@@ -10,7 +10,7 @@ description: |-
   2. Notice lifecycle: `aida awaiting --notice` adds the one-line protocol reminder only while the current worktree holds a lease on the spec; zero lines with no lease; the line disappears after `queue done` / lease release (TASK-160 quiet contract).
   3. Seed path from the CLI: `aida protocol seed` on a store with two of six protocols adds four and is idempotent (the core test exists; add the CLI-level one).
   Acceptance: `cargo test -p aida-cli-lib --lib protocol` discovers and passes at least 6 tests covering the three groups; no behaviour change.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
