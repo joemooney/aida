@@ -4801,6 +4801,8 @@ fn run() -> Result<()> {
             id,
             title,
             description,
+            description_from_file,
+            description_stdin,
             status,
             priority,
             r#type,
@@ -4839,6 +4841,11 @@ fn run() -> Result<()> {
             // FR-283: the numeric weight is git-canonical only, same rule.
             weight: _,
         } => {
+            // trace:BUG-1234 | ai:codex — keep legacy and git-canonical edit
+            // behavior aligned for file/stdin description replacement.
+            let resolved_description =
+                resolve_edit_description(description, description_from_file, *description_stdin)?;
+            let description = &resolved_description;
             // If any flags provided, use non-interactive mode; otherwise interactive
             // trace:TASK-351 | ai:claude — --add-tag / --remove-tag count too
             let has_flags = title.is_some()
@@ -15370,6 +15377,24 @@ fn resolve_description(
         return Ok(Some(body));
     }
     Ok(None)
+}
+
+// trace:BUG-1234 | ai:codex
+/// Resolve an edit description and refuse an empty file/stdin body so a
+/// failed producer cannot erase an existing requirement description.
+/// Inline `--description ""` remains the explicit way to clear the field.
+fn resolve_edit_description(
+    description: &Option<String>,
+    description_from_file: &Option<std::path::PathBuf>,
+    description_stdin: bool,
+) -> Result<Option<String>> {
+    let resolved = resolve_description(description, description_from_file, description_stdin)?;
+    if (description_from_file.is_some() || description_stdin)
+        && resolved.as_deref().is_some_and(str::is_empty)
+    {
+        anyhow::bail!("description input is empty; existing description left unchanged");
+    }
+    Ok(resolved)
 }
 
 pub(crate) fn parse_requirement_type(s: &str) -> Result<RequirementType> {
