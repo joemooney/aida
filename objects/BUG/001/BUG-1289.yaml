@@ -26,17 +26,20 @@ description: |
   6. Field names and shape are stated somewhere a consumer can read without reading the source.
 
   Reported by the aida-monitor project; the unified-endpoint half of their recommendation is narrowed here because the synthesis already exists in `aida status <SPEC>`.
-status: Draft
-priority: Medium
+status: Approved
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:07:00.436499599Z
-modified_at: 2026-09-19T21:07:02.194214823Z
+modified_at: 2026-09-19T21:12:21.840574602Z
 req_type: Bug
 tags:
 - agent-ux
+- batch:followups-0918i
 - cli
+- conformance
 - contract
+- drain-safe
 - from:aida-monitor
 - monitor
 - parent:EPIC-26
@@ -44,3 +47,4 @@ relationships:
 - rel_type: Child
   target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
   created_at: 2026-09-19T21:07:02.194214823Z
+execution_mode: drain
