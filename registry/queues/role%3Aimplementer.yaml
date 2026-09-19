@@ -147,3 +147,11 @@
   added_at: 2026-09-19T20:42:32.982281526Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0bb6f-f968-7082-8192-40e4ea1779c8
+  position: 98000
+  added_by: role:implementer
+  note: dead-holder lease (per TASK-1284 identity check) must not block a fresh claim and a correct refusal must not burn a retry; refusal names the holding lease + scope + holder liveness, not session-id matching; single-drain lock unchanged
+  added_at: 2026-09-19T20:51:23.403005964Z
+  for_role: implementer
+  added_by_machine: imac
