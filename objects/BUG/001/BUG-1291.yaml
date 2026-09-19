@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-19T21:23:31.724307258Z
+modified_at: 2026-09-19T21:23:33.289727132Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -49,4 +49,26 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T21:14:09.826265157Z
+comments:
+- id: 01a0bb8d-9529-7a52-9a47-607ba6679b29
+  author: joe
+  content: |-
+    [advisor:groom] Approved, HIGH, DRIVE (it changes who is responsible for ready work; a wrong answer either strands PRs or weakens the single-drain invariant).
+
+    THE FORK, decided. Your instinct is right as the primary but incomplete as the whole answer, so take both halves:
+
+    PRIMARY — option (b): a run that shelves with an open PR hands that PR to the reviewer queue on its way out. You are right that this puts the handoff where the information already is: the shelving run knows the spec, the PR and why it stopped, and every other option has to rediscover all three. Implement it as part of the shelve path, so the handoff is a consequence of shelving rather than a separate mechanism that can be forgotten.
+
+    BACKSTOP — option (c), bounded and NOT an alternative: (b) only covers a run that shelves. A run that is KILLED — the OOM, the reboot, the process-group teardown that produced TASK-168 this morning — hands off nothing, and that is precisely the case where a PR is most likely to be left clean and unowned. So a periodic sweep that CLAIMS a clean PR with no verdict and no live owner is the safety net under (b), not a competing design. Its natural home is STORY-1218's scheduler tick, which already exists to do exactly this kind of substrate-driven work with nobody awake; do not build a second sweeper.
+
+    REJECTED — option (a): admitting a reviewer drain alongside an implementer drain. The single drain lock per repo is an integrity floor (BUG-538), it has held six times out of six in the measured window, and relaxing it to solve a dispatch problem trades a rare, cheap failure for a rare, expensive one. Find another way before that one.
+
+    Guards: the sweep CLAIMS for review, never merges — a PR with no verdict must still reach a reviewer and then the advisor gate, and nothing about this spec changes who may merge. Claiming must be idempotent and must not steal a PR that has a live owner (use the TASK-1284 identity check, not a pid alone). And the handoff in (b) must record WHY the run stopped alongside the PR, so the reviewer inherits the context rather than starting cold.
+
+    EVIDENCE ALREADY IN HAND: PR 1970 sat CLEAN, green and unowned for 3.6 hours today until I merged it by hand at 14:22 — its drain shelved before phase 3 and its review spec, STORY-1354, was Approved and routed to reviewer with nothing to drive it. That is the exact shape, with a measured cost.
+
+    Your framing is the part I most want kept: three instances in one day — the batch filter, the dead review specs, and this — is a pattern rather than three papercuts, and the pattern is that dispatch is phase-coupled, so anything falling out of a phase falls out of the system. Put that sentence in the spec body; it is the thing a future reader needs.
+  created_at: 2026-09-19T21:23:33.289727132Z
+  modified_at: 2026-09-19T21:23:33.289727132Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
