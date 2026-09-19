@@ -4570,6 +4570,23 @@ pub(crate) fn handle_queue_command(
                 &req_id,
                 done_remove_role.as_deref(),
             )?;
+            // A completed pickup no longer owns the spec. Release only the
+            // matching lease that covers this command's cwd; another agent's
+            // lease for the same scope must remain untouched. Besides avoiding
+            // stale ownership, this makes the per-turn protocol reminder quiet
+            // immediately after `queue done`.
+            // trace:TASK-1283 | ai:codex
+            if let (Ok(project_root), Ok(cwd)) =
+                (find_main_worktree_root(), std::env::current_dir())
+            {
+                let canonical_cwd = cwd.canonicalize().unwrap_or(cwd);
+                for lease in list_leases(&project_root).into_iter().filter(|lease| {
+                    lease.scope.eq_ignore_ascii_case(display_id)
+                        && canonical_cwd.starts_with(&lease.worktree_path)
+                }) {
+                    let _ = std::fs::remove_file(lease_path(&project_root, &lease.id));
+                }
+            }
             // BUG-65: queue done bypasses Command::Edit (sets status via
             // update_atomically directly), so the role activity log used
             // to miss it entirely — leaving statusline @SPEC stuck on the
