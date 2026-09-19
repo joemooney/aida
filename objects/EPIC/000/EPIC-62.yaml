@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:24:41.882954288Z
-modified_at: 2026-09-19T19:10:03.950892503Z
+modified_at: 2026-09-19T20:49:26.843597828Z
 req_type: Epic
 tags:
 - autonomy
@@ -143,6 +143,9 @@ relationships:
 - rel_type: Parent
   target_id: 01a0bb13-581b-78a1-9c12-8221052bb1ed
   created_at: 2026-09-19T19:10:03.950892503Z
+- rel_type: Parent
+  target_id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
+  created_at: 2026-09-19T20:49:26.843597828Z
 comments:
 - id: 01a09185-18d7-7903-86b0-9f1e31697879
   author: joe
