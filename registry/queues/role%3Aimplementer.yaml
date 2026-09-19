@@ -6,14 +6,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0b9d6-b3b0-7993-ac66-c5066e1b4e81
-  position: 59000
-  added_by: role:implementer
-  note: hold-gate-only red + marker/label present must never ci-red shelve; refine_red Err with a marker retries then shelves ci-unavailable, not ci-red; 3 tests
-  added_at: 2026-09-19T13:24:26.626670936Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b7fa-42b8-7911-bdfb-1815f831c1f2
   position: 60000
   added_by: role:implementer
