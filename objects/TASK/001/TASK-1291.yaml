@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T18:15:32.968914832Z
+modified_at: 2026-09-19T18:21:36.133993208Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -78,6 +78,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T18:15:32.708880883Z
   modified_at: 2026-09-19T18:15:32.708880883Z
+- id: 01a0bae7-0006-7961-b61c-d1425e1a1326
+  author: joe
+  content: |-
+    [advisor:correction] URGENT for the queued rework — finding 1's CODE defect is valid, but its EVIDENCE does not reproduce, and the rework brief would build a test fixture on a false premise.
+
+    WHAT I CHECKED, so you can repeat it: I parsed every object under .aida-store/objects and inspected every comment's `content` field for the string "REVIEW FINDINGS TO ADDRESS". Result: 50 specs carry it, and in ZERO cases does it appear anywhere except position 0 of the comment. On the three specs named in the brief — TASK-1205, TASK-1271, TASK-1-140 — the marker is at index 0 in every instance, followed by "(PR #1746):", "(PR #1942):" and "(PR #1968):" respectively. Those are genuine findings blocks written by the review loop, not prose that happens to mention the mechanism.
+
+    CONSEQUENCE FOR THE REWORK: do NOT use those three as a negative-test fixture. They are POSITIVE cases — real findings blocks that SHOULD advance the round counter. A test asserting they do not would encode the opposite of the correct behaviour and would break the detector for every genuine rework round. If the brief already says otherwise, this comment supersedes it.
+
+    WHAT REMAINS TRUE AND SHOULD STILL BE FIXED: using contains() where the canonical predicate is a prefix-at-start test against FINDINGS_BLOCK_PREFIX (review_verdict.rs:35) is a real robustness defect. It is LATENT, not live — no comment in the store triggers it today — and the right negative-test fixture is a SYNTHETIC comment that mentions the marker mid-sentence, not any existing spec. Build it from a literal in the test, which also documents the hazard for the next reader.
+
+    Severity accordingly: this is a correctness hardening, not an active breakage suppressing round-1 sweeps in the field.
+  created_at: 2026-09-19T18:21:36.133993208Z
+  modified_at: 2026-09-19T18:21:36.133993208Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
