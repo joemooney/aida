@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:30:55.289650932Z
-modified_at: 2026-09-19T16:39:16.311239893Z
+modified_at: 2026-09-19T16:39:17.878311802Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -22,4 +22,11 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-18T18:30:57.455772864Z
+comments:
+- id: 01a0ba89-5676-73d1-90e4-0072e050ad56
+  author: joe
+  content: '[advisor:groom] Approved, medium, DRAIN. Mirror-only blast radius and the measurements are already in the spec, which is what makes it drain-safe: the candidates are ordered and each is independently verifiable against the 903 s warm baseline. Scope guard: land the splits one at a time with the pipeline number and the new warm figure recorded on this spec, so a regression is attributable; do NOT trade correctness for time — the nextest/doctest/MCP-stdio/fmt/clippy set that runs today must still run, just arranged better. If the 10-minute target needs dropping a check, come back to me instead of dropping it.'
+  created_at: 2026-09-19T16:39:17.878311802Z
+  modified_at: 2026-09-19T16:39:17.878311802Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
