@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T11:18:08.801389466Z
-modified_at: 2026-09-19T11:22:23.690243329Z
+modified_at: 2026-09-19T11:22:25.940244093Z
 req_type: Bug
 tags:
 - alias
@@ -29,4 +29,8 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-19T11:18:11.158706616Z
+- rel_type: !Custom related
+  target_id: 01a0b5dd-93e3-7382-bb96-c99e4a8014af
+  created_at: 2026-09-19T11:22:25.940237823Z
+  created_by: joe
 execution_mode: drive
