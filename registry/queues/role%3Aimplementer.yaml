@@ -155,3 +155,11 @@
   added_at: 2026-09-19T21:01:29.658581255Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0bb79-a835-7f93-953b-a0c602afd8d9
+  position: 100000
+  added_by: role:implementer
+  note: wave start + QueueDrained state batch member count AND count of other approved specs routed to the role outside the batch; emit as event too; silent when zero; correct under the role fallback
+  added_at: 2026-09-19T21:01:56.634213530Z
+  for_role: implementer
+  added_by_machine: imac
