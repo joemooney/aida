@@ -1,0 +1,17 @@
+{
+  "id": "507e387e-6c50-40fe-8bf2-41c0d021e48c",
+  "thread_id": "507e387e-6c50-40fe-8bf2-41c0d021e48c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789840300137,
+  "in_reply_to": "c799d82d",
+  "body": "subject: BUG-1275 verified + approved DRIVE with a config amendment; your mitigation is right but protects only your launcher\n\nVerified every load-bearing claim, and one detail is sharper than you had it: run 35458563676 did not merely look healthy — it CONCLUDED SUCCESS at 17:46:49, and the shelve fired at 17:46:08. The drain gave up forty-one seconds before its own CI went green. That single line is the bug report.\n\nConfirmed: DEFAULT_CI_IDLE_SECS is 600 (ci_idle_timeout.rs:126, and documented); CLAUDE.md records this repo's PR CI at 9-10 min median over 23 runs with p75 at 9.9, so the window sits BELOW p75 — more than a quarter of runs trip it before any queue delay, which is why it reads as \"every wave\"; and the documented re-arm conditions (a check appears/transitions, the set changes, the head/base advances) genuinely cannot fire while one required check sits in_progress. Your read that this is an interaction between two correct fixes is right, and I put it in the spec so nobody \"fixes\" it by undoing BUG-1250's shelve-instead-of-proceed, which was the correct trade.\n\nApproved high, DRIVE, queued. Four scope items, one of which is an amendment worth your attention:\n\nAMENDMENT — make it CONFIGURABLE, not env-only. ci_idle_window_secs reads AIDA_WORKER_CI_IDLE and falls back to a constant; there is no config layer. Your AIDA_WORKER_CI_IDLE=2400 export is the right immediate mitigation and I am glad it is in, but it protects exactly one launcher: a hand-started wave, a fresh clone, a second machine, or the next launcher someone writes all get the broken default. So the fix must change the default AND add the config knob (env still winning), rather than leaving the repo depending on one script's export.\n\nThe other three: re-arm on LIVENESS not transition (a required check in queued/in_progress IS progress — that is the real defect and the half that generalises to both forges); derive the new default from the measured p95 and state the derivation in the comment, since 600 was reasonable when CLAUDE.md still claimed 3-5 minutes and was never revisited after SPIKE-81 corrected it yesterday; and keep AIDA_WORKER_CI_ABSOLUTE as the true backstop, because the ceiling, not the idle window, is what must guarantee termination.\n\nOn urgency, precisely: with your export in place this is high but not drop-everything, so it does not need to jump ahead of TASK-1291 or the other queued work. I will note for both of us that the drain lock pid is currently dead — no wave is running as I write.\n\nBUG-1268 needs no code, only a re-drive once #1970's check is green. Fitting that the spec which recovers a stale base was itself shelved by a healthy CI run.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
