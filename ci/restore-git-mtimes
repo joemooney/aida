@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+# GitLab Runner force-checks out every pipeline, refreshing source mtimes even
+# when a file's content is unchanged. Derive a stable, past mtime from each Git
+# blob ID: identical content keeps its timestamp, while changed content gets a
+# different one and still invalidates Cargo correctly.
+# trace:TASK-1274 | ai:codex
+git ls-files --stage -z | perl -0ne '
+    next unless /^(100644|100755) ([0-9a-f]{40,64}) 0\t(.*)$/s;
+    my ($hash, $path) = ($2, $3);
+    my $mtime = 946684800 + (hex(substr($hash, 0, 8)) % 630720000);
+    utime($mtime, $mtime, $path) or die "utime $path: $!\n";
+'

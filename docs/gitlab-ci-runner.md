@@ -69,6 +69,13 @@ are in `/ci-cache/target-*`, not the checkout. If the runner workspace ever need
 a clean reset, stop the runner and clean that project's directory explicitly
 rather than putting an unconditional clean back on every pipeline.
 
+GitLab Runner still performs a forced checkout even without `git clean`, which
+can refresh tracked-file mtimes. Before each builder job,
+`ci/restore-git-mtimes` assigns every regular tracked file a deterministic past
+mtime derived from its Git blob ID. Unchanged content therefore keeps the same
+mtime across pipelines, while a content change gets a different mtime and
+continues to invalidate Cargo correctly.
+
 Gotchas learned the hard way:
 
 - `gitlab-runner register` run as your user writes `~/.gitlab-runner/config.toml`;

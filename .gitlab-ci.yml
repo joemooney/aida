@@ -60,6 +60,8 @@ default:
   # downloaded per run. Built on the runner host with podman; the runner uses
   # pull_policy if-not-present. Bump the tag together with ci/Dockerfile.
   image: localhost/aida-ci:1.92
+  before_script:
+    - ci/restore-git-mtimes
 
 # Fast compile/static gates. Tests are separate so they can start immediately
 # and overlap this job on the two-slot mirror runner. Release binaries are built
