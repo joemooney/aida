@@ -2657,11 +2657,14 @@ impl<'a> McpServer<'a> {
                 })
             })
             .collect();
-        // Explicit ack only: advance the watermark to the full inbox's newest
-        // so the unread/notice surface clears. Default is a non-marking peek
-        // (STORY-585 acceptance #4). trace:STORY-585
+        // Explicit ack only: record receipts for latency history, then advance
+        // the watermark to the full inbox's newest so the unread/notice surface
+        // clears. Default is a non-marking peek (STORY-585 acceptance #4).
+        // trace:STORY-585 trace:TASK-1271 | ai:codex
         if mark_seen {
             if let Some(newest) = full.iter().map(|m| m.timestamp).max() {
+                let ids: Vec<&str> = full.iter().map(|m| m.id.as_str()).collect();
+                let _ = crate::mailbox_store::record_seen(&self.project_root, &agent, &ids);
                 let _ = crate::mailbox_store::set_watermark(&self.project_root, &agent, newest);
             }
         }
@@ -9789,7 +9792,7 @@ mod tests {
         assert!(err.is_err(), "must require to/broadcast: {err:?}");
     }
 
-    // trace:STORY-585 | ai:claude
+    // trace:STORY-585 trace:TASK-1271 | ai:claude+codex
     /// read_inbox is a non-marking peek by default; `mark_seen` advances the
     /// watermark (the explicit ack) and `unread` filters to the unread slice.
     #[test]
@@ -9816,10 +9819,37 @@ mod tests {
         assert_eq!(unread1_p["count"], 2, "peek did not consume: {unread1}");
         assert_eq!(unread1_p["unread"], true);
 
-        // Explicit ack: mark_seen advances the watermark.
+        // Explicit ack: mark_seen records per-message latency history and
+        // advances the watermark.
         server
             .tool_read_inbox(&json!({ "agent": "claude", "mark_seen": true }))
             .unwrap();
+        let receipts = crate::mailbox_store::read_receipts(dir.path(), "claude");
+        let message_ids: Vec<&str> = peek_p["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(receipts.len(), 2, "ack records a receipt for each message");
+        let max_read_latency_ms = message_ids
+            .iter()
+            .filter_map(|id| {
+                let sent_at = peek_p["messages"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|m| m["id"].as_str() == Some(id))?["timestamp"]
+                    .as_i64()?;
+                receipts
+                    .get(*id)
+                    .map(|seen_at| seen_at.saturating_sub(sent_at).max(0))
+            })
+            .max();
+        assert!(
+            max_read_latency_ms.is_some(),
+            "latency history is populated after MCP mark_seen"
+        );
         let unread2 = server
             .tool_read_inbox(&json!({ "agent": "claude", "unread": true }))
             .unwrap();
