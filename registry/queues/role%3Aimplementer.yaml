@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b6e5-444d-7a00-a3c2-d1237930528c
-  position: 32000
-  added_by: role:implementer
-  note: 'drive (merge at advisor gate): member worktree must be its own or punt; queue done verifies branch/commits belong to the spec (refuse, --force ledgered); CI/reviewer phases bind to THIS run''s PhaseDonePr PR; tests + banner names worktree/branch'
-  added_at: 2026-09-18T23:41:23.522149729Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b75b-3dde-78b2-bab8-a7b50e522094
   position: 33000
   added_by: role:implementer
