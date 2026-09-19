@@ -34,12 +34,29 @@ description: |
   6. Existing SpecRetried consumers keep working — the field is additive and optional.
 
   Filed by the product seat; the watchdog LIMITS themselves are a separate question and are deliberately not touched here. This spec is about being able to tell which limit fired.
+
+  ADDITIONAL ACCEPTANCE (added 2026-09-19 by the product seat, ratified by the advisor with criterion 7 sharpened; confirmed by event at 23:47:24)
+
+  TASK-1274's second attempt shelved and produced the sharpest instance of this class we have. Both fields, verbatim, from one event:
+
+    detail:        the implementer phase watchdog stopped the session - phase exceeded the 45m wall-clock ceiling (attempt 2/2)
+    recovery_hint: The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window - likely a degenerate spin. Inspect the worktree and pick the spec back up by hand.
+
+  They contradict each other inside a single event. The detail names the wall-clock CEILING trip. The hint describes the NO-PROGRESS trip and calls the session a likely degenerate spin. The hint is the false one: that session made ten commits and its headless log was still being written twenty-three seconds before the stop. It was a healthy long-running session killed for length, and the hint sends the reader to hunt a spin that never happened.
+
+  This is worse in kind than the rest of the class. A dropped field degrades; a wrong run id misdirects. This one ASSERTS something its own sibling field disproves, so a reader who trusts it is actively misled rather than merely uninformed.
+
+  It also settles the open question above. The ceiling was inferred from commit count and a live log; the shelve detail names it outright. The cost was 2h17m of a serial drain, roughly three merges of capacity, spent re-running a session that was working.
+
+  7. THE HINT IS DERIVED FROM THE SAME TRIP VALUE AS THE DETAIL, not selected by a parallel branch. Sharpened from "selected by which trip fired, not hardcoded": two independent switches on the same enum satisfy that wording and can still drift apart later, which is the defect one level up. One resolved trip value produces both strings, so they cannot disagree. This is PRIN-4 rule 1 applied to the site that motivated it.
+  8. A test asserts detail and recovery_hint agree. A Ceiling-caused shelve produces a ceiling hint, a NoProgress-caused shelve produces a no-progress hint, and neither emits the other text. The test fails if a future trip variant is added without a matching hint, rather than silently reusing whichever branch is first.
+  9. The Ceiling hint advice differs IN KIND from the NoProgress hint. "Inspect the worktree for a spin" is the wrong next action for a session that ran out of clock. The ceiling hint names the ceiling, states what it was, and says the remedy is a larger budget or a smaller spec.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T23:03:57.581552445Z
-modified_at: 2026-09-19T23:47:56.063323077Z
+modified_at: 2026-09-19T23:53:03.423825703Z
 req_type: Bug
 tags:
 - batch:followups-0918i
