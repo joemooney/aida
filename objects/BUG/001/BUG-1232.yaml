@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:35:48.973706941Z
-modified_at: 2026-09-19T01:16:24.083730519Z
+modified_at: 2026-09-19T02:07:49.172553233Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -67,6 +67,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T01:16:23.833690500Z
   modified_at: 2026-09-19T01:16:23.833690500Z
+- id: 01a0b76b-79b4-73d1-add9-a6db1ff02d6f
+  author: joe
+  content: 'Review round 2: preserved GitLab Rebase semantics by issuing PUT /rebase, polling include_rebase_in_progress, then PUT /merge with squash=false. Added a production API-shape test distinguishing Merge, Rebase, and Squash.'
+  created_at: 2026-09-19T02:07:49.172553233Z
+  modified_at: 2026-09-19T02:07:49.172553233Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
