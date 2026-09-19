@@ -1,0 +1,24 @@
+id: 01a0bba9-d2ca-7901-a48c-4663304cf072
+spec_id: STORY-1359
+agreed_id: STORY-1359
+title: Codegraph to requirements-graph auto-population as an interactive hygiene session
+description: |-
+  FILING GAP, not a new idea. This is the one Followup bullet from docs/plans/2026-09-12-entry-memory-lane.md that never became a spec: "Codegraph -> requirements-graph auto-population as an interactive hygiene session (deferred, longer-term)." That plan explicitly scoped it OUT of the memory-lane work ("Explicitly out of scope: ... the codegraph -> requirements-graph auto-population (deferred; see Followups)"), and EPIC-63 then closed with six children, none of them this. The seam has had no owner since 2026-09-12. Filed now so the deferral is recorded rather than lost -- same failure mode SPIKE-81 found, where a capability question leaves the working set when its parent spec closes.
+
+  THE IDEA. A derived code graph knows what calls what. AIDA knows why each thing exists. An interactive hygiene session would walk the derived graph and offer the authored graph a candidate: this module has no spec, this spec has no trace, this trace points at code that moved. The human accepts or declines each; nothing is written without a decision.
+
+  WHY IT IS INTERACTIVE AND NOT AUTOMATIC. The same plan names the reason under Risks: "Authored-memory rot -- unlike codegraph (derived, self-fresh), this needs capture + staleness or it misleads." A derived graph cannot go stale because it is recomputed; an authored graph rots. Auto-populating intent from structure would manufacture confident-looking intent that nobody ever decided, which is worse than a gap, because a gap is visibly a gap. The hygiene-session shape keeps a human in the accept loop for exactly that reason.
+
+  STILL DEFERRED. The trigger is SPIKE-84 question 4, which asks whether a local codegraph install makes a bounded slice worth filing now. Do not scope this until that spike reports. If the answer is yes, the slice to cut first is the narrowest one: candidates offered, never written unattended.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T21:54:24.074021232Z
+modified_at: 2026-09-19T21:54:24.074021232Z
+req_type: Story
+tags:
+- codegraph
+- deferred
+- ecosystem-watch
+- memory-lane
