@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T20:49:26.843597828Z
+modified_at: 2026-09-19T21:56:14.481128966Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -659,6 +659,24 @@ comments:
     Push fixups to task-1289-work. Do not open a new PR.
   created_at: 2026-09-19T20:46:10.420483710Z
   modified_at: 2026-09-19T20:46:10.420483710Z
+- id: 01a0bbab-8211-7562-a3c5-453665113320
+  author: joe
+  content: |-
+    [advisor:review round 2] CHANGES REQUESTED. I am withdrawing my round-1 APPROVED at the same head (41d4cfdd) — the orchestrator's phase-3 reviewer found a fail-open that I read past, and it is real.
+
+    THE DEFECT. implementer_preflight.rs builds GuardResult::Skipped at three sites: :305 on timeout, :306 on could-not-start, and :288 when the worktree binary is unavailable. decide() at :46-52 filters for GuardResult::Failed and nothing else, so every one of those returns PreflightDecision::Open. A guard that was supposed to run and could not is currently indistinguishable from a guard that does not apply.
+
+    THE REVIEWER UNDER-SCOPED IT BY ONE CASE, and it is the case that matters most here. :288 fires when the worktree binary cannot be built, which is precisely the condition that produced the incident this spec exists to prevent: a stale aida on PATH made the CLI-manual drift guard report drift that did not exist, and I mis-attributed it as finding TASK-1-145. Building the worktree binary was the scope I added for exactly that reason. Under this code, if that build fails, the guard it protects is skipped and the PR opens anyway. The feature would be silently absent in the one scenario it was written for.
+
+    THE FIX IS A DISTINCTION, NOT A THIRD VARIANT. Two different things are currently both Skipped:
+      - "this guard does not apply here" — unknown or missing configured name. Keep skipping; that behaviour is correct and the reviewer was right to say preserve it.
+      - "this guard was supposed to run and did not" — timeout, start failure, unavailable binary. Must refuse.
+    Whether that is a new GuardResult::Unavailable or a flag on Skipped is the implementer's call. What is not optional: decide() must refuse on all three of :288, :305, :306, and a test must assert Refuse for each. The existing timeout test asserting Skipped is currently asserting the bug.
+
+    PROCESS NOTE ON MYSELF. I read this diff and approved it. The reviewer read the same diff and refused it. That is the second time this wave the reviewer has been right where I was not, and it is the argument for the independence rule stated better than I could state it: I had already formed a view of what this PR was for, and I checked whether the code matched that view rather than whether the code could fail. The hold on PR #1972 stays until a round at the new head comes back clean.
+  created_at: 2026-09-19T21:56:14.481128966Z
+  modified_at: 2026-09-19T21:56:14.481128966Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
