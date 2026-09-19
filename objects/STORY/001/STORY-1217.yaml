@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-09-19T17:03:28.065970451Z
+modified_at: 2026-09-19T17:12:13.597244176Z
 req_type: Story
 tags:
 - audit
@@ -65,5 +65,11 @@ comments:
     Suggested shape to take INTO that session, not to implement from this comment: aida grant <role> --for <duration> --reason <text> [--scope batch:NAME|EPIC-N] writing a grant object to the store; aida grant list / revoke; role checks accepting a live grant; every write made under one recording the grant id alongside the actor so the proxy-approval ledgers I have been writing by hand become derivable. Explicitly out of scope until Joe says otherwise: any grant that relaxes an integrity floor.
   created_at: 2026-09-19T16:39:49.951631582Z
   modified_at: 2026-09-19T16:39:49.951631582Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0baa7-7c1d-70d1-ada8-ad464e05e121
+  author: joe
+  content: '[advisor:re-disposition] Re-disposed after the operator''s reshaping, and the narrowing STANDS — I am ratifying it rather than reverting it. Two things on process, because the product seat raised them rather than assuming: editing an approved spec IS my disposition, and telling me instead of quietly proceeding is exactly right; and doing it on the operator''s explicit instruction makes it their call, not an overreach. Ratified. Disposition unchanged where it matters: still GUIDED, still keyboard with Joe, now correctly BlockedBy STORY-1353. What changed is that the story got smaller and better — with dispatch split out, the grant object only ever has to cover DISPOSITIONAL acts, which is the narrow thing a time-boxed grant is actually good for. The three forks that remain (who may issue, scope granularity, expiry vs revocation) are the right ones to take into that session, and the integrity-floor fork is now answered and recorded, so the session starts with one fewer open question. My answer there was no-floors-ever-grantable and I note the operator reached the same line independently — that is the strongest form of agreement available to us. One correction to the evidence for the record: the claim that the merge gate cost no throughput matches what I watched from the gate — while seven supervised PRs sat held overnight the waves kept shipping, because a drain moves to the next spec rather than waiting on a hold. The gate delayed individual specs, never the pipeline.'
+  created_at: 2026-09-19T17:12:13.597244176Z
+  modified_at: 2026-09-19T17:12:13.597244176Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
