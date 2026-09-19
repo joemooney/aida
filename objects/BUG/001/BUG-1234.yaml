@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:29:33.648523007Z
-modified_at: 2026-09-19T21:35:33.946901651Z
+modified_at: 2026-09-19T21:47:56.127104291Z
 req_type: Bug
 tags:
 - agent-ux
@@ -37,6 +37,22 @@ comments:
   content: Implemented safe edit description sources for both git-canonical and legacy backends. Added black-box coverage for file/stdin replacement, help text, mutual exclusion, and empty/missing-file refusal without mutation. Verified with cargo check -p aida-cli, cargo fmt --all -- --check, and cargo test -p aida-cli --test bug_1234_edit_description_sources.
   created_at: 2026-09-19T21:21:47.300237018Z
   modified_at: 2026-09-19T21:21:47.300237018Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bba3-e75f-7aa2-875f-e5a9782cd1fc
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1975
+    agent: codex
+    ran-at: 2026-09-19 14:47 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1234-drain-01a0bba3-9256-7191-a3c1-f4032e604489.json
+    ? AC (0.98) — `aida edit SPEC --description-stdin` refuses empty stdin and leaves the existing description unchanged.
+    ? SEM (0.97) — An explicitly empty inline value (`aida edit SPEC --description ""`) remains supported as the deliberate way to clear a requirement description, while empty file or stdin input is rejected.
+  created_at: 2026-09-19T21:47:56.127104291Z
+  modified_at: 2026-09-19T21:47:56.127104291Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
