@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:51:12.872457642Z
-modified_at: 2026-09-19T20:51:20.520786069Z
+modified_at: 2026-09-19T20:51:22.102102300Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -37,5 +37,9 @@ relationships:
 - rel_type: !Custom related
   target_id: 01a0b75b-3dde-78b2-bab8-a7b50e522094
   created_at: 2026-09-19T20:51:20.520781083Z
+  created_by: joe
+- rel_type: !Custom related
+  target_id: 01a0b9f8-f6ff-7002-8921-db993bc1a347
+  created_at: 2026-09-19T20:51:22.102096912Z
   created_by: joe
 execution_mode: drain
