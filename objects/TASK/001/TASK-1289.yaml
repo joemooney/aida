@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T18:48:12.674229613Z
+modified_at: 2026-09-19T18:51:41.753839116Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -523,6 +523,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T18:48:12.414214170Z
   modified_at: 2026-09-19T18:48:12.414214170Z
+- id: 01a0bb02-8d39-7531-a73c-63323daad439
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1972, advisor round 1):
+    Verdict: CHANGES REQUESTED. The design is right — commands read from ci.yml rather than hand-copied, names from [preflight] config, unresolvable names skipped, lifecycle:no-preflight honoured, and run() correctly invoked with worktree_path. Four items block, and the first is this task's own first-run failure.
+    1. THE BINARY. Guards execute via `bash -lc` in the worktree, so any guard that invokes `aida` uses whatever PATH resolves. At least one DEFAULT guard does: "CLI-manual drift-guard" runs docs/cli/verify-manual.py, which validates the manual against `aida --help`. That is exactly what produced finding TASK-1-145 — three documented flags (mailbox --stdin, mailbox --body-file, schedule --hook) reported missing because an older binary was consulted, while the same guard exits 0 on main with all three PRESENT. Required: run binary-dependent guards against the worktree's OWN build, or SKIP them with a stated reason; and name the binary used (path, version, build sha) in every refusal AND every skip, so a spurious result is diagnosable in one line instead of a re-run. A guard that can be wrong must never block publication.
+    2. LOGIN SHELL. `bash -lc` sources the user's profile, so a gate's verdict depends on a developer's dotfiles. Use `-c` with an explicit environment, or at minimum record the resolved `aida` path alongside the result.
+    3. NO TIMEOUT. The guard command has no bound. Clippy and the portability ratchet are slow, and this blocks PR publication, so a hung guard hangs the phase with no recovery. Bound it, and treat a timeout as Skipped-with-reason — never as Failed, because "we could not measure it" is not "it is broken".
+    4. BASE BRANCH. "${{ github.base_ref }}" is replaced with the literal "main". Resolve the repository's actual default branch.
+    Non-blocking: GuardResult::Passed(String) holds a JSON-encoded Guard when it comes from guards_from_ci and a bare name when it comes from run — one variant meaning two things at two stages. A separate Resolved type would cost little and would stop the next reader mis-reading it.
+    Contract: produce at least one commit addressing 1-4, or punt explicitly naming the item you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T18:51:41.753839116Z
+  modified_at: 2026-09-19T18:51:41.753839116Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
