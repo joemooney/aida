@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-19T21:31:32.085801410Z
+modified_at: 2026-09-19T21:31:34.379881871Z
 req_type: Task
 tags:
 - acceptance
@@ -58,4 +58,11 @@ relationships:
   target_id: 01a0ba81-ec62-7220-9218-08fc9b286023
   created_at: 2026-09-19T21:31:32.085797012Z
   created_by: joe
+comments:
+- id: 01a0bb94-ec6b-7983-b6ff-7aba6e8b143b
+  author: joe
+  content: '[advisor:groom] Approved, medium, DRAIN — as the spec that makes the convention ENFORCEABLE, not as a restatement of it. Worth being explicit about what already exists so this does not duplicate work: I recorded the convention in two places at 11:30 today, as a scope addition on TASK-1290 (the criteria gate should flag ''not verifiable at merge time'' under its own label, since the remedy is to MOVE the criterion rather than write a test) and as content for the discipline pack STORY-1351 ships, with TASK-1291/TASK-1294 as the worked example. The instance is also already resolved: TASK-1291''s criterion was removed and re-filed as TASK-1294, blocked-by. So the prose is covered twice over. What is NOT covered, and what this spec should be, is DETECTION — a heuristic that recognises the shape at filing or at done (''measured over the next N'', ''after this ships'', a median or rate needing a post-merge window) and says so. Scope it to that and it earns its place; scope it to writing the rule down again and it is a third copy of something already written. Sequencing note: the detector belongs with TASK-1290''s criteria report, which is DRIVE and blocked on TASK-1277''s done-gate, so if the implementer finds it natural to land there instead, say so and close this rather than building a parallel surface.'
+  created_at: 2026-09-19T21:31:34.379881871Z
+  modified_at: 2026-09-19T21:31:34.379881871Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
