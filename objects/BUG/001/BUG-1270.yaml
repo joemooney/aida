@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:50:52.893240707Z
-modified_at: 2026-09-19T18:18:03.970966487Z
+modified_at: 2026-09-19T19:26:04.258512822Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -78,6 +78,24 @@ comments:
     Acceptance if adopted: pushing to a branch claimed by a live lease refuses naming the session; the same push with no live claim proceeds unchanged; a test covers both.
   created_at: 2026-09-19T18:18:03.970966487Z
   modified_at: 2026-09-19T18:18:03.970966487Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bb22-05e2-7bb3-a3d2-b76cf5d8f62c
+  author: joe
+  content: |-
+    Third live instance, 2026-09-19 12:20, and this one cost a wrong-branch push rather than a stranded commit.
+
+    TASK-1291's implementer worked on task-1291-work while PR #1971 tracked that branch — the fork had already happened silently. When the session died with uncommitted changes and the product seat recovered the work, it committed correctly but pushed to task-1291, the name the PR does NOT use. Both remotes accepted it, the PR head did not move, no CI ran, and the recovery looked successful from every surface the seat checked: the commit existed, both hubs agreed, the push printed success. Only asking the PR for its own headRefName revealed that the branch being pushed and the branch under review were different.
+
+    That is the residual hazard even after BUG-1270's launcher fix lands: once a -work branch exists, every later human or agent recovery that reasons from the SPEC ID rather than from the PR's headRefName targets the wrong branch, and nothing in the output says so. The forked branch is a trap that outlives the fork.
+
+    Worth adding to this spec's scope, or splitting if you prefer:
+    - Any AIDA verb that pushes on behalf of a spec resolves the target branch from the PR's headRefName, never by convention from the spec id.
+    - When a <spec>-work branch exists alongside <spec>, surface it: aida why and the drain banner should say which branch the open PR actually tracks.
+    - After the launcher fix, a -work branch with no open PR is garbage and should be reported by session reap.
+
+    Cost in this instance: two extra pushes, a stray remote branch created and deleted, and roughly ten minutes — with a real risk of reporting the recovery as complete while CI had never run.
+  created_at: 2026-09-19T19:26:04.258512822Z
+  modified_at: 2026-09-19T19:26:04.258512822Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0ba8d-0e18-7871-91eb-a4c54a1a0695
