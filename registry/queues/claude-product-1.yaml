@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b75b-3dde-78b2-bab8-a7b50e522094
-  position: 0
-  added_by: claude-product-1
-  note: 'CI red on PR #1957 (run 35423277897): drain_state::tests::status_segment_renders_live_drain_progress fails at drain_state.rs:1644 — expected Some("drain:2/3 STORY-285(ci)"), got None. The lease-based liveness change now treats the test fixture''s drain as not-live (the fixture records a pid but no process start time / boot id), so the status segment renders nothing. Either make the fixture record the new liveness fields the way a real lock does, or keep a documented fallback for a lock/lease that carries only a pid (treat as live when the pid is alive) so existing records from before this change still render; add a test for the pid-only legacy record. Run cargo test -p aida-cli-lib drain_state before pushing.'
-  added_at: 2026-09-19T05:23:52.307902102Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
