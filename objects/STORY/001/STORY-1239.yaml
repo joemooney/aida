@@ -1,0 +1,26 @@
+id: 01a0b856-be16-7492-9c04-ed42fba3319c
+spec_id: STORY-1239
+agreed_id: STORY-1239
+title: 'Review PR-1961: [AI:codex] fix(tags): guard structural tag replacement (BUG-1252)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b845`) for branch `bug-1252`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1961>
+  - Branch: `bug-1252` → `main`
+
+  ## Covers
+
+  - BUG-1252
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1961` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T06:24:47.638723712Z
+modified_at: 2026-09-19T06:24:47.638723712Z
+req_type: Story
