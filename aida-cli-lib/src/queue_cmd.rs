@@ -4530,6 +4530,77 @@ pub(crate) fn handle_queue_command(
                 }
             }
 
+            // TASK-1290: reuse `aida criteria`'s existing tracer (STORY-1178) to
+            // name an untraced acceptance criterion before review instead of
+            // letting the reviewer discover it. Default WARN (proceed, loudly);
+            // `[protocol] enforce = "refuse"` blocks, quoting the criterion
+            // verbatim, and `--force` overrides with a ledgered comment. Quiet
+            // when clean — a spec whose criteria are all traced produces no
+            // output. This is the single choke point a future TASK-1277
+            // protocol-item done-gate can fold in alongside its own checks; see
+            // `criteria_gate.rs`'s module doc for the absorb points.
+            // trace:TASK-1290 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                if let Ok(criteria_report) = crate::criteria::build_criteria_report(
+                    &project_root,
+                    display_id,
+                    &req.description,
+                ) {
+                    let enforce = crate::criteria_gate::read_enforce_mode(&project_root);
+                    match crate::criteria_gate::evaluate(&criteria_report, enforce) {
+                        crate::criteria_gate::CriteriaGate::Proceed => {}
+                        crate::criteria_gate::CriteriaGate::Warn(lines) => {
+                            eprintln!(
+                                "{} {} has untraced acceptance criteria (no test traces them):",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                                display_id
+                            );
+                            for line in &lines {
+                                eprintln!("  {line}");
+                            }
+                        }
+                        crate::criteria_gate::CriteriaGate::Refuse(lines) => {
+                            if *force {
+                                eprintln!(
+                                    "{} --force: overriding untraced acceptance criteria for {}:",
+                                    "warning:".yellow().bold(),
+                                    display_id
+                                );
+                                for line in &lines {
+                                    eprintln!("  {line}");
+                                }
+                                let author = get_default_author();
+                                let comment = aida_core::Comment::new(
+                                    author,
+                                    crate::criteria_gate::force_override_ledger_comment(
+                                        display_id, &lines,
+                                    ),
+                                );
+                                let gate_req_id = req.id;
+                                storage.update_atomically(|s| {
+                                    if let Some(r) =
+                                        s.requirements.iter_mut().find(|r| r.id == gate_req_id)
+                                    {
+                                        r.add_comment(comment);
+                                    }
+                                })?;
+                            } else {
+                                eprintln!(
+                                    "queue done refused: {} has untraced acceptance criteria \
+                                     ([protocol] enforce = \"refuse\"):",
+                                    display_id
+                                );
+                                for line in &lines {
+                                    eprintln!("  {line}");
+                                }
+                                eprintln!("Override with `--force` (the override is ledgered).");
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                }
+            }
+
             // STORY-469 Guard 1: validate trailer spec-IDs before flipping the
             // spec to Done. Catch a hallucinated / typo'd / since-rejected
             // `(SPEC-ID)` trailer on this branch's commits BEFORE the spec is
@@ -8144,6 +8215,66 @@ pub(crate) fn append_reviewer_prompt_suffixes(prompt: &mut String) {
     }
 }
 
+/// TASK-1290: round 1 of the headless reviewer prompt CITES the untraced
+/// acceptance criteria for every spec the PR covers instead of rediscovering
+/// them during review — reuses `aida criteria`'s tracer
+/// (`crate::criteria::build_criteria_report`) via
+/// `criteria_gate::reviewer_prompt_block`; no second implementation.
+/// Resolves the PR's covered specs from its commit trailers, the same
+/// resolution `generate_review_prompt` uses for `--pr`. Best-effort: any
+/// failure to resolve the PR/commits/store degrades to no block — this
+/// never blocks the reviewer launch.
+// trace:TASK-1290 | ai:claude
+pub(crate) fn append_untraced_criteria_prompt_block(
+    prompt: &mut String,
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+    forge: ReviewForge,
+    pr_n: u64,
+) {
+    // Only round 1 cites the list; a rework round already has the reviewer's
+    // own findings to work from. trace:TASK-1290 | ai:claude
+    let round = std::env::var("AIDA_REVIEW_ROUND")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(1);
+    if round != 1 {
+        return;
+    }
+    let Ok((base, head)) = pr_base_head(project_root, forge, pr_n) else {
+        return;
+    };
+    let Ok(messages) = git_log_messages(project_root, &base, &head) else {
+        return;
+    };
+    let mut spec_ids: Vec<String> = Vec::new();
+    for msg in &messages {
+        for id in extract_spec_ids_from_commit(msg) {
+            if !spec_ids
+                .iter()
+                .any(|existing| existing.eq_ignore_ascii_case(&id))
+            {
+                spec_ids.push(id);
+            }
+        }
+    }
+    let mut reports: Vec<(String, crate::criteria::CriteriaReport)> = Vec::new();
+    for id in &spec_ids {
+        let Some(req) = store.requirements.iter().find(|r| spec_matches(r, id)) else {
+            continue;
+        };
+        let display = req.spec_id.as_deref().unwrap_or(id.as_str());
+        if let Ok(report) =
+            crate::criteria::build_criteria_report(project_root, display, &req.description)
+        {
+            reports.push((display.to_string(), report));
+        }
+    }
+    if let Some(block) = crate::criteria_gate::reviewer_prompt_block(&reports) {
+        prompt.push_str(&block);
+    }
+}
+
 // trace:BUG-1063 | ai:codex
 fn headless_waiting_rule_suffix(role: &str) -> String {
     let artifact = if role.eq_ignore_ascii_case("reviewer") {
@@ -8960,6 +9091,14 @@ pub(crate) fn handle_queue_work(
     // env; bake the absolute anchor into the prompt text as well.
     if role.eq_ignore_ascii_case("reviewer") {
         append_reviewer_prompt_suffixes(&mut prompt);
+        // trace:TASK-1290 | ai:claude
+        if let Some((forge, pr_n)) = plan.review_target {
+            if let Some(root) = project_root_for_config.as_deref() {
+                if let Ok(store) = storage.load() {
+                    append_untraced_criteria_prompt_block(&mut prompt, root, &store, forge, pr_n);
+                }
+            }
+        }
     }
     if no_human {
         prompt.push_str(&headless_waiting_rule_suffix(&role));

@@ -2301,6 +2301,13 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
         anyhow::bail!("could not derive a non-empty PR title from the latest commit");
     }
 
+    // TASK-1290: report (never block — the blocking/`--force`/ledger contract
+    // lives at `aida queue done`, already run before a branch reaches PR
+    // creation) untraced acceptance criteria for the spec(s) this PR's head
+    // commit references. Reuses `aida criteria`'s tracer; quiet when clean.
+    // trace:TASK-1290 | ai:claude
+    report_untraced_criteria_for_commit(project_root, &commit_msg);
+
     // STORY-516: route PR creation through the Forge trait. open_change passes
     // an explicit `--head <branch>` (the branch we just pushed) — equivalent to
     // the prior inferred head, and what makes a GitLab/pure-git repo open its
@@ -2328,6 +2335,48 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
         );
     }
     Ok(change.id)
+}
+
+/// TASK-1290: report-only (no blocking, no `--force`) pass over the spec(s)
+/// named by `(SPEC-ID)` trailers in `commit_msg` — the same extraction
+/// `generate_review_prompt` uses for `--pr`. Reuses `aida criteria`'s
+/// tracer via `criteria_gate::evaluate`; a spec whose criteria are all
+/// traced produces no output. Best-effort: any resolution failure (no
+/// trailer, spec not found, store unreadable) is a silent no-op — PR
+/// creation must never fail because this report couldn't run.
+// trace:TASK-1290 | ai:claude
+fn report_untraced_criteria_for_commit(project_root: &std::path::Path, commit_msg: &str) {
+    let spec_ids = extract_spec_ids_from_commit(commit_msg);
+    if spec_ids.is_empty() {
+        return;
+    }
+    let storage = Storage::new(project_root.join(".aida-store"));
+    let Ok(store) = storage.load() else {
+        return;
+    };
+    for id in &spec_ids {
+        let Some(req) = store.requirements.iter().find(|r| spec_matches(r, id)) else {
+            continue;
+        };
+        let display = req.spec_id.as_deref().unwrap_or(id.as_str());
+        let Ok(report) =
+            crate::criteria::build_criteria_report(project_root, display, &req.description)
+        else {
+            continue;
+        };
+        if let crate::criteria_gate::CriteriaGate::Warn(lines) =
+            crate::criteria_gate::evaluate(&report, crate::criteria_gate::EnforceMode::Warn)
+        {
+            eprintln!(
+                "  {} {} has untraced acceptance criteria (no test traces them):",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                display
+            );
+            for line in &lines {
+                eprintln!("    {line}");
+            }
+        }
+    }
 }
 
 /// Open a change for a just-pushed `queue recover` branch through the forge,
