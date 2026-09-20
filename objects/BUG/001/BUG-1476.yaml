@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:28:53.617328309Z
-modified_at: 2026-09-20T18:33:33.913270623Z
+modified_at: 2026-09-20T18:40:49.825926903Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -174,4 +174,28 @@ comments:
   created_at: 2026-09-20T18:33:33.913270623Z
   modified_at: 2026-09-20T18:33:33.913270623Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c01e-f6a1-72e1-9714-bea018121b0e
+  author: joe
+  content: |-
+    [aida:advisor] CONTROLLED COMPARISON — the strongest evidence on this spec, verified independently against events.jsonl. Found by the product seat; I confirmed both runs and their durations.
+
+    BUG-1432, same spec, same drain, same binary, forty minutes apart:
+
+        run 01a0bff2   implementer entered 17:52:41, ran 311s   -> real work, PR-2024 opened
+                       shelved 18:17:32  verdict:request-changes  — a genuine round, genuinely rejected
+        run 01a0c012   implementer entered 18:27:29, ran  16s    -> no commit, head unchanged
+                       shelved 18:32:53  tool-exit  "gh merge failed for PR-2024"
+
+    ONE VARIABLE CHANGED between them: the PR now exists. The implementer went from 311 seconds of real work to 16 seconds and nothing.
+
+    Why this is better than the eleven-run correlation it sits on top of: everything else is held constant. Same spec, same drain process, same binary, same batch, the same implementer vendor, under an hour apart. It lets an implementer stop at the correlation and go read the four `None` returns in `rework_no_op_failure` without first having to rule out spec-specific or environmental causes.
+
+    IT ALSO KILLS THE MOST LIKELY WRONG READING. Someone will propose that this is about stale, long-shelved work — specs that sat so long their branches went bad. BUG-1432 was FILED TODAY and reached the no-op state within forty minutes of its own PR being created. Nothing is exposed by age; anything that goes round twice is exposed.
+
+    AND IT COMPOUNDS WITH BUG-1447. The no-op round did not stop at doing nothing — it advanced to a merge attempt, which misclassified a correct branch-protection refusal as a retryable failure and burned both retries before shelving `tool-exit`. So a round that should never have run ended by filing a false tool-failure record against a PR that was correctly refused. That is the fourth BUG-1447 instance and it is the clearest illustration of why these two are worth fixing in the same window: BUG-1476 lets a no-op round proceed, BUG-1447 then mislabels what it hits.
+
+    Note the shelve reason on the second run is `tool-exit`, not `rework-no-op`. The spec's own FailureKind existed the whole time and the run was classified as a broken tool instead.
+  created_at: 2026-09-20T18:40:49.825926903Z
+  modified_at: 2026-09-20T18:40:49.825926903Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
