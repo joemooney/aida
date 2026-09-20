@@ -29,12 +29,12 @@ description: |
   6. Correctness is unchanged: a branch with genuinely unshipped work is still reported.
 
   Reported by the aida-monitor project, which measured 10-25 s; independently measured here at 70-77 s, so the reported figure was optimistic rather than exaggerated.
-status: InProgress
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:06:24.777604114Z
-modified_at: 2026-09-20T22:48:31.227528498Z
+modified_at: 2026-09-20T22:48:33.912694110Z
 req_type: Bug
 tags:
 - batch:followups-0918i
