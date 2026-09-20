@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T04:07:54.265428714Z
-modified_at: 2026-09-20T19:28:50.624112506Z
+modified_at: 2026-09-20T20:16:20.457422143Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -158,4 +158,10 @@ comments:
   created_at: 2026-09-20T19:28:49.320508817Z
   modified_at: 2026-09-20T19:28:49.320508817Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c076-67e9-7f13-82c6-55291a0fd4b0
+  author: joe
+  content: '[aida:advisor] ADDITIONAL ACCEPTANCE, from ADR-47 and sharper than the example this spec currently carries. As of ADR-47 the cross-platform nightly is a detector we have DELIBERATELY decided not to read: it will keep firing every night and re-commenting on tracking issue #1925 into an empty room, and that is now expected rather than an oversight. So we have a live instance of the exact thing this spec exists to prevent — except deliberate. ADDED: ''this check is deferred'' must be a state a scheduled job can HOLD. If the scheduler lands without it, the first thing it will do is re-notify us about Windows, and the second thing is teach every seat to ignore its notifications — which is how a detector that works becomes one nobody reads. A deferred check must be distinguishable from a passing one and from a failing-unnoticed one; three states again, which is PRIN-5 pointed at scheduling rather than at evidence.'
+  created_at: 2026-09-20T20:16:20.457422143Z
+  modified_at: 2026-09-20T20:16:20.457422143Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
