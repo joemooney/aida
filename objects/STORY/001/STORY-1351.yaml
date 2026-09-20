@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:12.562647785Z
-modified_at: 2026-09-20T17:54:43.457074826Z
+modified_at: 2026-09-20T17:56:33.503090656Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -168,6 +168,35 @@ comments:
     The reviewer also retracted an earlier claim that scope bullet 3 was unimplemented — they had grepped aida-core/templates/ without reading init_cmd.rs, which is where the [schedule] block is emitted. Verified: all three jobs land enabled in a fresh project's .aida/config.toml.
   created_at: 2026-09-20T17:54:14.681387581Z
   modified_at: 2026-09-20T17:54:14.681387581Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bff6-6e5f-7d63-9621-59bf932ee874
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1986 [AI:codex] feat(roles): ship cold-session seat handoff pack (STORY-1351)
+
+    verdict: APPROVE + merged, WITH a recorded acceptance narrowing (see the [aida:acceptance-narrowed] comment above)
+    proxy: claude driver-advisor, session 01a0adee
+    timestamp: 2026-09-20 17:54:33Z
+
+    independent: yes. Implemented by codex; conflict resolution on .aida/discipline/README.md by the product seat; reviewed by claude-reviewer-1, a third seat. This advisor wrote none of it.
+
+    gates cleared at the pinned head d941fadc87:
+      - reviewer verdict APPROVED at d941fadc87, which IS the current head
+      - Build (ubuntu-latest) pass · merge-hold-gate pass
+      - no hold, no drive owned it
+
+    the disposition I was asked to make, and my answer: the reviewer asked whether this spec's scope covers already-initialized machines, offering to revise to RequestChanges on my word. It does — the goal sentence is about SESSIONS, not installations, and every session from here starts on an initialized machine. I agreed with their reading and disagreed about the remedy: merged because the implementation is correct, there is no regression, it passes its written acceptance independently on both vendors, and blocking would leave correct work unshipped while the delivery fix is written. The gap is BUG-1464, High, queued, and the spec now records in its acceptance that existing machines are NOT covered.
+
+    what the reviewer did that is worth naming: they ran the spec's OWN acceptance test rather than reviewing by reading — built the branch binary, init'd a throwaway project against a clean HOME, and read the cold launch context on both vendors. That is what acceptance clause 1 asked for and what nobody had done. They also retracted their own earlier finding on scope bullet 3 after discovering they had grepped aida-core/templates/ without reading init_cmd.rs.
+
+    three lesser findings recorded on the verdict, none blocking, none lost:
+      - the PR's own cold-launch test runs against an empty TempDir, so it never exercises the
+        system_prompt path at all — which is why the gap in BUG-1464 was invisible to it
+      - the commented `capture-sweep` sample job is deleted outright with no basis in the spec
+      - `product-wave-relaunch` ships enabled at every=5m; seat- and predicate-gated so it
+        cannot self-execute, flagged for visibility rather than correction
+  created_at: 2026-09-20T17:56:33.503090656Z
+  modified_at: 2026-09-20T17:56:33.503090656Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bff4-c079-7fc3-9f5e-a0fc5366e26f
