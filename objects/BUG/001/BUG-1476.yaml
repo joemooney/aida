@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:28:53.617328309Z
-modified_at: 2026-09-20T18:31:35.925482416Z
+modified_at: 2026-09-20T18:33:33.913270623Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -153,4 +153,25 @@ comments:
   created_at: 2026-09-20T18:31:30.937583580Z
   modified_at: 2026-09-20T18:31:30.937583580Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c018-4fd9-75f2-a074-353f11daf1bd
+  author: joe
+  content: |-
+    BUG-1432 shows both defects compounding in a single spec, in under an hour, which is the clearest single illustration of why this one should be fixed ahead of the triage gap.
+
+        17:57     first run opens PR-2024                    (normal-length implementer: real work)
+        18:17:32  SpecShelved verdict:request-changes         (a genuine round, genuinely rejected)
+        18:27:29  implementer phase runs 16s                  <-- this defect: no commit produced
+        18:32:51  SpecRetried phase=merge cause=tool-exit attempt 2/2
+                  "PR #2024 is not mergeable: the base branch policy prohibits the merge"
+        18:32:53  SpecShelved tool-exit
+        now       member state: failed
+
+    So the second round did no work, the pipeline advanced anyway, and the merge phase then misclassified a correct branch-protection refusal as a retryable conflict and burned both attempts. Two rounds consumed; one of them produced code, the other produced nothing and then failed for an unrelated reason that will also need fixing.
+
+    The detail worth keeping: BUG-1432's FIRST run had a normal-length implementer phase and produced a real PR. Its second run, on the same spec with the PR now existing, ran sixteen seconds. Same spec, same drain, same binary, one variable changed — the PR exists. That is as close to a controlled comparison as this data offers, and it is consistent with the eleven-run correlation without me having to assert the mechanism.
+
+    It also means the defect is not confined to old shelved work. BUG-1432 was filed and first driven today; it reached the no-op state within forty minutes of its own PR being created. Anything that goes round twice is exposed.
+  created_at: 2026-09-20T18:33:33.913270623Z
+  modified_at: 2026-09-20T18:33:33.913270623Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
