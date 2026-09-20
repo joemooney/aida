@@ -41,12 +41,12 @@ description: |
   - A failure occurring AFTER the implementer has pushed does not leave the spec `done` with an unshipped branch: either the PR is opened, or the spec is not marked done, or the shelve names the stranded branch and the recovery is one command.
   - The error text drops the active-lease list, or explains what a reader is meant to do with it.
   - Regression fixture reproduces both positions: a mismatch at session start (BUG-1445's 25-second shape) and a mismatch after a successful push (BUG-1442's shape).
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-20T20:21:03.665396564Z
+modified_at: 2026-09-20T20:30:01.256874279Z
 req_type: Bug
 tags:
 - batch:night-0920
