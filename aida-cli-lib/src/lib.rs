@@ -78585,10 +78585,14 @@ fn handle_from_pr(
             // `aida drain resume` pins the failed phase from the newest
             // SpecShelved row; the normal --from-pr path stays reality-based.
             // trace:TASK-1272 | ai:codex
-            let start_phase = std::env::var("AIDA_DRAIN_RESUME_PHASE")
+            let recorded_phase = std::env::var("AIDA_DRAIN_RESUME_PHASE")
                 .ok()
                 .as_deref()
-                .and_then(drain_resume::shelved_resume_phase)
+                .and_then(drain_resume::shelved_resume_phase);
+            let start_phase = recorded_phase
+                .map(|recorded| {
+                    drain_resume::reconciled_shelved_phase(recorded, probed_start_phase)
+                })
                 .unwrap_or(probed_start_phase);
             // A RECORDED PHASE DOES NOT CARRY THE HEAD IT WAS RECORDED FOR.
             // Whatever phase we resume from, never enter a reviewer without

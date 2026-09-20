@@ -44,6 +44,18 @@ pub(crate) fn shelved_resume_phase(slug: &str) -> Option<Phase> {
     }
 }
 
+/// Reconcile the phase recorded when work was shelved with the phase allowed
+/// by the PR's current state. History may restore a later failed phase, but it
+/// must never rewind work whose postcondition is already visible today.
+// trace:TASK-1272 | ai:codex
+pub(crate) fn reconciled_shelved_phase(recorded: Phase, probed: Phase) -> Phase {
+    if recorded.index() > probed.index() {
+        recorded
+    } else {
+        probed
+    }
+}
+
 /// Whether a crashed or parked drain member may be auto-resumed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Resumability {
@@ -326,6 +338,22 @@ mod tests {
     fn shelved_resume_refuses_fresh_or_unknown_work() {
         assert_eq!(shelved_resume_phase("implementer"), None);
         assert_eq!(shelved_resume_phase("legacy-phase"), None);
+    }
+
+    #[test]
+    fn shelved_resume_never_rewinds_behind_current_reality() {
+        assert_eq!(
+            reconciled_shelved_phase(Phase::Ci, Phase::Merge),
+            Phase::Merge
+        );
+        assert_eq!(
+            reconciled_shelved_phase(Phase::Reviewer, Phase::Ci),
+            Phase::Reviewer
+        );
+        assert_eq!(
+            reconciled_shelved_phase(Phase::Reviewer, Phase::Reviewer),
+            Phase::Reviewer
+        );
     }
 
     #[test]

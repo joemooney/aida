@@ -195,6 +195,13 @@ fn handle_shelved_resume(spec: &str, json: bool) -> Result<()> {
             "no recorded failure for `{spec}` — `aida drain resume` only re-drives a shelved run"
         )
     })?;
+    let storage = Storage::new(project_root.join(".aida-store"));
+    if !requirement_has_failure_reason(&storage, spec) {
+        anyhow::bail!(
+            "`{spec}` is no longer shelved; its last shelve was at {} but it has since recovered",
+            shelf.ts
+        );
+    }
     let phase_slug = match &shelf.kind {
         events::EventKind::SpecShelved { phase, .. } => phase.as_str(),
         _ => unreachable!("latest_spec_shelved returned a non-shelving event"),
