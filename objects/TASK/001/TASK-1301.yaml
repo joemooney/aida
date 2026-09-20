@@ -17,14 +17,15 @@ description: |
   - `aida comment add <ID> --body-stdin` reads stdin; errors non-zero on empty stdin.
   - The positional CONTENT argument keeps working unchanged; supplying more than one input source is a clap conflict, not a silent precedence rule.
   - Flag names match the shape a caller who knows `aida add` would guess, or `aida add`'s existing names are accepted as aliases, so the two surfaces stop disagreeing.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:05:14.397525688Z
-modified_at: 2026-09-20T16:05:14.397525688Z
+modified_at: 2026-09-20T20:14:48.395694661Z
 req_type: Task
 tags:
 - agent-surface
 - papercut
 - severity:cosmetic
+execution_mode: drain
