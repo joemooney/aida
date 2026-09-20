@@ -593,10 +593,7 @@ pub(crate) fn handle_drain_resume(
         .and_then(|c| state.members.iter().find(|m| &m.spec == c))
         .cloned();
     let member_in_flight = current.is_some();
-    let member_state_in_phase = member
-        .as_ref()
-        .map(|m| m.state.starts_with("in-phase-"))
-        .unwrap_or(false);
+    let member_state_in_phase = member.as_ref().map(|m| m.is_running()).unwrap_or(false);
     // BUG-478: the "deliberately shelved" signal lives on the REQUIREMENT
     // (`failure_reason`, set by the shelve function), NOT on the drain-state
     // member. The member is stamped STATE_FAILED on ANY non-zero outcome —

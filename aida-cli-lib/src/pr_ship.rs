@@ -361,18 +361,20 @@ pub enum ReviewerLiveness {
     None,
 }
 
-/// `members` is `(state, pr)` per drive member — state is the raw
-/// `DrainMember::state` string (`"in-phase-N"` while running), pr is the
-/// member's currently-bound PR (STORY-1033/TASK-1292 binds it live, at
-/// phase-entry, not only at the member's terminal outcome).
+/// `members` is `(is_running, pr)` per drive member. The caller derives
+/// liveness through `DrainMember::is_running`, so this guard cannot drift from
+/// the state producer's format. `pr` is the member's currently-bound PR
+/// (STORY-1033/TASK-1292 binds it live, at phase-entry, not only at the
+/// member's terminal outcome).
 // trace:TASK-1292 | ai:claude
-pub fn reviewer_liveness_for_pr<'a>(
-    members: impl IntoIterator<Item = (&'a str, Option<u32>)>,
+// trace:BUG-1429 | ai:codex
+pub fn reviewer_liveness_for_pr(
+    members: impl IntoIterator<Item = (bool, Option<u32>)>,
     pr: u32,
 ) -> ReviewerLiveness {
     let mut saw_other_live_pr = false;
-    for (state, member_pr) in members {
-        if !state.starts_with("in-phase-") {
+    for (is_running, member_pr) in members {
+        if !is_running {
             continue;
         }
         match member_pr {
@@ -1100,7 +1102,7 @@ mod tests {
     // TASK-1292: the pure PR-keyed liveness decision. trace:TASK-1292 | ai:claude
     #[test]
     fn reviewer_liveness_on_this_pr_when_a_live_member_is_bound_to_it() {
-        let members = [("in-phase-3", Some(1948))];
+        let members = [(true, Some(1948))];
         assert_eq!(
             reviewer_liveness_for_pr(members, 1948),
             ReviewerLiveness::OnThisPr
@@ -1109,7 +1111,7 @@ mod tests {
 
     #[test]
     fn reviewer_liveness_elsewhere_when_live_member_bound_to_a_different_pr() {
-        let members = [("in-phase-3", Some(1965))];
+        let members = [(true, Some(1965))];
         assert_eq!(
             reviewer_liveness_for_pr(members, 1948),
             ReviewerLiveness::Elsewhere
@@ -1118,7 +1120,7 @@ mod tests {
 
     #[test]
     fn reviewer_liveness_none_with_no_drive_members() {
-        let members: [(&str, Option<u32>); 0] = [];
+        let members: [(bool, Option<u32>); 0] = [];
         assert_eq!(
             reviewer_liveness_for_pr(members, 1948),
             ReviewerLiveness::None
@@ -1130,7 +1132,7 @@ mod tests {
         // A member that finished (`completed`/`failed`, not `in-phase-*`)
         // keeps its `pr` field, but it is no longer LIVE — its reviewer
         // is not running, so it must not block a ship.
-        let members = [("completed", Some(1948))];
+        let members = [(false, Some(1948))];
         assert_eq!(
             reviewer_liveness_for_pr(members, 1948),
             ReviewerLiveness::None
@@ -1142,7 +1144,7 @@ mod tests {
         // An implementer phase that hasn't discovered a PR yet is live but
         // unbound — it must not read as "elsewhere" (which would be a false
         // "some other reviewer is busy" signal) or "on this PR".
-        let members = [("in-phase-1", None)];
+        let members = [(true, None)];
         assert_eq!(
             reviewer_liveness_for_pr(members, 1948),
             ReviewerLiveness::None
@@ -1159,7 +1161,7 @@ mod tests {
         // is the drive's nominal "current" member but is shelved/terminal
         // and carries no PR binding of its own — exactly the 2026-09-18
         // near-miss shape.
-        let members = [("failed", None), ("in-phase-3", Some(1948))];
+        let members = [(false, None), (true, Some(1948))];
         assert_eq!(
             reviewer_liveness_for_pr(members, 1948),
             ReviewerLiveness::OnThisPr,

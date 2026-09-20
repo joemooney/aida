@@ -82,8 +82,8 @@ impl DrainMember {
     }
 
     /// True while this member is mid-pipeline (`in-phase-N`).
-    fn is_running(&self) -> bool {
-        self.state.starts_with("in-phase-")
+    pub(crate) fn is_running(&self) -> bool {
+        aida_core::liveness::drain_member_is_running(&self.state)
     }
 }
 
@@ -2273,7 +2273,7 @@ mod tests {
         );
         let read = DrainState::read(dir.path()).unwrap();
         let liveness = crate::pr_ship::reviewer_liveness_for_pr(
-            read.members.iter().map(|m| (m.state.as_str(), m.pr)),
+            read.members.iter().map(|m| (m.is_running(), m.pr)),
             1948,
         );
         assert_eq!(

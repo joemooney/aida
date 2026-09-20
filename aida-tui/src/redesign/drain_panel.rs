@@ -70,7 +70,9 @@ impl DrainPanelMember {
     }
 
     pub fn is_running(&self) -> bool {
-        self.state.starts_with("in-phase-")
+        // Keep the read-only TUI projection aligned with the drain producer's
+        // canonical state predicate. trace:BUG-1429 | ai:codex
+        aida_core::liveness::drain_member_is_running(&self.state)
     }
 
     pub fn is_failed(&self) -> bool {
