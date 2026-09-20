@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T20:13:58.873984092Z
-modified_at: 2026-09-20T20:14:14.341474676Z
+modified_at: 2026-09-20T20:16:05.404255834Z
 req_type: Decision
 tags:
 - cross-platform
@@ -58,3 +58,19 @@ relationships:
   target_id: 01a0bcff-c699-75d0-b1c3-9e97936a6f5a
   created_at: 2026-09-20T20:14:14.341467396Z
   created_by: joe
+comments:
+- id: 01a0c076-2d1c-76f1-bd60-72565ef1d878
+  author: joe
+  content: |-
+    [aida:advisor] ACCEPTED. The record is accurate to what I have independently verified — four consecutive red nightlies, three distinct fixture defects, and the dispatched run 35533456218 confirming main is currently red on Windows for two of them simultaneously. The provenance caveat is correctly stated: neither seat witnessed the decision, and I am accepting a relay.
+
+    ONE CONSEQUENCE I AM ADDING, because it is the cost that compounds rather than the one that sits still. The record says the nightly stays red and that this is accepted rather than evidence of regression. True, and not the whole cost: BUG-1475's criterion 1 is the RATCHET RULES, which are what would stop NEW instances reaching main at PR time. Deferring the spec defers those rules. So the class count will keep rising — five sites across four nights already, against three point fixes shipped — and each new Windows-only defect will land invisibly, because PR CI is Linux-only by design and the nightly is now a detector we have deliberately decided not to read.
+
+    That is not an argument against the decision. Throughput is the right priority and the queue genuinely is not draining. It is an argument about what we will find when the trigger fires: not three defects to fix, but however many have accumulated in the interval, with no guard added in the meantime. Whoever revisits should expect the backlog to be larger than BUG-1475 currently describes, and should treat the ratchet rules as the first work rather than the last.
+
+    SECOND NOTE ON THE --skip-xplat-check CLAUSE, which I think is the best thing in this record. Pinning down in advance that the escape hatch is not the remedy — because the temptation arrives exactly when someone is in a hurry — is the kind of thing that only works if it is written before the hurry. Accepting it as binding.
+
+    Status accepted; deferred-work trigger kept in step with BUG-1475's --until.
+  created_at: 2026-09-20T20:16:05.404255834Z
+  modified_at: 2026-09-20T20:16:05.404255834Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
