@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-20T16:13:08.037498654Z
+modified_at: 2026-09-20T16:13:09.822174237Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -191,6 +191,20 @@ comments:
   created_at: 2026-09-20T16:13:04.684618549Z
   modified_at: 2026-09-20T16:13:04.684618549Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bf97-c414-7582-b226-7b3ecf53e6ad
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #2001):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2a410c46fb30
+    Recorded: 2026-09-20T05:29:04.613891514+00:00
+    Findings:
+    1. BUG-1291 AC2/AC3: reviewer_phase_shelve_hands_open_pr_to_reviewer_queue only asserts that a mock hook was invoked. It never exercises RealPhaseDriver's queue handoff, never creates/uses STORY-1354, and never asserts the review story is claimable after shelving. Add an integration-level regression that shelves BUG-1268 mid-reviewer phase and verifies the reviewer queue/claim state.
+    2. BUG-1291 ownership guarantee: handoff_open_pr_after_shelve and the sweep use aida_subcmd_queue_add_for_reviewer, which discards queue-add failures; try_auto_queue_pr_review can still report Filed and sweep_orphaned_reviews can print 'claimed' even though no queue owner was created. Propagate/verify queue insertion or retain a durable retry signal so a successful shelf cannot silently orphan the PR.
+    3. BUG-1291 backstop predicate: sweep_orphaned_reviews treats only an Approved local verdict as a verdict. If PR-N.json contains RequestChanges or Rejected while GitHub reviewDecision is empty, no_verdict is true and the PR is incorrectly requeued to reviewer. Detect every valid local verdict and add focused sweep tests for Approved, RequestChanges, Rejected, holds, live-owner identity, and queue-add failure.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T16:13:09.524151103Z
+  modified_at: 2026-09-20T16:13:09.524151103Z
 execution_mode: drive
 implementation_info:
   implemented: true
