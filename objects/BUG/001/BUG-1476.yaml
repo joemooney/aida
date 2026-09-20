@@ -1,0 +1,75 @@
+id: 01a0c014-08f1-7131-9e78-3a80a1e5a65d
+spec_id: BUG-1476
+agreed_id: BUG-1476
+title: A rework round's implementer phase exits in fifteen seconds with no commit, then the pipeline re-reviews the unchanged head and re-shelves the same verdict — eleven runs today, every one on a spec tha
+description: |
+  A rework round runs its implementer phase in fifteen seconds, produces no commit, and the pipeline then re-reviews the unchanged head and re-issues the same verdict. The loop is self-sustaining: it burns a full review cycle per iteration and cannot converge, because nothing between one verdict and the next ever changes the code.
+
+  THE MEASUREMENT, over every drain run today (implementer phase duration = PhaseEntered idx=1 → PhaseEntered idx=2):
+
+      runs with implementer phase under 60s:   11
+      runs with a normal-length implementer:   40
+
+      06:02:51  TASK-1289    27s
+      13:23:48  STORY-1350   16s
+      14:29:25  BUG-1310     17s
+      14:35:52  TASK-1298    15s
+      15:01:55  BUG-1297     50s
+      17:00:39  BUG-1288     16s
+      17:04:31  BUG-1286     16s
+      18:17:40  TASK-1298    18s
+      18:23:00  BUG-1297     14s
+      18:23:33  BUG-1288     17s
+      18:27:29  BUG-1432     16s
+
+  THE CORRELATION IS TOTAL. Every one of the eight distinct specs above already had an open PR created BEFORE its short run:
+
+      TASK-1289  PR 1972 created 09-19 18:32     STORY-1350 PR 1974 created 09-19 20:59
+      BUG-1310   PR 2016 created 09-20 11:54     TASK-1298  PR 2014 created 09-20 11:10
+      BUG-1297   PR 2006 created 09-20 07:13     BUG-1288   PR 1999 created 09-20 04:20
+      BUG-1286   PR 1998 created 09-20 03:21     BUG-1432   PR 2024 created 09-20 17:57
+
+  Eleven runs, eight specs, no exceptions. The forty normal-length runs are first passes, where no PR exists yet.
+
+  THE DOWNSTREAM SHAPE, traced on three specs I requeued and watched:
+
+      BUG-1288   18:23:33 implementer (16s) -> 18:23:49 ci (3s) -> 18:23:52 reviewer
+                 18:27:27 SpecShelved verdict:request-changes
+                 branch tip unchanged: a8632b7f1d, committed 09-19 21:20
+
+      TASK-1298  18:17:40 implementer (18s) -> 18:17:58 ci (3s) -> 18:18:01 reviewer
+                 18:22:56 SpecShelved verdict:request-changes
+                 branch tip unchanged: f94c08d945, committed 09-20 07:02
+
+      BUG-1297   18:23:00 implementer (14s) -> shelved stale-base-conflict
+                 branch tip unchanged: 5a857b7df4, committed 09-20 00:12
+
+  A three-second CI phase is reading a cached terminal result for a head that did not move — which follows necessarily from the implementer producing nothing. The reviewer then spends three to five real minutes reviewing code it has already reviewed and reaches the same conclusion, correctly.
+
+  WHY THIS MATTERS MORE THAN THE TRIAGE GAP. There is a separate finding that shelved specs are never requeued. That one is about work not being started. This one is about work being started and achieving nothing, which is worse in two ways: it consumes a reviewer cycle per iteration, and it produces a `verdict:request-changes` shelve that looks exactly like a genuine round where the implementer tried and fell short. Twenty-two of today's thirty-four shelves are request-changes. An unknown fraction of them are this.
+
+  It also means requeueing a shelved spec — the obvious remedy for the triage gap — does not help on its own. I requeued three specs today, all three produced rounds within minutes, and all three ended exactly where they started.
+
+  WHAT I HAVE NOT ESTABLISHED, stated plainly. I have not read the implementer phase's entry conditions. I do not know why it exits in fifteen seconds on a spec with an existing PR — whether it detects commits already carrying the spec id and concludes the work is done, whether a branch/worktree precondition fails silently, or whether the pickup refuses and the failure is swallowed. The correlation is total across eleven runs and the consequence is measured, but the cause is not read from the code, and three separate causal claims of mine have been wrong today. Read that path before designing.
+
+  A CHEAP DIAGNOSTIC THAT WOULD HAVE CAUGHT THIS MONTHS AGO: the drain knows the branch head when the implementer phase starts and when it ends. A phase that leaves the head unchanged is either a no-op or a failure, and in neither case should the pipeline proceed to CI and review as though a round happened.
+
+  Acceptance:
+  - The implementer phase records the branch head at entry and at exit. If unchanged, the run does not advance to CI/review; it ends with a cause naming that the phase produced no change.
+  - That outcome is its own shelve kind, distinguishable from `verdict:request-changes` — a round that did nothing and a round that did something a reviewer rejected must not look the same in `aida findings list`.
+  - A spec with an existing open PR entering the implementer phase either performs the rework or reports why it cannot. Exiting successfully in fifteen seconds having done nothing is not an acceptable outcome of either path.
+  - Regression fixture: a spec with an open PR and a recorded RequestChanges verdict, driven once; assert the branch head changed or the run ended with the no-change cause.
+  - The eleven runs above are the historical fixture set; their specs and timestamps are in this description.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T18:28:53.617328309Z
+modified_at: 2026-09-20T18:28:53.617328309Z
+req_type: Bug
+tags:
+- drain-safe
+- orchestrator
+- parent:EPIC-62
+- rework-loop
+- severity:major
