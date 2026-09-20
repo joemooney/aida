@@ -32,15 +32,16 @@ description: |
   - Worth checking in the same pass whether any other guarded transition has a second route. The pattern — an authority check on the obvious verb and none on the verb that achieves the same state indirectly — is unlikely to be unique to this pair.
 
   Related: the three specs above are currently Approved and batched as a result of this. They are legitimate rework candidates on the merits and the advisor has been asked to either bless or revert them; the point of this spec is the route, not those three.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:50:46.533446065Z
-modified_at: 2026-09-20T22:50:46.533446065Z
+modified_at: 2026-09-20T22:53:46.430474898Z
 req_type: Bug
 tags:
 - agent-surface
 - authority
 - drain-safe
 - substrate-gate
+execution_mode: drain
