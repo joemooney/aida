@@ -1,0 +1,38 @@
+id: 01a0bff1-2ba4-75b2-976c-a074961121fc
+spec_id: BUG-1464
+agreed_id: BUG-1464
+title: Starter role system_prompt never reaches an already-initialized machine - neither aida init nor scaffold refresh backfills it
+description: |-
+  STORY-1351 (PR #1986) delivers the product/advisor operating protocol through a new system_prompt on the starter role files. That channel does not reach any machine that has already run aida init.
+
+  MECHANISM
+  - scaffold_starter_roles skips a role whose file already exists (load_role(...).is_ok() -> skipped). By design per TASK-638 idempotence, so an existing advisor.toml/product.toml keeps system_prompt absent forever.
+  - role_guidance_for reads system_prompt from the role file and, when it is absent, falls through to default_role_guidance. The new prose is the ONLY place that points at two-seat-protocol.md, rework-brief-craft.md and seat-recovery-playbooks.md.
+  - aida scaffold refresh (TASK-1170, the edit-preserving cross-vendor overlay) does not cover ~/.aida/roles/ at all.
+
+  REPRODUCED end-to-end with the PR-1986 release binary, not inferred:
+  - Fresh HOME + aida init -> advisor.toml HAS system_prompt; "aida agent new claude|codex --role advisor --show-context" prints a "System prompt:" block naming all three guides. Acceptance clause "how it writes a rework brief" PASSES on both vendors.
+  - Same project, HOME whose advisor.toml predates the change (system_prompt line removed) -> launch context prints "Loaded role file" and "Purpose:" but NO "System prompt:" block. Nothing in the whole context names rework-brief-craft.md.
+  - Re-running aida init on that HOME: system_prompt still absent.
+  - Running aida scaffold refresh on that HOME: system_prompt still absent.
+
+  WHY THIS MATTERS MORE THAN A NORMAL GAP
+  STORY-1351 exists because memory-backed behaviour failed 0-for-3 while substrate-backed behaviour held 6-for-6. A durable-looking channel that silently carries nothing to existing installs is that same failure mode. Both documented upgrade paths no-op without a warning, so an operator has every reason to believe the upgrade landed.
+
+  Filed as a follow-up rather than blocking PR #1986: there is no regression, the spec scoped its acceptance to a cold/fresh seat (which passes on Claude and Codex), and the remedy is a different mechanism the spec never scoped.
+
+  ## Acceptance
+
+  - An already-initialized machine acquires the shipped system_prompt for a starter role whose own system_prompt is absent, via an explicit path (scaffold refresh covering ~/.aida/roles/ is the natural home, alongside the other packs).
+  - A role file the USER edited, or one carrying a system_prompt already, is never overwritten - same edit-preserving contract as the memory/skill packs.
+  - A test covers: existing starter role file with no system_prompt, run the refresh, assert the guidance is present; then assert a user-edited system_prompt survives a second refresh unchanged.
+  - Re-running the refresh on a machine that is already current is a silent no-op.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T17:50:48.740973629Z
+modified_at: 2026-09-20T17:50:48.740973629Z
+req_type: Bug
+tags:
+- roles scaffolding refresh cold-session multivendor from:review-pr-1986 parent:EPIC-62
