@@ -1,0 +1,37 @@
+id: 01a0bffa-514d-7752-8f2f-cf3d58fe7647
+spec_id: BUG-1467
+agreed_id: BUG-1467
+title: A reviewer seat launched outside the drain has no supported way to record a verdict, so it hand-writes JSON with null reviewed_sha — two APPROVED verdicts today are unverifiable against their heads
+description: |
+  TASK-168 stamped `reviewed_sha` / `recorded_at` / `recorded_by` onto drain-written verdicts and landed 2026-09-19 20:08 (a78c4e670b, PR #1995). It fixed the writer it was scoped to. A human-launched reviewer seat writes through a different path that stamps none of them.
+
+  MEASURED over every verdict file written today:
+
+      23 of 25 carry provenance   recorded_by = "aida drain reviewer" or "advisor (proxy for operator)"
+       2 of 25 carry none         PR-1976.json, PR-1986.json — reviewed_sha/recorded_at/recorded_by all null
+
+  Both unstamped files were written by the reviewer seat launched via `aida agent new claude --role reviewer`, and both are APPROVED — the consequential direction. A RequestChanges without provenance costs a round; an APPROVED without provenance is an unverifiable authorisation to merge.
+
+  WHY THIS IS NOT COSMETIC, with today's evidence. The advisor built a rework brief on PR #1978's verdict, which also lacked these fields. The findings described an earlier state of the branch and item 1 — marked "do this one if only one lands" — had already been fixed. An hour went into a brief item that was already closed. The fields exist so a reader can ask "which head did this verdict cover?" and get an answer. With them null, a verdict is indistinguishable on disk from one recorded against a commit that no longer exists.
+
+  It also silently defeats the ADR-40 post-review SHA guard, which compares the reviewed sha against the head; there is nothing to compare.
+
+  THE GAP IS THE WRITER, NOT THE FORMAT. The schema is right and three writers already populate it. What is missing is that a reviewer seat spawned outside the drain has no supported way to record a verdict — so it writes the JSON by hand and the hand-written file omits fields the agent does not know are load-bearing. That is a missing surface, not carelessness: nothing told it.
+
+  Acceptance:
+  - A reviewer seat launched by `aida agent new <vendor> --role reviewer` records verdicts through a supported command rather than by writing JSON directly, and that command stamps `reviewed_sha` (resolved from the PR head at record time), `recorded_at`, and `recorded_by` (the seat's identity, distinguishable from "aida drain reviewer").
+  - A verdict file missing `reviewed_sha` is rejected or flagged at read time rather than silently accepted — a consumer must not treat it as covering the current head.
+  - The existing two unstamped files (PR-1976, PR-1986) are either re-stamped or explicitly marked unverifiable; both PRs' specs shipped or are shipping on those approvals.
+  - The path is discoverable from the reviewer role's own context, so a cold-booted seat finds it without being told by another agent.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T18:00:48.205325226Z
+modified_at: 2026-09-20T18:00:48.205325226Z
+req_type: Bug
+tags:
+- agent-surface
+- drain-safe
+- provenance
+- reviewer
