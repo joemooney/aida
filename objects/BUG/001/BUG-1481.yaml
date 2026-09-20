@@ -32,8 +32,43 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:33.668555610Z
-modified_at: 2026-09-20T19:37:11.893777469Z
+modified_at: 2026-09-20T19:37:13.272204636Z
 req_type: Bug
 tags:
 - awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
+comments:
+- id: 01a0c052-9738-7212-ae0b-eb73ec78d494
+  author: joe
+  content: |-
+    [aida:advisor] Approved HIGH, mode drain. I verified it directly and it is worse than a reporting bug for one specific reason: this is the surface I have used all day to decide what is mergeable.
+
+    VERIFIED:
+        $ gh api repos/joemooney/aida/commits/065f3df8aa/check-runs
+          merge-hold-gate: completed/success
+          (nothing else)
+        $ aida awaiting
+          prs[1]{number,title,ci}:
+            2009,"…(BUG-1420)",pass
+
+    One trivial green check, no Build (ubuntu-latest) — required for main — and the surface says pass.
+
+    WHY THIS IS NOT ACADEMIC. `aida awaiting` is the advisor's merge-decision surface. I have read "2009 … pass" on roughly forty mail ticks over twelve hours. I did not merge it, but the reason was that BUG-1420 is blocked-by TASK-1289 — a constraint from a different subsystem entirely. The surface had already told me it was ready. Had that blocker not existed, the correct-looking action on any of those forty ticks was to merge a commit whose build never ran.
+
+    THE FILING'S OWN COMPARISON IS THE RIGHT ONE and I am reinforcing it rather than restating: this is BUG-1466's shape. There the drain matches only on Approved and never compares reviewed_sha, so an approval authorizes any head. Here awaiting matches only the checks PRESENT and never asks which are REQUIRED, so an incomplete pipeline reads as a complete one. Both compute a green from an incomplete set. **Neither notices absence.**
+
+    That is the same rule I added to BUG-1466 — the gate must refuse on a MISSING sha, not merely a mismatched one — and it must not get two ad-hoc fixes. Whatever shape the answer takes, "the evidence I need is not present" has to be a distinct outcome from "the evidence I have is good", on both surfaces.
+
+    THE TEST NOTE IS EXACTLY THE FORM I ASKED FOR and it is load-bearing here: every existing test in awaiting_you.rs builds PRs through a helper that passes Some("pass") straight in, so they assert the CLASSIFIER given a rollup and never exercise how the rollup is DERIVED. The defect is upstream of every current test. No assertion added to them reaches it. That means coverage is part of this fix, not just code — and an implementer who adds cases to those helpers will produce a green suite over an unchanged bug.
+
+    ACCEPTANCE — additions:
+    1. A missing required check reads as NOT-green. Required-ness comes from the branch protection configuration, not from a hardcoded list that will drift the moment protection changes.
+    2. The three states are distinguishable in the output: all required checks green; a required check failed; a required check has not reported. Today the third is rendered as the first.
+    3. The fix is designed jointly with BUG-1466 and the spec says which surfaces share the code. Two independent fixes for "compute green from an incomplete set" is how the third instance ships.
+    4. Tests exercise the DERIVATION, not the classifier. Build a head with only a non-required check present and assert it is not surfaced as ready.
+    5. Report how many currently-open PRs the corrected logic would reclassify. If any PR merged today had an incomplete required set, that is a separate and more urgent finding than this spec.
+
+    trace note for the implementer: criterion 5 is not busywork. I merged five PRs today on this surface's information.
+  created_at: 2026-09-20T19:37:13.272204636Z
+  modified_at: 2026-09-20T19:37:13.272204636Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
