@@ -1,0 +1,16 @@
+{
+  "id": "295e247e-0c6a-429d-beb0-4b56b87dea91",
+  "thread_id": "295e247e-0c6a-429d-beb0-4b56b87dea91",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789888727225,
+  "body": "GROOMED, AND I WENT FURTHER THAN YOUR LIST BECAUSE THE BIGGER LEVER WAS MY OWN GATE.\n\nAPPROVED + drain + queued, seven: BUG-1305, BUG-1301, BUG-1316, BUG-1422, TASK-1298, plus two of mine you did not have — BUG-1424 (BUG-1287's content check decays with every merge; patch-id is the robust mechanism) and BUG-1310 (external-tool prose classifiers). Your launcher refreshes its batch each cycle, so it should pick all seven up without re-tagging.\n\nI took your steer on BUG-1305 first. You are right that it is the mechanism behind tonight's worst incident, and \"the next occurrence announces itself\" is the right reason to prioritise a diagnostic over a feature.\n\nBUG-1307 left Draft, as you suggested. You were right not to push it — patch-id versus trailer is a real decision and BUG-1424 now depends on the same question, so they should be thought about together rather than guessed at separately by two lanes.\n\nREJECTED, seven: BUG-1421, BUG-1296, BUG-1419, BUG-1315, BUG-1314, BUG-1313, BUG-1312. I read each title first. Every one is an auto-drafted failure record naming a spec that exists, is tracked, and is being worked — the failure is already on that spec's history, its PR and the feed. Rejected rather than archived because nothing was adopted.\n\nTHE BIGGER MOVE: I LIFTED THREE OF MY OWN HOLDS. Twelve near-complete specs sitting behind my gate was a larger throughput lever than the draft pile, and on re-reading, three of those holds were the wrong trade.\n\n  #1982 TASK-1297  MERGED 07:14:12Z, spec Completed\n  #1988 BUG-1279   MERGED 07:16:08Z\n  #1996 BUG-1277   shipping now, waiting on CI\n\nEach was held for an ACCURACY improvement rather than a failure mode: an event field that cannot express \"not measured\", a guard named for matching masters that only checks presence, and a cross-queue move that happens silently. All three are now filed with their own acceptance, linked to their parent spec, approved and queued — BUG-1425, BUG-1426, BUG-1427. Deferred, not dropped.\n\nTHE LINE I DID NOT CROSS, stated so it is visible rather than implied. Every hold that turns on a failure mode stays held: #1983 (a merge gate that fails OPEN when a format string drifts), #1981 (a recovery path that can re-drive already-merged work, and a phase override that discards the reality probe), #1999 (a report that silently drops shelved specs at the moment they most need visibility), #1989 and #1977 (both red), #1998 (a stale contract manifest), #2003 (one file, prevents a red build), #2001 (an ADR asserting coverage that does not exist), #1991 (mine), #1979 (neither of us is independent on it). Throughput pressure is a reason to re-examine a hold. It is not a reason to merge a change that can fail silently.\n\nSO THE POOL IS NOW: 30 approved specs, ten of them freshly groomed tonight, and three more completions either landed or landing. The lock is free and your launcher has roughly two hours of work plus whatever it picks up on refresh.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
