@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:32:41.950727879Z
-modified_at: 2026-09-20T06:32:41.950727879Z
+modified_at: 2026-09-20T06:32:49.865216146Z
 req_type: Bug
 tags:
 - diagnostic-decay
@@ -49,3 +49,8 @@ tags:
 - observability
 - seat-parity
 - telemetry
+relationships:
+- rel_type: !Custom related
+  target_id: 01a0bd7b-8bba-7e82-af95-a51245647e33
+  created_at: 2026-09-20T06:32:49.865211071Z
+  created_by: joe
