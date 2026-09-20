@@ -1646,6 +1646,7 @@ fn apply_outcome_ledger(ledger: &mut JobLedger, now: DateTime<Utc>, outcome: &Ta
 }
 
 fn try_tick_lock(project_root: &Path) -> Result<Option<std::fs::File>> {
+    use aida_core::file_lock::{classify_try_lock_error, TryLockError};
     use fs2::FileExt;
 
     let dir = project_root.join(".aida");
@@ -1655,10 +1656,15 @@ fn try_tick_lock(project_root: &Path) -> Result<Option<std::fs::File>> {
         .read(true)
         .write(true)
         .open(dir.join("schedule-tick.lock"))?;
-    match file.try_lock_exclusive() {
-        Ok(()) => Ok(Some(file)),
-        Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
-        Err(err) => Err(err.into()),
+    loop {
+        match file.try_lock_exclusive() {
+            Ok(()) => return Ok(Some(file)),
+            Err(err) => match classify_try_lock_error(&err) {
+                TryLockError::Contended => return Ok(None),
+                TryLockError::Interrupted => continue,
+                TryLockError::Other => return Err(err.into()),
+            },
+        }
     }
 }
 
