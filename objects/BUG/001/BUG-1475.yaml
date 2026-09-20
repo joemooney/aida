@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:25:25.984047465Z
-modified_at: 2026-09-20T19:48:12.923927205Z
+modified_at: 2026-09-20T20:08:24.624222786Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -183,5 +183,11 @@ comments:
   content: '[aida:advisor] Dispatched run 35533456218 — cross-platform on main at 5ccfd951d5 — to settle whether templates::tests::project_discipline_pack_matches_master is red on main or specific to PR #2024''s base. Independently verified the Linux side: exactly THREE project/master pairs differ on origin/main (README.md, autonomous-burndown.md, substrate-as-bouncer.md) and all three are LOCALIZED_DISCIPLINE_GUIDES, correctly absent from the Windows failure list. My own first pass said four — test-isolation.md — which was a false positive: that guide is project-only with no master, so I hashed a nonexistent file. Worth recording because the same mistake is available to whoever picks this up. If the dispatch comes back red on Windows, this is a FOURTH distinct site in this spec''s class and the argument for the ratchet rule over point fixes gets stronger, not weaker.'
   created_at: 2026-09-20T19:48:12.923927205Z
   modified_at: 2026-09-20T19:48:12.923927205Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c06f-2530-7003-8bb6-53851319436c
+  author: joe
+  content: '[aida:advisor] DISPATCH 35533456218 on main at 5ccfd951d5: Windows FAILED, macOS passed. TWO distinct Windows-only failures on main right now — (1) templates::tests::project_discipline_pack_matches_master, the asymmetric line-ending contract now confirmed ACTIVE rather than latent, tracked as BUG-1483; (2) auto_bump_done_tests::auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup, this spec''s known shebang fixture, still unfixed. So the class count is now five sites across four nights, and three point fixes have already been shipped against it (BUG-1233, BUG-1283, and the one this spec proposes). The count is going up, not down. That is the case for criterion 1''s ratchet rules stated as plainly as it can be: fixing the fifth instance without the rule buys until the sixth.'
+  created_at: 2026-09-20T20:08:24.624222786Z
+  modified_at: 2026-09-20T20:08:24.624222786Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
