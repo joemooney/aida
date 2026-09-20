@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-20T07:24:42.809949689Z
+modified_at: 2026-09-20T07:38:18.955294421Z
 req_type: Bug
 tags:
 - agent-surface
@@ -64,6 +64,23 @@ comments:
   content: 'Implemented unified mailbox message-prefix resolution across reply/thread/mutation/read surfaces; ambiguous prefixes list full candidates, unknown --in-reply-to refuses before write, and new non-consuming mailbox read supports rereading acknowledged messages. Validation: cargo fmt --all -- --check; cargo test -p aida-cli-lib mailbox_ --lib (30 passed); cargo test -p aida-cli-lib mailbox_cmd::tests --lib (9 passed).'
   created_at: 2026-09-20T07:12:30.901608041Z
   modified_at: 2026-09-20T07:12:30.901608041Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bdc0-69cb-70f2-8956-b6c2c04b4c56
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2006
+    agent: codex
+    ran-at: 2026-09-20 00:38 -07:00
+    mode: propose-only (drain)
+    proposed: 3
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1297-drain-01a0bdc0-066b-7da1-926d-c3e5486f66cf.json
+    ? SEM (0.96) — When `mailbox send --thread` is given an existing message id or unique message-id prefix, the new message is placed in that message's thread; when the value matches neither a thread nor a message, it remains valid as a caller-chosen new thread id.
+    ? SEM (0.93) — A reply created from an `--in-reply-to` prefix stores the resolved full message id in `in_reply_to`, not the prefix supplied by the caller, and inherits the target message's thread id.
+    ? SEM (0.82) — An exact existing thread-id match takes precedence over interpreting the same input as a message-id prefix.
+  created_at: 2026-09-20T07:38:18.955294421Z
+  modified_at: 2026-09-20T07:38:18.955294421Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
