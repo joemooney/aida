@@ -34,12 +34,12 @@ description: |
   - `cargo test -p aida-cli-lib` still runs the forge-lookup test on Linux.
 
   Verification is not fully local: after the PR is green on Linux, dispatch `gh workflow run cross-platform.yml --ref <branch>` and confirm the Windows job passes before calling it done.
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:08:32.241242234Z
-modified_at: 2026-09-20T16:08:32.241242234Z
+modified_at: 2026-09-20T16:10:59.228736068Z
 req_type: Bug
 tags:
 - ci
