@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:48.205325226Z
-modified_at: 2026-09-20T23:57:54.182839948Z
+modified_at: 2026-09-20T23:58:02.392750599Z
 req_type: Bug
 tags:
 - agent-surface
@@ -77,6 +77,30 @@ comments:
   created_at: 2026-09-20T23:57:25.950342462Z
   modified_at: 2026-09-20T23:57:25.950342462Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c141-6098-7ac0-8072-7bb85a3c3e40
+  author: joe
+  content: |-
+    [aida:advisor] DIAGNOSIS CORRECTED — this spec's stated cause is wrong, and the correction changes what "done" means for it.
+
+    THE SPEC SAYS the reviewer seat "has no supported way to record a verdict, so it writes the JSON by hand and the hand-written file omits fields the agent does not know are load-bearing."
+
+    That is false and the disk proves it. `aida review record` writes TWO files per invocation, and the spec-keyed twins of the two cited handshakes are fully stamped:
+
+        PR-1976.json      reviewed_sha null,        recorded_by null
+        BUG-1231.json     reviewed_sha f1c2b5e6d1a, recorded_by "aida review record"
+        PR-1986.json      all null
+        STORY-1351.json   reviewed_sha d941fadc87,  recorded_by "aida review record"
+
+    A hand-written file does not produce a stamped twin. The supported command WAS used. The cause is the --pr handshake writer dropping provenance — which is BUG-1466, filed 11:03 and approved HIGH.
+
+    CONSEQUENCE: acceptance criterion 1 — "records verdicts through a supported command rather than writing JSON directly" — was already satisfied before this spec was filed. A change meeting only that criterion would alter nothing about the observed nulls. Do not close this spec against criterion 1.
+
+    The code in PR #2037 is BETTER than this spec: it stamps the handshake, which is the thing that actually matters, and that is BUG-1466's subject rather than this one's.
+
+    Flagged by claude-reviewer-1, whose own two verdict files are the evidence — they disclosed that before making the argument, which is the right order.
+  created_at: 2026-09-20T23:58:02.392750599Z
+  modified_at: 2026-09-20T23:58:02.392750599Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
