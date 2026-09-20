@@ -1,0 +1,42 @@
+id: 01a0be7a-090e-7f20-99c2-17b834204a22
+spec_id: BUG-1436
+agreed_id: BUG-1436
+title: The tick lock test flakes on Linux under parallel load with no established cause, and the Windows fix does not explain it
+description: |
+  The lock test flakes on Linux under parallel load and nothing explains it. BUG-1303 closed Completed having fixed the WINDOWS cause, which was established by observation; this carries the half that was not.
+
+  WHAT IS ESTABLISHED, so this spec starts from evidence rather than repeating the search. Cross-platform run 35502040911 on main — which did not contain the fix — failed on Windows with:
+
+    called `Result::unwrap()` on an `Err` value: The process cannot access the file
+    because another process has locked a portion of the file. (os error 33)
+
+  Os error 33 is ERROR_LOCK_VIOLATION, fs2's Windows contention sentinel, which Rust does not surface as `ErrorKind::WouldBlock`. BUG-1303 fixed that and the fix is mechanically connected to that observation. None of it explains Linux, where contention DOES map to WouldBlock and the old guard therefore matched correctly.
+
+  WHAT IS KNOWN ABOUT THE LINUX SIGHTING. `maintenance_schedule::tests::tick_lock_is_nonblocking_and_reusable` failed once during a full-suite run at parallelism, passed standalone, and passed on a clean rerun. A later deliberate attempt — 200 runs at parallelism 16 — did not reproduce it. Two candidate explanations were raised and neither was ever evidenced: that the lock genuinely blocks, or that the call returns an error that is neither success nor WouldBlock, such as EINTR or descriptor exhaustion under load.
+
+  THE SPECULATIVE FIX WAS DELIBERATELY NOT SHIPPED. An EINTR retry was written and removed from BUG-1303 at review, because nothing observed pointed at it and a patch landed first would make the symptom ambiguous exactly when it finally became informative. That reasoning still holds and this spec should not resurrect it as a starting point.
+
+  THE METHOD THAT WORKED ON WINDOWS APPLIES HERE AND IS CHEAP. The panic already prints the os error number — `unwrap()` on an `Err` renders the Display of io::Error, which includes it. We spent two days reading those panics as "the lock blocked" and stopped at the sentence rather than the parenthesis. So no instrumentation is needed: the next Linux failure will state which error it actually saw, and that single fact discriminates between every hypothesis on the table.
+
+  ACCEPTANCE
+  1. Capture one real Linux failure and record the error's kind and raw os error number verbatim. That is the deliverable; a fix is not.
+  2. Until that exists, ship no fix. Specifically, do not add EINTR handling, retry logic, or serialisation on the strength of reasoning about what the error might be.
+  3. Do not weaken, serialise or ignore the test. It asserts a real property, and a flake is evidence about the code rather than a problem with the test.
+  4. Treat non-reproduction as a RESULT and record it with its conditions — command, parallelism, machine, run count. For an intermittent fault only a reproduction is informative; a pass is close to worthless, and two passes agreeing is not corroboration.
+  5. If a cause is identified, state whether it is the same defect as the Windows one or a different defect sharing a symptom. They are not obviously the same, and assuming so would repeat the framing error that started this.
+
+  Split from BUG-1303 so a Completed spec does not carry an unexplained symptom. The Windows fix and its evidence are recorded there.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T11:01:03.886041426Z
+modified_at: 2026-09-20T11:01:03.886041426Z
+req_type: Bug
+tags:
+- drain-safe
+- flake
+- from:session-0919
+- linux
+- locking
+- parent:EPIC-62
