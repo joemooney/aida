@@ -1,0 +1,37 @@
+id: 01a0bffb-0f76-7123-9225-8c5296ace390
+spec_id: BUG-1469
+agreed_id: BUG-1469
+title: aida merge-hold list shows only marker-backed holds, so six of sixteen active holds are invisible — and the hidden ones are exactly those no human placed
+description: |
+  `aida merge-hold list` reports the holds that have a MARKER file. It does not report holds that exist only as the GitHub `aida:merge-hold` LABEL. Both block a merge identically — the label is what drives the required `merge-hold-gate` check — so the inventory under-reports the thing it exists to inventory.
+
+  MEASURED 2026-09-20 ~17:40Z:
+
+      labeled (blocking):   1972 1974 1978 1979 1981 1984 1989 1991 1998 1999 2001 2006 2014 2019 2021 2023   = 16
+      in merge-hold list:   1972      1979 1981 1984 1989 1991 1998 1999 2001 2006                            = 10
+      invisible:                 1974 1978                              2014 2019 2021 2023                   =  6
+
+  Six of sixteen active holds do not appear. An advisor working the hold queue from this command sees ten and believes that is the set.
+
+  WHY IT MATTERS MORE THAN A COUNT. The six invisible ones are not an arbitrary subset — they are the ones applied by the reviewer/shelve path rather than by an explicit advisor hold, which means the inventory systematically hides the holds that nobody consciously placed. Those are exactly the ones most likely to be forgotten, because no human remembers creating them.
+
+  It also makes the surface's silence ambiguous in the wrong direction. A PR absent from `merge-hold list` reads as "not held", and acting on that reading — proposing it for merge, routing it to a drain, telling an operator it is ready — is wrong for six PRs right now.
+
+  TASK-1287 and TASK-1288 (both completed) addressed the adjacent problems: `aida pr ship` can now RELEASE a label-only hold, and `aida merge-hold add` places marker and label symmetrically. Neither made the label-only hold VISIBLE in the listing. The write paths were reconciled; the read path was not.
+
+  Acceptance:
+  - `aida merge-hold list` enumerates every active hold on an open PR, whether its source is a marker file, the forge label, or both, and labels each row with its source.
+  - A hold present as a label with no marker is shown as such rather than omitted, since that is a recoverable state a reader may need to act on.
+  - The listing's count agrees with the count of open PRs carrying the label plus any marker-only holds; a discrepancy is itself reported rather than silently resolved in favour of the smaller set.
+  - Verification: with N labeled PRs and M marker-only holds, the command lists N+M rows. The fixture uses today's shape — some PRs with both, some label-only.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T18:01:36.886070157Z
+modified_at: 2026-09-20T18:01:36.886070157Z
+req_type: Bug
+tags:
+- agent-surface
+- drain-safe
+- merge-hold
