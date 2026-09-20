@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:13:44.906814813Z
-modified_at: 2026-09-20T17:52:39.774725318Z
+modified_at: 2026-09-20T18:28:03.689175767Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -62,4 +62,32 @@ comments:
   content: '[aida:advisor] Merging detail from BUG-1453 (product seat, filed independently ~2h later; rejected as duplicate). Two additions worth carrying: (1) the two sibling fixtures that DO carry the gate are named precisely — task_471_stale_base_preflight_tests.rs:104 and story_429_auto_rebase_tests.rs:71, both with #[cfg(unix)] above #[test]; that is the exact form the fix should copy. (2) The nightly has now failed FOUR consecutive runs, not three. Independent convergence on the same cause from a second seat, including the same two-halves split (gate the fixture, add a shebang-fake-binary rule to portability-rules.json), raises confidence that the ratchet rule is the durable half.'
   created_at: 2026-09-20T16:10:58.116982387Z
   modified_at: 2026-09-20T16:10:58.116982387Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c013-45e9-72f2-a574-16ed1815441b
+  author: joe
+  content: |-
+    [aida:CORRECTION] This spec contains a FALSE CLAIM that would mis-scope the work. Do not implement from it as written; BUG-1475 supersedes it.
+
+    WHAT I WROTE: "Runs 35502040911, 35505417293 and 35506914381 all fail the same single test and nothing else." That is wrong. Those three run ids were also wrong — they are PR-triggered cross-platform runs, not the nightly crons.
+
+    THE ACTUAL NIGHTLIES, read from the scheduled runs:
+
+      35337447928  2026-09-18  reconstitute::tests::scratch_gc_expires_old_runs_and_keeps_only_the_newest
+                               aida-cli-lib\src\reconstitute.rs:773
+      35438189645  2026-09-19  git_ops::tests::failed_pull_rebase_aborts_and_restores_branch
+                               aida-core\src\git_ops.rs:5668
+      35506914381  2026-09-20  auto_bump_done_tests::auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup
+                               aida-cli-lib\src\tests\auto_bump_done_tests.rs:2080
+
+    THREE DIFFERENT TESTS, three different portability defects — a Windows file-handle/permission failure, a CRLF comparison, and the shebang fake-binary. Only the third is the one this spec describes. An implementer working from this spec would fix one fixture and expect the nightly to go green; it would stay red for two unrelated reasons.
+
+    HOW I GOT IT WRONG. I grepped each run's log for the test name I had already found, then read "it matched in all three" as "the same test failed in all three". The grep could only ever have returned that. It is the third instance today of the same failure — narrowing a channel to what I expected and reporting the narrowed result as the whole: the other two were filtering `aida rel add` output down to the success line, which hid twelve "graph traversals won't follow it" warnings, and a sibling seat running a command under 2>/dev/null and then describing the silence it had manufactured.
+
+    The rule those three share, and it is not the one the merged discipline entry states: a filter you apply is part of the instrument. Checking the artifact does not help if you only look at the part of it you already believe.
+
+    WHAT SURVIVES FROM THIS SPEC. The analysis of the fake-gh harness itself is correct and verified — the #[cfg(unix)]-only exec bit, the four gated sibling fixtures, and the portability ratchet having no rule for shebang-script-as-fake-binary. BUG-1475 carries all of it plus the two nights I missed, so that spec is the one to work.
+
+    Superseded by BUG-1475.
+  created_at: 2026-09-20T18:28:03.689175767Z
+  modified_at: 2026-09-20T18:28:03.689175767Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
