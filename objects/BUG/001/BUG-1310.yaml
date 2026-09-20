@@ -20,7 +20,7 @@ description: |
   NOT IN SCOPE: changing what any classifier decides today, and adding a dependency to parse a tool's output where we currently shell out.
 
   Filed by the advisor while reviewing PR #1993, where the exclusion was argued explicitly and well. The reasoning there is worth reading alongside this.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
