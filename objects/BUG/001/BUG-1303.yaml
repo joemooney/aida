@@ -1,0 +1,65 @@
+id: 01a0bc31-6859-7971-b588-a2814b48e2b2
+spec_id: BUG-1303
+agreed_id: BUG-1303
+title: 'Every try-lock in the workspace reports Windows contention as a hard failure: three sites compare against WouldBlock, which Windows never returns'
+description: |
+  Every try-lock in this workspace detects contention by comparing the error kind to ErrorKind::WouldBlock. That comparison is false on Windows, so a lock held by another process is reported as a hard failure instead of as contention. Three sites, one root cause, and the fix is a helper the dependency already provides.
+
+  ROOT CAUSE, verified in source rather than inferred from the red build. fs2's try_lock returns the platform's raw contention error. On Unix that maps to ErrorKind::WouldBlock. On Windows the OS returns error 33, ERROR_LOCK_VIOLATION, which Rust does not map to WouldBlock, so every guard of this shape falls through to the error arm:
+
+    aida-cli-lib/src/maintenance_schedule.rs:1656-1660   try_tick_lock
+        Err(err) if err.kind() == ErrorKind::WouldBlock => Ok(None)
+        Err(err) => Err(err.into())                      <- Windows takes this arm
+
+    aida-core/src/storage.rs:336-345                     exclusive lock, retry loop
+    aida-core/src/storage.rs:373-385                     shared lock, retry loop
+
+  CONSEQUENCES DIFFER BY SITE, and none of them is test-only.
+
+  maintenance_schedule: the contract is that Ok(None) means another tick already holds the lock, so skip quietly. On Windows that case is an Err instead, so two overlapping maintenance ticks produce a hard error rather than a graceful skip. This is the machinery STORY-1218 wants for the BUG-1291 backstop, so an unattended recovery path that works on Linux would not work on Windows.
+
+  storage.rs, both sites: the WouldBlock arm is what implements the five-second wait-and-retry. On Windows that arm is never taken, so the retry loop never retries. The lock does not wait at all; it fails on first contention. The behaviour the loop exists to provide is entirely absent, and the surrounding code reads as though it is present.
+
+  OBSERVED 2026-09-19 in cross-platform run 35477353903, Windows only, ubuntu and macos green:
+
+    maintenance_schedule::tests::tick_lock_is_nonblocking_and_reusable ... FAILED
+    panicked at aida-cli-lib\src\maintenance_schedule.rs:1977:43
+    called Result::unwrap() on an Err value: The process cannot access the file
+    because another process has locked a portion of the file. (os error 33)
+
+  Line 1977 is the second try_tick_lock, the one asserting the already-held case returns Ok(None). It returns Err. The test is correct and the code is wrong; this is a genuine platform defect surfaced by a test, not a test artifact.
+
+  THE FIX EXISTS IN THE DEPENDENCY. fs2 ships lock_contended_error() at fs2-0.4.3/src/lib.rs:125 precisely so callers need not know each platform's code. Compare against its raw_os_error in addition to the WouldBlock kind, at all three sites, through one shared helper rather than three copies of the same condition.
+
+  ACCEPTANCE
+  1. A single helper decides "is this error contention", used by all three sites. No site repeats the comparison inline.
+  2. The helper treats both ErrorKind::WouldBlock and fs2::lock_contended_error()'s raw OS error as contention, so it is correct on Unix and Windows without cfg branching.
+  3. maintenance_schedule's try_tick_lock returns Ok(None) for a lock held elsewhere on every platform. tick_lock_is_nonblocking_and_reusable passes on Windows, unchanged; do not weaken the test.
+  4. Both storage.rs loops actually retry on contention, so the five-second wait exists on Windows rather than only appearing to.
+  5. A test covers the helper directly against a synthesised raw OS error 33, so the Windows path is proven on Linux CI and does not depend on the nightly to catch a regression.
+  6. A grep finds no remaining comparison of a lock error against WouldBlock outside the helper.
+
+  SECOND BLOCKER ON THE SAME NIGHTLY, recorded here rather than as its own spec to avoid a fifth filing for one red run. The same Windows job failed twice with:
+
+    error: The following untracked working tree files would be overwritten by merge: conflict.txt
+
+  A test leaves conflict.txt in a shared working tree and a later test's merge trips over it. Ordering-dependent, which is why it is Windows-visible rather than Windows-specific. Criterion 7: no test leaves files behind in a tree another test uses; whichever test creates conflict.txt cleans it up or works in its own tempdir.
+
+  THIS SHAPE IS LINTABLE AND SHOULD JOIN THE RATCHET. A try_lock result compared against ErrorKind::WouldBlock with no raw-OS-error fallback is a greppable pattern, not a semantic judgement. It belongs in BUG-1283's rule widening once BUG-1301 makes the ratchet extensible. Fix the three sites here; add the rule there so the fourth site cannot be written.
+
+  Found by the advisor at the gate while reading cross-platform run 35477353903; all three call sites and the fs2 helper read directly before filing.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T00:22:29.721225410Z
+modified_at: 2026-09-20T00:22:29.721225410Z
+req_type: Bug
+tags:
+- drain-safe
+- from:session-0919
+- lease
+- nightly
+- parent:EPIC-62
+- portability
+- windows
