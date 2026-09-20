@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:40.960788392Z
-modified_at: 2026-09-20T03:44:44.811338305Z
+modified_at: 2026-09-20T04:32:35.869228572Z
 req_type: Story
 tags:
 - api-stability
@@ -129,6 +129,27 @@ comments:
     FOLLOW-UP RECORDED, not blocked on. The CI step is gated on the `full_ci` path filter, which is everything minus docs and markdown. The contract's own fixtures live under docs/monitor-contract-fixtures/, so they sit inside the excluded path. Any code change triggers the guard, which covers the realistic case, but a docs-only change editing a fixture alone would not run the guard that validates fixtures. One line re-including the fixtures directory and the contract document in that filter closes it. A guard whose own inputs are outside the trigger that runs it is worth fixing while the reasoning is fresh.
   created_at: 2026-09-20T03:44:44.811338305Z
   modified_at: 2026-09-20T03:44:44.811338305Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bd16-621d-71c2-86b5-867353c8a63e
+  author: joe
+  content: |-
+    [advisor] FOLLOW-UP FOUND BY THE FIRST PR THAT TOUCHED THE FEED AFTER THIS MERGED. Two gaps in the contract's own guard, both narrow, both worth closing while the reasoning is fresh.
+
+    1. THE COMPATIBILITY CHECK IGNORES `event_kinds`. `compatibility_errors` in verify.py compares only the `fields` map of each surface. The contract publishes an `event_kinds` array on the events-follow surface, and a consumer will switch on it, but adding or removing a kind never triggers the version-bump requirement. So a kind could be REMOVED with no major bump demanded — a breaking change to every consumer matching on it, passing the guard that exists to prevent exactly that.
+
+    The live-versus-fixture comparison at verify.py:71 does read `event_kinds`, so a stale fixture is still caught. What is missing is only the versioning obligation, which is the half a consumer actually depends on.
+
+    Evidence: PR #1998 adds `SpecCompleted` and `RunCompleted`. Under the contract's own rules that is additive and wants 1.0.0 → 1.1.0. Nothing in the guard would have asked for it.
+
+    2. `known_names()` IS HAND-MAINTAINED, not derived from the `EventKind` enum. So a variant can be added to the enum and omitted from the published list with nothing failing — the contract would then advertise fewer kinds than the feed emits, and a consumer that trusted the manifest would silently miss events. #1998 updated both correctly; the next change might not. Deriving the list, or failing a test when the two disagree, closes it.
+
+    3. THE PATH-FILTER GAP recorded at merge time still stands: the CI guard runs under `full_ci`, which excludes `docs/**`, and the contract's own fixtures live there. Any code change triggers it, but a fixtures-only change would not run the guard that validates fixtures.
+
+    WHAT THESE SHARE. All three are the contract being unable to check something it publishes: the kinds it advertises, the versioning of those kinds, and its own fixtures. None is urgent and nothing is broken today. They are worth doing together as one small follow-up rather than three, since each is a few lines in the same two files.
+
+    Found while reviewing #1998, which was created 23 minutes before this contract merged and so could not have run its guard. That timing is also the cleanest demonstration of why the guard matters — the very first PR to touch the feed afterwards made the manifest stale, and only a rebase will reveal it.
+  created_at: 2026-09-20T04:32:35.869228572Z
+  modified_at: 2026-09-20T04:32:35.869228572Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bcea-5980-7873-a5fc-df081af1a267
