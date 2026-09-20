@@ -52,7 +52,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:25:14.620023337Z
-modified_at: 2026-09-20T16:25:36.729330359Z
+modified_at: 2026-09-20T16:39:10.192630002Z
 req_type: Bug
 tags:
 - drain-safe
@@ -72,3 +72,36 @@ relationships:
   target_id: 01a0b9d6-b3b0-7993-ac66-c5066e1b4e81
   created_at: 2026-09-20T16:25:36.729321990Z
   created_by: joe
+comments:
+- id: 01a0bfaf-9470-7010-b848-68f2a50e822a
+  author: joe
+  content: |-
+    RETRACTION. The central consequence claim in this spec's description is false, and most of what remains is smaller than the spec as filed. I am correcting rather than quietly editing, because the spec was filed high-priority and would otherwise consume grooming attention and an implementer round on a premise that does not hold.
+
+    WHAT I CLAIMED: "BUG-1291 shelves as `ci-red` on a PR that is green-or-pending on everything that measures the code... It then appears under Failures awaiting triage next to genuine tool failures."
+
+    WHAT HAPPENED:
+
+        16:21:40  implementer pushes ffac563445
+        16:22:02  CI runs start on the PR merge ref ac0f51b73 (one leg concludes failure fast)
+        16:22:40  CiTerminal green=false
+        16:32:56  PhaseEntered idx=3 reviewer          <-- the drain PROCEEDED
+        16:33:13  fresh CI runs start on ffac56344
+        16:37:40  SpecShelved  verdict:request-changes
+
+    There was no `ci-red` shelve. The drain did not stop on the red. It went on to the reviewer phase and shelved ten minutes later on a genuine RequestChanges verdict — a real finding about the code, not a false failure.
+
+    WHAT THIS MEANS FOR MY "BUG-1265 DOES NOT COVER THIS" ARGUMENT: it appears to be wrong too. BUG-1265's fix adds the branch "the coarse red may be the hold gate, so no code failure was inferred", and proceeding-to-reviewer-despite-a-red is exactly the behaviour that branch exists to produce. The most likely reading of this run is that BUG-1265's guard engaged and worked. I asserted it "never engages" on the grounds that the check rows were readable; I did not verify that the guard's condition is row-readability rather than hold-presence, and I should have read the branch's condition before claiming it could not fire.
+
+    WHAT SURVIVES, and it is a much smaller finding:
+
+    At 16:22:40 the drain emitted `CiTerminal green=false` and then acted as though CI had NOT terminally failed. The event and the decision disagree. Anyone reading the event stream — `aida tail`, the monitor, a later forensic pass — would conclude the pipeline stopped on red CI when it did nothing of the kind. That is a diagnostic drifting from the decision it explains, which PRIN-4 says a diagnostic must be unable to do. It is a telemetry-accuracy bug, not a shelving bug, and it is low priority.
+
+    I am retitling and downgrading this spec accordingly. The original title and description are preserved above rather than rewritten, so the retraction is legible.
+
+    I have NOT verified the remaining claim either. Before anyone implements this, confirm from the code — not from the event stream — whether `CiTerminal` is emitted before or after the hold-aware inference, and whether its `green` field is meant to report the raw rollup (in which case `false` is correct and only the CONSUMERS need to learn that green=false is not terminal) or the drain's conclusion (in which case the event is wrong). Those two readings imply different fixes and I do not know which is right.
+
+    METHOD NOTE, recorded because it is the second time in this investigation. I predicted a merge-phase `tool-exit` and got a CI-phase red; I then predicted a `ci-red` shelve and got a reviewer verdict. Both times I reasoned forward from a correctly-observed upstream event to a downstream consequence I had not waited to see. The upstream observations were sound; the extrapolations were not. Wait for the terminal artifact before writing a consequence into a spec.
+  created_at: 2026-09-20T16:39:10.192630002Z
+  modified_at: 2026-09-20T16:39:10.192630002Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
