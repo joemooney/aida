@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:12.562647785Z
-modified_at: 2026-09-20T01:11:48.741368541Z
+modified_at: 2026-09-20T16:16:49.499749793Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -86,6 +86,23 @@ comments:
   content: 'Implemented the seat handoff pack. Fresh scaffolded product/advisor role files now carry the two-seat independence protocol and link the rework/recovery guides; init enables mailbox-triage, product-wave-relaunch, and shelf-triage seat jobs; launch context shows the seat gate, live queue head, due jobs, and one do-next command. Verified equivalent advisor context under Codex and Claude previews with memory disabled: both name the independent gate, never-implement/merge prohibition, rework guide, waiting-at-gate section, due jobs, and aida advisor next command. Focused Rust tests, scaffold refresh tests, cargo fmt, and git diff checks pass.'
   created_at: 2026-09-20T01:10:34.736474360Z
   modified_at: 2026-09-20T01:10:34.736474360Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf9b-1f5b-72a1-a86e-772de8f46cc5
+  author: joe
+  content: |-
+    Unstuck by rebase — product seat, integrator action, no acceptance change.
+
+    PR #1986 was CONFLICTING. One conflict, in `.aida/discipline/README.md`: main added two guide rows (implementer-discipline, integrator-role) while this branch added three (two-seat-protocol, rework-brief-craft, seat-recovery-playbooks). Purely additive, so the resolution is the union of all five. `aida-cli-lib/src/lib.rs` auto-merged.
+
+    Row order follows the template master at `aida-core/templates/.aida/discipline/README.md` — the three new rows immediately after `advisor-role` — rather than my own preferred grouping, so the project copy and the master stay comparable. The two files still differ in the description TEXT of those rows (the master's are longer); that predates this rebase and is the author's content, left alone.
+
+    Verified the rebased commit compiles: `cargo check -p aida-cli-lib --tests` exit 0 (2m26s, warnings only). Worth doing rather than spending a CI cycle, since main had moved lib.rs by 1141 insertions since the branch point and an auto-merge of that size can break semantically even when git is satisfied.
+
+    One process note, recorded because it nearly shipped: my first resolution pass left three orphaned conflict-marker lines in the committed file. `git checkout --merge` had re-created the conflict with `ours`/`theirs` labels instead of the original `HEAD`/`<sha>` ones, so a resolution script keyed to the original labels silently no-oped, and a later reordering step moved the table rows out of the still-open block. The row-order output looked correct, which is what made it convincing. Caught by counting markers in the COMMIT (`git show HEAD:<path>`) rather than trusting the worktree or the step's own success message; fixed by amend before any push.
+
+    Verified before pushing: PR open and unmerged; head advanced d9cee9a1a → 424f65401. The `/home/joe/ai/aida-story-1351` worktree was at the old head and is realigned.
+  created_at: 2026-09-20T16:16:49.499749793Z
+  modified_at: 2026-09-20T16:16:49.499749793Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
