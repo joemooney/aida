@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-20T12:11:15.243467336Z
+modified_at: 2026-09-20T12:11:59.635831585Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -53,6 +53,55 @@ comments:
   content: Implemented an external-output classifier inventory and centralized unavoidable gh/SQLite/OS spellings in a named registry. GitLab remains structured JSON; unknown gh merge prose continues to fail closed. Verified focused CLI/TUI tests, cargo check -p aida-cli-lib, cargo fmt, and git diff --check.
   created_at: 2026-09-20T11:53:42.224167363Z
   modified_at: 2026-09-20T11:53:42.224167363Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0beba-f913-7471-ace3-9f7e6cc68cdc
+  author: joe
+  content: |-
+    [rework round 2] PR #2016 — CHANGES REQUESTED. All three findings are the same defect: the inventory this spec exists to produce is incomplete. Behaviour and tests are fine; the deliverable is not.
+
+    I have done the enumeration rather than repeat "re-run it", because "look again" is what produced an incomplete list the first time.
+
+    REQUIREMENT 1 — THE INVENTORY MUST BE WORKSPACE-WIDE AND DERIVED, NOT RECALLED.
+
+    Files carrying control-flow `.contains` on external tool output (stderr/stdout/response/to_string), by count:
+
+        44  aida-cli-lib/src/session.rs
+        21  aida-cli-lib/src/mcp.rs
+        14  aida-core/src/git_ops.rs
+         9  aida-cli-lib/src/help_next.rs
+         8  aida-cli-lib/src/plan_cmd.rs
+         7  aida-cli-lib/src/init_cmd.rs
+         7  aida-cli-lib/src/forge.rs
+         6  aida-cli-lib/src/remote_create.rs
+         5  aida-cli-lib/src/worktree.rs
+         5  aida-cli-lib/src/terminal_cmd.rs
+         5  aida-cli-lib/src/cli.rs
+         4  aida-cli-lib/src/pr_rebase.rs
+
+    Named classifier functions reading tool output, which are the highest-value entries:
+
+        forge.rs   glab_stderr_is_transient              (the reviewer's finding 1)
+        forge.rs   gitlab_merge_response_is_stale_head   (finding 2)
+        forge.rs   gitlab_merge_response_is_retryable    (finding 2)
+        forge.rs   glab_lookup_from_list_output
+        drive_robustness.rs  launch_no_output_is_retryable
+        alias.rs   json_output_is_valid
+
+    Not all 135 sites are classifiers — many are ordinary string tests on our own data. Narrowing that is the work. But the inventory must be PRODUCED BY A COMMAND, recorded in the doc with that command, so the next reader can re-derive it rather than trusting a list. An inventory nobody can regenerate is the same failure as a hand-authored manifest validated against hand-authored fixtures.
+
+    REQUIREMENT 2 — CORRECT THE GITLAB CLAIM.
+    The doc states `forge::gitlab_merge_response_*` parses JSON and discards wrapper prose. It does not: `gitlab_merge_response_is_stale_head` and `gitlab_merge_response_is_retryable` lowercase and substring-match the entire raw stderr buffer. Either fix them to parse, or correct the doc. A document asserting a safety property the code does not have is worse than no document — it stops the next reader checking.
+
+    REQUIREMENT 3 — CENTRALISE THE LITERALS THAT REMAIN DISPERSED.
+    Named in the verdict and confirmed above: Git index-lock / nothing-to-commit / push-rejection strings in aida-core/src/git_ops.rs, glab transient / stale-head / retryable strings in forge.rs, and Cargo build-failure markers. These belong in external_tool_output.rs with the tool and the observed version recorded, per the spec's own scope 3.
+
+    WHY THE COMPLETENESS IS THE POINT, not pedantry. The advisor's argument for this spec was that external prose is the MOST dangerous class: our own prose drifts only when one of us edits it and a test can catch that, whereas an upstream release reaps our classifiers with no deprecation we read and no test of ours failing. An inventory that misses `glab_stderr_is_transient` misses exactly that — a glab release rewording a timeout message silently turns Unreachable into Inconclusive.
+
+    ONE THING TO CARRY FORWARD: I have filed STORY-1382 proposing a ratchet rule so new instances of this class are refused mechanically, using the extensible rules BUG-1301 landed. That does not replace this inventory — it depends on it. The fixtures for that rule come from the list you produce here, so an incomplete inventory weakens both specs.
+
+    Push fixups to the existing branch. Do not open a new PR.
+  created_at: 2026-09-20T12:11:59.635831585Z
+  modified_at: 2026-09-20T12:11:59.635831585Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
