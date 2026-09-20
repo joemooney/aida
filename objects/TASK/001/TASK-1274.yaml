@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:30:55.289650932Z
-modified_at: 2026-09-19T23:47:23.485338720Z
+modified_at: 2026-09-20T00:02:27.595388480Z
 req_type: Task
 tags:
 - batch:story-1216
@@ -27,6 +27,29 @@ comments:
   content: '[advisor:groom] Approved, medium, DRAIN. Mirror-only blast radius and the measurements are already in the spec, which is what makes it drain-safe: the candidates are ordered and each is independently verifiable against the 903 s warm baseline. Scope guard: land the splits one at a time with the pipeline number and the new warm figure recorded on this spec, so a regression is attributable; do NOT trade correctness for time — the nextest/doctest/MCP-stdio/fmt/clippy set that runs today must still run, just arranged better. If the 10-minute target needs dropping a check, come back to me instead of dropping it.'
   created_at: 2026-09-19T16:39:17.878311802Z
   modified_at: 2026-09-19T16:39:17.878311802Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bc1f-108b-7df1-b32c-d3db82690184
+  author: joe
+  content: |-
+    [advisor:disposition] NOT REQUEUED, deliberately, and this is the one case where the new requeue-on-shelve rule should not fire.
+
+    The standing arrangement from tonight is that a shelved spec gets requeued without waiting for a rework brief, because a spec sitting shelved costs more than an adequate brief. That is right for the normal case. It is wrong here, and the shelve's own detail says why:
+
+      phase exceeded the 45m wall-clock ceiling (attempt 2/2)
+
+    This spec did not fail. It ran out of clock, twice, having made ten commits with its log still being written twenty-three seconds before the second stop. Requeueing it puts a session that needs more than 45 minutes back into a 45-minute phase, where it will produce a third partial attempt and shelve again. That is not recovery, it is a loop that looks like activity.
+
+    WHY IT NEEDS MORE THAN THE CEILING. The work is measuring GitLab mirror CI, and measuring it means waiting for actual pipelines. The latency is in the thing being measured, so no amount of implementer speed helps. This is the archetype the ceiling hint should name and currently does not, which is now criterion 9 on BUG-1299.
+
+    COST ALREADY PAID, recorded so the decision is not re-litigated: it held the serial drain for 2h17m across two attempts, roughly three merges of capacity, and was correctly pulled from batch followups-0918i by the product seat.
+
+    THE REMEDY IS A SMALLER SPEC, NOT A BIGGER BUDGET. Raising the ceiling globally would let every stuck session run longer before anyone notices, which trades this problem for a worse one. The right shape is to split the pipeline-waiting from the code change: land the runner-isolation fix on its own evidence, and measure the effect as separate work that can wait on a pipeline without holding a drain phase open. That split needs someone to scope it against what the ten commits already do, which is a keyboard task, not a headless one.
+
+    STATE IS SAFE. Ten commits on task-1274-work, present on origin and on the gitlab mirror — I checked both hubs, which is the lesson from earlier today. Nothing is at risk while this waits.
+
+    Leaving it parked for the keyboard with the operator. Do not requeue into a drain phase in the meantime.
+  created_at: 2026-09-20T00:02:27.595388480Z
+  modified_at: 2026-09-20T00:02:27.595388480Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 failure_reason:
