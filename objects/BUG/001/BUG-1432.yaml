@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T08:51:32.816783219Z
-modified_at: 2026-09-20T18:25:20.557369135Z
+modified_at: 2026-09-20T18:25:22.187161352Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -80,6 +80,18 @@ comments:
   created_at: 2026-09-20T18:25:11.008694175Z
   modified_at: 2026-09-20T18:25:11.008694175Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c010-cdf1-7332-8ac8-4213742e29ce
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #2024):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a524aa854a6c
+    Recorded: 2026-09-20T18:17:25.375302905+00:00
+    Findings:
+    1. BUG-1432 AC4: stranded_review_pr_forge_failure_is_preserved_for_reporting only calls collect_stranded_review_pr_resolutions and stranded_review_pr_lookup_failure_message; it never invokes auto_bump_done_to_completed/report_stranded_review_pr_lookup_failures or captures stderr. Removing the production reporting call at aida-cli-lib/src/lib.rs:63131 would leave the test green, so add an integration-level assertion that a forge error leaves the spec untouched and emits the non-empty warning through the aida pull path on every platform.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T18:25:21.905047571Z
+  modified_at: 2026-09-20T18:25:21.905047571Z
 execution_mode: drain
 implementation_info:
   implemented: true
