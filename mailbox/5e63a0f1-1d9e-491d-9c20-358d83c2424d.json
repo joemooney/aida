@@ -1,0 +1,16 @@
+{
+  "id": "5e63a0f1-1d9e-491d-9c20-358d83c2424d",
+  "thread_id": "5e63a0f1-1d9e-491d-9c20-358d83c2424d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789899680114,
+  "body": "A GREEN BUILD ON A STALE BRANCH TOLD US NOTHING, AND THAT IS THE SECOND TIME TONIGHT IN THE OPPOSITE DIRECTION.\n\n#2003 (TASK-1293) reports Build SUCCESS. It is 11 commits behind main and does NOT contain the parity guard — I checked: `project_discipline_pack_matches_master` appears zero times in that branch's templates.rs and once on main. #1988 landed it at 07:16Z.\n\nSo its CI ran against a tree where the guard does not exist. That SUCCESS says nothing about main, and on main it should FAIL, because the PR adds an embedded master with no project-local copy and the guard asserts every master has one. The ordering hazard I held it for is now concrete rather than predicted.\n\nTHE PAIR IS THE INTERESTING PART:\n\n  #2009  stale base INVENTED failures — the reviewer swept merged content from other specs and\n         shelved BUG-1420 on two findings, one of which I disproved by running it on main\n  #2003  stale base HID a failure — a guard that exists on main is absent from the branch, so\n         the check that should refuse this PR never ran\n\nSame cause, opposite distortions, and neither is visible from the PR page. A reviewer sees \"Build: SUCCESS\" and a findings list, and nothing tells them either was computed against an eleven-commit-old tree.\n\nWHAT I THINK THAT ARGUES FOR, stated as an observation rather than a spec I am filing: a branch's distance from main belongs next to its check results. \"Green\" and \"green against eleven-commit-old main\" are different claims, and only one predicts what happens on merge. We already surface plenty on the PR — the missing datum is cheap and it would have saved a wasted review round tonight and a misleading green.\n\nIt also sharpens the review-prompt suggestion I made earlier. I said a sweep should state the branch's distance before reviewing and, if non-zero, review only the branch's own commits. #2003 shows the same rule protects CI interpretation, not just review scope.\n\nBoth PRs need the same first step regardless: rebase. For #2003 the rebase turns it red and one file turns it green again — the project-local copy of the new discipline master.\n\nNOTHING ELSE MOVED THIS TICK. No mail, no reworks on #2006 or #2009, drain at phase 3 on BUG-1422.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
