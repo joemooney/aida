@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:06:24.777604114Z
-modified_at: 2026-09-20T04:39:29.475022954Z
+modified_at: 2026-09-20T04:41:40.070293561Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -70,6 +70,36 @@ comments:
   content: 'Fix choice and validation: expensive unshipped probes are bounded to branches attributable to InProgress/Done specs or recorded session leases; stale unrelated refs only incur two batched ref listings. Open PR correctness uses the existing process-cached open snapshot; shipped merge/squash branches are rejected by patch-equivalence. The independent nightly workflow result has an explicit 30-second disk freshness bound at `.aida/cache/awaiting-nightly-red.json` (full fidelity, refreshed on expiry), and its refresh runs concurrently with other channels. Release measurements on this repo: cold awaiting --json 4.44s (cache fill), immediate warm poll 2.39s (<3s acceptance); status --full 20.32s (<30s stated bound, vs 88.6s reported). Regression suite: 4 unshipped detector tests pass, including genuine local/remote unshipped work, live/open/terminal exclusions, merged/squash-equivalent correctness, plus a deterministic 10,000-stale-ref candidate-bound test.'
   created_at: 2026-09-20T04:20:05.795742146Z
   modified_at: 2026-09-20T04:20:05.795742146Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bd1e-afe6-76e3-896c-672a179066b8
+  author: joe
+  content: |-
+    [rework round 2] PR #1999 — CHANGES REQUESTED. The latency win is real; the candidate gate that produced it drops genuinely unshipped work. Product-seat note with a live fixture the reviewer did not have.
+
+    THE FINDING, restated so the fix targets the right thing: `collect_unshipped_work_items` now builds `active_prefixes` from InProgress/Done specs only, and filters local and remote refs BEFORE `work_spec_id_from_branch` or any commit inspection. Previously every NONTERMINAL spec's branch was a candidate and terminal statuses were excluded later. So the gate moved from "exclude what is finished" to "include only what is running", and those are not complements — Approved, Draft and NeedsAttention all fall in the gap.
+
+    A LIVE FIXTURE, in this repo, right now. TASK-1274:
+
+      status:   needs-attention
+      branch:   task-1274-work, 10 commits not on origin/main
+      open PR:  none
+      lease:    present
+
+    Ten commits of real work with no PR. Under the old detector it is reported. Under this change it survives only because a lease happens to still exist for it — remove that lease, which `session reap` would do the moment the spec reached a terminal state, and ten commits become invisible. Use TASK-1274 as the regression case, and build the test so it does NOT depend on a lease existing, because the lease is the accident that is currently masking the bug.
+
+    WHY THIS MATTERS MORE THAN AN ORDINARY REGRESSION. Unshipped-work detection is the surface that tells us work exists that nobody owns. Twelve branches in this repo currently carry commits with no PR (BUG-1307) — exactly the population this change makes invisible, since a spec that has been parked or reset is precisely the one whose status is no longer InProgress or Done. A detector optimised until it only sees running work has stopped answering the question it exists for: what got dropped.
+
+    THE SHAPE OF THE FIX. Keep the bounded probe set — that is where the 70-second cost went, and the spec's whole point. Widen the ADMISSION rule rather than abandoning bounding: admit every status the detector previously considered actionable, which is every nonterminal status, and keep excluding terminal ones. If a complete source other than "branches of nonterminal specs" can be proven equivalent, that is acceptable, but prove it with a test rather than asserting it.
+
+    Do NOT solve this by re-scanning every ref. The reviewer's phrasing is exact: preserve the bounded probe set while admitting all statuses previously considered actionable.
+
+    ON THE MEASUREMENT HALF, which the reviewer did not dispute: the spec requires profiling recorded BEFORE the fix, and the existing fast paths treated as a floor rather than left unmentioned. If that is in the PR body already, good; if it is not, add it, because a latency spec whose evidence is "it feels faster now" is the thing this spec was filed against.
+
+    Required CI was still running when the verdict was recorded — confirm it went green rather than assuming, since a red there would be a second, separate round.
+
+    Push fixups to the existing branch. Do not open a new PR.
+  created_at: 2026-09-20T04:41:40.070293561Z
+  modified_at: 2026-09-20T04:41:40.070293561Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
