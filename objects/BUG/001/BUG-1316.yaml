@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T05:53:25.916051220Z
-modified_at: 2026-09-20T07:15:12.759811762Z
+modified_at: 2026-09-20T07:38:57.799749934Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -58,4 +58,25 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T05:53:28.185662334Z
+comments:
+- id: 01a0bdc1-0187-78f1-a8eb-6e650695c4f6
+  author: joe
+  content: |-
+    SECOND CONFIRMED INSTANCE, 2026-09-20 07:38, while this spec sits Approved and queued. Adding it because one occurrence is an anecdote and two in under two hours is a rate.
+
+      07:38:21  SpecRetried  phase=merge  cause=tool-exit  attempt=2/2
+      07:38:23  SpecShelved  kind=tool-exit
+
+    Two seconds. Spec BUG-1297, PR-2006, refused by a supervised merge-hold whose text says outright "A human/advisor must review, then clear the hold (`aida merge-hold clear 2006`) before merging."
+
+    That is the identical shape as the TASK-1293 / PR-2003 occurrence in the description: a deliberate, stable, correctly-functioning refusal consuming the entire transient-retry budget in two seconds and then shelving as `tool-exit`, which reads as "the tool broke".
+
+    WHAT THE SECOND INSTANCE ADDS, beyond frequency. Both holds were CORRECT and both caught something real — PR-2003's caught a cross-PR ordering hazard between a discipline master and the guard requiring its project-local copy; PR-2006's caught prose-matching inside the very PR that fixes prose-matching. So the mechanism being mishandled is not a marginal one: it is the gate doing its highest-value work, and the drain's response to it is to burn a retry budget and file a misleading shelve.
+
+    The rate matters for the acceptance. At two per two hours, an unattended night produces roughly a dozen of these, each costing two wasted attempts and each landing in triage as `tool-exit` alongside genuine tool failures. The triage cost is the real one — a reader cannot tell a held PR from a broken subprocess without opening the detail text.
+
+    No change to the proposed fix. This only strengthens criterion 3: the recovery hint must name the hold reason and the exact `merge-hold clear <pr>` command, both of which are present in the refusal text and discarded today.
+  created_at: 2026-09-20T07:38:57.799749934Z
+  modified_at: 2026-09-20T07:38:57.799749934Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
