@@ -1,8 +1,8 @@
 id: 01a0becf-5722-7db2-a49b-1e13af40f0bf
 spec_id: STORY-1385
 agreed_id: STORY-1385
-title: 'A narrowed acceptance leaves no trace: record the excluded part as a deferred remainder so idle capacity can sweep it back'
-description: |
+title: 'We shipped without meeting the reviewer''s bar and left no trace: record the unmet requirement as debt so idle capacity can close it'
+description: |-
   When the advisor narrows a spec's acceptance to let a change land, the excluded part vanishes. The amended criterion looks identical to acceptance that was always that narrow, so nobody can later tell "we decided this is out of scope" from "nobody thought of it", and the excluded work is remembered only for as long as one session's context lasts.
 
   OPERATOR REQUEST 2026-09-20: mark the narrowing so idle capacity can sweep back and address what the reviewer originally wanted.
@@ -35,12 +35,36 @@ description: |
   NOT IN SCOPE, deliberately: automatically reopening a remainder, or blocking a narrowing. The advisor's judgement that a limitation is acceptable is a legitimate decision and this spec exists to make it VISIBLE and RECOVERABLE, not to prevent it.
 
   SEQUENCING NOTE: criteria 1-3 are convention plus existing verbs and need no new code. Criterion 4's periodic prompt is a natural job for the scheduler registry in STORY-1367, which currently has no jobs registered. This should not wait on that — the query is useful run by hand.
+
+  FRAMING CORRECTED BY THE OPERATOR, 2026-09-20, and it is not a wording change — it changes what the sweep is FOR.
+
+  I wrote this as "the acceptance was NARROWED". The operator's framing is "we FAILED TO MEET the higher review acceptance". Those describe the same event and imply opposite things about it.
+
+    "acceptance was narrowed"     reads as a scoping decision — the bar was wrong, we corrected it.
+                                  Nobody revisits a deliberate scope boundary. There is nothing to sweep.
+    "did not meet the bar"        reads as a known shortfall against a bar somebody applied.
+                                  That is debt, and debt is exactly what a sweep exists to work through.
+
+  My framing would have produced a tidy record that nobody ever acted on, because a scoping decision does not ask to be revisited. The operator's produces a list of things we know are unfinished. Only the second is worth sweeping, which is the whole purpose of this spec.
+
+  It is also the more honest of the two. On BUG-1424 the reviewer was right: per-commit patch identity does not clear a multi-commit squash, so of the five artifacts that work set out to clear, four clear and one does not. Calling that "narrowed scope" is true and self-serving. Calling it "we shipped with one case unmet" is true and useful.
+
+  SO THE RECORDED FACT IS THE SHORTFALL, NOT THE DECISION. What gets marked is: a reviewer applied a bar, the change did not meet it, we shipped anyway, and here is the specific gap with what would close it.
+
+  ONE DISTINCTION TO PRESERVE. Sometimes the reviewer's bar is wrong — over-strict, or reading a criterion more broadly than it was meant. That is not a shortfall, it is a spec correction, and it should be recorded as the finding having been considered and rejected WITH REASONS rather than as debt. Both belong in the record and they are not the same thing; a sweep that cannot tell them apart will keep re-raising decisions that were already made.
+
+  The test for which one you have: if the reviewer's concern were addressed, would the outcome be better? If yes it is debt. If no it is a spec correction.
+
+  ACCEPTANCE AMENDED ACCORDINGLY
+  6. The marker records an UNMET REVIEW BAR, not a scope change: which criterion, what the reviewer wanted, what shipped instead, and what would close the gap.
+  7. A finding considered and REJECTED is recorded distinctly from one accepted as debt, with the reason. The sweep surfaces debt and must not re-raise settled decisions.
+  8. Where the reviewer's verdict exists in `.aida/review-verdicts/`, the record links to it rather than paraphrasing, so the original wording survives the summary.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:34:14.434033357Z
-modified_at: 2026-09-20T12:34:17.409851428Z
+modified_at: 2026-09-20T12:35:02.636756152Z
 req_type: Story
 tags:
 - acceptance
