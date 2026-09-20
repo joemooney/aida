@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:51:40.834379762Z
-modified_at: 2026-09-20T22:51:40.834379762Z
+modified_at: 2026-09-20T22:52:06.758877360Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -42,3 +42,4 @@ tags:
 - from:session-0920
 - loop-guard
 - observability
+execution_mode: drain
