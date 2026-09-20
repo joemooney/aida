@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T08:24:01.804311106Z
-modified_at: 2026-09-20T08:24:01.804311106Z
+modified_at: 2026-09-20T08:24:03.594850523Z
 req_type: Story
 tags:
 - from:session-0919
@@ -47,3 +47,7 @@ tags:
 - observability
 - parent:EPIC-62
 - substrate-as-bouncer
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-20T08:24:03.594850523Z
