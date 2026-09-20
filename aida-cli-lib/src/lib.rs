@@ -7934,6 +7934,66 @@ fn pr_head_sha_best_effort(driver: &RealPhaseDriver, pr: u32) -> Option<String> 
         .filter(|s| !s.trim().is_empty())
 }
 
+/// Add the orchestrator-owned review context to a reviewer-written PR verdict.
+///
+/// The reviewer owns the verdict, summary, findings, and any future fields;
+/// `record_verdict` deliberately preserves those while adding the commit and
+/// audit metadata only the drain can reliably know.
+// trace:TASK-168 | ai:codex
+fn stamp_pr_review_verdict(
+    project_root: &std::path::Path,
+    pr: u32,
+    reviewed_sha: Option<&str>,
+    reviewed_branch: Option<&str>,
+) -> std::io::Result<std::path::PathBuf> {
+    review_verdict::record_verdict(
+        project_root,
+        &format!("PR-{pr}"),
+        None,
+        reviewed_sha,
+        reviewed_branch,
+        None,
+        &[],
+        "aida drain reviewer",
+    )
+}
+
+#[cfg(test)]
+mod task_168_pr_verdict_metadata_tests {
+    use super::*;
+
+    #[test]
+    fn stamps_pr_verdict_metadata_without_losing_reviewer_fields() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = review_verdict::verdict_path(tmp.path(), "PR-1965");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            r#"{"verdict":"Approved","summary":"clean","findings":["note"],"mode":"deep"}"#,
+        )
+        .unwrap();
+
+        stamp_pr_review_verdict(
+            tmp.path(),
+            1965,
+            Some("deadbeefdeadbeefdeadbeef"),
+            Some("task-168-work"),
+        )
+        .unwrap();
+
+        let value: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(value["verdict"], "Approved");
+        assert_eq!(value["summary"], "clean");
+        assert_eq!(value["findings"][0], "note");
+        assert_eq!(value["mode"], "deep");
+        assert_eq!(value["reviewed_sha"], "deadbeefdeadbeefdeadbeef");
+        assert_eq!(value["reviewed_branch"], "task-168-work");
+        assert_eq!(value["recorded_by"], "aida drain reviewer");
+        assert!(value["recorded_at"].as_str().is_some());
+    }
+}
+
 /// BUG-1186: `Some(message)` when the PR head moved between the pre- and
 /// post-review probes — the reviewer seat wrote to the branch under review.
 /// Pure so the decision is unit-testable; SHA comparison is whitespace- and
@@ -87889,6 +87949,21 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 }
             }
         };
+
+        // The reviewer writes the decision fields, but the drain owns the
+        // authoritative PR head and branch context. Normalize a PR-keyed
+        // artifact through the shared recorder so it has the same diagnostic
+        // metadata as spec-keyed verdicts. Best-effort, matching `aida review`:
+        // metadata persistence must not change the review gate's decision.
+        // trace:TASK-168 | ai:codex
+        if verdict_path.is_file() {
+            let _ = stamp_pr_review_verdict(
+                &self.project_root,
+                pr,
+                pre_review_head_sha.as_deref(),
+                self.branch.as_deref(),
+            );
+        }
 
         // STORY-439: tag-along read for reviewer-side calibration. Same
         // verdict file we just parsed; we re-read so the orchestrator's
