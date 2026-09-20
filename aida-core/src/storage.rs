@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use uuid::Uuid;
 
+use crate::file_lock::is_lock_contended;
 use crate::models::{Requirement, RequirementsStore};
 
 /// Error type for storage operations
@@ -335,7 +336,7 @@ impl Storage {
         loop {
             match lock_file.try_lock_exclusive() {
                 Ok(()) => return Ok(lock_file),
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                Err(e) if is_lock_contended(&e) => {
                     if start.elapsed() > timeout {
                         anyhow::bail!(
                             "Timeout waiting for file lock - another user may be editing: {:?}",
@@ -372,7 +373,7 @@ impl Storage {
             // Use fs2's try_lock_shared explicitly to avoid conflict with std::fs::File method
             match fs2::FileExt::try_lock_shared(&lock_file) {
                 Ok(()) => return Ok(Some(lock_file)),
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                Err(e) if is_lock_contended(&e) => {
                     if start.elapsed() > timeout {
                         anyhow::bail!(
                             "Timeout waiting for file lock - another user may be editing: {:?}",
