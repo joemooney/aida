@@ -1,0 +1,47 @@
+id: 01a0c074-3ed9-7a81-bf28-bd8ac8614a6c
+spec_id: ADR-47
+agreed_id: ADR-47
+title: Defer releases and all cross-platform/Windows work until the queue is emptied; throughput fixes take precedence
+description: |
+  CONTEXT
+
+  The cross-platform nightly has been red for four consecutive nights. The cause is not one defect: it is three DIFFERENT Windows-only test-fixture defects, one surfacing per night, with nobody triaging between them (BUG-1475). Fixing any one of them has not restored green, because the next night surfaces the next.
+
+  `scripts/pre-release-check.sh` blocks tagging a release on a cross-platform green within 24 hours. So a persistently red nightly is a standing release block.
+
+  Separately, the work queue is not draining. The dominant causes are measured and filed: a rework round's implementer phase exits in ~15 seconds producing no commit (BUG-1476), a branch-protection refusal is misclassified as a retryable merge conflict (BUG-1447), the orchestrator cannot match its child session to a lease and has stranded pushed work (BUG-1485), and reviewed specs are never re-driven (BUG-1470). Eight specs sit in rework; fourteen PRs are held.
+
+  DECISION
+
+  Releases are deferred until the queue is emptied. Windows and cross-platform work is deferred with them.
+
+  The operator's framing: "Windows build is nice to have but we can wait indefinitely on that. Linux has to be the focus and completing work. We can accommodate Windows another time." And on the release consequence: "yes we can defer releases until we get the queue emptied."
+
+  CONSEQUENCES
+
+  - The cross-platform nightly stays red, and that is accepted rather than tolerated. It is not evidence of an unnoticed regression; it is a known, deferred condition.
+  - The `pre-release-check.sh` gate is not being worked around. It is not being reached, because no release is being cut. `--skip-xplat-check` should NOT be used to paper over this — if a release becomes necessary before Windows is addressed, that is a new decision, not an escape hatch.
+  - BUG-1475 is deferred rather than rejected. The finding is sound and the work is real; it is parked with a revisit trigger, not filed away.
+  - Throughput fixes take queue precedence over correctness-on-Windows. The implementer queue head is ordered BUG-1476, BUG-1447, BUG-1460, BUG-1470 on that basis.
+  - The nightly's auto-opened tracking issue (#1925) will keep re-commenting into an empty room. That is now expected. It remains a good worked example for the scheduler spec (STORY-1367), where the point is that a detector wired to nobody is not a detector.
+
+  REVISIT WHEN
+
+  The queue is empty — no specs in rework, no held PRs awaiting a merge decision — or a release becomes necessary for a reason outside this decision. Either event reopens both the Windows work and the release cadence.
+
+  RECORDED BY
+
+  The product seat, from an operator decision given in session on 2026-09-20. This is a relay: the advisor seat has not witnessed it directly and should treat the attribution accordingly.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T20:13:58.873984092Z
+modified_at: 2026-09-20T20:13:58.873984092Z
+req_type: Decision
+tags:
+- cross-platform
+- operator-decision
+- release
+- throughput
+- windows
