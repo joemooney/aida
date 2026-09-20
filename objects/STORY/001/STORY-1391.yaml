@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:28:38.860398318Z
-modified_at: 2026-09-20T20:58:31.082721781Z
+modified_at: 2026-09-20T21:02:32.856156531Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -94,5 +94,29 @@ comments:
   content: '[aida:advisor] LIVE INSTANCE, 2026-09-20 20:52. PR-2030''s verdict file was hand-recorded by a reviewer seat via `aida review record`, then OVERWRITTEN by the drain''s phase-3 reviewer minutes later — mode: orchestrator-phase-3, recorded_by: aida drain reviewer. The two verdicts carried DIFFERENT findings: the hand-recorded one flagged an untested writer and two duplicate fixtures; the drain''s flagged post-push recovery depending on a surviving worktree. Both are valid, neither is a superset, and only the second survives in the store. I had to reconstruct the first from a mailbox message and my own verification against the branch. This happened AN HOUR after I raised this spec''s priority arguing that overwritten rounds destroy the evidence behind decisions — and it destroyed the evidence behind a rework brief I was writing at the time. Note the shape is slightly worse than the round-over-round loss this spec describes: this was not round N+1 overwriting round N by the same reviewer, it was one REVIEWER overwriting another, so the file cannot even be read as ''the latest state of one opinion''.'
   created_at: 2026-09-20T20:58:31.082721781Z
   modified_at: 2026-09-20T20:58:31.082721781Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c0a0-b598-77a0-bd22-7aa1254bec0d
+  author: joe
+  content: |-
+    [aida:advisor] CORRECTING MY OWN INSTANCE ABOVE — it is half wrong and the half that is wrong matters.
+
+    I wrote that the hand-recorded verdict on PR-2030 was destroyed and had to be reconstructed from a mailbox message. The PR-KEYED handshake was overwritten; the SPEC-KEYED record survived intact:
+
+        .aida/review-verdicts/PR-2030.json    recorded_by 'aida drain reviewer'  20:52:44  2 findings
+        .aida/review-verdicts/BUG-1485.json   recorded_by 'aida review record'   20:52:03  5 findings, intact
+
+    41 seconds apart. Verified: the spec-keyed file carries all five findings, the reviewer's provenance, and reviewed_sha 8ba48f5b98. Nothing was lost.
+
+    WHY: `aida review record --pr N` writes BOTH files; the drain's phase-3 writes ONLY the PR-keyed one. Counted across the directory — spec-keyed: 29 'aida review record', 1 'codex review', 10 with none, and ZERO by the drain. PR-keyed: 28 'aida drain reviewer', 2 advisor-proxy, 1 codex, 457 with none.
+
+    So the drain has NEVER written a spec-keyed verdict, which makes a spec-keyed file with recorded_by 'aida review record' a hand-record the drain structurally cannot clobber.
+
+    WHAT REMAINS TRUE, and it is still this spec's point: the PR-keyed handshake IS overwritten, one reviewer over another, and it is the file most readers reach for. Two valid non-overlapping verdicts existed on one PR and only one was visible where anyone looked. The loss is of a VIEW rather than of the data — but a reader who trusts PR-N.json is reading one reviewer's opinion presented as the record.
+
+    AND THE SCALE IS THE FINDING: 457 of 488 PR-keyed handshakes carry no recorded_by at all. That is what BUG-1466 and BUG-1467 are actually costing, measured.
+
+    Correction found by claude-reviewer-1, whose verdict it was. I asserted the destruction without checking for a spec-keyed twin — I read the file I had been reading all day rather than asking what else the write produced.
+  created_at: 2026-09-20T21:02:32.856156531Z
+  modified_at: 2026-09-20T21:02:32.856156531Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
