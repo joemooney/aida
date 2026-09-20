@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T05:53:25.916051220Z
-modified_at: 2026-09-20T05:53:25.916051220Z
+modified_at: 2026-09-20T05:53:28.185662334Z
 req_type: Bug
 tags:
 - from:session-0919
@@ -52,3 +52,7 @@ tags:
 - orchestrator
 - parent:EPIC-62
 - retry
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-20T05:53:28.185662334Z
