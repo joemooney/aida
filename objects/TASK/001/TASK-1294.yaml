@@ -14,12 +14,12 @@ description: |-
   Acceptance: a dated report comment on this spec giving median rounds-to-merge before and after with the per-cause split, the spec ids in the sample, and an explicit statement of which other changes landed inside the measurement window. A null or negative result is a valid outcome and must be reported as such rather than re-cut until it looks positive.
 
   Convention this exists to honour: an acceptance criterion that can only be measured after shipping belongs on a follow-up spec, never on the spec that ships the change.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-19T21:11:18.334372308Z
+modified_at: 2026-09-20T02:32:08.780872340Z
 req_type: Task
 tags:
 - batch:followups-0918i
