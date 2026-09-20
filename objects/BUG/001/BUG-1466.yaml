@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-20T23:52:52.986068790Z
+modified_at: 2026-09-20T23:58:04.326170955Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -67,5 +67,24 @@ comments:
     Add it to the existing test rather than creating a new one. It is one line and it makes the existing test assert the property this spec is about.
   created_at: 2026-09-20T23:42:39.667754045Z
   modified_at: 2026-09-20T23:42:39.667754045Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c141-6826-7f70-a4d6-beaf678b497f
+  author: joe
+  content: |-
+    [aida:advisor] PR #2037 (filed against BUG-1467) IMPLEMENTS THIS SPEC'S WRITER HALF. Do not drain this spec into a no-op the way BUG-1476 nearly was after BUG-1445 landed.
+
+    #2037 stamps the --pr handshake with provenance. That is this spec's first two acceptance bullets — the handshake carrying reviewed_sha/reviewed_branch/recorded_at/recorded_by identical to the spec-keyed record, and a test exercising the real writer. BUG-1467's own criterion 1 was already satisfied before it was filed, so the code overshot its spec and landed here instead.
+
+    REMAINING SCOPE OF THIS SPEC once #2037 merges is the CONSUMER half:
+      - the drain compares the handshake reviewed_sha against the current head and refuses, or
+        clearly warns, when an APPROVED verdict was recorded against a different commit
+      - a test covering approved-verdict-at-stale-sha asserting the drain does not treat it as reviewed
+      - the bug_775_commits_ahead fixtures updated to the provenance-carrying shape
+      - the one-line reviewed_sha identity assertion added above
+    Plus my standing requirement that the gate refuse on a MISSING sha, not only a mismatched one.
+
+    Verify which bullets #2037 actually satisfies before starting — read the merged code, do not assume from this note.
+  created_at: 2026-09-20T23:58:04.326170955Z
+  modified_at: 2026-09-20T23:58:04.326170955Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
