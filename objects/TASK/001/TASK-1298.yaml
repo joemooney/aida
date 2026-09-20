@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:18.813550852Z
-modified_at: 2026-09-20T22:49:01.500696909Z
+modified_at: 2026-09-20T22:49:03.078101572Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -187,6 +187,11 @@ comments:
   content: 'Product seat requeue: verdict recorded and no drain run followed it. Findings are specific and actionable; re-driving so the round happens. No acceptance change.'
   created_at: 2026-09-20T18:06:00.274790502Z
   modified_at: 2026-09-20T18:06:00.274790502Z
+- id: 01a0c102-364f-7323-93f7-4233eb1bed2e
+  author: joe
+  content: Requeued after the orchestrator rebuild. BUG-1445's no-op guard is now live in the running binary (wave b09197ab72), so a round that produces no new commit is detected rather than silently re-reviewed. Verdict reviewed_sha matches this branch head exactly, so the findings describe current code. No acceptance change.
+  created_at: 2026-09-20T22:49:02.799494783Z
+  modified_at: 2026-09-20T22:49:02.799494783Z
 execution_mode: drain
 implementation_info:
   implemented: true
