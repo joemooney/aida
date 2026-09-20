@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:08:32.241242234Z
-modified_at: 2026-09-20T18:01:56.023927228Z
+modified_at: 2026-09-20T18:02:06.299949688Z
 req_type: Bug
 tags:
 - ci
@@ -66,3 +66,18 @@ comments:
   created_at: 2026-09-20T16:11:00.200162905Z
   modified_at: 2026-09-20T16:11:00.200162905Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bffb-825b-7a93-a191-5670b925b5c0
+  author: joe
+  content: |-
+    RECURRENCE — this class has struck before and was fixed once, which strengthens the case for half 2 (the ratchet rule) over half 1 (the one-line gate).
+
+    BUG-1184, completed: "merge_lock test stale_dead_pid_same_host_is_reclaimed panics on Windows — pid probe is unix-only, test lacks `#[cfg(unix)]`."
+
+    Identical shape to this spec: a test exercising a Unix-only mechanism, not gated, discovered only when the Windows leg ran. Fixed by gating that one test. Nothing was added to stop the next one, and here is the next one.
+
+    That is the argument for the portability ratchet rule. Half 1 restores the nightly and will hold until someone writes the third instance; half 2 makes writing it fail PR CI. Two occurrences of a class that a regex can catch is the point at which the regex is worth more than the fix.
+
+    It also suggests the rule should be phrased against the MECHANISM rather than the literal shebang. BUG-1184's test had no shebang at all — it called a unix-only pid probe. The `#!/usr/bin/env bash` regex proposed in the description catches this spec's instance and would have missed BUG-1184's. Worth deciding during implementation whether the ratchet should also cover the broader "unix-only API used in an ungated test" shape, or whether that is too wide for a count-ratchet and belongs in the Linux-hosted `cargo check --target` step instead.
+  created_at: 2026-09-20T18:02:06.299949688Z
+  modified_at: 2026-09-20T18:02:06.299949688Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
