@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:12.562647785Z
-modified_at: 2026-09-20T01:00:46.103871581Z
+modified_at: 2026-09-20T01:10:34.736474360Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -77,6 +77,12 @@ comments:
   created_at: 2026-09-19T18:23:02.326555982Z
   modified_at: 2026-09-19T18:23:02.326555982Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bc5d-6df0-7300-990e-37399b1ad8cc
+  author: joe
+  content: 'Implemented the seat handoff pack. Fresh scaffolded product/advisor role files now carry the two-seat independence protocol and link the rework/recovery guides; init enables mailbox-triage, product-wave-relaunch, and shelf-triage seat jobs; launch context shows the seat gate, live queue head, due jobs, and one do-next command. Verified equivalent advisor context under Codex and Claude previews with memory disabled: both name the independent gate, never-implement/merge prohibition, rework guide, waiting-at-gate section, due jobs, and aida advisor next command. Focused Rust tests, scaffold refresh tests, cargo fmt, and git diff checks pass.'
+  created_at: 2026-09-20T01:10:34.736474360Z
+  modified_at: 2026-09-20T01:10:34.736474360Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 failure_reason:
   phase: implementer
