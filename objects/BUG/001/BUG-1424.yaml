@@ -2,7 +2,7 @@ id: 01a0bda4-a9ff-7cb2-978c-fda93ba5c931
 spec_id: BUG-1424
 agreed_id: BUG-1424
 title: BUG-1287's content check compares against main as it is today, so it decays with every merge and already clears nothing three hours later
-description: |
+description: |-
   BUG-1287's fix works only while the default branch has not moved on the files the branch touched. It decays with every subsequent merge, and it has already stopped working — three hours after it merged, it clears nothing.
 
   MEASURED, SAME BRANCH, SAME COMMAND, THREE HOURS APART:
@@ -49,12 +49,26 @@ description: |
   A tree comparison in a steadily-merging repository is a mechanism with a half-life, and the situation it decays fastest in is precisely the situation it exists for: worktrees accumulate BECAUSE nobody reaps promptly, which means merges are landing the whole time it waits. Any future check in this area should be asked the same question before it is accepted — does this answer expire, and if so what is the durable form.
 
   WHY THIS SPEC SHOULD JUMP THE QUEUE, recorded so the priority is not mistaken for enthusiasm: a fix that is inert is worse than an open bug, because the spec that carries it reads Completed. The failure direction is safe — it keeps rather than deletes, so no work is at risk while this waits — but BUG-1287 currently claims an outcome it does not deliver, and every reader of that spec will believe the problem is solved.
+
+  CRITERION 1 AMENDED 2026-09-20 BY THE ADVISOR, after the orchestrator's reviewer correctly refused PR #2015 against it as written.
+
+  The reviewer's finding is literally true: `git rev-list --cherry-pick --right-only` matches INDIVIDUAL commit patch identities, so a branch whose commits were squashed into one cumulative commit on the default branch has no per-commit match, and criterion 1 as written ("identify landed work by patch-id equivalence") is therefore unsatisfied for that case.
+
+  I had reviewed that PR, FOUND the same limitation independently, verified it against a live instance — task-1251, two commits, both reported unique — and recorded it as acceptable rather than blocking. That decision was mine to make and I stand by it. But I recorded it in a COMMENT, and a comment does not bind a reviewer. So the reviewer applied the criterion as written, refused correctly, and the spec has bounced. That is my own rule about refinements belonging in acceptance, broken by me on the spec where it cost a round.
+
+  AMENDED CRITERION 1. Identify landed work by patch-equivalence against the default branch's history since the merge-base, bounded to the divergent range, such that the classification does not decay as the default branch advances. Per-commit patch equivalence satisfies this.
+
+  EXPLICITLY OUT OF SCOPE: a branch whose commits were combined into a single squash commit. Per-commit patch identity cannot match a cumulative one, such a branch stays KEPT, and that is accepted. It fails in the safe direction — keeping a landed branch costs disk, removing an unlanded one costs work — and it is strictly better than the mechanism it replaces, which cleared nothing at all three hours after merging.
+
+  CONSEQUENCE STATED PLAINLY so nobody reads the outcome as broader than it is: of the five artifacts BUG-1287 set out to clear, four clear under this and one does not. If the multi-commit case becomes worth solving, the shape is to compare the branch's combined diff against its merge-base with what landed, which is a different computation with different failure modes and deserves its own spec.
+
+  The reviewer was right to refuse the spec as written. The spec was wrong, not the implementation.
 status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:08:00.383333375Z
-modified_at: 2026-09-20T11:48:01.096265145Z
+modified_at: 2026-09-20T12:28:22.654251889Z
 req_type: Bug
 tags:
 - batch:night-0920
