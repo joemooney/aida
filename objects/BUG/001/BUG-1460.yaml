@@ -1,0 +1,70 @@
+id: 01a0bfe3-6dc2-7383-a557-60fa9e297241
+spec_id: BUG-1460
+agreed_id: BUG-1460
+title: The drain enters the reviewer phase with no terminal CI result, against a head that postdates the CI phase — so specs shelve on verdicts rendered before the build finishes, one of them 3.5 minutes bef
+description: |
+  The drain advances from the CI phase to the reviewer phase without CI having reached a terminal state, and against a head that did not exist when the CI phase began. The reviewer then records a verdict on code whose build has not run, and the spec shelves — in at least one observed case minutes before that build went green.
+
+  OBSERVED ON TASK-1272 / PR #1981. Every line below is read off an artifact.
+
+  Drain events (.aida/events.jsonl):
+
+      17:05:02  RunStarted
+      17:05:02  PhaseEntered idx=1 implementer
+      17:10:46  PhaseEntered idx=2 ci
+      17:20:17  PhaseEntered idx=3 reviewer     <-- no CiTerminal between these
+      17:27:58  SpecShelved verdict:request-changes
+
+  There is NO `CiTerminal` event anywhere in this run. The only one on record for this spec is from 00:26:29Z, a different run_uuid. So the CI phase did not conclude; it was left.
+
+  The branch commit (git):
+
+      f4e2cb3c67  committed 2026-09-20T17:20:22Z  fix(drain): guard shelved resume recovery
+
+  The reviewer phase was entered at 17:20:17Z — FIVE SECONDS BEFORE the commit it would review existed.
+
+  The check runs on that head (forge API):
+
+      merge-hold-gate        started 17:20:32Z  completed 17:20:34Z  → failure   (2s)
+      Build (ubuntu-latest)  started 17:20:32Z  completed 17:31:23Z  → success   (11m)
+
+  The verdict (.aida/review-verdicts/PR-1981.json):
+
+      reviewed_sha  f4e2cb3c6
+      recorded_at   2026-09-20T17:27:50
+      verdict       RequestChanges
+
+  So the verdict was recorded at 17:27:50 against a head whose required build did not finish until 17:31:23, and the spec was shelved at 17:27:58 — three and a half minutes before that build reported SUCCESS.
+
+  THIS IS NOT ONE RUN. Eight verdict files on disk state, in the reviewer's own words, that required CI was incomplete at review time: PR-1846, PR-1956, PR-1974, PR-1981, PR-1998, PR-1999, PR-2006, PR-253. Two of those — PR-1846 and PR-1956 — are APPROVED. An approval issued while the build is still running is the more dangerous outcome of the two, because a RequestChanges merely wastes a round while an approval can carry unverified code toward merge.
+
+  WHY IT MATTERS FOR THROUGHPUT. `verdict:request-changes` is the dominant shelve kind by a wide margin — 22 of 34 shelves today against 10 merges. Any fraction of those rendered against an un-built head is a round spent for nothing: the implementer is sent to address findings from a reviewer that could not see the build result, and the build may well have been green.
+
+  WHAT I HAVE NOT ESTABLISHED, stated plainly so nobody builds on it:
+
+  - I have not read the CI phase's exit conditions in the code, so I do not know WHY it left without a terminal result. The two obvious candidates are a timeout that advances rather than shelves, and a phase that concluded against the pre-push head and never re-probed after the implementer pushed. The five-second ordering is consistent with the second, but consistent-with is not evidence.
+  - I have not measured what fraction of the 22 request-changes shelves are affected. Eight verdicts mention it explicitly; the true number is at least eight and I do not know the ceiling.
+  - Whether the reviewer is ABLE to wait is a separate question from whether it should be handed the spec early.
+
+  RELATED. BUG-1455 (low) records the adjacent case where `CiTerminal green=false` IS emitted and the drain proceeds anyway. That spec's central consequence claim was retracted after the outcome disproved it; this one is filed on terminal artifacts rather than on a predicted consequence. The two are probably facets of one question — what the CI phase's exit conditions actually are — and whoever takes either should read that code path once and answer both.
+
+  ACCEPTANCE
+
+  - The drain does not enter the reviewer phase until the CI phase has recorded a terminal result for the CURRENT head of the PR branch.
+  - If the implementer pushes during the CI phase, the phase re-probes against the new head rather than concluding on the old one.
+  - A run that leaves the CI phase without a terminal CI result is itself an error: either it shelves with a cause naming the timeout, or it waits. Silently advancing is not an option.
+  - A reviewer verdict records the CI conclusion it saw. A verdict whose `reviewed_sha` has no terminal CI result is not a valid basis for a shelve.
+  - Regression test reproduces the observed ordering: reviewer phase entered before the reviewed commit's checks have started.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T17:35:48.162497532Z
+modified_at: 2026-09-20T17:35:48.162497532Z
+req_type: Bug
+tags:
+- ci
+- drain-safe
+- orchestrator
+- parent:EPIC-62
+- reviewer
