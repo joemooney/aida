@@ -1,0 +1,49 @@
+id: 01a0bdea-440c-7d92-8712-3d607e07fdf6
+spec_id: STORY-1375
+agreed_id: STORY-1375
+title: A merge-hold shows what merging might break and never what holding leaves broken, so the decision is made on half the evidence
+description: |
+  A merge-hold shows what merging might BREAK and never what holding leaves BROKEN. Both are costs; only one is visible, so the decision to hold is made on half the evidence.
+
+  THE INCIDENT THAT NAMES IT, 2026-09-20. PR #1983 (TASK-1292) was held pending review. That PR binds `member.pr` at phase start, which is the data a PR-keyed drive-ownership check reads. Before it merges, `member.pr` is written only at TERMINAL outcome, so the check has nothing to read mid-phase and is inert.
+
+  At 07:56Z the advisor merged #2007 over a live drive on that same spec. The orchestrator's independent reviewer entered its phase a minute later, against an already-merged PR, exited 1, retried, and recorded PhaseDonePr. No work was lost; a second reader never read the code, and an independence breach was recorded in the ledger.
+
+  `aida pr ship` HAS a guard for exactly this, and it had correctly refused the same actor on #2004 earlier the same night with "target PR is owned by the live drive". It did not fire here because the binding it reads is what #1983 adds.
+
+  So: the guard that would have prevented the breach was the one being held. The hold was not wrong on its own terms — it was placed on a real finding, that the in-phase check prose-matches a state string and fails OPEN on a format drift. The trade actually made was a LATENT fail-open requiring someone to reword a format string, against an ACTIVE fail-open already producing breaches that night. Nothing in the hold surface showed the second half of that trade.
+
+  THIS IS NOT A CARE PROBLEM. The advisor self-reported it unprompted, had hardened a rule against the same class two days earlier, and has held other PRs tonight for precisely the reason #1983 should not have been. A resolution to be more careful would not have changed the outcome, because the missing information was not available to be careful about. A held PR shows what it might break. Nothing shows what stays broken while it waits.
+
+  PROPOSED. When a PR is held — and in `aida merge-hold list` — surface the COST OF HOLDING alongside the reason:
+  - the spec the PR resolves, and its status
+  - what that spec FIXES that remains broken while held, drawn from the spec's own text and its typed relationships
+  - specifically, any guard, gate or check the PR ENABLES that is inert until it lands, since that is the case with compounding cost
+  - how long it has been held
+
+  The last two are what would have changed this decision. "This PR is what makes the drive-ownership check work" is a sentence that reframes the trade instantly.
+
+  DELIBERATELY NOT PROPOSED: anything that pressures a holder to release. The holds have been right far more often than not tonight, several caught defects no green check would have, and a surface that nags toward merging would destroy more value than it creates. This must inform the decision, never push it.
+
+  ACCEPTANCE
+  1. `aida merge-hold list` shows, per held PR: the spec, its status, and how long the hold has stood.
+  2. Where the PR's spec is linked to others, or its description names a capability it enables, that is surfaced as what remains broken while held.
+  3. A PR whose spec enables a guard, gate or check that is inert without it is flagged distinctly — this is the compounding case.
+  4. Nothing in the output recommends, ranks by urgency, or otherwise pressures release. It states; it does not advise.
+  5. A hold with no discoverable downstream cost renders no extra lines — quiet when there is nothing to say, so the signal stays readable.
+  6. The 2026-09-20 case is the fixture: a hold on #1983 must surface that the drive-ownership check is inert until it lands.
+
+  Filed by the product seat at the advisor's explicit request — they asked that someone without their bias shape it, having just been on the wrong side of the trade. Disposition remains theirs.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T08:24:01.804311106Z
+modified_at: 2026-09-20T08:24:01.804311106Z
+req_type: Story
+tags:
+- from:session-0919
+- merge-hold
+- observability
+- parent:EPIC-62
+- substrate-as-bouncer
