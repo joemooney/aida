@@ -410,13 +410,13 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
-            } else if *excluded_from_batch > 0 {
+            } else if excluded_from_batch.is_some_and(|count| count > 0) {
                 format!(
                     "drain done — {} shipped, {} shelved · {} other approved routed spec{} excluded by batch filter",
                     shipped,
                     shelved,
-                    excluded_from_batch,
-                    if *excluded_from_batch == 1 { "" } else { "s" }
+                    excluded_from_batch.unwrap(),
+                    if *excluded_from_batch == Some(1) { "" } else { "s" }
                 )
             } else {
                 format!("drain done — {} shipped, {} shelved", shipped, shelved)
@@ -514,7 +514,7 @@ mod tests {
         let (_, hint) = describe(&EventKind::QueueDrained {
             shipped: 3,
             shelved: 0,
-            excluded_from_batch: 16,
+            excluded_from_batch: Some(16),
             ineligible: vec![],
         });
         assert!(
@@ -525,7 +525,7 @@ mod tests {
         let (_, quiet_hint) = describe(&EventKind::QueueDrained {
             shipped: 3,
             shelved: 0,
-            excluded_from_batch: 0,
+            excluded_from_batch: Some(0),
             ineligible: vec![],
         });
         assert!(!quiet_hint.contains("excluded"), "{quiet_hint}");
@@ -537,7 +537,7 @@ mod tests {
         let (_, hint) = describe(&EventKind::QueueDrained {
             shipped: 0,
             shelved: 0,
-            excluded_from_batch: 0,
+            excluded_from_batch: Some(0),
             ineligible: vec![crate::events::IneligibleBatchMember {
                 spec: "STORY-1218".into(),
                 reason: "guided execution mode".into(),
@@ -597,7 +597,7 @@ mod tests {
                     EventKind::QueueDrained {
                         shipped: 1,
                         shelved: 0,
-                        excluded_from_batch: 0,
+                        excluded_from_batch: Some(0),
                         ineligible: vec![],
                     },
                 ), // WAKE

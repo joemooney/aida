@@ -79366,7 +79366,7 @@ fn handle_auto_complete_batch(
         // TASK-1297: the "M other approved specs routed to this role are not
         // in this batch" figure, echoed onto the terminal QueueDrained event
         // so a monitor can alarm on it. trace:TASK-1297 | ai:claude
-        closing_excluded_count,
+        Some(closing_excluded_count),
         &ineligible,
     );
     // STORY-493: at drain-end, durably digest any mailbox traffic the drain
@@ -80014,7 +80014,9 @@ fn handle_auto_complete_batches(
         // surface the per-batch exclusion count — out of scope for this
         // fix, which targets the single-batch drain the 2026-09-19 incident
         // hit. trace:TASK-1297 | ai:claude
-        0,
+        // BUG-1425: the chain does not compute one aggregate exclusion count.
+        // trace:BUG-1425 | ai:codex
+        None,
         &[],
     );
     // STORY-493: same best-effort drain-end mailbox digest as the single-batch
@@ -80951,7 +80953,7 @@ fn finalize_drain_summary(
     // batch" — 0 for every non-batch drain kind (single, next-n). Echoed onto
     // the terminal QueueDrained event so a monitor can alarm on it without
     // scraping the human closing line. trace:TASK-1297 | ai:claude
-    excluded_from_batch: usize,
+    excluded_from_batch: Option<usize>,
     ineligible: &[events::IneligibleBatchMember],
 ) {
     // A budget-cap stop reports the cap that fired; otherwise the drain outcome.
@@ -81030,6 +81032,7 @@ fn finalize_drain_summary(
                     shipped: summary.tallies.shipped,
                     shelved: summary.tallies.shelved,
                     // trace:TASK-1297 | ai:claude
+                    // trace:BUG-1425 | ai:codex
                     excluded_from_batch,
                     // trace:BUG-1422 | ai:codex
                     ineligible: ineligible.to_vec(),
@@ -81458,7 +81461,7 @@ fn handle_auto_complete_next_n(
         json,
         // TASK-1297: a nextN drain has no `--batch` filter, so there is
         // nothing excluded to report. trace:TASK-1297 | ai:claude
-        0,
+        Some(0),
         &[],
     );
     // STORY-301: clean exit removes the drain-state file; a crash leaves it.

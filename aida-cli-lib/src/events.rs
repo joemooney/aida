@@ -204,16 +204,18 @@ pub enum EventKind {
         /// Specs that shelved.
         shelved: usize,
         /// TASK-1297: for a `--batch` drain, how many OTHER approved specs
-        /// are routed to the same role but excluded by the batch filter — 0
-        /// for a non-batch drain (single-spec, `next-n`), and 0 rather than
-        /// noise when the filter excluded nothing. The silence about this
+        /// are routed to the same role but excluded by the batch filter. The
+        /// silence about this
         /// number, not the filter itself, was the 2026-09-19 incident: a
         /// batch of 3 open members was re-driven for hours while 16 approved,
         /// role-routed specs sat outside the filter, invisible. A monitor can
         /// alarm on this field without scraping the closing summary line.
         // trace:TASK-1297 | ai:claude
-        #[serde(default)]
-        excluded_from_batch: usize,
+        // BUG-1425: absence means the value was not measured (including
+        // legacy events); `Some(0)` is an explicit measured zero.
+        // trace:BUG-1425 | ai:codex
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        excluded_from_batch: Option<usize>,
         /// BUG-1422: batch members that remained queued but were not eligible
         /// for autonomous execution. Empty means the batch genuinely had no
         /// remaining members (or this was not a batch drain).
@@ -756,10 +758,10 @@ mod tests {
 
     // TASK-1297: an older event line written before `excluded_from_batch`
     // existed must still deserialize — `#[serde(default)]` makes a missing
-    // field read as 0 rather than a hard parse failure.
-    // trace:TASK-1297 | ai:claude
+    // field read as None rather than inventing a measured zero.
+    // trace:TASK-1297 trace:BUG-1425 | ai:codex
     #[test]
-    fn queue_drained_deserializes_pre_task_1297_lines_with_default_zero() {
+    fn queue_drained_deserializes_pre_task_1297_lines_as_not_measured() {
         let legacy = r#"{"ts":"2026-09-01T00:00:00Z","kind":{"event":"QueueDrained","shipped":8,"shelved":1}}"#;
         let ev: Event = serde_json::from_str(legacy).unwrap();
         match ev.kind {
@@ -771,11 +773,33 @@ mod tests {
             } => {
                 assert_eq!(shipped, 8);
                 assert_eq!(shelved, 1);
-                assert_eq!(excluded_from_batch, 0);
+                assert_eq!(excluded_from_batch, None);
                 assert!(ineligible.is_empty());
             }
             other => panic!("expected QueueDrained, got {other:?}"),
         }
+    }
+
+    // trace:BUG-1425 | ai:codex
+    #[test]
+    fn queue_drained_distinguishes_measured_zero_from_not_measured() {
+        let measured = EventKind::QueueDrained {
+            shipped: 0,
+            shelved: 0,
+            excluded_from_batch: Some(0),
+            ineligible: vec![],
+        };
+        let not_measured = EventKind::QueueDrained {
+            shipped: 0,
+            shelved: 0,
+            excluded_from_batch: None,
+            ineligible: vec![],
+        };
+
+        let measured_json = serde_json::to_value(measured).unwrap();
+        let not_measured_json = serde_json::to_value(not_measured).unwrap();
+        assert_eq!(measured_json["excluded_from_batch"], 0);
+        assert!(not_measured_json.get("excluded_from_batch").is_none());
     }
 
     // The incident fixture: a supervisor consuming only QueueDrained can tell
@@ -786,7 +810,7 @@ mod tests {
         let kind = EventKind::QueueDrained {
             shipped: 0,
             shelved: 0,
-            excluded_from_batch: 0,
+            excluded_from_batch: Some(0),
             ineligible: vec![
                 IneligibleBatchMember {
                     spec: "STORY-1218".into(),
@@ -880,7 +904,7 @@ mod tests {
         assert!(EventKind::QueueDrained {
             shipped: 8,
             shelved: 1,
-            excluded_from_batch: 0,
+            excluded_from_batch: Some(0),
             ineligible: vec![],
         }
         .is_actionable());
@@ -1172,7 +1196,7 @@ mod tests {
                 EventKind::QueueDrained {
                     shipped: 8,
                     shelved: 0,
-                    excluded_from_batch: 0,
+                    excluded_from_batch: Some(0),
                     ineligible: vec![],
                 },
             ),
