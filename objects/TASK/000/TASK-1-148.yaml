@@ -1,5 +1,6 @@
 id: 01a0bc62-0303-7150-90b4-abf4c96b854f
 spec_id: TASK-1-148
+agreed_id: TASK-172
 title: GitLab mirror rejected rebased story branch
 description: While shipping STORY-1352, the GitHub force-with-lease push after rebasing succeeded and PR-1987 opened, but the configured GitLab mirror rejected story-1352-work as non-fast-forward. GitHub is authoritative for this PR; inspect aida remote status before relying on the mirror branch.
 status: Rejected
