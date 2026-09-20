@@ -6,13 +6,6 @@
   added_at: 2026-09-20T20:53:50.681744322Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a0c04e-e506-7173-a849-af7584b7342a
-  position: 49000
-  added_by: role:implementer
-  added_at: 2026-09-20T19:38:05.660984596Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0bfe3-6dc2-7383-a557-60fa9e297241
   position: 50000
   added_by: role:implementer
