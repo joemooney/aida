@@ -1600,6 +1600,18 @@ pub(crate) trait PhaseDriver {
         Ok(None)
     }
 
+    /// BUG-1291: once shelving has durably parked the spec, transfer any open
+    /// PR to the reviewer queue. This is deliberately a separate post-shelve
+    /// hook: a failed/declined shelf must not manufacture a handoff, while a
+    /// successful shelf must not be able to forget the PR it abandons.
+    fn handoff_open_pr_after_shelve(
+        &mut self,
+        _spec: &str,
+        _phase: Phase,
+        _failure: &PhaseFailure,
+    ) {
+    }
+
     /// TASK-975: the CI auto-fix budget — how many in-drain fix cycles phase 2
     /// may attempt on a red CI run before the failure proceeds to the EPIC-28
     /// shelve. The default `0` keeps the feature OFF: red CI shelves
@@ -2611,7 +2623,12 @@ fn finish_inconclusive_shelved(
     // rather than silently swallowing the spec.
     let shelved_reason: Option<aida_core::FailureReason> =
         match driver.shelve_on_failure(spec, phase, &failure, &hint) {
-            Ok(fr) => fr,
+            Ok(fr) => {
+                if fr.is_some() {
+                    driver.handoff_open_pr_after_shelve(spec, phase, &failure);
+                }
+                fr
+            }
             Err(e) => {
                 eprintln!(
                     "  {} could not shelve {} into Needs Attention: {} \
@@ -2846,7 +2863,12 @@ fn finish_failure(
     // trace:EPIC-28 | ai:claude
     let shelved_reason: Option<aida_core::FailureReason> = if failure.kind.is_shelvable() {
         match driver.shelve_on_failure(spec, phase, failure, &hint) {
-            Ok(fr) => fr,
+            Ok(fr) => {
+                if fr.is_some() {
+                    driver.handoff_open_pr_after_shelve(spec, phase, failure);
+                }
+                fr
+            }
             Err(e) => {
                 eprintln!(
                     "  {} could not shelve {} into Needs Attention: {} \
@@ -6123,6 +6145,8 @@ mod tests {
         /// batch-mode inconclusive can route through the EPIC-28 shelve→advance
         /// path. `false` (default) keeps the trait default `Ok(None)`.
         shelve_succeeds: bool,
+        /// BUG-1291: successful shelves must transfer an open PR to review.
+        handoff_calls: Vec<(String, Phase, String)>,
         /// BUG-657: when `Some`, `terminal_status` reports the target spec as
         /// already terminal (`Completed`/`Rejected`) so the orchestrator
         /// finishes as a clean NO-OP without ever calling `run_implementer`.
@@ -6232,6 +6256,7 @@ mod tests {
                 held: None,
                 mark_escalated_calls: 0,
                 shelve_succeeds: false,
+                handoff_calls: Vec::new(),
                 terminal: None,
                 ci_fix_budget: 0,
                 ci_red_failures: 0,
@@ -6721,6 +6746,15 @@ mod tests {
                 shelved_at: chrono::Utc::now(),
             }))
         }
+        fn handoff_open_pr_after_shelve(
+            &mut self,
+            spec: &str,
+            phase: Phase,
+            failure: &PhaseFailure,
+        ) {
+            self.handoff_calls
+                .push((spec.to_string(), phase, failure.reason.clone()));
+        }
         // TASK-975: CI auto-fix + merge-conflict rebase hooks.
         fn ci_fix_budget(&self) -> usize {
             self.ci_fix_budget
@@ -6959,6 +6993,30 @@ mod tests {
         );
         assert!(LifecycleSkip::from_tags(["lifecycle:no-harvest"]).no_harvest);
         assert!(!is_unrecognized_lifecycle_tag("lifecycle:no-harvest"));
+    }
+
+    /// PR 1970 / STORY-1354 regression: a run that reaches an open PR and
+    /// then shelves in the reviewer phase must leave review claimable instead
+    /// of dropping ownership between phases.
+    // trace:BUG-1291 | ai:codex
+    #[test]
+    fn reviewer_phase_shelve_hands_open_pr_to_reviewer_queue() {
+        let mut driver = MockPhaseDriver::failing_at(Phase::Reviewer);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1268",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+        assert!(result.shelved_reason.is_some());
+        assert_eq!(driver.handoff_calls.len(), 1);
+        assert_eq!(driver.handoff_calls[0].0, "BUG-1268");
+        assert_eq!(driver.handoff_calls[0].1, Phase::Reviewer);
+        assert!(driver.handoff_calls[0].2.contains("mock failure"));
     }
 
     #[test]

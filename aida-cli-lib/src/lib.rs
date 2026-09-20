@@ -66631,6 +66631,76 @@ fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenPrSnapshot {
     parse_open_pr_snapshot(&String::from_utf8_lossy(&out.stdout))
 }
 
+/// BUG-1291: bounded safety net for runs killed before their normal reviewer
+/// handoff. The scheduler tick calls this once over the forge's already-bounded
+/// open-PR list. It only claims review work; it never reviews or merges.
+// trace:BUG-1291 trace:TASK-1284 | ai:codex
+pub(crate) fn sweep_orphaned_reviews(project_root: &std::path::Path) -> Vec<String> {
+    let live_branches: std::collections::HashSet<String> = list_leases(project_root)
+        .into_iter()
+        .filter(|lease| {
+            lease.active_pid.is_some_and(|pid| {
+                process_probe::process_identity_is_alive(
+                    pid,
+                    lease.active_pid_start_time.as_deref(),
+                )
+            }) || lease.creator_pid.is_some_and(|pid| {
+                process_probe::process_identity_is_alive(
+                    pid,
+                    lease.creator_pid_start_time.as_deref(),
+                )
+            })
+        })
+        .map(|lease| lease.branch)
+        .filter(|branch| !branch.is_empty())
+        .collect();
+
+    let mut lines = Vec::new();
+    for pr in collect_open_prs_uncached(project_root)
+        .by_branch
+        .into_values()
+    {
+        let clean = pr.mergeable.as_deref() == Some("MERGEABLE");
+        let green = matches!(pr.ci_rollup.as_deref(), None | Some("pass"));
+        let no_verdict =
+            pr.review_decision.is_none() && !pr_has_approved_verdict(project_root, pr.number);
+        let no_hold = merge_hold::read_hold(project_root, pr.number).is_none();
+        let unowned = !live_branches.contains(&pr.head_branch);
+        if !(clean && green && no_verdict && no_hold && unowned) {
+            continue;
+        }
+
+        let outcome = try_auto_queue_pr_review(
+            project_root,
+            &pr.head_branch,
+            "orphan-sweep",
+            AutoQueueOrigin::PrSkill,
+        );
+        if matches!(
+            outcome.status,
+            AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists
+        ) {
+            // Re-add an existing story so the queue note records WHY this
+            // claim happened. Queue insertion is idempotent.
+            if let Some(story) = open_pr_review_story(project_root, pr.number) {
+                aida_subcmd_queue_add_for_reviewer(
+                    project_root,
+                    &story,
+                    &format!(
+                        "BUG-1291 scheduler recovery: claimed clean, unowned PR #{} for review",
+                        pr.number
+                    ),
+                );
+            }
+            lines.push(format!(
+                "schedule tick: claimed orphaned PR #{} for reviewer",
+                pr.number
+            ));
+        }
+    }
+    lines
+}
+
 /// TASK-833: pure parse of a `gh pr list --json
 /// number,title,headRefName,statusCheckRollup,mergeable,reviewDecision` payload
 /// into an `OpenPrSnapshot`. Split out of `collect_open_prs` so it's
@@ -90590,6 +90660,56 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &failure.reason,
             recovery_hint,
         )
+    }
+
+    // trace:BUG-1291 | ai:codex
+    fn handoff_open_pr_after_shelve(
+        &mut self,
+        spec: &str,
+        phase: auto_complete::Phase,
+        failure: &auto_complete::PhaseFailure,
+    ) {
+        let Some(pr) = self.pr_number else {
+            return;
+        };
+        let Some(story_id) = open_pr_review_story(&self.project_root, pr as u64) else {
+            // Normally `/aida-pr` already filed the story. Re-run that
+            // idempotent path as a repair before looking it up once more.
+            if let Some(branch) = self.branch.as_deref() {
+                let _ = try_auto_queue_pr_review(
+                    &self.project_root,
+                    branch,
+                    "shelve-recovery",
+                    AutoQueueOrigin::PrSkill,
+                );
+            }
+            let Some(story_id) = open_pr_review_story(&self.project_root, pr as u64) else {
+                eprintln!(
+                    "  {} shelved {} with PR #{} but could not resolve its review story",
+                    "Warning:".yellow().bold(),
+                    spec,
+                    pr
+                );
+                return;
+            };
+            let note = format!(
+                "BUG-1291 recovery: PR #{} handed off after shelving in phase {} ({}): {}",
+                pr,
+                phase.index(),
+                phase.slug(),
+                failure.reason
+            );
+            aida_subcmd_queue_add_for_reviewer(&self.project_root, &story_id, &note);
+            return;
+        };
+        let note = format!(
+            "BUG-1291 recovery: PR #{} handed off after shelving in phase {} ({}): {}",
+            pr,
+            phase.index(),
+            phase.slug(),
+            failure.reason
+        );
+        aida_subcmd_queue_add_for_reviewer(&self.project_root, &story_id, &note);
     }
 
     /// TASK-975: the `[drain] ci_auto_fix` budget (env override
