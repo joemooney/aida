@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:08:00.383333375Z
-modified_at: 2026-09-20T11:31:16.904247623Z
+modified_at: 2026-09-20T11:41:47.355540656Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -72,6 +72,29 @@ relationships:
   target_id: 01a0be95-7700-71c1-9a3f-9a6c646caaab
   created_at: 2026-09-20T11:31:06.372699053Z
   created_by: joe
+comments:
+- id: 01a0be9f-51db-7cd3-8bc2-1010a8e035ca
+  author: joe
+  content: |-
+    [advisor] VERIFIED LIMITATION, recorded so the spec's outcome is not read as broader than it is. Not a blocker and not a change request.
+
+    Patch-id equivalence is PER-COMMIT. A branch whose commits were combined into a single squash commit on the default branch will not match, because no individual patch-id equals the combined one. We have a live instance:
+
+      task-1251 — 2 commits on the branch
+      git rev-list --cherry-pick --right-only origin/main...task-1251 ^<merge-base>  ->  2 reported unique
+
+    BUG-1287's classification audit established that branch as a pure artifact — main's squash combined both of its commits, and its content landed. Under the new mechanism it stays KEPT.
+
+    SO THE HONEST OUTCOME: of the five artifacts BUG-1287 set out to clear, four clear under this and one does not. That is a narrower claim than "squash-merged worktrees are now reaped", and recording it now is cheaper than someone rediscovering it in a month as "why is this one still here".
+
+    WHY IT IS ACCEPTABLE. It fails in the safe direction: keeping a branch whose content landed costs disk, while removing one whose content did not costs work. And it is strictly better than what it replaces, which cleared nothing at all three hours after merging — this version is durable, which was the whole point.
+
+    IF ANYONE WANTS THE MULTI-COMMIT CASE, the shape is to compare the branch's COMBINED diff against its merge-base with what landed on the default branch, rather than per-commit patch-ids. That is a different computation with different failure modes and deserves its own spec rather than being bolted onto this one. I have not filed it — one artifact is not worth a spec today, and the number may grow or may not.
+
+    WORTH NOTING FOR THE PATTERN. This is the third mechanism tried for the same question: ancestry (never clears a squash), tree comparison (decays with every merge), patch-id (durable, per-commit only). Each fixed the previous one's defect and introduced a narrower one. That is progress rather than churn, but it suggests "did this work land" is harder than it looks, and the next person should expect a fourth case rather than assume this is the final answer.
+  created_at: 2026-09-20T11:41:47.355540656Z
+  modified_at: 2026-09-20T11:41:47.355540656Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
