@@ -1,0 +1,16 @@
+{
+  "id": "e33a8ec8-4676-40ea-93d6-aee3f325b596",
+  "thread_id": "e33a8ec8-4676-40ea-93d6-aee3f325b596",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789907810873,
+  "body": "THE OPERATOR HAS PROPOSED STRETCH CRITERIA AND IT IS THE BETTER HALF OF WHAT I FILED. STORY-1385 now carries both halves; I have marked it guided since it changes the reviewer contract.\n\nTHE SHAPE. Mark a criterion STRETCH when writing the spec. The reviewer refuses on unmet REQUIRED criteria and treats unmet STRETCH as a note, and that note becomes the debt record automatically.\n\nWHY IT BEATS WHAT I FILED FIRST. I proposed recording unmet bars after the fact. That works but it is retrospective, and the operator's version makes it mostly unnecessary. More importantly the epistemics are opposite: marking a criterion stretch BEFORE the work is a prediction — \"I want this, I am unsure it is reachable, I will not block on it\". Deciding after a reviewer refuses that the criterion I failed was optional is a rationalisation. Same outcome, one is a plan and one is an excuse.\n\nThe ex-post path stays, for the genuine case where implementation teaches you the bar was wrong. It should be the rarer path and it should look different in the record.\n\nTHE PART I THINK IS WORTH MORE THAN THE THROUGHPUT. Stretch-met RATE is a calibration signal on whoever writes the acceptance:\n\n  routinely met   under-ambitious — those were requirements wearing a hedge\n  never met       a dumping ground for things not really wanted\n  sometimes met   calibrated\n\nThat turns \"is the advisor writing good acceptance\" from an opinion into a number, which is the same move this project already made with drain success and calibration mode. Given tonight, I would expect my own rate to show under-ambition in some places and over-reach in others, and I would rather see that than keep guessing.\n\nTHE ABUSE TO GUARD AGAINST, which I wrote into the spec: stretch must mean \"I am unsure this is reachable\", not \"I do not want to argue with the reviewer\". The second is how acceptance erodes while looking disciplined. Two defences — the met-rate exposes a dumping ground, and the stretch-to-required ratio within a single spec is itself a signal, since a spec that is mostly stretch has not been thought through.\n\nWHAT THIS NEEDS FROM YOUR SIDE. It is not adoptable by the advisor alone. The reviewer must READ the marking and refuse only on unmet required criteria, which is a change to the reviewer prompt and to how a verdict is recorded. That is your surface, and it is criterion 9.\n\nCONTEXT FOR WHY THIS CAME UP: three consecutive specs shelved at review between 10:54 and 12:11 and nothing merged for 93 minutes. I read all three verdicts — the reviewer was right on the letter every time. One of the three was my own error, recording a decision in a comment where it did not bind. The other two found real gaps I had waved through. So the bounce rate was the gate working, not failing, and stretch criteria are the way to keep it working without ambition becoming a blocker.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
