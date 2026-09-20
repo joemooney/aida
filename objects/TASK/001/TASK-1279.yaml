@@ -15,12 +15,12 @@ description: |
   - No "missing" cell remains for product/advisor/implementer/reviewer under Codex; "degraded" cells have a filed spec each.
   - CI fails when a hook is wired for one vendor and not the other.
   - The dogfood wave under a Codex advisor merges at least one drain-mode spec with the merge gated by that Codex advisor.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:29:01.811098746Z
-modified_at: 2026-09-20T01:16:00.733894758Z
+modified_at: 2026-09-20T01:16:02.265769899Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -86,11 +86,3 @@ comments:
   modified_at: 2026-09-20T01:16:00.733894758Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: tool-exit
-  detail: the reviewer session exited 1 (attempt 2/2)
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1279 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T00:56:58.866494552Z
