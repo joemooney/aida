@@ -1,0 +1,7 @@
+[
+  {"id": "proc-literal", "label": "proc literal", "regex": "\"[^\"\\n]*/proc/[^\"\\n]*\""},
+  {"id": "tmp-literal", "label": "tmp literal", "regex": "\"[^\"\\n]*/tmp[^\"\\n]*\""},
+  {"id": "path-separator-join", "label": "PATH separator join", "regex": "\\.join\\(\\s*\":\"\\s*\\)"},
+  {"id": "path-separator-split", "label": "PATH separator split", "regex": "\\.split\\(\\s*(?:':'|\":\")\\s*\\)"},
+  {"id": "shell-command", "label": "shell command", "regex": "Command::new\\(\\s*\"(?:sh|bash|/bin/sh)\"\\s*\\)"}
+]

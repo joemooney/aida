@@ -296,14 +296,27 @@ jobs:
         run: bash scripts/check-removed-flags.sh
 
       # TASK-1205: portability ratchet for Linux-only assumptions in test code.
-      # Existing sites live in scripts/portability-allowlist.txt; PRs may only
-      # shrink that baseline after the bootstrap lands. trace:TASK-1205 | ai:codex
+      # Existing sites live in scripts/portability-allowlist.txt. The growth
+      # verifier is loaded from the trusted base revision so comparison-only
+      # edits cannot bypass it. trace:TASK-1205 BUG-1301 | ai:codex
       - name: Check Rust test portability ratchet
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="origin/${{ github.base_ref }}"
             git fetch --no-tags origin "${{ github.base_ref }}" || true
-            scripts/check-portability.sh --check-allowlist-growth "$BASE"
+            BASE_CHECK="$(mktemp)"
+            BASE_ALLOWLIST="$(mktemp)"
+            BASE_RULES="$(mktemp)"
+            trap 'rm -f "$BASE_CHECK" "$BASE_ALLOWLIST" "$BASE_RULES"' EXIT
+            if git show "$BASE:scripts/check-portability-growth.py" >"$BASE_CHECK" 2>/dev/null; then
+              git show "$BASE:scripts/portability-allowlist.txt" >"$BASE_ALLOWLIST"
+              git show "$BASE:scripts/portability-rules.json" >"$BASE_RULES"
+              python3 "$BASE_CHECK" "$BASE_ALLOWLIST" "$BASE_RULES" \
+                scripts/portability-allowlist.txt scripts/portability-rules.json
+            else
+              scripts/check-portability.sh --check-allowlist-growth "$BASE"
+            fi
+            scripts/check-portability.sh
           else
             scripts/check-portability.sh
           fi

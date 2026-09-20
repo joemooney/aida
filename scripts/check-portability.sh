@@ -4,6 +4,7 @@ set -euo pipefail
 # trace:TASK-1205 | ai:codex
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ALLOWLIST="$ROOT/scripts/portability-allowlist.txt"
+RULES="$ROOT/scripts/portability-rules.json"
 
 usage() {
   cat <<'USAGE'
@@ -11,7 +12,7 @@ usage: scripts/check-portability.sh [--print-findings] [--check-allowlist-growth
 
 Flags Linux-only assumptions in Rust test code that are not behind an
 explicit Unix/Linux cfg. Baseline entries live in scripts/portability-allowlist.txt
-as exact `path:trimmed source line` records.
+as tab-separated `rule-id<TAB>path:trimmed source line` records.
 USAGE
 }
 
@@ -46,38 +47,32 @@ done
 
 if [[ -n "$BASE_REF" ]]; then
   tmp_base="$(mktemp)"
-  tmp_base_sorted="$(mktemp)"
-  tmp_new="$(mktemp)"
-  trap 'rm -f "$tmp_base" "$tmp_base_sorted" "$tmp_new"' EXIT
+  tmp_base_rules="$(mktemp)"
+  trap 'rm -f "$tmp_base" "$tmp_base_rules"' EXIT
 
-  if git show "$BASE_REF:scripts/portability-allowlist.txt" >"$tmp_base" 2>/dev/null; then
-    grep -v '^[[:space:]]*$' "$ALLOWLIST" | grep -v '^[[:space:]]*#' | sort -u >"$tmp_new" || true
-    grep -v '^[[:space:]]*$' "$tmp_base" | grep -v '^[[:space:]]*#' | sort -u >"$tmp_base_sorted" || true
-    if comm -13 "$tmp_base_sorted" "$tmp_new" | grep -q .; then
-      echo "error: scripts/portability-allowlist.txt grew relative to $BASE_REF" >&2
-      comm -13 "$tmp_base_sorted" "$tmp_new" >&2
-      exit 1
-    fi
+  if git show "$BASE_REF:scripts/portability-allowlist.txt" >"$tmp_base" 2>/dev/null &&
+     git show "$BASE_REF:scripts/portability-rules.json" >"$tmp_base_rules" 2>/dev/null; then
+    # trace:BUG-1301 | ai:codex
+    python3 "$ROOT/scripts/check-portability-growth.py" \
+      "$tmp_base" "$tmp_base_rules" "$ALLOWLIST" "$RULES"
   else
     echo "portability allowlist growth check: no baseline exists at $BASE_REF; skipping initial bootstrap comparison"
   fi
 fi
 
-python3 - "$ROOT" "$ALLOWLIST" "$PRINT_FINDINGS" <<'PY'
+python3 - "$ROOT" "$ALLOWLIST" "$RULES" "$PRINT_FINDINGS" <<'PY'
+import json
 import pathlib
 import re
 import sys
 
 root = pathlib.Path(sys.argv[1])
 allowlist_path = pathlib.Path(sys.argv[2])
-print_findings = sys.argv[3] == "1"
-
+rules_path = pathlib.Path(sys.argv[3])
+print_findings = sys.argv[4] == "1"
 PATTERNS = [
-    ("proc literal", re.compile(r'"[^"\n]*/proc/[^"\n]*"')),
-    ("tmp literal", re.compile(r'"[^"\n]*/tmp[^"\n]*"')),
-    ("PATH separator join", re.compile(r"\.join\(\s*\":\"\s*\)")),
-    ("PATH separator split", re.compile(r"\.split\(\s*(?:':'|\":\")\s*\)")),
-    ("shell command", re.compile(r'Command::new\(\s*"(?:sh|bash|/bin/sh)"\s*\)')),
+    (item["id"], item["label"], re.compile(item["regex"]))
+    for item in json.loads(rules_path.read_text())
 ]
 
 LINUX_CFG_RE = re.compile(
@@ -152,19 +147,22 @@ def cfg_scoped_lines(lines: list[str], attr_re: re.Pattern[str]) -> set[int]:
     return cfg_lines
 
 
-def load_allowlist() -> set[str]:
+def load_allowlist() -> set[tuple[str, str]]:
     if not allowlist_path.exists():
         return set()
-    allowed: set[str] = set()
+    allowed: set[tuple[str, str]] = set()
     for raw in allowlist_path.read_text().splitlines():
         line = raw.strip()
         if line and not line.startswith("#"):
-            allowed.add(line)
+            rule, separator, record = raw.partition("\t")
+            if not separator:
+                raise SystemExit(f"error: invalid portability allowlist row: {raw}")
+            allowed.add((rule.strip(), record.strip()))
     return allowed
 
 
-def scan() -> list[tuple[str, int, str, str]]:
-    findings: list[tuple[str, int, str, str]] = []
+def scan() -> list[tuple[str, str, int, str, str]]:
+    findings: list[tuple[str, str, int, str, str]] = []
     for path in sorted(root.rglob(f"*{RS_EXT}")):
         if any(part in {".git", "target"} for part in path.parts):
             continue
@@ -180,9 +178,9 @@ def scan() -> list[tuple[str, int, str, str]]:
             in_test_scope = "/tests/" in f"/{rel}" or idx in test_scoped
             if in_test_scope and idx not in linux_lines:
                 stripped = raw.strip()
-                for label, pattern in PATTERNS:
+                for rule, label, pattern in PATTERNS:
                     if pattern.search(code):
-                        findings.append((rel, idx, label, stripped))
+                        findings.append((rule, rel, idx, label, stripped))
                         break
     return findings
 
@@ -191,16 +189,16 @@ allowed = load_allowlist()
 findings = scan()
 new_findings = []
 
-for rel, lineno, label, stripped in findings:
+for rule, rel, lineno, label, stripped in findings:
     record = f"{rel}:{stripped}"
     if print_findings:
-        print(record)
-    if record not in allowed:
-        new_findings.append((rel, lineno, label, stripped))
+        print(f"{rule}\t{record}")
+    if (rule, record) not in allowed and ("unattributed", record) not in allowed:
+        new_findings.append((rule, rel, lineno, label, stripped))
 
 if new_findings:
     print("error: new non-portable Rust test assumptions found:", file=sys.stderr)
-    for rel, lineno, label, stripped in new_findings:
+    for rule, rel, lineno, label, stripped in new_findings:
         print(f"{rel}:{lineno}: {label}: {stripped}", file=sys.stderr)
     print(
         "\nMove the code behind #[cfg(unix)] / #[cfg(target_os = \"linux\")], "
