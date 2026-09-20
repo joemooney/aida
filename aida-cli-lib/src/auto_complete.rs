@@ -1864,9 +1864,11 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
         (Phase::Implementer, FailureKind::MissingTool) => {
             forge_cli_missing_hint(ctx.forge, "track the PR", "re-run")
         }
+        // trace:BUG-1445 | ai:codex
         (Phase::Implementer, FailureKind::ReworkNoOp) => format!(
-            "The rework round produced no new PR commit. Inspect the unchanged head and the \
-             quoted open findings with `aida why {spec}`; do not retry unchanged work. Either \
+            "The rework round produced no patch-unique change (the failure detail says whether \
+             the head was unchanged or rebase-only). Inspect the quoted open findings with \
+             `aida why {spec}`; do not retry the same branch contribution. Either \
              push a new fixup commit or explicitly punt the disputed finding for advisor triage."
         ),
         (Phase::Implementer, _) => {

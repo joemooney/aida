@@ -34,7 +34,39 @@ fn fixture() -> tempfile::TempDir {
     tmp
 }
 
-// trace:TASK-1265 | ai:codex
+// trace:BUG-1445 | ai:codex
+#[test]
+fn pr_keyed_reviewer_verdict_arms_rework_guard() {
+    let tmp = tempfile::tempdir().unwrap();
+    review_verdict::record_verdict(
+        tmp.path(),
+        "STORY-1350",
+        Some("Approved"),
+        Some("older"),
+        Some("story-1350-work"),
+        Some("stale spec-keyed verdict"),
+        &[],
+        "codex",
+    )
+    .unwrap();
+    review_verdict::record_verdict(
+        tmp.path(),
+        "PR-1974",
+        Some("RequestChanges"),
+        Some("deadbeef"),
+        Some("story-1350-work"),
+        Some("two findings remain"),
+        &["share the marker constant".to_string()],
+        "codex",
+    )
+    .unwrap();
+
+    let verdict = blocking_rework_verdict(tmp.path(), "STORY-1350", 1974)
+        .expect("the canonical PR-N reviewer artifact must arm the guard");
+    assert_eq!(verdict.kind, review_verdict::VerdictKind::RequestChanges);
+}
+
+// trace:TASK-1265 trace:BUG-1445 | ai:codex
 #[test]
 fn rebased_branch_without_new_work_is_a_rework_no_op() {
     let tmp = fixture();
@@ -49,9 +81,26 @@ fn rebased_branch_without_new_work_is_a_rework_no_op() {
     let after = git(repo, &["rev-parse", "HEAD"]);
 
     assert_ne!(before, after, "the fixture must rewrite the topic SHA");
+    assert_ne!(
+        git(repo, &["diff", "--stat", &before, &after]),
+        "",
+        "the moving base must make a tree comparison report changes"
+    );
     assert_eq!(
-        rework_heads_content_changed(repo, &before, &after),
-        Some(false)
+        classify_rework_head_change(repo, &before, &after),
+        Some(ReworkHeadChange::RebaseOnly)
+    );
+    let message = rework_no_op_message(
+        1974,
+        &before,
+        &after,
+        "fix both open findings",
+        2,
+        ReworkHeadChange::RebaseOnly,
+    );
+    assert!(
+        message.contains("patch-ids are unchanged (rebase-only)"),
+        "{message}"
     );
 }
 
@@ -67,18 +116,22 @@ fn genuine_new_commit_is_not_a_rework_no_op() {
     let after = git(repo, &["rev-parse", "HEAD"]);
 
     assert_eq!(
-        rework_heads_content_changed(repo, &before, &after),
-        Some(true)
+        classify_rework_head_change(repo, &before, &after),
+        Some(ReworkHeadChange::ContentChanged)
     );
 }
 
 // trace:TASK-1265 | ai:codex
 #[test]
 fn no_op_failure_names_the_actual_rework_round() {
-    let message = rework_no_op_message(42, "before", "after", "fix the guard", 3);
-    assert!(
-        message.starts_with("ROUND 3 rework implementer"),
-        "{message}"
+    let message = rework_no_op_message(
+        42,
+        "before",
+        "after",
+        "fix the guard",
+        3,
+        ReworkHeadChange::Unchanged,
     );
+    assert!(message.starts_with("ROUND 3 rework"), "{message}");
     assert!(message.contains("fix the guard"), "{message}");
 }
