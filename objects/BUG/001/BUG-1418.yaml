@@ -1,0 +1,46 @@
+id: 01a0bd6a-b8f1-7a51-b4ca-0f7684a17bde
+spec_id: BUG-1418
+agreed_id: BUG-1418
+title: The drain exit record reports zero tokens for 57 of 92 drains, indistinguishably from a genuine zero, so it cannot be used as a cost ledger
+description: |
+  The drain-exit record cannot be used as a cost ledger. Measured 2026-09-19 across the 92 valid `drain_summary` records in ~/.aida/usage.jsonl: 57 carry zero tokens (62%) while the 35 nonzero ones carry 538,786,359. Any per-drain, per-outcome or per-role cost figure computed from this file today is wrong by an unknown and non-uniform amount.
+
+  THE ZEROS ARE NOT A SUBSET WITH A PATTERN, which is what makes the file unusable rather than merely incomplete. Every outcome class contains both zero and nonzero records:
+
+    drained                23 records, 18 zero
+    drained-with-shelved   38 records, 18 zero
+    failed                  5 records,  1 zero
+    max-reached            20 records, 17 zero
+    mismatched              6 records,  3 zero
+
+  So a consumer cannot filter the zeros out by outcome, and cannot tell a genuinely cheap drain from an unmeasured one. The record also carries no vendor field, so vendor correlation cannot even be tested from it.
+
+  THE PRECISE CONDITION, from SPIKE-83's read of `finalize_drain_summary()` and `sum_headless_log_tokens()`: at finalization the exit record sums parseable Claude-shaped usage from `<drain_root>/.aida/headless-logs/*.jsonl`, including only files whose filesystem mtime is at or after the drain's in-memory start, and contributes zero silently for a missing or unreadable directory, an unreadable file, an empty or non-JSON log, or a stream whose usage shape is not recognized. It records zero when that sum is zero or when `drain_root` is None.
+
+  That one condition explains four situations that look unrelated from outside: a fully interactive drain (no headless logs at all), a vendor whose stream uses a different usage schema, logs written somewhere other than the resolved root, and a truncated or missing log. It also explains how live output and the exit summary disagree — the live cap display calls the driver's running counter while the exit summary independently rescans a filtered directory. They are two observations, not one counter carried into persistence.
+
+  WHY THIS MATTERS BEYOND TIDINESS. This is the file anyone reaches for to answer "what did that drain cost", and it answers confidently with a number that is zero 62% of the time for reasons unrelated to cost. A silent zero is worse than a missing field: a consumer summing the column gets a plausible total that is wrong, where a null would have forced the question.
+
+  ACCEPTANCE
+  1. A drain whose token total could not be established records that it could not, distinguishably from a genuine zero. Whatever the representation, `0` and `unknown` must not be the same value.
+  2. The record carries enough identity to attribute cost: at minimum the vendor, and the spec or run key. Today it has outcome, role, iterations, shipped/shelved counts, elapsed time and diff statistics, but nothing to join cost to what was worked.
+  3. A stream whose usage shape is not recognized is reported rather than silently contributing zero — one line naming the file and the unrecognized shape is enough, and it is what would have surfaced the foreign-vendor case without a spike.
+  4. A test covers the four zero-producing situations separately and asserts each is distinguishable from a measured zero: no headless logs, an unrecognized schema, logs outside the resolved root, and a truncated log.
+  5. Documented where cost consumers look, stating that records written before this change cannot distinguish zero from unknown, so historical sums are lower bounds rather than totals.
+
+  NOT IN SCOPE: the durable round/phase join in usage.jsonl that SPIKE-83 names as the replacement for its proportional estimates. That is a larger measurement and belongs on its own spec; this one is about the exit record not lying.
+
+  Evidence and root cause from SPIKE-83 (docs/spikes/2026-09-19-cost-observability.md); the population figures were measured in that spike, not by this filing.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T06:04:43.121876649Z
+modified_at: 2026-09-20T06:04:43.121876649Z
+req_type: Bug
+tags:
+- cost
+- diagnostic-decay
+- from:session-0919
+- observability
+- telemetry
