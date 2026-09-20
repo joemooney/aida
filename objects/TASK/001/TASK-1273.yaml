@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-20T00:12:46.009200482Z
+modified_at: 2026-09-20T00:18:02.631510715Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -38,3 +38,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-19T23:54:17.500757235Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: reviewer verdict is RequestChanges — not Approved
+  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1273 --work`'
+  shelved_by: advisor
+  shelved_at: 2026-09-20T00:18:02.631510715Z
