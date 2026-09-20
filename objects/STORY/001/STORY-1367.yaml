@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T04:07:54.265428714Z
-modified_at: 2026-09-20T04:11:08.533606703Z
+modified_at: 2026-09-20T18:59:10.094348714Z
 req_type: Story
 tags:
 - from:session-0919
@@ -78,3 +78,30 @@ comments:
   created_at: 2026-09-20T04:11:08.533606703Z
   modified_at: 2026-09-20T04:11:08.533606703Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c02f-c08e-71f2-a8a6-73e288a96ab7
+  author: joe
+  content: |-
+    Candidate first jobs, from a day of hitting exactly the failure this spec describes. `aida schedule list` today returns "No scheduled jobs configured", so the surface is still empty and every item below ran only because a human or an agent happened to look.
+
+    1. ID-BLOCK TOP-UP — and the argument is not the one it first appears to be.
+
+    `aida db block status` showed SPIKE at 19 remaining against an auto-claim threshold of 20, with "WARNING: Low, claim soon". That looks like a broken auto-claim. It is not. `aida-core/src/block_allocation.rs` is explicit: "when the aggregate remaining IDs for a (node, type) pair drops below the configured threshold, **the next spec-creating command** quietly claims a fresh block". Auto-claim is demand-triggered on `aida add` (TASK-281) and would have topped SPIKE up the next time anyone filed one. Nothing was broken.
+
+    The problem is WHEN the top-up runs. A block claim writes to the orphan store and can need the remote. Doing it lazily means it happens inside a spec-creating command — which today included a reviewer seat whose filing hit "origin unreachable" and a "Cannot rebase onto multiple branches" retry, leaving two specs local-only until someone ran `aida db sync --push` by hand. Coupling "file a spec" to "claim a block succeeded" puts a network-dependent write on the critical path of the one operation agents perform constantly, and it fires under load rather than at rest.
+
+    A scheduled proactive top-up does not replace auto-claim; it makes the lazy path never need to run. Job shape: for each type below `auto_claim_threshold + margin`, claim a block. Idempotent, cheap, and its failure is invisible to callers because nothing is waiting on it.
+
+    2. HUB DRIFT — this spec's own title cites 32 hours of silent drift as the proof. It happened again today: gitlab `main` was 21 commits behind and `aida-store` diverged, discovered only because I ran `aida remote status` while looking at something else. Reconciled by hand. `aida remote status` already exists and exits non-zero on drift, so the job is a one-liner.
+
+    3. STORE PUSH HEALTH. Distinct from drift: today the reviewer's `aida db sync --push` failed transiently and its two filed specs existed only on one machine. The seat flagged it rather than assuming, which is the only reason it was caught. A periodic push-and-verify would have closed it without anyone noticing.
+
+    4. VERDICT WITH NO SUBSEQUENT RUN. "Which specs have a review verdict and no drain run since, and for how long?" took a hand pass over events.jsonl plus the verdict files today, and it surfaced five specs — one parked eleven hours. That is BUG-1470's criterion 4 and it is inherently a periodic question, not an on-demand one: nobody thinks to ask it, which is precisely why work sat.
+
+    5. NIGHTLY-RED AGE. The cross-platform nightly was red four consecutive runs before anyone looked, and the cause was a single ungated test fixture. `aida status` already reports "nightly red since <date>"; the job is to escalate when that age crosses a threshold rather than waiting for it to be read.
+
+    THE COMMON SHAPE, and the reason I would argue for two or three of these rather than a framework: every one is a question with a cheap existing command, whose answer nobody thinks to ask, and whose cost is paid silently. The scheduler does not need to be clever to fix that — it needs to have something in it. Items 1 and 2 are both single existing commands with no new logic, which makes them the right first registrations: they prove the mechanism without any of them being the reason it is hard.
+
+    trace note: this comment is evidence FOR the spec, not a scope expansion. If the spec's author wants the job list narrower, items 1 and 2 are the ones I would keep.
+  created_at: 2026-09-20T18:59:10.094348714Z
+  modified_at: 2026-09-20T18:59:10.094348714Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
