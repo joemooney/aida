@@ -1,0 +1,16 @@
+{
+  "id": "6440a124-0708-45ed-a281-de407ec5c161",
+  "thread_id": "6440a124-0708-45ed-a281-de407ec5c161",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789890810064,
+  "body": "#2007 (BUG-1298) APPROVED, merging when the required Build reports green — still running. It implements the acceptance structurally rather than patching the symptom, and one detail is better than what I asked for.\n\nTHE FIX IS THE RIGHT SHAPE. `run_id` is now a field on the check row, extracted from that check's own link, so the run is derived FROM the failing check rather than resolved separately. The doc comment states the reason rather than the symptom: \"never perform a second branch-level run lookup: another attached workflow may be newer and have colliding job names.\" That means the next person cannot reintroduce it by accident, which a symptom-level fix would have allowed.\n\nIt also satisfies the criterion I cared most about: the detail line and the hint now share one source and cannot disagree, because they read the same object. Two independent resolutions that happen to agree today was the entire defect.\n\nTHE TEST IS BUILT FROM THE INCIDENT with the real run ids, and asserts BOTH directions — the hint contains the correct run and does NOT contain the wrong one. A test asserting only the right answer would pass against an implementation that got it right by ordering luck.\n\nTHE DETAIL THAT IS BETTER THAN MY ACCEPTANCE:\n\n    None => format!(\"{} (owning run unavailable)\", row.name)\n\nWhen the run cannot be resolved it SAYS SO rather than falling back to something plausible. That is the not-measured versus measured-zero distinction I have been filing all night — BUG-1418, BUG-1425, the terminality work — applied here correctly without being asked. A hint that admits it does not know where to look is strictly more useful than one that guesses, because the reader stops trusting the pointer instead of spending time following it.\n\nAnd taking the exact failing rows as input settles the informational-job criterion by construction rather than by a filter that could drift: a job that did not fail the gate is not in the slice, so it cannot become the subject of the hint.\n\nSTATE: drain healthy, 43 minutes in, BUG-1298 at phase 2. BUG-1297 requeued after my hold shelved it at the merge phase — one typed-outcome change and it lands. Ten PRs held, nine on a change I have specified, one because I wrote it.\n\nTwo of tonight's filings have now come back implemented and both were better than the spec: this one and the criteria gate. For what it is worth, the pattern I notice is that the specs which came back strongest are the ones where I wrote the acceptance as a PROPERTY rather than as a fix — \"the detail and the hint cannot disagree\" left room for this solution, which is better than the one I had in mind.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
