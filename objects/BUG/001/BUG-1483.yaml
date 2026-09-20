@@ -1,0 +1,46 @@
+id: 01a0c05d-c0a3-7422-9198-ce55a185e49c
+spec_id: BUG-1483
+agreed_id: BUG-1483
+title: Discipline parity check is structurally broken on Windows (gitattributes asymmetry) and silently PASSES on an unreadable file
+description: |-
+  Two defects in the BUG-1426 parity check, aida-core/src/templates.rs discipline_content_mismatches (~line 1164). Found while investigating whether merging PR #2023 broke the Windows build. It did not; the mechanism below is structural and independent of that merge.
+
+  DEFECT 1 - GITATTRIBUTES ASYMMETRY. The two sides of the comparison have different line-ending contracts. Verified with git check-attr on Linux:
+
+      aida-core/templates/.aida/discipline/session-discipline.md : text=set  eol=lf
+      .aida/discipline/session-discipline.md                     : text=unspecified  eol=unspecified
+
+  .gitattributes pins ONLY aida-core/templates/** to LF (added by BUG-244, to stop a Windows checkout embedding CRLF). The PROJECT COPY under .aida/discipline/ is not covered, so a Windows checkout with core.autocrlf converts it to CRLF on disk. The check then compares a CRLF file against an LF-embedded master.
+
+  The comparison is:  local.trim_end() != *master
+  trim_end() removes trailing whitespace from the END OF THE STRING only. It does nothing about the \r before every internal newline. So every guide with more than one line mismatches, which is exactly the observed failure: all 22 non-allowlisted guides reported at once, while the 3 allowlisted ones are correctly absent. Observed on PR #2024 Windows job 106124356720; Build (ubuntu-latest) passed on the same commit.
+
+  DEFECT 2 - ABSENCE READS AS PASS. Same function:
+
+      let local = std::fs::read_to_string(project_dir.join(name)).ok()?;
+
+  A file that cannot be read - missing, wrong path separator, permission error - yields None, filter_map DROPS it, and it is counted as NOT mismatching. If the project directory does not resolve at all on some platform, EVERY file is dropped and the check reports a clean pack. A guard whose job is to detect drift reports "no drift" when it cannot see the files.
+
+  This is a PRIN-5 instance: computing a verdict over what is present, erring toward reassurance. It belongs with BUG-1466, BUG-1481 and BUG-1482 rather than being read as a Windows-only issue.
+
+  DEFECT 2 MAY EXPLAIN A TIMING ANOMALY I COULD NOT OTHERWISE RESOLVE. The 09-20 nightly at 11:06 local ran aida-core with 952 passed / 0 failed and this test OK on Windows; a run at 11:13 on a base 3 commits later failed it with all 22 files. Under defect 1 alone the mismatch should be CONSTANT on Windows, not intermittent. A path that resolves on one run and not the other, silently passing when it does not resolve, would produce exactly that flip. This is a HYPOTHESIS, not a verified cause - it needs a Windows runner to confirm, and whoever takes it should confirm rather than adopt it.
+
+  NOT CAUSED BY PR #2023. That merge changed two files; this failure names twenty-two. All 22 master/project pairs were re-verified byte-identical in git on current main except the 3 intentionally-localized ones.
+
+  ## Acceptance
+
+  - The two sides of the comparison have the same line-ending contract. Preferred: extend the .gitattributes eol=lf pin to cover .aida/discipline/** so both sides are LF on every platform. Normalizing inside the comparison is acceptable but weaker, because it leaves the on-disk copies inconsistent across platforms for every other consumer.
+  - An unreadable or missing project-copy file is reported as a FAILURE naming the file, never silently dropped. Absence must not read as agreement.
+  - A test covers the unreadable-file case: point the check at a project dir missing one guide and assert it FAILS naming that guide. Note the existing tests (discipline_content_check_rejects_locally_edited_copy) only exercise a present-but-edited file, so the absence path has never been executed.
+  - A test covers the CRLF case: a project copy with CRLF line endings and an LF master must be handled per whichever fix is chosen, and the expected outcome stated.
+  - Confirm or refute the 11:06-vs-11:13 hypothesis above on a Windows runner and record which it was, so the next reader is not left with an unexplained intermittency.
+  - Link to PRIN-5 for defect 2.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T19:49:24.771676840Z
+modified_at: 2026-09-20T19:49:24.771676840Z
+req_type: Bug
+tags:
+- windows portability ci gitattributes prin-5 from:review-session-0920
