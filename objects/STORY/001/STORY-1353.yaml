@@ -31,12 +31,12 @@ description: |
   - The refusal text for a dispatch command never says "advisor authority" again.
   - A unit test per authority class over the role matrix (product / advisor / implementer / reviewer / integrator / orchestrated).
   - The call-site audit table is recorded on this spec, with every site classified.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:02:54.706318011Z
-modified_at: 2026-09-19T21:23:51.682886483Z
+modified_at: 2026-09-20T01:30:50.568500898Z
 req_type: Story
 tags:
 - authority
