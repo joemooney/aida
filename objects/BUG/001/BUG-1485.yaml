@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-20T20:53:48.253813474Z
+modified_at: 2026-09-20T20:58:26.809802256Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -183,6 +183,25 @@ comments:
   content: 'Round 2: reviewer findings are specific and implementable. (1) post-push recovery still requires the recorded worktree to exist — when the child released it, branch_commits_ahead_main returns zero and recovery falls through to the generic no-PR failure. That is the exact shape that stranded BUG-1442''s pushed commit today and required a human to open PR #2027. (2) the regression tests serialize OrchestratedLeaseReceipt directly instead of exercising the real lifecycle positions. No acceptance change.'
   created_at: 2026-09-20T20:53:47.956576703Z
   modified_at: 2026-09-20T20:53:47.956576703Z
+- id: 01a0c09c-f479-7241-9bed-6ce5ea0ce8a0
+  author: joe
+  content: |-
+    [aida:rework-brief-addendum] BUG-1485 / PR #2030 — a THIRD binding item, and an explanation of why my brief above cites findings that are no longer in the verdict file.
+
+    WHAT HAPPENED TO THE EVIDENCE. The reviewer seat hand-recorded a RequestChanges via `aida review record`. The drain's phase-3 reviewer then ran at 20:52:44 and OVERWROTE PR-2030.json with its own verdict — `mode: orchestrator-phase-3`, `recorded_by: aida drain reviewer`. The hand-recorded findings I briefed above (the untested writer; the two fixtures being one test) are real and were verified by me against the branch, but they no longer exist in the substrate. That is STORY-1391 destroying evidence in real time, on the spec I am briefing, an hour after I raised its priority on exactly this argument.
+
+    Both sets of findings are valid and they do not overlap fully. Capturing the drain's here so its half survives the next overwrite too.
+
+    3. BINDING — post-push recovery must not depend on a surviving worktree.
+       Mechanism: when the child has released its lease and worktree, the receipt fallback returns the branch, but run_implementer calls try_open_orchestrator_pr_for_no_pr_worktree; branch_commits_ahead_main on a missing worktree evaluates to zero and recovery falls through to the generic "run /aida-pr inside the session" failure. Use the RETAINED BRANCH to invoke the existing pushed-branch recovery, or emit the stranded branch plus a one-command recovery. Test the released-worktree case specifically.
+       Why this is the heart of the spec rather than an extra: the whole premise is a lease released before the parent resumes. If recovery still requires the worktree, the fix works only in the case that was never broken.
+
+    CONVERGENCE WORTH NOTING. Two reviewers, working independently and hours apart, both concluded the regression fixtures do not reproduce anything — one via "they hand-write the receipt and assert the reader reads it back", one via "they never create/push commits, remove the worktree, run phase-1 recovery, or assert PR/spec-state recovery". Same conclusion, different routes, neither seeing the other's verdict. Item 1 and item 3's test requirement are the same requirement stated twice, and satisfying either properly satisfies both.
+
+    ORDER, replacing the partial-credit note above: item 3 first, then item 1's writer test, then item 2. Item 3 is a behaviour gap; items 1 and 2 are coverage gaps over behaviour that at least partly works.
+  created_at: 2026-09-20T20:58:26.809802256Z
+  modified_at: 2026-09-20T20:58:26.809802256Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
