@@ -1,0 +1,26 @@
+id: 01a0bcb1-5a2f-7213-ad74-29d3eaa7ae58
+spec_id: STORY-1365
+agreed_id: STORY-1365
+title: 'Review PR-1995: [AI:codex] fix(review): stamp drain verdict metadata (TASK-168)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0bcac`) for branch `task-168-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1995>
+  - Branch: `task-168-work` → `main`
+
+  ## Covers
+
+  - TASK-168
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1995` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T02:42:14.703446246Z
+modified_at: 2026-09-20T02:42:14.703446246Z
+req_type: Story
