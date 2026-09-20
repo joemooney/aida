@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:03:07.230562710Z
-modified_at: 2026-09-20T14:03:25.865898343Z
+modified_at: 2026-09-20T16:31:07.110826901Z
 req_type: Task
 tags:
 - diagnostic-decay
@@ -45,3 +45,4 @@ relationships:
   target_id: 01a0bcb3-beba-79d1-8449-8b286527c46f
   created_at: 2026-09-20T14:03:25.865893478Z
   created_by: joe
+execution_mode: drain
