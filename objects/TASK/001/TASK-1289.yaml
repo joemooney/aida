@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-20T06:22:24.646723915Z
+modified_at: 2026-09-20T06:22:49.819717041Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -701,6 +701,38 @@ comments:
     I am recording this as evidence on BUG-1291 as well: its success condition is that a spec cannot end up simultaneously queued, statused as in-flight, and unowned. This one did, and nothing reported it.
   created_at: 2026-09-20T03:02:35.178636636Z
   modified_at: 2026-09-20T03:02:35.178636636Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bd7b-4ddb-7bb2-8ec5-b7bf421398f4
+  author: joe
+  content: |-
+    [advisor:disposition] NOT RE-DRIVEN A FIFTH TIME. Mode changed drain → GUIDED (keyboard), scope narrowed to the design problem, two findings split out, one deferred. Title rewritten, because the old one described a feature and this spec is now about why that feature does not exist.
+
+    I VERIFIED THE NON-CONVERGENCE RATHER THAN TAKING THE COUNT. The head has moved — 6512f131, four commits, pushed 06:03:36Z — so rounds ARE producing work. And at that head:
+
+      implementer_preflight.rs still produces GuardResult::Skipped at six sites while decide() collects only Failed
+      lib.rs:25847 still instructs implementers to run `aida pr ship --no-merge` and exit at the PR-open checkpoint
+
+    So the most recent round pushed commits and closed none of the four findings. That is the signal, and it is different from thrashing: work is happening and not landing on the findings.
+
+    FINDING 1 IS NOT A FINDING, IT IS THE SPEC BEING WRONG. The orchestrated launch prompt tells full / through-ci / through-merge / skip-build implementers to publish the PR themselves and exit, while the parent's preflight runs afterwards. A guard that runs after publication cannot gate publication. This spec's own title promised the guards run "before opening the PR"; as built, they cannot. Everything else is detail on top of a feature that does not do the thing it is named for.
+
+    That is why another drain round was never going to fix it. The question is where the publication boundary belongs — does the implementer stop before `pr ship` and the parent publish after preflight, or does the preflight move into the implementer's own exit path? — and that is a design decision about the orchestrator's control flow, not a defect an implementer can infer from a findings list. Four coupled changes to the publication boundary is keystone work, and keystone work stays at the keyboard here.
+
+    WHAT STAYS ON THIS SPEC: findings 1 and 2. They are one piece of work. Deciding where publication happens and making the guard actually refuse are both required for the feature to exist, and separating them would produce a guard that refuses correctly in a place where refusing is too late.
+
+    Finding 2 restated so it is not re-derived: `decide()` collects only `GuardResult::Failed`, while `Skipped` is produced at :288 (worktree binary unavailable), :305 (timeout) and :306 (could not start). All three return `PreflightDecision::Open`. Keep skipping for "this guard does not apply here" — an unknown or missing configured name. Refuse for "this guard was supposed to run and did not". Do not distinguish them by string-matching the note text.
+
+    SPLIT OUT: BUG-1420, the shell-semantics mismatch — guards run under plain `bash -c` while CI uses `--noprofile --norc -e -o pipefail`, so a guard with a failing intermediate command passes locally and fails in CI. Approved, drain, queued. It shares only a file with the rest and the permissiveness runs the wrong way: a local check weaker than CI converts "CI will catch this" into "preflight said it was fine."
+
+    DEFERRED: TASK-1299, the build-before-guard-resolution ordering. It is an optimisation, it was the only one of the four that is not a correctness defect, and every guard this repo configures needs the binary anyway — so the waste is hypothetical in the only project running it. Revisit trigger recorded.
+
+    WHY THE SPLIT MATTERS MORE THAN THE COUNT OF ROUNDS. Four findings sharing a file and nothing else means a round that fixes two and regresses none still shelves. The implementer gets no credit for partial progress and the next round re-reads all four from scratch. That is the shape that does not converge, and it is a grooming failure rather than an implementer failure — I put four unrelated problems behind one gate.
+
+    SEQUENCING, and I am taking this recommendation. TASK-1290 goes first. Once the reviewer prompt carries the untraced-criteria list into round 1, the reviewer cites findings rather than rediscovering them, which is precisely what these rounds have been spending themselves on. That is worth more than the split.
+
+    ON TASK-1291, for the record: it is working. Its evidence was "rounds tail one finding at a time"; here it converted two partial rounds into one complete list of four. This spec looks worse since it merged because we can finally see its true state. A spec getting visibly worse right after a measurement lands is usually the measurement working, and it would be a mistake to read tonight's shelve count as a regression.
+  created_at: 2026-09-20T06:22:49.819717041Z
+  modified_at: 2026-09-20T06:22:49.819717041Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
