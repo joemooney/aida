@@ -25,10 +25,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:13:31.332560143Z
-modified_at: 2026-09-20T07:13:31.332560143Z
+modified_at: 2026-09-20T07:13:44.566115914Z
 req_type: Bug
 tags:
 - diagnostic-decay
 - drain-safe
 - from:session-0919
 - queue
+execution_mode: drain
