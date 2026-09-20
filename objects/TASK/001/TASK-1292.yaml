@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:50:12.735351787Z
-modified_at: 2026-09-20T00:19:38.032323133Z
+modified_at: 2026-09-20T00:49:35.821340334Z
 req_type: Task
 tags:
 - drain-safe
@@ -40,4 +40,11 @@ relationships:
   target_id: 01a0b6e5-444d-7a00-a3c2-d1237930528c
   created_at: 2026-09-19T16:50:25.561560262Z
   created_by: joe
+comments:
+- id: 01a0bc4a-384d-7e21-b0e0-f67e76385686
+  author: joe
+  content: Commit a8b04f587f references this requirement
+  created_at: 2026-09-20T00:49:35.821340334Z
+  modified_at: 2026-09-20T00:49:35.821340334Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
