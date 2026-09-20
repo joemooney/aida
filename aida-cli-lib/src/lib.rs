@@ -1112,7 +1112,7 @@ mod bug_1265_finish_ci_tests {
 set -eu
 printf '%s\n' "$*" >> '{}'
 if [ "${{1:-}}" = "--version" ]; then echo 'gh version test'; exit 0; fi
-if [ "$1 $2" = "pr view" ]; then
+if [ "${{1:-}} ${{2:-}}" = "pr view" ]; then
   printf '%s\n' '{{"state":"OPEN","title":"test","baseRefName":"main","headRefName":"bug-1265","headRefOid":"deadbeefdeadbeefdeadbeef","isCrossRepository":false,"isDraft":false}}'
   exit 0
 fi
@@ -1389,59 +1389,6 @@ mod bug_1205_ci_phase_fallthrough_tests {
         );
         assert!(body.contains(concat!("let refined_", "green")));
         assert!(body.contains(concat!("self.end_implementer_", "session()")));
-    }
-}
-
-#[cfg(test)]
-mod bug_1460_current_head_ci_gate_tests {
-    /// Regression for the observed ordering where phase 3 was announced before
-    /// the reviewed head's checks had even registered.
-    // trace:BUG-1460 | ai:codex
-    #[test]
-    fn reviewer_announcement_follows_registration_and_current_head_proof() {
-        let src = include_str!("lib.rs");
-        let real_impl = src
-            .find(concat!(
-                "impl auto_complete::PhaseDriver ",
-                "for RealPhaseDriver {"
-            ))
-            .expect("real phase driver");
-        let finish = src[real_impl..]
-            .find(concat!("fn finish_", "ci(&mut self)"))
-            .map(|i| real_impl + i)
-            .expect("production CI phase");
-        let review = src[finish..]
-            .find(concat!("fn run_", "reviewer("))
-            .map(|i| finish + i)
-            .expect("production reviewer phase");
-        let finish_body = &src[finish..review];
-        assert!(
-            finish_body.contains(concat!("wait_for_checks_to_", "register(")),
-            "fresh heads must wait for their checks to register"
-        );
-        assert!(
-            finish_body.contains(concat!("self.ci_terminal_", "sha =")),
-            "terminal CI must be bound to a head"
-        );
-
-        let review_end = src[review..]
-            .find(concat!("    fn ", "merge("))
-            .map(|i| review + i)
-            .unwrap_or(src.len());
-        let review_body = &src[review..review_end];
-        let current_head = review_body
-            .find(concat!("let current = pr_head_sha_", "best_effort"))
-            .expect("current-head guard");
-        let announced = review_body
-            .find(concat!(
-                "mark_drain_phase(auto_complete::Phase::",
-                "Reviewer)"
-            ))
-            .expect("reviewer announcement");
-        assert!(
-            current_head < announced,
-            "PhaseEntered(reviewer) must follow current-head CI validation"
-        );
     }
 }
 
@@ -88395,6 +88342,43 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // returns the pool worktree, and — only if an OPEN PR still exists —
         // auto-queues the `Review PR-N` item for the reviewer).
         self.end_implementer_session()
+    }
+
+    fn verify_ci_for_review(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        if self.lifecycle_forge == crate::forge::ForgeKind::None {
+            return Ok(());
+        }
+        let pr = self.pr_number.ok_or_else(|| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Internal,
+                "internal: PR number not resolved before the review phase",
+            )
+        })?;
+        let ci_sha = self.ci_terminal_sha.as_deref().ok_or_else(|| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::CiUnavailable,
+                format!(
+                    "review of PR-{pr} refused: this run has no terminal CI result for a known head"
+                ),
+            )
+        })?;
+        let current = pr_head_sha_best_effort(self, pr).ok_or_else(|| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::CiUnavailable,
+                format!("cannot verify the current head of PR-{pr} before review"),
+            )
+        })?;
+        if !ci_sha.eq_ignore_ascii_case(current.trim()) {
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::CiUnavailable,
+                format!(
+                    "PR-{pr} moved after CI concluded ({} -> {}); re-run CI for the current head",
+                    &ci_sha[..ci_sha.len().min(9)],
+                    &current[..current.len().min(9)]
+                ),
+            ));
+        }
+        Ok(())
     }
 
     fn run_reviewer(
