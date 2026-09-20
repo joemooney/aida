@@ -1,0 +1,41 @@
+id: 01a0be68-a2ce-7090-8cfc-892f35262c87
+spec_id: BUG-1435
+agreed_id: BUG-1435
+title: The merge-hold classifier matches the refusal's own sentence, so a reword silently returns a supervised gate to burning both retries
+description: |
+  `classify_drain_merge_failure` decides that a merge was refused by a supervised hold by substring-matching the refusal's own sentence:
+
+    aida-cli-lib/src/lib.rs:847-848
+    let hold_prefix = format!("refusing to merge PR-{pr}: supervised merge-hold");
+    if detail.contains(&hold_prefix) {
+
+  The producer is ours — `forge.rs:1527` formats that exact string — so a typed signal is available and nothing external forces text matching here.
+
+  THE FAILURE MODE. Reword that refusal by a word, a dash, or by adding the branch name, and the match misses. The hold then falls back to a generic tool failure, which IS in the transient-retry set, so a supervised gate burns both retries again — proving twice that a human decision is still a human decision. Silently, with no test failing, because every test in the change constructs the current wording.
+
+  That is precisely the behaviour BUG-1316 existed to end, reachable by editing a string.
+
+  WHY THIS IS A FOLLOW-UP AND NOT A REVERT. The rest of that change is correct and worth keeping: `FailureKind::MergeHold` is a real variant rather than a reused bucket, `should_retry_transient_failure` excludes it with a direct assertion, and its test covers both directions — the hold is typed AND a genuine tool failure stays retryable, which is what stops the fix overshooting into swallowing crashes. Reverting would take those with it.
+
+  HOW IT SHIPPED, recorded because the cause is procedural rather than technical. I reviewed PR #2012, held it for exactly this, and wrote the hold as a marker file under `.aida/merge-holds/`. That file gates `aida pr ship` and nothing else; the forge-side `merge-hold-gate` check is driven by the `aida:merge-hold` LABEL, which I did not apply. The PR merged at 09:52:33Z with my marker still in place. Seven of my eleven holds that night were marker-only and therefore advisory.
+
+  ACCEPTANCE
+  1. `forge::merge_change` returns a TYPED refusal for a supervised hold — a dedicated error variant the caller downcasts, or an outcome enum with a Held arm carrying the reason and the clear command. The printed message is unchanged; humans keep the sentence and the machine stops parsing it.
+  2. `classify_drain_merge_failure` matches that variant. No `contains` on the refusal text remains.
+  3. A test proves the drift property rather than the current behaviour: reword the refusal message in the test fixture and assert the classification is still MergeHold. Against today's code that test fails, which is what makes it a regression test.
+  4. `FailureKind::MergeHold`, its retry exclusion, and the existing both-directions test are preserved unchanged.
+  5. A grep finds no other place classifying a merge outcome by matching refusal prose.
+
+  Filed by the advisor after the hold it was raised on failed to gate the merge. Same class as BUG-1295, BUG-1310 and BUG-1297 — and the third instance this week of prose matching appearing inside a fix for an adjacent problem.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T10:42:03.598350636Z
+modified_at: 2026-09-20T10:42:03.598350636Z
+req_type: Bug
+tags:
+- diagnostic-decay
+- drain-safe
+- from:session-0919
+- orchestrator
