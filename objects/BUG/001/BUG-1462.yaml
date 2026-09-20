@@ -1,0 +1,30 @@
+id: 01a0bfeb-0832-7311-83ba-023b5effdb14
+spec_id: BUG-1462
+agreed_id: BUG-1462
+title: TUI mail pane ignores an explicit subject - duplicated projection went out of sync with aida-core
+description: |-
+  BUG-1231 (PR #1976) made aida_core::mailbox::subject_line prefer an explicit Message.subject over the first non-empty body line. The TUI keeps its own copy of that projection and was not updated:
+
+  - aida-tui/src/redesign/mail.rs:36 builds the row title with mail_subject(&m.body, 60) - body only.
+  - mail_subject is defined in the same file (~line 62) and its doc comment says it "Mirrors aida_core::mailbox private notice-subject projection (kept independent since that one is not pub)". That mirror is now stale.
+
+  Effect: a user sends mail with --subject "Review requested" and the aida tui mail pane still titles the row with the first body line. The feature is invisible in the default product face.
+
+  PR #1976 touched this exact file, but only to add subject: None to a test fixture.
+
+  Root cause is the duplicated projection, not the missed line - the comment documents the duplication as deliberate because the core helper is private.
+
+  ## Acceptance
+
+  - The TUI mail row title prefers Message.subject when it is present and non-blank, falling back to the body first line otherwise.
+  - Preferred fix: make the core projection pub (or add a pub helper) and have the TUI call it, deleting the local mail_subject copy, so the two cannot drift again. If the copy is kept, a test must pin the two implementations to the same behavior.
+  - A test covers a Message with a subject rendering that subject as the row title.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T17:44:06.450584423Z
+modified_at: 2026-09-20T17:44:06.450584423Z
+req_type: Bug
+tags:
+- mailbox tui duplication from:review-pr-1976
