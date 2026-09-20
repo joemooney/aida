@@ -1440,7 +1440,7 @@ pub(crate) fn pr_ship_handler(
             state
                 .members
                 .iter()
-                .filter(|member| member.state.starts_with("in-phase-"))
+                .filter(|member| member.is_running())
                 .map(|member| member.spec.as_str())
                 .collect()
         })
@@ -1468,7 +1468,7 @@ pub(crate) fn pr_ship_handler(
             state
                 .members
                 .iter()
-                .map(|member| (member.state.as_str(), member.pr)),
+                .map(|member| (member.is_running(), member.pr)),
             pr_number as u32,
         ) == pr_ship::ReviewerLiveness::OnThisPr
     });
