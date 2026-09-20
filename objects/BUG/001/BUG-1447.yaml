@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:30:25.285712180Z
-modified_at: 2026-09-20T15:02:13.058293134Z
+modified_at: 2026-09-20T16:21:53.751477777Z
 req_type: Bug
 tags:
 - from:session-0919
@@ -116,4 +116,30 @@ comments:
     I inferred a total population from a snapshot of a queue that was mid-drain, and stated it as a standing condition. The check that would have caught it — merge something and see — happened on its own fifteen minutes later.
   created_at: 2026-09-20T15:02:13.058293134Z
   modified_at: 2026-09-20T15:02:13.058293134Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf9f-c3d7-7ba0-ab25-3f8c30cbfec7
+  author: joe
+  content: |-
+    Blast radius, measured 2026-09-20 16:20 local. The spec's diagnosis needs nothing added; this is the priority argument it is missing.
+
+    FOURTEEN open PRs currently carry `aida:merge-hold`:
+
+      #2021 #2019 #2014 #2006 #2001 #1999 #1998 #1991 #1989 #1984 #1981 #1979 #1974 #1972
+
+    Every one of them is a future instance. The drain does not know a hold from a conflict, so each held PR it reaches costs two retry attempts and then a `tool-exit` shelve whose hint ("Investigate the merge failure") sends a human to look at a PR that is behaving correctly.
+
+    TWO have already paid it. `.aida/events.jsonl` carries six matching records — a `SpecRetried` at attempt 2/2 and a `SpecShelved` for each of:
+
+      TASK-1298  14:29:18Z shelved, 14:40:06Z retried 2/2, 14:40:08Z shelved again
+      BUG-1310   14:35:43Z retried 2/2, 14:35:45Z shelved
+
+    So the observed rate is 2 of 14 in roughly six hours, with the other twelve latent purely because the drain has not reached them yet. TASK-1298 is sitting NeedsAttention right now for this reason and for no other — its PR #2014 is green on Build (ubuntu-latest) and is waiting on review, which is not a failure state at all.
+
+    THE SECOND-ORDER COST is worse than the wasted retries and is the reason I would not leave this in draft. The shelve reclassifies "waiting for a human reviewer" as "the tooling broke". Those need opposite responses: one is the system working, the other is an incident. `aida findings list` currently presents TASK-1298 under "Failures awaiting triage" alongside genuine tool failures, so the triage surface actively misdirects attention — and it will do so once per held PR, for a review queue that is fourteen deep.
+
+    This is also self-reinforcing in a way that argues against waiting: the advisor began applying real labels (rather than marker-only holds) on 2026-09-20, so holds are enforcing for the first time. The better hold enforcement gets, the more often this fires.
+
+    No change requested to the diagnosis or the fix. This is a note that the cost is being paid now, at a known rate, against a queue whose depth is the multiplier.
+  created_at: 2026-09-20T16:21:53.751477777Z
+  modified_at: 2026-09-20T16:21:53.751477777Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
