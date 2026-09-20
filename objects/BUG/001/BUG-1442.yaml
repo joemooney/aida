@@ -41,7 +41,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:55:30.106400060Z
-modified_at: 2026-09-20T19:38:03.564457064Z
+modified_at: 2026-09-20T19:38:07.672894395Z
 req_type: Bug
 tags:
 - agent-surface
@@ -63,3 +63,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-20T19:38:03.564457064Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - aida show --format toon now preserves canonical relationship types and exposes blocker pickup state
