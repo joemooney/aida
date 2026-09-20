@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:25:25.984047465Z
-modified_at: 2026-09-20T19:46:18.441560977Z
+modified_at: 2026-09-20T19:48:12.923927205Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -178,4 +178,10 @@ comments:
   created_at: 2026-09-20T19:46:18.441560977Z
   modified_at: 2026-09-20T19:46:18.441560977Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c05c-a7fb-7013-9d23-ac03a32610a1
+  author: joe
+  content: '[aida:advisor] Dispatched run 35533456218 — cross-platform on main at 5ccfd951d5 — to settle whether templates::tests::project_discipline_pack_matches_master is red on main or specific to PR #2024''s base. Independently verified the Linux side: exactly THREE project/master pairs differ on origin/main (README.md, autonomous-burndown.md, substrate-as-bouncer.md) and all three are LOCALIZED_DISCIPLINE_GUIDES, correctly absent from the Windows failure list. My own first pass said four — test-isolation.md — which was a false positive: that guide is project-only with no master, so I hashed a nonexistent file. Worth recording because the same mistake is available to whoever picks this up. If the dispatch comes back red on Windows, this is a FOURTH distinct site in this spec''s class and the argument for the ratchet rule over point fixes gets stronger, not weaker.'
+  created_at: 2026-09-20T19:48:12.923927205Z
+  modified_at: 2026-09-20T19:48:12.923927205Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
