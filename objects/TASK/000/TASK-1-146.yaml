@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T23:52:53.703891368Z
-modified_at: 2026-09-20T00:03:17.313435543Z
+modified_at: 2026-09-20T07:27:16.129262126Z
 req_type: Task
 tags:
 - credential
@@ -34,4 +34,30 @@ comments:
   created_at: 2026-09-20T00:03:17.313435543Z
   modified_at: 2026-09-20T00:03:17.313435543Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bdb6-4ca1-7951-900f-2eb982daa4b3
+  author: joe
+  content: |-
+    Credential provisioned by the operator 2026-09-20 00:26 local. Recording the evidence and the scope reasoning, since this spec exists precisely because a headless session could not do it.
+
+    VERIFIED, name only — the value was never transmitted through any session:
+
+      gh secret list --repo joemooney/aida
+      AIDA_GITLAB_TOKEN    2026-09-20T07:26:36Z
+
+    SCOPES GRANTED: `api` + `write_repository`. The reasoning is worth keeping because the obvious single-scope answer is wrong:
+
+    - `api` alone is insufficient. It grants complete read/write API access — project create, MR open, pipeline read, merge, project delete — but NOT git-over-HTTP push. The live round-trip test reads `http_url_to_repo` from the project it creates and pushes its branch over HTTPS, so it needs `write_repository` as well.
+    - `admin_mode` was offered and deliberately NOT granted. Nothing in the job needs it; the test creates its own throwaway project and therefore already owns everything it touches. Granting it would have made a leaked nightly-test secret an administrator credential on the host rather than a project-scoped one.
+    - `self_rotate` not granted, so rotation is manual. At this scope a short-lived manual token is preferable to one permitted to extend itself.
+
+    EXPIRY 2026-10-20, one month. Deliberate: a nightly test credential should expire rather than linger.
+
+    THE FAILURE MODE TO WATCH, and it is the reason this note exists. The job's preflight skips cleanly when the token is absent or the mirror is unreachable, emitting `::notice::Skipping GitLab forge smoke: ...` rather than failing. So when this token expires on 2026-10-20 the nightly will go QUIET, not red. A silently-skipping job is indistinguishable from a passing one at a glance — the same class PRIN-4 names. Whoever reads the nightly after that date should check the notice line, not just the conclusion.
+
+    NOT YET ACTIVE. The workflow that consumes this secret is in PR #1978 (TASK-1273), still OPEN and UNSTABLE. Nothing reads the secret until that merges, so provisioning is preparation rather than activation, and a green nightly before #1978 lands proves nothing about the credential.
+
+    Suggest this spec closes once #1978 merges and one nightly has actually exercised the credential — closing it now would mark it satisfied on an untested secret. Disposition is the advisor's; I have not changed the status.
+  created_at: 2026-09-20T07:27:16.129262126Z
+  modified_at: 2026-09-20T07:27:16.129262126Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: operator
