@@ -2,12 +2,12 @@ id: 01a0c031-2999-72b2-8c02-2745b3c2ab24
 spec_id: TASK-1-154
 title: BUG-1436 cannot complete until a real Linux lock failure is captured
 description: 'Headless reproduction exhausted the currently available evidence: 1,000 direct test-binary runs at process parallelism 16 on Linux 7.0.0-30-generic (6 CPUs) produced 0 failures, and local artifact searches did not recover the original Linux panic. Acceptance requires the next real Linux failure’s ErrorKind and raw OS error, while explicitly forbidding a speculative fix. Keep BUG-1436 queued/in-progress and capture the verbatim panic when it next occurs.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T19:00:42.521523069Z
-modified_at: 2026-09-20T19:03:53.128836676Z
+modified_at: 2026-09-20T19:11:00.241383733Z
 req_type: Task
 tags:
 - awaiting-reproduction
@@ -24,3 +24,9 @@ comments:
   created_at: 2026-09-20T19:03:53.128836676Z
   modified_at: 2026-09-20T19:03:53.128836676Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c03a-9691-7fa3-b631-4aa8879b89aa
+  author: joe
+  content: 'Dismissed by joe 2026-09-20: Duplicate of TASK-1-153 — identical finding, same spec, same text, filed twice. TASK-1-153 survives as the record. BUG-1436 is now deferred with the revisit trigger ''a real Linux tick-lock failure is captured'', so the underlying observation is resolved by disposition rather than by triage.'
+  created_at: 2026-09-20T19:11:00.241383733Z
+  modified_at: 2026-09-20T19:11:00.241383733Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
