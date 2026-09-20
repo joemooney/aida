@@ -544,3 +544,206 @@ fn implementer_retry_refuses_when_predecessor_stays_live_after_reprobes() {
         "live lease must remain in place"
     );
 }
+
+// ============================================================================
+// BUG-1285: a drain restart cannot reclaim its own previous run's orphaned
+// lease, and a correct refusal must not burn a transient retry.
+// ============================================================================
+
+/// (a) The exact incident shape: a fresh drain launch's very first phase-1
+/// attempt (not an in-run retry) finds a predecessor lease its own previous,
+/// now-dead run left on this same scope. `release_dead_phase_predecessor_leases`
+/// — the same identity-aware reclaim `run_implementer` now calls before
+/// spawning — must release a dead/clean predecessor even for `Phase::Implementer`,
+/// exactly as it already does for `Phase::Reviewer`.
+// trace:BUG-1285 | ai:claude
+#[test]
+fn fresh_implementer_launch_reclaims_dead_clean_predecessor_lease() {
+    let project = committed_repo();
+    let worktree = add_worktree(project.path(), "task-168");
+    let mut lease = lease_at(worktree.path(), 5, Some(reaped_pid()), None);
+    lease.id = "019fb1285clean".to_string();
+    lease.scope = "TASK-168".to_string();
+    lease.slug = "task-168".to_string();
+    lease.branch = "task-168".to_string();
+    lease.role = Some("implementer".to_string());
+    write_lease(project.path(), &lease);
+
+    release_dead_phase_predecessor_leases(
+        project.path(),
+        "TASK-168",
+        auto_complete::Phase::Implementer,
+    )
+    .expect("a provably-dead predecessor lease must not block a fresh claim");
+
+    assert!(
+        !lease_path(project.path(), &lease.id).exists(),
+        "the dead predecessor lease should be released, not just tolerated"
+    );
+}
+
+/// (b) When the dead-owner lease's worktree is dirty, the fresh launch still
+/// refuses (uncommitted work is never silently discarded) — but as a typed,
+/// shelvable failure naming the worktree, not a phantom "could not match the
+/// orchestrated session" message.
+// trace:BUG-1285 | ai:claude
+#[test]
+fn fresh_implementer_launch_refuses_dirty_dead_predecessor_with_typed_cause() {
+    let project = committed_repo();
+    let worktree = add_worktree(project.path(), "task-168-dirty");
+    std::fs::write(worktree.path().join("wip.rs"), "// unfinished\n").unwrap();
+    let mut lease = lease_at(worktree.path(), 5, Some(reaped_pid()), None);
+    lease.id = "019fb1285dirty".to_string();
+    lease.scope = "TASK-168".to_string();
+    lease.slug = "task-168".to_string();
+    lease.branch = "task-168-dirty".to_string();
+    lease.role = Some("implementer".to_string());
+    write_lease(project.path(), &lease);
+
+    let err = release_dead_phase_predecessor_leases(
+        project.path(),
+        "TASK-168",
+        auto_complete::Phase::Implementer,
+    )
+    .expect_err("a dirty dead predecessor must refuse, not silently discard work");
+
+    assert_eq!(err.kind, auto_complete::FailureKind::CacheLocked);
+    assert!(err.reason.contains("wip.rs"), "{}", err.reason);
+}
+
+/// (b) Diagnostic: a same-scope lease whose holder is verifiably DEAD is
+/// named — id, scope, and "dead" — not folded into a bare id list. Classified
+/// as `LeaseConflict`, which [`auto_complete::is_transient_retry_cause`] does
+/// NOT recognize, so this refusal does not spend a transient retry.
+// trace:BUG-1285 | ai:claude
+#[test]
+fn scope_conflict_failure_names_dead_holder_and_does_not_spend_a_retry() {
+    let repo = clean_repo();
+    let mut lease = lease_at(repo.path(), 30, Some(reaped_pid()), None);
+    lease.id = "019fb1285ded0".to_string();
+    lease.scope = "TASK-168".to_string();
+    write_lease(repo.path(), &lease);
+
+    let failure = scope_conflict_lease_failure(repo.path(), "TASK-168")
+        .expect("a same-scope lease on disk must be diagnosed, not ignored");
+
+    assert_eq!(failure.kind, auto_complete::FailureKind::LeaseConflict);
+    assert!(
+        !auto_complete::is_transient_retry_cause(failure.kind.cause_slug()),
+        "a correct lease-conflict refusal must not consume the transient retry \
+         budget — cause_slug was {:?}",
+        failure.kind.cause_slug()
+    );
+    assert!(
+        failure.reason.contains(&lease.id[..8]),
+        "message should name the holding lease: {}",
+        failure.reason
+    );
+    assert!(
+        failure.reason.contains("TASK-168"),
+        "message should name the scope: {}",
+        failure.reason
+    );
+    assert!(
+        failure.reason.contains("is dead"),
+        "message should state the holder's liveness: {}",
+        failure.reason
+    );
+    assert!(
+        failure.reason.contains("--force-claim") && failure.reason.contains("--resume"),
+        "message should name both recovery paths: {}",
+        failure.reason
+    );
+}
+
+/// A same-scope lease whose holder is LIVE is named as alive, not dead — the
+/// message must reflect the true liveness signal, not assume death just
+/// because a conflict exists.
+// trace:BUG-1285 | ai:claude
+#[test]
+fn scope_conflict_failure_names_live_holder() {
+    let repo = clean_repo();
+    let mut lease = lease_at(repo.path(), 30, Some(std::process::id()), None);
+    lease.id = "019fb1285live0".to_string();
+    lease.scope = "TASK-168".to_string();
+    write_lease(repo.path(), &lease);
+
+    let failure = scope_conflict_lease_failure(repo.path(), "TASK-168")
+        .expect("a same-scope lease on disk must be diagnosed");
+
+    assert_eq!(failure.kind, auto_complete::FailureKind::LeaseConflict);
+    assert!(
+        failure.reason.contains("is alive"),
+        "a live holder must be reported as alive, not dead: {}",
+        failure.reason
+    );
+}
+
+/// (identity-aware, not a bare pid check) A lease recording a pid that is
+/// CURRENTLY alive but whose recorded kernel start time does NOT match that
+/// pid's actual start time — the pid-recycling hazard TASK-1284 exists to
+/// catch — must still classify as dead. A bare `kill(pid, 0)`-style check
+/// would get this wrong.
+// trace:BUG-1285 trace:TASK-1284 | ai:claude
+#[test]
+fn scope_conflict_failure_is_identity_aware_not_a_bare_pid_check() {
+    let repo = clean_repo();
+    let mut lease = lease_at(repo.path(), 30, Some(std::process::id()), None);
+    lease.id = "019fb1285recy0".to_string();
+    lease.scope = "TASK-168".to_string();
+    // A recorded start time that cannot possibly match this live process's
+    // real kernel start time — simulates the pid having been recycled since
+    // the lease was minted.
+    lease.creator_pid_start_time = Some("1999-01-01T00:00:00+00:00".to_string());
+    write_lease(repo.path(), &lease);
+
+    let failure = scope_conflict_lease_failure(repo.path(), "TASK-168")
+        .expect("a same-scope lease on disk must be diagnosed");
+
+    assert!(
+        failure.reason.contains("is dead"),
+        "a mismatched start-time must be treated as a different (dead) process \
+         despite the pid matching a currently-live process: {}",
+        failure.reason
+    );
+}
+
+/// Missing start-time data (a legacy lease, or a platform that cannot report
+/// one) degrades to the plain pid-only check rather than refusing to answer.
+// trace:BUG-1285 trace:TASK-1284 | ai:claude
+#[test]
+fn scope_conflict_failure_degrades_to_pid_only_when_start_time_missing() {
+    let repo = clean_repo();
+    let mut lease = lease_at(repo.path(), 30, Some(std::process::id()), None);
+    lease.id = "019fb1285legacy".to_string();
+    lease.scope = "TASK-168".to_string();
+    lease.creator_pid_start_time = None;
+    write_lease(repo.path(), &lease);
+
+    let failure = scope_conflict_lease_failure(repo.path(), "TASK-168")
+        .expect("a same-scope lease on disk must be diagnosed");
+
+    assert!(
+        failure.reason.contains("is alive"),
+        "with no recorded start time, a live pid alone must read alive: {}",
+        failure.reason
+    );
+}
+
+/// No lease on disk holds the target scope — the diagnostic must not
+/// fabricate a conflict, leaving the caller's existing bare-id-list message
+/// standing.
+// trace:BUG-1285 | ai:claude
+#[test]
+fn scope_conflict_failure_is_none_when_no_lease_holds_the_scope() {
+    let repo = clean_repo();
+    let mut lease = lease_at(repo.path(), 30, Some(reaped_pid()), None);
+    lease.id = "019fb1285other".to_string();
+    lease.scope = "OTHER-SPEC".to_string();
+    write_lease(repo.path(), &lease);
+
+    assert!(
+        scope_conflict_lease_failure(repo.path(), "TASK-168").is_none(),
+        "an unrelated-scope lease on disk must not be reported as a conflict"
+    );
+}

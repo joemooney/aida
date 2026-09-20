@@ -83084,6 +83084,63 @@ fn find_orchestrated_lease(
     ))
 }
 
+/// BUG-1285: when [`RealPhaseDriver::discover_orchestrated_lease`] comes up
+/// empty, the dominant real-world cause is a same-scope lease conflict — the
+/// child `aida queue work`'s claim gate refused before it ever minted a
+/// lease under the orchestrator's session id, most often because a PREVIOUS
+/// (now-dead) drain run's own lease on this spec's scope is still on disk.
+/// Name that lease and its holder's liveness — per the SAME identity-aware
+/// check `stale_lease_recovery_for_lease` uses (pid + kernel start time,
+/// degrading to a plain pid check only when start-time data is missing) —
+/// instead of leaving the caller to cross-reference a bare id list against
+/// `aida ps` by hand. `None` when no lease on disk holds this spec's own
+/// scope (a genuinely unmatched-candidates case), which leaves the existing
+/// bare-list diagnostic standing.
+// trace:BUG-1285 | ai:claude
+fn scope_conflict_lease_failure(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> Option<auto_complete::PhaseFailure> {
+    let conflict = find_scope_lease_conflict(&list_leases(project_root), spec)?;
+    let holder_pid = conflict.active_pid.or(conflict.creator_pid);
+    let holder_start = if conflict.active_pid.is_some() {
+        conflict.active_pid_start_time.as_deref()
+    } else {
+        conflict.creator_pid_start_time.as_deref()
+    };
+    let liveness = match holder_pid {
+        Some(pid) if process_probe::process_identity_is_alive(pid, holder_start) => {
+            format!("holder pid {pid} is alive")
+        }
+        Some(pid) => {
+            let dead_since = std::fs::metadata(lease_path(project_root, &conflict.id))
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.elapsed().ok())
+                .map(|d| {
+                    format!(
+                        ", dead since ~{} ago",
+                        humanize_secs_short(d.as_secs() as i64)
+                    )
+                })
+                .unwrap_or_default();
+            format!("holder pid {pid} is dead{dead_since}")
+        }
+        None => "the lease records no process-liveness signal".to_string(),
+    };
+    let short_id = &conflict.id[..conflict.id.len().min(8)];
+    Some(auto_complete::PhaseFailure::of(
+        auto_complete::FailureKind::LeaseConflict,
+        format!(
+            "the previous attempt's lease {short_id} is still held on scope `{spec}` \
+             ({liveness}) — that is why this run's claim never minted a session lease \
+             under it. Recovery: `aida queue work {spec} --force-claim` if the holder is \
+             dead and its worktree is clean, or `aida queue work {spec} --resume` to \
+             continue that session."
+        ),
+    ))
+}
+
 /// Decide whether the worktree's live branch represents a mid-phase swap
 /// away from the branch the lease recorded at session-start. Returns the
 /// new branch when a genuine swap is detected; `None` when the recorded
@@ -84772,6 +84829,21 @@ impl RealPhaseDriver {
                     auto_complete::PhaseFailure::new(
                         "no session lease appeared — `aida queue work` did not start a session",
                     )
+                } else if let Some(conflict_failure) =
+                    scope_conflict_lease_failure(&self.project_root, &self.spec)
+                {
+                    // BUG-1285: the dominant real-world cause of "no lease
+                    // minted under this run's session id" is a same-scope
+                    // lease conflict — the child `aida queue work` claim gate
+                    // refused before it ever got to mint one. Name the
+                    // holding lease + its liveness, not a bare id list the
+                    // operator has to cross-reference by hand — and route it
+                    // through `FailureKind::LeaseConflict`, which is NOT a
+                    // transient-retry cause, so a refusal that IS correct
+                    // (the holder is still live) does not burn the drain's
+                    // retry budget rediscovering the same conflict.
+                    // trace:BUG-1285 | ai:claude
+                    conflict_failure
                 } else {
                     // TASK-271: suggest BARE `--resume` (continues the most recent
                     // recorded claude session for the scope) — never paste a listed
@@ -86175,6 +86247,27 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // advisor tier resolves the fork, `resume_implementer` `--resume`s
         // exactly this session. trace:STORY-306 | ai:claude
         self.implementer_session = Some(session_uuid.clone());
+
+        // BUG-1285: a FRESH drain launch (a brand-new orchestrator process,
+        // not an in-run retry) can find a predecessor lease its own PREVIOUS
+        // run left on this exact scope — the crash-and-restart shape (a
+        // launcher swap, an OOM kill, a reboot) that killed the earlier
+        // drain mid-implementer without releasing the lease it took. Reuse
+        // the same identity-aware reclaim the Reviewer phase already applies
+        // (BUG-906) so a lease whose holder is PROVABLY DEAD (per the
+        // TASK-1284 pid+start-time identity check inside
+        // `stale_lease_recovery_for_lease`) never blocks this fresh claim —
+        // reclaimed here, before spawning, rather than discovered only after
+        // the child subprocess refuses and exits with no lease to match.
+        // BUG-908's in-run retry reclaim (`prepare_transient_retry`) already
+        // clears any same-run predecessor by the time a retry reaches here,
+        // so this is a no-op on that path and only does work on the first,
+        // cross-run collision. trace:BUG-1285 | ai:claude
+        release_dead_phase_predecessor_leases(
+            &self.project_root,
+            &self.spec,
+            auto_complete::Phase::Implementer,
+        )?;
 
         let headless_impl = self
             .no_human
