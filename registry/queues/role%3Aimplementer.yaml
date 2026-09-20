@@ -50,12 +50,6 @@
   added_at: 2026-09-20T16:12:30.767878621Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a0bdd2-fec7-7d13-aa03-21a66f089037
-  position: 67000
-  added_by: role:implementer
-  added_at: 2026-09-20T16:04:53.872578966Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a0ba82-9fb0-7763-a986-b54029980a2c
   position: 72000
   added_by: role:implementer
