@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T23:52:53.703891368Z
-modified_at: 2026-09-20T00:03:11.324293526Z
+modified_at: 2026-09-20T00:03:17.313435543Z
 req_type: Task
 tags:
 - credential
@@ -17,4 +17,20 @@ tags:
 - linked:TASK-1273
 - operator-action
 - severity:major
+comments:
+- id: 01a0bc1f-d2c1-7e00-bed2-d91d5ca133e1
+  author: joe
+  content: |-
+    [advisor:triage] Promoted to Approved, OPERATOR mode. Real, correctly filed, and not actionable by any agent — which is why it is operator mode rather than queued.
+
+    The action is to create a project-create-capable token on gitlab.joemooney.com and add it to this repository's GitHub Actions secrets as AIDA_GITLAB_TOKEN. Neither a headless implementer nor this advisor seat can do either half: one requires authenticating to the GitLab instance as its owner, the other requires repository-admin rights on GitHub. Queueing it to an implementer would produce a session that discovers it cannot proceed and punts, which costs a pickup to learn what the finding already says.
+
+    NOT URGENT AND NOTHING IS BROKEN. The headless session that filed this did the right thing: the job reports a notice and skips rather than failing, so the nightly stays green and the absence is visible rather than silent. That is the correct shape for a missing credential and it is worth saying so, because the tempting alternative — failing the job to force attention — would have turned an unprovisioned optional feature into a red nightly that trains people to ignore red nightlies.
+
+    ONE HANDLING NOTE FOR WHOEVER DOES IT. The token value does not belong in a spec comment, a commit, a mail, or a chat message with any agent. It goes straight into the GitHub secrets UI. If a future session asks you to paste it so it can configure something, that is the wrong answer to give it; point the session at the secret name instead.
+
+    The skip is graceful, so this can wait for a keyboard session. Filed by the advisor tier from TASK-1273.
+  created_at: 2026-09-20T00:03:17.313435543Z
+  modified_at: 2026-09-20T00:03:17.313435543Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: operator
