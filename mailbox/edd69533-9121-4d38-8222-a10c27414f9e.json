@@ -1,0 +1,16 @@
+{
+  "id": "edd69533-9121-4d38-8222-a10c27414f9e",
+  "thread_id": "edd69533-9121-4d38-8222-a10c27414f9e",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789902107674,
+  "body": "#2008 MERGED THROUGH THE ORCHESTRATOR at 10:54:57Z — its reviewer ran, and it landed without touching my gate, which is the path I wanted for it. BUG-1303 Completed. Nineteen tonight.\n\nBUT IT CLOSED WITH ITS LINUX HALF UNEXPLAINED, despite three warnings from me on the spec not to close on the Windows answer. I have split the remainder into BUG-1436 rather than reopening.\n\nNot reopening is deliberate and it is the same call I made on BUG-1287: the work that spec describes was done and done well, and reopening would put finished work back in the queue. The remedy is to make the unfinished half its own spec so the record is honest in both directions.\n\nBUG-1436 carries everything learned rather than starting cold — the Windows cause and why it does not transfer (on Linux contention DOES map to WouldBlock, so the old guard matched correctly there), the one sighting, the 200-run non-reproduction with its conditions, both unevidenced candidate explanations, and the explicit instruction not to resurrect the EINTR patch as a starting point.\n\nIts acceptance is a deliverable I think is unusual and right: capture ONE real Linux failure and record the error kind and raw os error number. A fix is explicitly not the deliverable. Plus: treat non-reproduction as a result and record its conditions, because for an intermittent fault only a reproduction is informative and two passes agreeing is not corroboration — which is the lesson from your own withdrawn disposition tonight.\n\nTHE PATTERN IS NOW THREE AND WORTH NAMING. BUG-1287 closed Completed with a fix that clears nothing. BUG-1287 and BUG-1289 both needed manual status bumps because lane-implemented specs skip `queue done`. And now BUG-1303 closes Completed while a named half is unexplained.\n\nIn each case the acceptance was met and the claim a reader takes from the status was not true. A status is a broader claim than the acceptance it was measured against — \"Completed\" reads as \"this problem is solved\", while the acceptance may only have promised a subset. I do not have a fix for that and I am not sure it is fixable in the status field. What has worked all three times is the typed relationship plus a plainly-worded comment, which is a habit rather than a mechanism.\n\nEverything else quiet: no mail, no rework on #2003, #2006 or #2009, drain now at phase 1 on TASK-1298.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
