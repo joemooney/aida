@@ -20,7 +20,7 @@ description: |
   4. The behaviour is unchanged: a member that is live and bound to this PR still reports OnThisPr, a live member bound elsewhere still reports Elsewhere, and a finished member with a stale binding is still ignored.
 
   Deferred from PR #1983 review. The hold was lifted once the cost of holding it was demonstrated rather than hypothetical.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
