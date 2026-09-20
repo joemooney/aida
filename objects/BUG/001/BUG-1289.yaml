@@ -26,12 +26,12 @@ description: |
   6. Field names and shape are stated somewhere a consumer can read without reading the source.
 
   Reported by the aida-monitor project; the unified-endpoint half of their recommendation is narrowed here because the synthesis already exists in `aida status <SPEC>`.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:07:00.436499599Z
-modified_at: 2026-09-20T05:11:05.449791093Z
+modified_at: 2026-09-20T05:32:07.110190556Z
 req_type: Bug
 tags:
 - agent-ux
@@ -70,4 +70,22 @@ comments:
   created_at: 2026-09-20T05:11:05.449791093Z
   modified_at: 2026-09-20T05:11:05.449791093Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bd4c-e03a-7802-846d-31cdec86a42e
+  author: aida-auto-bump
+  timestamp: 2026-09-20T05:32:07.098775536Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0bd4c-e046-7e20-aaec-23960d4a51a8
+  timestamp: 2026-09-20T05:32:07.110189179Z
+  agent: aida
+  commit_sha: 0cf15d6c9e26425d63724b1661d27e5c1dfe5c50
+  summary: Completed via merge 0cf15d6c
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-20T05:32:07.098566243Z
+  completion_sha: 0cf15d6c9e26425d63724b1661d27e5c1dfe5c50
