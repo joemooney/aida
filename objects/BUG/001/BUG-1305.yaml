@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:52.759483961Z
-modified_at: 2026-09-20T09:01:31.524692815Z
+modified_at: 2026-09-20T09:02:16.143031745Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -72,6 +72,34 @@ comments:
   created_at: 2026-09-20T04:01:29.810986059Z
   modified_at: 2026-09-20T04:01:29.810986059Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0be0d-464f-7de0-9d1f-8daac899f8f2
+  author: joe
+  content: |-
+    [rework round 2] PR #2010 — CHANGES REQUESTED, one finding, and it is the whole spec rather than a detail. The pure classifier is fine; where it runs is not.
+
+    REQUIREMENT 1 — THE DETECTION CANNOT LIVE IN THE THING IT DETECTS THE ABSENCE OF.
+
+    The fix is implemented inside the dev binary that disappears. With activation, PATH starts with `$AIDA_DEV_BIN`. Once `$AIDA_DEV_BIN/aida` is deleted, both `aida dev status` and the shell hook's `command aida dev ps1` fall through to the OLDER INSTALLED BINARY — which does not contain `handle_dev_status`'s new missing-marker branch. So the code that reports the problem never executes, and the reported incident stays exactly as it was: status reads ACTIVE, PS1 keeps the old marker.
+
+    This is self-referential in the way that makes it hard to see from inside: every test that runs the new binary passes, because in those tests the binary exists. The one state the spec exists for is the one state the fix cannot run in.
+
+    It is also precisely the shape of the incident that produced this spec. On 2026-09-19 a subagent deleted `target/` to survive a full disk, the dev binary vanished, and every health surface kept reporting normally while a drain ran eight-day-old orchestration for twenty minutes. A fix that only speaks when the binary is present reproduces that silence exactly.
+
+    THE FIX must put the detection somewhere that SURVIVES the binary's absence. The reviewer names the shell-wrapper path, which is the natural home: the `aida()` wrapper and the PS1 hook are shell, they already run on every prompt, and they do not depend on the pinned executable existing. Whatever you choose, the requirement is that the check runs when `$AIDA_DEV_BIN/aida` is gone — state in the PR body how you guarantee that, rather than asserting it.
+
+    Note the fallback binary is not merely old, it is ARBITRARILY old. Tonight's was from 2026-09-11, roughly thirty merges behind. So you cannot rely on the installed binary containing any recent behaviour; the surviving check has to be version-independent, which argues for shell rather than for a newer-binary fix.
+
+    REQUIREMENT 2 — THE TEST MUST REMOVE THE BINARY.
+    An end-to-end shell test: activate, delete the pinned executable, supply an older fallback on PATH, then assert status is visibly MISSING and PS1 shows the `!` marker.
+
+    That ordering is the test. Without the deletion step it exercises the path that already worked, which is why round 1 passed its focused tests while leaving the defect fully intact. This is the same lesson as BUG-1424 tonight — a fixture that does not move the world cannot catch a mechanism whose failure depends on the world moving.
+
+    The pure classifier passing is genuinely good and worth keeping; it is only the wiring that is wrong.
+
+    Push fixups to the existing branch. Do not open a new PR.
+  created_at: 2026-09-20T09:02:16.143031745Z
+  modified_at: 2026-09-20T09:02:16.143031745Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
