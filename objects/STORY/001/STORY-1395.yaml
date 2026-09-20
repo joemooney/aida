@@ -1,0 +1,26 @@
+id: 01a0bfd5-1e68-76d2-8df7-4229088e2c4f
+spec_id: STORY-1395
+agreed_id: STORY-1395
+title: 'Review PR-1981: [AI:codex] feat(drain): resume shelved phase checkpoints (TASK-1272)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0bfc7`) for branch `task-1272-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1981>
+  - Branch: `task-1272-work` → `main`
+
+  ## Covers
+
+  - TASK-1272
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1981` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T17:20:10.344001466Z
+modified_at: 2026-09-20T17:20:10.344001466Z
+req_type: Story
