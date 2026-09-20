@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:33.544062298Z
-modified_at: 2026-09-20T03:40:33.905666515Z
+modified_at: 2026-09-20T16:12:32.560248255Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -171,6 +171,26 @@ comments:
   created_at: 2026-09-20T03:40:33.905666515Z
   modified_at: 2026-09-20T03:40:33.905666515Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf97-33b0-7730-bd5e-4b8e2400b8c7
+  author: joe
+  content: |-
+    [aida:rework-brief] BUG-1286 / PR #1998 — three binding items, all mechanical. The branch predates the monitor contract, so its guard never ran against this change; that is why this reads as a checklist rather than a critique.
+
+    1. BINDING — rebase onto post-contract main.
+       Mechanism: git rebase onto current origin/main so the contract guard actually executes against this branch. Confirm by patch-id that your own commits survive the rebase unchanged; a rebase that silently drops a commit is the failure I have seen twice tonight.
+
+    2. BINDING — add both new event kinds to docs/monitor-contract-fixtures/events-follow.json.
+       Mechanism: the fixture is the contract's test surface. Both kinds this PR introduces need entries there, or the contract passes while describing an event stream it has never seen.
+
+    3. BINDING — bump the contract version 1.0.0 -> 1.1.0.
+       Mechanism: additive change, so minor. The bump is what tells a downstream consumer that new kinds may appear; without it a consumer pinned to 1.0.0 has no signal that the stream grew.
+
+    Verification that actually proves it: after the rebase, `aida contract --json` and the fixture check must both pass ON THE REBASED BRANCH. Passing before the rebase proves nothing, because the guard was not in the tree.
+
+    NOT IN SCOPE: changing what any existing event kind means, and the contract's own schema shape.
+  created_at: 2026-09-20T16:12:32.560248255Z
+  modified_at: 2026-09-20T16:12:32.560248255Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
