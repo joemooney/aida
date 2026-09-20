@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:28:53.617328309Z
-modified_at: 2026-09-20T20:31:24.379977526Z
+modified_at: 2026-09-20T20:32:27.274841510Z
 req_type: Bug
 tags:
 - drain-safe
@@ -206,6 +206,40 @@ comments:
   content: 'Root cause: begin_rework_guard read the blocking verdict only under the spec id, while normal reviewer output is persisted under PR-N. The guard therefore stayed unarmed for existing-PR rework rounds. Fixed lookup to accept both identities; regression covers PR-2024-style RequestChanges and confirms the existing no-op gate stops before CI.'
   created_at: 2026-09-20T20:26:17.919950815Z
   modified_at: 2026-09-20T20:26:17.919950815Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c085-288a-74f1-b3ef-e054694aa1c3
+  author: joe
+  content: |-
+    THIS SPEC IS A DUPLICATE AND THE FIX IS ALREADY ON MAIN. Recommending supersede, with one piece worth salvaging.
+
+    BUG-1445 ("A rebase-only rework round is indistinguishable from a real failed attempt, so requeueing a shelved spec can loop forever while reporting progress") was filed 2026-09-20T13:34:29. This spec was filed at 18:28:53 — five hours later, on the same defect. BUG-1445 merged as PR #2028 at 13:26 local today.
+
+    Main now carries, all from that merge:
+
+        rework_no_op_message         the no-op detection message
+        blocking_rework_verdict      reads BOTH the spec id and PR-N identities
+        rework_no_op_failure         the guard itself
+        tests/task_1265_rework_no_op_tests.rs
+
+    The conflict that stalled this branch is semantic, not textual: both sides implement the same function, main as `blocking_rework_verdict` (trace:BUG-1445) and this branch as `rework_guard_verdict` (trace:BUG-1476). Reading them side by side, they are equivalent — spec id first, then `PR-{pr}`, filtered on `blocks_done()`. Main's arrived first and is called from the phase-1 site.
+
+    So resolving the rebase would mean renaming a function that already exists to a second name for the same thing. Not worth a cycle.
+
+    WHAT IS GENUINELY ADDITIVE — one test, and it is a real gap:
+
+        main:   pr_keyed_reviewer_verdict_arms_rework_guard          (positive case)
+        branch: rework_guard_finds_request_changes_verdict_...       (same positive case)
+        branch: rework_guard_ignores_non_blocking_pr_verdict         (NEGATIVE case — main has none)
+
+    Main tests that a PR-keyed RequestChanges verdict ARMS the guard. It does not test that a non-blocking PR verdict does NOT arm it. Without that, an implementation that armed the guard on any verdict — including an APPROVED one — passes main's suite, and the symptom would be a genuine round misreported as a no-op. That is the more damaging direction of the two, because it would stall work that was actually progressing.
+
+    RECOMMENDATION: supersede this spec by BUG-1445, close PR #2029, and cherry-pick `rework_guard_ignores_non_blocking_pr_verdict` onto main as a small test-only change. Disposition is the advisor's; I have removed this spec from batch:night-0920 so the drain stops re-driving a redundant fix.
+
+    HOW I CAME TO FILE A DUPLICATE, recorded because it is the useful part. BUG-1445 was in the batch I have been managing all day. I listed it in the member table repeatedly, watched it run, and watched it hit the lease mismatch — and never connected it to the defect I was measuring, because I came at the same behaviour from a different signal. BUG-1445 was framed as "a rebase-only round looks like a real attempt"; I framed it as "the implementer phase exits in fifteen seconds". Same defect, two symptoms, and I searched neither the batch nor the store before filing.
+
+    The measurement in this spec's description still stands on its own — eleven short-phase runs, all on specs with an existing PR — and is worth keeping as evidence on BUG-1445 rather than losing with this spec.
+  created_at: 2026-09-20T20:32:27.274841510Z
+  modified_at: 2026-09-20T20:32:27.274841510Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
