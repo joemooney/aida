@@ -60,9 +60,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:35:48.162497532Z
-modified_at: 2026-09-20T17:38:05.875531369Z
+modified_at: 2026-09-20T17:38:07.498436242Z
 req_type: Bug
 tags:
+- batch:night-0920
 - ci
 - drain-safe
 - orchestrator
