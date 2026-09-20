@@ -7,14 +7,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0b5c7-73ce-7452-8e86-12a9c741bfde
-  position: 78000
-  added_by: role:implementer
-  note: 'drive: aida drain resume <SPEC> re-enters at the failed phase using this run''s PhaseDonePr, reuses an already-green pipeline, refuses with no recorded failure; no phases 1-2 replay'
-  added_at: 2026-09-19T16:39:38.521239919Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b5fe-5f73-78d3-8529-b9a0f585470e
   position: 79000
   added_by: role:implementer
