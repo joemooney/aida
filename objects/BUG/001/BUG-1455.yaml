@@ -52,7 +52,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:25:14.620023337Z
-modified_at: 2026-09-20T18:17:06.982343826Z
+modified_at: 2026-09-20T18:17:08.286363076Z
 req_type: Bug
 tags:
 - drain-safe
@@ -64,10 +64,6 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T16:25:16.734798078Z
-- rel_type: !Custom related
-  target_id: 01a0b9d6-b3b0-7993-ac66-c5066e1b4e81
-  created_at: 2026-09-20T16:25:36.729321990Z
-  created_by: joe
 - rel_type: References
   target_id: 01a0bf39-b505-7e41-bf9f-afbad2b3112b
   created_at: 2026-09-20T18:17:06.982335673Z
