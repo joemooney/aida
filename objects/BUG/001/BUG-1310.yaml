@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-20T13:02:39.420467422Z
+modified_at: 2026-09-20T13:37:55.682893811Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -117,6 +117,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T13:02:39.138350551Z
   modified_at: 2026-09-20T13:02:39.138350551Z
+- id: 01a0bf09-a5e2-7801-ad93-d4facaea2874
+  author: joe
+  content: 'Round 2: centralized all inventoried external-prose tokens in aida-core/src/external_tool_output.rs; added omitted glab/GitHub/Claude/Git/Cargo/TUI/terminal classifiers to the inventory; changed GitLab merge stale/retry decisions to parse JSON message/status fields and fail closed on wrapper prose. Focused tests and cargo check for aida-core, aida-cli-lib, and aida-tui pass.'
+  created_at: 2026-09-20T13:37:55.682893811Z
+  modified_at: 2026-09-20T13:37:55.682893811Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
