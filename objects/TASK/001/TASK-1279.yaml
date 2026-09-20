@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:29:01.811098746Z
-modified_at: 2026-09-20T00:36:47.690526776Z
+modified_at: 2026-09-20T00:44:00.041658698Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -52,4 +52,10 @@ comments:
   created_at: 2026-09-19T16:40:11.780470901Z
   modified_at: 2026-09-19T16:40:11.780470901Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bc45-18a9-7ec1-924a-5cb443461525
+  author: codex
+  content: 'Codex implementation pass 2026-09-19: added the seat-parity matrix and changed advisor watch so a Codex-selected advisor runs as a vendor-native cold boot using AgentSeat::Advisor; Claude retains fork-from-live. Verified advisor_watch tests (4 passed), codex_hooks_match_settings (1 passed), cargo fmt, and git diff --check. Completion is intentionally withheld: acceptance still requires two real cross-seat dogfood waves, including a drain-mode merge gated by the Codex advisor, with SPIKE-82 event counts.'
+  created_at: 2026-09-20T00:44:00.041658698Z
+  modified_at: 2026-09-20T00:44:00.041658698Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
