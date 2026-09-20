@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:06:24.777604114Z
-modified_at: 2026-09-20T18:05:48.967448533Z
+modified_at: 2026-09-20T18:05:50.282002914Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -134,6 +134,18 @@ comments:
   content: 'Product seat requeue: verdict recorded and no drain run followed it. Findings are specific and actionable; re-driving so the round happens. No acceptance change.'
   created_at: 2026-09-20T18:05:48.693042131Z
   modified_at: 2026-09-20T18:05:48.693042131Z
+- id: 01a0bffe-ec34-7061-be7b-e07ebb534844
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1999):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 820aa6e7e71a
+    Recorded: 2026-09-20T17:04:16.894363649+00:00
+    Findings:
+    1. BUG-1288: collect_unshipped_work_items only admits in-progress/done specs or leased branches. TASK-1274 is needs-attention with an existing task-1274-work branch, so it disappears from the unshipped-work report. Preserve needs-attention (and any other intended nonterminal statuses), or explicitly expose truncation instead of silently narrowing the report.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T18:05:50.004535321Z
+  modified_at: 2026-09-20T18:05:50.004535321Z
 execution_mode: drain
 implementation_info:
   implemented: true
