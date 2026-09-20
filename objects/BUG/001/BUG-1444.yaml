@@ -2,7 +2,7 @@ id: 01a0bf00-e0c1-7221-ab03-26ee387cecef
 spec_id: BUG-1444
 agreed_id: BUG-1444
 title: 'auto-complete failure: phase 3 (reviewer) on STORY-1350'
-description: |
+description: |-
   Auto-drafted by `aida queue work STORY-1350 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
 
   ## Failure
@@ -17,8 +17,8 @@ description: |
 
   ## Recurrence
 
-  Attempts: 1
-  Latest recurrence: 2026-09-20T13:28:19.993214995+00:00
+  Attempts: 2
+  Latest recurrence: 2026-09-20T23:19:00.925888161+00:00
 
   ## Phase durations
 
@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:28:20.929861111Z
-modified_at: 2026-09-20T13:28:20.929861111Z
+modified_at: 2026-09-20T23:19:01.248953750Z
 req_type: Bug
 tags:
 - auto-complete
