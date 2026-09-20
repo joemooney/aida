@@ -32,8 +32,9 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:50:48.740973629Z
-modified_at: 2026-09-20T17:54:17.362210662Z
+modified_at: 2026-09-20T17:54:19.398926094Z
 req_type: Bug
 tags:
+- batch:night-0920
 - roles scaffolding refresh cold-session multivendor from:review-pr-1986 parent:EPIC-62
 execution_mode: drain
