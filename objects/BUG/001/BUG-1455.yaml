@@ -52,7 +52,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:25:14.620023337Z
-modified_at: 2026-09-20T18:17:09.623910846Z
+modified_at: 2026-09-20T19:10:02.050283247Z
 req_type: Bug
 tags:
 - drain-safe
@@ -104,4 +104,35 @@ comments:
     METHOD NOTE, recorded because it is the second time in this investigation. I predicted a merge-phase `tool-exit` and got a CI-phase red; I then predicted a `ci-red` shelve and got a reviewer verdict. Both times I reasoned forward from a correctly-observed upstream event to a downstream consequence I had not waited to see. The upstream observations were sound; the extrapolations were not. Wait for the terminal artifact before writing a consequence into a spec.
   created_at: 2026-09-20T16:39:10.192630002Z
   modified_at: 2026-09-20T16:39:10.192630002Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c039-b342-7501-aa4b-d1896c1f89db
+  author: joe
+  content: |-
+    CLEANEST LIVE INSTANCE YET, captured at the moment of the emit rather than reconstructed afterwards. BUG-1441 / PR #2026, 2026-09-20.
+
+    Drain events:
+
+        19:04:32  PhaseEntered implementer
+        19:08:28  PhaseEntered ci          (implementer ran 3m56s — real work, PR #2026 opened)
+        19:09:00  CiTerminal green=false   (32 seconds into the CI phase)
+
+    The PR's check rollup, read at that moment:
+
+        Build (ubuntu-latest)  started 19:08:16Z  completed=RUNNING      <-- the required check
+        merge-hold-gate        started 19:08:16Z  completed 19:08:18Z  success
+        merge-hold-gate        started 19:08:32Z  completed 19:08:36Z  FAILURE
+
+    So the sequence is unambiguous. The hold gate passed first (2 seconds, no hold yet), the hold was then applied, the gate re-ran and failed at 19:08:36, and the drain emitted `CiTerminal green=false` twenty-four seconds later — while the only check that measures code health had been running for forty-four seconds and would run for minutes more.
+
+    This is better evidence than the BUG-1291 observation this spec was originally filed on, for three reasons:
+
+    1. The rollup was read at the time of the emit, not reconstructed from a later state. On BUG-1291 I inferred the rollup after the fact and then had to retract the consequence I drew from it.
+    2. The hold gate's own two runs are visible in the same rollup — success at 19:08:18, failure at 19:08:36 — so the transition from unheld to held is dated, and the emit provably follows the failure rather than merely coinciding with it.
+    3. The required build was demonstrably still running, with `completed=RUNNING` in the API response rather than an absent field.
+
+    WHAT THIS DOES AND DOES NOT ESTABLISH. It establishes that `green=false` is emitted on a partial rollup whose only concluded failure is a hold gate. It does NOT establish what the drain then does — that is the consequence I asserted here once and had disproved, and I am not repeating it. The outcome for BUG-1441 is pending as I write this and should be appended by whoever reads this next, either way.
+
+    What is worth noting regardless of that outcome: the hold gate concludes in two to four seconds by construction, and the required build takes ten minutes. On any held PR the gate will always be the first check to conclude, so if terminality is decided on whatever has concluded, the gate always decides. That is a structural property, not a race.
+  created_at: 2026-09-20T19:10:02.050283247Z
+  modified_at: 2026-09-20T19:10:02.050283247Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
