@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-20T02:33:49.151762224Z
+modified_at: 2026-09-20T02:35:55.739611842Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -57,5 +57,11 @@ comments:
   content: '2026-09-19 headless measurement checkpoint (19:34 MST): TASK-1291 merged at 2026-09-19 13:07:33 MST (commit b1f25b98c2, PR #1971). The required fixed sample of the next 20 Completed specs has not accrued. origin/main currently has only five later spec-linked merge commits: BUG-1268 (14:21), BUG-1234 (14:47), BUG-1290 (18:12), BUG-1285 (18:41), and TASK-1296 (19:12). The event log contains only one post-boundary PrMerged event (BUG-1234), so per-spec SpecShelved counts between first RunStarted and PrMerged cannot yet be computed for the prescribed sample. TASK-1289 has RunStarted/SpecShelved activity but has not merged; TASK-1290 landed inside the immature window, so it is already a named confound; TASK-1289 has not landed. No median or conclusion is reported because doing so now would truncate/re-cut the acceptance sample. Current wait state: 5/20 subsequent merges visible (15 remaining); leave TASK-1294 open until the 20th subsequent Completed spec and corresponding event data exist.'
   created_at: 2026-09-20T02:33:49.151762224Z
   modified_at: 2026-09-20T02:33:49.151762224Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bcab-91db-7143-bf46-f45bbfa3e070
+  author: joe
+  content: '2026-09-19 post-deployment checkpoint (headless bounded wait): TASK-1291 merged at 2026-09-19T20:07:35Z. The fixed 20-spec sample is not mature. Five specs subsequently reached Completed in store order: BUG-1268, BUG-1234, BUG-1290, BUG-1285, TASK-1296 (5/20). Only BUG-1234 currently has a PrMerged event in .aida/events.jsonl after the intervention timestamp; the other four completion transitions have no matching PrMerged event, so the prescribed first-RunStarted-to-PrMerged measurement is not yet computable for them. No median or causal comparison is reported early, and the sample was not re-cut. TASK-1294 remains In Progress and queued pending 15 more completions plus resolution/interpretation of the missing event boundaries.'
+  created_at: 2026-09-20T02:35:55.739611842Z
+  modified_at: 2026-09-20T02:35:55.739611842Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
