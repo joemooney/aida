@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-20T07:41:01.903242832Z
+modified_at: 2026-09-20T07:59:07.656692657Z
 req_type: Bug
 tags:
 - agent-surface
@@ -104,6 +104,36 @@ comments:
   created_at: 2026-09-20T07:40:58.638640255Z
   modified_at: 2026-09-20T07:40:58.638640255Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bdd3-7788-7f51-acbb-06f8ffb912a3
+  author: joe
+  content: |-
+    [rework round 2] PR #2006 — HELD on one finding. All five acceptance criteria are met with named tests; this is the only blocker. Stated as a requirement with its failure mode, not as a note.
+
+    REQUIREMENT 1 — TYPE THE OUTCOME; DO NOT MATCH THE ERROR'S PROSE.
+
+        Err(error) if error.to_string().contains("ambiguous") => Err(error),
+        Err(_) if allow_new => Ok(query.to_string()),
+
+    Ambiguity is distinguished from not-found by substring-matching the error's own text. Reword that message — any reword, by anyone, for any reason — and an ambiguous prefix stops matching the first arm, falls through to the second, and on the send path `allow_new` is `true`. So it becomes a NEW THREAD ID.
+
+    An ambiguous prefix silently starting a detached thread is the exact defect this PR was filed to fix. It reintroduces it through a mechanism nothing in the suite would catch, because no test asserts on the wording of an error message, and nobody rewording a message would think to.
+
+    THE FIX: give `resolve_mailbox_thread` a typed outcome — an enum distinguishing Resolved, Ambiguous(candidates) and NotFound — and have the caller match the variant. Keep the prose for the human; stop reading it in code. The ambiguity list the error already carries becomes data on the variant rather than text to be re-parsed.
+
+    TWO THINGS THE TEST MUST DO, because a test that only proves the new path works is what let this through the first time:
+    - Assert an ambiguous prefix on the SEND path (`allow_new = true`) is refused, not turned into a new thread. That is the exact failure, and it is the arm least likely to be exercised by accident.
+    - Prove classification survives a reword: change the error's wording in the test fixture and assert the ambiguous case still classifies as ambiguous. Without that, the next reword reintroduces this silently and the suite stays green.
+
+    WHY THIS IS WORTH THE ROUND rather than a follow-up. It fails in the PERMISSIVE direction — it creates something rather than refusing — so there is no error to notice. And it lands in the mailbox, which is the coordination channel every seat uses to hand work to another seat; a silently detached thread is a message that looks sent and is never read by its intended reader.
+
+    CONTEXT, NOT BLAME: this is the BUG-1295 shape in code written after BUG-1295 merged. That is not a lapse — it is a reasonable thing to write, which is exactly why the class keeps recurring and why the typed form has to be the habit rather than the correction. BUG-1310 is the sibling for external-tool prose and is already approved.
+
+    Everything else passed: prefix resolution with a candidate-listing ambiguity error, `--in-reply-to` refusing an unresolvable target instead of detaching, `mailbox thread` distinguishing unknown from empty, and a message readable without consuming its unread state.
+
+    Push fixups to the existing branch. Do not open a new PR.
+  created_at: 2026-09-20T07:59:07.656692657Z
+  modified_at: 2026-09-20T07:59:07.656692657Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
