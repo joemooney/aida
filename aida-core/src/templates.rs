@@ -67,6 +67,44 @@ pub fn classify_skill_key(key: &str) -> Option<SkillKey<'_>> {
     }
 }
 
+/// Extract markdown link targets (`[label](target)`) from `content`, in the
+/// order they appear. Only the `(target)` half is returned — the label is
+/// ignored. A lightweight scanner, not a full markdown parser: it does not
+/// understand code fences, so a link-shaped string inside a fenced code
+/// block would be picked up too. None of the discipline guides currently do
+/// that, and the guard below only cares about the README's own link table.
+fn extract_markdown_link_targets(content: &str) -> Vec<&str> {
+    let mut targets = Vec::new();
+    let mut rest = content;
+    while let Some(open) = rest.find("](") {
+        let after_open = &rest[open + 2..];
+        let Some(close) = after_open.find(')') else {
+            break;
+        };
+        targets.push(&after_open[..close]);
+        rest = &after_open[close + 1..];
+    }
+    targets
+}
+
+/// Guard for the `.aida/discipline/` pack: given a README's content and the
+/// set of guide filenames actually available (siblings of the README), find
+/// every link target that does NOT resolve to an available file. Skips
+/// external links (`http://`, `https://`) and anchors (`#...`) — the guard
+/// only cares about links to sibling files in the pack. trace:BUG-1279 | ai:claude
+pub fn discipline_readme_dead_links(readme: &str, available: &[&str]) -> Vec<String> {
+    extract_markdown_link_targets(readme)
+        .into_iter()
+        .filter(|target| {
+            !target.starts_with("http://")
+                && !target.starts_with("https://")
+                && !target.starts_with('#')
+        })
+        .filter(|target| !available.contains(target))
+        .map(|target| target.to_string())
+        .collect()
+}
+
 /// Information about an embedded template
 #[derive(Debug, Clone)]
 pub struct TemplateInfo {
@@ -1047,6 +1085,112 @@ mod tests {
             orphans.is_empty(),
             "embedded template key(s) have no owning declaration in build.rs \
              (orphan embed): {orphans:?}"
+        );
+    }
+
+    // trace:BUG-1279 | ai:claude
+    #[test]
+    fn discipline_readme_link_checker_catches_synthetic_dead_link() {
+        let readme = "\
+# Guides
+- [`real.md`](real.md) exists
+- [`ghost.md`](ghost.md) does not
+- [external](https://example.com/x.md) is not a sibling file
+- [anchor](#section) is not a file either
+";
+        let available = ["real.md"];
+        let dead = discipline_readme_dead_links(readme, &available);
+        assert_eq!(
+            dead,
+            vec!["ghost.md".to_string()],
+            "the checker must flag exactly the one dead sibling-file link"
+        );
+    }
+
+    #[test]
+    fn discipline_readme_link_checker_passes_when_every_link_resolves() {
+        let readme = "- [`real.md`](real.md) and [`other.md`](other.md)\n";
+        let available = ["real.md", "other.md"];
+        assert!(discipline_readme_dead_links(readme, &available).is_empty());
+    }
+
+    /// Guards the MASTER discipline pack embedded in the binary: every link
+    /// in `.aida/discipline/README.md` must resolve to a file that is
+    /// itself embedded under `.aida/discipline/`. This is the pack every
+    /// `aida init` scaffolds into a downstream project, so a dead link here
+    /// ships to every one of them. trace:BUG-1279 | ai:claude
+    #[test]
+    fn master_discipline_readme_has_no_dead_links() {
+        let readme = EMBEDDED_TEMPLATES
+            .get(".aida/discipline/README.md")
+            .expect("discipline pack README must be embedded");
+        let available: Vec<&str> = EMBEDDED_TEMPLATES
+            .keys()
+            .filter_map(|k| k.strip_prefix(".aida/discipline/"))
+            .collect();
+        let dead = discipline_readme_dead_links(readme, &available);
+        assert!(
+            dead.is_empty(),
+            "master .aida/discipline/README.md links to file(s) that are not \
+             embedded under .aida/discipline/: {dead:?}"
+        );
+    }
+
+    /// Guards the CHECKED-IN project copy of the discipline pack (this
+    /// repo's own `.aida/discipline/`, explicitly un-ignored in .gitignore
+    /// so this project dogfoods the pack it ships) against the master: every
+    /// master guide must be present on disk, and the project copy's own
+    /// README must link to files that actually exist. Only runs when the
+    /// project copy is reachable relative to this crate (true for this
+    /// monorepo checkout, where `cargo test -p aida-core` runs); a
+    /// standalone build of the published `aida-core` crate — which does not
+    /// vendor the sibling project directory — skips it rather than failing
+    /// on a path that was never expected to exist. trace:BUG-1279 | ai:claude
+    #[test]
+    fn project_discipline_pack_matches_master() {
+        let crate_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let Some(repo_root) = crate_dir.parent() else {
+            return;
+        };
+        let project_dir = repo_root.join(".aida").join("discipline");
+        if !project_dir.is_dir() {
+            // Not running inside the AIDA monorepo checkout — nothing to
+            // compare against.
+            return;
+        }
+
+        let master_names: Vec<&str> = EMBEDDED_TEMPLATES
+            .keys()
+            .filter_map(|k| k.strip_prefix(".aida/discipline/"))
+            .collect();
+
+        let missing: Vec<&str> = master_names
+            .iter()
+            .filter(|name| !project_dir.join(name).is_file())
+            .copied()
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "project copy .aida/discipline/ is missing master guide(s) that \
+             the pack promises downstream: {missing:?}. Copy the file(s) \
+             from aida-core/templates/.aida/discipline/, or record why they \
+             are deliberately excluded."
+        );
+
+        let project_readme_path = project_dir.join("README.md");
+        let project_readme = std::fs::read_to_string(&project_readme_path)
+            .unwrap_or_else(|e| panic!("reading {}: {e}", project_readme_path.display()));
+        let available: Vec<String> = std::fs::read_dir(&project_dir)
+            .expect("reading .aida/discipline/")
+            .filter_map(|e| e.ok())
+            .filter_map(|e| e.file_name().into_string().ok())
+            .collect();
+        let available_refs: Vec<&str> = available.iter().map(String::as_str).collect();
+        let dead = discipline_readme_dead_links(&project_readme, &available_refs);
+        assert!(
+            dead.is_empty(),
+            "project copy .aida/discipline/README.md links to file(s) that \
+             do not exist on disk: {dead:?}"
         );
     }
 }
