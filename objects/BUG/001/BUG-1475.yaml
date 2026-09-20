@@ -61,12 +61,12 @@ description: |-
     inbox so a red nightly cannot sit three days unowned. Whichever is chosen, state it.
   - A green cross-platform nightly on main is observed before this is closed - not merely the
     three tests passing locally.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:25:25.984047465Z
-modified_at: 2026-09-20T18:28:06.370894205Z
+modified_at: 2026-09-20T18:28:30.362531171Z
 req_type: Bug
 tags:
 - ci windows portability nightly release-blocker from:review-session-0920
@@ -75,3 +75,4 @@ relationships:
   target_id: 01a0bef3-82ca-7f50-8722-5f4cb9fb75da
   created_at: 2026-09-20T18:28:06.370885644Z
   created_by: joe
+execution_mode: drain
