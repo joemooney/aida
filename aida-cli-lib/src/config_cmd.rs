@@ -546,6 +546,16 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "doubles drain cost — set deliberately in .aida/config.toml",
         },
     },
+    // --- [protocol]. trace:TASK-1290 ---
+    KnobSpec {
+        section: "protocol",
+        key: "enforce",
+        doc: "Untraced acceptance criteria at `aida queue done`: warn (default) or refuse.",
+        default: "warn",
+        edit: EditSafety::Enum {
+            allowed: &["warn", "refuse"],
+        },
+    },
     // --- [archive]. ---
     KnobSpec {
         section: "archive",
@@ -2157,6 +2167,31 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             header: "[advisor]".to_string(),
             rows: vec![PolicyRow {
                 key: "calibration_mode",
+                value,
+                source,
+            }],
+        }
+    });
+
+    // --- Untraced-acceptance-criteria gate at `aida queue done`. trace:TASK-1290 (no env) ---
+    sections.push({
+        let configured =
+            config_lookup(cfg.as_ref(), "protocol", "enforce").and_then(|v| v.as_str());
+        let (value, source) = match configured {
+            Some(s) if s.eq_ignore_ascii_case("refuse") => {
+                ("refuse".to_string(), PolicySource::ProjectConfig)
+            }
+            Some(_) => (
+                "warn (unrecognized value, default)".to_string(),
+                PolicySource::Default,
+            ),
+            None => ("warn (default)".to_string(), PolicySource::Default),
+        };
+        PolicySection {
+            section: "protocol",
+            header: "[protocol]".to_string(),
+            rows: vec![PolicyRow {
+                key: "enforce",
                 value,
                 source,
             }],

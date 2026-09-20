@@ -39,6 +39,7 @@ mod config_edit;
 mod context_prompt;
 mod coordination;
 mod criteria;
+mod criteria_gate;
 mod db_cmd;
 mod decide_cmd;
 mod deep_link;
