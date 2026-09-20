@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:40.960788392Z
-modified_at: 2026-09-20T04:32:35.869228572Z
+modified_at: 2026-09-20T05:30:55.163792705Z
 req_type: Story
 tags:
 - api-stability
@@ -150,6 +150,39 @@ comments:
     Found while reviewing #1998, which was created 23 minutes before this contract merged and so could not have run its guard. That timing is also the cleanest demonstration of why the guard matters — the very first PR to touch the feed afterwards made the manifest stale, and only a rebase will reveal it.
   created_at: 2026-09-20T04:32:35.869228572Z
   modified_at: 2026-09-20T04:32:35.869228572Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bd4b-c73b-7582-a583-29b7fa56cc2f
+  author: joe
+  content: |-
+    [advisor:correction] MY ROUND-1 REVIEW OF THIS WAS WRONG IN THE WORD THAT MATTERED, and the guard I vouched for cannot see the drift it was built for. Correcting it here rather than leaving the review standing.
+
+    WHAT I WROTE when merging #1987: "verify.py reads the LIVE manifest via `aida contract --json` and compares it against the checked-in fixtures, so a fixture that stops describing reality fails."
+
+    The fixture is not compared against reality. It is compared against the MANIFEST, and the manifest is hand-authored too. monitor_contract.rs:25-26 declares surfaces as literals:
+
+      surface("queue-progress", "aida queue progress --json", &[…])
+      surface("findings-list",  "aida findings list --json",  &[…])
+
+    Those command strings are never executed. verify.py invokes exactly one aida command — `aida contract --json`, the manifest itself — and otherwise shells only to `git show` and `git ls-tree` for the base-ref comparison. So the loop is hand-authored Rust versus hand-authored JSON, and both can agree perfectly while describing commands that do not exist.
+
+    THEY DID. I ran them on the current binary just now:
+
+      $ aida queue progress --json   -> error: unexpected argument '--json' found
+      $ aida findings list --json    -> error: unexpected argument '--json' found
+
+    Two of the twelve advertised surfaces are unrunnable. A consumer following the contract hits a hard parse error on a command the contract names.
+
+    THE PART I WANT ON THE RECORD IS HOW I MISSED IT. My review opened by saying I had "checked the enforcement rather than the prose", and treated that as the thing that distinguishes a contract from a wish. The enforcement is real. I did not check WHAT IT ENFORCES AGAINST. Having established that a mechanism existed, I stopped — which is the exact operation the discipline entry describes, performed while reviewing the enforcement of a contract, an hour after ratifying the entry. Checking that a guard exists is not checking that it can fail.
+
+    WHAT THIS DOES NOT CHANGE. The version-bump enforcement in #1987 is genuinely useful and should stay. A fixture that drifts from the manifest is still caught. Nothing needs unwinding.
+
+    WHAT IT ADDS to the follow-up already recorded above. The guard must INVOKE each covered command and parse its output, not just read the manifest. verify.py already imports subprocess, so this is small. That folds naturally into the three gaps recorded earlier — the event_kinds blind spot, the hand-maintained known_names, and the docs path filter — because all four are the same file pair and the same underlying shape: the contract cannot check the things it publishes.
+
+    Stated as one requirement for whoever takes it: for every surface in the manifest, run its declared command, assert it exits zero, assert the output parses as JSON, and assert every declared field is present with the declared type. A surface that cannot be run is a contract violation, not a documentation gap.
+
+    Found by the BUG-1289 lane auditing all twelve surfaces empirically rather than reading the manifest, which is how it found two that could not run.
+  created_at: 2026-09-20T05:30:55.163792705Z
+  modified_at: 2026-09-20T05:30:55.163792705Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bcea-5980-7873-a5fc-df081af1a267
