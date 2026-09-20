@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-20T19:37:54.976517398Z
+modified_at: 2026-09-20T19:37:58.698463045Z
 req_type: Bug
 tags:
 - agent-surface
@@ -62,4 +62,29 @@ relationships:
   target_id: 019f06d4-7661-7362-bb14-982a52dcc52f
   created_at: 2026-09-20T19:33:31.642469589Z
   created_by: joe
+comments:
+- id: 01a0c053-48aa-7061-8287-b6b659817626
+  author: joe
+  content: |-
+    [aida:advisor] Approved HIGH, mode drain. Reproduced independently: `aida show BUG-1447` at 7.55s on an idle machine with no drain running. The measurement is solid and the filing was right not to attach a diagnosis to it.
+
+    WHY HIGH RATHER THAN THE MEDIUM A 7-SECOND COMMAND USUALLY EARNS — two reasons, both about what it is doing to the system around it.
+
+    First, it contradicts documentation that says this class is fixed. CLAUDE.md states that single-spec writes are targeted "so writes are sub-second even with active leases (was ~13-20s; BUG-634)" and that "Reads follow the same rule: the bare `aida status` and `aida list` never `backend.load()` the full store (STORY-707)". A 7.5s single-spec read against a 4094-row cache is the exact signature those two specs removed. Either `show` was not included in that work, or it regressed. Establishing which is the first thing to do, because it decides whether this is a gap or a regression — and a regression means the fix needs a guard, not just a patch.
+
+    Second, the cost compounds through agents rather than through humans. A batch-refresh loop over 30 approved specs calling `show` twice per spec takes over seven minutes per cycle, which is why the drain sat idle for eight minutes after a QueueDrained. An earlier 16-spec loop in this session hit a 120-second timeout and had to be rewritten. The same information via `aida list --tags` takes under a second. So agents either wait or route around the canonical single-spec read — and the second of those is worse, because it means the documented way to read a spec is the way nothing uses.
+
+    WHAT THE FLAGS ALREADY RULE OUT, per the filing and consistent with my run: `--no-git` saves 0.3s so git linkage is not it; `--format json` is no faster so rendering is not it; four consecutive runs at 7.5s so it is not warm-up or a cache rebuild.
+
+    ACCEPTANCE
+    1. Establish whether `show` takes the full-store `backend.load()` path that STORY-707 removed from `status` and `list`. State the answer. If it does, say whether it was never included or regressed.
+    2. `aida show <SPEC>` is sub-second on a store of this size. Same target as its siblings; it is a single-spec read against a cache that answers other single-spec queries in 0.3s.
+    3. A test or benchmark pins the property so a future change cannot silently reintroduce it. STORY-707 fixed this class once on two commands and it is back on a third, which is the argument for a guard rather than a second point fix.
+    4. Check `aida why` and any other single-spec read for the same path. A third instance after `show` would make this a category rather than two commands.
+    5. Say whether this shares a cause with BUG-1288's `aida awaiting --json` at 70-77s. The filing linked them and the shapes rhyme — a machine-readable path far slower than its human sibling — but do not assume it; if they are unrelated, saying so is worth the line.
+
+    The filing explicitly declined to diagnose, having had four causal claims corrected today. That was the right call and I am not going to supply a guess in its place. Criterion 1 is where the answer comes from.
+  created_at: 2026-09-20T19:37:58.698463045Z
+  modified_at: 2026-09-20T19:37:58.698463045Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
