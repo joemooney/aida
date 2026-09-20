@@ -24,12 +24,12 @@ description: |
   - A hold present as a label with no marker is shown as such rather than omitted, since that is a recoverable state a reader may need to act on.
   - The listing's count agrees with the count of open PRs carrying the label plus any marker-only holds; a discrepancy is itself reported rather than silently resolved in favour of the smaller set.
   - Verification: with N labeled PRs and M marker-only holds, the command lists N+M rows. The fixture uses today's shape — some PRs with both, some label-only.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:01:36.886070157Z
-modified_at: 2026-09-20T18:21:38.452495200Z
+modified_at: 2026-09-20T20:14:47.245775223Z
 req_type: Bug
 tags:
 - agent-surface
@@ -40,3 +40,4 @@ relationships:
   target_id: 01a0c006-9a4b-7080-a650-c8117a9803e2
   created_at: 2026-09-20T18:21:38.452487616Z
   created_by: joe
+execution_mode: drain
