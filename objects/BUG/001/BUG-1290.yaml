@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:07:25.301380079Z
-modified_at: 2026-09-20T00:19:44.867993888Z
+modified_at: 2026-09-20T00:50:30.927058684Z
 req_type: Bug
 tags:
 - drain-safe
@@ -92,5 +92,11 @@ comments:
     This does not change the spec's conclusion about dedup — suppressing repeated (spec, run_uuid, phase) would still swallow the 121 legitimate retry re-entries. It only makes step 1 cheap.
   created_at: 2026-09-19T21:52:19.312580765Z
   modified_at: 2026-09-19T21:52:19.312580765Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bc4b-0f8f-7ac0-a69a-b3413da50e7f
+  author: joe
+  content: Commit 2ef88f0295 references this requirement
+  created_at: 2026-09-20T00:50:30.927058684Z
+  modified_at: 2026-09-20T00:50:30.927058684Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
