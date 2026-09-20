@@ -164,6 +164,14 @@ pub(crate) struct DrainState {
     /// trace:BUG-286 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) retries: Vec<DrainRetry>,
+    /// TASK-1297: for a batch drain, how many OTHER approved specs are
+    /// routed to this batch's role but excluded by the `--batch` filter — 0
+    /// for a single-spec / `next-n` drain, and 0 rather than noise when the
+    /// filter excluded nothing. Lets `aida drain status` show the same
+    /// figure a live drain prints at start-up while it is still running.
+    // trace:TASK-1297 | ai:claude
+    #[serde(default)]
+    pub(crate) excluded_from_batch: usize,
 }
 
 /// Corroborated live-drain facts shared by glance/status surfaces. This is the
@@ -295,6 +303,7 @@ impl DrainState {
             run_uuid: run_uuid.to_string(),
             zen,
             retries: Vec::new(),
+            excluded_from_batch: 0,
         }
     }
 
@@ -321,6 +330,7 @@ impl DrainState {
             run_uuid: String::new(),
             zen: false,
             retries: Vec::new(),
+            excluded_from_batch: 0,
         }
     }
 
@@ -346,6 +356,7 @@ impl DrainState {
             run_uuid: String::new(),
             zen: false,
             retries: Vec::new(),
+            excluded_from_batch: 0,
         }
     }
 
@@ -397,6 +408,16 @@ impl DrainState {
     // trace:STORY-1041 trace:ADR-27 | ai:codex
     pub(crate) fn with_pipeline_depth(mut self, depth: usize) -> Self {
         self.pipeline_depth = clamp_pipeline_depth(depth);
+        self
+    }
+
+    /// Record the "M other approved specs routed to this role are not in
+    /// this batch" count so `aida drain status` can echo it while the drain
+    /// is live. Best-effort callers set this after construction, before
+    /// writing the state.
+    // trace:TASK-1297 | ai:claude
+    pub(crate) fn with_excluded_from_batch(mut self, excluded: usize) -> Self {
+        self.excluded_from_batch = excluded;
         self
     }
 }
@@ -1391,7 +1412,7 @@ fn render_human_inner(
     ));
     out.push_str(&format!("  {}\n", state.command.dimmed()));
     out.push_str(&format!(
-        "  {}\n\n",
+        "  {}\n",
         format!(
             "orchestrator pid {} · started {}",
             state.orchestrator_pid,
@@ -1399,6 +1420,16 @@ fn render_human_inner(
         )
         .dimmed()
     ));
+    // TASK-1297: echo the "M other approved specs routed to this role are
+    // not in this batch" figure a live batch drain prints at start-up, so
+    // `aida drain status` shows the same number while it is still running.
+    // Silent when there is nothing to declare (M == 0). trace:TASK-1297
+    if state.batch.is_some() {
+        if let Some(clause) = crate::batch_exclusion_clause(state.excluded_from_batch, None) {
+            out.push_str(&format!("  {}\n", clause.yellow()));
+        }
+    }
+    out.push('\n');
 
     let quiet_warn_minutes = drain_quiet_warn_minutes(project_root);
     for member in &state.members {
@@ -1775,6 +1806,7 @@ mod tests {
             run_uuid: String::new(),
             zen: false,
             retries: Vec::new(),
+            excluded_from_batch: 0,
         }
     }
 
@@ -2312,6 +2344,40 @@ mod tests {
         assert!(out.contains("1 merged, 1 in flight (pipeline depth 2)."));
     }
 
+    // TASK-1297: `aida drain status` echoes the "M other approved specs
+    // routed to this role are not in this batch" figure while a batch drain
+    // is live — the same line the drain printed at start-up.
+    // trace:TASK-1297 | ai:claude
+    #[test]
+    fn render_human_batch_shows_excluded_from_batch_when_nonzero() {
+        let mut state = batch_state();
+        state.excluded_from_batch = 16;
+        let out = render_human(&state, false);
+        assert!(
+            out.contains("16 other approved specs routed to this role are not in this batch"),
+            "{out}"
+        );
+    }
+
+    /// TASK-1297: M == 0 renders no extra noise, per acceptance.
+    #[test]
+    fn render_human_batch_omits_exclusion_line_when_zero() {
+        let state = batch_state();
+        assert_eq!(state.excluded_from_batch, 0);
+        let out = render_human(&state, false);
+        assert!(!out.contains("are not in this batch"), "{out}");
+    }
+
+    /// TASK-1297: a single-spec drain has no `--batch` filter, so the
+    /// exclusion line never renders even if the field were somehow nonzero.
+    #[test]
+    fn render_human_single_never_shows_exclusion_line() {
+        let mut state = single_state();
+        state.excluded_from_batch = 5;
+        let out = render_human(&state, false);
+        assert!(!out.contains("are not in this batch"), "{out}");
+    }
+
     // STORY-948: terminal rows show finish clock + per-spec duration; the
     // footer repeats total elapsed and the latest completed ship.
     #[test]
@@ -2484,6 +2550,17 @@ mod tests {
         assert!(active.contains("STORY-301"));
         let stale = render_json(&DrainStatus::Stale(single_state()));
         assert!(stale.contains("\"status\": \"stale\""));
+    }
+
+    // TASK-1297: `aida drain status --json` carries the exclusion count for
+    // machine consumers — a monitor should not have to scrape the human line.
+    // trace:TASK-1297 | ai:claude
+    #[test]
+    fn render_json_carries_excluded_from_batch() {
+        let mut state = batch_state();
+        state.excluded_from_batch = 16;
+        let active = render_json(&DrainStatus::Active(state));
+        assert!(active.contains("\"excluded_from_batch\": 16"), "{active}");
     }
 
     // STORY-948: the JSON projection carries the same raw timestamps and

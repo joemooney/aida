@@ -384,9 +384,26 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             format!("escalated to human: {}", reason),
         ),
         EventKind::PrMerged { pr } => ("pr-merged", format!("PR #{} merged", pr)),
-        EventKind::QueueDrained { shipped, shelved } => (
+        EventKind::QueueDrained {
+            shipped,
+            shelved,
+            excluded_from_batch,
+        } => (
             "queue-drained",
-            format!("drain done — {} shipped, {} shelved", shipped, shelved),
+            // TASK-1297: name what the `--batch` filter excluded in the same
+            // line a live `aida watch` renders — the silence about this
+            // number was the defect, not the filter. trace:TASK-1297
+            if *excluded_from_batch > 0 {
+                format!(
+                    "drain done — {} shipped, {} shelved · {} other approved routed spec{} excluded by batch filter",
+                    shipped,
+                    shelved,
+                    excluded_from_batch,
+                    if *excluded_from_batch == 1 { "" } else { "s" }
+                )
+            } else {
+                format!("drain done — {} shipped, {} shelved", shipped, shelved)
+            },
         ),
         EventKind::UnreadMail => (
             "unread-mail",
@@ -472,6 +489,29 @@ mod tests {
         verbose: false,
     };
 
+    // TASK-1297: `aida watch`'s per-line render names the batch-exclusion
+    // count when it is nonzero, and stays silent about it otherwise.
+    // trace:TASK-1297 | ai:claude
+    #[test]
+    fn queue_drained_describe_names_excluded_from_batch_when_nonzero() {
+        let (_, hint) = describe(&EventKind::QueueDrained {
+            shipped: 3,
+            shelved: 0,
+            excluded_from_batch: 16,
+        });
+        assert!(
+            hint.contains("16 other approved routed specs excluded"),
+            "{hint}"
+        );
+
+        let (_, quiet_hint) = describe(&EventKind::QueueDrained {
+            shipped: 3,
+            shelved: 0,
+            excluded_from_batch: 0,
+        });
+        assert!(!quiet_hint.contains("excluded"), "{quiet_hint}");
+    }
+
     fn fixture(path: &Path, events: &[Event]) {
         let body: String = events
             .iter()
@@ -519,6 +559,7 @@ mod tests {
                     EventKind::QueueDrained {
                         shipped: 1,
                         shelved: 0,
+                        excluded_from_batch: 0,
                     },
                 ), // WAKE
             ],
