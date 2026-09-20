@@ -235,6 +235,27 @@ fn guard_uses_aida(guard: &Guard) -> bool {
             .any(|word| word == "aida")
 }
 
+/// Build the shell invocation used for CI-derived `run:` steps.
+///
+/// GitHub Actions invokes Bash on Linux as
+/// `bash --noprofile --norc -e -o pipefail {0}`. Keep this argv in parity with
+/// that runner contract so the local preflight cannot accept a command that CI
+/// rejects. See <https://docs.github.com/actions/writing-workflows/workflow-syntax-for-github-actions#custom-shell>.
+// trace:BUG-1420 | ai:codex
+fn github_actions_bash(command: &str) -> Command {
+    let mut shell = Command::new("bash");
+    shell.args([
+        "--noprofile",
+        "--norc",
+        "-e",
+        "-o",
+        "pipefail",
+        "-c",
+        command,
+    ]);
+    shell
+}
+
 fn build_worktree_binary(project_root: &Path, path: &Path) -> Result<String, String> {
     let mut build = Command::new("cargo");
     build
@@ -291,8 +312,8 @@ fn execute(project_root: &Path, guards: Vec<ResolvedGuard>, timeout: Duration) -
         let command = guard.command
             .replace("${{ github.event_name }}", "pull_request")
             .replace("${{ github.base_ref }}", &default_branch);
-        let mut child = Command::new("bash");
-        child.args(["-c", &command]).current_dir(project_root)
+        let mut child = github_actions_bash(&command);
+        child.current_dir(project_root)
             .env("PATH", &path)
             .env("AIDA_PREFLIGHT_BINARY", &binary_path)
             .env("AIDA_PREFLIGHT_DEFAULT_BRANCH", &default_branch);
@@ -415,6 +436,36 @@ mod tests {
             Duration::from_secs(2),
         );
         assert_eq!(results, vec![GuardResult::Passed("No profile".into())]);
+    }
+
+    #[test]
+    fn guard_shell_fails_when_an_intermediate_command_fails() {
+        let out = run_bounded(
+            &mut github_actions_bash("false\nprintf 'last command succeeded\\n'"),
+            Duration::from_secs(2),
+        )
+        .unwrap()
+        .unwrap();
+
+        assert!(
+            !out.status.success(),
+            "preflight must match CI's -e behavior even when the last command would succeed"
+        );
+    }
+
+    #[test]
+    fn guard_shell_fails_when_a_pipeline_stage_fails() {
+        let out = run_bounded(
+            &mut github_actions_bash("false | true"),
+            Duration::from_secs(2),
+        )
+        .unwrap()
+        .unwrap();
+
+        assert!(
+            !out.status.success(),
+            "preflight must match CI's pipefail behavior"
+        );
     }
 
     #[test]
