@@ -1976,3 +1976,142 @@ fn auto_bump_git_canonical_store_writes_targeted_commits_per_spec() {
         subjects
     );
 }
+
+/// TASK-1296: writes a fake `gh` binary that answers `gh pr view <N> --json
+/// ...` per PR number with the given state (`"MERGED"` / `"CLOSED"` /
+/// `"OPEN"`). Used to test the forge fallback that resolves a Review-PR spec
+/// whose PR never produced a local merge commit — either because it closed
+/// without merging (no merge commit exists at all) or because it merged
+/// outside the git-log scan window.
+fn write_fake_gh_for_pr_states(
+    root: &std::path::Path,
+    states: &[(u64, &str)],
+) -> std::path::PathBuf {
+    let mut script = String::from("#!/usr/bin/env bash\ncase \"${3:-}\" in\n");
+    for (pr, state) in states {
+        script.push_str(&format!(
+            "  {pr})\n    cat <<JSON\n\
+             {{\"state\": \"{state}\", \"title\": \"t\", \"mergedAt\": null, \
+             \"baseRefName\": \"main\", \"headRefName\": \"b\", \"headRefOid\": \"sha\", \
+             \"isCrossRepository\": false, \"headRepository\": null, \"isDraft\": false}}\n\
+             JSON\n    exit 0\n    ;;\n"
+        ));
+    }
+    script.push_str("  *)\n    exit 1\n    ;;\nesac\n");
+    let path = root.join("gh");
+    std::fs::write(&path, script).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&path, perms).unwrap();
+    }
+    path
+}
+
+/// TASK-1296: a "Review PR-N" spec's own PR reaching a terminal state
+/// resolves the spec even when the git-log scan finds no evidence for it at
+/// all — a PR closed WITHOUT merging never produces a merge commit, so the
+/// forge is the only source of truth; a PR that merged outside the scan
+/// window is covered the same way. Regression fixture: the six real specs
+/// found stranded Approved on 2026-09-19 — STORY-1234 (PR 1952, closed
+/// unmerged → Rejected) and STORY-1238/1240/1343/1344/1345 (PRs
+/// 1949/1957/1964/1956/1965, all merged → Completed). A review spec whose PR
+/// is still open (STORY-9999 here) is left untouched.
+// trace:TASK-1296 | ai:claude
+#[test]
+fn auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    // A GitHub origin so `resolve_forge_kind` routes the lookup through `gh`
+    // rather than degrading to the network-free pure-git forge.
+    run_git(
+        &project_root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/repo.git",
+        ],
+    );
+
+    seed_review_story_at(
+        &store_path,
+        "STORY-1234",
+        1952,
+        "closed without merging",
+        "approved",
+    );
+    seed_review_story_at(&store_path, "STORY-1238", 1949, "merged", "approved");
+    seed_review_story_at(&store_path, "STORY-1240", 1957, "merged", "in-progress");
+    seed_review_story_at(&store_path, "STORY-1343", 1964, "merged", "approved");
+    seed_review_story_at(&store_path, "STORY-1344", 1956, "merged", "approved");
+    seed_review_story_at(&store_path, "STORY-1345", 1965, "merged", "approved");
+    seed_review_story_at(&store_path, "STORY-9999", 1970, "still open", "approved");
+
+    let fake_gh = write_fake_gh_for_pr_states(
+        &project_root,
+        &[
+            (1952, "CLOSED"),
+            (1949, "MERGED"),
+            (1957, "MERGED"),
+            (1964, "MERGED"),
+            (1956, "MERGED"),
+            (1965, "MERGED"),
+            (1970, "OPEN"),
+        ],
+    );
+    let _env =
+        crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake_gh.to_str().unwrap())]);
+
+    // No commit references any of these PRs — the git-log scan alone finds
+    // nothing, so this fixture only resolves if the forge fallback runs.
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    std::fs::write(project_root.join("unrelated.txt"), "noop\n").unwrap();
+    run_git(&project_root, &["add", "unrelated.txt"]);
+    run_git(&project_root, &["commit", "-m", "chore: unrelated work"]);
+
+    let storage = Storage::new(store_path.clone());
+    auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+
+    let after = storage.load().unwrap();
+
+    let rejected = after.get_requirement_by_spec_id("STORY-1234").unwrap();
+    assert!(
+        matches!(rejected.status, RequirementStatus::Rejected),
+        "PR closed without merging should reject the review spec, was {:?}",
+        rejected.status
+    );
+    assert!(
+        rejected
+            .comments
+            .iter()
+            .any(|c| c.content.contains("1952") && c.content.contains("without merging")),
+        "expected an audit comment naming PR #1952, got: {:?}",
+        rejected.comments
+    );
+
+    for (spec_id, pr) in [
+        ("STORY-1238", 1949),
+        ("STORY-1240", 1957),
+        ("STORY-1343", 1964),
+        ("STORY-1344", 1956),
+        ("STORY-1345", 1965),
+    ] {
+        let req = after.get_requirement_by_spec_id(spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "{} (PR {}) should auto-complete via the forge fallback, was {:?}",
+            spec_id,
+            pr,
+            req.status
+        );
+    }
+
+    let still_open = after.get_requirement_by_spec_id("STORY-9999").unwrap();
+    assert!(
+        matches!(still_open.status, RequirementStatus::Approved),
+        "a review spec whose PR is still open must be untouched, was {:?}",
+        still_open.status
+    );
+}
