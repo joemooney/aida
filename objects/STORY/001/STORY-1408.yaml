@@ -1,0 +1,26 @@
+id: 01a0c130-889c-7982-bb79-74fb8d8a3a22
+spec_id: STORY-1408
+agreed_id: STORY-1408
+title: 'Review PR-2037: [AI:codex] fix(review): make reviewer verdict provenance enforceable (BUG-1467)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0c128`) for branch `bug-1467-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2037>
+  - Branch: `bug-1467-work` → `main`
+
+  ## Covers
+
+  - BUG-1467
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2037` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T23:39:38.524139263Z
+modified_at: 2026-09-20T23:39:38.524139263Z
+req_type: Story
