@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:27:17.869346098Z
-modified_at: 2026-09-20T12:41:08.312269113Z
+modified_at: 2026-09-20T12:41:09.642435242Z
 req_type: Story
 tags:
 - ci
@@ -60,6 +60,10 @@ relationships:
 - rel_type: !Custom related
   target_id: 01a0bcb3-beba-79d1-8449-8b286527c46f
   created_at: 2026-09-20T12:41:08.312249111Z
+  created_by: joe
+- rel_type: !Custom related
+  target_id: 01a0bbf0-ada2-71c3-a890-2ed927426bb7
+  created_at: 2026-09-20T12:41:09.642430436Z
   created_by: joe
 comments:
 - id: 01a0bed5-4ee2-7ae0-83ab-3ec807e239c7
