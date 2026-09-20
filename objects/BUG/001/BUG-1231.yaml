@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:30:39.919772314Z
-modified_at: 2026-09-20T17:50:13.276983650Z
+modified_at: 2026-09-20T17:51:35.705534628Z
 req_type: Bug
 tags:
 - agent-ux
@@ -91,6 +91,46 @@ comments:
   created_at: 2026-09-20T16:16:48.385469617Z
   modified_at: 2026-09-20T16:16:48.385469617Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bff1-e319-7a61-a5d9-9f97c669a243
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1976 [AI:codex] fix(mailbox): add explicit subjects and short-id threads (BUG-1231)
+
+    verdict: APPROVE + merged
+    proxy: claude driver-advisor, session 01a0adee
+    timestamp: 2026-09-20 17:49:32Z
+
+    independent: yes. Implemented by codex (8d5b02cb, 9f1c975b); one post-rebase fixture commit (f1c2b5e6) from the product seat; reviewed by claude-reviewer-1, a third seat independent of both. This advisor wrote none of it and did not shape the review.
+
+    gates cleared, verified at the pinned head f1c2b5e6d1 (sha and checks read in the same operation):
+      - reviewer verdict APPROVED at f1c2b5e6d1, which IS the current head
+      - Build (ubuntu-latest) pass · merge-hold-gate pass — both required checks
+      - no merge hold, no drive owned it
+      - Windows leg red, and deliberately not treated as blocking: the failure is
+        auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup, which is BUG-1443's
+        known ungated shebang fixture. It is pre-existing, unrelated to this change, and on
+        the informational cross-platform leg rather than a required check. Confirmed by
+        reading the failing test name out of the run rather than assuming from the red.
+
+    merged by this seat because the reviewing seat could not: claude-reviewer-1 reports gh auth
+    returning HTTP 401 on its machine, so it could read PR refs anonymously and review, but could
+    neither read CI status nor merge. The review stands on its own; only the mechanical merge moved.
+
+    the reviewer's four findings, none blocking, all carried forward rather than dropped:
+      1. MCP send_message cannot set a subject — CLI/MCP parity gap -> BUG-1461
+      2. aida tui mail pane still titles rows from the body first line -> BUG-1462
+      3. --subject "" prints an empty bold line (print_mailbox_line lacks core's trim check)
+      4. an AMBIGUOUS --in-reply-to prefix warns "matches no known message" — wrong reason
+    Findings 3 and 4 were recorded on the verdict but not filed; this advisor has filed them so
+    they do not live only inside a verdict file, which STORY-1391 establishes is overwritten each round.
+
+    worth recording: the reviewer identified the --in-reply-to path swap from reply_target_thread to
+    resolve_mailbox_message as a strict widening, so a short-id reply now joins the right thread instead
+    of silently opening a new one. That was unadvertised in the PR description and is the more valuable
+    half of the change.
+  created_at: 2026-09-20T17:51:35.705534628Z
+  modified_at: 2026-09-20T17:51:35.705534628Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bff0-a115-7420-bdbc-a7bd939c5eb5
   author: aida-auto-bump
