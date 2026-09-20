@@ -1,0 +1,35 @@
+id: 01a0bff2-370b-7d70-83c7-dc923378bfdb
+spec_id: BUG-1465
+agreed_id: BUG-1465
+title: 'Mailbox CLI print path lost two checks the core projection has: an empty --subject renders a blank bold line, and an ambiguous --in-reply-to prefix reports not-found'
+description: |
+  Two small mailbox-surface defects found by claude-reviewer-1 while reviewing PR #1976 (BUG-1231), recorded on the verdict but not filed. Filing them because a verdict file is overwritten each round (STORY-1391), so a finding that lives only there is a finding that will be lost.
+
+  Neither blocks anything. Both are the same shape: the CLI surface lost a check that the core projection has.
+
+  1. `--subject ""` prints an empty bold line.
+     `print_mailbox_line` lacks the trim check that core's `subject_line` has. An explicitly empty subject should fall back to the body-first-line derivation the way an absent subject does, not render as a blank emphasised row.
+
+  2. An AMBIGUOUS `--in-reply-to` prefix reports the wrong reason.
+     The warning says "matches no known message" when the prefix matches SEVERAL. The user's correct next action differs completely between those two cases — lengthen the prefix versus check the id — and the message sends them the wrong way. Note this is adjacent to BUG-1297, which is about the same ambiguous-versus-not-found distinction being decided by substring-matching our own error prose; if BUG-1297's typed outcome lands first, this message should be derived from the variant rather than fixed in place.
+
+  ACCEPTANCE
+  1. `--subject ""` behaves as an absent subject: the row is titled from the body's first line, with no empty emphasised output.
+  2. An ambiguous `--in-reply-to` prefix says it is ambiguous, and says what to do about it. A not-found prefix keeps its current message.
+  3. A test covers both strings by the condition that produced them, not by matching the text — assert that the ambiguous path and the not-found path produce DIFFERENT outcomes, so a later reword cannot silently collapse them.
+  4. Check whether the CLI print path has other divergences from core's projection. Both findings here are the same omission, which suggests the two were written independently rather than one calling the other; if that is so, say whether they should be one function.
+
+  Found during an independent third-seat review, merged as PR #1976. The reviewer's other two findings are BUG-1461 (MCP parity) and BUG-1462 (TUI mirror).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T17:51:57.195181294Z
+modified_at: 2026-09-20T17:51:57.195181294Z
+req_type: Bug
+tags:
+- batch:night-0920
+- cli
+- drain-safe
+- from:review-1976
+- mailbox
