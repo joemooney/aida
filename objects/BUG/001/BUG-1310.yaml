@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-20T11:47:56.655120167Z
+modified_at: 2026-09-20T11:53:42.224167363Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -43,4 +43,11 @@ relationships:
   target_id: 01a0bbf0-ada2-71c3-a890-2ed927426bb7
   created_at: 2026-09-20T02:45:02.891850041Z
   created_by: joe
+comments:
+- id: 01a0beaa-3a50-7632-94ff-e7575f1f66c4
+  author: joe
+  content: Implemented an external-output classifier inventory and centralized unavoidable gh/SQLite/OS spellings in a named registry. GitLab remains structured JSON; unknown gh merge prose continues to fail closed. Verified focused CLI/TUI tests, cargo check -p aida-cli-lib, cargo fmt, and git diff --check.
+  created_at: 2026-09-20T11:53:42.224167363Z
+  modified_at: 2026-09-20T11:53:42.224167363Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
