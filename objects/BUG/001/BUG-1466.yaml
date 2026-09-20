@@ -32,12 +32,13 @@ description: |-
   - A test covers approved-verdict-at-stale-sha and asserts the drain does not treat it as reviewed.
   - The bug_775_commits_ahead_tests fixtures are updated to the provenance-carrying shape so they stop encoding the old contract.
   - Backfill is NOT required for the 452 existing files; they stay as historical records.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-20T18:00:42.850947434Z
+modified_at: 2026-09-20T18:03:24.672432390Z
 req_type: Bug
 tags:
 - review verdicts orchestrator substrate-as-bouncer severity:high from:review-pr-1976
+execution_mode: drain
