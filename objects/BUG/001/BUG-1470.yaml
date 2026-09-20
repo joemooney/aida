@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:13.869367085Z
-modified_at: 2026-09-20T18:11:29.357739378Z
+modified_at: 2026-09-20T18:11:30.615381417Z
 req_type: Bug
 tags:
 - drain-safe
@@ -54,4 +54,36 @@ relationships:
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T18:08:40.862314723Z
   created_by: joe
+comments:
+- id: 01a0c004-1eb7-7f52-834b-f1be2738cec2
+  author: joe
+  content: |-
+    [aida:advisor] Approved HIGH, mode drain — but mechanism 2 as filed does not survive my evidence, and it must be established before anyone designs a fix on it. Mechanism 1 is sound and is the one I would fix first.
+
+    MECHANISM 1 — ACCEPTED AND IT IS THE REAL FINDING. A shelved spec is NeedsAttention, drain eligibility correctly reports needs-triage and skips, and nothing else drives it. "Skipped pending triage" becomes "parked indefinitely" whenever the triaging seat is busy. The five-spec count with zero runs after their newest verdict is the right measurement and TASK-1289's eleven hours is the right headline. This is the same family as BUG-1452 — a correct refusal that leaves nothing behind to resume it — and the two should be fixed with one model rather than separately.
+
+    MECHANISM 2 — CONTRADICTED. The claim is that bare `aida queue rework` produces a flag-only state nothing can pick up. I used the bare form repeatedly today and four of those specs were subsequently DRIVEN BY THE DRAIN to Done:
+
+        TASK-1272   bare rework (Done -> InProgress)  -> drain reached reviewer phase, now Done
+        BUG-1291    bare rework (Done -> InProgress)  -> driven, now Done
+        BUG-1429    bare rework (Done -> InProgress)  -> driven, now Done
+        TASK-1273   bare rework (Done -> InProgress)  -> driven, now Done
+
+    So bare rework on a DONE spec produced something the drain picked up, four times.
+
+    The three that went flag-only were in different starting states. `aida queue rework --help` documents the transition table: Done -> InProgress, but **InProgress -> no flip, refuse re-queue without --force**. TASK-1298 and BUG-1288 were shelved NeedsAttention at the time, and BUG-1297 was already InProgress. So the most likely reading is not "the verb produces an unpickable state" but "the verb is a no-op or near-no-op from the states those three were in, and the resulting spec is then skipped for mechanism 1's reason."
+
+    That is a materially different bug with a different fix. If it is the verb, the verb changes. If it is that rework from NeedsAttention/InProgress silently achieves nothing while reporting success, the fix is that it says so.
+
+    ACCEPTANCE — replacing the filing's mechanism-2 criteria:
+    1. Establish, from the code, what bare `queue rework` does from each starting status — Done, InProgress, NeedsAttention, Approved — and which of those the drain's pickup and batch-refresh paths will subsequently claim. State it as a table. Do not design before this exists; the four counter-examples above mean the current account is incomplete.
+    2. Whatever the answer, a rework that cannot result in the spec being driven must SAY SO at the point of the call, rather than reporting success. That is the durable requirement regardless of which mechanism turns out to be true.
+    3. Mechanism 1: a spec parked NeedsAttention with an open PR and a verdict must appear in a surface that names it as awaiting triage, with the age since its newest verdict. Skipped-pending-triage must be distinguishable from nothing-to-do.
+    4. The measurement that produced this filing — "which specs have a verdict with no subsequent run, and for how long" — must be answerable by a command. It took a hand pass over events.jsonl plus the verdict files, which is the tell that the surface is missing.
+    5. Excluding BUG-1286 from the count because its verdict has no recorded_at is correct and is BUG-1467 biting the measurement. Note it; do not work around it here.
+
+    ON THE TWO LEFT ALONE. Both calls were right. TASK-1289 needs a design decision rather than another round, and STORY-1350 would reproduce its rebase-only round if requeued without addressing why — that is the BUG-1445 precondition applied correctly and unprompted.
+  created_at: 2026-09-20T18:11:30.615381417Z
+  modified_at: 2026-09-20T18:11:30.615381417Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
