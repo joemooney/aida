@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:31:24.073637202Z
-modified_at: 2026-09-20T09:57:05.470513176Z
+modified_at: 2026-09-20T09:58:59.675657832Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -63,5 +63,46 @@ comments:
   content: 'SKETCH-FIRST (Codex, 2026-09-20): Extend QueueDrained compatibly with a serde-defaulted, omitted-when-empty list of {spec, reason} ineligible batch members. Derive that list from the same queue role/batch scan and queue_drain_pickup_policy used by batch head selection, so guided/operator/decide, dependency-blocked, deferred, awaiting-merge, and other refusal reasons cannot disagree with execution. Capture the closing snapshot only for named batch drains. When shipped/shelved/punted/escalated are all zero: render either the existing empty-batch message when the list is empty, or a stuck/ineligible message naming every member and reason; include the same list in JSON and QueueDrained. Successful/non-empty drains retain their existing human output (the new event field is omitted when empty). Add pure/regression coverage for the observed two-member guided + blocked fixture, legacy QueueDrained deserialization, watch rendering, JSON, and success-path silence. This changes the terminal event contract/orchestrator semantics, so per AGENTS.md I am awaiting master sign-off before editing code.'
   created_at: 2026-09-20T09:57:05.470513176Z
   modified_at: 2026-09-20T09:57:05.470513176Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0be41-355b-7f40-9c7c-a7f220ca307c
+  author: joe
+  content: |-
+    [rework round 2] PR: none — both attempts exited without opening one. This is NOT a design problem and the spec is not misrouted; the implementer was cut off mid-exploration. Its last message was "I'm locating the drain selection and QueueDrained emission paths now", with a clean worktree and no commits.
+
+    So the fix is to remove the exploration, not to re-drive the same search. There is a merged precedent for exactly this change shape and it is one commit old.
+
+    FOLLOW TASK-1297 / PR #1982, WHICH MERGED TONIGHT. That spec added a count to the same event, for the mirror-image reason — it reports approved routed specs a batch filter EXCLUDED; this spec reports batch members the drain found INELIGIBLE. Same event, same wiring, same rendering surfaces.
+
+    Its field, now on main in aida-cli-lib/src/events.rs:
+
+        /// alarm on this field without scraping the closing summary line.
+        // trace:TASK-1297 | ai:claude
+        #[serde(default)]
+        excluded_from_batch: usize,
+
+    Copy that shape exactly, including `#[serde(default)]` so old event lines still parse.
+
+    THE EIGHT FILES #1982 TOUCHED are your map. Every one is a place this change also belongs:
+
+        aida-cli-lib/src/events.rs           the QueueDrained field
+        aida-cli-lib/src/drain_state.rs      the live `aida drain status` figure
+        aida-cli-lib/src/lib.rs              the batch drive + closing summary
+        aida-cli-lib/src/watch.rs            rendering
+        aida-cli-lib/src/notify.rs           the alarm rule
+        aida-cli-lib/src/event_wait.rs       existing QueueDrained construction
+        aida-cli-lib/src/integrate_view.rs   existing QueueDrained construction
+        aida-cli-lib/src/tests/...           a dedicated test file
+
+    Read #1982's diff first (`gh pr diff 1982`). It will answer the questions the last two sessions spent their budget rediscovering.
+
+    WHAT THIS SPEC ADDS BEYOND A COUNT, and it is why a bare number is not enough: the acceptance wants the ineligibility REASON per member — guided, blocked, in-flight elsewhere. A count alone tells a supervisor the wave is stuck but not whether a human could unstick it. So the field is richer than `excluded_from_batch`; decide whether that is a count plus a reason breakdown or a small typed list, and say which in the PR body.
+
+    THE BINDING CONSTRAINT, restated: a drain that genuinely completed its batch must produce NO extra output. The whole defect is that `shipped:0 shelved:0` reads identically for "finished" and "could never start" — adding noise to the success path would trade one unreadable signal for another.
+
+    REGRESSION FIXTURE, from the incident: batch followups-0918i on 2026-09-20 ended with two members, STORY-1218 (execution_mode guided, which the drain correctly refuses) and TASK-1277 (approved but colliding with an unmerged PR). Three consecutive drains reported shipped:0 shelved:0 and a supervising launcher relaunched every three minutes indefinitely.
+
+    Commit and open a PR even if incomplete — a PR with a stated gap is reviewable; a third session exiting with nothing is not.
+  created_at: 2026-09-20T09:58:59.675657832Z
+  modified_at: 2026-09-20T09:58:59.675657832Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
