@@ -31,12 +31,12 @@ description: |
   5. State whether the four gated siblings are gated for this same reason or a different one. If they are skipping real Windows coverage rather than working around a harness limit, say so — that is a separate gap and should be filed, not folded in here.
 
   Not autonomous-safe to verify: the fix can be written headlessly, but the proof is a green Windows nightly, which needs a cross-platform workflow dispatch rather than PR CI. Verification is a `gh workflow run cross-platform.yml` and reading the result.
-status: Approved
+status: Superseded
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:13:44.906814813Z
-modified_at: 2026-09-20T18:28:03.689175767Z
+modified_at: 2026-09-20T18:28:04.918893931Z
 req_type: Bug
 tags:
 - batch:night-0920
