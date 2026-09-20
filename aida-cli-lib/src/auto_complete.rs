@@ -613,11 +613,21 @@ impl Verdict {
 /// user; `kind` classifies it so the "what to do next" hint can name the
 /// layer that broke. The hint is derived separately via [`recovery_hint`] so
 /// it can be unit-tested independent of the driver.
+///
+/// `hint_override`, when set, REPLACES that generic per-`kind` hint. It
+/// exists so a failure whose specific hint depends on more than `kind` alone
+/// — today, only the watchdog's fired [`WatchdogTrip`] — can carry the hint
+/// [`watchdog_trip_report`] resolved in the SAME match arm as `reason`,
+/// rather than have a caller re-derive it from `kind` alone in a second,
+/// independent match that can drift out of agreement with `reason`
+/// (BUG-1299). Additive and `None` for every other failure kind.
 /// trace:STORY-246 | ai:claude
+// trace:BUG-1299 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PhaseFailure {
     pub(crate) reason: String,
     pub(crate) kind: FailureKind,
+    pub(crate) hint_override: Option<String>,
 }
 
 impl PhaseFailure {
@@ -628,6 +638,7 @@ impl PhaseFailure {
         Self {
             reason: reason.into(),
             kind: FailureKind::Failed,
+            hint_override: None,
         }
     }
 
@@ -639,7 +650,17 @@ impl PhaseFailure {
         Self {
             reason: reason.into(),
             kind,
+            hint_override: None,
         }
+    }
+
+    /// Attach a hint that was resolved together with `reason` (from the same
+    /// decision) so it must be used verbatim instead of the generic
+    /// per-`kind` [`recovery_hint`].
+    // trace:BUG-1299 | ai:claude
+    pub(crate) fn with_hint_override(mut self, hint: impl Into<String>) -> Self {
+        self.hint_override = Some(hint.into());
+        self
     }
 
     /// BUG-455: upgrade a failure that is really transient SQLite cache-lock
@@ -860,6 +881,80 @@ pub(crate) fn watchdog_verdict_with_ci_wait(
         return Some(WatchdogTrip::Ceiling);
     }
     None
+}
+
+/// BUG-1299: turn a resolved [`WatchdogTrip`] into the failure DETAIL (what
+/// happened, prefixed with a machine-parseable `trip-name:` tag naming the
+/// trip and the limit crossed) and the RECOVERY HINT (what to do about it) —
+/// together, in one function.
+///
+/// This is the single place that reads `trip`. `NoProgress` and `Ceiling`
+/// have opposite remedies (BUG-1299's whole point): a no-progress trip means
+/// the session stalled — go find out why; a ceiling trip means the session
+/// simply ran out of clock — it may have been working the entire time, so
+/// the fix is a bigger budget or a smaller spec, never "inspect for a spin".
+/// Because one `match` arm produces both strings, a ceiling detail can never
+/// ship next to a no-progress hint (or vice versa) — there is no second,
+/// independently-maintained switch on the same enum for the two to drift
+/// apart in. PRIN-4 rule 1 ("a diagnostic must be unable to drift away from
+/// the decision it explains") applied at the site that motivated it.
+// trace:BUG-1299 | ai:claude
+pub(crate) fn watchdog_trip_report(
+    trip: &WatchdogTrip,
+    no_progress_limit: std::time::Duration,
+    ceiling_limit: std::time::Duration,
+    pr_ship_wait_seen: bool,
+    output_only: bool,
+) -> (String, String) {
+    match trip {
+        WatchdogTrip::NoProgress => {
+            let detail = if output_only {
+                format!(
+                    "no-progress: no session output for {}s",
+                    no_progress_limit.as_secs()
+                )
+            } else {
+                format!(
+                    "no-progress: no commit, file-change, or session output for {}s",
+                    no_progress_limit.as_secs()
+                )
+            };
+            let hint = "The phase watchdog stopped a headless session that made no progress \
+                 (no commit, file-change, or session output) within its window — likely a \
+                 degenerate spin. Inspect the worktree and pick the spec back up by hand: \
+                 the session was STUCK, so find out why before re-running it."
+                .to_string();
+            (detail, hint)
+        }
+        WatchdogTrip::Ceiling => {
+            let detail = if pr_ship_wait_seen {
+                format!(
+                    "ceiling: {}s wall-clock exceeded while `aida pr ship` was waiting on CI",
+                    ceiling_limit.as_secs()
+                )
+            } else {
+                format!("ceiling: {}s wall-clock exceeded", ceiling_limit.as_secs())
+            };
+            let hint = "The phase watchdog stopped a headless session because it exceeded its \
+                 wall-clock ceiling, NOT because it stalled — the session may have been \
+                 working the entire time. Do not assume a spin: check the worktree's commit \
+                 history for progress, then raise the phase budget for this class of spec (or \
+                 split the spec into a smaller slice) before re-running it."
+                .to_string();
+            (detail, hint)
+        }
+        WatchdogTrip::Spinning { template, count } => {
+            let detail =
+                format!("spinning: low-information session output repeated `{template}` x{count}");
+            let hint = format!(
+                "The phase watchdog stopped a headless session whose output was a repeated \
+                 low-information template (`{template}`, seen {count} times) rather than real \
+                 progress — a spin, not a stall on silence and not a wall-clock overrun. \
+                 Inspect the worktree and pick the spec back up by hand."
+            );
+            (detail, hint)
+        }
+    }
 }
 
 /// TASK-136: the GH PR-verification retry backoff schedule — `retries` waits at
@@ -1524,7 +1619,11 @@ pub(crate) trait PhaseDriver {
 
     /// STORY-975: record that a transient phase failure is being retried.
     /// Default no-op keeps pure/mock drivers file-free unless they opt in.
+    /// `detail`, when present, is the [`PhaseFailure::reason`] that triggered
+    /// the retry — carried through to `EventKind::SpecRetried.detail` so a
+    /// retry no longer loses it at the event boundary (BUG-1299).
     // trace:STORY-975 | ai:codex
+    // trace:BUG-1299 | ai:claude
     fn record_transient_retry(
         &mut self,
         _spec: &str,
@@ -1532,6 +1631,7 @@ pub(crate) trait PhaseDriver {
         _cause: &str,
         _attempt: u32,
         _max: u32,
+        _detail: Option<&str>,
     ) {
     }
 
@@ -1690,16 +1790,19 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                  `aida queue work {spec} --auto-complete`."
             );
         }
-        // BUG-420: the no-progress / ceiling watchdog killed a degenerate
-        // headless phase. The partial work (if any) is on the branch; a human
-        // should inspect why the session stopped making progress.
-        // trace:BUG-420 | ai:claude
+        // BUG-420 / BUG-1299: the no-progress / ceiling / spinning watchdog
+        // stopped a headless phase. The production path always sets
+        // `PhaseFailure::hint_override` (from [`watchdog_trip_report`], which
+        // knows WHICH trip fired) before this generic hint is ever consulted
+        // — see `finish_failure` / `finish_inconclusive_shelved`. This branch
+        // is only the fallback for a `PhaseFailure` built directly (e.g. a
+        // test) without going through that path, so it deliberately does NOT
+        // guess which trip fired. trace:BUG-420 | ai:claude trace:BUG-1299 | ai:claude
         FailureKind::Watchdog => {
             return format!(
-                "The phase watchdog stopped a headless session that made no progress \
-                 (no commit or file-change) within its window — likely a degenerate spin. \
-                 Inspect the worktree and pick the spec back up by hand: \
-                 `aida queue rework {spec} --work`."
+                "The phase watchdog stopped a headless session — see the failure detail \
+                 above for which limit it crossed. Inspect the worktree and pick the spec \
+                 back up by hand: `aida queue rework {spec} --work`."
             );
         }
         // BUG-455: the SQLite cache was locked by another concurrent `aida`
@@ -2462,7 +2565,11 @@ fn finish_inconclusive_shelved(
     let phase = Phase::Implementer;
     let elapsed = start.elapsed().as_millis();
     let failure = PhaseFailure::of(FailureKind::PrVerificationInconclusive, reason);
-    let hint = recovery_hint(phase, failure.kind, &driver.hint_context());
+    // BUG-1299: same override precedence as `finish_failure` — see there.
+    let hint = failure
+        .hint_override
+        .clone()
+        .unwrap_or_else(|| recovery_hint(phase, failure.kind, &driver.hint_context()));
     // Best-effort shelve — a shelve-side error leaves `shelved_reason` None, so
     // `drain_batch` falls back to treating the inconclusive as a hard pause
     // rather than silently swallowing the spec.
@@ -2687,7 +2794,14 @@ fn finish_failure(
 ) -> OrchestrationResult {
     let code = phase.index();
     let elapsed = start.elapsed().as_millis();
-    let hint = recovery_hint(phase, failure.kind, &driver.hint_context());
+    // BUG-1299: a watchdog failure carries its hint pre-resolved (by
+    // `watchdog_trip_report`, in the same match arm as `reason`) rather than
+    // re-derived here from `kind` alone — see `PhaseFailure::hint_override`.
+    // trace:BUG-1299 | ai:claude
+    let hint = failure
+        .hint_override
+        .clone()
+        .unwrap_or_else(|| recovery_hint(phase, failure.kind, &driver.hint_context()));
 
     // EPIC-28: shelve the spec into `NeedsAttention` so a batch drain can
     // continue past the failure. Best-effort — a shelve-side error is
@@ -2892,7 +3006,13 @@ fn maybe_retry_transient_failure(
     let attempt = (*retries_used + 1) as u32;
     let max = (budget + 1) as u32;
     let cause = failure.kind.cause_slug();
-    driver.record_transient_retry(spec, phase, cause, attempt, max);
+    // BUG-1299: carry the failure detail through the retry event boundary —
+    // it's the same `reason` a shelve would keep as `SpecShelved.detail`. For
+    // a watchdog retry this is what distinguishes "stalled, go find out why"
+    // from "ran out of clock, raise the budget" instead of the bare cause
+    // word `watchdog`. trace:BUG-1299 | ai:claude
+    let detail = failure.reason.as_str();
+    driver.record_transient_retry(spec, phase, cause, attempt, max, Some(detail));
     driver.prepare_transient_retry(spec, phase, cause)?;
     if json {
         let attempt_s = attempt.to_string();
@@ -2909,12 +3029,13 @@ fn maybe_retry_transient_failure(
                     ("kind", cause),
                     ("attempt", attempt_s.as_str()),
                     ("max", max_s.as_str()),
+                    ("detail", detail),
                 ],
             )
         );
     } else {
         eprintln!(
-            "  {} transient {} failure ({cause}); retrying phase {} attempt {attempt}/{max}",
+            "  {} transient {} failure ({cause}): {detail}; retrying phase {} attempt {attempt}/{max}",
             glyph(crate::glyphs::Glyph::Info).cyan(),
             phase.slug(),
             phase.index(),
@@ -2936,10 +3057,21 @@ fn failure_with_retry_attempt(
         return failure;
     }
     let max = clamp_transient_retry_budget(driver.transient_retry_budget()) + 1;
-    PhaseFailure::of(
+    // BUG-1299: `PhaseFailure::of` starts a fresh `hint_override: None` — carry
+    // the original forward explicitly. Before this fix, a watchdog failure
+    // that exhausted its retry budget and fell through to a shelve lost the
+    // trip-specific hint right here: the eventual `SpecShelved.recovery_hint`
+    // fell back to the generic per-`FailureKind::Watchdog` text (which
+    // asserted NoProgress) even when `reason` — one line below — named the
+    // Ceiling trip. That contradiction (detail says ceiling, hint describes
+    // no-progress and calls it "likely a degenerate spin") is the exact
+    // defect the TASK-1274 observation reported. trace:BUG-1299 | ai:claude
+    let mut updated = PhaseFailure::of(
         failure.kind,
         format!("{} (attempt {}/{})", failure.reason, retries_used + 1, max),
-    )
+    );
+    updated.hint_override = failure.hint_override.clone();
+    updated
 }
 
 /// The result of routing a phase-1 punt through the advisor tier
@@ -5747,6 +5879,135 @@ mod tests {
         );
     }
 
+    /// BUG-1299: the whole point of `watchdog_trip_report` — a NoProgress
+    /// trip and a Ceiling trip must produce DIFFERENT machine-parseable
+    /// detail tags AND differently-worded hints, and — critically — neither
+    /// hint may contain the other trip's characteristic phrase. Before the
+    /// fix, every watchdog hint was the hardcoded NoProgress text regardless
+    /// of which trip fired, so a Ceiling detail shipped next to a
+    /// "likely a degenerate spin" hint (the TASK-1274 observation).
+    // trace:BUG-1299 | ai:claude
+    #[test]
+    fn watchdog_trip_report_distinguishes_ceiling_from_no_progress() {
+        use std::time::Duration;
+        let no_progress = Duration::from_secs(600);
+        let ceiling = Duration::from_secs(2700);
+
+        let (np_detail, np_hint) = watchdog_trip_report(
+            &WatchdogTrip::NoProgress,
+            no_progress,
+            ceiling,
+            false,
+            false,
+        );
+        let (ceil_detail, ceil_hint) =
+            watchdog_trip_report(&WatchdogTrip::Ceiling, no_progress, ceiling, false, false);
+
+        // Details carry a machine-parseable `trip-name: limit` tag naming
+        // WHICH limit was crossed (acceptance criterion 3).
+        assert!(
+            np_detail.starts_with("no-progress:") && np_detail.contains("600s"),
+            "{np_detail}"
+        );
+        assert!(
+            ceil_detail.starts_with("ceiling:") && ceil_detail.contains("2700s"),
+            "{ceil_detail}"
+        );
+        assert_ne!(np_detail, ceil_detail);
+
+        // The two hints must disagree in kind, not just in wording: a
+        // NoProgress hint says the session stalled (go find out why); a
+        // Ceiling hint explicitly says NOT a stall, don't assume a spin.
+        assert!(
+            np_hint.to_lowercase().contains("degenerate spin"),
+            "{np_hint}"
+        );
+        assert!(np_hint.to_lowercase().contains("stopped"), "{np_hint}");
+        assert!(
+            ceil_hint.to_lowercase().contains("wall-clock ceiling"),
+            "{ceil_hint}"
+        );
+        assert!(
+            ceil_hint.to_lowercase().contains("raise the")
+                || ceil_hint.to_lowercase().contains("split the spec"),
+            "{ceil_hint}"
+        );
+
+        // Neither hint may emit the other trip's characteristic phrase — this
+        // is the exact contradiction BUG-1299 reported (a ceiling detail next
+        // to a hint that both describes NoProgress AND calls it a spin).
+        assert!(
+            !ceil_hint.to_lowercase().contains("degenerate spin"),
+            "ceiling hint must not describe a spin: {ceil_hint}"
+        );
+        assert!(
+            !np_hint.to_lowercase().contains("wall-clock ceiling"),
+            "no-progress hint must not mention the ceiling: {np_hint}"
+        );
+        assert_ne!(np_hint, ceil_hint);
+
+        // The Spinning trip is a third, distinguishable case too.
+        let (spin_detail, spin_hint) = watchdog_trip_report(
+            &WatchdogTrip::Spinning {
+                template: "...thinking...".to_string(),
+                count: 40,
+            },
+            no_progress,
+            ceiling,
+            false,
+            false,
+        );
+        assert!(spin_detail.starts_with("spinning:"), "{spin_detail}");
+        assert!(!spin_hint.to_lowercase().contains("wall-clock ceiling"));
+        assert_ne!(spin_detail, np_detail);
+        assert_ne!(spin_detail, ceil_detail);
+    }
+
+    /// BUG-1299: `failure_with_retry_attempt` rebuilds a fresh `PhaseFailure`
+    /// (to append the `(attempt N/max)` suffix to `reason`) — it must carry
+    /// `hint_override` forward rather than silently reset it to `None`. This
+    /// is the exact mechanism the TASK-1274 contradiction traced back to: a
+    /// watchdog failure's Ceiling-specific hint was resolved once at trip
+    /// time, then discarded right here on the way to the eventual shelve, so
+    /// the generic (NoProgress-shaped) hint won by default.
+    // trace:BUG-1299 | ai:claude
+    #[test]
+    fn failure_with_retry_attempt_preserves_hint_override() {
+        let (detail, hint) = watchdog_trip_report(
+            &WatchdogTrip::Ceiling,
+            std::time::Duration::from_secs(600),
+            std::time::Duration::from_secs(2700),
+            false,
+            false,
+        );
+        let original = PhaseFailure::of(
+            FailureKind::Watchdog,
+            format!("the implementer phase watchdog stopped the session — {detail}"),
+        )
+        .with_hint_override(hint.clone());
+
+        let driver = MockPhaseDriver::base();
+        // transient_retry_budget defaults to 0 in `base()`, but
+        // `failure_with_retry_attempt` only reads it when `retries_used > 0`.
+        let updated = failure_with_retry_attempt(&driver, &original, 1);
+
+        assert!(
+            updated.reason.contains("(attempt 2/1)") || updated.reason.contains("attempt 2/"),
+            "{}",
+            updated.reason
+        );
+        assert!(
+            updated.reason.contains("ceiling:"),
+            "attempt-suffixed reason must still carry the trip tag: {}",
+            updated.reason
+        );
+        assert_eq!(
+            updated.hint_override,
+            Some(hint),
+            "hint_override must survive the attempt-count rewrap"
+        );
+    }
+
     /// TASK-136: backoff schedule is 30s/1m/5m, then 15m for any beyond. trace:TASK-136
     #[test]
     fn gh_verify_backoff_schedule_steps() {
@@ -5864,6 +6125,13 @@ mod tests {
         /// STORY-975: mock reviewer failures that classify as watchdog before
         /// succeeding.
         reviewer_watchdog_failures: usize,
+        /// BUG-1299: the exact `PhaseFailure` (reason + optional
+        /// `hint_override`) returned while `reviewer_watchdog_failures > 0`,
+        /// so a test can drive a specific `WatchdogTrip`'s resolved report
+        /// through retry-exhaustion and the eventual shelve. Falls back to a
+        /// generic watchdog message when unset.
+        // trace:BUG-1299 | ai:claude
+        reviewer_watchdog_failure: Option<PhaseFailure>,
         /// BUG-906: mock reviewer launch failures caused by a dirty dead
         /// predecessor lease. They classify as cache-locked so the retry gate
         /// parks with a typed cause after the budget is spent.
@@ -5872,7 +6140,9 @@ mod tests {
         /// STORY-975: whole-phase transient retry budget returned by the mock.
         transient_retry_budget: usize,
         /// STORY-975: retry records captured by `record_transient_retry`.
-        transient_retry_events: Vec<(Phase, String, u32, u32)>,
+        /// BUG-1299: the 5th element is the `detail` the real driver now
+        /// threads through from `PhaseFailure::reason`.
+        transient_retry_events: Vec<(Phase, String, u32, u32, Option<String>)>,
         /// BUG-895: phase-3 missing-PR recovery result.
         // trace:BUG-895 | ai:codex
         recover_review_pr: Option<u32>,
@@ -5925,6 +6195,7 @@ mod tests {
                 recorded_merge_holds: Vec::new(),
                 pr_number: Some(46),
                 reviewer_watchdog_failures: 0,
+                reviewer_watchdog_failure: None,
                 reviewer_cache_locked_failures: 0,
                 transient_retry_budget: 0,
                 transient_retry_events: Vec::new(),
@@ -6067,6 +6338,21 @@ mod tests {
         fn reviewer_watchdog_then_succeeds(failures: usize) -> Self {
             Self {
                 reviewer_watchdog_failures: failures,
+                transient_retry_budget: 1,
+                ..Self::base()
+            }
+        }
+
+        /// BUG-1299: like [`Self::reviewer_watchdog_then_succeeds`] but with a
+        /// caller-supplied `PhaseFailure` (reason + `hint_override`) instead
+        /// of the generic message — lets a test drive a specific
+        /// `WatchdogTrip`'s resolved report through retry-exhaustion and the
+        /// eventual shelve, to prove the detail/hint pair survives intact.
+        // trace:BUG-1299 | ai:claude
+        fn reviewer_watchdog_then_succeeds_with(failures: usize, failure: PhaseFailure) -> Self {
+            Self {
+                reviewer_watchdog_failures: failures,
+                reviewer_watchdog_failure: Some(failure),
                 transient_retry_budget: 1,
                 ..Self::base()
             }
@@ -6224,10 +6510,12 @@ mod tests {
             self.record(Phase::Reviewer)?;
             if self.reviewer_watchdog_failures > 0 {
                 self.reviewer_watchdog_failures -= 1;
-                return Err(PhaseFailure::of(
-                    FailureKind::Watchdog,
-                    "the reviewer phase watchdog stopped the session",
-                ));
+                return Err(self.reviewer_watchdog_failure.clone().unwrap_or_else(|| {
+                    PhaseFailure::of(
+                        FailureKind::Watchdog,
+                        "the reviewer phase watchdog stopped the session",
+                    )
+                }));
             }
             if self.reviewer_cache_locked_failures > 0 {
                 self.reviewer_cache_locked_failures -= 1;
@@ -6362,9 +6650,15 @@ mod tests {
             cause: &str,
             attempt: u32,
             max: u32,
+            detail: Option<&str>,
         ) {
-            self.transient_retry_events
-                .push((phase, cause.to_string(), attempt, max));
+            self.transient_retry_events.push((
+                phase,
+                cause.to_string(),
+                attempt,
+                max,
+                detail.map(str::to_string),
+            ));
         }
     }
 
@@ -6712,7 +7006,13 @@ mod tests {
         );
         assert_eq!(
             driver.transient_retry_events,
-            vec![(Phase::Reviewer, "watchdog".to_string(), 2, 2)]
+            vec![(
+                Phase::Reviewer,
+                "watchdog".to_string(),
+                2,
+                2,
+                Some("the reviewer phase watchdog stopped the session".to_string()),
+            )]
         );
     }
 
@@ -6759,6 +7059,105 @@ mod tests {
         assert!(shelved.detail.contains("attempt 2/2"), "{}", shelved.detail);
     }
 
+    /// BUG-1299: acceptance criterion 8 — end to end, through retry
+    /// exhaustion and the eventual shelve, a Ceiling-caused failure must
+    /// produce a `shelved_reason` whose `detail` AND `recovery_hint` both
+    /// describe the ceiling, and a NoProgress-caused failure must produce
+    /// both describing no-progress — never a detail naming one trip beside a
+    /// hint describing the other. This reproduces the exact TASK-1274
+    /// contradiction (Ceiling detail + a hint hardcoded for NoProgress that
+    /// called a 10-commit, still-writing session "likely a degenerate spin")
+    /// and proves it can no longer happen.
+    // trace:BUG-1299 | ai:claude
+    #[test]
+    fn exhausted_watchdog_retry_shelve_detail_and_hint_agree_on_the_trip() {
+        use std::time::Duration;
+        let no_progress = Duration::from_secs(600);
+        let ceiling = Duration::from_secs(2700);
+
+        // --- Ceiling: the session ran out of clock, not stuck. -------------
+        let (ceil_tag, ceil_hint) =
+            watchdog_trip_report(&WatchdogTrip::Ceiling, no_progress, ceiling, false, false);
+        let ceil_failure = PhaseFailure::of(
+            FailureKind::Watchdog,
+            format!("the implementer phase watchdog stopped the session — {ceil_tag}"),
+        )
+        .with_hint_override(ceil_hint);
+        let mut driver = MockPhaseDriver::reviewer_watchdog_then_succeeds_with(2, ceil_failure);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1274",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        let shelved = result.shelved_reason.as_ref().expect("shelved");
+        assert!(shelved.detail.contains("ceiling:"), "{}", shelved.detail);
+        let ceil_recovery_hint = shelved
+            .recovery_hint
+            .as_deref()
+            .expect("watchdog shelve carries a recovery hint");
+        assert!(
+            ceil_recovery_hint
+                .to_lowercase()
+                .contains("wall-clock ceiling"),
+            "{ceil_recovery_hint}"
+        );
+        assert!(
+            !ceil_recovery_hint
+                .to_lowercase()
+                .contains("degenerate spin"),
+            "a ceiling shelve must not tell the operator to hunt a spin: {ceil_recovery_hint}"
+        );
+
+        // --- NoProgress: the session genuinely stalled. ---------------------
+        let (np_tag, np_hint) = watchdog_trip_report(
+            &WatchdogTrip::NoProgress,
+            no_progress,
+            ceiling,
+            false,
+            false,
+        );
+        let np_failure = PhaseFailure::of(
+            FailureKind::Watchdog,
+            format!("the implementer phase watchdog stopped the session — {np_tag}"),
+        )
+        .with_hint_override(np_hint);
+        let mut driver = MockPhaseDriver::reviewer_watchdog_then_succeeds_with(2, np_failure);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1274",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        let shelved = result.shelved_reason.as_ref().expect("shelved");
+        assert!(
+            shelved.detail.contains("no-progress:"),
+            "{}",
+            shelved.detail
+        );
+        let np_recovery_hint = shelved
+            .recovery_hint
+            .as_deref()
+            .expect("watchdog shelve carries a recovery hint");
+        assert!(
+            np_recovery_hint.to_lowercase().contains("degenerate spin"),
+            "{np_recovery_hint}"
+        );
+        assert!(
+            !np_recovery_hint
+                .to_lowercase()
+                .contains("wall-clock ceiling"),
+            "a no-progress shelve must not mention the ceiling: {np_recovery_hint}"
+        );
+
+        // The two shelves must not have produced identical hints.
+        assert_ne!(ceil_recovery_hint, np_recovery_hint);
+    }
+
     #[test]
     fn exhausted_cache_locked_reviewer_retry_parks_with_typed_cause() {
         let mut driver = MockPhaseDriver::reviewer_cache_locked_then_succeeds(2);
@@ -6777,7 +7176,15 @@ mod tests {
         assert!(failure.reason.contains("attempt 2/2"), "{}", failure.reason);
         assert_eq!(
             driver.transient_retry_events,
-            vec![(Phase::Reviewer, "cache-locked".to_string(), 2, 2)]
+            vec![(
+                Phase::Reviewer,
+                "cache-locked".to_string(),
+                2,
+                2,
+                Some(
+                    "phase 3 retry found dead predecessor lease with a dirty worktree".to_string()
+                ),
+            )]
         );
         let shelved = result.shelved_reason.as_ref().expect("shelved");
         assert_eq!(shelved.kind, "cache-locked");
@@ -8248,7 +8655,17 @@ mod tests {
         assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
         assert_eq!(
             driver.transient_retry_events,
-            vec![(Phase::Reviewer, "no-pr".to_string(), 2, 2)]
+            vec![(
+                Phase::Reviewer,
+                "no-pr".to_string(),
+                2,
+                2,
+                Some(
+                    "no open PR resolved before the reviewer phase — refusing to launch \
+                     reviewer for PR-0"
+                        .to_string()
+                ),
+            )]
         );
     }
 

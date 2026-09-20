@@ -83,27 +83,54 @@ fn ci_fix_log_tail_is_bounded_and_keeps_the_end() {
     assert!(tail.starts_with("…(log truncated)…"));
 }
 
+// BUG-1299: `trip_reason` now names WHICH trip fired and the exact limit
+// crossed (in seconds, via `auto_complete::watchdog_trip_report`) rather
+// than a bare "no progress for Nm" — a NoProgress trip and a Ceiling trip
+// have opposite remedies, so the detail must be distinguishable by itself,
+// not just by which minute count happens to be nearby. `trip_reason` also
+// now resolves — and stashes on `self.last_trip_hint`, fetched via
+// `take_trip_hint` — the matching recovery hint in the SAME call, so the two
+// can never name different trips. trace:BUG-1299 | ai:claude
 #[test]
-fn watchdog_trip_reason_names_the_threshold_minutes() {
-    let wd = PhaseWatchdog::new(
+fn watchdog_trip_reason_names_the_threshold_seconds() {
+    let mut wd = PhaseWatchdog::new(
         std::path::PathBuf::from("/tmp/nonexistent"),
         "sess".to_string(),
         session::HeadlessVendor::Claude,
         std::time::Duration::from_secs(10 * 60),
         std::time::Duration::from_secs(45 * 60),
     );
-    assert!(wd
-        .trip_reason(auto_complete::WatchdogTrip::NoProgress)
-        .contains("10m"));
-    assert!(wd
-        .trip_reason(auto_complete::WatchdogTrip::Ceiling)
-        .contains("45m"));
-    assert!(wd
-        .trip_reason(auto_complete::WatchdogTrip::Spinning {
-            template: "poll: no work §N jobs".into(),
-            count: 41,
-        })
-        .contains("watchdog:spinning"));
+
+    let no_progress_detail = wd.trip_reason(auto_complete::WatchdogTrip::NoProgress);
+    assert!(
+        no_progress_detail.starts_with("no-progress:"),
+        "{no_progress_detail}"
+    );
+    assert!(no_progress_detail.contains("600s"), "{no_progress_detail}");
+    let no_progress_hint = wd.take_trip_hint().expect("hint resolved alongside detail");
+    assert!(no_progress_hint.to_lowercase().contains("degenerate spin"));
+
+    let ceiling_detail = wd.trip_reason(auto_complete::WatchdogTrip::Ceiling);
+    assert!(ceiling_detail.starts_with("ceiling:"), "{ceiling_detail}");
+    assert!(ceiling_detail.contains("2700s"), "{ceiling_detail}");
+    let ceiling_hint = wd.take_trip_hint().expect("hint resolved alongside detail");
+    assert!(ceiling_hint.to_lowercase().contains("wall-clock ceiling"));
+    // The two trips' hints must never share the other's characteristic
+    // phrase — the exact TASK-1274 contradiction this bug fixed.
+    assert!(!ceiling_hint.to_lowercase().contains("degenerate spin"));
+    assert!(!no_progress_hint
+        .to_lowercase()
+        .contains("wall-clock ceiling"));
+
+    let spinning_detail = wd.trip_reason(auto_complete::WatchdogTrip::Spinning {
+        template: "poll: no work §N jobs".into(),
+        count: 41,
+    });
+    assert!(
+        spinning_detail.starts_with("spinning:"),
+        "{spinning_detail}"
+    );
+    assert!(wd.take_trip_hint().is_some());
 }
 
 // trace:STORY-998 | ai:codex
@@ -143,7 +170,10 @@ fn watchdog_trips_on_spinning_output_template() {
     let reason = watchdog
         .check()
         .expect("low-information repeated output should trip spinning watchdog");
-    assert!(reason.contains("watchdog:spinning"), "{reason}");
+    // BUG-1299: the "watchdog:" prefix was dropped in favor of the same
+    // `<trip-name>: <what>` tag shape every trip now uses (`no-progress:`,
+    // `ceiling:`, `spinning:`).
+    assert!(reason.starts_with("spinning:"), "{reason}");
     assert!(reason.contains("poll: no work"), "{reason}");
 }
 
@@ -237,8 +267,10 @@ fn reviewer_watchdog_streaming_output_survives_but_silence_trips() {
     silent.last_sig = Some(current_sig);
 
     let reason = silent.check().expect("silent reviewer should trip");
+    // BUG-1299: the detail now leads with the machine-parseable `no-progress:`
+    // tag and reports the limit in seconds (10m == 600s) rather than minutes.
     assert!(
-        reason.contains("no session output for 10m"),
+        reason.starts_with("no-progress:") && reason.contains("no session output for 600s"),
         "reviewer trip reason should name output silence, got {reason:?}",
     );
 }

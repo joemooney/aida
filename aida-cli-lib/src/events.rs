@@ -146,6 +146,16 @@ pub enum EventKind {
         /// Model after retry escalation, when known.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         model_after: Option<String>,
+        /// BUG-1299: human-readable failure detail the retry was triggered
+        /// by — the same `PhaseFailure::reason` text `SpecShelved.detail`
+        /// carries on the shelve path, so a retry no longer loses it at this
+        /// event boundary. For a watchdog-caused retry this names WHICH trip
+        /// fired and the limit crossed (e.g. `ceiling: 2700s wall-clock
+        /// exceeded`), not just the bare cause word `watchdog`. Absent on
+        /// legacy event lines, skipped when `None` so a driver with no
+        /// detail keeps emitting the pre-BUG-1299 shape.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        detail: Option<String>,
     },
     /// STORY-1051: the ABOVE-phase re-drive supervisor re-drove a
     /// transient-parked spec (distinct from the in-phase `SpecRetried`). The
@@ -857,6 +867,120 @@ mod tests {
         assert_eq!(back, fired);
     }
 
+    /// BUG-1299: `SpecRetried.detail` round-trips like `SpecShelved.detail` —
+    /// additive, `#[serde(default)]` on the way in so a legacy line written
+    /// before this field existed still parses (as `None`), and skipped on
+    /// the way out when absent so an old consumer's parser is never handed a
+    /// key it doesn't expect.
+    #[test]
+    fn spec_retried_detail_is_additive_and_round_trips() {
+        let with_detail = EventKind::SpecRetried {
+            phase: "implementer".into(),
+            cause: "watchdog".into(),
+            attempt: 2,
+            max: 2,
+            model_before: None,
+            model_after: None,
+            detail: Some("ceiling: 2700s wall-clock exceeded".into()),
+        };
+        let json = serde_json::to_string(&with_detail).unwrap();
+        assert!(
+            json.contains("\"detail\":\"ceiling: 2700s wall-clock exceeded\""),
+            "{json}"
+        );
+        let back: EventKind = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, with_detail);
+
+        // A legacy line with no `detail` key at all (pre-BUG-1299) must still
+        // parse cleanly, as `None` — the bare cause word, same as before.
+        let legacy =
+            r#"{"event":"SpecRetried","phase":"reviewer","cause":"watchdog","attempt":2,"max":2}"#;
+        let parsed: EventKind = serde_json::from_str(legacy).unwrap();
+        assert_eq!(
+            parsed,
+            EventKind::SpecRetried {
+                phase: "reviewer".into(),
+                cause: "watchdog".into(),
+                attempt: 2,
+                max: 2,
+                model_before: None,
+                model_after: None,
+                detail: None,
+            }
+        );
+
+        // A `None` detail is skipped entirely on serialize (matches
+        // `SpecShelved.detail`'s contract) rather than written as `null`.
+        let without_detail = EventKind::SpecRetried {
+            phase: "implementer".into(),
+            cause: "cache-locked".into(),
+            attempt: 2,
+            max: 2,
+            model_before: None,
+            model_after: None,
+            detail: None,
+        };
+        let json = serde_json::to_string(&without_detail).unwrap();
+        assert!(!json.contains("\"detail\""), "{json}");
+    }
+
+    /// BUG-1299: a watchdog-caused retry's event detail must distinguish
+    /// WHICH trip fired — the whole point of the fix. Two `SpecRetried`
+    /// events differing only in which watchdog trip caused them must not
+    /// collapse to the same detail text, and each must carry its own
+    /// trip's machine-parseable tag.
+    #[test]
+    fn spec_retried_detail_distinguishes_watchdog_trips() {
+        let ceiling_retry = EventKind::SpecRetried {
+            phase: "implementer".into(),
+            cause: "watchdog".into(),
+            attempt: 2,
+            max: 2,
+            model_before: None,
+            model_after: None,
+            detail: Some(
+                "the implementer phase watchdog stopped the session — ceiling: 2700s \
+                 wall-clock exceeded"
+                    .into(),
+            ),
+        };
+        let no_progress_retry = EventKind::SpecRetried {
+            phase: "implementer".into(),
+            cause: "watchdog".into(),
+            attempt: 2,
+            max: 2,
+            model_before: None,
+            model_after: None,
+            detail: Some(
+                "the implementer phase watchdog stopped the session — no-progress: no \
+                 commit, file-change, or session output for 600s"
+                    .into(),
+            ),
+        };
+        let EventKind::SpecRetried {
+            detail: Some(ceiling_detail),
+            ..
+        } = &ceiling_retry
+        else {
+            unreachable!()
+        };
+        let EventKind::SpecRetried {
+            detail: Some(np_detail),
+            ..
+        } = &no_progress_retry
+        else {
+            unreachable!()
+        };
+        assert_ne!(ceiling_detail, np_detail);
+        assert!(ceiling_detail.contains("ceiling:"));
+        assert!(!ceiling_detail.contains("no-progress:"));
+        assert!(np_detail.contains("no-progress:"));
+        assert!(!np_detail.contains("ceiling:"));
+        // Both are a strict improvement over the bare cause word alone.
+        assert_ne!(ceiling_detail.as_str(), "watchdog");
+        assert_ne!(np_detail.as_str(), "watchdog");
+    }
+
     #[test]
     fn is_actionable_silent_on_phase_churn() {
         // The benign majority the watcher absorbs in cheap code.
@@ -932,6 +1056,7 @@ mod tests {
                     max: 2,
                     model_before: None,
                     model_after: None,
+                    detail: None,
                 },
             ),
         );
