@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:30:25.285712180Z
-modified_at: 2026-09-20T21:19:35.919751182Z
+modified_at: 2026-09-20T21:22:06.080360534Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -326,6 +326,19 @@ comments:
   created_at: 2026-09-20T21:19:17.915891158Z
   modified_at: 2026-09-20T21:19:17.915891158Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c0b2-9c80-7de2-ab87-2c624ec9b644
+  author: joe
+  content: |-
+    [aida:advisor] RECORDED DEBT, non-blocking, from claude-reviewer-1's post-merge review. The fix takes the PROSE route, not the typed one. This spec proposed classifying from mergeStateStatus — BLOCKED for policy versus DIRTY for conflict — and permitted prose exclusion only 'at minimum'. So an upstream `gh` reword of 'the base branch policy prohibits the merge' silently returns this site to the broken behaviour with no test of ours failing.
+
+    That is BUG-1435's shape re-created at a new site, which is why I have linked them: the class must be tracked rather than rediscovered an eighth time. Within what this spec permitted, so it was correctly not blocked.
+
+    THE MITIGATION IS THE RIGHT ONE UNDER THE CONSTRAINT and worth naming so it is not undone: the new constant went into aida-core/src/external_tool_output.rs — BUG-1310's inventory of external prose contracts — rather than being inlined in auto_complete.rs. Identical behaviour, but the dependency is registered where the class is already tracked. Anyone tempted to inline a prose constant here should read that as the standard rather than the exception.
+
+    FOLLOW-UP CONDITION: when TASK-1300's mechanical enumerator lands, this site should appear in its output. If it does not, the enumerator's predicate is too narrow — this is a known instance and makes a good fixture.
+  created_at: 2026-09-20T21:22:06.080360534Z
+  modified_at: 2026-09-20T21:22:06.080360534Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c0b0-51ee-7851-a0f7-e0be1f90b8e4
   author: aida-auto-bump
