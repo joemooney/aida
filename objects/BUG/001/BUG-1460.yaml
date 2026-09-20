@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:35:48.162497532Z
-modified_at: 2026-09-20T22:27:51.174900704Z
+modified_at: 2026-09-20T22:36:19.571533406Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -183,6 +183,60 @@ comments:
   created_at: 2026-09-20T22:17:03.871620228Z
   modified_at: 2026-09-20T22:17:03.871620228Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c0f6-90f3-7ee0-9e10-cce319be1604
+  author: joe
+  content: |-
+    [aida:rework-brief] BUG-1460 / PR #2034 — ONE binding item. This is much closer than the last two rounds and most of it is right; I am asking for one test to change shape.
+
+    WHAT IS GOOD, recorded first so a rework round does not disturb it:
+
+      - The author DEFENDED AGAINST PR-2033's defect. The structural tests use
+        concat!("wait_for_checks_to_", "register(") so the searched strings never appear
+        contiguously in the test's own source. That is precisely the trap found an hour earlier,
+        where include_str! plus split_once matched the test's own literals and scanned 93 characters
+        of itself. This test CAN fail. A fix propagated between PRs without anyone asking for it.
+      - Criterion 4 is properly met: ci_terminal_sha / ci_terminal_green are written into the verdict
+        artifact and a real behavioural test reads the JSON back and asserts both. A verdict that
+        records the CI conclusion it saw, tested the way the rest of this should be.
+
+    1. BINDING — criterion 5's test asserts SOURCE ORDER, not execution order.
+
+           let current_head = review_body.find(concat!("let current = pr_head_sha_", "best_effort"))...
+           let announced    = review_body.find(concat!("mark_drain_phase(...Phase::", "Reviewer)"))...
+           assert!(current_head < announced, "PhaseEntered(reviewer) must follow current-head CI validation");
+
+       These are byte offsets of two `.find()` results in the source text. Either line could move
+       into a branch, a closure or behind an early return and the assertion would still pass. The
+       criterion says "reproduces the observed ordering: reviewer phase entered before the reviewed
+       commit's checks have started" — reproducing an ordering requires running it.
+
+       Mechanism, and it is in-tree with a same-day precedent: MockPhaseDriver in auto_complete.rs
+       already drives orchestrate() through phases, and BUG-1447 used it exactly this way today in
+       orchestrate_branch_policy_refusal_never_rebases_or_retries (auto_complete.rs:7504). A driver
+       whose CI phase reports PrNoChecks and whose head advances mid-phase reproduces the real thing.
+
+       Why it is worth a behavioural test rather than a positional one: this spec's own evidence
+       includes TWO APPROVED verdicts issued while builds were still running. A guard against that
+       should be exercised, not measured in bytes.
+
+       Apply the revert-and-show-it-red rule before merge regardless. The trap was anticipated here,
+       which is exactly when it is easiest to assume the check is sound.
+
+    NON-BLOCKING FIXTURE BUG, one character: the new fake-gh line is `if [ "$1 $2" = "pr view" ]`
+    under set -eu, while the line directly above correctly guards `${1:-}`. One argument gives
+    "parameter not set", exit 2; zero arguments likewise. Use `"${1:-} ${2:-}"`.
+    NOT a BUG-1475 instance — the module is cfg(all(test, unix)), so do not "fix" it in that
+    direction.
+
+    ONE QUESTION FOR THE AUTHOR, not a finding. The no_ci_wait short-circuit inside finish_ci is
+    removed, so a CI phase that runs now always waits. The `lifecycle:no-ci-wait` tag is NOT dead —
+    14 live uses remain in auto_complete.rs including the orchestrator branch that can skip the CI
+    phase outright — so the documented behaviour survives. What grepping cannot settle is whether
+    any spec relying on the finish_ci escape now waits where CLAUDE.md line 160 promises it will not.
+    Confirm, and if a documented tag's behaviour moved, update CLAUDE.md in the same change.
+  created_at: 2026-09-20T22:36:19.571533406Z
+  modified_at: 2026-09-20T22:36:19.571533406Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
