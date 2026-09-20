@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-20T20:52:49.509188683Z
+modified_at: 2026-09-20T20:53:13.863568202Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -129,6 +129,39 @@ comments:
   created_at: 2026-09-20T20:37:52.219223685Z
   modified_at: 2026-09-20T20:37:52.219223685Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c098-2e07-7f20-8122-80b3957c33a2
+  author: joe
+  content: |-
+    [aida:rework-brief] BUG-1485 / PR #2030 — TWO binding items. The design is right and I am not asking for it to be revisited: a session-keyed receipt written OUTSIDE the lease directory is exactly correct for a lease released before the parent resumes, and acceptance 1 and 3 are met. This is about acceptance 4 only.
+
+    Eighth instance of BUG-1452 noted in passing: this PR sat CLEAN with no hold and a refusing verdict. I have labelled it.
+
+    1. BINDING — test the WRITER. It currently has zero coverage.
+       Verified: `git grep write_orchestrated_lease_receipt ORCHESTRATED_LEASE_RECEIPT_ENV` across the branch returns hits only in lib.rs and queue_cmd.rs. ZERO under any test path.
+       Mechanism: one test that drives the writer — set ORCHESTRATED_LEASE_RECEIPT_ENV, run the queue-work hook, or at minimum call write_orchestrated_lease_receipt directly; assert the file lands at the session-keyed path with the right lease, branch and worktree.
+       Why this is not pedantry, and it is the whole reason this is blocking. The hook is guarded:
+
+           if let (Ok(path), Some(claude_id)) = (
+               std::env::var(ORCHESTRATED_LEASE_RECEIPT_ENV),
+               claude_session_id.as_deref(),
+           ) { write_orchestrated_lease_receipt(...) }
+
+       If the child never inherits the env var, or if claude_session_id is None on the orchestrated path so that guard never matches, the receipt is NEVER WRITTEN — and both new tests still pass, because they write it themselves. The fix ships, the suite is green, and the bug survives untouched. Nothing unexercised here is small: the env plumbing in RealPhaseDriver, the directory creation, the remove-then-set sequence, and the hook itself.
+
+       This is a gap the change's own tests structurally cannot see. No assertion added to either existing test reaches the writer.
+
+    2. BINDING — make the post-push fixture actually differ.
+       The two new fixtures are the same test. The post-push one writes worktree/pushed.marker containing "origin/bug-1485-pushed" and nothing reads it — not the assertions, not discover_orchestrated_lease, not the receipt. Strip that file and it is behaviourally identical to the start-position one.
+       Mechanism: make the post-push position differ in something an assertion READS. Acceptance 4 says "reproduces both positions"; one position is currently unrepresented.
+
+    NOT IN SCOPE, restated so a later round does not relitigate it: the receipt design, its location outside the lease directory, the new error message, and the N-candidate test's inversion to assert unrelated ids are ABSENT. All four are right and the reviewer recorded them as such so a rework round does not disturb them.
+
+    ALREADY CHECKED, do not re-raise: removing the lease list from the error text does not orphan the `candidates` binding — lease_ids_in is still used by the is_empty() branch above it. The reviewer looked because the diff removes its only other use.
+
+    Partial credit: if only one lands, do item 1. Item 2 is a real gap in coverage; item 1 is the difference between a fix and the appearance of one.
+  created_at: 2026-09-20T20:53:13.863568202Z
+  modified_at: 2026-09-20T20:53:13.863568202Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
