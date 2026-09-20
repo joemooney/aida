@@ -1,0 +1,55 @@
+id: 01a0c0a1-e106-7300-8e60-1a5e9a70f983
+spec_id: TASK-1304
+agreed_id: TASK-1304
+title: 'Session-discipline entry: after you gate something, check that every surface agrees'
+description: |
+  The advisor asked me to draft this after it named the technique I had been using without seeing it as one. It belongs in the session-discipline guide, master first then mirrored to the project copy (byte-identical, enforced by the discipline-pack parity test).
+
+  WHY IT IS WORTH AN ENTRY. Auditing a surface is expensive and usually inconclusive: you are asking the surface what is true, and you have no independent answer to check it against. The exception is the few minutes after you yourself apply a gate. Then you know the correct answer independently of every surface reporting it, and any surface that disagrees is demonstrably wrong rather than merely suspect. That asymmetry is rare and it is the entire justification - the recipe without the reason reads as "check things after you do them", which nobody acts on.
+
+  DRAFT ENTRY, for the implementer to place and edit:
+
+    ## After you gate something, check that every surface agrees
+
+    Most of the time you are asking surfaces what is true and have nothing better to
+    compare them against. The exception is a gate you just applied yourself. For a few
+    minutes afterwards you hold a fact the whole system is supposed to reflect - you
+    refused the PR, you placed the hold, you moved the status - and you know it without
+    consulting anything. Any surface still reporting the old answer is not suspect, it
+    is wrong, and you can say so without further investigation.
+
+    So spend the check there. Having gated something, look at the surfaces that are
+    supposed to route work: the coordination inbox, the readiness view, the queue, the
+    record you just wrote. Ask whether each one now reflects what you did. Disagreement
+    is a defect with a reproduction already in hand.
+
+    This is not the same as auditing. An audit asks "is this surface correct in
+    general", which needs ground truth you rarely have. This asks "does this surface
+    agree with the one thing I currently know", which needs nothing.
+
+    The check is cheap and the window is short. Take it while the answer is still in
+    your head.
+
+  WORKED EXAMPLE from the session that produced this. A reviewer recorded a refusal on a pull request, then looked at what the surfaces said about it over the next few minutes. Three defects came out of that one act:
+    - the coordination inbox still listed the refused PR as awaiting-you, because it reads the forge's review decision and not the refusal that had just been recorded in the substrate;
+    - the same classifier treats an unknown CI rollup as acceptable, so a head whose required build never ran is indistinguishable from a passing one;
+    - the recorded verdict itself was overwritten forty-one seconds later by a second reviewer writing to the same file, which was only noticed because someone went back to read the thing they had just written.
+  None of the three was reachable by reading the code first. Each was visible because the observer already knew the answer.
+
+  ## Acceptance
+
+  - The session-discipline guide gains a section stating the technique AND the reason it works - specifically that a gate you just applied is a fact you hold independently of every surface, which is what makes disagreement proof rather than suspicion. A version that gives the recipe without that reason does not satisfy this.
+  - It distinguishes the move from auditing: an audit needs ground truth you rarely have; this needs only the one fact you just created.
+  - It names the surfaces worth checking in this project (coordination inbox, readiness view, queue, the written record itself) rather than saying "the surfaces" abstractly.
+  - It carries a worked example. The one above may be used or replaced, but it must show more than one defect found from a single gate, because the point is that the window is productive rather than that one bug was found.
+  - No SPEC-IDs appear in the guide text, since the pack is scaffolded to downstream projects. The worked example must be told without identifiers.
+  - Master and project copy stay byte-identical and the discipline-pack parity test passes.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T21:03:49.510585225Z
+modified_at: 2026-09-20T21:03:49.510585225Z
+req_type: Task
+tags:
+- discipline docs drain-safe scaffolding from:review-session-0920
