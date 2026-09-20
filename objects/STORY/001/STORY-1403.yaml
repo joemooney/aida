@@ -1,0 +1,26 @@
+id: 01a0c094-2569-7f22-b330-72bb96677ac6
+spec_id: STORY-1403
+agreed_id: STORY-1403
+title: 'Review PR-2030: [AI:codex] fix(orchestrator): preserve child lease handoff (BUG-1485)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0c083`) for branch `bug-1485-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2030>
+  - Branch: `bug-1485-work` → `main`
+
+  ## Covers
+
+  - BUG-1485
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2030` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T20:48:49.513007402Z
+modified_at: 2026-09-20T20:48:49.513007402Z
+req_type: Story
