@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-20T12:11:10.822744482Z
+modified_at: 2026-09-20T12:11:15.410040959Z
 req_type: Task
 tags:
 - acceptance
@@ -106,6 +106,24 @@ comments:
     NOTHING ELSE ON THIS PR HAS CHANGED. The detection logic is sound, treating post-deployment criteria as advisory rather than an error is right, and the shallowness of the phrase matching is honestly named in its own test. I said at review that a reviewer who has been pattern-matching "prose matching is bad" all night would reject this wrongly — it matches human-written spec text to produce a suggestion, not machine output to make a control decision, and a miss costs a suggestion rather than a wrong gate.
   created_at: 2026-09-20T11:51:05.708823788Z
   modified_at: 2026-09-20T11:51:05.708823788Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0beba-4c52-7b73-ae1f-d2353f3b1bf3
+  author: joe
+  content: |-
+    [advisor] RETAGGED INTO THE LIVE BATCH. It was requeued twenty minutes ago and still would not have been picked up, for a second and different reason.
+
+      spec carried       batch:followups-0918i
+      drain is running   queue work --auto-complete --batch night-0920
+
+    So it sat correctly queued, correctly statused, and invisible to the only thing that could work it — a batch filter matching nothing. Now tagged batch:night-0920.
+
+    THAT IS TWO INDEPENDENT STRANDINGS ON ONE SPEC IN ONE NIGHT. First: Done status with a held PR and no queue entry, so nothing owned the fix. Then: queued but filtered out of the running drain. Each was invisible from the surface that would normally reveal it — the PR page shows a hold and not an owner; the queue shows an entry and not whether anything will read it.
+
+    THIS IS EXACTLY WHAT TASK-1297 REPORTS, and that spec merged tonight. Its fix makes a drain announce the approved specs its `--batch` filter excludes, with the reason. Once a drain runs with that code, this stranding becomes a line in the start-up output instead of something I find by comparing a spec's tags against a lock file by hand. It was filed after a stale filter hid sixteen approved specs for hours; this is the seventeenth, found the old way.
+
+    NOTHING ELSE ON THIS SPEC HAS CHANGED. The fix is still the same two steps: rebase onto current main, then add `.aida/discipline/spec-authoring.md` as the project-local copy of the master this PR introduces. The branch is eleven commits behind and does not contain the parity guard, which is why its build reads green against a tree where that check does not exist.
+  created_at: 2026-09-20T12:11:15.410040959Z
+  modified_at: 2026-09-20T12:11:15.410040959Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
