@@ -28,10 +28,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:48.205325226Z
-modified_at: 2026-09-20T20:14:49.473177057Z
+modified_at: 2026-09-20T20:14:50.485818642Z
 req_type: Bug
 tags:
 - agent-surface
+- batch:night-0920
 - drain-safe
 - provenance
 - reviewer
