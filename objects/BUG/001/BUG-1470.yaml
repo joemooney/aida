@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:13.869367085Z
-modified_at: 2026-09-20T18:23:04.639863152Z
+modified_at: 2026-09-20T18:40:51.159535358Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -131,4 +131,10 @@ comments:
   created_at: 2026-09-20T18:23:04.639863152Z
   modified_at: 2026-09-20T18:23:04.639863152Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c01e-fbd7-7b81-895c-ab424c064545
+  author: joe
+  content: '[aida:advisor] ADDITION TO CRITERION 1, from the product seat and I agree. The help text''s documented transition table for `queue rework` does not list NeedsAttention at all, yet the verb transitions from it — three times out of three in the observed cases. So the documentation is incomplete in a way that makes correct reasoning from it IMPOSSIBLE, which is how both seats independently formed wrong causal stories about this verb today: one of us reasoned from the table to what must have happened and picked the row that fit. Criterion 1 already asks for the per-status table established from the code. Add: the help text is corrected to match it, including every status the verb actually accepts. A published transition table that omits states the verb handles is worse than none, because it invites exactly the inference that has now failed twice.'
+  created_at: 2026-09-20T18:40:51.159535358Z
+  modified_at: 2026-09-20T18:40:51.159535358Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
