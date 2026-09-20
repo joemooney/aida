@@ -388,12 +388,29 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             shipped,
             shelved,
             excluded_from_batch,
+            ineligible,
         } => (
             "queue-drained",
             // TASK-1297: name what the `--batch` filter excluded in the same
             // line a live `aida watch` renders — the silence about this
             // number was the defect, not the filter. trace:TASK-1297
-            if *excluded_from_batch > 0 {
+            if !ineligible.is_empty() {
+                format!(
+                    "drain stopped — {} member{} {} ineligible: {}",
+                    ineligible.len(),
+                    if ineligible.len() == 1 { "" } else { "s" },
+                    if ineligible.len() == 1 {
+                        "remains"
+                    } else {
+                        "remain"
+                    },
+                    ineligible
+                        .iter()
+                        .map(|member| format!("{} ({})", member.spec, member.reason))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else if *excluded_from_batch > 0 {
                 format!(
                     "drain done — {} shipped, {} shelved · {} other approved routed spec{} excluded by batch filter",
                     shipped,
@@ -498,6 +515,7 @@ mod tests {
             shipped: 3,
             shelved: 0,
             excluded_from_batch: 16,
+            ineligible: vec![],
         });
         assert!(
             hint.contains("16 other approved routed specs excluded"),
@@ -508,8 +526,28 @@ mod tests {
             shipped: 3,
             shelved: 0,
             excluded_from_batch: 0,
+            ineligible: vec![],
         });
         assert!(!quiet_hint.contains("excluded"), "{quiet_hint}");
+    }
+
+    // trace:BUG-1422 | ai:codex
+    #[test]
+    fn queue_drained_describe_names_ineligible_members() {
+        let (_, hint) = describe(&EventKind::QueueDrained {
+            shipped: 0,
+            shelved: 0,
+            excluded_from_batch: 0,
+            ineligible: vec![crate::events::IneligibleBatchMember {
+                spec: "STORY-1218".into(),
+                reason: "guided execution mode".into(),
+            }],
+        });
+        assert!(hint.contains("1 member remains ineligible"), "{hint}");
+        assert!(
+            hint.contains("STORY-1218 (guided execution mode)"),
+            "{hint}"
+        );
     }
 
     fn fixture(path: &Path, events: &[Event]) {
@@ -560,6 +598,7 @@ mod tests {
                         shipped: 1,
                         shelved: 0,
                         excluded_from_batch: 0,
+                        ineligible: vec![],
                     },
                 ), // WAKE
             ],
