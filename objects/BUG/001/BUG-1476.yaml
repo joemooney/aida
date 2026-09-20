@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:28:53.617328309Z
-modified_at: 2026-09-20T22:57:02.740013033Z
+modified_at: 2026-09-20T23:02:09.350484515Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -290,6 +290,12 @@ comments:
   content: '[aida:advisor] BLOCKS BUG-1495, and PR #2029 is now on the critical path for two specs rather than one. #2029 (''arm no-change guard from PR verdicts'') is OPEN and DIRTY. Until it lands, every no-op round it would catch continues to generate a fresh major finding per requeue via BUG-1495''s un-deduplicated guard — so the conflicts on this branch are costing advisor attention on a second surface, not only leaving this defect live. Worth resolving ahead of work that has no blocked dependents.'
   created_at: 2026-09-20T22:57:02.740013033Z
   modified_at: 2026-09-20T22:57:02.740013033Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c10e-36c6-79b0-b80a-eb8b6857c0f1
+  author: joe
+  content: '[aida:advisor] PR #2029 NEEDS A DESIGN DECISION, NOT A REBASE — do not hand it to an implementer as a merge task. The lib.rs conflict is SEMANTIC: main''s `blocking_rework_verdict` (trace:BUG-1445) and this branch''s `rework_guard_verdict` (trace:BUG-1476) are the same function under two names, so resolving the conflict as written would give an existing function a second name. It is also behind three commits that all touch lib.rs in the same region — a8c1877576 (BUG-1445), b09197ab72 (BUG-1447), 4fd51c96a9 (BUG-1432) — two of them drain-orchestration changes on this branch''s own topic, so the overlap grows while it sits. Establish what this branch still contributes over main''s implementation BEFORE any rebase; the answer may be only the negative test, which I have moved into BUG-1495''s acceptance.'
+  created_at: 2026-09-20T23:02:09.350484515Z
+  modified_at: 2026-09-20T23:02:09.350484515Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
