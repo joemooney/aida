@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-20T16:44:27.452961029Z
+modified_at: 2026-09-20T16:44:53.564460946Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -84,6 +84,12 @@ comments:
   content: 'Round 2: nightly now fails on a missing AIDA_GITLAB_TOKEN (only mirror unreachability skips); the live GitLab smoke uses the drain CI streaming seam and asserts CiTerminal/PrMerged with no unexpected SpecShelved event, creates and validates an Approved review verdict, verifies source-branch and project deletion, logs panic-cleanup failures, and phase-labels open/status/merge failures. Compile-verified with cargo test -p aida-cli-lib gitlab_live_mr_round_trip --no-run. Commit 8645670e66.'
   created_at: 2026-09-20T16:44:27.452961029Z
   modified_at: 2026-09-20T16:44:27.452961029Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bfb4-d1bc-7ee3-a81c-546f178a306d
+  author: joe
+  content: 'Explicit disposition of review finding 1: I dispute that this credentialed provider smoke should launch the full agent-backed queue drain. That would add model/vendor availability and nondeterministic implementation/review sessions to a Forge-provider acceptance test. The test now exercises the production drain CI streaming seam (including its real CiTerminal emission), validates the merge lifecycle event and rejects any SpecShelved outcome around the successful live path. The remaining Forge phases stay direct so a provider regression is isolated and phase-named.'
+  created_at: 2026-09-20T16:44:53.564460946Z
+  modified_at: 2026-09-20T16:44:53.564460946Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
