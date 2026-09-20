@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:18.813550852Z
-modified_at: 2026-09-20T11:26:22.826088698Z
+modified_at: 2026-09-20T12:51:50.890767140Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -65,6 +65,33 @@ comments:
   created_at: 2026-09-20T04:01:26.434124704Z
   modified_at: 2026-09-20T04:01:26.434124704Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bedf-75ea-75c1-9c20-3ff303448b26
+  author: joe
+  content: |-
+    [rework round 2] PR #2014 — CHANGES REQUESTED, one finding. AC1 and AC2 verified. The gap is inode headroom, which the spec's own incident scope names explicitly.
+
+    REQUIREMENT 1 — CHECK INODES, NOT ONLY BYTES.
+    `machine_readiness.rs` reports byte-space for the repo, build and temp filesystems but never inode availability. A filesystem with free bytes and no free inodes fails every write exactly as a full one does, and reports 100% healthy on the check we built to catch a full disk. Add inode reporting with a workload-scaled threshold, an actionable remedy line, and a pure threshold test alongside the existing ones.
+
+    CURRENT MEASUREMENT, so the threshold is set against reality rather than a guess. On this machine right now:
+
+        inodes   5,092,000 used of 60,981,248  (9% full)   55,889,248 free
+        byte-space headroom was the thing that hit 100% last night, not inodes
+
+    So inode exhaustion is NOT close here, and the fix should not pretend otherwise by picking an alarming threshold. What makes it worth checking anyway is the workload shape: 79 sibling worktrees and 13 agent lanes, each a full checkout plus a cargo target tree. Cargo targets are enormous in FILE COUNT as well as bytes — an incremental build directory is hundreds of thousands of small artifacts. The ratio of inodes to bytes consumed by this workload is far higher than a typical one, which is exactly why a byte-only check can pass while inodes are the binding constraint.
+
+    Scale the threshold to that: a fraction of free inodes that accounts for a build tree's file count, not a flat number. State the reasoning in the PR so the next person can re-derive it rather than tuning it blind.
+
+    WHY THIS MATTERS BEYOND COMPLETENESS, and it is the spec's whole thesis. TASK-1298 exists because a readiness check passed forty minutes before the disk hit 100%. That check covered the substrate — drain, launcher, store, queue depth — and not the machine. Shipping the machine half while omitting inodes recreates the same shape one level down: a machine check that reports healthy in a failure mode it does not look at. The remedy must be actionable too — "inodes low" without naming what to delete is a readiness check that tells you to panic rather than what to do.
+
+    A NOTE ON THE REMEDY LINE, since we learned it the hard way last night. When byte-space ran out, the recovery that actually worked was removing `target/` from worktrees holding no active lease — non-destructive, regenerable, and it freed 201 GB. The inode remedy is the same action for the same reason, and naming it directly is worth more than a generic "free space" message.
+
+    AC1 AND AC2 ARE VERIFIED and worth keeping intact: probe/disk_checks with live JSON for repo, build and temp byte-space, and the available-memory check. Do not disturb them while adding the inode path.
+
+    Push fixups to the existing branch. Do not open a new PR.
+  created_at: 2026-09-20T12:51:50.890767140Z
+  modified_at: 2026-09-20T12:51:50.890767140Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
