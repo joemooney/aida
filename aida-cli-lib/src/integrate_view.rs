@@ -283,7 +283,7 @@ mod tests {
             EventKind::QueueDrained {
                 shipped: 4,
                 shelved: 1,
-                excluded_from_batch: 0,
+                excluded_from_batch: Some(0),
                 ineligible: vec![],
             },
         );

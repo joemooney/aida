@@ -338,7 +338,7 @@ mod tests {
                 EventKind::QueueDrained {
                     shipped: 1,
                     shelved: 0,
-                    excluded_from_batch: 0,
+                    excluded_from_batch: Some(0),
                     ineligible: vec![],
                 },
             )],
@@ -368,7 +368,7 @@ mod tests {
                     EventKind::QueueDrained {
                         shipped: 2,
                         shelved: 0,
-                        excluded_from_batch: 0,
+                        excluded_from_batch: Some(0),
                         ineligible: vec![],
                     },
                 )],

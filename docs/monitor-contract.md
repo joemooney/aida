@@ -40,8 +40,14 @@ jq -n --argjson d "$drain" --argjson q "$queue" --argjson f "$findings" '
 aida watch --all --json | jq -c '{at: .ts, event: .kind.event, spec: .spec}'
 ```
 
+`QueueDrained` is the terminal boundary for a drain, not proof that every
+optional diagnostic was measured. In particular, `excluded_from_batch: 0`
+means the exclusion count was measured and was genuinely zero; an absent
+`excluded_from_batch` means it was not measured (including legacy events and
+chained-batch drains). Consumers must preserve that distinction instead of
+coercing an absent field to zero. // trace:BUG-1425 | ai:codex
+
 ## Migration notes
 
 - `1.0.0` — initial contract: eleven polling surfaces and the events follow
   feed. The promised subset is recorded in `monitor-contract-fixtures/`.
-

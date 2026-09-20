@@ -451,7 +451,10 @@ fn evaluate_rules(body: &str, rules: &NotifyRules) -> Vec<RuleFire> {
                 // exactly the "3 open members re-driven for hours while 16
                 // sat outside the filter" incident shape.
                 // trace:TASK-1297 | ai:claude
-                if shipped == 0 || shelved > 0 || excluded_from_batch > 0 || !ineligible.is_empty()
+                if shipped == 0
+                    || shelved > 0
+                    || excluded_from_batch.is_some_and(|count| count > 0)
+                    || !ineligible.is_empty()
                 {
                     let mut msg = format!("drain shipped {shipped}, shelved {shelved}");
                     if !ineligible.is_empty() {
@@ -466,7 +469,9 @@ fn evaluate_rules(body: &str, rules: &NotifyRules) -> Vec<RuleFire> {
                                 .join(", ")
                         ));
                     }
-                    if excluded_from_batch > 0 {
+                    if let Some(excluded_from_batch) =
+                        excluded_from_batch.filter(|count| *count > 0)
+                    {
                         msg.push_str(&format!(
                             "; {excluded_from_batch} other approved routed spec{} excluded by the batch filter",
                             if excluded_from_batch == 1 { "" } else { "s" }
@@ -746,7 +751,7 @@ mod tests {
                 EventKind::QueueDrained {
                     shipped: 0,
                     shelved: 1,
-                    excluded_from_batch: 0,
+                    excluded_from_batch: Some(0),
                     ineligible: vec![],
                 }
             )
@@ -772,7 +777,7 @@ mod tests {
             EventKind::QueueDrained {
                 shipped: 3,
                 shelved: 0,
-                excluded_from_batch: 16,
+                excluded_from_batch: Some(16),
                 ineligible: vec![],
             },
         );
@@ -798,7 +803,7 @@ mod tests {
             EventKind::QueueDrained {
                 shipped: 0,
                 shelved: 0,
-                excluded_from_batch: 0,
+                excluded_from_batch: Some(0),
                 ineligible: vec![crate::events::IneligibleBatchMember {
                     spec: "TASK-1277".into(),
                     reason: "blocked by in-flight work".into(),
