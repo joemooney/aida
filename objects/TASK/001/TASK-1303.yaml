@@ -26,9 +26,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:28.168866180Z
-modified_at: 2026-09-20T18:15:37.297430705Z
+modified_at: 2026-09-20T18:15:38.705375804Z
 req_type: Task
 tags:
+- batch:night-0920
 - discipline docs drain-safe scaffolding from:review-pr-2023
 comments:
 - id: 01a0c007-e251-7d01-918d-8b25e375cffb
