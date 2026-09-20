@@ -40,12 +40,12 @@ description: |
   5. The exit codes or markers are documented where a future caller will look.
 
   Origin: recorded by the advisor as a non-blocking note on BUG-1268 while reviewing #1970. Filed separately because a note on a Completed spec goes obsolete unread, and verified independently here against main before filing.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:49:09.217213996Z
-modified_at: 2026-09-20T02:28:01.267423182Z
+modified_at: 2026-09-20T02:43:16.511991829Z
 req_type: Bug
 tags:
 - coupling
@@ -93,4 +93,22 @@ comments:
   created_at: 2026-09-20T02:28:01.267423182Z
   modified_at: 2026-09-20T02:28:01.267423182Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bcb2-4b98-7122-b15e-cea286532078
+  author: aida-auto-bump
+  timestamp: 2026-09-20T02:43:16.504434354Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0bcb2-4b9f-7210-8cf5-ba04e5916c73
+  timestamp: 2026-09-20T02:43:16.511990755Z
+  agent: aida
+  commit_sha: 212ace9b23f2ca95961ff81bd89a3c9a82375f35
+  summary: Completed via merge 212ace9b
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-20T02:43:16.504243536Z
+  completion_sha: 212ace9b23f2ca95961ff81bd89a3c9a82375f35
