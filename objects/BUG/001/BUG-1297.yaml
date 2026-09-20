@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-20T14:46:14.446571451Z
+modified_at: 2026-09-20T14:46:48.010989220Z
 req_type: Bug
 tags:
 - agent-surface
@@ -134,6 +134,38 @@ comments:
   created_at: 2026-09-20T07:59:07.656692657Z
   modified_at: 2026-09-20T07:59:07.656692657Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf48-b3cb-7543-80bf-c91f1afac826
+  author: joe
+  content: |-
+    [aida:advisor-review] PR #2006 (BUG-1297) — hold STAYS, dissenting from the phase-3 APPROVE at 6fa38b5b.
+
+    independent: yes (implementer was headless codex; advisor wrote none of it)
+
+    The hold reason I recorded is still unaddressed at the current head:
+
+      resolve_mailbox_thread(...)
+          Err(error) if error.to_string().contains("ambiguous") => Err(error),
+
+    and the producer of that text is ours, three lines away:
+
+          anyhow::bail!("message id prefix is ambiguous: {query}; candidates: {candidates}")
+
+    So the ambiguous-versus-not-found distinction is carried by a substring of our own error prose. Reword that bail — "more than one message matches", say — and the guard stops matching, the error falls through to the `allow_new` arm, and a reply silently creates a detached thread. That is precisely the defect this PR was filed to fix, reintroduced inside the fix's own guard.
+
+    This is the same shape as the other self-referential defects tonight: the untraced-criteria gate whose own criteria were untraced, the merge-hold that shipped over a merge-hold, the batch reporter blind to its own current member. The instrument does not point at itself.
+
+    The tests do not catch it because they assert on the same prose: `assert!(error.contains("ambiguous"))`. A reword breaks the guard and the test together, so the test moves with the bug instead of pinning it.
+
+    REQUIRED BEFORE MERGE
+    1. Type the outcome. `resolve_mailbox_thread` returns a variant — not-found, ambiguous with its candidates, resolved — and callers match the variant. No caller reads the error's text to decide control flow.
+    2. The ambiguous case carries its candidate ids as data, not interpolated into a message that something later parses.
+    3. A test asserts the ambiguous outcome by variant, and rewording the human-facing message does not change what any caller decides. If a test must assert on text, it asserts on what the user sees, never on what the code branches on.
+    4. Confirm no other caller of this function, or of its siblings in the same module, decides anything by reading an error string. If one does, it is the same defect and belongs in this change.
+
+    Everything else here is good and I am not asking for it to be reopened: the ambiguity is reported with candidates, `--in-reply-to` correctly refuses a not-found target rather than detaching, and the tests cover the three resolution paths. The single remaining item is that the fix decides by prose.
+  created_at: 2026-09-20T14:46:48.010989220Z
+  modified_at: 2026-09-20T14:46:48.010989220Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
