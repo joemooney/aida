@@ -5665,9 +5665,13 @@ mod tests {
         assert!(!rebase_in_progress(&second));
         assert_eq!(current_branch(&second).unwrap(), "aida-store");
         assert_eq!(head_sha(&second).unwrap(), local_head);
-        assert_eq!(
-            std::fs::read_to_string(second.join("shared.yaml")).unwrap(),
-            "value: local\n"
-        );
+        // Assert the committed blob via `git show`, not the working-tree file:
+        // `git show` reads the object directly, bypassing the checkout-time
+        // core.autocrlf filter that rewrites LF to CRLF on Windows. The test
+        // exists to prove the abort restored the commit, not a particular
+        // checkout line-ending encoding.
+        // trace:BUG-1283 | ai:claude
+        let restored_blob = git(&second, &["show", "HEAD:shared.yaml"]).unwrap().stdout;
+        assert_eq!(restored_blob, "value: local");
     }
 }
