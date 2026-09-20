@@ -37,12 +37,12 @@ description: |
   5. A test covers the observed case: a branch rebased onto newer main with no content change, under a reviewer that refuses, asserting the round is classified rebase-only and not reported as an ordinary requested-changes failure.
 
   Evidence gathered by the advisor after requeueing STORY-1350 and checking whether the requeue accomplished anything. The first hypothesis, that the implementer had touched nothing, was wrong — the head did move — and the patch-id comparison is what settled it.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:34:29.728492333Z
-modified_at: 2026-09-20T17:52:40.707889385Z
+modified_at: 2026-09-20T19:57:07.097168072Z
 req_type: Bug
 tags:
 - batch:night-0920
