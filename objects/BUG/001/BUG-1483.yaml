@@ -35,12 +35,13 @@ description: |-
   - A test covers the CRLF case: a project copy with CRLF line endings and an LF master must be handled per whichever fix is chosen, and the expected outcome stated.
   - Confirm or refute the 11:06-vs-11:13 hypothesis above on a Windows runner and record which it was, so the next reader is not left with an unexplained intermittency.
   - Link to PRIN-5 for defect 2.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:49:24.771676840Z
-modified_at: 2026-09-20T19:49:24.771676840Z
+modified_at: 2026-09-20T19:50:23.963628179Z
 req_type: Bug
 tags:
 - windows portability ci gitattributes prin-5 from:review-session-0920
+execution_mode: drain
