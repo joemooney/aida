@@ -1,0 +1,26 @@
+id: 01a0bc4d-273f-7911-ba49-b428d491d448
+spec_id: STORY-1361
+agreed_id: STORY-1361
+title: 'Review PR-1984: [AI:codex] feat(advisor): add Codex seat-parity fallback (TASK-1279)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0bc3e`) for branch `task-1279`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1984>
+  - Branch: `task-1279` → `main`
+
+  ## Covers
+
+  - TASK-1279
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1984` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T00:52:48.063971115Z
+modified_at: 2026-09-20T00:52:48.063971115Z
+req_type: Story
