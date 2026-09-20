@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:18.813550852Z
-modified_at: 2026-09-20T14:02:09.036660622Z
+modified_at: 2026-09-20T14:29:12.694820036Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -109,6 +109,25 @@ comments:
   content: 'Round 2 review fix: readiness now probes available inodes with statvfs for repo, build, and temp paths; fails when either bytes or workload-scaled inode headroom is insufficient; reports an inode-reclamation remedy; and extends the pure threshold test across scaling and pass/fail boundaries.'
   created_at: 2026-09-20T14:02:09.036660622Z
   modified_at: 2026-09-20T14:02:09.036660622Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf38-9976-7052-b282-860d8d057711
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2014
+    agent: codex
+    ran-at: 2026-09-20 07:29 -07:00
+    mode: propose-only (drain)
+    proposed: 5
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1298-drain-01a0bf37-f941-7ee1-ade1-4f23e5348558.json
+    ? AC (0.96) — A real `aida burndown run` performs the machine-readiness probe immediately before launch and refuses to launch on any hard failure; `--dry-run` remains observational and skips this host-capacity gate.
+    ? SEM (0.94) — The automatic launch preflight assumes a 20-hour window, derives lane demand from `--concurrency` (defaulting to 4), and derives spec demand from the smaller of `--max` and the current ready-set size, with both demand values clamped to at least 1.
+    ? SEM (0.92) — Disk readiness is fail-closed for inode capacity: each repo/build/temp filesystem fails if free inodes are below the workload-scaled inode threshold, and inability to obtain inode availability is itself a hard failure.
+    ? SEM (0.98) — The workload policy reserves disk bytes as `6 GiB + 5 GiB per lane + 2 GiB per spec + floor((hours-1)/4) GiB per lane`, recommends memory as `max(4 GiB, 2 GiB + 2 GiB per lane)`, and reserves `10,000 + 5,000 per lane + 2,000 per spec + 250 per lane-hour` inodes; zero-valued inputs are treated as one.
+    ? AC (0.90) — `aida burndown readiness --json` emits the complete structured report, including requested hours/lanes/specs, computed disk/inode/memory thresholds, and every named check with level, detail, and optional remedy, while retaining the same non-zero exit on hard failure as human output.
+  created_at: 2026-09-20T14:29:12.694820036Z
+  modified_at: 2026-09-20T14:29:12.694820036Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
