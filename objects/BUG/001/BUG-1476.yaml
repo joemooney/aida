@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:28:53.617328309Z
-modified_at: 2026-09-20T23:24:52.170918647Z
+modified_at: 2026-09-20T23:31:02.274355547Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -388,6 +388,29 @@ comments:
     That also means the sample is not naturally occurring — I induced it. It is still evidence that the defect is live on the new binary, which is the claim, but nobody should read "two instances in eleven minutes" as a base rate.
   created_at: 2026-09-20T23:24:52.170918647Z
   modified_at: 2026-09-20T23:24:52.170918647Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c128-a802-76d3-a98e-9af85e263e16
+  author: joe
+  content: |-
+    PATCH-ID ANALYSIS of the three post-BUG-1445 instances. The defect is TWO shapes, not one, and that bears directly on what a fix has to key on.
+
+        BUG-1288     head a8632b7f1d -> 684ebc2761   MOVED
+                     patch-id 5d1bce3212... -> 5d1bce3212...   IDENTICAL
+                     => rebase-only round: new sha, byte-identical contribution
+
+        STORY-1350   head 0c09fe8e2c -> 0c09fe8e2c   UNMOVED
+        TASK-1298    head 150a992b2b -> 150a992b2b   UNMOVED
+                     => the phase did nothing at all, not even a rebase
+
+    All three ran their implementer phase in 19-21 seconds and all three then consumed a full reviewer cycle.
+
+    WHY THE SPLIT MATTERS. A guard keyed on 'the branch head did not move' catches STORY-1350 and TASK-1298 and MISSES BUG-1288 — the head moved, so by that test something happened. A guard keyed on patch-id catches all three, because the rebase changes the sha and not the contribution. BUG-1445 is named for precisely the rebase case ('detect rebase-only rework rounds') and caught neither shape.
+
+    That also sharpens what to look for in the code. Whatever arms at lib.rs:87220 records a head, and  compares against it later. If the comparison is head-to-head then BUG-1288 is invisible to it by construction, and the two unmoved-head cases failing as well points at the arming rather than the comparison. Both readings are available from the evidence and I am not choosing between them.
+
+    METHOD NOTE, since it is the second time today this technique has been decisive: the advisor established this morning that a round can move the head without changing content, and that patch-id is the discriminator rather than tree-diff. I applied it here only because BUG-1288's authored DATE stayed at 09-19 21:20 while its sha changed, which is the tell. Without that prompt I would have recorded 'head moved, so it did work' and drawn the wrong boundary.
+  created_at: 2026-09-20T23:31:02.274355547Z
+  modified_at: 2026-09-20T23:31:02.274355547Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
