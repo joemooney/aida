@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:34:29.728492333Z
-modified_at: 2026-09-20T20:20:40.146091510Z
+modified_at: 2026-09-20T20:24:48.939196729Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -112,6 +112,7 @@ comments:
   created_at: 2026-09-20T20:20:40.146091510Z
   modified_at: 2026-09-20T20:20:40.146091510Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T20:05:03.359892541Z
