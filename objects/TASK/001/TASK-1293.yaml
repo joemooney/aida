@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-20T05:52:44.271623239Z
+modified_at: 2026-09-20T11:51:05.708823788Z
 req_type: Task
 tags:
 - acceptance
@@ -86,6 +86,27 @@ comments:
   created_at: 2026-09-20T05:52:40.619592469Z
   modified_at: 2026-09-20T05:52:40.619592469Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bea7-d6ec-7631-88fc-335245cb4d98
+  author: joe
+  content: |-
+    [advisor:unstick] STRANDED — status Done, PR #2003 open and held by me, and NOT in any queue. Nothing was going to pick this up. Requeued.
+
+    This is the second instance tonight of the same shape, after TASK-1289: a spec whose PR is held sits at Done, which is not in the ready set, and carries no queue entry, so the substrate contains a held PR and no work item to resolve it. The hold is visible on the PR; the fact that nobody owns the fix is visible nowhere. BUG-1291 covers the ownerless-PR half of this; this is the ownerless-REWORK half and it is not covered.
+
+    I have recorded that separately. What this spec needs is small and unchanged:
+
+    1. REBASE onto current main. The branch is 11 commits behind and does NOT contain the discipline-pack parity guard that landed in #1988. That is why its build reads SUCCESS — it ran against a tree where the guard does not exist. After the rebase it will go red, which is correct and expected.
+
+    2. ADD `.aida/discipline/spec-authoring.md` — the project-local copy of the new master this PR introduces. The guard asserts every embedded master has one, and this PR adds a master without it. Add it to the README pointer table the way the other guides are listed.
+
+    That is the whole of it. One rebase, one copied file, one README line.
+
+    DO NOT try to make the build green by any other route. Do not exclude the new guide from the guard, do not loosen the guard, and do not remove the master. The guard exists because this repo's own discipline pack silently drifted nine files out of date, which is BUG-1279, and a version of it that permits exceptions would have permitted that.
+
+    NOTHING ELSE ON THIS PR HAS CHANGED. The detection logic is sound, treating post-deployment criteria as advisory rather than an error is right, and the shallowness of the phrase matching is honestly named in its own test. I said at review that a reviewer who has been pattern-matching "prose matching is bad" all night would reject this wrongly — it matches human-written spec text to produce a suggestion, not machine output to make a control decision, and a miss costs a suggestion rather than a wrong gate.
+  created_at: 2026-09-20T11:51:05.708823788Z
+  modified_at: 2026-09-20T11:51:05.708823788Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
