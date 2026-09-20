@@ -155,6 +155,89 @@ reading the code, the reviewer is usually right. Read the reviewer's
 cited evidence before pushing back; if you push back, do the diff inspection
 yourself.
 
+## Knowing what a change is for makes you worse at finding how it fails
+
+"Trust the reviewer over intuition" says the reviewer is usually right when a
+verdict contradicts an intuition formed without reading the code. This is the
+mechanism underneath that rule, and it is worth understanding, because it
+applies in cases the rule does not literally cover — including when the
+reviewer HAS read the code and is still wrong.
+
+A reviewer who knows what a change is **for** will check whether the code matches
+that purpose. Checking for a match is a different operation from checking for a
+failure, and it is the easier one — the purpose supplies a shape, and the code
+either fits it or does not. Checking for a failure has no shape to work from. It
+requires generating the conditions the author did not think of, and the author's
+own intent is exactly what makes those conditions hard to imagine.
+
+It follows that **you should be most suspicious where the code matches the
+purpose most neatly**. A clean match is what the easier operation produces. It is
+what you would see whether or not the change is correct, so it is not evidence.
+
+This is also why a second reader who lacks the author's intent catches what the
+author cannot. Not because they are more careful, and not because they are
+better. They are simply doing a different operation, because they have no purpose
+to check against.
+
+Note what this does *not* say. Knowing the purpose makes you **better** at several
+real checks: whether the acceptance criteria are covered, whether the change is in
+scope, whether it solves the problem at all. It makes you worse at one specific
+thing. The precision is the point.
+
+### The worked example
+
+2026-09-19, on a spec whose whole point was that a stale binary on PATH must not
+be allowed to produce phantom drift. The advisor read the diff and approved it.
+The orchestrator reviewer read the same diff and refused it.
+
+The refusal was right. The guard collected only the "failed" result, while three
+separate paths produced "skipped", and every one of those three let the PR
+publish unchecked. The worst was the one that fires when the worktree binary
+cannot be built — which is precisely the condition the spec existed to guard. So
+the feature was silently absent in its own motivating scenario.
+
+The advisor's account of the miss is the useful part:
+
+> I had formed a view of what the PR was for and checked whether the code matched
+> the view, rather than whether it could fail.
+
+Nothing was rushed and nothing was skipped. The diff was read. The reading was
+simply the wrong operation, and holding the purpose is what selected it.
+
+### How to apply
+
+- **Intent is acquired by READING, not only by writing.** Reading the spec before
+  the diff is enough to install the purpose you will then check against — which is
+  nearly every review anyone does. Writing the brief or the spec makes it
+  stronger, and typing the code makes it strongest, but the weakest form is the
+  one you will be in most often, and it is the one nobody guards against.
+- **Never review your own implementation**, and treat writing the rework brief or
+  the spec as enough involvement to weaken your reading.
+- **When you must read something you shaped**, change the operation deliberately.
+  Do not ask "does this do what it is supposed to do." Ask "what input makes this
+  wrong", "what happens when this call fails rather than returns", "which branch
+  has no test". Enumerate the ways out of a function and check each one, rather
+  than following the path the purpose suggests.
+- **Treat convergence between two independent readers as the real signal.** Two
+  readers who did not see each other's findings arriving at the same list is
+  strong evidence the sweep is complete. The same list from a reader who saw the
+  first one is an echo and evidence of nothing.
+- **A review that finds nothing is a result that needs explaining**, not a result.
+  Say what you looked for and did not find, so the next reader knows what is still
+  uncovered.
+
+### Why this is not just about code review
+
+The same mechanism governs verifying a claim, confirming a fix, and checking a
+report from another agent. Whenever you already know what the answer is supposed
+to be, you will check for the match.
+
+Changing the reader is the primary defence and it is why the independence rule
+exists. But it is not always available: sometimes you are the only reader, and
+sometimes you are the second reader who has already been told what the change is
+for. When you cannot change the reader, change the operation. See
+`session-discipline.md`, "Confirm a claim by a different method than produced it".
+
 ## Confirm a claim by a different method than produced it
 
 Independence between seats is a property of *method*, not a posture of
