@@ -9,7 +9,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T06:23:05.658484581Z
-modified_at: 2026-09-20T06:23:05.658484581Z
+modified_at: 2026-09-20T06:32:17.224440918Z
 req_type: Task
 tags:
 - acceptance
@@ -19,3 +19,31 @@ tags:
 - linked:TASK-1279
 - seat-parity
 - severity:major
+comments:
+- id: 01a0bd83-f648-7891-a438-b6cc7f940fd7
+  author: joe
+  content: |-
+    [advisor:triage] THE FINDING IS RIGHT AND THE CAUSE IS WORSE THAN IT STATES. Promoted to Approved, operator mode, and the blocker is now recorded as a defect rather than as a missing wave.
+
+    I measured the feed for the window myself rather than re-running the finding's counts. Since 2026-09-20T00:00Z the only seats or vendors recorded are:
+
+      reviewer 12, implementer 15, integrator 5, codex 23
+
+    No advisor seat. No product seat. And the decisive number:
+
+      PrMerged: 1
+
+    I merged NINE pull requests tonight from the advisor gate — 1980, 1985, 1987, 1990, 1992, 1993, 1994, 2000, 2002 — and the feed records one PrMerged, which belongs to the drain's own merge phase. So an advisor merge emits nothing at all.
+
+    THIS CHANGES WHAT THE FINDING MEANS. It is not that the coordination-seat permutations did not happen. They happened continuously for the whole window: an advisor seat reviewing, holding, disposing and merging, a product seat dispatching lanes and briefing, and Codex implementers and reviewers between them. The feed cannot record any of it. TASK-1279's dogfood acceptance is therefore not merely unproven — it is UNPROVABLE FROM THIS FEED, and re-running a wave will produce exactly the same absence.
+
+    So the recovery advice in the finding, capture the evidence in a scheduled wave, would not have worked. A scheduled wave emits the same drain-phase events and the same silence about the seats coordinating it.
+
+    WHAT I AM DOING WITH IT. Approved in operator mode, because whoever completes it must first decide what counts as evidence given that the obvious source cannot supply it. Two honest routes: either the feed learns to record coordination-seat actions, which is a real change and is filed separately, or this spec's acceptance is rewritten to name a source that exists — the store's git log carries every disposition and every status change with timestamps and actors, and the proxy-approval ledger comments carry every merge with its gates. Both are durable and both were written all night. I lean to rewriting the acceptance rather than blocking the spec on new instrumentation, but that is the decision, not the answer.
+
+    DO NOT re-drive this expecting different evidence. That is the specific mistake this comment exists to prevent.
+
+    The finding's operational note is also correct and worth keeping: a competing drive must not be forced past the live serialized batch drain. Whoever picks this up works with the drain, not around it.
+  created_at: 2026-09-20T06:32:17.224440918Z
+  modified_at: 2026-09-20T06:32:17.224440918Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
