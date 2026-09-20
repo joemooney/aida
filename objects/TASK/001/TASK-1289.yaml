@@ -1,7 +1,7 @@
 id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
 spec_id: TASK-1289
 agreed_id: TASK-1289
-title: 'Pre-flight guard parity: the implementer phase runs CI''s own guards before opening the PR, and refuses while one fails'
+title: 'Pre-flight guard parity: the guard runs AFTER the implementer publishes the PR, so it cannot gate publication — the boundary needs a design decision, not another round'
 description: |
   Evidence (2026-09-18 12:00 → 2026-09-19 09:30): 40 shelves across 19 specs — 26 verdict:request-changes, 10 ci-red, 4 tool-exit. At least five of those rounds were guard failures that CI reported minutes after the PR opened and that the implementer could have run locally in seconds:
   - PR #1952 and BUG-1244 round 3: scripts/check-portability.sh (hard-coded /tmp literals in new tests)
@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-20T06:10:58.464534591Z
+modified_at: 2026-09-20T06:22:24.646723915Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -702,7 +702,7 @@ comments:
   created_at: 2026-09-20T03:02:35.178636636Z
   modified_at: 2026-09-20T03:02:35.178636636Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
-execution_mode: drive
+execution_mode: guided
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T18:32:18.229994468Z
