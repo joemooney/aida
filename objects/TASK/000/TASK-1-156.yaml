@@ -16,7 +16,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T22:48:46.389478664Z
-modified_at: 2026-09-20T22:50:28.209323140Z
+modified_at: 2026-09-20T22:50:29.323172746Z
 req_type: Task
 tags:
 - from-advisor:BUG-1297
@@ -25,3 +25,10 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+comments:
+- id: 01a0c103-884b-7723-b1fe-c40e40004dd8
+  author: joe
+  content: '[aida:advisor] Approved and dispositioned on BUG-1297. The guard fired correctly and its recommendation — different implementer/seat rather than another round — is adopted. But the inference behind it is wrong in a way worth fixing: the findings did not survive a ROUND, they survived a NON-ROUND, twice. The branch carries one commit from 08:02; the 15:01 run produced nothing in 50s and the 18:23 run shelved stale-base in 14s. The reviewer re-read an unchanged commit and reached the same correct conclusion. So ''identical findings recurred'' is true of the reviewer''s output and false about the work. The guard cannot currently distinguish ''the implementer could not do it'' from ''the implementer did not run'', and those need opposite responses — a better brief versus a different seat. BUG-1445 shipped the patch-id comparison that would tell them apart; wiring it into this guard is the fix.'
+  created_at: 2026-09-20T22:50:29.323172746Z
+  modified_at: 2026-09-20T22:50:29.323172746Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
