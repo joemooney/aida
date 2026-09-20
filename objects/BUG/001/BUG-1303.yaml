@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:22:29.721225410Z
-modified_at: 2026-09-20T08:24:28.965964885Z
+modified_at: 2026-09-20T09:31:00.768526787Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -152,6 +152,36 @@ comments:
   created_at: 2026-09-20T08:24:28.965964885Z
   modified_at: 2026-09-20T08:24:28.965964885Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0be27-9720-7d01-9423-e7eb37568554
+  author: joe
+  content: |-
+    [advisor] LIVE REPRODUCTION ON WINDOWS, 35 MINUTES AFTER A GREEN RUN, ON AN UNRELATED BRANCH. Requirement 1 stands and is now MEETABLE. Do not close this on non-reproduction.
+
+      run 35499761021  08:30:49Z  bug-1303-work   tick_lock_is_nonblocking_and_reusable ... ok
+      run 35501330917  09:05:09Z  bug-1301-work   tick_lock_is_nonblocking_and_reusable ... FAILED
+
+    Same test, same platform, 35 minutes apart. The second is on a branch that never touched the lock, which is what a genuine timing defect in main looks like and is not what a fix-introduced regression looks like.
+
+    SO THE SHAPE IS NARROWER THAN EITHER OF MY EARLIER FRAMINGS. Not deterministic-on-Windows (my first), not reproduces-nowhere (the reading I was about to act on). It is INTERMITTENT ON BOTH PLATFORMS, and Windows flaked toward failure often enough on 2026-09-18/19 to look deterministic. Runner noise is now hard to sustain: noise does not select one named test across two platforms and four runs.
+
+    A METHOD NOTE THAT APPLIES TO MY OWN CONTROL EXPERIMENT. I dispatched a cross-platform run on main — which lacks the fix — to test whether the branch's Windows pass could be attributed to the fix at all. Against an INTERMITTENT defect that experiment is asymmetric and I want that on the record before its result lands:
+
+      main FAILS  -> informative. The defect exists without the fix.
+      main PASSES -> tells us nothing. One sample from the passing side of a distribution.
+
+    I designed it while still holding the deterministic model, where a single run would have been decisive. It is not. I will report whatever it returns and will not read a pass as evidence of anything.
+
+    THE INSTRUMENTATION PATH IS THE RIGHT NEXT MOVE and I am making it acceptance rather than advice. Do not chase a local reproduction; the cheap path is to make the failing assertion report what it actually saw.
+
+    ADDITIONAL ACCEPTANCE
+    11. Before any further fix attempt, land instrumentation ONLY: when `tick_lock_is_nonblocking_and_reusable` fails, print the error's `kind()`, its `raw_os_error()`, and what `fs2::lock_contended_error()` returns on that platform. Land nothing else in that change.
+    12. One real observation from a Windows CI failure decides the cause. Until that exists, no fix ships — including the EINTR handling, which remains unshipped under this spec for the reason it always was, now strengthened: we are roughly two runs from knowing, and a patch landed first would make the symptom ambiguous exactly when it finally becomes informative.
+    13. The EINTR handling, if wanted on its own merits, goes in its own spec with its own justification. It must not be readable later as the fix for this.
+
+    WHY THE NON-REPRODUCTION READING WAS WRONG, worth recording because it is a reusable error. Two non-reproductions of an intermittent fault are not evidence of absence; they are two samples from the passing side. Agreement between them felt like corroboration and was not. The asymmetry is the rule: for an intermittent defect only a REPRODUCTION is informative, and a pass is close to worthless.
+  created_at: 2026-09-20T09:31:00.768526787Z
+  modified_at: 2026-09-20T09:31:00.768526787Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
