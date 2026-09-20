@@ -2,12 +2,12 @@ id: 01a0c031-18cd-7723-8cdb-3efa5fc830db
 spec_id: TASK-1-153
 title: BUG-1436 cannot complete until a real Linux lock failure is captured
 description: 'Headless reproduction exhausted the currently available evidence: 1,000 direct test-binary runs at process parallelism 16 on Linux 7.0.0-30-generic (6 CPUs) produced 0 failures, and local artifact searches did not recover the original Linux panic. Acceptance requires the next real Linux failure’s ErrorKind and raw OS error, while explicitly forbidding a speculative fix. Keep BUG-1436 queued/in-progress and capture the verbatim panic when it next occurs.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T19:00:38.221497719Z
-modified_at: 2026-09-20T19:00:38.221497719Z
+modified_at: 2026-09-20T19:20:30.259373320Z
 req_type: Task
 tags:
 - awaiting-reproduction
@@ -16,3 +16,10 @@ tags:
 - kind:observation
 - linked:BUG-1436
 - severity:minor
+comments:
+- id: 01a0c043-4933-7a83-aaf1-17ffc0eaf701
+  author: joe
+  content: 'Dismissed by joe 2026-09-20: Discharged by disposition rather than triage. BUG-1436 is now deferred with the revisit trigger ''a real Linux tick-lock failure is captured in CI or in local artifacts, carrying the error kind and raw os error number'' — which is exactly what this finding said was missing. The observation was correct and it is now recorded where it acts (the defer trigger) rather than where it only waits (the findings queue).'
+  created_at: 2026-09-20T19:20:30.259373320Z
+  modified_at: 2026-09-20T19:20:30.259373320Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
