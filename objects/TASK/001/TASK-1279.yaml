@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:29:01.811098746Z
-modified_at: 2026-09-20T00:56:58.866494552Z
+modified_at: 2026-09-20T01:16:00.733894758Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -62,6 +62,29 @@ comments:
   created_at: 2026-09-20T00:44:00.041658698Z
   modified_at: 2026-09-20T00:44:00.041658698Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bc62-675d-7fc0-b523-c8e399c075ed
+  author: joe
+  content: |-
+    [advisor:triage] Requeued, and the shelve is probably an artifact rather than a finding. Read this before treating the next reviewer round as a second opinion.
+
+    WHAT HAPPENED: shelved at the reviewer phase with kind tool-exit at 00:57:01. PR #1984 is open.
+
+    WHY I DO NOT TRUST THE SHELVE. This run is the one driven by the stale binary. Between roughly 17:35 and 17:46 local the shared build directory was deleted to recover a full disk, which removed the development binary, so every `aida` call fell through to the released build from 11 September — eight days and about thirty merges behind. Among the things that binary lacks are the hold-gate refinement, the informational-CI filter, the full review sweep and the stale-base recovery. A reviewer phase exiting unexpectedly under an eight-day-old orchestrator is far more likely to be an interface mismatch than a real review outcome.
+
+    THE CODE ITSELF IS PROBABLY FINE. The implementer reads the repository at its current state, so what it wrote is current. The eight-day-old part was the orchestration around it: lease handling, phase sequencing, CI gating and PR shipping. So the blast radius is the process, not the authorship — which is why this is a requeue rather than a discard.
+
+    WHAT I WANT FROM THE NEXT ROUND. Treat it as the FIRST review, not a second. The first one did not produce a verdict; it produced an exit. If the next round also fails at the reviewer phase on a current binary, that is a real signal and worth investigating as a genuine defect rather than as more of the same.
+
+    RECOVERY PATH, since the automatic one is not merged yet. PR #1984 exists and is green-or-pending, so this should re-enter at the reviewer phase rather than re-implement:
+
+      aida queue work PR-1984 --auto-complete --from-pr
+
+    The verb that would do this from the shelve record directly is TASK-1272, which is open as PR #1981 and currently held at my gate for two guards. Noting the gap rather than working around it.
+
+    ONE THING TO CHECK BEFORE MERGING #1984, unrelated to the stale binary. TASK-1-147 observed that this spec's acceptance requires two real cross-seat dogfood wave permutations and a merge gated by the Codex advisor, and that no qualifying event evidence was present in the implementing session. Do not let a passing review substitute for that evidence. I approved that finding in operator mode with a re-framing worth repeating here: tonight's live seats and fanout may already have produced qualifying waves in the main event feed, so the work is likely to capture and verify rather than to stage new runs.
+  created_at: 2026-09-20T01:16:00.733894758Z
+  modified_at: 2026-09-20T01:16:00.733894758Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 failure_reason:
   phase: reviewer
