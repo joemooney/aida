@@ -23,35 +23,11 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0bb03-3ec2-7c40-9d51-80b0b22fbb2f
-  position: 92000
-  added_by: role:implementer
-  note: 'establish the cause (init-only vs refresh-skip vs symlink-skip vs never-run) before fixing; ADD a drift check for the discipline pack modelled on aida memories check, wired into doctor, reporting missing guides and dead README links; acceptance: this repo resolves every README link and reports clean'
-  added_at: 2026-09-19T19:24:52.409781454Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0bb79-a835-7f93-953b-a0c602afd8d9
-  position: 100000
-  added_by: role:implementer
-  note: wave start + QueueDrained state batch member count AND count of other approved specs routed to the role outside the batch; emit as event too; silent when zero; correct under the role fallback
-  added_at: 2026-09-19T21:01:56.634213530Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0ba82-9fb0-7763-a986-b54029980a2c
   position: 106000
   added_by: role:implementer
   note: 'round 2 after RequestChanges: reviewer prompt must carry the approach statement (generate_review_prompt reads title + acceptance only); the post-nothing rule for a spec with no parseable acceptance is missing from aida-pickup.md step 3d; share one constant for the ''## Implementer approach'' marker across both ends. Criteria 4-5 remain OUT of scope per the advisor''s binding scope decision — do not implement the advisor preview or the 20-spec measurement.'
   added_at: 2026-09-19T21:20:41.842654542Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0bae2-c5f6-7b50-9cf5-44e1e88e1b92
-  position: 108000
-  added_by: role:implementer
-  note: queue rework writes to the ROLE queue the drain reads (not the invoking user), printed next-step matches what was written, explicit --user still overrides; test asserts visibility to a batch drain; do NOT widen who may call rework
-  added_at: 2026-09-19T21:31:12.657121377Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
