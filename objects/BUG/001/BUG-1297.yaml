@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-20T07:38:18.955294421Z
+modified_at: 2026-09-20T07:38:22.943599769Z
 req_type: Bug
 tags:
 - agent-surface
@@ -87,3 +87,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-20T07:13:08.569486664Z
   implemented_by: joe
+failure_reason:
+  phase: merge
+  phase_index: 4
+  kind: tool-exit
+  detail: 'gh merge failed for PR-2006: refusing to merge PR-2006: supervised merge-hold — advisor hold: resolve_mailbox_thread distinguishes ambiguous from not-found by substring-matching the error prose; a reword drops an ambiguous prefix into the allow_new arm, silently creating a detached thread — the exact defect this PR fixes. Type the outcome.. A human/advisor must review, then clear the hold (`aida merge-hold clear 2006`) before merging. (attempt 2/2)'
+  recovery_hint: 'Investigate the merge failure: `gh pr view 2006`'
+  shelved_by: advisor
+  shelved_at: 2026-09-20T07:38:22.943599769Z
