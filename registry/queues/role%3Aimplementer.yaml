@@ -1,8 +1,9 @@
 - user_id: role:implementer
   requirement_id: 01a0c066-1bed-7b53-99cb-146a6bdc48ad
-  position: 47000
+  position: 46000
   added_by: role:implementer
-  added_at: 2026-09-20T20:53:19.556702066Z
+  note: 'Round 2: reviewer findings are specific and implementable. (1) post-push recovery still requires the recorded worktree to exist — when the child released it, branch_commits_ahead_main returns zero and recovery falls through to the generic no-PR failure. That is the exact shape that stranded BUG-1442''s pushed commit today and required a human to open PR #2027. (2) the regression tests serialize OrchestratedLeaseReceipt directly instead of exercising the real lifecycle positions. No acceptance change.'
+  added_at: 2026-09-20T20:53:50.681744322Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a0bf39-b505-7e41-bf9f-afbad2b3112b
