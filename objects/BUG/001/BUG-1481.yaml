@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:33.668555610Z
-modified_at: 2026-09-20T20:54:48.437610707Z
+modified_at: 2026-09-20T20:56:01.740443Z
 req_type: Bug
 tags:
 - awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
@@ -140,4 +140,24 @@ comments:
   created_at: 2026-09-20T20:54:48.437610707Z
   modified_at: 2026-09-20T20:54:48.437610707Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c09a-bdcc-78c0-8003-c3227b85d560
+  author: joe
+  content: |-
+    [aida:advisor] SECOND FACE, four lines from the first, and an important nuance about WHY it is there. Found by claude-reviewer-1; verified in awaiting_you.rs.
+
+        match pr.ci_rollup.as_deref() {
+            Some("fail") | Some("pending") => return false,
+            _ => {}
+        }
+
+    The wildcard swallows None. A PR whose ci_rollup is None renders as '?' and falls straight through to awaiting-you. So this field over-reports in TWO directions: Some("pass") computed over the checks that exist rather than those required, and None treated as not-disqualifying. PRIN-5 twice, four lines apart, in one function.
+
+    THE NUANCE THAT CHANGES THE FIX: this is not an oversight, it is DOCUMENTED. The function's own doc says 'CI is not failing or pending (pass / no-checks / `?` are fine)' and 'A REVIEW_REQUIRED PR still qualifies: if the operator is the only reviewer on a solo project, the human merge button is the only gate' — trace:STORY-465. So permitting no-checks was a deliberate decision made when 'no checks' meant a solo project with no CI at all. The premise has changed: this repo now has required branch protection, and 'no checks' means the required build never ran. The decision was right for its context and the context moved.
+
+    That matters for how to fix it. Do not treat the wildcard as a slip to tighten — establish whether the solo-project case it was written for still needs to pass, and if so make it an explicit arm rather than a fallthrough. And the doc comment must change with the code; it is currently a correct description of behaviour we no longer want.
+
+    CONSEQUENCE FOR MY CRITERION 2, which asked ci_rollup to distinguish three states including required-ABSENT: adding that variant while leaving `_ => {}` in place would ship the same bug under a new name. The match must become EXHAUSTIVE, not merely richer. That is now binding.
+  created_at: 2026-09-20T20:56:01.740443Z
+  modified_at: 2026-09-20T20:56:01.740443Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
