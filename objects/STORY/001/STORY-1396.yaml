@@ -1,0 +1,26 @@
+id: 01a0bff7-60ef-7e32-a657-72c255053626
+spec_id: STORY-1396
+agreed_id: STORY-1396
+title: 'Review PR-2024: [AI:codex] fix(pull): report stranded forge lookup failures (BUG-1432)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0bff3`) for branch `bug-1432-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2024>
+  - Branch: `bug-1432-work` → `main`
+
+  ## Covers
+
+  - BUG-1432
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2024` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T17:57:35.599138768Z
+modified_at: 2026-09-20T17:57:35.599138768Z
+req_type: Story
