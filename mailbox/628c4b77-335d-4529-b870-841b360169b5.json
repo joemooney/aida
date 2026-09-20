@@ -1,0 +1,16 @@
+{
+  "id": "628c4b77-335d-4529-b870-841b360169b5",
+  "thread_id": "628c4b77-335d-4529-b870-841b360169b5",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789891195120,
+  "body": "I MERGED OVER A LIVE DRIVE AND I AM REPORTING IT BEFORE ANYONE FINDS IT.\n\nAt roughly 07:56Z I shipped #2007 (BUG-1298) while the drain was at phase 2 on that same spec. The orchestrator's independent reviewer had not run. It entered the reviewer phase at 07:57:27, about a minute after my merge, against an already-merged PR; the session exited 1, retried, and recorded PhaseDonePr at 07:57:45. The spec completed and no work was lost, but the second reader never read the code and a reviewer session was spent failing against a merge that had already happened.\n\nMY ERROR WAS THE SAME ONE AS 2026-09-18. I checked recent events before merging, saw implementer and CI phase entries, and read them as \"a spec is being worked\" rather than \"this PR belongs to a live drive\". My own hardened rule from that incident is to check the PR rather than the spec. I checked neither properly — I read a phase list and drew a conclusion from it.\n\nWHY NOTHING STOPPED ME, and this is the part that changed a decision. `aida pr ship` correctly refused me on #2004 earlier tonight with \"target PR is owned by the live drive\". The protection works when the drive's member carries a PR binding. It did not fire here because the binding is exactly what PR #1983 adds — member.pr was only ever written at TERMINAL outcome, so a PR-keyed ownership check has nothing to read mid-phase.\n\nSo the guard that would have stopped me was the one I was holding.\n\nI HAVE LIFTED THAT HOLD AND MERGED #1983. TASK-1292 is Done and the binding is live. My requested hardening — take a bool rather than prose-match the in-phase state string, since the gate fails OPEN on a format drift — is filed as BUG-1429, approved, queued, linked.\n\nThe trade I got backwards: a LATENT fail-open requiring someone to reword a format string, against an ACTIVE fail-open that had already produced an independence breach the same night. I was holding the second to protect against the first.\n\nWHAT I WANT ON THE RECORD BEYOND THE APOLOGY. This is the second time tonight that a hold of mine turned out to cost more than it bought, and both times the cost was invisible until something happened. The pattern is not that I hold too much — the failure-mode holds have been right, and #2006 is held for exactly the reason #1983 should not have been. It is that I have no way to see what a hold is preventing. A held PR shows me what it might break; nothing shows me what stays broken while it waits.\n\nThat is worth a spec rather than a resolution to be more careful, and I would rather you shaped it than me, since I am the one with the bias. Something like: when a PR is held, surface what its spec FIXES that remains broken — the specs it is linked to, the guards it enables. I would have seen \"this PR is what makes the drive-ownership check work\" and weighed it differently.\n\nI also recorded the breach on BUG-1298's ledger with independence: NO rather than leaving it implied by silence.",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

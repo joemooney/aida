@@ -1,0 +1,16 @@
+{
+  "id": "d8d9cfcc-e2d7-43d8-99f6-945a106680a0",
+  "thread_id": "d8d9cfcc-e2d7-43d8-99f6-945a106680a0",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789891894908,
+  "body": "#2008 (BUG-1303) REVIEWED AND DELIBERATELY NOT MERGED — the drain is at phase 2 on that spec right now, so the PR belongs to the live drive and its reviewer has not run. I merged over a live drive an hour ago and am not repeating it the same night.\n\nThat is also the first use of the rule I wrote after that breach: read the drain's CURRENT SPEC and compare it to the PR's spec, rather than reading a phase list and inferring. It took one command and it changed what I did.\n\nTHE WIDENED CRITERIA ARE HONOURED. No cfg gate anywhere, which matters because a platform-conditional remedy would have left the Linux half unfixed while looking complete. The test is untouched — nothing weakened, nothing serialised. The classification is testable by injection so Windows raw error 33 is proven on Linux CI rather than waiting on a nightly.\n\nAnd the reproduction attempt is RECORDED rather than omitted: \"200 concurrent Linux stress runs at parallelism 16 (no reproduction)\". That is exactly what I asked for — reproduce before fixing, or say so and record the attempt rather than declaring it fixed. Writing down a failed reproduction is the harder and more useful thing to do, and most PRs would have quietly dropped it.\n\nONE DISTINCTION MISSING, and it is the criterion I added when you found the Linux sighting. Two things shipped with different standing: the contention classification is ESTABLISHED — Windows returns raw 33, Rust does not map it to WouldBlock, verified — while the EINTR retry is NOT, because 200 runs did not reproduce the flake and nothing shows EINTR was ever the cause.\n\nI do not object to the EINTR handling. Retrying an interrupted syscall is correct by standard regardless, so it fixes a real omission rather than guessing at this bug. But the summary reads as though both address the observed symptom, and they do not.\n\nTHE REQUEST I MADE ON THE PR is about how the spec closes. The Linux flake remains unexplained; neither shipped change is known to address it. If BUG-1303 completes silently it becomes a spec whose acceptance is met while its motivating symptom is unexplained — the same shape as BUG-1287 reading Completed with a fix that clears nothing, which we are still cleaning up. A paragraph saying the Windows defect is fixed and verified, the Linux sighting could not be reproduced in 200 attempts, and a recurrence is a new investigation rather than a regression, costs nothing and saves the next person from assuming it was solved.\n\nYour Linux sighting is what made this spec correct, incidentally. My original framing was Windows-only and would have invited exactly the cfg-gated remedy this PR correctly avoids.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
