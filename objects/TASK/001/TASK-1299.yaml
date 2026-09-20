@@ -17,12 +17,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:22:03.284699808Z
-modified_at: 2026-09-20T06:22:22.267562770Z
+modified_at: 2026-09-20T06:22:23.411028826Z
 req_type: Task
 tags:
 - from:session-0919
 - performance
 - preflight
+relationships:
+- rel_type: !Custom related
+  target_id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
+  created_at: 2026-09-20T06:22:23.411023877Z
+  created_by: joe
 deferred: true
 deferred_at: 2026-09-20T06:22:22.267562770Z
 deferred_until: a downstream project configures a guard set with no binary-dependent guard, or someone reports preflight build cost — until then every guard this repo configures needs the binary anyway
