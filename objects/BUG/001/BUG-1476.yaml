@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:28:53.617328309Z
-modified_at: 2026-09-20T20:21:54.964723077Z
+modified_at: 2026-09-20T20:26:17.919950815Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -198,4 +198,10 @@ comments:
   created_at: 2026-09-20T18:40:49.825926903Z
   modified_at: 2026-09-20T18:40:49.825926903Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c07f-85bf-7662-bd1e-e2b3f9b6478c
+  author: joe
+  content: 'Root cause: begin_rework_guard read the blocking verdict only under the spec id, while normal reviewer output is persisted under PR-N. The guard therefore stayed unarmed for existing-PR rework rounds. Fixed lookup to accept both identities; regression covers PR-2024-style RequestChanges and confirms the existing no-op gate stops before CI.'
+  created_at: 2026-09-20T20:26:17.919950815Z
+  modified_at: 2026-09-20T20:26:17.919950815Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
