@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:30:25.285712180Z
-modified_at: 2026-09-20T18:33:35.222623349Z
+modified_at: 2026-09-20T20:51:48.019731667Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -262,5 +262,37 @@ comments:
   content: 'Fourth instance, logged for the ledger rather than re-argued: BUG-1432 / PR-2024 at 18:32:51Z and 18:32:53Z, same verbatim message, same 2/2 burn, same tool-exit shelve. Ledger is now TASK-1298 (two runs), BUG-1310, BUG-1429, BUG-1432 — four specs, five runs, in roughly four hours. This one is notable only because it compounds with BUG-1476: the round that preceded the merge attempt did no work, so the drain burned its retries trying to merge a PR whose second round had produced nothing to merge.'
   created_at: 2026-09-20T18:33:35.222623349Z
   modified_at: 2026-09-20T18:33:35.222623349Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c096-deb3-7e62-a38c-ebc78241220b
+  author: joe
+  content: |-
+    NOT SUPERSEDED BY BUG-1435 — checked deliberately, because BUG-1435 merged today with a near-identical title and I had just filed one duplicate on exactly this kind of overlap.
+
+    BUG-1435: "The merge-hold classifier matches the refusal's own sentence, so a reword silently returns a supervised gate to burning both retries."
+    This spec: "A branch-protection refusal is classified as a merge conflict because both say not mergeable."
+
+    Same symptom, two different refusals, and BUG-1435 fixed the other one.
+
+    WHAT BUG-1435 LANDED (a8c1877576, forge.rs + lib.rs): a typed `MergeHoldRefusal` — "A supervised merge-hold deliberately refused a merge" — raised by AIDA itself before it shells out, carrying the PR and a `aida merge-hold clear {pr}` command. That types AIDA's OWN client-side hold so a reword cannot break its detection. Correct fix, wrong refusal for this spec.
+
+    WHAT THIS SPEC IS ABOUT IS STILL PRESENT ON MAIN. `is_merge_conflict_failure` was refactored to delegate to the shared token list, and the list is unchanged:
+
+        aida-core/src/external_tool_output.rs:24
+        pub const GH_MERGE_CONFLICT: &[&str] = &[
+            "not mergeable",                                 <-- the generic one
+            "merge conflict",
+            "merge commit cannot be cleanly created",
+            "conflicts must be resolved",
+        ];
+
+    GitHub's branch-protection refusal — "Pull request joemooney/aida#NNNN is not mergeable: the base branch policy prohibits the merge" — contains "not mergeable" and therefore still classifies as a retryable conflict. That is a FORGE-side refusal arriving in `gh pr merge` output, after AIDA's own hold check has already passed. BUG-1435's typed error is never reached for it.
+
+    So the two are complementary, not overlapping: BUG-1435 types the refusal AIDA raises, this spec fixes the refusal the forge returns.
+
+    THE ADVISOR ALREADY NAMED THE PRECISE FIX and it is still the right one: the three specific phrases carry the meaning and the generic one is what admits the false positive. The decision to make during implementation is whether "not mergeable" belongs in that constant at all, rather than adding a negative check at the call site — a call-site guard leaves the next caller of GH_MERGE_CONFLICT exposed to the same collision.
+
+    Ledger unchanged and still four specs, five runs: TASK-1298 (twice), BUG-1310, BUG-1429, BUG-1432.
+  created_at: 2026-09-20T20:51:48.019731667Z
+  modified_at: 2026-09-20T20:51:48.019731667Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
