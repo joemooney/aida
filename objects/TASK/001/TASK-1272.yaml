@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:02.542178535Z
-modified_at: 2026-09-20T17:05:34.106669718Z
+modified_at: 2026-09-20T17:10:37.419138869Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -56,6 +56,12 @@ comments:
   created_at: 2026-09-20T16:12:27.689183462Z
   modified_at: 2026-09-20T16:12:27.689183462Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bfcc-606b-78e3-a08e-73b3b4a8d538
+  author: joe
+  content: 'Codex resumed pickup 2026-09-20. Addressed PR-1981 advisor blockers in commit 5c7ea128cd: refuse stale historical shelves unless the requirement still has its current failure marker; clamp the recorded resume phase to no earlier than live PR reality; document AIDA_DRAIN_RESUME_PHASE; add regression coverage. cargo test -p aida-cli-lib drain_resume --lib: 27 passed; cargo fmt clean. Pushed and requested re-review. Current wait state: GitHub Build pending; aida:merge-hold remains and merge-hold-gate is expectedly failing. Left TASK-1272 in-progress and queued rather than falsely completing before review/merge.'
+  created_at: 2026-09-20T17:10:37.419138869Z
+  modified_at: 2026-09-20T17:10:37.419138869Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
   implemented: true
