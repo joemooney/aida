@@ -1,0 +1,44 @@
+id: 01a0bffa-b9bf-74d3-b83f-bd96812aed16
+spec_id: BUG-1468
+agreed_id: BUG-1468
+title: A PR's green check is never re-evaluated when a new required guard lands on main, so a fifteen-hour-old green was presented as ready to merge while it would have broken the build
+description: |
+  A PR's green build is evidence about the guards that existed WHEN IT RAN. Nothing re-evaluates that green when a new required guard lands on main, so a long-lived PR can present a passing required check that no longer means what a reader assumes.
+
+  OBSERVED TODAY on PR #1979 (TASK-1295):
+
+      00:00:19Z   Build (ubuntu-latest) started, completed 00:01:24Z → SUCCESS
+      14:58:29Z   BUG-1426 lands on main (PR #2018): the discipline-pack guard gains a
+                  CONTENT check; before it, the guard only verified the files existed
+      17:4xZ      PR #1979 still shows Build = SUCCESS, mergeable, held only on independence
+
+  The branch added 83 lines to `aida-core/templates/.aida/discipline/session-discipline.md` and did not touch the project copy `.aida/discipline/session-discipline.md`, which is not in `LOCALIZED_DISCIPLINE_GUIDES`. Post-merge the master would have been 418 lines against a 335-line project copy, and `templates::tests::project_discipline_pack_matches_master` would have failed ON MAIN.
+
+  The PR was presented to a human as green and ready to merge. Its green was fifteen hours older than the guard that would have caught it. Caught only because a seat happened to compare the two file lengths by hand before recommending the merge.
+
+  WHY THE OBVIOUS ANSWERS DO NOT COVER IT:
+
+  - Branch protection's "require branches to be up to date" would catch this, but it forces a rebase-and-rebuild on every PR for every main commit, which at this merge rate is most of the day's CI budget.
+  - `mergeable` is a git property and says nothing about guards.
+  - A human reading `gh pr checks` sees a green with a timestamp they have no reason to compare against anything.
+
+  The cheap version is not re-running CI — it is making the STALENESS VISIBLE at the moment a merge is proposed, so the reader knows the green predates guards now on main.
+
+  Acceptance:
+  - A merge-proposing surface (`aida pr ship`, the drain's merge phase, the awaiting/PR views) warns when a PR's newest required check completed BEFORE the base branch's current head, naming how far behind it is.
+  - The warning distinguishes "base moved" (common, usually harmless) from "a required check's DEFINITION changed since this build ran" (the dangerous case) where that is determinable — e.g. the workflow files or the guarded test changed on main since the check ran.
+  - `aida pr ship` refuses, or requires an explicit override, when the PR's green predates a change to the workflow or guard that produced it.
+  - Regression fixture reproduces the shape: a PR green at T, a guard-strengthening commit on main at T+1, the PR still reporting green at T+2.
+
+  Related: this is the same family as the report-vs-artifact discipline entry — a green check is a REPORT about a past state of the world, and the artifact it describes has since changed underneath it.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T18:01:14.943970052Z
+modified_at: 2026-09-20T18:01:14.943970052Z
+req_type: Bug
+tags:
+- ci
+- drain-safe
+- merge-safety
