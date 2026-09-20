@@ -115,6 +115,8 @@ mod load_cmd;
 mod lock_cmd;
 // trace:TASK-1140 | ai:claude — STORY-711 slice 2 automatic advisor-lock gate.
 mod locking_gate;
+// trace:STORY-1352 | ai:codex — versioned read-only monitor API.
+mod monitor_contract;
 // trace:TASK-974 | ai:claude — AXI #9 lifecycle-aware next-step help block.
 mod help_next;
 // trace:TASK-1098 | ai:claude — clap-derived `aida help commands` catalog.
@@ -3553,6 +3555,10 @@ fn run() -> Result<()> {
         return statusbar_cmd::handle_statusbar_command(*interval, *once, *plain, *restore_title);
     }
 
+    if let Command::Contract { json: _ } = &cli.command {
+        return monitor_contract::print_json();
+    }
+
     // `aida watch` is a read-only consumer of the slice-1 `.aida/events.jsonl`
     // stream (STORY-712): it tails the file, classifies each event in cheap
     // code, and wakes only on actionable verbs. It touches no store/backend, so
@@ -3560,6 +3566,7 @@ fn run() -> Result<()> {
     if let Command::Watch {
         emit_wakes: _,
         all,
+        json,
         verbose,
         once,
         backlog,
@@ -3571,6 +3578,7 @@ fn run() -> Result<()> {
             &project_root,
             &watch::WatchOpts {
                 all: *all,
+                json: *json,
                 // trace:TASK-994 | ai:claude
                 verbose: *verbose,
                 once: *once,
@@ -5093,6 +5101,7 @@ fn run() -> Result<()> {
             unreachable!("merge-hold is dispatched before storage init")
         }
         Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
+        Command::Contract { .. } => unreachable!("contract is dispatched before storage init"),
         // trace:TASK-1034
         Command::Integrate { .. } => {
             unreachable!("integrate is dispatched before storage init")
@@ -12897,6 +12906,7 @@ fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
             )
             | Command::Session(SessionCommand::Leases { .. } | SessionCommand::Show { .. })
             | Command::Schema { .. }
+            | Command::Contract { .. }
             | Command::Cache(CacheCommand::Status)
             | Command::Usage { .. }
             | Command::Plan(PlanCommand::Verify { fix: false, .. })
@@ -19594,6 +19604,7 @@ fn role_restore_prompt_should_skip(command: &Command) -> bool {
             | Command::Internal { .. }
             | Command::Statusline { .. }
             | Command::Statusbar { .. }
+            | Command::Contract { .. }
     )
 }
 

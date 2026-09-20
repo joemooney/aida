@@ -9599,6 +9599,12 @@ pub enum Command {
         #[clap(long)]
         all: bool,
 
+        /// Emit each event as its original JSON object. Requires --all; this is
+        /// the stable read-only follow feed for monitor consumers.
+        // trace:STORY-1352 | ai:codex
+        #[clap(long, requires = "all", conflicts_with = "verbose")]
+        json: bool,
+
         /// Live-debugging feed: implies --all, and stamps every line with the
         /// event's local wall-clock time plus the run correlation id, then
         /// appends the event's raw payload. For a human watching a drain — the
@@ -9618,6 +9624,14 @@ pub enum Command {
         // trace:TASK-146 | ai:claude
         #[clap(long)]
         backlog: bool,
+    },
+
+    /// Print the versioned read-only monitor contract.
+    // trace:STORY-1352 | ai:codex
+    Contract {
+        /// Emit the contract as JSON (the only supported representation).
+        #[clap(long)]
+        json: bool,
     },
 
     /// Operator alerts for stalled drains and escalations.

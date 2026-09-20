@@ -1,0 +1,1 @@
+{"name":"ps","command":"aida ps --json","fields":{"sessions":"array"}}

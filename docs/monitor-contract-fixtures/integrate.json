@@ -1,0 +1,1 @@
+{"name":"integrate","command":"aida integrate --json","fields":{"ready":"array","blocked":"array"}}
