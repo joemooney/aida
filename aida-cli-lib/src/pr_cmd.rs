@@ -1451,14 +1451,27 @@ pub(crate) fn pr_ship_handler(
         .is_some_and(|scope| drive_specs.contains(&scope));
     let caller_is_drive_seat =
         in_headless_drive || has_orchestrator_envelope || worktree_belongs_to_drive;
-    let pr_matches_drive_state = drive_state.as_ref().is_some_and(|state| {
-        state.members.iter().any(|member| {
-            member.state.starts_with("in-phase-") && member.pr == Some(pr_number as u32)
-        })
+    // TASK-1292: PR-keyed, not spec-keyed. Scan every drive member's LIVE
+    // phase binding for this PR number, regardless of which spec's run it
+    // belongs to — a reviewer phase bound to PR-N under spec A must block a
+    // ship of PR-N even when the drive's "current spec" is B. Before
+    // TASK-1292 this asked "does the drive's current spec own this PR",
+    // which missed exactly that sibling-spec case (2026-09-18 near-miss on
+    // PR #1948: the live reviewer was running under BUG-1236 while the
+    // drive's bookkeeping pointed at the shelved STORY-1221).
+    // trace:TASK-1292 | ai:claude
+    let reviewer_live_here = drive_state.as_ref().is_some_and(|state| {
+        pr_ship::reviewer_liveness_for_pr(
+            state
+                .members
+                .iter()
+                .map(|member| (member.state.as_str(), member.pr)),
+            pr_number as u32,
+        ) == pr_ship::ReviewerLiveness::OnThisPr
     });
     let hold_matches_drive_spec = crate::merge_hold::read_hold(&main_worktree, pr_number)
         .is_some_and(|reason| drive_specs.iter().any(|spec| reason.contains(spec)));
-    let pr_is_drive_owned = pr_matches_drive_state || hold_matches_drive_spec;
+    let pr_is_drive_owned = reviewer_live_here || hold_matches_drive_spec;
     let allow_in_drive = std::env::var("AIDA_PR_SHIP_ALLOW_IN_DRIVE")
         .map(|v| v == "1")
         .unwrap_or(false);

@@ -659,10 +659,29 @@ pub(crate) fn clear_run(project_root: &Path) {
 /// Best-effort — a missing file is a no-op. trace:STORY-301 | ai:claude
 #[allow(dead_code)] // compatibility wrapper; new drains use set_phase_with_tuning (STORY-1033)
 pub(crate) fn set_phase(project_root: &Path, spec: &str, phase_index: i32, phase_slug: &str) {
-    set_phase_inner(project_root, spec, phase_index, phase_slug, None, None);
+    set_phase_inner(
+        project_root,
+        spec,
+        phase_index,
+        phase_slug,
+        None,
+        None,
+        None,
+    );
 }
 
+/// TASK-1292: `pr` binds the member's `pr` field the moment the phase
+/// starts — not only once the member reaches a terminal outcome
+/// (`set_member_outcome`). `aida pr ship`'s PR-keyed drive-ownership check
+/// (`pr_ship::reviewer_liveness_for_pr`) reads this live binding, which is
+/// what lets it catch a reviewer phase running under a DIFFERENT spec than
+/// the one the caller thinks owns the PR (the 2026-09-18 sibling-spec
+/// near-miss: a reviewer live on PR-N under spec A did not stop a ship of
+/// PR-N driven under spec B). `None` leaves any previously-recorded `pr`
+/// untouched.
 // trace:STORY-1033 | ai:codex
+// trace:TASK-1292 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn set_phase_with_tuning(
     project_root: &Path,
     spec: &str,
@@ -672,6 +691,7 @@ pub(crate) fn set_phase_with_tuning(
     seat: Option<&str>,
     model: Option<&str>,
     effort: Option<&str>,
+    pr: Option<u32>,
 ) {
     set_phase_inner_with_tuning(
         project_root,
@@ -683,6 +703,7 @@ pub(crate) fn set_phase_with_tuning(
         seat,
         model,
         effort,
+        pr,
     );
 }
 
@@ -744,6 +765,11 @@ pub(crate) fn set_phase_session_vendor(
     announce: bool,
 ) {
     if announce {
+        // TASK-1292: this announce path never carries a `pr` of its own —
+        // it's the session/vendor tracking call, not a PR-binding call. Any
+        // PR binding for this phase happens separately via
+        // `set_phase_with_tuning`'s `pr` param, and `None` here leaves that
+        // binding untouched.
         set_phase_inner(
             project_root,
             spec,
@@ -751,6 +777,7 @@ pub(crate) fn set_phase_session_vendor(
             phase_slug,
             Some(session_id),
             Some(vendor.as_str()),
+            None,
         );
     } else {
         attach_phase_session(
@@ -800,6 +827,7 @@ fn set_phase_inner(
     phase_slug: &str,
     session_id: Option<&str>,
     vendor: Option<&str>,
+    pr: Option<u32>,
 ) {
     set_phase_inner_with_tuning(
         project_root,
@@ -811,6 +839,7 @@ fn set_phase_inner(
         None,
         None,
         None,
+        pr,
     );
 }
 
@@ -832,6 +861,7 @@ fn set_phase_inner_with_tuning(
     seat: Option<&str>,
     model: Option<&str>,
     effort: Option<&str>,
+    pr: Option<u32>,
 ) {
     let Some(mut state) = DrainState::read(project_root) else {
         return;
@@ -861,6 +891,14 @@ fn set_phase_inner_with_tuning(
             .started_at
             .get_or_insert_with(|| chrono::Utc::now().to_rfc3339());
         member.state = format!("in-phase-{phase_index}");
+        // TASK-1292: bind the PR live, the moment it's known, rather than
+        // only at the member's terminal outcome (`set_member_outcome`) — a
+        // reviewer phase's PR ownership must be visible to a concurrent
+        // `aida pr ship` call WHILE the review is in flight.
+        // trace:TASK-1292 | ai:claude
+        if pr.is_some() {
+            member.pr = pr;
+        }
     }
     let _ = state.write(project_root);
     // STORY-712: phase churn is the benign majority — emitted (so a `--all`
@@ -2008,6 +2046,7 @@ mod tests {
             Some("reviewer"),
             None,
             None,
+            None,
         );
         let entered: Vec<_> = crate::events::read_all(dir.path())
             .into_iter()
@@ -2041,6 +2080,7 @@ mod tests {
             "reviewer",
             Some("claude"),
             Some("reviewer"),
+            None,
             None,
             None,
         );
@@ -2085,6 +2125,7 @@ mod tests {
                 Some("reviewer"),
                 None,
                 None,
+                None,
             );
         }
         let attempts: Vec<u32> = crate::events::read_all(dir.path())
@@ -2118,6 +2159,7 @@ mod tests {
             Some("implementer"),
             None,
             None,
+            None,
         );
         set_phase_with_tuning(
             dir.path(),
@@ -2126,6 +2168,7 @@ mod tests {
             "reviewer",
             Some("claude"),
             Some("reviewer"),
+            None,
             None,
             None,
         );
@@ -2173,6 +2216,71 @@ mod tests {
             }
             other => panic!("expected PhaseEntered, got {other:?}"),
         }
+    }
+
+    // TASK-1292: set_phase_with_tuning binds the member's `pr` LIVE, at
+    // phase-entry, not only once the member reaches a terminal outcome —
+    // this is what `pr_ship::reviewer_liveness_for_pr` reads to gate
+    // `aida pr ship` while a reviewer is mid-review.
+    // trace:TASK-1292 | ai:claude
+    #[test]
+    fn set_phase_with_tuning_binds_pr_live_before_the_member_finishes() {
+        let dir = tempfile::tempdir().unwrap();
+        batch_state().write(dir.path()).unwrap();
+        set_phase_with_tuning(
+            dir.path(),
+            "STORY-285",
+            3,
+            "reviewer",
+            Some("claude"),
+            Some("reviewer"),
+            None,
+            None,
+            Some(1948),
+        );
+        let read = DrainState::read(dir.path()).unwrap();
+        let member = read.members.iter().find(|m| m.spec == "STORY-285").unwrap();
+        assert_eq!(member.state, "in-phase-3");
+        assert_eq!(
+            member.pr,
+            Some(1948),
+            "the PR must be bound while the member is still running, not only at set_member_outcome"
+        );
+    }
+
+    // TASK-1292 regression fixture (full drain_state round trip): a reviewer
+    // phase live on PR-N under spec A must be visible to a PR-keyed liveness
+    // check even though the drive's "current" bookkeeping points at a
+    // different, terminal sibling spec B — the 2026-09-18 near-miss shape.
+    // trace:TASK-1292 | ai:claude
+    #[test]
+    fn sibling_spec_reviewer_binding_is_visible_pr_keyed_not_spec_keyed() {
+        let dir = tempfile::tempdir().unwrap();
+        batch_state().write(dir.path()).unwrap();
+        // spec B (STORY-285) shelves out — terminal, no PR of its own.
+        set_member_outcome(dir.path(), "STORY-285", false, None);
+        // spec A (STORY-276) is live-reviewing PR #1948.
+        set_phase_with_tuning(
+            dir.path(),
+            "STORY-276",
+            3,
+            "reviewer",
+            Some("claude"),
+            Some("reviewer"),
+            None,
+            None,
+            Some(1948),
+        );
+        let read = DrainState::read(dir.path()).unwrap();
+        let liveness = crate::pr_ship::reviewer_liveness_for_pr(
+            read.members.iter().map(|m| (m.state.as_str(), m.pr)),
+            1948,
+        );
+        assert_eq!(
+            liveness,
+            crate::pr_ship::ReviewerLiveness::OnThisPr,
+            "PR-1948's live sibling-spec reviewer must be found regardless of which spec's run it belongs to"
+        );
     }
 
     // set_member_outcome marks completed/failed and records the PR.
