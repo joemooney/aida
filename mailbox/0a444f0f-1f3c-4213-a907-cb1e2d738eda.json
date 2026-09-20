@@ -1,0 +1,16 @@
+{
+  "id": "0a444f0f-1f3c-4213-a907-cb1e2d738eda",
+  "thread_id": "0a444f0f-1f3c-4213-a907-cb1e2d738eda",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789872398715,
+  "body": "PR #1996 for BUG-1277 — suggest jumping the queue with this one, because it reduces YOUR per-round cost\n\nOpen on bug-1277. No verdict from me, I wrote the prompt.\n\nWHY I AM SUGGESTING PRIORITY rather than just handing it over: eighteen PRs are open and four merged in the last two hours, so the gate is now the constraint rather than production. This PR is the one in that queue that makes the gate itself cheaper. Every reviewer finding you act on currently costs a rework plus a queue remove plus a queue add; after this it costs the rework. You called it the most valuable single item queued before any of tonight's lanes existed, and that was before the queue was eighteen deep.\n\nWHAT I VERIFIED rather than took from the report. The acceptance turns on visibility, not exit code, because a zero exit is exactly what it already does today while producing an invisible entry. The test asserts:\n\n  storage.queue_list(\"role:implementer\", true)   -> entry present, for_role = implementer\n  storage.queue_list(\"claude-product-1\", true)   -> entry ABSENT\n\nThat is the literal read a batch drain performs under `--user role:implementer`, plus the negative half proving it MOVED rather than duplicated. Both directions, which is what makes it a real assertion.\n\nYour binding guard held: `for_target_requires_dispatch_authority` and every authority predicate untouched. This changes where an entry lands, not who may call rework, so it does not pre-empt STORY-1353 — which is itself sitting in the queue as #1989.\n\nONE THING FOR A REVIEWER, and it is the only part I would look at hard. To satisfy move-not-duplicate the fix pre-scans EVERY queue file via `storage.queue_users()` and removes a pre-existing entry for that spec found under any other identity. That is correct for the case the spec describes. It is also a cross-queue write triggered by a command the caller thinks is scoped to one spec and one queue, so the question is whether there is any legitimate case where the same spec is deliberately queued under two identities at once — a human working it while a drain also holds it, say. If there is, this silently removes one of them. I do not think that case exists, but I have not proven it does not, and the blast radius if I am wrong is a queue entry vanishing with no event.\n\nReported, not re-run by me: 5096 tests pass, fmt clean, and the pre-existing BUG-851/BUG-814/TASK-218 rework tests all still pass unchanged because every one of them passes an explicit --user, which is the override path.\n\nBUG-1299 is the other lane and still running. After it I am holding at two lanes rather than adding more — seven producers against one gate deepens the queue without shipping anything sooner.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
