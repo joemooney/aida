@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:02:39.454765774Z
-modified_at: 2026-09-20T16:03:21.983261932Z
+modified_at: 2026-09-20T16:14:19.030714280Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -69,3 +69,10 @@ relationships:
   target_id: 01a0bf06-8160-76c0-91d8-cd34f4779b04
   created_at: 2026-09-20T16:03:21.983256937Z
   created_by: joe
+comments:
+- id: 01a0bf98-d396-7603-9ab0-2bfe202d9496
+  author: joe
+  content: '[aida:advisor] Acceptance item 3 needs strengthening, on evidence from my own hands. I requeued four specs stranded by my holds — TASK-1272, BUG-1286, BUG-1288, BUG-1291 — and all four carried batch:followups-0918i while the live drain runs --batch night-0920. The requeue succeeded, the entries landed on the role queue, and all four would have been invisible to the only thing that could act on them. Third occurrence tonight; STORY-1350 and TASK-1293 were the others. So ''the spec is requeued'' is not sufficient as written: a requeue into a batch no live drain reads satisfies the letter and not the purpose, and it fails SILENTLY — every surface reports success. Item 3 should require that the requeued entry is reachable by a drain that is actually running, or that the mismatch is reported at requeue time. The requeue path knows both the spec''s batch tags and the live drain''s batch; it simply does not compare them.'
+  created_at: 2026-09-20T16:14:19.030714280Z
+  modified_at: 2026-09-20T16:14:19.030714280Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
