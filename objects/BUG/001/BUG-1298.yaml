@@ -30,12 +30,12 @@ description: |
   5. An informational (non-required) job that is pending or failing never becomes the subject of the hint while a required check is the thing that actually shelved the spec.
 
   Found by the advisor seat triaging the BUG-1231 shelve; both run ids and their job lists verified against the PR check rollup before filing.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:03:17.289916672Z
-modified_at: 2026-09-20T07:38:30.845714173Z
+modified_at: 2026-09-20T07:44:39.643451522Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -60,3 +60,7 @@ relationships:
   created_at: 2026-09-19T23:12:09.618389490Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-20T07:44:39.643451522Z
+  implemented_by: joe
