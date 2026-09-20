@@ -24,12 +24,12 @@ description: |
   - A batch drain launched afterwards picks the spec up with no further commands.
   - An existing entry for the same spec under a different user is MOVED, not duplicated; a test covers the duplicate case.
   - --user still overrides and is honoured verbatim.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:16:59.126029963Z
-modified_at: 2026-09-20T06:41:31.948790022Z
+modified_at: 2026-09-20T07:18:33.766656022Z
 req_type: Bug
 tags:
 - dispatch
@@ -58,8 +58,24 @@ comments:
   created_at: 2026-09-20T02:45:25.074386019Z
   modified_at: 2026-09-20T02:45:25.074386019Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bdae-5404-7a51-87a7-386613578bb7
+  author: aida-auto-bump
+  timestamp: 2026-09-20T07:18:33.733050210Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0bdae-5426-7b82-bc80-0d233dbe442b
+  timestamp: 2026-09-20T07:18:33.766654248Z
+  agent: aida
+  commit_sha: 4dd24dcbe3d3f13dac732655e53e7ed15e7660f7
+  summary: Completed via merge 4dd24dcb
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T06:07:07.973882140Z
   implemented_by: joe
+  completed_at: 2026-09-20T07:18:33.732261533Z
+  completion_sha: 4dd24dcbe3d3f13dac732655e53e7ed15e7660f7
