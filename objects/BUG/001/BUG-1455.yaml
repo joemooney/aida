@@ -52,7 +52,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:25:14.620023337Z
-modified_at: 2026-09-20T19:26:27.618197780Z
+modified_at: 2026-09-20T21:27:02.282471009Z
 req_type: Bug
 tags:
 - drain-safe
@@ -156,4 +156,31 @@ comments:
     One detail for whoever implements it: the two hold-gate runs and the required build are all in the same rollup, so the emit has everything it needs to be accurate. The `green` field could report the required checks' aggregate and omit or separately name the supervised-hold gate, without changing any behaviour at all — the behaviour is already correct.
   created_at: 2026-09-20T19:26:27.618197780Z
   modified_at: 2026-09-20T19:26:27.618197780Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c0b7-218a-7240-8161-49ae4eba840f
+  author: joe
+  content: |-
+    RE-MEASURED against the running binary, as owed. The mechanism is unchanged between the wave binary c2b3c2f0c8 and current HEAD b09197ab72, so every observation on this spec stands.
+
+    The single emission site is byte-for-byte identical in both revisions (line 34687 vs 34772 — only the offset moved):
+
+        // Any non-InProgress probe is the terminal CI verdict.
+        // STORY-712: emit the actionable CiTerminal wake before returning.
+        // Best-effort, no control-flow change. trace:TASK-988 | ai:claude
+        _ => {
+            emit_ci_terminal(project_root, matches!(probe, CiProbe::Green { .. }));
+            return probe;
+        }
+
+    THE CODE DOCUMENTS THE DIVERGENCE AS INTENTIONAL, which is the part I had not appreciated and which sharpens what this spec should ask for.
+
+    `green` is computed as `matches!(probe, CiProbe::Green { .. })` — it reports 'the probe was not Green', not 'CI failed'. Any non-Green, non-InProgress probe emits `green=false`, including probes the drain then proceeds past. And the comment says plainly: 'Best-effort, no control-flow change.' The emission is deliberately decorative and the control flow is deliberately elsewhere.
+
+    So this is not a bug in the sense of code doing the wrong thing. The emission does exactly what it was written to do. The defect is that an event named CiTerminal with a boolean named green is read by consumers as a VERDICT, while the code treats it as a probe-shape annotation that explicitly does not bind the decision. Two readings of one field, and the consumers got the reasonable one.
+
+    That means the fix is probably not at the emission site. Either the field reports the drain's conclusion rather than the probe's shape, or the event is renamed to say what it actually is — a probe observation, not a terminal verdict. Widening `green: bool` to carry the probe variant would let a consumer distinguish 'failed' from 'not green for another reason' without changing any control flow, which keeps the best-effort property the comment is protecting.
+
+    Provenance for this check: running wave binary c2b3c2f0c8 (built 11:53:27), current HEAD b09197ab72, compared with `git grep` + `git show` on both revisions. Recording the binary explicitly because four orchestrator fixes merged today that the running drain does not contain, and I filed observations earlier without noting which binary produced them.
+  created_at: 2026-09-20T21:27:02.282471009Z
+  modified_at: 2026-09-20T21:27:02.282471009Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
