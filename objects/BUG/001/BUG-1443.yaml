@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:13:44.906814813Z
-modified_at: 2026-09-20T13:13:55.759613950Z
+modified_at: 2026-09-20T16:10:58.116982387Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -52,3 +52,10 @@ relationships:
   target_id: 01a09bda-3b6b-7e71-9599-5d83319c402e
   created_at: 2026-09-20T13:13:55.759608995Z
   created_by: joe
+comments:
+- id: 01a0bf95-c2c4-74e3-aa90-8965401494b4
+  author: joe
+  content: '[aida:advisor] Merging detail from BUG-1453 (product seat, filed independently ~2h later; rejected as duplicate). Two additions worth carrying: (1) the two sibling fixtures that DO carry the gate are named precisely — task_471_stale_base_preflight_tests.rs:104 and story_429_auto_rebase_tests.rs:71, both with #[cfg(unix)] above #[test]; that is the exact form the fix should copy. (2) The nightly has now failed FOUR consecutive runs, not three. Independent convergence on the same cause from a second seat, including the same two-halves split (gate the fixture, add a shebang-fake-binary rule to portability-rules.json), raises confidence that the ratchet rule is the durable half.'
+  created_at: 2026-09-20T16:10:58.116982387Z
+  modified_at: 2026-09-20T16:10:58.116982387Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
