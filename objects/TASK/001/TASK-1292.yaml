@@ -14,12 +14,12 @@ description: |-
   Acceptance: with a live reviewer phase bound to PR-N under spec A, aida pr ship N refuses even when the drive's current spec is B; with no live reviewer, an otherwise-ready PR ships as today; the escape env var still overrides and the override is printed; unit test on the pure decision (live reviewer on this PR / live reviewer elsewhere / none) and a fixture that the sibling-spec case refuses.
 
   Why it matters beyond the one incident: this is the merge gate. The advisor is the only actor allowed to release a supervised hold, so a gate that only sometimes fires is the one place where the independence rule can be lost silently — as it nearly was here, and the only reason it was caught is that the advisor re-read the verdict directory afterwards and found a verdict two minutes newer than its own merge.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:50:12.735351787Z
-modified_at: 2026-09-20T06:41:35.953545213Z
+modified_at: 2026-09-20T07:59:31.525228789Z
 req_type: Task
 tags:
 - drain-safe
@@ -47,8 +47,24 @@ comments:
   created_at: 2026-09-20T00:49:35.821340334Z
   modified_at: 2026-09-20T00:49:35.821340334Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bdd3-d4b9-7070-ba5d-f6a5335e067d
+  author: aida-auto-bump
+  timestamp: 2026-09-20T07:59:31.513081297Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0bdd3-d4c5-75e0-88d1-69b2413a72b9
+  timestamp: 2026-09-20T07:59:31.525227606Z
+  agent: aida
+  commit_sha: 1218b35d164a1d8e5a197b967a153f26d49cc716
+  summary: Completed via merge 1218b35d
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T06:07:15.324350931Z
   implemented_by: joe
+  completed_at: 2026-09-20T07:59:31.512766376Z
+  completion_sha: 1218b35d164a1d8e5a197b967a153f26d49cc716
