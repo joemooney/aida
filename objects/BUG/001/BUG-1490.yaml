@@ -1,0 +1,43 @@
+id: 01a0c099-577c-73c1-bbf3-e54a1a76da73
+spec_id: BUG-1490
+agreed_id: BUG-1490
+title: aida awaiting keeps listing a PR as awaiting-you after a reviewer records CHANGES REQUESTED, because it reads GitHub's reviewDecision and not AIDA's own verdict
+description: |-
+  Demonstrated live on PR #2030 this session, not reconstructed.
+
+  I recorded a refusal through the documented reviewer surface:
+
+      aida review record BUG-1485 --verdict request-changes --pr 2030
+      .aida/review-verdicts/PR-2030.json  ->  "verdict": "RequestChanges"
+
+  Three minutes later aida awaiting still listed it:
+
+      prs[2]{number,title,ci}:
+        2030,"[AI:codex] fix(orchestrator): preserve child lease handoff (BUG-1485)",?
+
+  ROOT CAUSE - aida-cli-lib/src/awaiting_you.rs, is_awaiting_you (~line 670):
+
+      let verdict = pr.review_decision.as_deref().unwrap_or("").to_ascii_uppercase();
+      if verdict == "CHANGES_REQUESTED" { return false; }
+
+  pr.review_decision is GITHUB\047s reviewDecision. On #2030 it is empty - I refused the PR in the AIDA substrate and never posted a GitHub review, which is the normal reviewer workflow here. So the suppression can never fire for an AIDA-recorded refusal.
+
+  WHY THIS IS MERGE-SAFETY AND NOT COSMETIC. The substrate DOES hold and enforce the verdict elsewhere: queue_cmd.rs reads it through review_verdict::read_recorded_verdict_any and evaluate_review_verdict_gate, and aida queue done refuses while the branch sits at the refused commit. So one surface enforces the refusal and the READINESS surface ignores it. Another seat reading aida awaiting sees a refused PR presented as awaiting-you and mergeable, with no indication a reviewer has already said no. The reviewer did everything the documented workflow asks and the coordination inbox still advertises the work as ready.
+
+  TWO RECORDS OF ONE FACT, AND THE SURFACE READS THE WRONG ONE. This is not the PRIN-5 absence problem - the evidence is present, it is just being sought in the forge rather than in the substrate that owns it. That makes it a distinct defect from BUG-1481, though both live in this function and both make awaiting over-report readiness.
+
+  ## Acceptance
+
+  - is_awaiting_you suppresses a PR when AIDA has a recorded RequestChanges/Rejected verdict for it, independent of GitHub reviewDecision. Read the verdict through the same review_verdict helpers queue done already uses, so the two surfaces cannot disagree about what a refusal is.
+  - A GitHub CHANGES_REQUESTED continues to suppress as it does today; the two sources are unioned, not swapped.
+  - The recorded verdict is honoured only when it applies to the CURRENT head. A verdict recorded against an older commit must not suppress a PR that has since been pushed to - this depends on BUG-1466, which is why these two should land in an order where this one does not encode the missing-sha behaviour as acceptable.
+  - A test covers the exact shape observed: an open MERGEABLE PR with empty GitHub reviewDecision and an AIDA RequestChanges verdict at the current head, asserting it is NOT classified as awaiting-you. Every existing test in this module constructs review_decision directly via the pr() helper and never consults a verdict file, so no assertion added to them reaches this path.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T20:54:30.012636986Z
+modified_at: 2026-09-20T20:54:30.012636986Z
+req_type: Bug
+tags:
+- awaiting review verdicts merge-safety prin-5 from:review-pr-2030
