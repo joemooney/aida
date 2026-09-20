@@ -3,13 +3,13 @@ spec_id: TASK-1303
 agreed_id: TASK-1303
 title: 'Session-discipline report-vs-artifact entry: add the pinning rule and correct the two command caveats'
 description: |
-  Follow-up to TASK-1302 / PR #2023, which is approved and merged. Five additions to the "Verify against the artifact that ships" section of the session-discipline guide. Master first, then mirror to the project copy - the two are required byte-identical by the discipline-pack parity test.
+  Follow-up to TASK-1302 / PR #2023, which is approved and merged. Five additions to the \"Verify against the artifact that ships\" section of the session-discipline guide. Master first, then mirror to the project copy - the two are required byte-identical by the discipline-pack parity test.
 
   1. THE PINNING RULE (the advisor flagged this on TASK-1302 as a follow-up rather than a round; recording it here so it survives).
-  An artifact reference must be PINNED, not re-derived: capture the identifier and its content in the same operation, and quote that identifier. A head can move between two individually-correct commands a minute apart and both readings will look authoritative. This is the gap the table does not close - its first row recommends "git show HEAD:<path>" and HEAD is exactly the thing that can move underneath you.
+  An artifact reference must be PINNED, not re-derived: capture the identifier and its content in the same operation, and quote that identifier. A head can move between two individually-correct commands a minute apart and both readings will look authoritative. This is the gap the table does not close - its first row recommends \"git show HEAD:<path>\" and HEAD is exactly the thing that can move underneath you.
 
   2. THE RECOMMENDED COMMAND EXITS 1 ON THE CLEAN CASE.
-  Verified empirically: grep -c with that alternation returns count 0 and exit status 1 when no markers are present, and exit 0 with a count when they are. The SUCCESS outcome therefore looks like a failure to set -e or to any caller checking the pipeline status. This matters more than usual here because the entry is scaffolded to downstream projects and the command will be pasted into scripts, and because an entry whose thesis is "a step report can mislead" should not ship a check whose exit status misleads. Either note the inversion inline or recommend a form that does not invert, for example piping to a count comparison rather than relying on the grep exit.
+  Verified empirically: grep -c with that alternation returns count 0 and exit status 1 when no markers are present, and exit 0 with a count when they are. The SUCCESS outcome therefore looks like a failure to set -e or to any caller checking the pipeline status. This matters more than usual here because the entry is scaffolded to downstream projects and the command will be pasted into scripts, and because an entry whose thesis is \"a step report can mislead\" should not ship a check whose exit status misleads. Either note the inversion inline or recommend a form that does not invert, for example piping to a count comparison rather than relying on the grep exit.
 
   3. THE MARKER REGEX FALSE-POSITIVES ON MARKDOWN.
   Verified empirically: the ^=======$ branch matches a markdown setext heading underline of exactly seven equals signs, reporting count 1 and exit 0 on a file with no conflict at all. The incident the entry documents was a conflict in a markdown discipline file containing a table, so this is the exact file class the advice targets. It fails safe by over-reporting, so this is precision rather than correctness - but a one-line caveat costs nothing.
@@ -17,12 +17,12 @@ description: |
   4. THE THREE NARROWING CLAUSES, as ONE section with the relationship stated.
      - FILTER / narrowing in SPACE: checking the artifact rather than the step's report does not help if you then look only at the part of the artifact you already believe. A grep, a jq selector, a --json field list, a 2>/dev/null and a head are all filters. The test: could the filter have returned anything other than what you expected? A filter can also change what the instrument DOES, not only what you see of it - a piped read that suppresses a write is the case that proves it.
      - PRE-REGISTRATION / narrowing in TIME: when you can state what an outcome will look like, state it before you look, and state separately what it will NOT establish. An explanation formed after the evidence fits by construction.
-     - SOURCE / narrowing in SOURCE: knowing WHICH ARTIFACT holds the fact is prior to reading it correctly. Reading the right file correctly, when it is not the whole record, produces a confident wrong answer no care in the reading would catch. Worked case: a verdict appeared destroyed because the PR-keyed handshake was overwritten; the spec-keyed record written by the same command was intact. Code instance the same day: a coordination surface reading the forge's review decision correctly while the refusal lived in the substrate.
+     - SOURCE / narrowing in SOURCE: knowing WHICH ARTIFACT holds the fact is prior to reading it correctly. Reading the right file correctly, when it is not the whole record, produces a confident wrong answer no care in the reading would catch. Worked case: a verdict appeared destroyed because the PR-keyed handshake was overwritten; the spec-keyed record written by the same command was intact. Code instance the same day: a coordination surface reading the forge's review decision correctly while the refusal lived in the substrate. THIRD instance, on WRITING rather than reading: three binding items were recorded as comments whose opening words asserted they were acceptance, while the description's acceptance section did not contain them. A spec queued for automation would have shipped without them. The self-certifying form is what hid it - a comment that says "putting this in acceptance" reads as done to anyone skimming, including its author moments later, the same shape as a doc comment that certifies the code beneath it. The verification move is the same as for reading: after writing a binding item, read the spec back and confirm the words are in the section that binds, not in the one you just wrote.
   None of the three is detectable by reading more carefully, which is what makes all three rules rather than cautions.
   ACTIONABLE HALF of the source clause: when a write produces more than one artifact, establish the full set before concluding anything about the record.
 
   5. A TEST YOU HAVE NEVER OBSERVED FAIL IS NOT YET EVIDENCE - one line under the existing CI row, generalising it from jobs to any check.
-  The operational form is what makes it a requirement rather than an aspiration: revert the change with the test in place and show it red. "The test must be capable of failing" is a property nobody can check by looking. Limiting case, same day: a test named for the production path it claimed to guard used include_str! on its own module and split_once on two markers whose first occurrences were its own string literals; it scanned ~93 characters of itself and passed identically before the fix, after the fix, and with the fix reverted.
+  The operational form is what makes it a requirement rather than an aspiration: revert the change with the test in place and show it red. \"The test must be capable of failing\" is a property nobody can check by looking. Limiting case, same day: a test named for the production path it claimed to guard used include_str! on its own module and split_once on two markers whose first occurrences were its own string literals; it scanned ~93 characters of itself and passed identically before the fix, after the fix, and with the fix reverted.
   AND THE SHARPER FORM, which justifies ADDING a test rather than trusting the suite you have: a mutation that breaks everything demonstrates nothing. Showing a test red establishes it CAN fail. Showing it red under a mutation narrow enough that the rest of the suite survives establishes it catches something NO OTHER TEST catches - a different and stronger claim. Worked case: a first mutation removed a filter from both branches of a lookup and broke the pre-existing positive test too, proving nothing about the new test's contribution; narrowing the mutation to one branch left the positive test green and the new test red.
 
   ## Acceptance
@@ -37,12 +37,13 @@ description: |
   - The setext false-positive is noted, or the regex is tightened so a markdown heading underline does not match.
   - Master and project copy remain byte-identical and project_discipline_pack_matches_master still passes.
   - No SPEC-IDs appear in the guide text, since it is scaffolded downstream.
+  "
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:28.168866180Z
-modified_at: 2026-09-20T23:46:28.959570971Z
+modified_at: 2026-09-20T23:58:05.914902589Z
 req_type: Task
 tags:
 - batch:night-0920
