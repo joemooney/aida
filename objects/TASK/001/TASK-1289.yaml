@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T21:56:14.481128966Z
+modified_at: 2026-09-20T03:02:35.178636636Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -676,6 +676,31 @@ comments:
     PROCESS NOTE ON MYSELF. I read this diff and approved it. The reviewer read the same diff and refused it. That is the second time this wave the reviewer has been right where I was not, and it is the argument for the independence rule stated better than I could state it: I had already formed a view of what this PR was for, and I checked whether the code matched that view rather than whether the code could fail. The hold on PR #1972 stays until a round at the new head comes back clean.
   created_at: 2026-09-19T21:56:14.481128966Z
   modified_at: 2026-09-19T21:56:14.481128966Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bcc3-f9aa-7d80-a4ee-7d6efe91a200
+  author: joe
+  content: |-
+    [advisor:unstick] STRANDED, not waiting its turn — and it is a live instance of the class BUG-1291 names. Flipped In Progress → Approved so the drain's ready-set can see it.
+
+    THE STATE IT WAS IN. `aida status TASK-1289` reports:
+
+      ◐ In Progress
+      ⚠ flag-only — status is In-Progress but no live session is linked to this spec
+      Why it's parked: verdict:request-changes at reviewer
+
+    So: marked In Progress, no session, no lease, queued for implementer, and a reviewer has requested changes on its open PR. That combination is invisible to a drain. The queue entry exists but the ready-set skips the spec because its status says someone is already working it, and nobody is. It sat that way for about five hours while I assumed it was queued behind a 27-deep batch.
+
+    WHY THE FLIP IS THE HONEST FIX RATHER THAN A NUDGE. The standing rule here is that a spec goes In Progress at dispatch because the substrate must not lie about what is being worked. The corollary is the part that bit: In Progress with no live session IS the substrate lying, and leaving it there to preserve an audit trail trades a true record for a stuck spec. Approved plus the existing queue entry plus the open PR is the accurate description — work exists, nobody holds it, a reviewer is waiting on a fix.
+
+    THE REWORK THIS NEEDS, restated so the next session does not re-derive it from the PR thread. The preflight guard fails OPEN at three sites. `decide()` collects only `GuardResult::Failed`, while `Skipped` is produced at :288 when the worktree binary is unavailable, :305 on timeout and :306 when the guard command cannot start. All three return `PreflightDecision::Open`. I re-checked the PR head just now — still 41d4cfdd, unchanged since the review, so none of this has landed.
+
+    :288 is the one that matters most: it fires when the worktree binary cannot be built, which is exactly the condition this spec exists to prevent. Under the current code the guard is skipped and the PR opens anyway, so the feature is silently absent in its own motivating scenario.
+
+    The fix is a distinction, not a new refusal rule. Keep skipping for "this guard does not apply here" — an unknown or missing configured name. Refuse for "this guard was supposed to run and did not" — the three sites above. `decide()` must tell them apart without string-matching the note text, because that is the BUG-1295 shape and would be a fresh instance of it in new code. The existing timeout test currently asserts `Skipped`, which means it asserts the bug, so it must be updated rather than left beside a new one.
+
+    I am recording this as evidence on BUG-1291 as well: its success condition is that a spec cannot end up simultaneously queued, statused as in-flight, and unowned. This one did, and nothing reported it.
+  created_at: 2026-09-20T03:02:35.178636636Z
+  modified_at: 2026-09-20T03:02:35.178636636Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
