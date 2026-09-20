@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:07:25.301380079Z
-modified_at: 2026-09-20T01:12:56.640033716Z
+modified_at: 2026-09-20T01:15:13.685053671Z
 req_type: Bug
 tags:
 - drain-safe
@@ -105,6 +105,30 @@ comments:
   created_at: 2026-09-20T00:52:37.825878892Z
   modified_at: 2026-09-20T00:52:37.825878892Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bc61-af95-73f3-88b1-9d21297e3133
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1985 [AI:claude] fix(events): stop reviewer-phase session attach from re-announcing
+    verdict: APPROVE + merged 2026-09-20 01:12:53Z at head 9e8ec681
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes, with one caveat stated below
+    gates cleared: required Build (ubuntu-latest) SUCCESS; merge-hold-gate SUCCESS; no live reviewer on any spec at merge time (drain was on STORY-1352 phase 1); mergeable clean
+
+    WHAT I VERIFIED MYSELF rather than taking from the report:
+
+    The doc comment claims the attempt counter keys on (spec, phase). The implementation agrees: same_entry is state.current == spec AND state.current_phase == phase_label, so a different spec entering the same phase slug resets to 1 rather than inheriting its predecessor's count. I checked this specifically because a comment describing a narrower key than the code uses is the exact shape of the class this spec belongs to.
+
+    The root cause matches the fingerprint that predicted it. mark_drain_phase_session was called twice per reviewer-style phase — once to announce, once later purely to attach the headless session id — and the second call could never carry a seat. That is why 292 of 292 second-of-pair events lacked the field. The announce flag splits the two shapes so only the sole entry point emits.
+
+    THE TEST SET COVERS THE FAILURE DIRECTIONS, not just the fix: exactly one emission per entry; an attach after an announce does not re-announce; a retry still emits a second event with an incremented attempt; a new phase resets the attempt; and a seat-less phase-1 entry survives as the only emission.
+
+    That last one is the negative guard I asked for during grooming, and it is the one that mattered. The obvious fix here was to drop PhaseEntered events lacking a seat, which would have been a second wrong fix inside the spec filed to prevent the first — 120 legitimate first-of-pair events also lack the field, because a seat is genuinely unknown at phase 1. It is tested rather than merely avoided.
+
+    INDEPENDENCE CAVEAT, recorded because it is structural rather than about this PR. I did not implement this and did not write its brief; I wrote one negative acceptance criterion during grooming, which is ordinary advisor work. But this PR came from a fanout lane, so no orchestrator reviewer ever ran on it. The drain path gives implementer then reviewer then advisor; the fanout path gives implementer then advisor. One fewer gate, and I am the only reader of the code. That is acceptable for a supervised afternoon and it is the reason the fanout was wound down rather than left running unattended — but it should not be invisible, so it is written here rather than inferred later from the absence of a verdict file.
+  created_at: 2026-09-20T01:15:13.685053671Z
+  modified_at: 2026-09-20T01:15:13.685053671Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bc5f-9838-7b00-b1f1-bfab781bf2ad
   author: aida-auto-bump
