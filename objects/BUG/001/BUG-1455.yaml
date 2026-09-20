@@ -52,7 +52,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:25:14.620023337Z
-modified_at: 2026-09-20T19:10:02.050283247Z
+modified_at: 2026-09-20T19:26:27.618197780Z
 req_type: Bug
 tags:
 - drain-safe
@@ -135,4 +135,25 @@ comments:
     What is worth noting regardless of that outcome: the hold gate concludes in two to four seconds by construction, and the required build takes ten minutes. On any held PR the gate will always be the first check to conclude, so if terminality is decided on whatever has concluded, the gate always decides. That is a structural property, not a race.
   created_at: 2026-09-20T19:10:02.050283247Z
   modified_at: 2026-09-20T19:10:02.050283247Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c048-bd22-7af0-b737-6506e78dabf7
+  author: joe
+  content: |-
+    OUTCOME, appended as the previous comment asked. The drain did NOT act on the premature `green=false`.
+
+        19:08:28  PhaseEntered ci
+        19:09:00  CiTerminal green=false        <-- emitted while Build was still running
+        19:20:19  Build (ubuntu-latest) SUCCESS <-- the real build finishes, green
+        19:21:03  PhaseEntered reviewer         <-- 44 seconds later
+        19:25:49  SpecShelved verdict:request-changes
+
+    The drain waited twelve minutes after emitting `green=false` and entered the reviewer forty-four seconds after the required build actually completed green. It then shelved on a genuine reviewer verdict about the code, not on CI.
+
+    So this spec's scope, as narrowed after the earlier retraction, is exactly right and is now confirmed twice — BUG-1291 and BUG-1441 both proceeded past the emitted red. The defect is that `CiTerminal green=false` is emitted on a partial rollup and then contradicted by the drain's own subsequent behaviour. Nothing downstream acts on it.
+
+    That makes this a telemetry-accuracy bug and nothing more, which is where I left the priority after the retraction. Anyone reading the event stream — `aida tail`, the monitor, a forensic pass — sees "CI terminal, not green" at 19:09 and would conclude the pipeline stopped on red CI. It did the opposite: it waited for the real result and proceeded on it. The diagnostic states the opposite of the decision, which is the PRIN-4 violation, and it is worth fixing for exactly that reason and no larger one.
+
+    One detail for whoever implements it: the two hold-gate runs and the required build are all in the same rollup, so the emit has everything it needs to be accurate. The `green` field could report the required checks' aggregate and omit or separately name the supervised-hold gate, without changing any behaviour at all — the behaviour is already correct.
+  created_at: 2026-09-20T19:26:27.618197780Z
+  modified_at: 2026-09-20T19:26:27.618197780Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
