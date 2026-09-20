@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-20T20:30:56.101687451Z
+modified_at: 2026-09-20T20:37:52.219223685Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -119,4 +119,10 @@ comments:
   created_at: 2026-09-20T20:21:03.665396564Z
   modified_at: 2026-09-20T20:21:03.665396564Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c08a-1ddb-7692-8ceb-ea9b09ef6b07
+  author: joe
+  content: 'Implemented a durable session-keyed orchestrator handoff receipt written immediately after queue-work creates the lease. Phase 1 falls back to that exact receipt if the child removes its live lease before the parent resumes, preserving branch/worktree recovery for pushed work. Unmatched diagnostics now name the missing lease/receipt and ignore unrelated active lease IDs. Regression coverage pins both the immediate-exit (BUG-1445) and post-push (BUG-1442) positions. Verified: 5 discover_lease tests, 17 queue_work_resume_tests, cargo fmt --check, git diff --check.'
+  created_at: 2026-09-20T20:37:52.219223685Z
+  modified_at: 2026-09-20T20:37:52.219223685Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
