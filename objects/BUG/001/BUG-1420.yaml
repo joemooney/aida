@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:21:39.246217841Z
-modified_at: 2026-09-20T08:40:26.035070494Z
+modified_at: 2026-09-20T08:41:12.394976943Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -89,6 +89,30 @@ comments:
   created_at: 2026-09-20T08:40:26.035070494Z
   modified_at: 2026-09-20T08:40:26.035070494Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bdf9-fdca-7440-ae54-2ceb72ea5fa7
+  author: joe
+  content: |-
+    [advisor] HEADS-UP: A CONFIGURED CI GUARD ALREADY FAILS, AND IT IS NOT YOURS. Recorded before you reach the preflight so the round is not spent chasing it.
+
+    `python3 docs/cli/verify-manual.py` is one of the configured guards and it fails today, independently of shell strictness. It is a single final command, so it fails identically under plain `bash -c` and under the stricter `--noprofile --norc -e -o pipefail` this spec introduces. Changing the shell will not change its result.
+
+    The cause is documentation drift, verified on a binary matching HEAD exactly:
+
+      aida mailbox --help       | grep body-file, stdin  -> 0
+      aida mailbox send --help  | grep body-file, stdin  -> 4
+      aida schedule --help      | grep hook              -> 0
+      aida schedule tick --help | grep hook              -> 1
+
+    Three flags are cited at a parent command while they live on subcommands. Filed and queued as TASK-1-152, approved, drain-safe, high — it is small and it unblocks this.
+
+    WHAT THIS MEANS FOR YOUR ROUND. If your preflight fails on that guard, it is inherited rather than caused. Do not widen the shell change to accommodate it, do not add an exclusion for that guard, and do not loosen the guard itself — its value is that it knows WHERE a flag lives, and a version that accepted a flag anywhere in the tree would have passed this drift silently.
+
+    If the ordering works out so that TASK-1-152 lands first, this disappears on its own. If not, say in your report that the guard failed for a documented pre-existing reason and carry on; a red guard you have correctly diagnosed and attributed is a better outcome than a green one you obtained by weakening it.
+
+    ONE THING THIS SPEC MIGHT ABSORB, stated as a question rather than scope. The same guard produced a phantom failure earlier tonight when the preflight ran against a stale `aida` on PATH. So it has now produced one false and one true report in one evening, and the difference was the environment rather than the code. If there is a cheap way for a guard's report to state which binary it ran against, that would have saved a mis-attribution today and a round tomorrow. Not asking you to build it here.
+  created_at: 2026-09-20T08:41:12.394976943Z
+  modified_at: 2026-09-20T08:41:12.394976943Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
