@@ -1,0 +1,48 @@
+id: 01a0bf93-88f1-7172-8265-b98c21bd36ce
+spec_id: BUG-1453
+agreed_id: BUG-1453
+title: 'Cross-platform nightly red 3 nights on one ungated test fixture: a shebang fake gh binary cannot execute on Windows, and the portability ratchet has no rule for that class'
+description: |
+  The cross-platform nightly has been red for three consecutive nights (runs 35501330917, 35502040911, 35505417293, 35506914381 — the last four are all failure). macOS is green every time. Windows fails on exactly one assertion out of 5092 passing tests:
+
+      aida-cli-lib\src\tests\auto_bump_done_tests.rs:2080
+      PR closed without merging should reject the review spec, was Approved
+
+  This is not a product defect. `auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup` (added by TASK-1296) calls `write_fake_gh_for_pr_states`, which writes a `#!/usr/bin/env bash` script to `<root>/gh` — no extension — and chmods it under `#[cfg(unix)]`. Windows cannot execute a shebang script through `CreateProcess`: it needs `.exe`, `.bat`, `.cmd`, or a registered association. So `AIDA_TEST_GH_BINARY` points at an unrunnable file, the forge lookup finds nothing, every seeded spec stays Approved, and the first assertion fires.
+
+  The repo already has a convention for this. Sibling tests that shell out to a shebang fake carry `#[cfg(unix)]` immediately above `#[test]` — see `task_471_stale_base_preflight_tests.rs:104` and `story_429_auto_rebase_tests.rs:71`. TASK-1296's test is the one that omitted it.
+
+  This matters beyond tidiness: releases require cross-platform green within 24h of tagging (`scripts/pre-release-check.sh` blocks on it), so a single ungated test fixture currently blocks every release.
+
+  Two halves, and the second is the one that stops this recurring.
+
+  HALF 1 — restore the nightly.
+  Gate the test the way its siblings are gated. If the Windows coverage of the forge-lookup path is judged worth keeping, the alternative is to make `write_fake_gh_for_pr_states` emit a `gh.cmd` batch wrapper on Windows and return that path; take this option only if it can be done without a second fixture format to maintain. Do not weaken the assertion.
+
+  HALF 2 — make the ratchet catch the next one.
+  `scripts/portability-rules.json` is a count-ratchet of regexes over Rust source, and it has no rule for this class even though it is the exact class it exists to catch. Add:
+
+      {"id": "shebang-fake-binary", "label": "shebang script as fake binary",
+       "regex": "#!/usr/bin/env (?:bash|sh)|#!/bin/(?:ba)?sh"}
+
+  and baseline the current count in `scripts/portability-allowlist.txt`. A regex cannot verify that the enclosing test carries `#[cfg(unix)]` — that is fine and is not what this rule is for. Its job is to make adding a new shebang fixture a deliberate act that fails PR CI until someone confirms the gate, which is precisely the decision TASK-1296 skipped.
+
+  Acceptance:
+  - The Windows leg of `cross-platform.yml` passes on a dispatched run against the fix branch.
+  - A newly added `#!/usr/bin/env bash` literal in Rust source fails `scripts/check-portability.sh` until the allowlist count is raised.
+  - The existing 15 files carrying shebang literals are baselined, not rewritten.
+  - `cargo test -p aida-cli-lib` still runs the forge-lookup test on Linux.
+
+  Verification is not fully local: after the PR is green on Linux, dispatch `gh workflow run cross-platform.yml --ref <branch>` and confirm the Windows job passes before calling it done.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T16:08:32.241242234Z
+modified_at: 2026-09-20T16:08:32.241242234Z
+req_type: Bug
+tags:
+- ci
+- drain-safe
+- papercut
+- portability
