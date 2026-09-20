@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:33.668555610Z
-modified_at: 2026-09-20T20:01:29.915090506Z
+modified_at: 2026-09-20T20:54:48.437610707Z
 req_type: Bug
 tags:
 - awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
@@ -115,4 +115,29 @@ comments:
   created_at: 2026-09-20T20:01:29.915090506Z
   modified_at: 2026-09-20T20:01:29.915090506Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c099-9f75-7092-a86e-392715b3620c
+  author: joe
+  content: |-
+    [aida:reviewer] A SECOND ABSENCE-READS-AS-FINE FIELD IN THE SAME FUNCTION, observed live on PR #2030. Not a new spec — same defect, same function, different field.
+
+    is_awaiting_you (awaiting_you.rs ~675):
+
+        match pr.ci_rollup.as_deref() {
+            Some("fail") | Some("pending") => return false,
+            _ => {}
+        }
+
+    The wildcard arm swallows None. So ci_rollup = None — which the renderer prints as "?" — falls straight through and the PR is classified awaiting-you. PR #2030 was surfaced to me with ci="?" while I had no idea whether its checks had run; they had, and were green, so nothing bad followed. But the classifier did not know that and would have classified it identically had no check ever run.
+
+    So this function over-reports readiness on the same field in TWO directions:
+      - ci_rollup = Some("pass") computed over checks that EXIST, not the ones REQUIRED (the original finding on this spec).
+      - ci_rollup = None treated as not-disqualifying rather than as unknown (this one).
+    Both are "computing a verdict over what is present, erring toward reassurance" — PRIN-5 exactly, twice, four lines apart.
+
+    CONSEQUENCE FOR THIS SPEC'S ACCEPTANCE. The criterion I wrote asks ci_rollup to distinguish three states (all-required-green / required-failing-or-pending / required-ABSENT). That is still right, but the match arm must be made exhaustive rather than wildcarded, or the new third state will fall through the same `_ => {}` that None does today. Worth saying explicitly, because adding a variant and leaving the wildcard is the natural way to implement this and would ship the bug again under a new name.
+
+    Filed separately as BUG-1490: the review_decision field in this same function reads GitHub's reviewDecision and therefore never sees an AIDA-recorded RequestChanges. That one is NOT an absence problem — the evidence is present and is being sought in the wrong store — so it is its own defect rather than a third instance here.
+  created_at: 2026-09-20T20:54:48.437610707Z
+  modified_at: 2026-09-20T20:54:48.437610707Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: drain
