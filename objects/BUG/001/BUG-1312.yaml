@@ -1,0 +1,52 @@
+id: 01a0bd1c-be7d-7e01-b790-d0bfae1e5c1e
+spec_id: BUG-1312
+agreed_id: BUG-1312
+title: 'auto-complete failure: phase 3 (reviewer) on BUG-1288'
+description: |
+  Auto-drafted by `aida queue work BUG-1288 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  reviewer verdict is RequestChanges — not Approved
+
+  Failure kind: `verdict:request-changes`
+
+  ## Recovery hint shown to the user
+
+  Address the review feedback, then push fixups: `aida queue rework BUG-1288 --work`
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-20T04:39:31.708716302+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 2488652 ms
+    - phase 2 (ci): 698545 ms
+    - phase 3 (reviewer): 383440 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"BUG-1288","started_at":"2026-09-20T03:39:56.440066568+00:00","completed_at":"2026-09-20T04:39:31.708716302+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":2488652},{"phase":2,"slug":"ci","elapsed_ms":698545},{"phase":3,"slug":"reviewer","elapsed_ms":383440}],"total_ms":3571835,"binary_sha":"2ef88f0295","auto_rebase":[{"phase":3,"pr_number":1999,"outcome":"clean"}]}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T04:39:32.733799386Z
+modified_at: 2026-09-20T04:39:32.733799386Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-3
+- failure-kind:verdict:request-changes
+- reviewer
