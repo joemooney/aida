@@ -1,0 +1,66 @@
+id: 01a0bed8-dde2-76f1-bb5f-71e419962777
+spec_id: STORY-1386
+agreed_id: STORY-1386
+title: Write the acceptance tests before the implementation and require them to fail first, so a test that cannot fail is caught before it ships
+description: |
+  OPERATOR PROPOSAL 2026-09-20: before implementing a spec, write the tests for its acceptance criteria and run them, expecting red. The red run is the artifact.
+
+  THE ARGUMENT IS STRONGER HERE THAN THE USUAL TDD CASE, because the failure it prevents happened repeatedly tonight. A test that has never been observed failing might be asserting nothing, and we shipped several:
+
+    BUG-1287   every test passed; the mechanism was inert three hours later. All were point-in-time
+               fixtures — they could not have failed, because the property they checked was true at
+               write time and decayed afterwards.
+    TASK-1289  the timeout test asserted `Skipped`, which WAS the bug. A green test pinning the defect.
+    TASK-1293  ships the gate that reports untraced criteria; all three of its own criteria are untraced.
+
+  A red-first run is empirical proof that a test DISCRIMINATES. It is the same rule the advisor spent the night applying to guards — "checking that a guard exists is not checking that it can fail" — applied to tests, which are guards.
+
+  THE INFRASTRUCTURE ALREADY EXISTS, which is what makes this cheap. `aida criteria <SPEC>` assigns every criterion a stable id and reports which have traced tests:
+
+    TASK-1293.ac1c7c47  The criteria gate distinguishes three states ...
+      untested   no traced tests
+
+  So test-first does not need new machinery. It moves an existing AUDIT to the front of the cycle and makes it a PRECONDITION. The same command becomes a progress tracker: every criterion traced and red at the checkpoint, every criterion traced and green at the end.
+
+  THE SHAPE THAT FITS THE DRAIN. Not a longer phase 1 — a separate phase with its own budget and a checkpoint between:
+
+    1a  write tests traced to criterion ids; run them; the RED output is the phase artifact
+        CHECKPOINT — the tests are reviewable before any implementation exists
+    1b  implement until green
+
+  The checkpoint is most of the value. Reviewing tests is cheaper than reviewing an implementation, and a WRONG CRITERION surfaces there instead of after a full build. Tonight BUG-1424's criterion 1 was wrong — per-commit patch identity cannot clear a multi-commit squash — and we learned it from a reviewer after the implementation existed. Writing that test first would have surfaced it in minutes.
+
+  IT ALSO DIRECTLY ATTACKS THE ACCEPTANCE-BOUNDARY CLASS. At least eight instances are recorded of "the acceptance named a boundary and the implementation tested below it". If tests are written from criterion ids before the code exists, there is no implementation to test below — the test has to address the criterion because nothing else is there yet.
+
+  COSTS, stated honestly because they are real.
+
+  1. THE PHASE CEILING. A combined write-then-implement session is longer, and the 45-minute wall-clock ceiling killed a healthy session tonight. This is the reason 1a must be its own phase with its own budget, not an extension of phase 1.
+  2. TESTS FOR A CRITERION THAT TURNS OUT WRONG. You will sometimes write a test for a criterion implementation later proves mistaken. That is a cost and also a benefit — it is cheaper to discover at test-writing time than after a build, which is exactly what happened with BUG-1424 in the expensive order.
+  3. NOT EVERY CRITERION IS TESTABLE. "Documented where consumers look", "the inventory is recorded", "a dated report comment" — these have no test. A blanket rule would produce fake tests, which is worse than none.
+
+  THAT THIRD COST IS WHY THIS DEPENDS ON TASK-1293, which is building exactly the distinction needed: traced, untraced, and cannot-be-traced-by-construction. Test-first needs that third state to mean "exempt, and here is why" rather than "not done yet". Without it, this proposal either forces fake tests or gets abandoned on the first documentation criterion.
+
+  ACCEPTANCE
+  1. A phase writes tests traced to criterion ids and runs them before implementation, with the failing output recorded as the phase artifact.
+  2. The red run is verified as genuinely red — a phase that produces no failing test has not satisfied this, because a test that passes before the implementation exists is asserting something other than the criterion.
+  3. Criteria exempt from testing are declared using TASK-1293's cannot-be-traced state, with the reason, and are not silently skipped.
+  4. `aida criteria <SPEC>` reports the checkpoint state — every testable criterion traced and failing — so the checkpoint is readable without inspecting the diff.
+  5. The phase has its own time budget, separate from implementation, so it does not consume the implementer phase's ceiling.
+  6. A spec whose criteria cannot be expressed as tests at all is surfaced at this checkpoint as a grooming problem rather than an implementation one.
+
+  STRETCH (per STORY-1385's mechanism, and marked so deliberately): the red-then-green transition per criterion is recorded, so a criterion that was never observed red is distinguishable from one that was. That is the strongest version — it would have caught every instance in the opening section — and I am not certain it is reachable without more instrumentation than it is worth.
+
+  NOT IN SCOPE: applying this to every spec regardless of size. A one-line fix does not need a test-writing phase, and a rule that cannot be skipped for trivial work will be skipped for everything.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T12:44:38.754900781Z
+modified_at: 2026-09-20T12:44:38.754900781Z
+req_type: Story
+tags:
+- drain
+- from:operator-0920
+- parent:EPIC-62
+- process
+- testing
