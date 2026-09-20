@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:58:36.743732005Z
-modified_at: 2026-09-20T16:11:09.845984374Z
+modified_at: 2026-09-20T17:47:53.406701256Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -165,6 +165,22 @@ comments:
   created_at: 2026-09-20T16:11:09.845984374Z
   modified_at: 2026-09-20T16:11:09.845984374Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bfee-7ebe-73d2-a535-81c7be62a307
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2021
+    agent: codex
+    ran-at: 2026-09-20 10:47 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1429-drain-01a0bfee-3107-73c2-9bfd-d7ac2e9d7d96.json
+    ? AC (0.96) — A live drain member with no PR binding contributes no reviewer-liveness signal: querying any PR returns None unless another live member has a binding.
+    ? AC (0.91) — Reviewer liveness is evaluated across all drain members, so a terminal nominal/current member does not hide a later live member bound to the queried PR.
+  created_at: 2026-09-20T17:47:53.406701256Z
+  modified_at: 2026-09-20T17:47:53.406701256Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
