@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:27:17.869346098Z
-modified_at: 2026-09-20T11:27:17.869346098Z
+modified_at: 2026-09-20T11:27:20.512436583Z
 req_type: Story
 tags:
 - ci
@@ -48,3 +48,7 @@ tags:
 - parent:EPIC-62
 - ratchet
 - substrate-as-bouncer
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-20T11:27:20.512436583Z
