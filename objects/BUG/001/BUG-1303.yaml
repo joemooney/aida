@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:22:29.721225410Z
-modified_at: 2026-09-20T09:41:14.959237700Z
+modified_at: 2026-09-20T10:11:00.670629269Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -220,6 +220,33 @@ comments:
     Two of the three have fixes waiting. That is worth knowing before anyone reads a red nightly as three new problems.
   created_at: 2026-09-20T09:41:14.959237700Z
   modified_at: 2026-09-20T09:41:14.959237700Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0be4c-35be-78f1-9b98-166375bf4683
+  author: joe
+  content: |-
+    [advisor:rework] THE DIRECTION HAS CHANGED BECAUSE THE CAUSE IS NOW KNOWN. This supersedes the reviewer's requirement 1 as written — it asked you to establish the cause, and the cause has since been established by observation, so the work in front of you is different from the work that verdict described.
+
+    WHAT WE NOW KNOW, from cross-platform run 35502040911 on MAIN, which does not contain this fix:
+
+      tick_lock_is_nonblocking_and_reusable ... FAILED
+      called `Result::unwrap()` on an `Err` value: The process cannot access the file
+      because another process has locked a portion of the file. (os error 33)
+
+    Os error 33 is ERROR_LOCK_VIOLATION, fs2's Windows contention sentinel, which Rust does not surface as `ErrorKind::WouldBlock`. So the old guard never matched and a contended lock took the hard-failure arm. That is the Windows cause, observed rather than inferred, and your contention classification addresses it by mechanism rather than by correlation.
+
+    SPLIT THIS PR.
+
+    SHIP NOW — the contention classification. Its cause is established, the fix connects to it mechanically, and it is the half that makes the defect go away on Windows. Nothing further is needed to justify it.
+
+    DO NOT SHIP HERE — the `Interrupted`/EINTR handling. Nothing observed points at it. It was offered as a candidate explanation for the Linux flake, and the Linux flake remains unexplained and is not addressed by anything we have learned. Retrying an interrupted syscall is correct by standard, so it deserves to exist — in its own spec, with its own justification, where a future reader cannot mistake it for the fix for this defect. File it and I will approve it on its own merits.
+
+    WHY THE SPLIT RATHER THAN SHIPPING BOTH. If both land together, the record says this spec's fix was "contention classification plus EINTR retry", and the next person debugging a lock flake will reasonably assume EINTR was implicated. It was not. That is the ambiguity the reviewer's requirement was protecting against, and it survives the cause being found.
+
+    THE LINUX HALF STAYS OPEN. A Windows contention code cannot explain a Linux race. Do not close this spec on the Windows answer, and do not treat 200 clean Linux runs as evidence of absence — this defect is intermittent on both platforms, so only a reproduction is informative and a pass is close to worthless.
+
+    WHAT WOULD ADVANCE THE LINUX HALF, if anyone wants to: the same observation that cracked Windows. The panic already prints the os error number. The next Linux failure will say which error it actually saw, and if it is not a contention code that is the discriminating fact. No instrumentation is needed — the number is already in the artifact, which is the lesson we took from the Windows half.
+  created_at: 2026-09-20T10:11:00.670629269Z
+  modified_at: 2026-09-20T10:11:00.670629269Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
