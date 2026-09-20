@@ -700,8 +700,10 @@ impl PhaseFailure {
 /// isolated so the classification rule is unit-testable without a driver.
 /// trace:BUG-455 | ai:claude
 pub(crate) fn is_database_locked_message(reason: &str) -> bool {
-    let lower = reason.to_ascii_lowercase();
-    lower.contains("database is locked") || lower.contains("database table is locked")
+    crate::external_tool_output::contains_any_case_insensitive(
+        reason,
+        crate::external_tool_output::SQLITE_LOCKED,
+    )
 }
 
 /// BUG-657: does a failure `message` describe an ENVIRONMENTAL fault — the disk
@@ -714,15 +716,10 @@ pub(crate) fn is_database_locked_message(reason: &str) -> bool {
 /// hides in `groom`/`room`).
 // trace:BUG-657 | ai:claude
 pub(crate) fn is_environmental_failure(message: &str) -> bool {
-    let m = message.to_ascii_lowercase();
-    m.contains("no space left on device")
-        || m.contains("disk full")
-        || m.contains("out of disk")
-        || m.contains("enospc")
-        || m.contains("out of memory")
-        || m.contains("cannot allocate memory")
-        || m.contains("oom-kill")
-        || m.contains("oomkilled")
+    crate::external_tool_output::contains_any_case_insensitive(
+        message,
+        crate::external_tool_output::OS_RESOURCE_EXHAUSTION,
+    )
 }
 
 /// The verdict of the BUG-241 reconcile step: when a phase ends without the
@@ -1013,11 +1010,10 @@ pub(crate) fn red_ci_action(budget: usize, attempts_made: usize, kind: FailureKi
 /// only a conflict is rebase-recoverable, so anything unrecognized is not.
 // trace:TASK-975 | ai:claude
 pub(crate) fn is_merge_conflict_failure(reason: &str) -> bool {
-    let r = reason.to_ascii_lowercase();
-    r.contains("not mergeable")
-        || r.contains("merge conflict")
-        || r.contains("merge commit cannot be cleanly created")
-        || r.contains("conflicts must be resolved")
+    crate::external_tool_output::contains_any_case_insensitive(
+        reason,
+        crate::external_tool_output::GH_MERGE_CONFLICT,
+    )
 }
 
 /// TASK-975: pure gate for the in-drain merge-conflict rebase — attempt it

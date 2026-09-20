@@ -100,6 +100,7 @@ mod event_wait;
 mod events;
 mod exit_signal;
 mod external_import_bleed;
+mod external_tool_output;
 mod feature_cmd;
 mod findings;
 // trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.
