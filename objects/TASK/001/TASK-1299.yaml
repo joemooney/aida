@@ -1,0 +1,25 @@
+id: 01a0bd7a-9814-76a2-a78d-4775565769d7
+spec_id: TASK-1299
+agreed_id: TASK-1299
+title: Preflight builds the worktree binary before checking whether any resolved guard needs it
+description: |
+  The implementer preflight builds the full worktree binary before inspecting which guards actually resolved. A downstream project configuring only lightweight non-aida guards still pays a full `cargo build` it never uses.
+
+  DEFERRED DELIBERATELY. This is an ordering optimisation, not a correctness defect, and it was found as one of four findings blocking TASK-1289 — a spec whose other three are correctness problems on a security-shaped feature. Carrying a performance item as a blocking finding there meant a round fixing every real defect still shelved.
+
+  THE FIX IS PROBABLY SMALL: resolve the guard set first, and build only if at least one resolved guard needs the binary. The information needed to decide is already computed, just later than it is used.
+
+  REVISIT TRIGGER: a downstream project configures a guard set with no binary-dependent guard, or someone reports preflight build cost. Until one of those happens this costs nothing here, because every guard this repo configures needs the binary anyway — so the wasted build is hypothetical in the only project currently running it.
+
+  NOT IN SCOPE, and worth stating so a future reader does not fold them back in: TASK-1289's publication-boundary design problem, the fail-open where a skipped guard permits publication, and BUG-1420's shell-semantics mismatch. All three are correctness defects in the same file. This is the only one of the four that is not.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T06:22:03.284699808Z
+modified_at: 2026-09-20T06:22:03.284699808Z
+req_type: Task
+tags:
+- from:session-0919
+- performance
+- preflight
