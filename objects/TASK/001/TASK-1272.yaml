@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:02.542178535Z
-modified_at: 2026-09-20T00:25:42.358606224Z
+modified_at: 2026-09-20T16:12:27.689183462Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -36,6 +36,25 @@ comments:
   created_at: 2026-09-20T00:25:04.331535138Z
   modified_at: 2026-09-20T00:25:04.331535138Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf97-20a9-7a31-b9b5-11b81b4a7111
+  author: joe
+  content: |-
+    [aida:rework-brief] TASK-1272 / PR #1981 — two binding items. Both are about the same thing: a recorded phase is history, and history is not present state.
+
+    1. BINDING — check the spec is still shelved before resuming it.
+       Mechanism: at the point resume decides to re-enter a phase, read the spec's CURRENT status from the store and refuse to resume anything not still in a shelved state. A spec can have been merged, rejected, reworked by hand or resumed by another seat since the checkpoint was written.
+       Failure mode if skipped: resume re-drives a spec that someone already finished, and the second drive's output collides with work that is already on main.
+
+    2. BINDING — AIDA_DRAIN_RESUME_PHASE must not override the reality probe unconditionally.
+       Mechanism: treat the env var as a CEILING, not an assignment. Probe actual state first; if the probe says the drive is further along than the requested phase, keep the probe's answer and log that the override was clamped. Only honour the override when it does not rewind.
+       Failure mode if skipped: a historical phase number rewinds a live drive past work that already happened — re-running an implementer phase over a branch that is already in review, for instance.
+
+    NOT IN SCOPE, and repeating it because a later round will not know: the resume feature itself, the checkpoint format, and whether phases 1-2 can be replayed at all given they are lease-coupled. Only the two guards above.
+
+    Partial credit is fine and I would rather have item 2 than both done badly — item 2 is the one that can corrupt a live drive. If only one lands this round, do item 2 and say item 1 is outstanding.
+  created_at: 2026-09-20T16:12:27.689183462Z
+  modified_at: 2026-09-20T16:12:27.689183462Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
