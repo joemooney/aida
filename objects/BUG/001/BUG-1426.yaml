@@ -22,12 +22,12 @@ description: |
   3. A test constructs a locally-edited copy and asserts the chosen behaviour, so the distinction between "missing" and "stale" is pinned rather than implied by a name.
 
   Deferred from PR #1988 review, where the pack restoration was merged on the operator's throughput directive with this recorded rather than blocking.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:13:13.644915988Z
-modified_at: 2026-09-20T14:58:22.991220196Z
+modified_at: 2026-09-20T14:58:45.322726470Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -62,8 +62,25 @@ comments:
   created_at: 2026-09-20T14:58:22.991220196Z
   modified_at: 2026-09-20T14:58:22.991220196Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bf53-a5c9-7092-94e3-18fa4586f078
+  author: aida-auto-bump
+  timestamp: 2026-09-20T14:58:45.321880480Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0bf53-a5ca-78b2-b162-651de7f59f01
+  timestamp: 2026-09-20T14:58:45.322725522Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1426-2026-09-20T145824Z.md
+  commit_sha: e9e2bc43282e9ec147640b058faed788c320bf7d
+  summary: Completed via merge e9e2bc43
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T14:45:18.862981070Z
   implemented_by: joe
+  completed_at: 2026-09-20T14:58:45.321661709Z
+  completion_sha: e9e2bc43282e9ec147640b058faed788c320bf7d
