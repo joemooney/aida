@@ -440,9 +440,25 @@ fn evaluate_rules(body: &str, rules: &NotifyRules) -> Vec<RuleFire> {
                     }
                 ));
             }
-            EventKind::QueueDrained { shipped, shelved } => {
-                if shipped == 0 || shelved > 0 {
-                    drained_idle.push(format!("drain shipped {shipped}, shelved {shelved}"));
+            EventKind::QueueDrained {
+                shipped,
+                shelved,
+                excluded_from_batch,
+            } => {
+                // TASK-1297: a batch drain excluding approved, role-routed
+                // work is alarm-worthy even when it shipped fine — that is
+                // exactly the "3 open members re-driven for hours while 16
+                // sat outside the filter" incident shape.
+                // trace:TASK-1297 | ai:claude
+                if shipped == 0 || shelved > 0 || excluded_from_batch > 0 {
+                    let mut msg = format!("drain shipped {shipped}, shelved {shelved}");
+                    if excluded_from_batch > 0 {
+                        msg.push_str(&format!(
+                            "; {excluded_from_batch} other approved routed spec{} excluded by the batch filter",
+                            if excluded_from_batch == 1 { "" } else { "s" }
+                        ));
+                    }
+                    drained_idle.push(msg);
                 }
             }
             _ => {}
@@ -715,7 +731,8 @@ mod tests {
                 None,
                 EventKind::QueueDrained {
                     shipped: 0,
-                    shelved: 1
+                    shelved: 1,
+                    excluded_from_batch: 0
                 }
             )
         );
@@ -727,6 +744,34 @@ mod tests {
         assert!(fires[0].message.contains("TASK-1"));
         assert!(fires[1].message.contains("TASK-2"));
         assert!(fires[2].message.contains("aida awaiting"));
+    }
+
+    // TASK-1297: a batch drain that shipped fine but excluded approved,
+    // role-routed specs must still fire `idle_with_work` — the silent
+    // filter, not a lack of shipping, is what a monitor needs to alarm on.
+    // trace:TASK-1297 | ai:claude
+    #[test]
+    fn queue_drained_with_excluded_from_batch_fires_idle_with_work_even_when_shipped() {
+        let body = event(
+            None,
+            EventKind::QueueDrained {
+                shipped: 3,
+                shelved: 0,
+                excluded_from_batch: 16,
+            },
+        );
+        let fires = evaluate_rules(&format!("{body}\n"), &NotifyRules::default());
+        assert_eq!(
+            fires.iter().map(|f| f.rule).collect::<Vec<_>>(),
+            vec!["idle_with_work"]
+        );
+        assert!(
+            fires[0]
+                .message
+                .contains("16 other approved routed specs excluded"),
+            "{}",
+            fires[0].message
+        );
     }
 
     #[test]

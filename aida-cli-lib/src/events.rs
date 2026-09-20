@@ -203,6 +203,17 @@ pub enum EventKind {
         shipped: usize,
         /// Specs that shelved.
         shelved: usize,
+        /// TASK-1297: for a `--batch` drain, how many OTHER approved specs
+        /// are routed to the same role but excluded by the batch filter — 0
+        /// for a non-batch drain (single-spec, `next-n`), and 0 rather than
+        /// noise when the filter excluded nothing. The silence about this
+        /// number, not the filter itself, was the 2026-09-19 incident: a
+        /// batch of 3 open members was re-driven for hours while 16 approved,
+        /// role-routed specs sat outside the filter, invisible. A monitor can
+        /// alarm on this field without scraping the closing summary line.
+        // trace:TASK-1297 | ai:claude
+        #[serde(default)]
+        excluded_from_batch: usize,
     },
     /// The supervisor's mailbox has unread mail — preserves the one
     /// event-driven trigger that exists today (TASK-776). **Actionable.**
@@ -729,6 +740,28 @@ fn try_emit(project_root: &Path, ev: &Event) -> std::io::Result<()> {
 mod tests {
     use super::*;
 
+    // TASK-1297: an older event line written before `excluded_from_batch`
+    // existed must still deserialize — `#[serde(default)]` makes a missing
+    // field read as 0 rather than a hard parse failure.
+    // trace:TASK-1297 | ai:claude
+    #[test]
+    fn queue_drained_deserializes_pre_task_1297_lines_with_default_zero() {
+        let legacy = r#"{"ts":"2026-09-01T00:00:00Z","kind":{"event":"QueueDrained","shipped":8,"shelved":1}}"#;
+        let ev: Event = serde_json::from_str(legacy).unwrap();
+        match ev.kind {
+            EventKind::QueueDrained {
+                shipped,
+                shelved,
+                excluded_from_batch,
+            } => {
+                assert_eq!(shipped, 8);
+                assert_eq!(shelved, 1);
+                assert_eq!(excluded_from_batch, 0);
+            }
+            other => panic!("expected QueueDrained, got {other:?}"),
+        }
+    }
+
     #[test]
     fn latest_spec_shelved_selects_newest_matching_event() {
         let first = Event::new(
@@ -804,6 +837,7 @@ mod tests {
         assert!(EventKind::QueueDrained {
             shipped: 8,
             shelved: 1,
+            excluded_from_batch: 0,
         }
         .is_actionable());
         assert!(EventKind::UnreadMail.is_actionable());
@@ -1094,6 +1128,7 @@ mod tests {
                 EventKind::QueueDrained {
                     shipped: 8,
                     shelved: 0,
+                    excluded_from_batch: 0,
                 },
             ),
         );

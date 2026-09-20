@@ -338,6 +338,7 @@ mod tests {
                 EventKind::QueueDrained {
                     shipped: 1,
                     shelved: 0,
+                    excluded_from_batch: 0,
                 },
             )],
         );
@@ -366,6 +367,7 @@ mod tests {
                     EventKind::QueueDrained {
                         shipped: 2,
                         shelved: 0,
+                        excluded_from_batch: 0,
                     },
                 )],
             );

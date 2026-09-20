@@ -78686,6 +78686,110 @@ fn resolve_batch_members_with_context(
     Ok(members)
 }
 
+// TASK-1297: one routed-queue row, reduced to the two fields the "what did
+// the `--batch` filter exclude" count needs — decoupled from `Storage` /
+// `QueueEntry` so the pure derivation below can be pinned with a plain
+// fixture instead of a live store.
+// trace:TASK-1297 | ai:claude
+#[derive(Debug, Clone)]
+struct RoutedSpecSnapshot {
+    tags: Vec<String>,
+    status: aida_core::RequirementStatus,
+}
+
+// TASK-1297: pure count of "M other approved specs routed to this role,
+// excluded from the batch by the `--batch` filter" — the number a mis-scoped
+// `--batch` launcher silently drove past for hours (2026-09-19 incident: 3
+// open batch members re-driven every wave while 16 approved, role-routed
+// specs sat outside the filter). `want_tag` is the `batch:<name>` tag
+// (case-insensitively) that marks batch membership; a snapshot carrying it
+// is a member and is never counted, regardless of status — only an
+// approved, non-member routed spec counts, matching the acceptance wording
+// ("M other approved specs routed to role:X are not in this batch"). Pure so
+// a fixture pins the derivation without a live queue/store.
+// trace:TASK-1297 | ai:claude
+fn count_routed_excluded_from_batch(snapshots: &[RoutedSpecSnapshot], want_tag: &str) -> usize {
+    snapshots
+        .iter()
+        .filter(|s| {
+            s.status == aida_core::RequirementStatus::Approved
+                && !s.tags.iter().any(|t| t.eq_ignore_ascii_case(want_tag))
+        })
+        .count()
+}
+
+// TASK-1297: impure shell for `count_routed_excluded_from_batch` — reads the
+// same role-routed queue `resolve_batch_members_with_context` reads
+// (`queue_list_with_role_fallback` + `entry_matches_role_filter` +
+// `Storage::resolve_queued_requirement`), so the count agrees with batch
+// resolution under the BUG-1264 alias fallback (a member whose object lives
+// under its origin_id alias resolves the same way here as it does for
+// membership). Returns the count plus the resolved role label (for the
+// human-facing line), `None` when role resolution fails. Best-effort: a
+// queue-read failure surfaces as `Err` so the caller can skip the line
+// rather than print a wrong number.
+// trace:TASK-1297 | ai:claude
+fn count_batch_excluded_routed_specs(
+    storage: &Storage,
+    user_id: &str,
+    batch_name: &str,
+    role: Option<&str>,
+) -> Result<(usize, Option<String>)> {
+    let want = format!("batch:{}", batch_name);
+    let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+    let (role_filter, _only_unrouted) =
+        resolve_queue_role_filter(role, false, session_role.as_deref());
+    let entries = queue_role_fallback::queue_list_with_role_fallback(
+        storage,
+        user_id,
+        role_filter.as_deref(),
+        false,
+    )?;
+    let mut snapshots = Vec::with_capacity(entries.len());
+    for entry in entries {
+        if !entry_matches_role_filter(entry.for_role.as_deref(), role_filter.as_deref(), false) {
+            continue;
+        }
+        if let Some(req) = storage.resolve_queued_requirement(&entry.requirement_id)? {
+            snapshots.push(RoutedSpecSnapshot {
+                tags: req.tags.into_iter().collect(),
+                status: req.status,
+            });
+        }
+    }
+    Ok((
+        count_routed_excluded_from_batch(&snapshots, &want),
+        role_filter,
+    ))
+}
+
+// TASK-1297: the operator-facing "M other approved specs routed to role:X
+// are not in this batch" clause — `None` when `excluded == 0` so a
+// non-filtering batch drain (or one that filtered nothing away) renders no
+// extra noise, per acceptance.
+// trace:TASK-1297 | ai:claude
+fn batch_exclusion_clause(excluded: usize, role_label: Option<&str>) -> Option<String> {
+    if excluded == 0 {
+        return None;
+    }
+    let role_phrase = match role_label {
+        Some(r) => format!("role:{r}"),
+        None => "this role".to_string(),
+    };
+    let (plural, verb) = if excluded == 1 {
+        ("", "is")
+    } else {
+        ("s", "are")
+    };
+    Some(format!(
+        "{excluded} other approved spec{plural} routed to {role_phrase} {verb} not in this batch"
+    ))
+}
+
+#[cfg(test)]
+#[path = "tests/task_1297_batch_exclusion_tests.rs"]
+mod task_1297_batch_exclusion_tests;
+
 /// Real [`auto_complete::BatchDriver`] — re-resolves the `batch:NAME` head
 /// against the live queue and runs each member's full `--auto-complete`
 /// lifecycle. trace:TASK-285 | ai:claude
@@ -78990,6 +79094,17 @@ fn handle_auto_complete_batch(
     // TASK-966: hard budget caps for the whole drain. trace:TASK-966 | ai:claude
     caps: &drain_caps::DrainCaps,
 ) -> ! {
+    // TASK-1297: resolve the batch head AND the "M other approved specs
+    // routed to this role are excluded" count up front — both read the same
+    // role-routed queue, so the start-up line, the drain-state file, and the
+    // closing summary all agree on one snapshot. Best-effort: a resolution
+    // failure just means the line/state don't render, not a drain abort.
+    // trace:TASK-1297 | ai:claude
+    let batch_members = resolve_batch_members(storage, user_id, batch_name, role).ok();
+    let batch_member_count = batch_members.as_ref().map(Vec::len).unwrap_or(0);
+    let excluded = count_batch_excluded_routed_specs(storage, user_id, batch_name, role).ok();
+    let (excluded_count, excluded_role) = excluded.unwrap_or((0, None));
+
     if !json {
         eprintln!();
         eprintln!(
@@ -79006,6 +79121,16 @@ fn handle_auto_complete_batch(
                 if limit == 1 { "" } else { "s" }
             );
         }
+        // TASK-1297: the filter is doing what it was asked — the SILENCE
+        // about what it excluded was the defect. State both numbers, unless
+        // there is nothing to declare (M == 0). trace:TASK-1297 | ai:claude
+        if let Some(clause) = batch_exclusion_clause(excluded_count, excluded_role.as_deref()) {
+            eprintln!(
+                "  {} batch:{batch_name}: {batch_member_count} member{}; {clause}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                if batch_member_count == 1 { "" } else { "s" },
+            );
+        }
     }
 
     // STORY-301: write the drain-state file so `aida drain status` can show
@@ -79014,11 +79139,14 @@ fn handle_auto_complete_batch(
     // just unobservable. trace:STORY-301 | ai:claude
     let drain_root = find_main_worktree_root().ok();
     if let Some(root) = &drain_root {
-        if let Ok(members) = resolve_batch_members(storage, user_id, batch_name, role) {
-            let specs: Vec<String> = members.into_iter().map(|m| m.1).collect();
+        if let Some(members) = &batch_members {
+            let specs: Vec<String> = members.iter().map(|m| m.1.clone()).collect();
             let pipeline_depth = DrainTuning::resolve(root).pipeline_depth();
             let _ = drain_state::DrainState::new_batch(batch_name, &specs)
                 .with_pipeline_depth(pipeline_depth)
+                // TASK-1297: carry the exclusion count so `aida drain status`
+                // can show it while the drain is live. trace:TASK-1297
+                .with_excluded_from_batch(excluded_count)
                 .write(root);
         }
     }
@@ -79087,7 +79215,24 @@ fn handle_auto_complete_batch(
     } else {
         result.exit_code
     };
-    emit_batch_drain_summary(batch_name, &result, exit_code, json);
+    // TASK-1297: re-resolve the exclusion count for the closing summary — the
+    // queue can have moved during the drain (more work approved, or this
+    // drain's own shipped members left the queue), so the closing number
+    // answers "how much is still sitting outside this batch right now" rather
+    // than repeating the stale start-of-drain figure. Best-effort.
+    // trace:TASK-1297 | ai:claude
+    let (closing_excluded_count, closing_excluded_role) =
+        count_batch_excluded_routed_specs(storage, user_id, batch_name, role)
+            .ok()
+            .unwrap_or((excluded_count, excluded_role));
+    emit_batch_drain_summary(
+        batch_name,
+        &result,
+        exit_code,
+        json,
+        closing_excluded_count,
+        closing_excluded_role.as_deref(),
+    );
     // TASK-967: permanent exit summary + cost-per-drain telemetry.
     finalize_drain_summary(
         "batch",
@@ -79106,6 +79251,10 @@ fn handle_auto_complete_batch(
         drain_started,
         drain_clock.elapsed(),
         json,
+        // TASK-1297: the "M other approved specs routed to this role are not
+        // in this batch" figure, echoed onto the terminal QueueDrained event
+        // so a monitor can alarm on it. trace:TASK-1297 | ai:claude
+        closing_excluded_count,
     );
     // STORY-493: at drain-end, durably digest any mailbox traffic the drain
     // produced into the git-canonical orphan store. Best-effort + non-fatal —
@@ -79672,8 +79821,16 @@ fn handle_auto_complete_batches(
                 if let Ok(members) = members_for_state {
                     let specs: Vec<String> = members.into_iter().map(|m| m.1).collect();
                     let pipeline_depth = DrainTuning::resolve(root).pipeline_depth();
+                    // TASK-1297: per-sub-batch exclusion count, so `aida
+                    // drain status` shows it live for whichever batch in the
+                    // chain is currently running. trace:TASK-1297 | ai:claude
+                    let excluded =
+                        count_batch_excluded_routed_specs(storage, user_id, batch_name, role)
+                            .map(|(count, _)| count)
+                            .unwrap_or(0);
                     let _ = drain_state::DrainState::new_batch(batch_name, &specs)
                         .with_pipeline_depth(pipeline_depth)
+                        .with_excluded_from_batch(excluded)
                         .write(root);
                 }
             }
@@ -79740,6 +79897,11 @@ fn handle_auto_complete_batches(
         chain_started,
         chain_clock.elapsed(),
         json,
+        // TASK-1297: the chained-batches path (`--batch a,b,c`) does not yet
+        // surface the per-batch exclusion count — out of scope for this
+        // fix, which targets the single-batch drain the 2026-09-19 incident
+        // hit. trace:TASK-1297 | ai:claude
+        0,
     );
     // STORY-493: same best-effort drain-end mailbox digest as the single-batch
     // path. Non-fatal — never affects the drain's exit code. trace:STORY-493
@@ -80060,12 +80222,18 @@ fn emit_batch_chain_summary(
 /// shipped, where it stopped, and what is left queued. The per-spec failure
 /// epilogue + recovery hint are already printed by `orchestrate`; this adds
 /// the batch-level framing (which members shipped, queue-intact-for-retry).
-/// `exit_code` is the process's effective exit code (see caller). trace:TASK-285
+/// `exit_code` is the process's effective exit code (see caller).
+/// `excluded_from_batch` is the "M other approved specs routed to this role
+/// are not in this batch" count, re-resolved at drain-end so the closing
+/// summary reflects the post-drain queue.
+// trace:TASK-285 trace:TASK-1297 | ai:claude
 fn emit_batch_drain_summary(
     batch_name: &str,
     result: &auto_complete::BatchDrainResult,
     exit_code: i32,
     json: bool,
+    excluded_from_batch: usize,
+    excluded_from_batch_role: Option<&str>,
 ) {
     use auto_complete::BatchDrainOutcome;
 
@@ -80149,6 +80317,12 @@ fn emit_batch_drain_summary(
         obj.insert(
             "exit_code".to_string(),
             serde_json::Value::Number(exit_code.into()),
+        );
+        // TASK-1297: the excluded-by-filter figure, so a machine consumer
+        // can alarm without scraping the human line. trace:TASK-1297 | ai:claude
+        obj.insert(
+            "excluded_from_batch".to_string(),
+            serde_json::Value::Number((excluded_from_batch as u64).into()),
         );
         println!("{}", serde_json::Value::Object(obj));
         return;
@@ -80369,6 +80543,16 @@ fn emit_batch_drain_summary(
             "⤳".yellow(),
             if kn == 1 { "" } else { "s" },
             render.join(", ")
+        );
+    }
+    // TASK-1297: closing-summary echo of the "M other approved specs routed
+    // to this role are not in this batch" figure — the same clause printed
+    // at start-up, re-resolved post-drain. Silent when M == 0.
+    // trace:TASK-1297 | ai:claude
+    if let Some(clause) = batch_exclusion_clause(excluded_from_batch, excluded_from_batch_role) {
+        eprintln!(
+            "  {} {clause}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
         );
     }
 }
@@ -80625,6 +80809,11 @@ fn finalize_drain_summary(
     started: std::time::SystemTime,
     elapsed: std::time::Duration,
     json: bool,
+    // TASK-1297: "M other approved specs routed to this role are not in this
+    // batch" — 0 for every non-batch drain kind (single, next-n). Echoed onto
+    // the terminal QueueDrained event so a monitor can alarm on it without
+    // scraping the human closing line. trace:TASK-1297 | ai:claude
+    excluded_from_batch: usize,
 ) {
     // A budget-cap stop reports the cap that fired; otherwise the drain outcome.
     let outcome = match cap_stop {
@@ -80701,6 +80890,8 @@ fn finalize_drain_summary(
                 events::EventKind::QueueDrained {
                     shipped: summary.tallies.shipped,
                     shelved: summary.tallies.shelved,
+                    // trace:TASK-1297 | ai:claude
+                    excluded_from_batch,
                 },
             ),
         );
@@ -81124,6 +81315,9 @@ fn handle_auto_complete_next_n(
         drain_started,
         drain_clock.elapsed(),
         json,
+        // TASK-1297: a nextN drain has no `--batch` filter, so there is
+        // nothing excluded to report. trace:TASK-1297 | ai:claude
+        0,
     );
     // STORY-301: clean exit removes the drain-state file; a crash leaves it.
     if let Some(root) = &drain_root {

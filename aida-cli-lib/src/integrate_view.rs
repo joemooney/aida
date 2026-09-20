@@ -283,6 +283,7 @@ mod tests {
             EventKind::QueueDrained {
                 shipped: 4,
                 shelved: 1,
+                excluded_from_batch: 0,
             },
         );
         drained.ts = ts(1, now);
