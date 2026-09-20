@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:01:03.886041426Z
-modified_at: 2026-09-20T18:56:24.079997310Z
+modified_at: 2026-09-20T19:00:14.498751675Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -49,4 +49,11 @@ relationships:
   target_id: 01a0bc31-6859-7971-b588-a2814b48e2b2
   created_at: 2026-09-20T11:01:26.537893585Z
   created_by: joe
+comments:
+- id: 01a0c030-bc22-72a3-a3ab-da24bb1d8d48
+  author: joe
+  content: 'Headless pickup result, 2026-09-20: no Linux reproduction. Command shape: the freshly built aida_cli_lib test binary was invoked 1,000 times via `seq 1 1000 | xargs -P16`, each invocation running `maintenance_schedule::tests::tick_lock_is_nonblocking_and_reusable --exact`. Machine: host imac, Linux 7.0.0-30-generic x86_64, 6 CPUs. Result: 1,000 completed, 0 failures. A standalone targeted run also passed. I searched local AIDA/session artifacts and the BUG-1299 record but found no preserved panic from the original Linux sighting, so the required ErrorKind and raw_os_error remain unknown. Per acceptance 2-4, no EINTR retry, serialization, weakening, ignore, or other code change was made. Current wait state: acceptance 1 requires a future real Linux failure; headless mode cannot wait for it, so this spec must remain in-progress and queued.'
+  created_at: 2026-09-20T19:00:14.498751675Z
+  modified_at: 2026-09-20T19:00:14.498751675Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
