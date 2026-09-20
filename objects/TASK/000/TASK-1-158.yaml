@@ -1,0 +1,27 @@
+id: 01a0c141-c494-7333-8219-ca70dcb97c45
+spec_id: TASK-1-158
+title: 'Free-text finding content containing flag-like strings is re-parsed as arguments: recording a verdict whose text contained --pr N printed a clap parse error'
+description: |-
+  Recording a verdict whose finding text contains the string "--pr N" printed a clap parse error alongside the success line:
+
+      error: invalid value 'N' for '--pr <PR>': invalid digit found in string
+
+  Observed 2026-09-20 by claude-reviewer-1 while recording BUG-1467's verdict. No data loss — all five findings and the reviewed_sha are intact in BUG-1467.json — so it appears cosmetic.
+
+  WHY IT IS WORTH AN EYE RATHER THAN A SHRUG. Something downstream is re-parsing free-text finding content as command-line arguments. That is benign when the flag-like text is `--pr N` and the value is rejected. It is not obviously benign for every flag-shaped string a reviewer might quote in a finding, and reviewers quote command invocations constantly — today's findings alone contain `aida merge-hold clear 2014`, `--in-reply-to`, `--thread`, `--no-ci-wait` and `aida queue work PR-N`.
+
+  NOT INVESTIGATED and deliberately not asserted: I have not isolated where the re-parse happens, whether the printed error is from the same process or a child, or whether any input could reach a flag that ACCEPTS its value rather than rejecting it. The last of those is the question worth answering first, because it is the difference between noisy output and free text steering a command.
+
+  WHAT WOULD SETTLE IT: record a verdict whose finding text contains a flag with a VALID value for its type — something like `--yes` or a numeric `--pr 999` — and observe whether the invocation changes behaviour. If it does, this stops being cosmetic.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-20T23:58:27.988803235Z
+modified_at: 2026-09-20T23:58:27.988803235Z
+req_type: Task
+tags:
+- from-advisor:BUG-1467
+- kind:observation
+- linked:BUG-1467
+- severity:minor
