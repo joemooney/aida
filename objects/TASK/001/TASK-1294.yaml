@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-20T02:41:32.716673440Z
+modified_at: 2026-09-20T02:41:55.438367120Z
 req_type: Task
 tags:
 - follow-up:TASK-1291
@@ -63,6 +63,31 @@ comments:
   created_at: 2026-09-20T02:35:55.739611842Z
   modified_at: 2026-09-20T02:35:55.739611842Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bcb1-0eee-7f03-8171-9597f36faa0f
+  author: joe
+  content: |-
+    [advisor:disposition] MODE CHANGED drain → OPERATOR, removed from batch followups-0918i, and the method is now bound to the store in the DESCRIPTION rather than in a comment. Two of these are corrections of my own errors.
+
+    ERROR 1 — THE MODE CONTRADICTED THE REASON THIS SPEC EXISTS. I split this out of TASK-1291 precisely because it is post-deployment by construction: you cannot measure the effect of a change in the same breath as making it. Then I groomed it `drain`, which is the one mode that requires a PR. Its deliverable is a dated report comment. So phase 1 fails with `no-pr` no matter how well an implementer does the work, and it did, twice, at 02:36:33 tonight:
+
+      the implementer session exited cleanly but opened no PR
+
+    That is not a failure of the session. It is a spec that cannot satisfy the pipeline it was routed to, and it would have burned both attempts on every requeue forever. Same shape as the TASK-403 punt already in the record — a report-shaped spec misrouted to a queue that demands code — and I should have caught the recurrence when I set the mode.
+
+    ERROR 2 — I CORRECTED THE METHOD IN A COMMENT, WHICH DOES NOT BIND. I said yesterday I had rebound the measurement window to the store. I had written it as a comment. The description still carried the PrMerged form until now. My own standing rule is that a refinement must edit the acceptance criteria, because a comment is not what an implementer executes, and I broke it on the spec where it mattered most.
+
+    WHY THAT ONE WOULD HAVE BEEN WORSE THAN A CRASH. Per BUG-1286, PrMerged is buried by trailing phase events for drain-driven specs and absent entirely for specs closed outside a drain — exactly one closed spec in the whole recorded history ends on it. An implementer following the old method would have measured a window that closes for roughly one spec in five hundred, produced a null for mechanical reasons, and reported it honestly as a null. This spec's acceptance permits reporting a null. So the output would have been a clean, defensible, completely false finding that TASK-1291's full-sweep requirement had no effect — and nothing in the artifact would have hinted at the cause.
+
+    The description now says to bound the window with the aida-store git log's Done-to-Completed commit, names PrMerged as forbidden with the reason, and says to exclude a spec by name rather than substitute a feed event if the store window cannot be built.
+
+    WHY OPERATOR RATHER THAN decide. There is no pending decision blocking the work; the work is well-specified and just is not code. Someone reads two data sources and writes a comment. `decide` would park it behind a question nobody needs to answer.
+
+    DO NOT REQUEUE THIS INTO A DRAIN. It is out of the wave batch and carries no drain-safe tag, so nothing should pick it up, and if something does that is a routing bug worth filing rather than a nudge to change the mode back.
+
+    TIMING, unchanged: this measures the 20 specs that reach Completed AFTER TASK-1291 lands. Running it early produces a number about the wrong population.
+  created_at: 2026-09-20T02:41:55.438367120Z
+  modified_at: 2026-09-20T02:41:55.438367120Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: operator
 failure_reason:
   phase: implementer
