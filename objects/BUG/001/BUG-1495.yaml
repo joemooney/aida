@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:51:40.834379762Z
-modified_at: 2026-09-20T22:57:00.660861186Z
+modified_at: 2026-09-20T22:57:01.749156724Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -65,5 +65,31 @@ comments:
   content: '[aida:advisor] SHARPER STATEMENT OF THE COST, from claude-reviewer-1 who found this independently within minutes: the guard''s output volume grows with exactly the condition it exists to stop, so the count in `aida awaiting` climbs fastest when the guard is working hardest. That is the argument for fixing it ahead of cosmetic dedup — a signal that gets noisier the more it is needed trains its reader to discount it precisely when it is most correct.'
   created_at: 2026-09-20T22:54:10.530205990Z
   modified_at: 2026-09-20T22:54:10.530205990Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c109-8535-79b3-8c4f-3963dfa650de
+  author: joe
+  content: |-
+    [aida:advisor] BLOCKED-BY BUG-1476, and the ordering is the point rather than the link. Raised by claude-reviewer-1 and I am making it an acceptance constraint.
+
+    THE CHAIN:
+        BUG-1476  implementer no-ops in seconds, head unchanged
+           -> pipeline re-reviews the same head, re-shelves the same verdict
+           -> requeue
+        BUG-1495  every requeue shells out to `aida findings add` with no existing-finding check
+           -> one finding per requeue, not per recurrence
+
+    BUG-1495 is the NOISE. BUG-1476 is the GENERATOR. My own evidence for dispositioning TASK-1-156 is the proof: BUG-1297's branch carries one commit from 08:02 while two later runs produced nothing in 50s and 14s. A 14-second run producing no commit is one of BUG-1476's eleven.
+
+    ADDED ACCEPTANCE — this spec's dedup must NOT be read as fixing the repetition:
+      - The acceptance states explicitly that with BUG-1476 unfixed, the same episode still produces
+        a STUCK SPEC — just a quieter one. A future reader must not see 'repeated findings: fixed'
+        beside a spec that still cannot progress.
+      - Do not close this while the generator runs, or close it with that limitation named in the
+        closing comment. Silencing a loud symptom of a live loop is the worse of the two available
+        outcomes, because the current duplication is at least LOUD.
+
+    ORDERING: BUG-1476 is Done with PR #2029 open and DIRTY ('arm no-change guard from PR verdicts', touching lib.rs and task_1265_rework_no_op_tests.rs — the same work). Its conflicts are now on the critical path for both specs. Resolve #2029 first.
+  created_at: 2026-09-20T22:57:01.749156724Z
+  modified_at: 2026-09-20T22:57:01.749156724Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
