@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-20T13:56:51.097511596Z
+modified_at: 2026-09-20T13:57:44.816489498Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -122,6 +122,45 @@ comments:
   content: 'Round 2: centralized all inventoried external-prose tokens in aida-core/src/external_tool_output.rs; added omitted glab/GitHub/Claude/Git/Cargo/TUI/terminal classifiers to the inventory; changed GitLab merge stale/retry decisions to parse JSON message/status fields and fail closed on wrapper prose. Focused tests and cargo check for aida-core, aida-cli-lib, and aida-tui pass.'
   created_at: 2026-09-20T13:37:55.682893811Z
   modified_at: 2026-09-20T13:37:55.682893811Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf1b-caf0-79c1-ba31-9738e78c3958
+  author: joe
+  content: |-
+    [rework round 2] PR #2016 — CHANGES REQUESTED, same category as round 1: the inventory is incomplete. That is my brief's fault as much as the work's. Last round I gave file COUNTS, which is not a checklist. Here is the enumeration.
+
+    THE SITES. Control-flow `.contains("...")` where the receiver is a tool's stderr/stdout/response, production code only, tests excluded:
+
+      git_ops.rs        185 186 187 188 216 217 230 231 232      git
+      forge.rs          2670 2671 2672 2677 2678 2679 2680        gh, git, glab
+      mcp.rs            8983 9080 9145 10554 10555 10664-10666    (indirect)
+      terminal_cmd.rs   440 448 449 450 451                       (indirect)
+      drain_state.rs    2549 2633
+      pr_rebase.rs      1172 1430                                 git
+      remote_create.rs  (named in the verdict)                    gh, git
+      network_retry.rs  362                                       (indirect)
+      worktree_pool_adopt.rs 792                                  git
+      context_prompt.rs 209
+      pr_cmd.rs         151
+      session.rs        6056
+      lib.rs            64889
+      ultraplan_cmd.rs  189
+
+    Roughly 40 sites across 14 files. Treat this as the checklist to work through, not as a definitive answer — I derived it with a grep and it will contain false positives (string tests on our own data) and may miss indirection. Correct it and say how; an inventory you re-derived and corrected is worth far more than one you inherited.
+
+    THE DEFINITION THAT WAS MISSING, and without it "enumerate every classifier" cannot terminate. A site belongs in this inventory when ALL THREE hold:
+      1. the string being searched originated outside our process — a subprocess's stdout/stderr, or an HTTP response body
+      2. the result of the match changes control flow, not just a message shown to a human
+      3. the wording is owned by someone else — git, gh, glab, cargo, the OS, a server
+
+    Write that definition into the doc. It is what lets a future reader decide a NEW site without re-litigating, and its absence is why two rounds have disagreed about what counts.
+
+    THE FOUR TOOLS, so the registry is organised by owner rather than by our file layout: git (git_ops, pr_rebase, worktree_pool_adopt, remote_create, forge), gh (forge, remote_create), glab (forge), cargo (build-failure markers). Record the observed version alongside each literal — that is what makes a future upstream reword diagnosable rather than mysterious.
+
+    STILL OUTSTANDING FROM ROUND 1, unchanged: the doc claims `forge::gitlab_merge_response_*` parses JSON and discards wrapper prose. It does not — it lowercases and substring-matches the whole raw stderr buffer. Either fix it or correct the claim. A doc asserting a safety property the code lacks is worse than no doc, because it stops the next reader checking.
+
+    IF THE FULL SWEEP WILL NOT FIT IN ONE ROUND, do git and glab first — those are the tools whose output actually drives Unreachable/Inconclusive and retry decisions — and state in the PR body which files remain. A complete registry for two tools beats a partial one for four, and a third round of "incomplete" helps nobody.
+  created_at: 2026-09-20T13:57:44.816489498Z
+  modified_at: 2026-09-20T13:57:44.816489498Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
