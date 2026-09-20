@@ -95,7 +95,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T03:37:04.274286254Z
-modified_at: 2026-09-19T21:07:02.194214823Z
+modified_at: 2026-09-20T15:34:32.180530575Z
 req_type: Epic
 tags:
 - claude-code
@@ -166,6 +166,9 @@ relationships:
 - rel_type: Parent
   target_id: 01a0bb7e-6ed4-7d33-8a00-8011759a1c25
   created_at: 2026-09-19T21:07:02.194214823Z
+- rel_type: Parent
+  target_id: 01a0bf74-5f98-7373-9045-cf15ec2b3d78
+  created_at: 2026-09-20T15:34:32.180530575Z
 comments:
 - id: 019e29bb-5a71-78e2-b7ae-74fa99dfad40
   author: joe
