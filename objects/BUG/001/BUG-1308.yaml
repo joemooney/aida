@@ -1,0 +1,52 @@
+id: 01a0bc8b-71a5-75c2-8fcd-c1d77633894a
+spec_id: BUG-1308
+agreed_id: BUG-1308
+title: 'auto-complete failure: phase 2 (ci) on STORY-1353'
+description: |
+  Auto-drafted by `aida queue work STORY-1353 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  CI check details are unavailable on PR-1989 after retries while a supervised merge-hold is present: `gh pr checks 1989 --json` produced no JSON: error connecting to api.github.com
+  check your internet connection or https://githubstatus.com
+
+  Failure kind: `ci-unavailable`
+
+  ## Recovery hint shown to the user
+
+  CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work STORY-1353 --auto-complete`.
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-20T02:00:49.354815585+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 1478442 ms
+    - phase 2 (ci): 317188 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"STORY-1353","started_at":"2026-09-20T01:30:52.179220408+00:00","completed_at":"2026-09-20T02:00:49.354815585+00:00","outcome":"failed","variant":"full","failed_phase":2,"failure_kind":"ci-unavailable","failure_message":"CI check details are unavailable on PR-1989 after retries while a supervised merge-hold is present: `gh pr checks 1989 --json` produced no JSON: error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":1478442},{"phase":2,"slug":"ci","elapsed_ms":317188}],"total_ms":1796126,"binary_sha":"2ef88f0295"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T02:00:50.341835125Z
+modified_at: 2026-09-20T02:00:50.341835125Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- ci
+- failure-2
+- failure-kind:ci-unavailable
