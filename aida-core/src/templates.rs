@@ -620,6 +620,31 @@ mod tests {
         }
     }
 
+    // trace:STORY-1350 | ai:codex
+    #[test]
+    fn aida_pickup_posts_approach_when_parseable_acceptance_is_present() {
+        let pickup = EMBEDDED_TEMPLATES
+            .get("skills/aida-pickup.md")
+            .expect("aida-pickup.md embedded");
+
+        assert!(pickup.contains("**Parseable-acceptance guard:**"));
+        assert!(pickup.contains("recognized `## Acceptance` or `## Verify` heading"));
+        assert!(pickup.contains("When that parseable section is present, post exactly one"));
+    }
+
+    // trace:STORY-1350 | ai:codex
+    #[test]
+    fn aida_pickup_posts_nothing_when_parseable_acceptance_is_absent() {
+        let pickup = EMBEDDED_TEMPLATES
+            .get("skills/aida-pickup.md")
+            .expect("aida-pickup.md embedded");
+
+        assert!(pickup.contains("When it is absent or empty, **post no"));
+        assert!(pickup.contains("approach comment at all** and continue to Step 3e"));
+        assert!(pickup.contains("Do not manufacture criteria"));
+        assert!(pickup.contains("do not post a placeholder comment"));
+    }
+
     /// BUG-280 regression guard — the `/aida-review` skill template must carry
     /// the headless-mode contract that prevents the PR-150 failure mode
     /// (reviewer posted a PASS comment then called AskUserQuestion and bailed

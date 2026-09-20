@@ -362,6 +362,13 @@ comment on the picked-up spec **before the first source or documentation
 edit**. This is a thinking artifact, not an approval gate: post it and proceed
 immediately. Do not wait for an advisor or operator response.
 
+**Parseable-acceptance guard:** first inspect the full description. Run this
+step only when it contains a recognized `## Acceptance` or `## Verify` heading
+with a non-empty body. When that parseable section is present, post exactly one
+approach comment as described below. When it is absent or empty, **post no
+approach comment at all** and continue to Step 3e. Do not manufacture criteria
+from the title or general description, and do not post a placeholder comment.
+
 The comment must have these three sections:
 
 1. **Acceptance criteria as tests** — restate every acceptance criterion as

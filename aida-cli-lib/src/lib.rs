@@ -76955,6 +76955,7 @@ fn generate_review_prompt(
                 out.push_str("_(no `## Acceptance` / `## Verify` section in description — review against the requirement title and description.)_\n\n");
             }
         }
+        append_implementer_approach(&mut out, &req.comments);
     }
 
     out.push_str(review_prompt_test_commands_section());
@@ -76988,6 +76989,26 @@ fn generate_review_prompt(
         print!("{}", out);
     }
     Ok(())
+}
+
+/// Return the newest durable implementation-intent comment. The exact first
+/// heading is the stable marker written by the pickup skill; ordinary comments
+/// that merely mention an approach must not leak into the review checklist.
+// trace:STORY-1350 | ai:codex
+fn extract_implementer_approach(comments: &[aida_core::models::Comment]) -> Option<&str> {
+    comments.iter().rev().find_map(|comment| {
+        let first_line = comment.content.trim_start().lines().next()?;
+        (first_line.trim_end() == "## Implementer approach").then_some(comment.content.trim())
+    })
+}
+
+// trace:STORY-1350 | ai:codex
+fn append_implementer_approach(out: &mut String, comments: &[aida_core::models::Comment]) {
+    if let Some(approach) = extract_implementer_approach(comments) {
+        out.push_str("#### Recorded implementer approach\n\n");
+        out.push_str(approach);
+        out.push_str("\n\n");
+    }
 }
 
 // trace:BUG-800 | ai:codex
@@ -91883,6 +91904,12 @@ mod story_698_test_plan_capture_tests;
 #[cfg(test)]
 #[path = "tests/bug_800_review_test_command_prompt_tests.rs"]
 mod bug_800_review_test_command_prompt_tests;
+
+// STORY-1350: round-one review compares the recorded implementation intent
+// with the resulting diff, using the pickup heading as a stable marker.
+#[cfg(test)]
+#[path = "tests/story_1350_review_approach_tests.rs"]
+mod story_1350_review_approach_tests;
 
 // STORY-790 review findings: drift brief then-vs-now + mail/briefs since exit.
 // trace:STORY-790 | ai:claude
