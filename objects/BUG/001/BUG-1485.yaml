@@ -1,0 +1,55 @@
+id: 01a0c066-1bed-7b53-99cb-146a6bdc48ad
+spec_id: BUG-1485
+agreed_id: BUG-1485
+title: The orchestrator cannot match its own child session to a lease — four occurrences, three today, and one of them stranded pushed work as a done spec with no PR
+description: |
+  The orchestrator cannot match its own child session to a lease, burns both retry attempts, and shelves. It has fired four times, three of them today with the gap between them shrinking, and in at least one case it stranded finished, pushed work that nothing would have shipped.
+
+  THE ERROR, verbatim:
+
+      could not match the orchestrated session (claude id 01a0c064) to a session lease.
+      Resume the most recent recorded session with `aida queue work BUG-1445 --resume`
+      (bare — no id needed). Active lease id(s), for diagnosis only (NOT `--resume`
+      arguments — these are lease ids, not claude session ids): 01a09e3e7dbd,
+      01a0bbe807fb, 01a0bc7022f0, 01a0bcaa72b0, 01a0bd7992db, 01a0c0323f5f, abf...
+
+  OCCURRENCES in `.aida/events.jsonl`:
+
+      2026-09-19 20:38:18  TASK-168    SpecShelved
+      2026-09-20 17:52:41  BUG-1432    SpecRetried attempt 2/2
+      2026-09-20 19:32:31  BUG-1442    SpecRetried attempt 2/2
+      2026-09-20 19:57:33  BUG-1445    SpecRetried attempt 2/2
+
+  Three today. The gaps are 100 minutes, then 25.
+
+  IT FIRES AT BOTH ENDS OF THE PHASE, which is the part that makes it more than a flake.
+
+      BUG-1445   implementer 19:57:08 -> 19:57:33   25 seconds, no commit, no remote branch
+      BUG-1442   implementer ran ~5 minutes, committed 6c692a496b (142 insertions, 3 files),
+                 PUSHED to origin/bug-1442-work — and then the mismatch prevented the PR
+
+  So it is not simply "the session died early". BUG-1442's implementer did the whole job and the failure landed between the push and the PR. The spec went to `done` with finished work on origin and no pull request, and the only signal was an `UnshippedWorkDetected` event. It sat that way until a human opened PR #2027 by hand; the drain has since adopted that PR and driven the spec through review.
+
+  That is the cost worth stating plainly: this failure can silently convert completed, pushed work into work nobody will ship, and the substrate records the spec as `done` while it happens.
+
+  THE ERROR TEXT IS ALSO WRONG ABOUT WHAT IT SHOWS. It prints the active lease ids "for diagnosis only", with a parenthetical warning the reader not to pass them to `--resume`. Per the advisor's finding TASK-1-155, stale leases are the normal resting state of this system — `aida session reap --dry-run` today correctly refused all six, one because its process is still running and the rest for want of a merge signal. So the lease list is noise in every instance of this error, and the parenthetical exists because the list invites exactly the misuse it then forbids. A diagnostic that must warn you off its own content is not carrying diagnostic information.
+
+  WHAT I HAVE NOT ESTABLISHED. I have not read the session-to-lease matching path and do not know why the claude session id fails to resolve — whether the lease is written after the child starts, whether the id recorded differs in form from the id matched, or whether concurrency between the launcher's relaunch and the child's registration is involved. The four occurrences and the two failure positions are measured; the cause is not. Read that path before designing.
+
+  Acceptance:
+  - The orchestrator matches its child session to the lease it created, or fails with a cause that names what did not match rather than listing leases the reader is told not to use.
+  - A failure occurring AFTER the implementer has pushed does not leave the spec `done` with an unshipped branch: either the PR is opened, or the spec is not marked done, or the shelve names the stranded branch and the recovery is one command.
+  - The error text drops the active-lease list, or explains what a reader is meant to do with it.
+  - Regression fixture reproduces both positions: a mismatch at session start (BUG-1445's 25-second shape) and a mismatch after a successful push (BUG-1442's shape).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T19:58:32.429439915Z
+modified_at: 2026-09-20T19:58:32.429439915Z
+req_type: Bug
+tags:
+- drain-safe
+- orchestrator
+- parent:EPIC-62
+- session-lease
