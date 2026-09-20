@@ -39,14 +39,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0bb7e-6ed4-7d33-8a00-8011759a1c25
-  position: 105000
-  added_by: role:implementer
-  note: make --format json honest on aida status <SPEC> (prose today) and aida ps (TOON today); give the existing per-spec view a JSON shape carrying the flag-only liveness case; do NOT add a new verb; kept separate from STORY-1352 deliberately
-  added_at: 2026-09-19T21:12:25.875020164Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0ba82-9fb0-7763-a986-b54029980a2c
   position: 106000
   added_by: role:implementer
@@ -95,13 +87,6 @@
   position: 120000
   added_by: role:implementer
   added_at: 2026-09-20T00:23:24.199779740Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0bb7d-7f12-78d1-a0ea-4c530343130e
-  position: 121000
-  added_by: role:implementer
-  added_at: 2026-09-20T01:02:17.979342040Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
