@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:02:39.454765774Z
-modified_at: 2026-09-20T23:51:26.959708359Z
+modified_at: 2026-09-20T23:58:25.774929786Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -65,5 +65,18 @@ comments:
     The seven-instance pattern is intact and this spec's remedy covers all seven. BUG-1485's case is the gap that remedy does NOT cover, which is the widening recorded above — a refusal must imply protection regardless of who records it. Caveat on the method: 10 spec-keyed files carry no recorded_by, so the check identifies hand-records positively but cannot prove a negative on those. None of the seven has a spec-keyed file at all, so they are unaffected by that caveat.
   created_at: 2026-09-20T21:02:34.103593992Z
   modified_at: 2026-09-20T21:02:34.103593992Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c141-bbee-71d0-9ae9-e28f3ef0f556
+  author: joe
+  content: |-
+    [aida:advisor] THE DISCRIMINATOR I USED TO SETTLE THE SEVEN-OF-EIGHT COUNT WILL BREAK when PR #2037 lands. Recording the robust restatement now, before it does.
+
+    I settled the count by testing for a spec-keyed verdict with recorded_by == the literal 'aida review record'. #2037 changes that field on the spec-keyed record from the literal command name to a SEAT IDENTITY. After it merges the literal matches only the 29 files written before today, so the test silently narrows to a historical cohort while still appearing to work.
+
+    ROBUST RESTATEMENT, which holds across the change: recorded_by is NOT 'aida drain reviewer'. The drain has never written a spec-keyed verdict — 0 of 30 across the directory — so absence of the drain's signature is the durable discriminator, and presence of any particular writer name is not.
+
+    The seven-of-eight result stands: it was computed on today's data with today's field values, and the seven have no spec-keyed file at all, which no rename affects. Flagged by claude-reviewer-1, who noticed their own change would invalidate a test they had given me this morning.
+  created_at: 2026-09-20T23:58:25.774929786Z
+  modified_at: 2026-09-20T23:58:25.774929786Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
