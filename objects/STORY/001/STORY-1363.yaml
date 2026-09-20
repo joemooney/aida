@@ -1,0 +1,26 @@
+id: 01a0bc6a-847a-7731-abc3-6f079e1dbcb4
+spec_id: STORY-1363
+agreed_id: STORY-1363
+title: 'Review PR-1987: [AI:codex] feat(monitor): version read-only contract (STORY-1352)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0bc54`) for branch `story-1352-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1987>
+  - Branch: `story-1352-work` → `main`
+
+  ## Covers
+
+  - STORY-1352
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1987` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T01:24:52.474631872Z
+modified_at: 2026-09-20T01:24:52.474631872Z
+req_type: Story
