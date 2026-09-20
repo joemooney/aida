@@ -1,0 +1,49 @@
+id: 01a0bf60-6de8-78a1-9ef9-9ed065935ce3
+spec_id: BUG-1450
+agreed_id: BUG-1450
+title: A watchdog-stopped implementer phase discards the work it already pushed, so ten committed commits stayed invisible to every PR-based surface for fifteen hours
+description: |
+  The implementer phase watchdog ends a session at its wall-clock ceiling without surfacing the work the session already committed, so finished-and-pushed work becomes invisible to every PR-based surface and is indistinguishable from a session that produced nothing.
+
+  OBSERVED on TASK-1274, stranded fifteen hours.
+
+    2026-09-19 22:17:05  PhaseEntered implementer (attempt 1)
+    2026-09-19 22:17:08  PuntFiled — the implementer hit a design fork
+    2026-09-19 23:02:14  SpecRetried  cause=watchdog, attempt 2/2
+    2026-09-19 23:47:24  SpecShelved  "the implementer phase watchdog stopped the session — phase exceeded the 45m wall-clock ceiling (attempt 2/2)"
+    2026-09-19 23:51:46  UnshippedWorkDetected  branch task-1274-work
+
+  The branch carried TEN commits, pushed, 107 insertions across four files — warm mirror pipeline parallelization, runner-slot isolation, mtime and build-stamp stabilization, fixture output-mode pinning. Real work, complete enough to review. No PR was ever opened, because opening the PR happens after the work and inside the same timed phase, and the watchdog ended the phase first.
+
+  WHY THAT MATTERS MORE THAN A LOST SESSION. Everything we use to see outstanding work is keyed on a PR — `aida awaiting` prs, the reviewer queue, merge-hold accounting, the drain's own phase 4. A branch with no PR appears in exactly one place, `unshipped_work`, which reads as a recovery hint rather than as a claim that finished work is sitting there. So for fifteen hours the substrate's answer to "is there anything to review" was no, while ten reviewable commits existed.
+
+  It is the inverse of BUG-1422. There, a session that touched nothing was indistinguishable from one that finished. Here a session that did a great deal is indistinguishable from one that did nothing, and for the same underlying reason: the signal is the artifact, and the artifact is produced by a step the failure pre-empts.
+
+  THE PUNT COMPOUNDS IT. A punt was filed three seconds into attempt 1 and never answered, because the escalation that would have surfaced it also died with the session. So the design fork that likely caused the phase to run long is itself unrecorded anywhere a human would look.
+
+  ACCEPTANCE
+  1. When the watchdog stops an implementer phase, work already committed and pushed on the branch is surfaced before the session is torn down — a PR opened, or a record that names the branch and its commit count as reviewable work rather than as a recovery hint.
+  2. The shelve event distinguishes a watchdog stop that left committed work from one that left none. The count of commits ahead of the default branch is the minimum; the current event says only that the ceiling was exceeded.
+  3. A punt filed during a phase that the watchdog later stops is still delivered. An unanswered design fork must not be lost because the session that raised it was killed.
+  4. `unshipped_work` distinguishes a branch with no PR from a branch whose PR is open and waiting, because those need opposite actions and currently read the same.
+  5. A test covers the observed shape: a phase that commits, pushes, and is then stopped by the watchdog leaves the work discoverable through the normal review path, not only through `unshipped_work`.
+
+  NOT ABOUT THE CEILING ITSELF. Whether 45 minutes is the right ceiling is a separate question and not in scope. A phase that is stopped correctly should still not lose what it produced.
+
+  Found by the advisor after TASK-1274 appeared in `unshipped_work` on roughly a dozen consecutive mail ticks without any surface treating it as actionable. PR #2019 opened manually to make the ten commits reviewable; held, pending review.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T15:12:42.984173284Z
+modified_at: 2026-09-20T15:12:42.984173284Z
+req_type: Bug
+tags:
+- batch:night-0920
+- diagnostic-decay
+- drain
+- drain-safe
+- from:session-0920
+- observability
+- parent:EPIC-28
+- watchdog
