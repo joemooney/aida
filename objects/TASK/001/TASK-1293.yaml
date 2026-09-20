@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-20T12:18:31.929046570Z
+modified_at: 2026-09-20T12:34:32.296249636Z
 req_type: Task
 tags:
 - acceptance
@@ -137,10 +137,10 @@ implementation_info:
   implemented_at: 2026-09-20T05:36:09.060440682Z
   implemented_by: joe
 failure_reason:
-  phase: merge
-  phase_index: 4
-  kind: tool-exit
-  detail: 'gh merge failed for PR-2003: refusing to merge PR-2003: supervised merge-hold — advisor hold: adds a new discipline MASTER without the matching project-local copy. PR #1988 adds a guard asserting every embedded master has one, so whichever merges second goes red for the other''s omission. One file.. A human/advisor must review, then clear the hold (`aida merge-hold clear 2003`) before merging. (attempt 2/2)'
-  recovery_hint: 'Investigate the merge failure: `gh pr view 2003`'
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: reviewer verdict is RequestChanges — not Approved
+  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1293 --work`'
   shelved_by: advisor
-  shelved_at: 2026-09-20T05:52:44.271623239Z
+  shelved_at: 2026-09-20T12:34:32.296249636Z
