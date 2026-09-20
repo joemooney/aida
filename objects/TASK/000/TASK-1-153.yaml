@@ -1,5 +1,6 @@
 id: 01a0c031-18cd-7723-8cdb-3efa5fc830db
 spec_id: TASK-1-153
+agreed_id: TASK-177
 title: BUG-1436 cannot complete until a real Linux lock failure is captured
 description: 'Headless reproduction exhausted the currently available evidence: 1,000 direct test-binary runs at process parallelism 16 on Linux 7.0.0-30-generic (6 CPUs) produced 0 failures, and local artifact searches did not recover the original Linux panic. Acceptance requires the next real Linux failure’s ErrorKind and raw OS error, while explicitly forbidding a speculative fix. Keep BUG-1436 queued/in-progress and capture the verbatim panic when it next occurs.'
 status: Rejected
