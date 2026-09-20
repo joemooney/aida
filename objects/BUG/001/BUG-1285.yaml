@@ -15,12 +15,12 @@ description: |-
   2. DIAGNOSTICS. The refusal reported "could not match the orchestrated session (claude id 01a0bb64) to a session lease" — a true statement about the wrong thing, which sent the reporting seat into twenty minutes of session-id investigation before a lease listing showed the real cause. The code already gathers candidate lease ids as diagnostics; it can notice that one of them holds THIS spec's scope and say so: "the previous attempt's lease <id> is still held on scope <scope> (holder pid <pid>, dead since <t>)". An error that names the symptom rather than the cause converts a two-minute fix into a twenty-minute hunt, and this one did.
 
   Acceptance: a lease whose recorded holder is provably dead (per the TASK-1284 identity check) does not block a fresh claim by a new drain run, and a refusal that IS correct does not consume a retry; the refusal message names the holding lease, its scope and its holder's liveness rather than session-id matching; unit tests on the pure decision (dead holder / live holder / missing start-time data → degrade to pid) and on the message content; no change to the single-drain-per-repo invariant, which is a different lock and must stay exactly as strict.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:51:12.872457642Z
-modified_at: 2026-09-20T00:12:42.426941932Z
+modified_at: 2026-09-20T01:41:38.720569395Z
 req_type: Bug
 tags:
 - diagnostics
@@ -67,4 +67,22 @@ comments:
   created_at: 2026-09-20T00:12:42.426941932Z
   modified_at: 2026-09-20T00:12:42.426941932Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bc79-df12-7803-9e33-12cf237b81b6
+  author: aida-auto-bump
+  timestamp: 2026-09-20T01:41:38.706267132Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0bc79-df20-7412-b2fe-1aa4788131f8
+  timestamp: 2026-09-20T01:41:38.720567579Z
+  agent: aida
+  commit_sha: f65434dee2d84df29e729d7c9151de1b3546be54
+  summary: Completed via merge f65434de
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-20T01:41:38.706018738Z
+  completion_sha: f65434dee2d84df29e729d7c9151de1b3546be54
