@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:06:24.777604114Z
-modified_at: 2026-09-20T18:05:47.410282529Z
+modified_at: 2026-09-20T18:05:48.967448533Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -129,6 +129,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T16:13:01.522557462Z
   modified_at: 2026-09-20T16:13:01.522557462Z
+- id: 01a0bffe-e715-77f1-8e6a-cc5f2235db52
+  author: joe
+  content: 'Product seat requeue: verdict recorded and no drain run followed it. Findings are specific and actionable; re-driving so the round happens. No acceptance change.'
+  created_at: 2026-09-20T18:05:48.693042131Z
+  modified_at: 2026-09-20T18:05:48.693042131Z
 execution_mode: drain
 implementation_info:
   implemented: true
