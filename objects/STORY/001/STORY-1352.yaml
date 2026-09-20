@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:40.960788392Z
-modified_at: 2026-09-20T01:30:38.501520215Z
+modified_at: 2026-09-20T01:31:17.129384291Z
 req_type: Story
 tags:
 - api-stability
@@ -81,6 +81,32 @@ comments:
   content: 'Implemented the operator-approved contract shape: aida contract --json advertises v1.0.0 and 11 consumed polling subsets plus aida watch --all --json. CI fixtures guard removals/type changes by semver and lock EventKind::known_names; docs state read-only/no-dispatch/no-human-output/no-store rules and include jq consumer example.'
   created_at: 2026-09-20T01:14:20.626612264Z
   modified_at: 2026-09-20T01:14:20.626612264Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bc70-6309-76f1-85b8-34e7aa6607cf
+  author: joe
+  content: |-
+    Product-seat note on the round-1 sweep. The advisor requeues this; I am adding one thing the five findings imply but do not say, plus independent confirmation of three of them.
+
+    CONFIRMED against the built binary at target/release/aida, not read off the diff:
+      aida events --follow --json   -> error: unrecognized subcommand 'events'
+      aida queue progress --json    -> error: unexpected argument '--json' found
+      aida findings list --json     -> error: unexpected argument '--json' found
+
+    So findings 1 and 2 are facts, not readings. The manifest advertises a subscribe surface that does not exist and two commands that reject the flag the contract promises.
+
+    THE THING WORTH SAYING OUT LOUD, because it decides how to approach the rework rather than just what to fix. Finding 3 is not one defect among five — it is the spec failing at its own purpose. This spec exists so an external consumer cannot be broken silently. The guard it ships compares hand-authored fixtures to a hand-authored manifest, so a real command's field can change type or disappear while fixtures and manifest stay in perfect agreement and CI passes. The mechanism built to detect silent drift has the silent-drift flaw built into it.
+
+    That also explains findings 1, 2 and 4 as consequences rather than separate mistakes. Nothing in the pipeline ever executed the commands being described, so nothing could notice that three of them do not exist in the form advertised. Fix finding 3 first and the others become detectable rather than needing to be found by a reviewer reading prose.
+
+    The shape to aim for: the drift guard must invoke the real command and validate its ACTUAL output against the fixture. A contract validated against itself is a tautology. If a covered command cannot be executed in CI, it does not belong in the contract until it can.
+
+    This is PRIN-4's class applied to an API surface rather than to a diagnostic — a description that cannot be forced to stay true to the thing it describes will drift, and the drift is invisible precisely because the description still looks internally consistent.
+
+    ONE CONTEXT ITEM the implementer should have. The aida-monitor project is being built against this contract RIGHT NOW. It already reported six findings against our read surfaces, four of which reproduced. So the consumer this spec protects is real and active, not hypothetical, and a contract that advertises `queue progress --json` will send them to a command that rejects it.
+
+    On finding 5: Build (windows-latest) is red on the normal PR matrix. Note that a Windows-only lock defect was filed today as BUG-1303 (three try-lock sites treating a Windows mandatory-lock error as a hard failure rather than contention). Check whether that is the same failure before treating it as this PR's own regression.
+  created_at: 2026-09-20T01:31:17.129384291Z
+  modified_at: 2026-09-20T01:31:17.129384291Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
