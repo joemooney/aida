@@ -19254,7 +19254,7 @@ fn mailbox_policy(project_root: &std::path::Path) -> MailboxPolicy {
     policy
 }
 
-// trace:STORY-583 | ai:codex
+// trace:STORY-583 trace:BUG-1297 | ai:codex
 fn resolve_mailbox_message<'a>(
     messages: &'a [aida_core::mailbox::Message],
     query: &str,
@@ -19266,7 +19266,14 @@ fn resolve_mailbox_message<'a>(
     match matches.as_slice() {
         [msg] => Ok(*msg),
         [] => anyhow::bail!("message not found: {query}"),
-        _ => anyhow::bail!("message id prefix is ambiguous: {query}"),
+        _ => {
+            let candidates = matches
+                .iter()
+                .map(|m| m.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            anyhow::bail!("message id prefix is ambiguous: {query}; candidates: {candidates}")
+        }
     }
 }
 

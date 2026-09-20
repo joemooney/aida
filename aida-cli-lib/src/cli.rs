@@ -2913,6 +2913,13 @@ pub enum MailboxCommand {
         stranded: bool,
     },
 
+    /// Read one message by id or unique id prefix without changing unread state.
+    // trace:BUG-1297 | ai:codex
+    Read {
+        /// Message id or unique id prefix to read.
+        message_id: String,
+    },
+
     /// Retract a sent message, leaving a withdrawn tombstone in mailbox views.
     // trace:STORY-583 | ai:codex
     Retract {
