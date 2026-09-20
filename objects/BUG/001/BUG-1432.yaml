@@ -34,12 +34,12 @@ description: |
   NOT IN SCOPE: the Rejected-on-closed-unmerged semantics, which I flagged separately at review time — a PR closed in favour of a replacement should arguably follow its successor rather than terminate the spec. That is a different question and needs its own evidence.
 
   Found by dispatching a cross-platform run on an unrelated branch, which is the only reason this surfaced at all — PR CI is Linux-only.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T08:51:32.816783219Z
-modified_at: 2026-09-20T18:32:52.594396704Z
+modified_at: 2026-09-20T22:34:08.673633950Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -108,19 +108,28 @@ comments:
   created_at: 2026-09-20T18:32:48.811604834Z
   modified_at: 2026-09-20T18:32:48.811604834Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0c0f4-9193-7a40-9284-ca57bcfbdf6a
+  author: aida-auto-bump
+  timestamp: 2026-09-20T22:34:08.659058046Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0c0f4-91a1-7420-9a4e-8a985ab6e8ce
+  timestamp: 2026-09-20T22:34:08.673632528Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1432-2026-09-20T183250Z.md
+  commit_sha: 4fd51c96a9417cdbfb2dc0b5415d8a339f4ea938
+  summary: Completed via merge 4fd51c96
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: gh merge failed for PR-2024: gh pr merge failed for #2024: X Pull request joemooney/aida#2024 is not mergeable: the base branch policy prohibits the merge. To have the pull request merged after all the requirements have been met, add the `--auto` flag. To use administrator privileges to immediately merge the pull request, add the `--admin` flag. (attempt 2/2)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T17:57:43.082226064Z
   implemented_by: joe
-failure_reason:
-  phase: merge
-  phase_index: 4
-  kind: tool-exit
-  detail: |-
-    gh merge failed for PR-2024: gh pr merge failed for #2024: X Pull request joemooney/aida#2024 is not mergeable: the base branch policy prohibits the merge.
-    To have the pull request merged after all the requirements have been met, add the `--auto` flag.
-    To use administrator privileges to immediately merge the pull request, add the `--admin` flag. (attempt 2/2)
-  recovery_hint: 'Investigate the merge failure: `gh pr view 2024`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T18:32:52.594396704Z
+  completed_at: 2026-09-20T22:34:08.658818388Z
+  completion_sha: 4fd51c96a9417cdbfb2dc0b5415d8a339f4ea938
