@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T19:00:42.521523069Z
-modified_at: 2026-09-20T19:00:42.521523069Z
+modified_at: 2026-09-20T19:03:53.128836676Z
 req_type: Task
 tags:
 - awaiting-reproduction
@@ -15,4 +15,12 @@ tags:
 - headless-blocked
 - kind:observation
 - linked:BUG-1436
+- recurrence:2
 - severity:minor
+comments:
+- id: 01a0c034-1228-7973-8364-404596aef836
+  author: joe
+  content: 'Recurrence #2 by joe 2026-09-20: Headless pickup independently inspected GitHub Actions run 35502040911: the preserved lock panic is Windows os error 33, not Linux. Another 1,000 Linux exact-test executions at -P16 produced 0 failures. BUG-1436 still cannot complete without a real Linux error kind/raw_os_error.'
+  created_at: 2026-09-20T19:03:53.128836676Z
+  modified_at: 2026-09-20T19:03:53.128836676Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
