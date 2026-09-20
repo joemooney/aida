@@ -9,12 +9,12 @@ description: |-
   THE COST IS DIAGNOSTIC AND REAL: a human or advisor reading .aida/review-verdicts/PR-N.json cannot tell which head it covers. Across 2026-09-18/19 I hand-pinned the head SHA into every advisor verdict file and had to re-pin it after each rebase (#1956, #1957, #1959, #1964, #1965) precisely because the reviewer's own file does not carry one; and on 2026-09-18 22:20 I misread a hold-gate state for want of the same kind of stamp.
   SUGGESTED FIX (one line of plumbing): have the reviewer phase write through review_verdict::record_verdict with the PR head SHA and branch it already knows (pr_head_sha_best_effort is right there), so PR-keyed and spec-keyed verdicts have the same shape. Then aida pr ship and the advisor can both say "this verdict covers this head" instead of inferring it from the file mtime.
   Related: TASK-1191 (verdict selection), BUG-1213 (rework rounds), the in-flight-review gate.
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T14:01:36.255012638Z
-modified_at: 2026-09-20T03:07:57.735137160Z
+modified_at: 2026-09-20T03:08:04.619704626Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -70,8 +70,26 @@ comments:
   created_at: 2026-09-20T03:07:57.735137160Z
   modified_at: 2026-09-20T03:07:57.735137160Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bcc9-0084-7f30-867f-68d31dfe7a7f
+  author: aida-auto-bump
+  timestamp: 2026-09-20T03:08:04.612301529Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0bcc9-008b-7eb2-b36d-c73895a78721
+  timestamp: 2026-09-20T03:08:04.619703418Z
+  agent: aida
+  commit_sha: a78c4e670b69e6b5b4c31a3c1420a206889ad931
+  summary: Completed via merge a78c4e67
+  punted:
+  - 'punted: could not match the orchestrated session (claude id 01a0bb64) to a session lease. Resume the most recent recorded session with `aida queue work TASK-168 --resume` (bare — no id needed). Active lease id(s), for diagnosis only (NOT `--resume` arguments — these are lease ids, not claude session ids): 01a09e3e7dbd, 01a0a5360dab, 01a0a7a89eb6, 01a0a86dc041, 01a0ae72142d, 01a0aeacbdda, 01a0b9a43688, 01a0bab7b3e8, 01a0bb6261fe, abf9f7f087dbb254e-c3a7f12a9af4d18b. (attempt 2/2)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T02:42:31.662136349Z
   implemented_by: joe
+  completed_at: 2026-09-20T03:08:04.558931964Z
+  completion_sha: a78c4e670b69e6b5b4c31a3c1420a206889ad931
