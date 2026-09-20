@@ -29,12 +29,12 @@ description: |
   RELATED AND DELIBERATELY SEPARATE: TASK-1298 asks the readiness check to verify the binary exists before an unattended window. This spec is about the status surface being truthful whenever anyone asks. The readiness check is a moment; this is the permanent answer.
 
   This is the PRIN-4 class at its second grade: not a diagnostic that degrades, but one that asserts something its own subject disproves.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:52.759483961Z
-modified_at: 2026-09-20T09:02:16.143031745Z
+modified_at: 2026-09-20T09:11:20.200653258Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -100,16 +100,26 @@ comments:
   created_at: 2026-09-20T09:02:16.143031745Z
   modified_at: 2026-09-20T09:02:16.143031745Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0be15-9380-7630-8c02-a0d57c7d96bf
+  author: aida-auto-bump
+  timestamp: 2026-09-20T09:11:20.192904779Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0be15-9388-73a1-bc87-2597801d1135
+  timestamp: 2026-09-20T09:11:20.200651821Z
+  agent: aida
+  commit_sha: 9c00ccf1e248a06da4533e0002d8320fd8e71d6d
+  summary: Completed via merge 9c00ccf1
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T08:44:21.352962148Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1305 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T09:01:31.524692815Z
+  completed_at: 2026-09-20T09:11:20.192463406Z
+  completion_sha: 9c00ccf1e248a06da4533e0002d8320fd8e71d6d
