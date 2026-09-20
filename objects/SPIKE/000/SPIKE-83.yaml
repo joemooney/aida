@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:39:04.185770995Z
-modified_at: 2026-09-20T06:03:21.614702183Z
+modified_at: 2026-09-20T06:04:18.136543837Z
 req_type: Spike
 tags:
 - batch:followups-0918i
@@ -106,6 +106,27 @@ comments:
   created_at: 2026-09-20T06:03:21.614702183Z
   modified_at: 2026-09-20T06:03:21.614702183Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bd6a-5758-73f0-9a0e-19ce5714485d
+  author: joe
+  content: |-
+    [advisor:decision] PRIORITIZATION DECIDED, since the report correctly defers it to me. PR #2004 is approved and is NOT merged: `aida pr ship` refused it because a live drive owns this spec and the orchestrator's independent reviewer gates the merge. That refusal is correct and I did not override it.
+
+    THE DECISION: yes, the review round-trip is the first optimization to evaluate, ahead of model substitution. The more useful half of the answer is that we are already doing it — tonight's merges were largely review-loop reliability — so this evidence RATIFIES the course rather than redirecting it. Worth saying plainly, because a spike confirming the existing plan reads too easily as having found nothing.
+
+    WHY THE CONCLUSION SURVIVES ITS OWN CAVEAT. The report is right that applying a round fraction to tokens and hours assumes uniform per-round cost, and that rework rounds are plausibly cheaper than initial ones, so 37.4M is an upper bound. The conclusion is robust to that: halve the rework rounds' unit cost and the tail is still roughly half of all tokens. Model substitution would have to deliver an implausibly large per-token saving to beat eliminating half the rounds. The decision does not depend on the estimate being tight, only on it being large, and it is.
+
+    WHAT WOULD CHANGE MY MIND, stated now so it is falsifiable later: per-round records showing rework rounds cost well under a third of an initial round. That would put the tail near 30% of tokens and make the two levers comparable. The report already names the missing join — a durable round/phase key in usage.jsonl — as what replaces the proportional estimate, so that is the measurement to build before revisiting.
+
+    ON THE DOLLAR FIGURE. Refusing to collapse cost to one number without the model and token-class mix was the right call and I want it upheld rather than quietly relaxed later. Cache reads, cache writes, uncached input and output carry different rates; a single blended figure would be quoted for months and wrong in a direction nobody could reconstruct. 2.9M tokens and 1.33 throughput-hours per merged spec is the honest unit until the mix is joined to dated rates.
+
+    A CAUTION THE REPORT DOES NOT MAKE, recorded so the figure is not misread later: the 25.3 throughput-hours derives from a 0.75 merges/hour rate, which measures the whole pipeline including the advisor gate and CI waits. It is not agent working time and must not be compared against one. Anyone computing a cost per hour from it would be dividing by wall-clock that includes hours when nobody was working.
+
+    FOLLOW-UP FILED SEPARATELY as Draft: the drain summary is not usable as a cost ledger — 57 of 92 records carry zero tokens while the nonzero ones carry 539M. The report gives a precise condition rather than a symptom, which is what makes it fixable.
+
+    Nothing else is needed from this spike. It answered what it was asked, declined what it could not establish, and made no decision it was not asked to make.
+  created_at: 2026-09-20T06:04:18.136543837Z
+  modified_at: 2026-09-20T06:04:18.136543837Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
