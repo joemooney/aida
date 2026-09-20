@@ -1136,11 +1136,67 @@ mod tests {
         );
     }
 
+    /// Project-local discipline guides that intentionally differ from the
+    /// downstream master, paired with the reason each one is localized.
+    /// Keep this list narrow: an entry opts that guide out of stale-copy
+    /// detection.
+    // trace:BUG-1426 | ai:codex
+    const LOCALIZED_DISCIPLINE_GUIDES: &[(&str, &str)] = &[
+        (
+            "README.md",
+            "indexes test-isolation.md, a guide specific to this Rust repository",
+        ),
+        (
+            "autonomous-burndown.md",
+            "documents this repository's lease-based drain liveness rule",
+        ),
+        (
+            "substrate-as-bouncer.md",
+            "tracks AIDA's own implementation gates rather than downstream guidance",
+        ),
+    ];
+
+    fn discipline_content_mismatches(
+        project_dir: &std::path::Path,
+        masters: &[(&str, &str)],
+        localized: &[(&str, &str)],
+    ) -> Vec<String> {
+        masters
+            .iter()
+            .filter(|(name, _)| !localized.iter().any(|(local, _)| local == name))
+            .filter_map(|(name, master)| {
+                let local = std::fs::read_to_string(project_dir.join(name)).ok()?;
+                (local.trim_end() != *master).then(|| (*name).to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn discipline_content_check_rejects_locally_edited_copy() {
+        let project = tempfile::tempdir().unwrap();
+        std::fs::write(project.path().join("guide.md"), "locally edited\n").unwrap();
+
+        let stale = discipline_content_mismatches(
+            project.path(),
+            &[("guide.md", "canonical content")],
+            &[],
+        );
+        assert_eq!(stale, vec!["guide.md"]);
+
+        let localized = discipline_content_mismatches(
+            project.path(),
+            &[("guide.md", "canonical content")],
+            &[("guide.md", "project-specific operational guidance")],
+        );
+        assert!(localized.is_empty());
+    }
+
     /// Guards the CHECKED-IN project copy of the discipline pack (this
     /// repo's own `.aida/discipline/`, explicitly un-ignored in .gitignore
     /// so this project dogfoods the pack it ships) against the master: every
-    /// master guide must be present on disk, and the project copy's own
-    /// README must link to files that actually exist. Only runs when the
+    /// master guide must be present on disk, every non-localized guide must
+    /// match its embedded master, and the project copy's own README must link
+    /// to files that actually exist. Only runs when the
     /// project copy is reachable relative to this crate (true for this
     /// monorepo checkout, where `cargo test -p aida-core` runs); a
     /// standalone build of the published `aida-core` crate — which does not
@@ -1175,6 +1231,22 @@ mod tests {
              the pack promises downstream: {missing:?}. Copy the file(s) \
              from aida-core/templates/.aida/discipline/, or record why they \
              are deliberately excluded."
+        );
+
+        let masters: Vec<(&str, &str)> = EMBEDDED_TEMPLATES
+            .iter()
+            .filter_map(|(key, body)| {
+                key.strip_prefix(".aida/discipline/")
+                    .map(|name| (name, *body))
+            })
+            .collect();
+        let stale =
+            discipline_content_mismatches(&project_dir, &masters, LOCALIZED_DISCIPLINE_GUIDES);
+        assert!(
+            stale.is_empty(),
+            "project copy .aida/discipline/ has guide(s) whose content differs \
+             from the embedded master: {stale:?}. Refresh each stale file, or \
+             add a narrow LOCALIZED_DISCIPLINE_GUIDES entry with its reason."
         );
 
         let project_readme_path = project_dir.join("README.md");
