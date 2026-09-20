@@ -22,12 +22,12 @@ description: |
   - The default idle window is documented against the measured CI p95, with the measurement cited.
 
   Immediate mitigation until this lands: launchers export AIDA_WORKER_CI_IDLE well above the CI ceiling (2400 has been used successfully for slow GitLab drains).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:47:10.008439484Z
-modified_at: 2026-09-20T02:32:04.272102787Z
+modified_at: 2026-09-20T03:32:10.289853644Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -115,8 +115,25 @@ comments:
   created_at: 2026-09-20T02:32:04.272102787Z
   modified_at: 2026-09-20T02:32:04.272102787Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bcdf-0fb0-7420-a9cc-b2aa95572976
+  author: aida-auto-bump
+  timestamp: 2026-09-20T03:32:10.289006424Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0bcdf-0fb1-76a0-bed4-b851a6b47c76
+  timestamp: 2026-09-20T03:32:10.289852870Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1275-2026-09-20T023205Z.md
+  commit_sha: bf6a70a35eded0bc307c0f76085d489e85e45afb
+  summary: Completed via merge bf6a70a3
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T02:06:44.247833512Z
   implemented_by: joe
+  completed_at: 2026-09-20T03:32:10.288709652Z
+  completion_sha: bf6a70a35eded0bc307c0f76085d489e85e45afb
