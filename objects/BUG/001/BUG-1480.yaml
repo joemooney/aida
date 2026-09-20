@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-20T21:59:18.254749642Z
+modified_at: 2026-09-20T21:59:20.194807492Z
 req_type: Bug
 tags:
 - agent-surface
@@ -154,6 +154,23 @@ comments:
   created_at: 2026-09-20T21:59:16.918997215Z
   modified_at: 2026-09-20T21:59:16.918997215Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c0d4-b254-73b3-9084-b513279dfd54
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-1480):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 74ff448f32
+    Recorded: 2026-09-20T21:58:01.032235958+00:00
+    Findings:
+    1. BLOCKING. show_latency_regression_tests::canonical_spec_show_path_never_loads_the_full_store asserts nothing. include_str!("git_backend_cmd.rs") pulls in the test module itself, and BOTH split markers occur first as string literals inside the test: "let id = &resolved_id;" at line 628 and "Command::Approvals {" at line 631. split_once takes the FIRST occurrence, so the scanned region is the 93 characters BETWEEN THE TEST'S OWN TWO LITERALS, namely: '") .expect("show canonical-path marker") .1 .split_once(' - which contains no backend.load() and never will. Reproduce: read the file, find the first occurrence of each marker, print the span. The production code at line 3471 is never examined. The test passes today, passed before the fix, and would pass if the fix were reverted.
+    2. BLOCKING, and it survives fixing the marker bug. Even repointed at the real region, the guard cannot see the function this PR introduces: show_cached_context is defined at line 39, far ABOVE any region bounded by the line-3471 marker. A backend.load() inside the new helper would be invisible to the assertion. So the structural approach needs a different anchor than a source-text span - assert on the helper too, or drop the text-scanning approach.
+    3. Acceptance criterion 4 asked for 'a latency regression test covering the single-spec read the way one presumably covers list after STORY-707'. A structural text assertion was substituted, with the stated reason that 'a timing assertion is noisy on shared CI'. That reasoning is defensible and I am not disputing it - but a substitution that weakens a named criterion should be renegotiated on the spec, not made silently in a comment. Whichever form is chosen, it must be capable of failing.
+    4. NOT LITERALLY MET, criterion 2. 'The single-spec read resolves through the cache to one YAML file rather than loading the store.' show_cached_context calls backend.list_summaries with ArchiveFilter::Both / DeferFilter::Both, i.e. ALL ~4116 rows, then does linear find/any scans over them - for every aida show, including non-epics with no batch tag. It is cache-backed and therefore fast, and it is a large improvement on backend.load(), but it is O(all specs) per single-spec read rather than the targeted resolution the criterion describes. Worth an explicit decision rather than being read as satisfied.
+    5. CODE IS GOOD - recorded so a rework round does not disturb it. The real fix is in backlog.rs and the diff's own comment identifies the true cause correctly: serialize_pairs called collect_spec_files PER REQUIREMENT, each a complete repository walk, so a batch of N members did N full walks. Collapsing that to a single scan_trace_graph over a wanted-set is right and is almost certainly the dominant win. Removing the two backend.load() calls (BUG-626 epic rollup, TASK-1268 serialize cluster, the latter unconditional on every show) is also right.
+    6. MEASUREMENT NOTE for whoever sets the bar. Criterion 1 says 'under one second on a warm, non-stale cache'. On main at b09197ab72 WITHOUT this fix I measured aida show at 0.36s repeatedly against a healthy 4116/4116 cache - so the criterion as written is already satisfiable pre-fix and does not capture the defect. The spec's own verification query does: aida usage --cmd show --slower-than 1000ms events shows a live population today including 8455ms, 38864ms, 39033ms. The variance is consistent with the repo-walk cause - warm page cache is fast, cold or contended is not. Recommend restating criterion 1 as a tail target (p95/max) rather than a warm-case median, or the fix can be declared done against a number that was already true.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T21:59:19.892160541Z
+  modified_at: 2026-09-20T21:59:19.892160541Z
 execution_mode: drain
 implementation_info:
   implemented: true
