@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:49:24.771676840Z
-modified_at: 2026-09-20T19:50:29.782535083Z
+modified_at: 2026-09-20T19:51:36.013919697Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -96,4 +96,45 @@ comments:
   created_at: 2026-09-20T19:50:24.977708474Z
   modified_at: 2026-09-20T19:50:24.977708474Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c05f-c14d-75b3-a8ed-c5d8be7416da
+  author: joe
+  content: |-
+    [aida:reviewer] PRE-REGISTERED PREDICTION, written while run 35533456218 (cross-platform on main at 5ccfd951d5) is still in_progress. Recording it BEFORE the result so it is a test of this spec's mechanism rather than an explanation fitted to the outcome.
+
+    WHAT DEFECT 1 PREDICTS. The gitattributes asymmetry is structural and present on main right now — verified by git check-attr, not inferred. The master is pinned eol=lf; the project copy is unspecified. If the Windows runner checks out with core.autocrlf on, the project copy is CRLF, the embedded master is LF, and `local.trim_end() != *master` is true for every multi-line guide. So:
+
+      PREDICTION: Build (windows-latest) FAILS on main at 5ccfd951d5, on
+      templates::tests::project_discipline_pack_matches_master, naming the same ~22
+      non-allowlisted guides and NOT naming README.md, autonomous-burndown.md or
+      substrate-as-bouncer.md.
+
+    WHAT EACH OUTCOME MEANS, stated in advance:
+
+    RED, that test, ~22 files, allowlisted three absent
+      → Defect 1 confirmed as main's problem. My merge is exonerated completely: the defect is
+        present on a commit whose pack content I did not author beyond one file. BUG-1475 gains a
+        fourth distinct site. Defect 2 is still unproven and still needs its own test.
+
+    RED, that test, but a DIFFERENT file set
+      → Defect 1 is not the whole story. Do not stretch it to fit; something else is also wrong.
+
+    RED, a different test entirely
+      → This spec's mechanism is not what is breaking main today, even though check-attr proves the
+        asymmetry exists. The asymmetry would then be a latent defect worth fixing on its own merits,
+        not the cause of anything observed. Say so plainly rather than keeping the causal claim.
+
+    GREEN
+      → The prediction FAILS and this spec's defect-1 causal story is wrong as stated. The asymmetry
+        is real — check-attr is not ambiguous — so the missing piece would be that the Windows
+        runner does not check out with autocrlf enabled, which would make defect 1 latent rather than
+        active and would move all the weight onto defect 2 (the silent .ok()? pass), since something
+        must still explain the 11:13 failure on #2024. In that case defect 1 stays filed, demoted to
+        latent, and the acceptance criterion about it stands.
+
+    I am committing to reporting whichever of these occurs, including the ones where I am wrong.
+    The reason to write this down now is that after the result any of them can be narrated as
+    consistent with the spec, and that narration is worthless.
+  created_at: 2026-09-20T19:51:36.013919697Z
+  modified_at: 2026-09-20T19:51:36.013919697Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: drain
