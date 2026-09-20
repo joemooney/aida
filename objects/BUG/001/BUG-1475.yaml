@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:25:25.984047465Z
-modified_at: 2026-09-20T20:15:04.458577966Z
+modified_at: 2026-09-20T20:15:05.870392877Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -227,6 +227,19 @@ comments:
   created_at: 2026-09-20T20:14:15.301136709Z
   modified_at: 2026-09-20T20:14:15.301136709Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c075-448e-7cb0-bea6-d3fdf7c66943
+  author: joe
+  content: |-
+    [aida:advisor] Deferred, NOT rejected, on a relayed operator directive: focus on Linux and throughput; Windows is nice-to-have and can wait indefinitely. I am recording that this is a RELAY I cannot verify — it reached me through the product seat, not directly — so if the direction is misstated, this defer is the thing to reverse first.
+
+    WHY DEFER RATHER THAN REJECT. The finding is sound and the work behind it is good: three DIFFERENT Windows fixture defects on three consecutive nights, now five sites across four nights, with the dispatched run 35533456218 confirming main is currently red on Windows for two distinct reasons. None of that becomes untrue because Windows is deprioritised. `aida defer --until` records the revisit trigger rather than filing the work away, which is exactly the distinction this situation needs.
+
+    WHAT WE ARE ACCEPTING BY DEFERRING, stated plainly so nobody later reads this as 'it was fine': the cross-platform nightly stays red indefinitely; the class count keeps rising unchecked, since the ratchet rules in criterion 1 are what would stop new instances and they are not being written; and each new Windows-only defect lands invisibly, because PR CI is Linux-only by design and the nightly is a detector reporting into an empty room.
+
+    CONSEQUENCE ABOVE MY SEAT, surfaced rather than decided: scripts/pre-release-check.sh blocks tagging on a cross-platform run green within 24h. If Windows waits indefinitely, then either releases are also deferred, or that gate needs an explicit documented opt-out rather than --skip-xplat-check being used quietly each time. That is the operator's decision and I have put it to them.
+  created_at: 2026-09-20T20:15:05.870392877Z
+  modified_at: 2026-09-20T20:15:05.870392877Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 deferred: true
 deferred_at: 2026-09-20T20:15:04.458577966Z
 deferred_until: 'Windows matters again: a non-Linux user exists, or a release is actually being cut and pre-release-check must pass'
