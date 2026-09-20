@@ -20,12 +20,12 @@ description: |
   - Removing or renaming a covered field without bumping the version fails CI with the field named.
   - `aida events --follow --json` streams new events without polling and honours the no-network rule.
   - A one-page consumer example (shell + jq) in the doc renders a drain/queue/gate summary using only the contract.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:40.960788392Z
-modified_at: 2026-09-19T18:18:07.880774057Z
+modified_at: 2026-09-20T01:00:48.954698514Z
 req_type: Story
 tags:
 - api-stability
