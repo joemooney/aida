@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T23:52:53.703891368Z
-modified_at: 2026-09-20T07:27:16.129262126Z
+modified_at: 2026-09-20T16:20:39.475461704Z
 req_type: Task
 tags:
 - credential
@@ -59,5 +59,20 @@ comments:
     Suggest this spec closes once #1978 merges and one nightly has actually exercised the credential — closing it now would mark it satisfied on an untested secret. Disposition is the advisor's; I have not changed the status.
   created_at: 2026-09-20T07:27:16.129262126Z
   modified_at: 2026-09-20T07:27:16.129262126Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf9e-a1b3-7db1-ae0b-9616a04e4f3b
+  author: joe
+  content: |-
+    Operator action is DONE; verification is not, and the gap is a dependency rather than a missing step.
+
+    `gh secret list --repo joemooney/aida` shows AIDA_GITLAB_TOKEN present, created 2026-09-20T07:26:36Z. The operator provisioned it this morning, choosing scopes against the GitLab PAT screen with guidance.
+
+    What is NOT yet established is that the token works end to end. The consumer is TASK-1273's nightly GitLab lifecycle smoke, which is still unmerged on PR #1978 (currently green on both required checks, awaiting review). Until that lands and runs once, "the credential is provisioned" and "the nightly forge job can authenticate" are two different claims and only the first is evidenced.
+
+    So this should not close on the secret's existence alone. Suggested close condition: the first nightly GitLab smoke run after #1978 merges completes without an auth failure. If that run fails on scope rather than plumbing, this spec is the right place to reopen rather than filing new.
+
+    Recording this rather than closing, because a credential spec that closes on "the secret exists" is exactly the kind that looks done and is not.
+  created_at: 2026-09-20T16:20:39.475461704Z
+  modified_at: 2026-09-20T16:20:39.475461704Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: operator
