@@ -3,12 +3,12 @@ spec_id: TASK-1-152
 agreed_id: TASK-176
 title: CLI-manual preflight guard already fails on three unresolved flags
 description: 'While validating BUG-1420''s stricter Bash parity, the configured CI guard python3 docs/cli/verify-manual.py failed independently of shell strictness: --stdin and --body-file under aida mailbox, and --hook under aida schedule, do not resolve to the cited command subtree. This guard is a single final command, so it already fails under both the old and new shell invocation; BUG-1420 did not cause it.'
-status: InProgress
+status: Done
 priority: High
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T08:30:27.192088042Z
-modified_at: 2026-09-20T15:56:20.286623777Z
+modified_at: 2026-09-20T16:04:33.361501679Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -51,3 +51,7 @@ comments:
   modified_at: 2026-09-20T08:40:55.805161965Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-20T16:04:33.361501679Z
+  implemented_by: joe
