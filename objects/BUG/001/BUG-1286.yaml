@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:33.544062298Z
-modified_at: 2026-09-20T03:39:47.284917548Z
+modified_at: 2026-09-20T03:40:33.905666515Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -137,6 +137,39 @@ comments:
   content: 'Implementation: added additive SpecCompleted and RunCompleted event kinds; EventKind::is_terminal plus latest_terminal_for_spec makes terminality queryable by kind while preserving trailing phase telemetry. SpecCompleted emits after confirmed Completed transitions from pull auto-bump and db reconcile-status (one per spec, including multi-spec trailers), carrying commit, PR when known, and closure path. RunCompleted emits after successful trailing pull/build. Added positional/crash, multi-spec, pull, and reconcile regression coverage; documented no-backfill/unknown semantics. trace:BUG-1286'
   created_at: 2026-09-20T03:20:49.537899688Z
   modified_at: 2026-09-20T03:20:49.537899688Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bce6-bef1-79a3-ada3-a5a6f0185aff
+  author: joe
+  content: |-
+    [rework round 2] PR #1998 — CHANGES REQUESTED on AC1, one finding, and I enumerated the paths so this closes as a set rather than one more instance.
+
+    THE FINDING, confirmed: `emit_spec_completed` is called from only two sites — `auto_bump_done_to_completed` and `handle_db_reconcile_status`. Six of seven acceptance criteria are verified; AC1 is the gap.
+
+    THE COMPLETE ENUMERATION. I grepped every site that assigns `RequirementStatus::Completed` outside tests and resolved each to its enclosing function:
+
+      lib.rs:9698         handle_done_command                  `aida done`
+      queue_cmd.rs:516    advance_dispatch                     queue dispatch advance
+      lib.rs:5968         handle_findings_command              findings close path
+      tracker_cmd.rs:978  handle_github_command                github tracker sync
+      report_cmd.rs:575   maybe_print_upstream_recheck_notice  upstream recheck close
+      doctor_cmd.rs:3951  heal_doctor_orphan_branch            doctor --heal orphan branch
+
+    Plus the two already covered (auto_bump_done_to_completed, handle_db_reconcile_status). That is eight total. Work from this list rather than from "the other paths" — the point of the spec is that a consumer can decide from the feed alone, and one uncovered path reintroduces exactly the silence BUG-1286 exists to remove.
+
+    JUDGEMENT REQUIRED, DO NOT EMIT BLINDLY. Not all eight are the same kind of event and the spec's purpose should decide each one:
+
+      - handle_done_command and advance_dispatch are genuine lifecycle completions. These clearly need it.
+      - handle_github_command is an external sync; a spec completed because a tracker says so is still a real completion, and arguably the one a consumer is MOST likely to miss, since no drain ran.
+      - heal_doctor_orphan_branch and maybe_print_upstream_recheck_notice are repair and housekeeping paths. A completion event is probably still right — the consumer rule is "the last terminal-kind event tells me the spec is finished", and it is finished — but state your reasoning in the PR rather than assuming, because an event from a heal pass reads oddly in a burndown.
+      - handle_findings_command closes a finding rather than a work spec; check whether that transition is in scope at all.
+
+    If you conclude a path should NOT emit, say so explicitly in the PR body with the reason. A deliberate exclusion that is written down is fine; a silent one is the defect again.
+
+    THE STRUCTURAL FIX WORTH CONSIDERING. Eight call sites each remembering to emit is the same shape as the bug — it works until someone adds a ninth. If the status assignment can be routed through one helper that emits as a consequence of the transition, the class closes instead of the instances. That may be a larger change than this spec wants; if so, note it as a follow-up rather than doing it here, and say which you chose.
+
+    Everything else passed: AC2 (multi-spec trailer), AC3 (pull/reconcile), AC4 (predicate), AC5 (trailing phases and crash), AC6 (build path), AC7. Push fixups to the existing branch. Do not open a new PR.
+  created_at: 2026-09-20T03:40:33.905666515Z
+  modified_at: 2026-09-20T03:40:33.905666515Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
