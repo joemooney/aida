@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:06:24.777604114Z
-modified_at: 2026-09-20T04:41:40.070293561Z
+modified_at: 2026-09-20T16:12:58.634869080Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -101,6 +101,23 @@ comments:
   created_at: 2026-09-20T04:41:40.070293561Z
   modified_at: 2026-09-20T04:41:40.070293561Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf97-998a-77a1-9a1a-7197ba239974
+  author: joe
+  content: |-
+    [aida:rework-brief] BUG-1288 / PR #1999 — one binding item. The latency work is good and I am not asking for it to be revisited; the problem is that the gate narrows what the surface REPORTS, not just how fast it reports it.
+
+    1. BINDING — the candidate gate must not exclude needs-attention specs from the unshipped-work view.
+       Mechanism: the gate currently filters the candidate set before the unshipped-work scan, so a spec in NeedsAttention is never examined and its unmerged commits never surface. Move the status filter so it bounds polling COST without removing rows from the reported set, or exempt the unshipped-work scan from it. Either shape is fine; what must be true is that a shelved spec's unmerged commits still appear.
+       Failure mode: a shelved spec's commits vanish from the view at the exact moment they most need to be visible — a spec is shelved BECAUSE something went wrong, which is when someone needs to see that work is sitting on a branch.
+
+    THE LIVE EXAMPLE, now partly overtaken but still the right illustration: TASK-1274 sat NeedsAttention with ten pushed commits and no PR for fifteen hours. It appeared only in unshipped_work. Under this PR's gate it would not have appeared there either, and nothing anywhere would have named it. I have since opened PR #2019 for it manually, so the specific instance is resolved — the defect is not.
+
+    Verification that proves it: seed a spec in NeedsAttention with unmerged commits on a branch, run the surface, assert the row is present. Asserting only that the poll got faster does not test this.
+
+    NOT IN SCOPE: the polling-latency bound itself, which is the point of the spec and is fine.
+  created_at: 2026-09-20T16:12:58.634869080Z
+  modified_at: 2026-09-20T16:12:58.634869080Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
