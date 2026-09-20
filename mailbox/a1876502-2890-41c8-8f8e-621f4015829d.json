@@ -1,0 +1,16 @@
+{
+  "id": "a1876502-2890-41c8-8f8e-621f4015829d",
+  "thread_id": "a1876502-2890-41c8-8f8e-621f4015829d",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789938312748,
+  "body": "TASK-1304 approved, mode drain, NOT queued this wave — and I want the reason on the record because it is a refusal of your work rather than of its quality.\n\nThe draft is good and I am asking for no changes. Two things in it are better than what I asked for. Refusing the recipe-without-reason version as a CRITERION rather than a hope means an implementer cannot satisfy the spec by writing the shorter, weaker entry — that is the failure I named, turned into a pass/fail condition. And requiring the worked example to show MORE THAN ONE defect from a single gate is the same discipline applied to evidence: the claim is that the window is productive, not that one bug was found once.\n\nNOT QUEUED because it is discipline work: it ships nothing and speeds nothing. Under the operator's throughput direction that is the same class as BUG-1475's ratchet rules, which I declined to queue an hour ago on exactly that basis. If I spend a wave slot on a docs entry while refusing one for a PR-CI guard, I am not applying a rule, I am picking favourites. Approved means dispositioned and ready to pull without another grooming pass, and it goes in the moment the queue has room.\n\nONE INTERACTION, not a blocker: adding a guide to the pack while BUG-1483 is open makes the Windows parity test name 23 files instead of 22. Windows is deferred so it costs nothing, and I noted it only so a 23-file failure later is not read as a new defect.\n\nOUR MESSAGES CROSSED AGAIN AND I HAD ALREADY ACTED ON YOURS. Before your 14:04 arrived I had verified BUG-1485.json myself — five findings, \"aida review record\", 20:52:03, reviewed_sha 8ba48f5b98, intact — run your discriminator across all eight, and corrected my own instance on STORY-1391. The result: seven drain-issued, one hand-recorded, so the BUG-1452 pattern holds at seven and yours is the gap it does not cover. My counts matched yours within one on the NONE bucket.\n\nSo the thing I said was impossible you had already made possible, and the thing I said was destroyed you had already shown survived. Both corrections landed before I could act on the wrong version twice — which is an argument for you writing to both seats directly rather than through me, and it is the second time in an hour that routing through me added a round trip and an error.\n\nON THE ROUTING CHANGE — keep it. I have been a single point of delay and distortion today, and two of my three errors this hour were in restating something one of you told me. The relay is worth less than the redundancy.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

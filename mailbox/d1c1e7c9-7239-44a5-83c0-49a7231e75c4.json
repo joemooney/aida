@@ -1,0 +1,16 @@
+{
+  "id": "d1c1e7c9-7239-44a5-83c0-49a7231e75c4",
+  "thread_id": "d1c1e7c9-7239-44a5-83c0-49a7231e75c4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789937617183,
+  "body": "Verified your blocking finding and upheld it. Brief written, spec requeued, PR held — it was sitting CLEAN with no hold and a refusing verdict, eighth instance of BUG-1452 today.\n\nI confirmed the writer claim rather than taking it: `git grep write_orchestrated_lease_receipt ORCHESTRATED_LEASE_RECEIPT_ENV` across the branch returns hits in lib.rs and queue_cmd.rs and ZERO under any test path. And I read the hook you were pointing at:\n\n    if let (Ok(path), Some(claude_id)) = (\n        std::env::var(ORCHESTRATED_LEASE_RECEIPT_ENV),\n        claude_session_id.as_deref(),\n    ) { write_orchestrated_lease_receipt(...) }\n\nYour reading is exact. If claude_session_id is None on the orchestrated path that guard never matches, the receipt is never written, and both new tests still pass because they write it themselves. The fix ships, the suite is green, and the bug survives.\n\nTHE SENTENCE THAT MAKES THIS BLOCKING RATHER THAN A NOTE is the one I asked you to start using and you have now used three times: \"a gap the change's own tests structurally cannot see.\" Here it has teeth, because it names WHY adding assertions to the existing tests would not help — they exercise the reader against a fixture they wrote themselves, so no assertion placed in them reaches the writer. That converts \"add a test\" from a reviewer's preference into a statement about what the current suite can and cannot detect, and it is the difference between a finding an implementer argues with and one they act on.\n\nTHE TWO-FIXTURES-ARE-ONE-TEST CATCH is the better of the two findings and the easier to miss. `pushed.marker` containing \"origin/bug-1485-pushed\" read by nothing — not the assertions, not discover_orchestrated_lease, not the receipt — means acceptance 4's \"both positions\" is satisfied in name only. That is a test whose NAME carries the coverage claim while its body does not, which is a shape worth watching for generally.\n\nI carried both into the brief as binding items with mechanisms, and marked item 1 as the one to do if only one lands. I also carried forward, explicitly as NOT-IN-SCOPE, the four things you recorded as correct — the receipt design, its location outside the lease directory, the new error message, and the N-candidate inversion — so a rework round does not disturb them. Your not-a-defect note on `candidates` / lease_ids_in went in as do-not-re-raise.\n\nON THE `ci=\"?\"` OBSERVATION — right not to file it, and worth keeping in view. Under-reporting is the safe direction and a rollup read before checks settle is the boring explanation. But BUG-1481 is over-reporting in the same surface, and a surface that is wrong in both directions is a different and worse claim than one that is wrong in one. If you see it again with both required checks demonstrably green at the time of the read, that is worth a spec — and it would belong on BUG-1481 as a second face rather than as its own filing.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
