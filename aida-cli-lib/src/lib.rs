@@ -833,6 +833,69 @@ fn drain_merge_lease_failure(
     }
 }
 
+/// BUG-1316: distinguish the substrate's deliberate supervised-hold refusal
+/// from a forge CLI failure. The refusal text is emitted at the single
+/// `Forge::merge_change` chokepoint and includes both the persisted hold reason
+/// and exact clear command, so carry that same evidence into the shelve hint.
+// trace:BUG-1316 | ai:codex
+fn classify_drain_merge_failure(
+    forge: crate::forge::ForgeKind,
+    pr: u32,
+    error: &anyhow::Error,
+) -> auto_complete::PhaseFailure {
+    let detail = format!("{error:#}");
+    let hold_prefix = format!("refusing to merge PR-{pr}: supervised merge-hold");
+    if detail.contains(&hold_prefix) {
+        let reason = format!(
+            "{} merge refused for {}-{pr}: {detail}",
+            forge
+                .cli_name()
+                .is_empty()
+                .then_some("pure-git")
+                .unwrap_or(forge.cli_name()),
+            forge.change_noun(),
+        );
+        return auto_complete::PhaseFailure::of(auto_complete::FailureKind::MergeHold, &reason)
+            .with_hint_override(format!("A human/advisor merge-hold is open: {detail}"));
+    }
+    let merge_tool = match forge.cli_name() {
+        "" => "pure-git",
+        cli => cli,
+    };
+    auto_complete::PhaseFailure::new(format!(
+        "{merge_tool} merge failed for {}-{pr}: {detail}",
+        forge.change_noun()
+    ))
+}
+
+#[cfg(test)]
+mod bug_1316_merge_hold_failure_tests {
+    use super::*;
+
+    #[test]
+    fn task_1293_pr_2003_hold_is_typed_and_real_tool_failure_stays_retryable() {
+        let held = anyhow::anyhow!(
+            "refusing to merge PR-2003: supervised merge-hold — advisor hold: PR interaction. \
+             A human/advisor must review, then clear the hold (`aida merge-hold clear 2003`) before merging."
+        );
+        let failure = classify_drain_merge_failure(crate::forge::ForgeKind::GitHub, 2003, &held);
+        assert_eq!(failure.kind, auto_complete::FailureKind::MergeHold);
+        assert!(!auto_complete::is_transient_retry_cause(
+            failure.kind.cause_slug()
+        ));
+        let hint = failure.hint_override.expect("hold-specific recovery hint");
+        assert!(hint.contains("advisor hold: PR interaction"), "{hint}");
+        assert!(hint.contains("aida merge-hold clear 2003"), "{hint}");
+
+        let tool = anyhow::anyhow!("HTTP 502 from GitHub while merging");
+        let failure = classify_drain_merge_failure(crate::forge::ForgeKind::GitHub, 2003, &tool);
+        assert_eq!(failure.kind, auto_complete::FailureKind::Failed);
+        assert!(auto_complete::is_transient_retry_cause(
+            failure.kind.cause_slug()
+        ));
+    }
+}
+
 #[cfg(test)]
 mod task_1244_drain_merge_lease_tests {
     use super::*;
@@ -88625,17 +88688,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         .map_err(|e| drain_merge_lease_failure(&e, &lease_target, pr))?;
         self.lifecycle_forge()
             .merge_change(&change_ref, &opts, &mut sink)
-            .map_err(|e| {
-                let merge_tool = match self.lifecycle_forge.cli_name() {
-                    "" => "pure-git",
-                    cli => cli,
-                };
-                auto_complete::PhaseFailure::new(format!(
-                    "{} merge failed for {}-{pr}: {e:#}",
-                    merge_tool,
-                    self.lifecycle_forge.change_noun()
-                ))
-            })?;
+            .map_err(|e| classify_drain_merge_failure(self.lifecycle_forge, pr, &e))?;
         println!(
             "  {} merged PR-{}",
             crate::glyph(crate::glyphs::Glyph::Check).green(),
