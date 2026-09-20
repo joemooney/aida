@@ -1,0 +1,26 @@
+id: 01a0bf51-3c2f-76f0-b854-43ba20e581b5
+spec_id: STORY-1389
+agreed_id: STORY-1389
+title: 'Review PR-2018: [AI:codex] fix(templates): detect stale discipline guides (BUG-1426)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0bf42`) for branch `bug-1426-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2018>
+  - Branch: `bug-1426-work` → `main`
+
+  ## Covers
+
+  - BUG-1426
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2018` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T14:56:07.215487722Z
+modified_at: 2026-09-20T14:56:07.215487722Z
+req_type: Story
