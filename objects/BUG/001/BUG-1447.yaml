@@ -1,0 +1,59 @@
+id: 01a0bf39-b505-7e41-bf9f-afbad2b3112b
+spec_id: BUG-1447
+agreed_id: BUG-1447
+title: A branch-protection refusal is classified as a merge conflict because both say not mergeable, so a held PR burns its retries and is reachable by auto-rebase
+description: |
+  `is_merge_conflict_failure` matches the substring "not mergeable", and GitHub's BRANCH-PROTECTION refusal contains that phrase. So a policy refusal — a deliberate, correct, stable gate — is classified as a merge conflict, which is exactly the case the function's own doc comment says it must exclude.
+
+  THE FUNCTION, aida-cli-lib/src/auto_complete.rs:1015, and its own documentation three lines above it:
+
+      /// base moved under the PR so the squash cannot apply), as opposed to any
+      /// other merge failure (auth, network, BRANCH PROTECTION)? Matched against
+      /// the `gh pr merge` error text carried in the failure reason. Conservative:
+      /// only a conflict is rebase-recoverable, so anything unrecognized is not.
+      pub(crate) fn is_merge_conflict_failure(reason: &str) -> bool {
+          let r = reason.to_ascii_lowercase();
+          r.contains("not mergeable")
+              || ...
+
+  The comment names branch protection as a thing this must NOT match. The first clause matches it.
+
+  THE MESSAGE, observed 2026-09-20 14:29:15Z on PR-2014 (TASK-1298):
+
+      gh pr merge failed for #2014: X Pull request joemooney/aida#2014 is not mergeable:
+      the base branch policy prohibits the merge.
+
+  "is not mergeable" is present. The classifier fires.
+
+  WHAT THE HOLD WAS DOING IS CORRECT AND IS THE POINT. `merge-hold-gate: fail` on that PR — a genuine, label-driven, forge-enforced supervised hold, working exactly as intended and for the first time reliably, since the advisor discovered on 2026-09-20 that most holds had been marker-only and began applying labels. Fixing hold enforcement is what exposed this: the more holds actually hold, the more often a correct refusal is misread as a conflict.
+
+  THREE CONSEQUENCES, in increasing order of cost:
+
+  1. The drain spent both transient-retry attempts on a refusal that cannot succeed until a human clears it, then shelved as `tool-exit` with the hint "Investigate the merge failure". The actual next action is `aida merge-hold clear 2014`. This is BUG-1316's defect at a different site — that spec fixed the case where our OWN `pr ship` refuses; this is the case where the FORGE refuses, and BUG-1316's MergeHold kind is not reached.
+  2. Worse, `is_merge_conflict_failure` gates the in-drain auto-rebase (TASK-975). A held PR can therefore be REBASED — force-pushing a branch whose review is deliberately paused, invalidating any review in flight, to "fix" a conflict that does not exist. I have not confirmed this fired on PR-2014; the budget gate (`ci_auto_fix`) may have been closed. It is reachable, and that is enough.
+  3. It is the seventh instance this week of a decision made by matching another component's prose. Here the prose belongs to `gh`, which is BUG-1310's class precisely: we do not control the wording, an upstream reword changes our control flow, and no test of ours fails.
+
+  PROPOSED: classify the forge's refusal from a typed signal rather than its sentence. `gh pr merge` distinguishes these cases; where it does not, `gh pr view --json mergeStateStatus` reports BLOCKED for a policy refusal versus DIRTY for a genuine conflict, and that is already queried elsewhere in this codebase. At minimum, exclude the branch-protection shape before the conflict test, and make the recovery hint name the hold and the clear command that are already present in the refusal text.
+
+  ACCEPTANCE
+  1. A branch-protection / policy refusal is NOT classified as a merge conflict.
+  2. It does not consume a transient-retry attempt, consistent with BUG-1316's principle that a correct refusal must not spend the budget meant for transient failure.
+  3. It cannot reach the auto-rebase path. A test asserts a held PR is never rebased.
+  4. The recovery hint names the hold and `aida merge-hold clear <pr>` rather than "investigate the merge failure".
+  5. A genuine merge conflict still classifies and still rebases as today — both directions tested.
+  6. The observed PR-2014 message is the fixture, verbatim.
+
+  Filed by the product seat; disposition is the advisor's. Note this is a direct consequence of holds being enforced properly for the first time — the defect existed all along and could not fire while the gate was inert.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T14:30:25.285712180Z
+modified_at: 2026-09-20T14:30:25.285712180Z
+req_type: Bug
+tags:
+- from:session-0919
+- merge-hold
+- orchestrator
+- parent:EPIC-62
+- prose-matching
