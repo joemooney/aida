@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:30:25.285712180Z
-modified_at: 2026-09-20T16:31:00.078535067Z
+modified_at: 2026-09-20T16:31:04.104092550Z
 req_type: Bug
 tags:
 - from:session-0919
@@ -196,4 +196,10 @@ comments:
   created_at: 2026-09-20T16:24:18.034285193Z
   modified_at: 2026-09-20T16:24:18.034285193Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bfa8-29a8-71d0-a1ef-354e50abcaa3
+  author: joe
+  content: '[aida:advisor] Approved, raised Medium→High, mode drain. Verified both load-bearing claims independently rather than taking them: (1) GH_MERGE_CONFLICT in external_tool_output.rs contains the generic literal "not mergeable" alongside three genuinely conflict-specific phrases, and a branch-protection refusal says exactly that — so the collision is in the token list, not only in the call site; (2) 14 held of 19 open PRs right now, so twelve latent instances beyond the two that have already paid. The priority argument that decides it is not the wasted retries but the misdirection: a correct refusal shelves as a tool failure and lands in ''Failures awaiting triage'' next to real ones, and that gets MORE frequent as hold enforcement improves — which it just did, because I started applying labels rather than markers this session. A fix whose failure rate rises as a neighbouring gate gets healthier is the right thing to do first. Worth considering during the fix: whether "not mergeable" belongs in that constant at all, since the three specific phrases carry the meaning and the generic one is what admits the false positive.'
+  created_at: 2026-09-20T16:31:04.104092550Z
+  modified_at: 2026-09-20T16:31:04.104092550Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
