@@ -1,0 +1,62 @@
+id: 01a0bfa2-d47c-7030-915e-cda1205d9ce4
+spec_id: BUG-1455
+agreed_id: BUG-1455
+title: CI terminality is decided on a partial rollup, so the always-fails-by-design merge-hold gate ends the wait before the real build finishes and a held PR shelves ci-red
+description: |
+  Observed live 2026-09-20 16:22:40Z on BUG-1291 / PR #2001, with the fix for the adjacent case already present in the running binary.
+
+  WHAT HAPPENED
+
+      16:15:35Z  PhaseEntered idx=1 implementer
+      16:22:08Z  PhaseEntered idx=2 ci
+      16:22:40Z  CiTerminal green=false
+
+  The PR's check rollup at that moment:
+
+      Build (ubuntu-latest) = in_progress
+      merge-hold-gate       = failure
+
+  The CI phase declared CI TERMINALLY RED after 32 seconds while the required build was still running. The only check that had reached a conclusion was the supervised merge-hold gate, which fails by construction on every held PR — it is a marker/label check with nothing to compute, so on a held PR it is always the first check to conclude and therefore always the one that decides.
+
+  WHY THIS IS NOT BUG-1265
+
+  BUG-1265 is Completed and its fix (e4e75678aa, PR #1966, merged 2026-09-19 12:14) IS in the drain's running binary — `git merge-base --is-ancestor e4e75678aa 52493554` exits 0, and `aida dev status` reports the live wave binary as 52493554 built 2026-09-20 08:32:59. So this is not a stale-binary artifact and not a regression of that fix.
+
+  That fix addresses a different facet. Its own message is "preserve supervised hold on CI row errors" and the branch it added reads "CI check details stayed unavailable while PR-{pr} was under a supervised merge-hold". It handles the case where the rows cannot be READ. Here the rows are read perfectly well: one concluded failure, one still in progress. No row error occurs, so the guard never engages.
+
+  THE ACTUAL DEFECT
+
+  Terminality is decided on a PARTIAL rollup. One concluded failing check is sufficient to end the CI wait, regardless of whether the checks that describe code health have finished. That is a reasonable fast-fail rule when the failing check is a build; it is wrong when the failing check is a gate that encodes a human decision and is designed to fail.
+
+  Two separable errors, and fixing only the second leaves a real bug:
+
+  1. The wait ends early. A terminal verdict is reached while a REQUIRED check is `in_progress` or `queued`, so the real build's result is never consulted at all.
+  2. The hold gate counts as evidence of code health. A red whose only failing check is `merge-hold-gate` is not a CI verdict.
+
+  Fixing (2) alone stops this exact shelve but leaves the early exit: any future always-fails-fast check has the same effect. Fixing (1) alone means the drain waits for the build and then still reads the hold gate as a code failure.
+
+  CONSEQUENCE
+
+  BUG-1291 shelves as `ci-red` on a PR that is green-or-pending on everything that measures the code, and whose only red is a hold the advisor placed deliberately. It then appears under "Failures awaiting triage" next to genuine tool failures, so a human is sent to investigate a system that is working. Fourteen open PRs currently carry `aida:merge-hold`; each is a candidate for this every time the drain reaches it.
+
+  RELATED, AND CURRENTLY THE SAME HOLD DEFEATING THE DRAIN ONE PHASE LATER: BUG-1447 covers the merge-phase path, where "is not mergeable: the base branch policy prohibits the merge" is misclassified as a merge conflict by `is_merge_conflict_failure` (auto_complete.rs:1015). Which of the two fires depends on when the hold lands relative to the pipeline — this one when the hold predates the CI phase, BUG-1447 when it lands between CI and merge. Fixing either alone will look like it solved the problem while the other path stays open.
+
+  ACCEPTANCE
+
+  - The CI phase does not report a terminal verdict while any REQUIRED check is `in_progress` or `queued`.
+  - A rollup whose only failing check is the supervised hold gate does not produce a `ci-red` shelve, whether or not the check rows were readable.
+  - A held PR whose code checks are green or pending is reported as awaiting review, not as a failure awaiting triage.
+  - Regression test reproduces the observed rollup exactly: one concluded `failure` on the hold gate, one `in_progress` required build, rows fully readable — the shape BUG-1265's row-error guard does not cover.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T16:25:14.620023337Z
+modified_at: 2026-09-20T16:25:14.620023337Z
+req_type: Bug
+tags:
+- drain-safe
+- merge-hold
+- orchestrator
+- parent:EPIC-62
+- prose-matching
