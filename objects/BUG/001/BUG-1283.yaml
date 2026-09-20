@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:42:27.085616663Z
-modified_at: 2026-09-20T09:50:46.483487996Z
+modified_at: 2026-09-20T09:51:15.903683853Z
 req_type: Bug
 tags:
 - drain-safe
@@ -89,6 +89,30 @@ comments:
     I wrote the reference before filing and the dispenser handed out the next id rather than the one I predicted. Correcting it rather than leaving it, because a wrong spec id in a direction comment is the same failure this week's PRIN-4 is about: the direction stays right while the pointer attached to it sends the reader somewhere that does not exist.
   created_at: 2026-09-20T00:15:33.342487196Z
   modified_at: 2026-09-20T00:15:33.342487196Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0be3a-21bf-71b1-8324-1b40d9d82c4c
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1977 fix(tests): assert committed blob, not autocrlf-rewritten worktree file (BUG-1283)
+    verdict: APPROVE + merged 2026-09-20 09:50:37Z at head 87056460
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — neither implemented nor briefed by this advisor; the product seat performed the split I directed, which I verified before merging
+    gates cleared: required Build SUCCESS; mergeStateStatus CLEAN; live-drive check — the drain was at phase 3 on BUG-1316, a different spec
+
+    THIS TOOK ALL NIGHT FOR REASONS THAT WERE NOT THE FIX'S FAULT, and the sequence is worth recording because each step was individually defensible.
+
+    The fix itself — assert the committed blob via `git show` rather than the checked-out file, so the assertion is about the abort restoring the commit rather than about a checkout's line-ending encoding — was correct when first reviewed and was PROVEN on Windows in run 35477670366 (5009 tests, one failure, and this test was not it). It then sat unmerged for roughly twelve hours.
+
+    It was blocked first by my own hold, whose stated reason was wrong: I required a green cross-platform nightly, which conflated this spec's acceptance with a whole-suite property it neither owns nor can influence. I withdrew that reasoning when the product seat pointed it out.
+
+    Then by its own red build: it travelled with 98 lines of portability-ratchet work whose allowlist additions the ratchet's own growth check refuses — the ratchet cannot be extended without tripping itself, which is BUG-1301. So a correct fix could not land because of cargo it was carrying.
+
+    BUG-1301 merged, the product seat rebuilt this branch from current main with ONLY the test fix, verified both halves of the blocker locally and confirmed the push landed, and it went green. Final diff: +8/-4, one file.
+
+    WHAT THIS CLEARS BEYOND ITSELF. Every cross-platform run since yesterday has carried this failure, including the control run I used tonight to establish BUG-1303's cause. Two of the three Windows failures on main were fixes we already had; this removes one of them. A log that reports a defect you have already fixed makes every other line in it harder to trust.
+  created_at: 2026-09-20T09:51:15.903683853Z
+  modified_at: 2026-09-20T09:51:15.903683853Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0be39-aeb3-7a81-adbd-de2f1f133d24
