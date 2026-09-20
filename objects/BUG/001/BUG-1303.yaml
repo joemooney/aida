@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:22:29.721225410Z
-modified_at: 2026-09-20T08:23:16.968745075Z
+modified_at: 2026-09-20T08:24:28.965964885Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -124,6 +124,33 @@ comments:
   content: 'Implemented shared fs2 try-lock error classification. Findings: the deterministic Windows failure is confirmed by fs2 source semantics (ERROR_LOCK_VIOLATION/raw 33 is its platform contention sentinel, while Rust does not expose it as WouldBlock). Interrupted syscalls are classified distinctly and retried; descriptor exhaustion and other errors remain genuine failures. The reported Linux full-suite flake could not be reproduced: 200 runs of tick_lock_is_nonblocking_and_reusable at parallelism 16 all passed. This supports EINTR as a plausible but unconfirmed transient explanation rather than genuine blocking; the fix handles EINTR without masking EMFILE/ENFILE. Targeted helper and unchanged scheduler tests pass. Windows cargo check was attempted but the host lacks x86_64-w64-mingw32-gcc for bundled SQLite.'
   created_at: 2026-09-20T08:05:36.830800444Z
   modified_at: 2026-09-20T08:05:36.830800444Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bdea-ae25-7ea0-9895-45bfae529e49
+  author: joe
+  content: |-
+    [rework round 2] PR #2008 — CHANGES REQUESTED, two findings, and the first is the acceptance criterion the advisor wrote specifically to prevent what happened.
+
+    REQUIREMENT 1 — ESTABLISH THE CAUSE BEFORE FIXING IT.
+    The PR reports that 200 Linux stress runs did not reproduce the flake, then adds speculative `Interrupted` retry handling anyway, without establishing whether the observed Linux failure was genuine lock blocking, EINTR, or something else.
+
+    That is exactly what acceptance 8 forbids. The spec says: establish which hypothesis holds before choosing a fix, rather than fixing both speculatively. It says so because the advisor's original Windows-only explanation PREDICTED the test could not fail on Linux — and it did, which falsified the explanation rather than merely leaving it incomplete. A fix chosen without knowing which mechanism is at work cannot be known to address it, and if it happens to silence the symptom we lose the evidence that would have identified the real cause.
+
+    The 200 clean runs are a RESULT, not a failure to find one. Record them: the command, the parallelism, the machine, and what was NOT reproduced. A non-reproduction under stated conditions narrows the hypothesis space and is worth more than a speculative patch. If the conclusion is "cannot be reproduced on demand and the cause is undetermined", say that plainly — the spec explicitly permits recording a failed reproduction attempt.
+
+    Do not remove the Interrupted handling reflexively either. If it is correct on its own merits, argue for it separately. What is not acceptable is shipping it AS the fix for an unexplained failure.
+
+    REQUIREMENT 2 — RUN IT WHERE IT ACTUALLY FAILS.
+    No Windows or cross-platform run exists for head 37c47684. Only Ubuntu CI ran. The defect's one reliable reproduction is Windows, where the lock blocks deterministically rather than as a load-dependent race.
+
+    Run the UNCHANGED `tick_lock_is_nonblocking_and_reusable` on Windows first and attach that result — that is the evidence that says what the bug is. Then attach a green post-fix run. Without the before, a green after proves only that the test passes, not that anything was fixed.
+
+    STANDING CONSTRAINTS from the spec, restated because they are easy to reach for under pressure: no cfg-gated remedy; do not weaken, serialise or ignore the test. It asserts a real property and a flake is evidence about the code, not about the test.
+
+    A NOTE ON SEQUENCING, not a finding. The advisor reviewed this PR and deliberately did NOT merge it, because the drain is at phase 2 on this spec and the PR belongs to the live drive whose reviewer has not run. That is correct and it means this rework should go through the drive rather than around it.
+
+    Push fixups to the existing branch. Do not open a new PR.
+  created_at: 2026-09-20T08:24:28.965964885Z
+  modified_at: 2026-09-20T08:24:28.965964885Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
