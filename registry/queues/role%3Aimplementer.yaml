@@ -126,14 +126,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0bb7d-7f12-78d1-a0ea-4c530343130e
-  position: 104000
-  added_by: role:implementer
-  note: classify which reap predicate fails for each of the 30 orphans and record counts BEFORE changing the reaper; if the status predicate dominates the fix is BUG-1286's; worktree-gc safety predicates stay exactly as strict
-  added_at: 2026-09-19T21:12:16.429598822Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0bb7e-6ed4-7d33-8a00-8011759a1c25
   position: 105000
   added_by: role:implementer
@@ -251,5 +243,12 @@
   position: 120000
   added_by: role:implementer
   added_at: 2026-09-20T00:23:24.199779740Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0bb7d-7f12-78d1-a0ea-4c530343130e
+  position: 121000
+  added_by: role:implementer
+  added_at: 2026-09-20T01:02:17.979342040Z
   for_role: implementer
   added_by_machine: imac
