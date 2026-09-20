@@ -43,10 +43,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:24:16.280507219Z
-modified_at: 2026-09-20T18:24:16.280507219Z
+modified_at: 2026-09-20T18:24:37.083173617Z
 req_type: Bug
 tags:
 - agent-surface
 - docs
 - drain-safe
 - drift
+relationships:
+- rel_type: References
+  target_id: 019edfef-4f83-7342-a791-2d83d76a4276
+  created_at: 2026-09-20T18:24:37.083166401Z
+  created_by: joe
