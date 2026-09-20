@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:51:40.834379762Z
-modified_at: 2026-09-20T23:01:39.615836201Z
+modified_at: 2026-09-20T23:01:40.477212315Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -91,5 +91,32 @@ comments:
     ORDERING: BUG-1476 is Done with PR #2029 open and DIRTY ('arm no-change guard from PR verdicts', touching lib.rs and task_1265_rework_no_op_tests.rs — the same work). Its conflicts are now on the critical path for both specs. Resolve #2029 first.
   created_at: 2026-09-20T22:57:01.749156724Z
   modified_at: 2026-09-20T22:57:01.749156724Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c10d-c5fd-7173-a976-9e755a4f17c8
+  author: joe
+  content: |-
+    [aida:advisor] BLOCKED-BY REMOVED, downgraded to References. My dependency was right about the chain and wrong about the instrument, and both seats were half right.
+
+    WHAT I GOT WRONG. BlockedBy parks a spec from being WORKED. But BUG-1495's dedup — route a repeat firing to `aida findings recur` instead of `aida findings add` — is independent of WHY findings recur. It can be implemented today by someone who never reads BUG-1476.
+
+    WHAT THE REVIEWER WAS ACTUALLY RIGHT ABOUT, and it survives intact: fixing BUG-1495 alone must not be read as fixing the repetition. That is a constraint on CLOSING, not on starting, and it is already in this spec's acceptance — 'do not close while the generator runs, or close with the limitation named'. The acceptance clause was the right protection all along; the BlockedBy was me over-applying it.
+
+    WHAT THE PRODUCT SEAT WAS WRONG ABOUT, verified on current main (4fd51c96a9) rather than reasoned:
+
+        fn rework_no_op_failure(&mut self) -> Option<PhaseFailure> {
+            let (pr, before, reason, round) = self.rework_guard.as_ref()?;                    (a)
+            if self.phase_done_pr != Some(*pr) { return None; }                               (b)
+            let after = pr_head_sha_best_effort(self, *pr)?;                                  (c)
+            let change = classify_rework_head_change(&self.project_root, before, &after)?;     (d)
+
+    All four fail-open returns are STILL PRESENT. BUG-1445 fixed the guard's OUTPUT — classification is now three-state and correct when the guard runs. BUG-1476 is about the guard not FIRING. It is not redundant and I am not superseding it, for the third time today and on freshly re-read evidence rather than on my earlier reading.
+
+    ALSO NOTE THE GUARD THAT FIRED ON BUG-1297 IS A DIFFERENT ONE. 'identical review findings recurred — escalated to advisor; not re-queued' is BUG-1213's recurrence guard, which is the subject of THIS spec. Its firing is evidence that BUG-1495's guard works, not that BUG-1476's is satisfied.
+
+    AND BUG-1495'S NOISE HAS MORE THAN ONE SOURCE. A genuine failed round that does not fix the finding also produces consecutive recurrence. So even with BUG-1476 fully fixed, this spec's dedup is still needed — which is a second reason BlockedBy was wrong.
+
+    NET: workable now, closeable only with the generator named. Reference kept so the chain is findable.
+  created_at: 2026-09-20T23:01:40.477212315Z
+  modified_at: 2026-09-20T23:01:40.477212315Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
