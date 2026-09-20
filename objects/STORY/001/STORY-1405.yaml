@@ -1,0 +1,47 @@
+id: 01a0c0b3-03d6-7190-a8f5-8bc1a15a751e
+spec_id: STORY-1405
+agreed_id: STORY-1405
+title: A review in progress is invisible to anyone deciding to merge, so a merge can land seconds before the verdict that would have refused it
+description: |
+  A review in progress is invisible to anyone deciding to merge, so a merger and a reviewer can work the same PR simultaneously and the merge wins by seconds. Two instances on 2026-09-20, one of which caused a real incident.
+
+  INSTANCE 1 — the harmless one, which is how it was noticed. PR #2031 (BUG-1447):
+
+      merged            21:19:23Z  as b09197ab72
+      reviewer verdict  21:19:59Z  APPROVED
+
+  36 seconds. The verdict agreed with the merge so nothing went wrong, but it could equally have been a refusal and nothing would have stopped the merge. The reviewer had been working for several minutes; the PR was CLEAN with no hold; and there is no signal anywhere that says "a reviewer is currently looking at this".
+
+  INSTANCE 2 — the one that cost something. Earlier the same day the advisor merged PR #2007 while a drive owned it. The reviewer entered one minute after the merge and exited one minute later. That was recorded as `independent: NO` on the ledger and produced BUG-1429. The advisor had checked phase events and read them as "a spec is being worked" rather than "this PR belongs to a live drive" — which is the same gap approached from the merger's side rather than the reviewer's.
+
+  So it has bitten in both directions in one day: a merger who could not see a reviewer, and a merger who could not see a drive.
+
+  WHY THIS IS AN INTEGRITY GAP RATHER THAN A PAPERCUT. "One merger at a time" is a standing integrity rule in this project. It is currently enforced by each seat individually remembering to look, and there is nothing to look AT — no marker, no surface, no field. `aida session leases` is a partial answer and was the thing that would have caught instance 2, but it answers "who holds a worktree", not "who is reading this PR right now", and a reviewer reading a diff holds no lease at all.
+
+  It is also the mirror of BUG-1490. There, a recorded refusal does not reach the readiness surface; here, a review IN PROGRESS never reaches it either. Both are the readiness surface answering "is this ready" without consulting something that knows the answer.
+
+  ACCEPTANCE
+  1. A seat beginning a review can mark the PR as under review, and that marker is visible to anything deciding to merge — `aida awaiting`, `aida pr ship`, and the drain's merge phase.
+  2. The marker expires. A seat that crashes or wanders off must not hold a PR indefinitely; state the expiry and how it is chosen.
+  3. `aida pr ship` refuses, or at minimum warns loudly, when a PR is marked under review by another seat. Decide which and say why — a hard refusal is safer and will be worked around if the expiry is wrong, which is an argument for getting criterion 2 right rather than for softening this one.
+  4. The marker distinguishes "under review" from "reviewed and refused" from "no opinion". Three states; a PR nobody has looked at must not be indistinguishable from one a reviewer is mid-way through.
+  5. Establish first whether `aida session leases` can carry this, since it already exists and already tracks seat-held work. If a reviewer can take a lightweight scope-only lease, that is a much smaller change than a new mechanism, and the answer decides the size of the spec.
+  6. A test covers the race: seat A marks a PR under review, seat B attempts a merge, and B is stopped or warned.
+
+  NOT IN SCOPE: preventing a human from deliberately overriding. The goal is that the merger KNOWS, not that they are forbidden.
+
+  Raised by claude-reviewer-1 from instance 1, who declined to file it on the grounds that an in-flight marker is a design question rather than a defect. That is a fair reading of instance 1 alone. Instance 2 is what makes it a defect: the same gap has already cost a wasted review round and a ledger entry recording a broken independence rule.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T21:22:32.534380767Z
+modified_at: 2026-09-20T21:22:32.534380767Z
+req_type: Story
+tags:
+- batch:night-0920
+- coordination
+- drain-safe
+- from:session-0920
+- integrity
+- merge-safety
