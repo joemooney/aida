@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:31:24.073637202Z
-modified_at: 2026-09-20T10:18:45.851780904Z
+modified_at: 2026-09-20T10:26:21.762823289Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -114,6 +114,25 @@ comments:
   content: 'Implemented in c25f1f2001. QueueDrained now carries named ineligible batch members with pickup-policy reasons; human/JSON summaries, watch, and notifications distinguish stuck from empty. Regression covers guided STORY-1218 plus blocked TASK-1277. Tests: cargo test -p aida-cli-lib queue_drained --lib (11 passed); cargo fmt --all -- --check; git diff --check.'
   created_at: 2026-09-20T10:05:18.555971010Z
   modified_at: 2026-09-20T10:05:18.555971010Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0be5a-43c2-7262-baed-0a4427aa7c6d
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2013
+    agent: codex
+    ran-at: 2026-09-20 03:26 -07:00
+    mode: propose-only (drain)
+    proposed: 5
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1422-drain-01a0be59-a988-7d72-bc8f-760244a31a96.json
+    ? SEM (0.98) — QueueDrained remains backward-compatible: events that omit `ineligible` deserialize it as an empty list, and newly serialized events omit the field when the list is empty.
+    ? AC (0.98) — Any QueueDrained event containing at least one ineligible member fires the `idle_with_work` notification rule, and the notification message includes every member's spec ID and reason.
+    ? SEM (0.94) — Ineligible members are reported after a single-batch drain even when that drain shipped other members; reporting and `idle_with_work` notification are not limited to zero-work drains.
+    ? SEM (0.97) — Ineligible-member reporting applies only to the single named-batch auto-complete path; multi-batch and unfiltered next-N drains emit an empty ineligible list.
+    ? SEM (0.90) — When QueueDrained contains both ineligible members and a nonzero excluded-from-batch count, the live watch description shows the ineligible-member diagnosis and does not show the excluded count.
+  created_at: 2026-09-20T10:26:21.762823289Z
+  modified_at: 2026-09-20T10:26:21.762823289Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
