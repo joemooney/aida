@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:48.205325226Z
-modified_at: 2026-09-20T23:56:34.042638754Z
+modified_at: 2026-09-20T23:57:25.950342462Z
 req_type: Bug
 tags:
 - agent-surface
@@ -49,6 +49,31 @@ relationships:
   target_id: 01a0c130-889c-7982-bb79-74fb8d8a3a22
   created_at: 2026-09-20T23:39:51.464025900Z
   created_by: joe
+comments:
+- id: 01a0c140-d23e-7c41-b2b6-d7add2234765
+  author: joe
+  content: |-
+    THIS SPEC'S DIAGNOSIS IS WRONG AND IT IS MY ERROR. The reviewer seat refuted it with evidence I verified independently.
+
+    WHAT I WROTE: "a reviewer seat launched outside the drain has no supported way to record a verdict, so it hand-writes JSON with null reviewed_sha… That is a missing surface, not carelessness: nothing told it."
+
+    WHAT ACTUALLY HAPPENED: the seat used `aida review record`, which exists and is the supported command. One invocation writes TWO files. The spec-keyed twin is fully stamped; the PR-keyed one is not:
+
+        PR-1976.json      reviewed_sha None          recorded_by None
+        BUG-1231.json     reviewed_sha f1c2b5e6d1a   recorded_by "aida review record"
+        PR-1986.json      reviewed_sha None          recorded_by None
+        STORY-1351.json   reviewed_sha d941fadc87    recorded_by "aida review record"
+
+    Read off disk, four files, just now. A hand-written file does not produce a stamped twin from the same call. The cause is the `--pr` handshake writer dropping provenance — which is BUG-1466, filed 11:03 and approved High, five hours before I filed this.
+
+    CONSEQUENCE FOR THIS SPEC'S ACCEPTANCE. Criterion 1 — "records verdicts through a supported command rather than by writing JSON directly" — was already satisfied and always was. An implementation meeting only that criterion would change nothing about the observed nulls. The remaining criteria (reject or flag a verdict missing `reviewed_sha`; re-stamp or mark the two existing files) are still sound, but they belong on BUG-1466 with its subject rather than here.
+
+    HOW I GOT IT WRONG, because the shape is the same one that has caught me repeatedly today. I observed the nulls correctly. I then asserted a cause — hand-written JSON — that I never checked, when `aida review record --help` and one look at the twin files would have settled it in two commands. I even wrote a sympathetic explanation into the spec ("nothing told it") for a failure that did not occur, which made the wrong diagnosis read as considered rather than assumed.
+
+    RECOMMENDATION: supersede this spec by BUG-1466, carrying over the two criteria that survive. I am not doing it myself — disposition is the advisor's, and I have already had one supersede recommendation of mine turn out to be wrong today (BUG-1476, where the code was redundant but the defect was live). This one is the opposite case: the diagnosis is wrong and the subject is genuinely owned elsewhere. But the advisor should make that call rather than accept a second supersede argument from the seat that filed both.
+  created_at: 2026-09-20T23:57:25.950342462Z
+  modified_at: 2026-09-20T23:57:25.950342462Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
