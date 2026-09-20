@@ -1,0 +1,46 @@
+id: 01a0c103-cb85-71d1-88b0-60aab87c746c
+spec_id: BUG-1494
+agreed_id: BUG-1494
+title: The NeedsAttention to Approved advisor gate is enforced on aida edit but not on queue rework, so the documented recovery sequence walks around it in two hops
+description: |
+  `aida edit <spec> --status approved` refuses to promote a NeedsAttention spec without advisor authority. `aida queue rework <spec>` flips the same spec NeedsAttention → InProgress with no authority check at all, and InProgress → Approved is then permitted. The gate blocks the one-hop path and not the two-hop one.
+
+  OBSERVED 2026-09-20 22:50Z. I ran `queue rework` followed by `edit --status approved` on four shelved specs from the product seat. Three went through; the store's own transition log shows the path:
+
+      BUG-1288     Approved <- InProgress <- InProgress
+      TASK-1298    Approved <- InProgress <- InProgress
+      STORY-1350   Approved <- InProgress <- InProgress
+
+  The fourth refused, and its refusal is what exposed the hole:
+
+      error: "promoting a Needs Attention spec to Approved needs advisor authority
+      (advisor role or an interactive session). Leave it for advisor triage, or run
+      as the advisor."
+
+  BUG-1297 only hit that message because its `queue rework` had declined to flip it for an unrelated reason — the recurrence guard escalated it instead. Had that guard not fired, it would have gone through like the other three.
+
+  So the gate is real, correctly worded, and enforced on exactly one of the two routes into the state it protects.
+
+  WHY THE TWO-HOP PATH IS NOT AN OBSCURE CORNER. It is the documented recovery sequence. `aida queue rework --help` describes the smart transition table as the encapsulation of "the recurring implementer → reviewer → fixup recovery sequence", and the InProgress landing state is what the verb is FOR. Anyone recovering a shelved spec reaches for it, and the follow-up `--status approved` is what makes the spec pickable again — I learned that earlier today because bare `queue rework` leaves a spec InProgress-with-no-lease that the drain will not claim. So the natural, documented recovery motion walks straight around the gate.
+
+  I did this three times without noticing, from a seat that is explicitly not supposed to hold disposition authority. The intent was throughput, not evasion, which is rather the point: a gate that only an intentional actor would trip is not a gate.
+
+  Acceptance:
+  - The NeedsAttention → Approved authority requirement is enforced on the state TRANSITION, not on the command that performs it, so `queue rework`, `edit --status`, and any future writer are all covered by one check.
+  - `aida queue rework` on a NeedsAttention spec either requires the same authority as the direct promotion, or lands the spec in a state that does not become Approved without one.
+  - Regression fixture drives the two-hop path from a non-advisor seat and asserts it is refused.
+  - Worth checking in the same pass whether any other guarded transition has a second route. The pattern — an authority check on the obvious verb and none on the verb that achieves the same state indirectly — is unlikely to be unique to this pair.
+
+  Related: the three specs above are currently Approved and batched as a result of this. They are legitimate rework candidates on the merits and the advisor has been asked to either bless or revert them; the point of this spec is the route, not those three.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T22:50:46.533446065Z
+modified_at: 2026-09-20T22:50:46.533446065Z
+req_type: Bug
+tags:
+- agent-surface
+- authority
+- drain-safe
+- substrate-gate
