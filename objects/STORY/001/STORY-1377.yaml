@@ -1,0 +1,26 @@
+id: 01a0be08-766a-7502-9d5c-a9e683473b05
+spec_id: STORY-1377
+agreed_id: STORY-1377
+title: 'Review PR-2010: [AI:codex] fix(dev): report missing activated binary truthfully (BUG-1305)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0bdf7`) for branch `bug-1305-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2010>
+  - Branch: `bug-1305-work` → `main`
+
+  ## Covers
+
+  - BUG-1305
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2010` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T08:57:00.778009642Z
+modified_at: 2026-09-20T08:57:00.778009642Z
+req_type: Story
