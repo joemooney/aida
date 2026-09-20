@@ -28,6 +28,16 @@ use std::time::{Duration, SystemTime};
 
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
+/// True when a serialized drain member state denotes an active pipeline phase.
+///
+/// Drain state is shared by the CLI producer and read-only consumers such as
+/// the TUI. Keep the format-dependent comparison here so those surfaces cannot
+/// silently disagree if the serialized spelling changes.
+// trace:BUG-1429 | ai:codex
+pub fn drain_member_is_running(state: &str) -> bool {
+    state.starts_with("in-phase-")
+}
+
 // ============================================================================
 // /proc process probe (moved verbatim from aida-cli/src/process_probe.rs).
 // STORY-69 foundation: enumerate live `claude` (Claude Code) processes, map

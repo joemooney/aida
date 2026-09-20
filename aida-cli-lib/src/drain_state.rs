@@ -83,7 +83,7 @@ impl DrainMember {
 
     /// True while this member is mid-pipeline (`in-phase-N`).
     pub(crate) fn is_running(&self) -> bool {
-        self.state.starts_with("in-phase-")
+        aida_core::liveness::drain_member_is_running(&self.state)
     }
 }
 
