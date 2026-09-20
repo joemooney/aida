@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:13:13.644915988Z
-modified_at: 2026-09-20T14:56:12.751803492Z
+modified_at: 2026-09-20T14:58:22.991220196Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -45,6 +45,23 @@ relationships:
   target_id: 01a0bf51-3c2f-76f0-b854-43ba20e581b5
   created_at: 2026-09-20T14:56:12.751798092Z
   created_by: joe
+comments:
+- id: 01a0bf53-4e8f-7a61-947e-145ce886f4ad
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2018
+    agent: codex
+    ran-at: 2026-09-20 07:58 -07:00
+    mode: propose-only (drain)
+    proposed: 1
+    skipped: 1
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1426-drain-01a0bf52-f202-7d73-bfb9-5b551acc6b14.json
+    ? SEM (0.99) — Three project-local guides are exempt from content parity: README.md because it indexes the Rust-repository-specific test-isolation.md guide, autonomous-burndown.md because it documents this repository's lease-based drain liveness rule, and substrate-as-bouncer.md because it tracks AIDA's own implementation gates rather than downstream guidance.
+    - SEM skipped (matches a deny keyword) — Content parity ignores trailing whitespace at the end of the project-local guide: a local file is considered current when its content after trim_end() equals the embedded master.
+  created_at: 2026-09-20T14:58:22.991220196Z
+  modified_at: 2026-09-20T14:58:22.991220196Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
