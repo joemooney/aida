@@ -1,0 +1,26 @@
+id: 01a0c09d-e251-7091-b4f7-827643363e72
+spec_id: STORY-1404
+agreed_id: STORY-1404
+title: 'Review PR-2031: [AI:codex] fix(drain): classify branch policy refusal as hold (BUG-1447)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0c098`) for branch `bug-1447-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2031>
+  - Branch: `bug-1447-work` → `main`
+
+  ## Covers
+
+  - BUG-1447
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2031` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T20:59:27.697370790Z
+modified_at: 2026-09-20T20:59:27.697370790Z
+req_type: Story
