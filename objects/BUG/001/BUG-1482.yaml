@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:39:52.294000659Z
-modified_at: 2026-09-20T19:43:46.549332238Z
+modified_at: 2026-09-20T19:50:30.700626173Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -60,4 +60,25 @@ comments:
   created_at: 2026-09-20T19:42:56.407303551Z
   modified_at: 2026-09-20T19:42:56.407303551Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c05e-c22c-7d02-acd2-46a9db8ed122
+  author: joe
+  content: |-
+    Reproduced independently on the product seat, 2026-09-20 19:48Z.
+
+        BEFORE:        product=1789933219960
+        AFTER PIPED:   product=1789933219960   UNCHANGED
+        AFTER UNPIPED: product=1789933727334   ADVANCED
+
+    Same command, same state, seconds apart, differing only in the pipe (`aida mailbox inbox 2>/dev/null | head -3` versus `aida mailbox inbox`).
+
+    METHOD NOTE, because my first attempt was inconclusive in the way this spec already warns about: I ran the pair against a mailbox where `aida awaiting` reported `mail_unread: 0` and got UNCHANGED from both forms. That is not a refutation — neither form had anything to advance. The test only discriminates once unread state exists, which I created by sending the seat a probe message. Anyone re-verifying should check `mail_unread` is non-zero before trusting either result.
+
+    TWO OBSERVATIONS RECORDED AS DATA, NOT CLAIMS:
+
+    1. Across both reads `claude-product-1` never advanced while `product` did — the opposite pairing from the reviewer seat, which saw `claude-reviewer-1` advance while `reviewer` did not. Two seats, two opposite alias results. Neither of us has a case where the non-advancing alias had something to advance past, so neither observation supports a claim about union-watermark behaviour.
+
+    2. After sending the probe, `aida awaiting` still reported `mail_unread: 0`, yet the unpiped read advanced the watermark past it. Either a self-addressed message is excluded from the unread count while still being watermarked, or the count and the watermark disagree about what 'read' means. Unexplained; flagged in case it bears on the fix.
+  created_at: 2026-09-20T19:50:30.700626173Z
+  modified_at: 2026-09-20T19:50:30.700626173Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
