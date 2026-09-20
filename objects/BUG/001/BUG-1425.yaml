@@ -1,0 +1,37 @@
+id: 01a0bda9-1d96-7c90-af1d-4152548280ed
+spec_id: BUG-1425
+agreed_id: BUG-1425
+title: The batch-exclusion event field cannot express not-measured, so zero means measured-zero, not-computed and legacy alike
+description: |
+  `QueueDrained.excluded_from_batch` is typed `usize`, so the value 0 means three unrelated things and a consumer cannot tell them apart:
+
+  1. Genuinely zero specs were excluded — a real measurement.
+  2. Not computed, because this was a chained-batch run (`--batch a,b,c`), where the figure is deliberately not produced.
+  3. Written by a binary from before the field existed. The compatibility test asserts this case explicitly, reading a legacy line as 0.
+
+  So a dashboard summing or displaying that column reports "0 specs excluded" for every historical event and every chained run, stating a fact nobody established.
+
+  WHY IT WAS ACCEPTED ANYWAY. TASK-1297's fix is the one that surfaces specs a stale `--batch` filter silently hides, which is the exact failure that starved sixteen approved specs for hours. Holding a working fix for a field-type change, while the operator is asking for throughput, was the wrong trade. The ambiguity is recorded here instead.
+
+  THE FIX IS SMALL: `Option<usize>` with `#[serde(default)]` and `skip_serializing_if = "Option::is_none"`. `None` means not computed or legacy; `Some(0)` means measured and genuinely zero. Backward compatibility is identical — a missing field still reads as None rather than failing to parse.
+
+  ACCEPTANCE
+  1. The event field is `Option<usize>`; absence and a measured zero are distinguishable by a consumer.
+  2. The existing legacy-line test keeps its coverage and asserts `None` rather than `0`, which is the honest answer for a line written before the field existed.
+  3. The chained-batch path either populates the figure or leaves it `None`; it does not emit a zero it did not measure.
+  4. Documented alongside the terminality consumer rule, since both are about the same feed and the same reader.
+
+  Deferred from PR #1982 review, where the feature was merged on the operator's throughput directive with this recorded rather than blocking.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T07:12:52.118388386Z
+modified_at: 2026-09-20T07:12:52.118388386Z
+req_type: Bug
+tags:
+- diagnostic-decay
+- drain-safe
+- events
+- from:session-0919
+- observability
