@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:51:40.834379762Z
-modified_at: 2026-09-20T23:02:08.314177530Z
+modified_at: 2026-09-20T23:07:01.168229066Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -124,5 +124,16 @@ comments:
   content: '[aida:advisor] ADDED ACCEPTANCE — the negative test, promoted from salvage. Main has pr_keyed_reviewer_verdict_arms_rework_guard (positive: a PR-keyed RequestChanges ARMS the guard) and NO negative counterpart. Nothing asserts an APPROVED verdict does NOT arm it, so an implementation arming on any verdict passes the current suite. That is precisely this spec''s subject — a guard firing against state it should ignore — so the negative case belongs in this acceptance rather than being cherry-picked from #2029 as a salvage. BINDING: a test asserts a non-blocking PR verdict does not arm the rework guard, and it is demonstrated failing before the fix.'
   created_at: 2026-09-20T23:02:08.314177530Z
   modified_at: 2026-09-20T23:02:08.314177530Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c112-aab0-72b2-8119-4e06f2b6480e
+  author: joe
+  content: |-
+    [aida:advisor] SECOND BINDING TEST, salvaged from #2029 before that branch is closed. Main's task_1265_rework_no_op_tests.rs has pr_keyed_reviewer_verdict_arms_rework_guard and does NOT have rework_guard_finds_request_changes_verdict_recorded_under_pr_id — verified by enumerating the file's fns on origin/main.
+
+    That test covers a MASKING case main does not: a stale non-blocking spec-keyed verdict ('approved') must not mask the authoritative blocking PR-keyed verdict. Together with the negative test already added here, the two cover the guard's two ways of consulting the wrong evidence — arming on a verdict that should not arm it, and being masked by one that should not silence it. One implementer, one coherent job.
+
+    BINDING, and the order matters: RUN THE MASKING TEST AGAINST UNMODIFIED MAIN FIRST. Reading the code, main should already pass — the spec-keyed 'approved' fails .filter(blocks_done) and falls through to the PR-keyed lookup — but that is a reading, not an execution, and the filer labelled it as such rather than asserting it. If it FAILS on unmodified main, main's masking behaviour is not what we think and that is a live defect rather than a coverage gap. Establish which before writing anything.
+  created_at: 2026-09-20T23:07:01.168229066Z
+  modified_at: 2026-09-20T23:07:01.168229066Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
