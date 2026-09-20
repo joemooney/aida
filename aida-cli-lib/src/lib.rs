@@ -62554,6 +62554,142 @@ fn apply_stale_review_flip(
     true
 }
 
+/// TASK-1296: how a stranded Review-PR spec's own PR resolved on the forge.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StrandedReviewPrOutcome {
+    /// PR merged, but its `(#N)` commit fell outside the git-log scan
+    /// window — the window-independent counterpart of `apply_stale_review_flip`.
+    Merged,
+    /// PR closed WITHOUT merging. Never produces a merge commit, so the
+    /// git-log scan has no evidence for it at all; the forge is the only
+    /// source of truth.
+    ClosedUnmerged,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct StrandedReviewPrResolution {
+    spec_id: String,
+    pr_n: u64,
+    outcome: StrandedReviewPrOutcome,
+}
+
+/// TASK-1296: a "Review PR-N" spec left `Approved`/`InProgress` while its own
+/// PR already reached a terminal state on the forge, undetected by the
+/// git-log scan (`pr_to_sha`) because that scan only sees a *merge* commit
+/// inside its window — a PR closed without merging never produces one at
+/// all, and a PR merged far enough back can fall outside the window too.
+/// Observed 2026-09-19: six such specs sat Approved routing to the reviewer
+/// queue for PRs that had already merged or closed, inflating queue depth
+/// with dead entries `aida queue gc` correctly leaves alone (it prunes on
+/// the queue entry's TARGET spec status; here the review spec itself is the
+/// stale Approved thing — gc has nothing to key off until this flip runs).
+///
+/// Bounded, not a poller: only the review-story-shaped specs still open
+/// after the local scan reach the forge, so this rides `aida pull`'s
+/// existing cadence rather than adding one. `metadata` lookup failures
+/// (offline, no `gh`/`glab`, auth) fail open — "cannot confirm" leaves the
+/// spec untouched, same as every other forge read in this file.
+// trace:TASK-1296 | ai:claude
+fn collect_stranded_review_pr_resolutions(
+    store: &aida_core::RequirementsStore,
+    pr_to_sha: &std::collections::BTreeMap<u64, String>,
+    project_root: &std::path::Path,
+) -> Vec<StrandedReviewPrResolution> {
+    let mut out = Vec::new();
+    let mut sink = network_retry::NoopSink;
+    for req in &store.requirements {
+        if !matches!(
+            req.status,
+            RequirementStatus::Approved | RequirementStatus::InProgress
+        ) {
+            continue;
+        }
+        let Some(pr_n) = parse_review_story_pr_number(&req.title) else {
+            continue;
+        };
+        // Already resolvable via the git-log-based merged path above — don't
+        // pay for a redundant forge round trip.
+        if pr_to_sha.contains_key(&pr_n) {
+            continue;
+        }
+        let Some(spec_id) = req.spec_id.as_deref() else {
+            continue;
+        };
+        let Ok(metadata) = crate::forge::forge_for(project_root).change_metadata(pr_n, &mut sink)
+        else {
+            continue;
+        };
+        let outcome = match metadata.state {
+            crate::forge::ChangeState::Merged => StrandedReviewPrOutcome::Merged,
+            crate::forge::ChangeState::Closed => StrandedReviewPrOutcome::ClosedUnmerged,
+            // Still open — untouched, per acceptance.
+            crate::forge::ChangeState::Open => continue,
+        };
+        out.push(StrandedReviewPrResolution {
+            spec_id: spec_id.to_string(),
+            pr_n,
+            outcome,
+        });
+    }
+    out
+}
+
+/// Applies one [`StrandedReviewPrResolution`]. Re-checks the live status —
+/// concurrent edits (or a second pull racing this one) may have moved it off
+/// Approved/InProgress already.
+// trace:TASK-1296 | ai:claude
+fn apply_stranded_review_pr_resolution(
+    r: &mut aida_core::Requirement,
+    resolution: &StrandedReviewPrResolution,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    if !matches!(
+        r.status,
+        RequirementStatus::Approved | RequirementStatus::InProgress
+    ) {
+        return false;
+    }
+    let prior = r.status.clone();
+    match resolution.outcome {
+        StrandedReviewPrOutcome::Merged => {
+            r.set_status_from_str("Completed");
+            r.failure_reason = None;
+            let info = r
+                .implementation_info
+                .get_or_insert_with(aida_core::ImplementationInfo::default);
+            info.completed_at.get_or_insert(now);
+            r.add_comment(aida_core::Comment::new(
+                "aida-auto-bump".to_string(),
+                format!(
+                    "Auto-completed: PR #{} is merged on the forge (its merge commit was \
+                     outside the local scan window).",
+                    resolution.pr_n
+                ),
+            ));
+        }
+        StrandedReviewPrOutcome::ClosedUnmerged => {
+            r.set_status_from_str("Rejected");
+            r.add_comment(aida_core::Comment::new(
+                "aida-auto-bump".to_string(),
+                format!(
+                    "Auto-rejected: PR #{} closed on the forge without merging.",
+                    resolution.pr_n
+                ),
+            ));
+        }
+    }
+    r.record_change(
+        "aida-auto-bump".to_string(),
+        vec![aida_core::Requirement::field_change(
+            "status",
+            format!("{:?}", prior),
+            format!("{:?}", r.status),
+        )],
+    );
+    r.modified_at = now;
+    true
+}
+
 /// trace:STORY-86 | ai:claude
 fn auto_bump_done_to_completed(
     project_root: &std::path::Path,
@@ -62706,12 +62842,24 @@ fn auto_bump_done_to_completed(
         }
     }
 
-    if candidates.is_empty() && pr_to_sha.is_empty() {
+    // TASK-1296: a Review-PR spec whose own PR closed WITHOUT merging never
+    // produces a `(#N)` merge commit, so it can never show up in `pr_to_sha`
+    // — the git-log scan above has no evidence to find. It also can't be
+    // deferred behind the `candidates.is_empty() && pr_to_sha.is_empty()`
+    // early-out below, since a closed-unmerged PR is precisely the case
+    // where both of those stay empty. Load the store unconditionally and
+    // ask the forge directly for the handful of Review-PR specs still
+    // Approved/InProgress that the local scan didn't already resolve.
+    // trace:TASK-1296 | ai:claude
+    let store = storage.load()?;
+    let stranded_review_pr =
+        collect_stranded_review_pr_resolutions(&store, &pr_to_sha, project_root);
+
+    if candidates.is_empty() && pr_to_sha.is_empty() && stranded_review_pr.is_empty() {
         return Ok(Vec::new());
     }
 
     // ── Step 4: figure out which candidates are eligible to ship ──
-    let store = storage.load()?;
     let mut flips: Vec<AutoBumpFlip> = Vec::new();
     for (spec_id, sha) in &candidates {
         let Some(req) = store.get_requirement_by_spec_id(spec_id) else {
@@ -62825,7 +62973,7 @@ fn auto_bump_done_to_completed(
     // trace:TASK-246 trace:BUG-219 | ai:claude
     let stale_review_flips = collect_stale_review_story_flips(&store, &pr_to_sha, &flips);
 
-    if flips.is_empty() && stale_review_flips.is_empty() {
+    if flips.is_empty() && stale_review_flips.is_empty() && stranded_review_pr.is_empty() {
         return Ok(Vec::new());
     }
 
@@ -62862,10 +63010,22 @@ fn auto_bump_done_to_completed(
                 backend.update_requirement(&r)?;
             }
         }
+        // TASK-1296: review stories stranded Approved/InProgress whose PR
+        // reached a terminal state the git-log scan above couldn't see
+        // (closed without merging, or merged outside the scan window).
+        for resolution in &stranded_review_pr {
+            let Some(mut r) = backend.get_requirement_by_spec_id(&resolution.spec_id)? else {
+                continue;
+            };
+            if apply_stranded_review_pr_resolution(&mut r, resolution, now) {
+                backend.update_requirement(&r)?;
+            }
+        }
     } else {
         // Legacy YAML/SQLite store: keep the atomic full-store write.
         let flips_for_write = flips.clone();
         let stale_for_write = stale_review_flips.clone();
+        let stranded_for_write = stranded_review_pr.clone();
         storage.update_atomically(|s| {
             for flip in &flips_for_write {
                 // TASK-1-113: match agreed_id as well as spec_id — the
@@ -62895,6 +63055,16 @@ fn auto_bump_done_to_completed(
                     apply_stale_review_flip(r, sha, *pr_n, now, project_root);
                 }
             }
+            // TASK-1296: same stranded-review-pr write, atomic-store path.
+            for resolution in &stranded_for_write {
+                if let Some(r) = s
+                    .requirements
+                    .iter_mut()
+                    .find(|r| r.spec_id.as_deref() == Some(resolution.spec_id.as_str()))
+                {
+                    apply_stranded_review_pr_resolution(r, resolution, now);
+                }
+            }
         })?;
     }
 
@@ -62911,6 +63081,62 @@ fn auto_bump_done_to_completed(
                 .unwrap_or(false)
         })
         .collect();
+
+    // TASK-1296: report the stranded review-pr specs that flipped Completed
+    // or Rejected because their PR reached a terminal state on the forge.
+    // trace:TASK-1296 | ai:claude
+    let confirmed_stranded: Vec<&StrandedReviewPrResolution> = stranded_review_pr
+        .iter()
+        .filter(|resolution| {
+            let expect = match resolution.outcome {
+                StrandedReviewPrOutcome::Merged => RequirementStatus::Completed,
+                StrandedReviewPrOutcome::ClosedUnmerged => RequirementStatus::Rejected,
+            };
+            after
+                .get_requirement_by_spec_id(&resolution.spec_id)
+                .map(|r| r.status == expect)
+                .unwrap_or(false)
+        })
+        .collect();
+    if !confirmed_stranded.is_empty() {
+        let completed_n = confirmed_stranded
+            .iter()
+            .filter(|r| r.outcome == StrandedReviewPrOutcome::Merged)
+            .count();
+        let rejected_n = confirmed_stranded.len() - completed_n;
+        if completed_n > 0 {
+            println!(
+                "  {} {} review stor{} → {} (PR merged on the forge)",
+                "auto-completed".cyan(),
+                completed_n,
+                if completed_n == 1 { "y" } else { "ies" },
+                "Completed".green().bold()
+            );
+        }
+        if rejected_n > 0 {
+            println!(
+                "  {} {} review stor{} → {} (PR closed without merging)",
+                "auto-rejected".cyan(),
+                rejected_n,
+                if rejected_n == 1 { "y" } else { "ies" },
+                "Rejected".red().bold()
+            );
+        }
+        for resolution in &confirmed_stranded {
+            println!(
+                "    {} {}",
+                resolution.spec_id.bold(),
+                format!("(PR #{})", resolution.pr_n).dimmed()
+            );
+        }
+    }
+    for resolution in &confirmed_stranded {
+        let action = match resolution.outcome {
+            StrandedReviewPrOutcome::Merged => "auto-completed",
+            StrandedReviewPrOutcome::ClosedUnmerged => "auto-rejected",
+        };
+        record_role_activity(&resolution.spec_id, action);
+    }
 
     // TASK-246 / BUG-219: report the review stories that flipped to
     // Completed because their PR merged before review finished. Kept
