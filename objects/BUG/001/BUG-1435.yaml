@@ -27,12 +27,12 @@ description: |
   5. A grep finds no other place classifying a merge outcome by matching refusal prose.
 
   Filed by the advisor after the hold it was raised on failed to gate the merge. Same class as BUG-1295, BUG-1310 and BUG-1297 — and the third instance this week of prose matching appearing inside a fix for an adjacent problem.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T10:42:03.598350636Z
-modified_at: 2026-09-20T12:12:26.334600662Z
+modified_at: 2026-09-20T18:33:00.551846272Z
 req_type: Bug
 tags:
 - batch:night-0920
