@@ -45,8 +45,7 @@ jobs:
   # TASK-1273: a real nightly GitLab lifecycle catches provider assumptions that
   # mocked CLI output cannot: open MR -> wait for pipeline -> read review verdict
   # -> merge through the Forge trait. The ignored Rust test owns cleanup. An
-  # absent credential or unreachable mirror skips this optional external probe;
-  # once reached, every lifecycle failure is a hard failure with a named phase.
+  # absent credentials fail loudly; only an unreachable mirror skips the probe.
   # trace:TASK-1273 | ai:codex
   gitlab-forge-smoke:
     name: GitLab live forge smoke
@@ -64,8 +63,8 @@ jobs:
         shell: bash
         run: |
           if [ -z "$GITLAB_TOKEN" ]; then
-            echo "::notice::Skipping GitLab forge smoke: AIDA_GITLAB_TOKEN is not provisioned"
-            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::error::AIDA_GITLAB_TOKEN is not provisioned"
+            exit 1
           elif ! curl --silent --show-error --fail --max-time 15 \
             "https://${AIDA_GITLAB_LIVE_HOST}/-/readiness" >/dev/null; then
             echo "::notice::Skipping GitLab forge smoke: mirror is unreachable"

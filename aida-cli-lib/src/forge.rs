@@ -3508,22 +3508,36 @@ mod tests {
             .expect("http_url_to_repo")
             .to_string();
 
-        // delete the project even if an assertion panics
+        // Best-effort panic fallback. The success path below explicitly deletes
+        // and verifies the project so cleanup regressions fail the smoke.
         struct Cleanup {
             pid: u64,
             host: String,
+            armed: bool,
         }
         impl Drop for Cleanup {
             fn drop(&mut self) {
-                let _ = std::process::Command::new("glab")
+                if !self.armed {
+                    return;
+                }
+                let deletion = std::process::Command::new("glab")
                     .env("GITLAB_HOST", &self.host)
                     .args(["api", "-X", "DELETE", &format!("projects/{}", self.pid)])
                     .output();
+                match deletion {
+                    Ok(out) if out.status.success() => {}
+                    Ok(out) => eprintln!(
+                        "phase=project-cleanup panic fallback failed: {}",
+                        String::from_utf8_lossy(&out.stderr)
+                    ),
+                    Err(err) => eprintln!("phase=project-cleanup panic fallback failed: {err}"),
+                }
             }
         }
-        let _cleanup = Cleanup {
+        let mut cleanup = Cleanup {
             pid,
             host: host.clone(),
+            armed: true,
         };
 
         // 2) clone, branch, change, push — a real implementer branch
@@ -3583,19 +3597,21 @@ mod tests {
                 body: "GitLabForge live integration test".into(),
                 draft: false,
             })
-            .expect("open_change must succeed against a real GitLab");
+            .expect("phase=open-change: open_change failed against real GitLab");
         assert!(cr.id > 0, "MR iid must be set");
 
         // poll for mergeability (GitLab computes it async)
         let mut status = forge
             .change_status(&cr)
-            .expect("change_status must succeed");
+            .expect("phase=pre-merge-status: change_status failed");
         for _ in 0..10 {
             if status.mergeable {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_secs(3));
-            status = forge.change_status(&cr).expect("change_status");
+            status = forge
+                .change_status(&cr)
+                .expect("phase=pre-merge-status: change_status poll failed");
         }
         assert_eq!(
             status.state,
@@ -3626,19 +3642,39 @@ mod tests {
         );
 
         eprintln!("forge-smoke phase=ci-wait branch={}", cr.branch);
-        let ci = forge.watch_ci(&cr).expect("phase ci-wait: watch_ci failed");
+        // Use the same branch-stream seam as the drain rather than the lower
+        // level MR watcher. It owns terminal polling and the CiTerminal emit.
+        let ci = forge
+            .stream_ci_for_branch(&cr.branch, false)
+            .expect("phase ci-wait: stream_ci_for_branch failed");
         assert_eq!(
             ci,
-            CiState::Success,
+            CiProbeResult::Green { change: cr.id },
             "phase ci-verdict: pipeline was not green"
         );
 
         eprintln!("forge-smoke phase=review-verdict mr={}", cr.id);
+        let approved = glab_api(&[
+            "api",
+            "-X",
+            "POST",
+            &format!("projects/{pid}/merge_requests/{}/approve", cr.id),
+        ]);
+        assert!(
+            approved.status.success(),
+            "phase=review-verdict: could not create approval: {}",
+            String::from_utf8_lossy(&approved.stderr)
+        );
         let mut review_sink = crate::network_retry::StderrSink;
         let review = forge
             .change_reviews(cr.id, &mut review_sink)
             .expect("phase review-verdict: change_reviews failed");
         eprintln!("forge-smoke review={:?}", review.decision);
+        assert_eq!(
+            review.decision,
+            ReviewDecision::Approved,
+            "phase=review-verdict: GitLab approval did not map to Approved"
+        );
 
         // merge_change — the never-live-validated path
         eprintln!("forge-smoke phase=merge mr={}", cr.id);
@@ -3653,14 +3689,87 @@ mod tests {
                 },
                 &mut sink,
             )
-            .expect("merge_change must succeed against a real GitLab");
+            .expect("phase=merge: merge_change failed against real GitLab");
 
-        let after = forge.change_status(&cr).expect("change_status after merge");
+        let after = forge
+            .change_status(&cr)
+            .expect("phase=post-merge-status: change_status failed");
         assert_eq!(
             after.state,
             ChangeState::Merged,
             "MR must read Merged after merge_change"
         );
+        crate::events::emit(
+            &repo,
+            &crate::events::Event::new(
+                Some("TASK-1273".into()),
+                "gitlab-live-smoke",
+                crate::events::EventKind::PrMerged { pr: cr.id as u32 },
+            ),
+        );
+
+        eprintln!("forge-smoke phase=lifecycle-events");
+        let lifecycle = crate::events::read_all(&repo);
+        assert!(
+            lifecycle.iter().any(|event| matches!(
+                event.kind,
+                crate::events::EventKind::CiTerminal { green: true }
+            )),
+            "phase=lifecycle-events: missing green CiTerminal"
+        );
+        assert!(
+            lifecycle.iter().any(|event| matches!(
+                event.kind,
+                crate::events::EventKind::PrMerged { pr } if pr == cr.id as u32
+            )),
+            "phase=lifecycle-events: missing PrMerged"
+        );
+        let shelved: Vec<_> = lifecycle
+            .iter()
+            .filter_map(|event| match &event.kind {
+                crate::events::EventKind::SpecShelved { phase, kind, .. } => {
+                    Some((phase.as_str(), kind.as_str()))
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            shelved.is_empty(),
+            "phase=lifecycle-events: successful lifecycle unexpectedly shelved: {shelved:?}"
+        );
+
+        eprintln!("forge-smoke phase=branch-cleanup branch={}", cr.branch);
+        let branch = glab_api(&[
+            "api",
+            &format!("projects/{pid}/repository/branches?search=^{}$", cr.branch),
+        ]);
+        assert!(
+            branch.status.success(),
+            "phase=branch-cleanup: branch absence probe failed: {}",
+            String::from_utf8_lossy(&branch.stderr)
+        );
+        let branches: serde_json::Value = serde_json::from_slice(&branch.stdout)
+            .expect("phase=branch-cleanup: invalid branch-list JSON");
+        assert_eq!(
+            branches.as_array().map(Vec::len),
+            Some(0),
+            "phase=branch-cleanup: source branch still exists: {branches}"
+        );
+
+        eprintln!("forge-smoke phase=project-cleanup project={pid}");
+        let deleted = glab_api(&["api", "-X", "DELETE", &format!("projects/{pid}")]);
+        assert!(
+            deleted.status.success(),
+            "phase=project-cleanup: project deletion failed: {}",
+            String::from_utf8_lossy(&deleted.stderr)
+        );
+        let absent = glab_api(&["api", &format!("projects/{pid}")]);
+        assert_eq!(
+            absent.status.code(),
+            Some(1),
+            "phase=project-cleanup: deleted project remains readable"
+        );
+        cleanup.armed = false;
     }
 
     /// STORY-516: PrLookup → ChangeLookup is a 1:1 state map that preserves the
