@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:35:48.162497532Z
-modified_at: 2026-09-20T17:35:48.162497532Z
+modified_at: 2026-09-20T17:35:50.061424002Z
 req_type: Bug
 tags:
 - ci
@@ -68,3 +68,7 @@ tags:
 - orchestrator
 - parent:EPIC-62
 - reviewer
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-20T17:35:50.061424002Z
