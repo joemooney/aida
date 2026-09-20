@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:52:27.202206555Z
-modified_at: 2026-09-20T01:40:20.157485508Z
+modified_at: 2026-09-20T01:51:56.896829834Z
 req_type: Bug
 tags:
 - discipline
@@ -65,4 +65,10 @@ comments:
   created_at: 2026-09-19T19:24:50.997342650Z
   modified_at: 2026-09-19T19:24:50.997342650Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bc83-4de0-74b0-bf57-876fd589d83d
+  author: joe
+  content: 'Drift cause: ensure_discipline_pack_scaffold (aida-cli-lib/src/lib.rs) only writes a discipline-pack file when the destination is entirely absent and never overlays an existing one against the embedded master, unlike the checksum-based overlay aida scaffold refresh uses for skills/commands/codex/antigravity (TASK-1170) — so once a guide exists locally it can drift forever, and this repo''s own project copy had simply never had a refresh run since ten guides were added to the master and four existing guides were revised (root cause is now recorded; not yet fixed in code — that overlay gap is left open as a follow-up, see PR).'
+  created_at: 2026-09-20T01:51:56.896829834Z
+  modified_at: 2026-09-20T01:51:56.896829834Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
