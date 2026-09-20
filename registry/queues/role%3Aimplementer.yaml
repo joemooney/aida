@@ -23,14 +23,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0ba8e-4480-7991-a292-0ef0ad057b31
-  position: 82000
-  added_by: role:implementer
-  note: 'drive: contract over CONSUMED fields at 0.x (not all 11 full shapes), aida contract --json, CI drift guard incl. EventKind::known_names, docs/monitor-contract.md; follow feed = a --all --json MODE on the existing aida watch, NOT a new aida events verb'
-  added_at: 2026-09-19T16:51:01.724763112Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0ba9e-f4f2-79b2-8a58-7df3a9234667
   position: 83000
   added_by: role:implementer
