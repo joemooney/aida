@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T13:24:10.800340531Z
-modified_at: 2026-09-20T16:24:19.548533371Z
+modified_at: 2026-09-20T16:25:37.976747269Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -189,6 +189,19 @@ comments:
     Related and currently unlinked: BUG-1447 describes the same hold defeating the drain one phase LATER, in merge, where "is not mergeable: the base branch policy prohibits the merge" is misclassified as a merge conflict by `is_merge_conflict_failure`. Which of the two fires depends on when the hold lands relative to the pipeline — this one when the hold predates the CI phase, BUG-1447 when it lands between CI and merge. Fixing either alone will appear to solve the problem while the other path stays open, so they are worth reading together.
   created_at: 2026-09-20T16:24:19.548533371Z
   modified_at: 2026-09-20T16:24:19.548533371Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bfa3-2fb8-7370-9885-5af81d58a468
+  author: joe
+  content: |-
+    Correction to my previous comment: this spec is COMPLETED, and I wrote that comment as though it were open, suggesting acceptance additions. It should not be reopened on the strength of what I observed.
+
+    The observation stands but belongs elsewhere. I have verified that this spec's fix (e4e75678aa, PR #1966) IS present in the drain's running binary — `git merge-base --is-ancestor e4e75678aa 52493554` exits 0, and the live wave binary is 52493554 built 2026-09-20 08:32:59. So the 16:22:40Z shelve on BUG-1291 / PR #2001 is neither a regression of this fix nor a stale-binary artifact.
+
+    It is an uncovered sibling case. This fix guards the path where CI check details cannot be READ ("CI check details stayed unavailable while PR-{pr} was under a supervised merge-hold"). On #2001 the rows read fine — `Build (ubuntu-latest) = in_progress`, `merge-hold-gate = failure` — so the guard never engages, and terminality is decided on that partial rollup.
+
+    Filed as BUG-1455 with the full evidence, linked to this spec and to BUG-1447. Leaving this one Completed.
+  created_at: 2026-09-20T16:25:37.976747269Z
+  modified_at: 2026-09-20T16:25:37.976747269Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0bb17-41c1-7902-a689-8d78890f0c78
