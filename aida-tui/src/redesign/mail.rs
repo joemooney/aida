@@ -219,6 +219,7 @@ mod tests {
             timestamp: ts,
             in_reply_to: None,
             body: body.to_string(),
+            subject: None,
             urgent,
             intent: Intent::Fyi,
             retracted: false,
