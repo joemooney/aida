@@ -1,0 +1,28 @@
+id: 01a0c066-89aa-7592-9ec3-220bec23a177
+spec_id: BUG-1486
+agreed_id: BUG-1486
+title: aida db block status (read-only) is refused under the requester role as a 'database write'
+description: |-
+  `aida db block status` is documented as "Show blocks for the current node and their remaining capacity" — a pure read. Under AIDA_SESSION_ROLE=requester it is refused:
+
+    error: "AIDA_SESSION_ROLE=requester is a least-privilege stakeholder role; refusing database writes. Ask an advisor to groom, route, or approve it."
+
+  The gate is evidently applied at the `db` subcommand level rather than per-verb, so the read-only `status`, `list` and `verify` siblings inherit the refusal meant for `claim` (which genuinely writes and needs a network push).
+
+  Impact is small but the failure is confusing rather than restrictive: the message says "refusing database writes" for a command that writes nothing, so a requester reading it cannot tell whether the command is mis-gated or they misunderstood what it does. It also blocks a requester from acting on the low-block WARNING the CLI itself prints during `aida add` ("SPIKE block running low (20 remaining)") — the warning routes to a command the warned role may not run.
+
+  Acceptance:
+  - `aida db block status`, `list` and `verify` succeed under the requester role.
+  - `aida db block claim` stays gated (it writes and pushes).
+  - The refusal message for a genuinely-gated read, if any remain, names the verb rather than asserting "database writes" for a read.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T19:59:00.522521946Z
+modified_at: 2026-09-20T19:59:00.522521946Z
+req_type: Bug
+tags:
+- aida:db
+- papercut
+- role-gate
