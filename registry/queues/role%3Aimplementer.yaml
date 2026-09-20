@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a0bc55-dcbd-74c2-827f-fb765ad6d414
+  position: 59000
+  added_by: role:implementer
+  note: 'Product seat requeue: verdict recorded and no drain run followed it. Findings are specific and actionable; re-driving so the round happens. No acceptance change.'
+  added_at: 2026-09-20T18:06:01.646720680Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a0bbb0-8032-72a1-8089-6a058cfeb3cf
   position: 60000
   added_by: role:implementer
@@ -41,12 +48,6 @@
   position: 67000
   added_by: role:implementer
   added_at: 2026-09-20T16:04:53.872578966Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a0bc55-dcbd-74c2-827f-fb765ad6d414
-  position: 70000
-  added_by: role:implementer
-  added_at: 2026-09-20T14:32:54.912731318Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a0ba82-9fb0-7763-a986-b54029980a2c
