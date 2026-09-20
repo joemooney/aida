@@ -231,6 +231,19 @@ fn gate_proceeds_with_no_verdict_or_a_passing_one() {
     );
 }
 
+#[test]
+fn gate_refuses_an_unverifiable_approval() {
+    let approved = rc("approved", None);
+    match queue_done_verdict_gate("TASK-5", Some(&approved), TipRelation::Unknown) {
+        VerdictGate::Refuse(lines) => {
+            let joined = lines.join("\n");
+            assert!(joined.contains("UNVERIFIABLE"), "{joined}");
+            assert!(joined.contains("reviewed_sha"), "{joined}");
+        }
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+}
+
 /// THE bug: the branch tip is still the exact commit the reviewer rejected.
 #[test]
 fn gate_refuses_when_tip_is_still_the_reviewed_commit() {
@@ -306,4 +319,11 @@ fn notice_line_is_one_readable_line() {
     assert!(line.starts_with("CHANGES REQUESTED"), "{line}");
     assert!(line.contains("e49317ecafe0"), "{line}");
     assert!(!line.contains('\n'), "{line}");
+}
+
+#[test]
+fn notice_flags_a_verdict_without_a_reviewed_sha() {
+    let line = verdict_notice_line(&rc("approved", None));
+    assert!(line.contains("UNVERIFIABLE"), "{line}");
+    assert!(line.contains("missing reviewed_sha"), "{line}");
 }

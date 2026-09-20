@@ -26920,7 +26920,10 @@ fn default_role_guidance(role: &str) -> String {
         "implementer" => "You are implementing. Read the assigned spec/brief, work in the supervised worktree, keep changes bounded to acceptance, run relevant tests, commit with the spec trailer, and finish with `aida pr ship`.".to_string(),
         // trace:TASK-1200 | ai:codex
         "product" => "You are wearing the product seat. Groom drafts, capture requirements, sharpen acceptance criteria, and route work to the right queue. Focus on intake and requirement capture; leave strategic counsel and disposition calls to the advisor.".to_string(),
-        "reviewer" => "You are reviewing. Inspect the PR and linked spec, prioritize correctness/regression risks, run targeted tests when useful, and produce a clear verdict/finding rather than taking over implementation.".to_string(),
+        // A cold-booted reviewer must discover the durable writer here; hand-
+        // writing JSON omits the provenance that makes approval enforceable.
+        // trace:BUG-1467 | ai:codex
+        "reviewer" => "You are reviewing. Inspect the PR and linked spec, prioritize correctness/regression risks, run targeted tests when useful, and produce a clear verdict/finding rather than taking over implementation. Record the result through `aida review record <SPEC> --pr <N> --verdict approved|request-changes|rejected --summary \"<why>\"` (repeat `--finding` as needed); never hand-write verdict JSON.".to_string(),
         // The integrator seat's role-context prompt, mirroring the arms above.
         // Mechanical merge cascade only; escalate anything that turns on judgment.
         "integrator" => "You are integrating. Land finished work (Done specs with an open PR) on the default branch one PR at a time in dependency order: rebase stale branches, resolve MECHANICAL conflicts only, watch CI, squash-merge the green-and-reviewed PRs, delete merged branches, and run `aida pull` to auto-bump. Never make a design call — escalate design-judgment conflicts to the advisor and route missing-verdict PRs to the reviewer.".to_string(),
@@ -76221,17 +76224,45 @@ fn handle_review_record(
     let branch = branch
         .map(str::to_string)
         .or_else(|| current_branch_at(&project_root));
+    // A from-PR reviewer receives the forge-resolved head in its launch
+    // envelope. Prefer it to a checkout's HEAD, which may be stale or may be
+    // the drive root rather than the review worktree.
+    // trace:BUG-1467 | ai:codex
+    let envelope_pr_sha = pr
+        .and_then(|_| std::env::var("AIDA_FROM_PR_HEAD_SHA").ok())
+        .filter(|s| !s.trim().is_empty());
+    let forge_pr_sha = if sha.is_none() && envelope_pr_sha.is_none() {
+        match pr {
+            Some(n) => Some(
+                pr_cmd::fetch_change_info_via_resolved_forge(
+                    &project_root,
+                    n,
+                    crate::forge::resolve_open_change_forge_kind(&project_root),
+                )
+                .with_context(|| {
+                    format!(
+                        "could not resolve PR {n}'s current head for the verdict; pass `--sha <commit>` explicitly"
+                    )
+                })?
+                .head_oid,
+            ),
+            None => None,
+        }
+    } else {
+        None
+    };
     let resolved_sha = sha
         .map(str::to_string)
+        .or(envelope_pr_sha)
+        .or(forge_pr_sha)
         .or_else(|| resolve_commit_sha(&project_root, branch.as_deref().unwrap_or("HEAD")))
         .or_else(|| resolve_commit_sha(&project_root, "HEAD"));
     if resolved_sha.is_none() {
-        eprintln!(
-            "{} no commit could be resolved for this review — record it with `--sha <commit>` \
-             so a later `aida queue done` can tell whether the branch moved on.",
-            "warning:".yellow().bold()
+        anyhow::bail!(
+            "no commit could be resolved for this review — pass `--sha <commit>`; an unstamped verdict is unverifiable and will not be recorded"
         );
     }
+    let recorded_by = review_recorded_by();
     let path = review_verdict::record_verdict(
         &project_root,
         spec,
@@ -76240,7 +76271,7 @@ fn handle_review_record(
         branch.as_deref(),
         summary,
         findings,
-        "aida review record",
+        &recorded_by,
     )
     .with_context(|| "could not write the review verdict")?;
     println!(
@@ -76278,6 +76309,10 @@ fn handle_review_record(
             "verdict": kind.label(),
             "summary": summary.unwrap_or(""),
             "mode": "orchestrator-phase-3",
+            "reviewed_sha": resolved_sha.as_deref().expect("checked above"),
+            "reviewed_branch": branch,
+            "recorded_at": chrono::Utc::now().to_rfc3339(),
+            "recorded_by": recorded_by,
         });
         let findings: Vec<_> = findings
             .iter()
@@ -76296,6 +76331,47 @@ fn handle_review_record(
         );
     }
     Ok(())
+}
+
+/// Audit identity for a supported seat-written verdict. The launched seat's
+/// name is stable and distinguishable from the drain's own metadata writer.
+// trace:BUG-1467 | ai:codex
+fn review_recorded_by() -> String {
+    review_recorded_by_from(
+        std::env::var("AIDA_AGENT_NAME").ok().as_deref(),
+        std::env::var("AIDA_AGENT_TYPE").ok().as_deref(),
+    )
+}
+
+fn review_recorded_by_from(name: Option<&str>, kind: Option<&str>) -> String {
+    match (
+        name.map(str::trim).filter(|s| !s.is_empty()),
+        kind.map(str::trim).filter(|s| !s.is_empty()),
+    ) {
+        (Some(name), Some(kind)) => format!("{name} ({kind} reviewer seat)"),
+        (Some(name), None) => format!("{name} (reviewer seat)"),
+        (None, Some(kind)) => format!("{kind} reviewer seat"),
+        (None, None) => "aida review record (operator)".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod bug_1467_reviewer_record_tests {
+    use super::*;
+
+    #[test]
+    fn launched_reviewer_identity_is_distinct_from_the_drain_writer() {
+        let identity = review_recorded_by_from(Some("review-pr-1986"), Some("claude"));
+        assert_eq!(identity, "review-pr-1986 (claude reviewer seat)");
+        assert_ne!(identity, "aida drain reviewer");
+    }
+
+    #[test]
+    fn cold_reviewer_context_names_the_supported_verdict_writer() {
+        let guidance = default_role_guidance("reviewer");
+        assert!(guidance.contains("aida review record <SPEC> --pr <N>"));
+        assert!(guidance.contains("never hand-write verdict JSON"));
+    }
 }
 
 /// `aida review verdict <SPEC>` — read the recorded verdict back.
