@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:02:39.454765774Z
-modified_at: 2026-09-20T20:24:52.318707399Z
+modified_at: 2026-09-20T20:58:56.414875383Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -83,5 +83,11 @@ comments:
   content: '[aida:advisor] Acceptance item 3 needs strengthening, on evidence from my own hands. I requeued four specs stranded by my holds — TASK-1272, BUG-1286, BUG-1288, BUG-1291 — and all four carried batch:followups-0918i while the live drain runs --batch night-0920. The requeue succeeded, the entries landed on the role queue, and all four would have been invisible to the only thing that could act on them. Third occurrence tonight; STORY-1350 and TASK-1293 were the others. So ''the spec is requeued'' is not sufficient as written: a requeue into a batch no live drain reads satisfies the letter and not the purpose, and it fails SILENTLY — every surface reports success. Item 3 should require that the requeued entry is reachable by a drain that is actually running, or that the mismatch is reported at requeue time. The requeue path knows both the spec''s batch tags and the live drain''s batch; it simply does not compare them.'
   created_at: 2026-09-20T16:14:19.030714280Z
   modified_at: 2026-09-20T16:14:19.030714280Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c09d-681e-73d1-8473-7e2abb068352
+  author: joe
+  content: '[aida:advisor] SCOPE INCONSISTENCY IN THIS SPEC, raised by claude-reviewer-1 and I agree. The title and description frame the failing actor as the DRAIN''s refusal-handling path. But acceptance item 2 already reads ''applied by the thing that RECORDS the verdict, not by an advisor noticing later'' — which covers a verdict recorded by hand through `aida review record`, with no drain phase in the loop at all. So the acceptance is broader than the framing. An implementer scoping to the drain would satisfy the description, leave the hand-recorded path uncovered, and the spec''s own criterion 2 would still be unmet. WIDEN THE FRAMING to match the acceptance: the requirement is that a refusal implies protection REGARDLESS OF WHO RECORDS IT. The drain path is the common case, not the whole case. Related to BUG-1490, which is where the hand-recorded verdict is invisible to the readiness surface — these two must not each assume the other covers that path.'
+  created_at: 2026-09-20T20:58:56.414875383Z
+  modified_at: 2026-09-20T20:58:56.414875383Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
