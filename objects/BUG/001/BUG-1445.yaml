@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:34:29.728492333Z
-modified_at: 2026-09-20T20:26:30.061702884Z
+modified_at: 2026-09-20T20:28:13.894059385Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -112,6 +112,51 @@ comments:
   created_at: 2026-09-20T20:20:40.146091510Z
   modified_at: 2026-09-20T20:20:40.146091510Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c081-4ac6-70e0-ae3a-67a2ca4bb5cc
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #2028 fix(drain): classify rework head changes (BUG-1445)
+
+    verdict: APPROVE + merged
+    proxy: claude driver-advisor, session 01a0adee
+    timestamp: 2026-09-20 20:26:19Z
+
+    independent: yes on the code. This advisor FILED this spec — the rebase-only rework loop — and wrote its acceptance, but wrote none of the implementation. Codex implemented; the drain's phase-3 reviewer approved. Recording the authorship of the spec explicitly, since I am merging against criteria I wrote.
+
+    gates cleared at the pinned head 13da26cf46:
+      - reviewer verdict APPROVED at 13da26cf46, which IS the current head
+      - Build (ubuntu-latest) pass
+      - merge-hold-gate failed on a hold whose stated reason was "BUG-1445 is marked unset
+        (supervised) — auto-merge refused". That reason was DISCHARGED, not waived: the spec had
+        no execution_mode, I set it to drain, and the condition the hold named no longer held.
+      - no drive owned it; the drain had handed it off at the merge gate
+
+    WHAT I VERIFIED MYSELF rather than taking from the verdict, because the acceptance was mine and the failure mode I was guarding against is a message that claims a method the code does not use:
+
+      acceptance 2 required detection by patch-id, explicitly NOT tree-diff, "because a rebase onto
+      newer main changes the tree substantially while changing nothing the findings asked for".
+
+      The implementation runs `git rev-list --cherry-pick` over `{before}...{after}` with
+      `^{default_ref}` excluded, and classifies empty stdout as RebaseOnly. --cherry-pick is
+      patch-equivalence; it omits commits whose patch-id matches one on the other side. So the
+      message "the PR head moved, but its patch-ids are unchanged (rebase-only)" is truthful about
+      its own mechanism. That check mattered: BUG-1424 was exactly a case where the stated method
+      and the implemented method diverged, and I would have refused this on the same grounds.
+
+      acceptance 1 required rebase-only be distinguishable from a content-changed round. Delivered
+      as a three-state enum — Unchanged / RebaseOnly / ContentChanged — rather than a bool, which is
+      the shape PRIN-5 asks for.
+
+      acceptance 4 required the recovery hint say what actually happened. The message now names the
+      classification instead of telling the reader to "push fixups", which on an unchanged head was
+      advice to repeat what had just failed.
+
+    what this unblocks: BUG-1476 is the root cause of rework rounds producing nothing, and this spec
+    is the detector for one of its two shapes. With this merged, a rebase-only round is reportable
+    rather than indistinguishable from a genuine failed attempt.
+  created_at: 2026-09-20T20:28:13.894059385Z
+  modified_at: 2026-09-20T20:28:13.894059385Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c07f-b52c-7b71-95c7-e4e12fe56a58
   author: aida-auto-bump
