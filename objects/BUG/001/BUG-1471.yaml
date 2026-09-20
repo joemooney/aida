@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-20T18:16:57.457640792Z
+modified_at: 2026-09-20T18:18:14.838295282Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -89,5 +89,32 @@ comments:
     I am re-adding my own seven as References now.
   created_at: 2026-09-20T18:16:57.457640792Z
   modified_at: 2026-09-20T18:16:57.457640792Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c00a-49b6-7fb0-b730-db4f8e300d6b
+  author: joe
+  content: |-
+    Migration detail that changes what the fix has to do — the 103 remaining inert edges are not a uniform population.
+
+        Custom-related edges that ALREADY have a References twin to the same target:  13
+        Custom-related edges with no typed twin (true orphans):                       77
+
+    (90 by target-pair; the 103 raw count includes duplicates within a spec.)
+
+    The 13 twins sit on BUG-1443, BUG-1445, BUG-1452, BUG-1453, BUG-1454, BUG-1461, BUG-1462, BUG-1465, STORY-1133 and TASK-1293. Someone — or some path — already added the typed edge alongside the inert one, so the link works and the Custom is dead weight. A migration that blindly converts every `!Custom related` to `References` will produce 13 duplicate edges rather than 13 repairs.
+
+    So the migration has two cases and they want opposite actions:
+
+        orphan (77)  →  convert to References; this is the actual repair
+        twin   (13)  →  DELETE the Custom; converting creates a duplicate
+
+    Worth an assertion in whatever does the migration: after the pass, no target should hold two edges from the same source. That is also a cheap regression test for the migration itself.
+
+    HOW THE TWINS GOT THERE is worth one look before writing the migration, because it may be a second bug. I created one of them by accident just now: `aida rel remove <s> <t> --type related` followed by `aida rel add <s> <t> --type references` left both edges on BUG-1453 for one target — the remove did not take, the add did. If `rel remove --type related` fails to match a `!Custom related` edge, then the obvious hand-repair (remove the bad one, add the good one) silently produces a twin instead, and the 13 may be other callers having already tried to fix this by hand and been defeated the same way.
+
+    I have not verified that. It is one command to check — try `rel remove --type related` against a known orphan and see whether the YAML loses the edge — and I am flagging it rather than testing it because doing so mutates a spec I do not own. If it holds, the repair path is broken in the same way as the creation path, which would make it part of this spec rather than a follow-up.
+
+    My own seven edges are now References; the store-wide inert count went 110 → 103.
+  created_at: 2026-09-20T18:18:14.838295282Z
+  modified_at: 2026-09-20T18:18:14.838295282Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
