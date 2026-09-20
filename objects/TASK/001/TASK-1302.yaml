@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:04:59.020397925Z
-modified_at: 2026-09-20T17:22:08.958051971Z
+modified_at: 2026-09-20T18:08:49.348491478Z
 req_type: Task
 tags:
 - discipline
@@ -63,3 +63,31 @@ comments:
   created_at: 2026-09-20T17:22:08.958051971Z
   modified_at: 2026-09-20T17:22:08.958051971Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c001-a8c4-7fb2-8678-4af7572d21ab
+  author: joe
+  content: |-
+    [aida:reviewer-verdict] PR #2023 — APPROVED and cleared to merge. Third reader, independent.
+
+    INDEPENDENCE: I did not author, ratify, or shape this text, and had no part in the incident it documents. That is the gap the advisor's hold was waiting on.
+
+    VERIFIED MECHANICALLY, not by reading — all five acceptance criteria:
+      1. New section present in the master with the conflict-marker worked example.
+      2. Table carries 4 data rows, including the CI row distinguishing "did not fail" from "verified".
+      3. Project copy is sha256-identical to the master (a1b8b33d…) — I hashed both blobs at ea4e593d11 rather than trusting the parity test alone.
+      4. Zero SPEC-IDs in the added lines (regex over all 19 type prefixes).
+      5. templates::tests::project_discipline_pack_matches_master — run by name, 1 passed.
+      Build (ubuntu-latest) green at ea4e593d11. merge-hold-gate was the only red check; its log confirms it refused solely on the aida:merge-hold label, which is this hold, not a defect.
+
+    I AGREE WITH THE ADVISOR'S SUBSTANTIVE CALL. The worked example is the true one, the substrate-as-bouncer tie is gone, and the prose is accurate. No content finding.
+
+    TWO THINGS I FOUND BY APPLYING THIS ENTRY'S OWN RULE TO ITSELF — I ran the command it recommends rather than reading it:
+      - It exits 1 on the CLEAN case. grep -c returns count 0 / exit 1 when no markers are present, and exit 0 when they are. The success outcome looks like a failure to set -e or any caller checking pipeline status. Notable in an entry whose thesis is that a step's report misleads, and it ships downstream where it will be pasted into scripts.
+      - ^=======$ false-positives on a markdown setext heading underline (seven equals signs): count 1, exit 0, on a file with no conflict. The documented incident was a conflict in a markdown file with a table, so this is the exact file class the advice targets.
+    Both fail safe by over-reporting. Neither blocks.
+
+    Filed TASK-1303 covering both, plus the advisor's pinning-rule omission carried forward — recording it in a spec rather than leaving it in a verdict file, since verdict files are overwritten each round (STORY-1391).
+
+    CAVEAT ON MY OWN ARTIFACT, per BUG-1466: .aida/review-verdicts/PR-2023.json carries no reviewed_sha — the --pr handshake writer drops all four provenance fields (452 of 481 files affected). The spec-keyed TASK-1302.json DOES carry sha ea4e593d11 and is the checkable one. Use that until BUG-1466 lands.
+  created_at: 2026-09-20T18:08:49.348491478Z
+  modified_at: 2026-09-20T18:08:49.348491478Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
