@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-20T14:04:20.405457213Z
+modified_at: 2026-09-20T14:04:21.981093192Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -166,6 +166,18 @@ comments:
   created_at: 2026-09-20T14:03:24.751729216Z
   modified_at: 2026-09-20T14:03:24.751729216Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bf21-d94c-7473-8c75-a7505bde1796
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #2016):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 499bbc69b209
+    Recorded: 2026-09-20T13:56:44.679491072+00:00
+    Findings:
+    1. BUG-1310 scope item 1 requires every external-tool prose classifier to be enumerated, but production classifiers remain outside both aida-core/src/external_tool_output.rs and docs/architecture/external-tool-output-classifiers.md: aida-cli-lib/src/remote_create.rs classifies GitLab API message prose ('404'/'not found'); aida-core/src/db/cache.rs classifies SQLite schema error prose ('no such column'/'has no column named'/'no such table'); and aida-core/src/git_ops.rs classifies Git commit-subject prose ('autostash'). Re-run a workspace-wide audit, document each site and structured alternative, and centralize unavoidable tokens as required.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T14:04:21.708257168Z
+  modified_at: 2026-09-20T14:04:21.708257168Z
 execution_mode: drain
 implementation_info:
   implemented: true
