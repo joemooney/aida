@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T04:07:54.265428714Z
-modified_at: 2026-09-20T04:07:57.992324665Z
+modified_at: 2026-09-20T04:11:08.533606703Z
 req_type: Story
 tags:
 - from:session-0919
@@ -47,3 +47,34 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T04:07:57.992324665Z
+comments:
+- id: 01a0bd02-bd75-7b41-8efa-e1773d53d2d2
+  author: joe
+  content: |-
+    [advisor:sequencing] REGISTER THE JOBS NOW, DO NOT INSTALL A CRONTAB AS THE BLESSED CALLER. That splits your question rather than answering it either way, and the reason comes from a defect found earlier today.
+
+    THE TWO HALVES ARE SEPARABLE AND HAVE DIFFERENT ANSWERS.
+
+    The REGISTRY is a tracked project config. Three `[[schedule.jobs]]` entries in `.aida/config.toml` are reviewable in a diff, travel with a clone, and are visible to everyone. Registering them costs nothing and is adoption of machinery that already exists and is provably unused. Do it now, independent of any runner.
+
+    The CALLER is where the sequencing question actually lives, and a crontab entry is the wrong answer even though it works today. It is machine-local, untracked, and invisible to everyone but the person who typed it. We hit exactly that shape hours ago: a blanket `.aida/` in `.git/info/exclude` silently overrode the repository's own allow-list, and nobody could see it because that file is per-clone and untracked. The symptom was a guard refusing files that were demonstrably in git, and it cost real time to trace. A crontab that runs our substrate checks has the same property — it works until the machine changes, and when it stops nobody can tell by reading the repository.
+
+    So: one supported caller, and it is STORY-1218's tick. If someone wants a crontab locally that is their business, but the project should not bless a second install path it cannot see. Your own instinct — that registering before the runner exists creates a second path to maintain — is right about the caller and wrong about the registry, and separating them keeps the benefit without the cost.
+
+    THE ORDERING THAT FOLLOWS: register the three jobs now; they are inert until a caller runs them. STORY-1218 lands the caller. Nothing migrates, because nothing was installed anywhere else.
+
+    A CONCRETE DESIGN NOTE FOR THE HUB-DRIFT JOB, from checking the reconcile rather than taking it. Both hubs' `main` match exactly. The STORE does not, and already did not within minutes of the reconcile:
+
+      origin  aida-store  7002a70fd289
+      gitlab  aida-store  79084eecdcfb   — 4 commits BEHIND, and a clean ancestor
+
+    That is not a regression of the reconcile. The store is written continuously — every comment, every status change, every merge — while the mirror leg is best-effort and pushes on sync. So the store being a few commits behind is its NORMAL state, and "the hubs differ" is true almost always.
+
+    A drift job that alerts on difference would therefore fire on nearly every run, which is precisely the failure your silence criterion is guarding against, arriving through the check's definition rather than through its reporting. The job must distinguish BEHIND from DIVERGED: if the mirror's ref is an ancestor of origin's, that is lag and it is silent. Only a non-fast-forward relationship — the two having actually forked — is worth waking anyone for. That is also the condition that produced today's 32-hour problem, so the narrower test loses nothing.
+
+    Worth applying the same lens to the other two before they are written: disk headroom should alert on a threshold crossing, not on a number, and stranded branches should exclude ones whose commits are already reachable from main by patch-id, or it will report every squash-merged branch forever.
+
+    YOUR SILENCE CRITERION IS THE MOST IMPORTANT LINE IN THE SPEC and I would keep it stated as strongly as you wrote it. A cadence check that reports every run trains people to ignore it, and then it is worse than no check because it occupies the slot a working one would fill.
+  created_at: 2026-09-20T04:11:08.533606703Z
+  modified_at: 2026-09-20T04:11:08.533606703Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
