@@ -1,7 +1,7 @@
 id: 01a0becf-5722-7db2-a49b-1e13af40f0bf
 spec_id: STORY-1385
 agreed_id: STORY-1385
-title: 'We shipped without meeting the reviewer''s bar and left no trace: record the unmet requirement as debt so idle capacity can close it'
+title: 'Acceptance is all-or-nothing, so ambition becomes a blocker: mark stretch criteria ahead of time and record unmet ones as debt'
 description: |-
   When the advisor narrows a spec's acceptance to let a change land, the excluded part vanishes. The amended criterion looks identical to acceptance that was always that narrow, so nobody can later tell "we decided this is out of scope" from "nobody thought of it", and the excluded work is remembered only for as long as one session's context lasts.
 
@@ -59,12 +59,39 @@ description: |-
   6. The marker records an UNMET REVIEW BAR, not a scope change: which criterion, what the reviewer wanted, what shipped instead, and what would close the gap.
   7. A finding considered and REJECTED is recorded distinctly from one accepted as debt, with the reason. The sweep surfaces debt and must not re-raise settled decisions.
   8. Where the reviewer's verdict exists in `.aida/review-verdicts/`, the record links to it rather than paraphrasing, so the original wording survives the summary.
+
+  STRETCH CRITERIA — THE EX-ANTE HALF, proposed by the operator 2026-09-20. This is the better half of the mechanism and it makes the ex-post half rarer.
+
+  THE PROBLEM IT SOLVES. Acceptance today is binary: every criterion must be met or the reviewer refuses, correctly. So an ambitious criterion becomes a blocker. That leaves the spec author two bad options — write weak criteria and lose the ambition, or write strong ones and watch the spec bounce. Both happened tonight. Three consecutive specs shelved at review in 93 minutes, and in at least one case the criterion was right and the shortfall was acceptable.
+
+  THE PROPOSAL. Mark a criterion as STRETCH when writing the spec. The reviewer treats an unmet REQUIRED criterion as a refusal and an unmet STRETCH criterion as a note. The note becomes the debt record automatically, which means the ex-post filing this spec was originally about becomes the exception rather than the routine.
+
+  WHY THIS IS EPISTEMICALLY DIFFERENT FROM NARROWING AFTER THE FACT, and this is the whole argument. Marking a criterion stretch BEFORE the work is a prediction: "I want this, I am not certain it is reachable, and I will not block on it." Deciding after a reviewer refuses that the criterion I failed was optional is a rationalisation. Same outcome, opposite epistemics — one is a plan, the other is an excuse. The ex-post path should still exist, because sometimes you genuinely learn during implementation that a bar was wrong, but it should be the rarer path and it should look different in the record.
+
+  IT MAKES THE ADVISOR'S JUDGEMENT MEASURABLE, which is the part worth more than the throughput. The stretch-met RATE is a calibration signal:
+
+    stretch routinely MET      the author is under-ambitious; those were requirements wearing a hedge
+    stretch never met          stretch is being used as a dumping ground for things not really wanted
+    stretch sometimes met      calibrated — the author is predicting reach accurately
+
+  That turns "is the advisor writing good acceptance" from an opinion into a number, and it is the same move this project made with drain success rates and calibration mode.
+
+  THE ABUSE TO GUARD AGAINST. Stretch must mean "I am unsure this is reachable", not "I do not want to argue with the reviewer". The second is how acceptance erodes while looking disciplined. Two defences: the met-rate above makes a dumping ground visible, and the RATIO of stretch to required within a single spec is itself a signal — a spec that is mostly stretch has not been thought through.
+
+  THIS REQUIRES A REVIEWER CHANGE, not just a convention. The reviewer must read the marking and refuse only on unmet REQUIRED criteria. That is a change to the reviewer prompt and to how a verdict is recorded, so it cannot be adopted by the advisor writing specs differently on their own.
+
+  ADDITIONAL ACCEPTANCE
+  9. A criterion can be marked stretch in the spec, in a form the reviewer reads. Unmet stretch does not refuse; unmet required does.
+  10. An unmet stretch criterion is recorded as debt automatically, with the same fields as the ex-post path — which criterion, what was wanted, what shipped, what would close it.
+  11. The stretch-met rate is reportable over a window, per author or seat, as a calibration signal rather than a score.
+  12. The stretch-to-required ratio within a spec is visible at grooming time, so a spec that is mostly stretch is caught before it is dispatched rather than after.
+  13. The ex-post path from criteria 1-8 remains, for the genuine case where implementation reveals a bar was wrong. It must be distinguishable in the record from an ex-ante stretch, because one is a prediction and the other is a revision.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:34:14.434033357Z
-modified_at: 2026-09-20T12:35:13.892066991Z
+modified_at: 2026-09-20T12:36:29.104602168Z
 req_type: Story
 tags:
 - acceptance
