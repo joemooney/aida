@@ -1,0 +1,55 @@
+id: 01a0bc7b-bc99-7843-9ce4-97989d3423bc
+spec_id: BUG-1307
+agreed_id: BUG-1307
+title: 'Commits stranded on abandoned worktree branches with no PR are reported nowhere: twelve such branches carry unreviewed work from 13-18 September'
+description: |
+  Commits accumulate on abandoned worktree branches with no PR and no owner, and nothing in AIDA reports them. BUG-1291 covers an open PR whose owner died. This is the case one step earlier: work that was committed but never reached a PR at all, so there is no PR for a sweep to find.
+
+  MEASURED 2026-09-19 while auditing sibling worktrees for disk reclamation. Eleven worktrees under ~/ai hold commits that are not on main and have no open PR:
+
+    aida-bug-1177          4 commits   branch bug-1177
+    aida-task1205          2 commits   branch task-1205
+    aida-task1251-verify   2 commits   detached HEAD
+    aida-task-1251         2 commits   branch task-1251
+    aida-task1244          2 commits   branch task-1244-work
+    aida-bug-1145          1 commit    branch fix/bug-1145-worktree
+    aida-task1238          1 commit    branch task-1238-work
+    aida-task1207          1 commit    branch task-1207
+    aida-bug1176           1 commit    branch bug-1176-flags-advisory
+    aida-plan1178          1 commit    branch docs-story-1178-plan (plus 1 uncommitted file)
+    aida-cfg1178           1 commit    branch config-contained-allowed-hosts
+    aida-plan1178-lint     1 commit    branch plan-1178-lint
+
+  Dates range from 13 to 18 September. Separately and on the same day, TASK-1274 accumulated TEN commits on task-1274-work with no PR, which the drain's session-end check DID warn about — once, into a log, as the run exited.
+
+  WHY IT IS INVISIBLE. `aida session reap` is the surface that looks at worktrees, and its predicate is spec-finished AND branch-merged AND process-exited. A branch that never opened a PR fails "merged" forever, so it is held rather than reported, and it is reported as an operator decision rather than as unshipped work. `aida awaiting` does not look at branches at all. The session-end warning fires once at teardown, when nobody is reading, and is not repeated.
+
+  So the failure is silent in the direction that matters: work that was DONE and never shipped looks identical to a worktree that was never used, and both look like disk.
+
+  THE CLASS. This is the third shape of the same problem in one day. BUG-1264: a batch member dropped silently. TASK-1297: a stale batch filter excluded sixteen approved specs. BUG-1291: a PR orphaned when its run died. Now: a branch with commits that never reached a PR. In every case work reaches a state where no component is responsible for it, and the system reports normally.
+
+  PROPOSED: report it where someone already looks. `aida awaiting` is the coordination inbox and already answers "where am I the gate"; a branch carrying commits, with no open PR and no live lease, is exactly that. Report the branch, the commit count, the age, and the spec if one can be inferred from the trailer.
+
+  DELIBERATELY NOT PROPOSED: automatic cleanup. These are unreviewed commits of unknown value — the correct action is a human decision per branch, and the defect is that nobody is ever told a decision is pending.
+
+  ACCEPTANCE
+  1. A branch with commits not on the default branch, no open PR, and no live lease is surfaced by `aida awaiting`, with branch, commit count, age, and inferred spec where a trailer allows it.
+  2. It is distinguishable from an ownerless open PR (BUG-1291's case) rather than merged into one line.
+  3. A branch whose content is already on main by a squash-merge is NOT reported — squash leaves commits unmerged by ancestry, which is the false positive that would make this noise. Detect by patch-id or trailer, not by ancestry alone.
+  4. The twelve branches listed above are the regression fixture; the squash-merged ones currently held by `session reap` are the negative fixture.
+  5. Nothing is deleted or force-pushed by this feature.
+
+  Filed by the product seat as a draft proposal; disposition is the advisor's.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T01:43:40.953486135Z
+modified_at: 2026-09-20T01:43:40.953486135Z
+req_type: Bug
+tags:
+- dispatch
+- from:session-0919
+- observability
+- orchestrator
+- parent:EPIC-62
