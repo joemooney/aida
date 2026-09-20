@@ -1,0 +1,40 @@
+id: 01a0c06d-31c0-7103-83a2-66f71e27aae9
+spec_id: BUG-1487
+agreed_id: BUG-1487
+title: aida queue move is the only queue verb without --user, so the documented way to reorder another identity's queue fails — and it is a write, so the caller silently reorders the wrong one
+description: |
+  `aida queue move` is the only queue verb that does not accept `--user`, so the documented way to address another identity's queue fails on the one verb that reorders it.
+
+  OBSERVED 2026-09-20 20:02Z, reordering the drain's implementer queue:
+
+      aida queue move BUG-1476 --top --user role:implementer
+        → error, "For more information, try '--help'"
+
+      AIDA_USER=role:implementer aida queue move BUG-1476 --top
+        → works
+
+  `aida queue list`, `add`, `work`, `next`, `done` and `remove` all take `--user`. `move` does not, and its `--help` lists only `--top`, `--bottom` and positional options.
+
+  WHY THIS IS MORE THAN A MISSING FLAG. CLAUDE.md documents the identity resolution order as "`--user <id>` flag → `AIDA_USER` env → `USER` env → `USERNAME` → default", and BUG-89 exists precisely because the queue is keyed on the shell's identity rather than the node's. An agent that has internalised that rule reaches for `--user` first — it is the documented, explicit, scriptable form — and on this one verb it fails with a bare clap error that does not say the flag is unsupported here, only that something was wrong.
+
+  The env-var fallback works, so the capability exists. What is missing is the surface, and the failure gives no hint that the fallback is the route.
+
+  THE CONSEQUENCE IS NOT SYMMETRICAL WITH THE OTHER VERBS. Reading someone else's queue wrong is harmless. `move` is a write, and the identity determines WHICH queue is reordered. A caller who does not notice the error — or who assumes the default identity is right because the command printed a plausible-looking help line — reorders their own queue and believes they reordered the drain's. I hit exactly that: my first attempt silently operated against the reviewer queue (11 items, all `for_role: reviewer`) while I was trying to reorder the implementer queue (46 items). The two are different queues and nothing in the output distinguished them.
+
+  Acceptance:
+  - `aida queue move` accepts `--user <id>` with the same semantics as the other queue verbs.
+  - Its `--help` documents the identity resolution, as the sibling verbs do.
+  - Until or unless that lands, the error when an unsupported flag is passed names the flag rather than emitting a bare "try --help".
+  - Worth checking in the same pass whether any other queue verb is missing `--user`; I checked `list`, `add`, `work`, `remove` and `done` and only `move` was affected, but I did not enumerate the full set.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T20:06:16.768684256Z
+modified_at: 2026-09-20T20:06:16.768684256Z
+req_type: Bug
+tags:
+- agent-surface
+- drain-safe
+- papercut
+- queue
