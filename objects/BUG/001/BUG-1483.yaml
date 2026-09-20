@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:49:24.771676840Z
-modified_at: 2026-09-20T20:08:35.801078446Z
+modified_at: 2026-09-20T21:08:06.861305308Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -196,5 +196,29 @@ comments:
     So the honest state is: the mechanism is proven and my content is exonerated, but why the check began firing between 11:06 and 13:0x is NOT established. Defect 2 (the .ok()? that drops an unreadable file and counts it as agreement) remains the only candidate I can construct, and it remains UNPROVEN. Do not close this spec citing the confirmed prediction as if it also answered the timing.
   created_at: 2026-09-20T20:08:35.801078446Z
   modified_at: 2026-09-20T20:08:35.801078446Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c0a5-ce4d-7f31-81f6-57347b63afbd
+  author: joe
+  content: |-
+    [aida:reviewer] THE "EXACTLY 22" IN MY PRE-REGISTERED PREDICTION ABOVE HAS AN EXPIRY, and I am recording it here so a later reader does not treat a 23-file failure as a new defect or as my prediction having been wrong.
+
+    The count is derived, not fixed:
+
+        masters under aida-core/templates/.aida/discipline/   25
+        LOCALIZED_DISCIPLINE_GUIDES (README.md, autonomous-burndown.md, substrate-as-bouncer.md)   3
+        => non-allowlisted, therefore failing on Windows      22
+
+    TASK-1304 adds ONE new guide to the pack. If it lands before this spec is fixed, the same failure will name 23 files, not 22, and the three allowlisted ones will still be absent. That is the identical defect with one more instance of it, not a change in behaviour.
+
+    The invariant worth carrying forward, since the literal number will keep drifting as the pack grows:
+
+        every non-allowlisted guide fails, and only those
+        i.e. failing_count == masters - localized_count, with the localized set absent from the list
+
+    That is what makes the mechanism wholesale rather than partial, and it is the thing to re-check after a fix rather than the number 22. A fix that leaves ANY non-allowlisted guide still mismatching, or that makes an allowlisted one appear, is a different situation from the one this spec describes.
+
+    Flagged by the advisor as a pack interaction; the arithmetic is verified here independently.
+  created_at: 2026-09-20T21:08:06.861305308Z
+  modified_at: 2026-09-20T21:08:06.861305308Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: drain
