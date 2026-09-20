@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-20T15:08:55.213206650Z
+modified_at: 2026-09-20T15:09:46.195654336Z
 req_type: Bug
 tags:
 - agent-surface
@@ -166,6 +166,53 @@ comments:
   created_at: 2026-09-20T14:46:48.010989220Z
   modified_at: 2026-09-20T14:46:48.010989220Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bf5d-bb53-7162-bd6b-0536581a2fe8
+  author: joe
+  content: |-
+    [rework round 3] PR #2006 — TWO findings outstanding, from two reviewers. The first has now survived two rounds because I asked for an outcome without giving a mechanism. Here is the code.
+
+    REQUIREMENT 1 — TYPE THE RESOLUTION OUTCOME. Still present at mailbox_cmd.rs:702:
+
+        match resolve_mailbox_message(messages, query) {
+            Ok(message) => Ok(message.thread_id.clone()),
+            Err(error) if error.to_string().contains("ambiguous") => Err(error),
+            Err(_) if allow_new => Ok(query.to_string()),
+            Err(_) => anyhow::bail!("no such mailbox message or thread: {query}"),
+        }
+
+    Reword the "ambiguous" message anywhere and an ambiguous prefix falls to the third arm, where `allow_new` is true on the send path, and silently becomes a NEW THREAD ID. And the test at line 855 asserts on the same prose, so it moves with the bug rather than catching it.
+
+    CONCRETELY, because "type the outcome" has not been actionable enough twice:
+
+        pub(crate) enum MessageLookup<'a> {
+            Found(&'a Message),
+            Ambiguous(Vec<String>),   // the candidate ids already built for the message
+            NotFound,
+        }
+
+    Have `resolve_mailbox_message` return that instead of `Result`. Then:
+
+        match resolve_mailbox_message(messages, query) {
+            MessageLookup::Found(m)        => Ok(m.thread_id.clone()),
+            MessageLookup::Ambiguous(ids)  => bail!("ambiguous message prefix {query}: {}", ids.join(", ")),
+            MessageLookup::NotFound if allow_new => Ok(query.to_string()),
+            MessageLookup::NotFound        => bail!("no such mailbox message or thread: {query}"),
+        }
+
+    The prose moves to the point of reporting; no branch reads it. Keep the existing message wording so nothing user-facing changes.
+
+    Then the test must assert on the VARIANT, not the string, and add one that REWORDS the ambiguous message and proves classification survives — the same drift guard BUG-1295 shipped, which is the precedent to copy.
+
+    REQUIREMENT 2 — `--thread` AND `--in-reply-to` TOGETHER. `aida mailbox send` accepts both, and mailbox_cmd.rs takes the `--thread` branch first, never resolving `in_reply_to`. So an unknown or ambiguous reply id is WRITTEN rather than refused, and a unique prefix is stored non-canonically.
+
+    Resolve and validate `in_reply_to` regardless of which branch supplies the thread. If both are given and disagree, refuse rather than silently preferring one — a reply attached to the wrong thread is the same failure class this spec exists to close, arriving by a different route.
+
+    WHY BOTH MATTER TOGETHER: this spec is about the mailbox silently detaching a reply. Requirement 1 detaches it via a reword; requirement 2 detaches it via flag precedence. Fixing one leaves the defect reachable by the other path, which is why I would not ship either alone.
+
+    If only one fits this round, do requirement 1 — it is the one that has persisted, and the enum is about fifteen lines.
+  created_at: 2026-09-20T15:09:46.195654336Z
+  modified_at: 2026-09-20T15:09:46.195654336Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
