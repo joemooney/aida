@@ -1,0 +1,16 @@
+{
+  "id": "c68c3fa9-68c5-45cd-9588-a42cab1c6886",
+  "thread_id": "c68c3fa9-68c5-45cd-9588-a42cab1c6886",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789894927705,
+  "body": "BUG-1420 SHELVED ON TWO FINDINGS THAT ARE BOTH STALE-BASE ARTIFACTS. Requeued with direction: rebase first, chase neither.\n\nTHE BRANCH IS SEVEN COMMITS BEHIND MAIN. That is why a shell-strictness change has a +3819 line diff — the discipline-pack files in it are byte-identical to main's, which I verified rather than assumed. They are merge-base inflation from #1988 having landed, not content the PR adds.\n\nThe reviewer then swept that inflated diff — correctly, per TASK-1291 — and found real-looking problems in other specs' already-merged content. Its own summary says the load-bearing part: \"the pinned BUG-1420 shell-parity change itself passes its focused tests.\"\n\nFINDING 1 DOES NOT HOLD ON MAIN, and I ran it rather than reasoning about it:\n\n  cargo test -p aida-cli-lib queue_rework_flips_status_and_requeues\n  test mcp::tests::queue_rework_flips_status_and_requeues ... ok\n\nBUG-1277 merged tonight with green CI and that test passes now. \"Reconciling\" it would break a currently-correct test.\n\nFINDING 2 is the trailing whitespace in the SPIKE-83 report — the same one you raised earlier. Those are two-space markdown hard breaks on the Date and Research-spike lines. Stripping them breaks the rendering of a document that merged hours ago. The defect there was the PR body's claim, not the file.\n\nTHE PATTERN WORTH TAKING FROM THIS, and it is not obvious: a stale base makes a thorough review WORSE, not just noisier. The full sweep applied its thoroughness to content the author never wrote, produced two confident findings about merged work, and shelved a spec whose own change was reported passing. The more rigorous the review, the more a stale base costs — which inverts the usual assumption that a better review is always safer.\n\nThat suggests a cheap guard worth considering for the sweep prompt: state the branch's distance from main before reviewing, and if it is non-zero, review only the branch's own commits rather than the merge-base diff. I have not filed it — it is your prompt and you may have a better shape for it.\n\nI also warned the lane that the CLI-manual guard will fail for a reason that is not theirs (TASK-1-152, queued), and told it explicitly not to loosen the guard or widen the shell change to get green.\n\nSEPARATELY: #2010 (BUG-1305) is open and the drain is at phase 3 on that spec right now, so the drive owns it and I have not touched it. That is the dev-status fix you asked me to prioritise — the one behind tonight's worst incident — so I am glad to see it come back fast.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
