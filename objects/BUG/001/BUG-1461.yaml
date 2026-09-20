@@ -1,0 +1,30 @@
+id: 01a0bfea-d790-7641-a9d9-acf9e41c3c09
+spec_id: BUG-1461
+agreed_id: BUG-1461
+title: MCP send_message cannot set a mail subject after BUG-1231 added --subject to the CLI
+description: |-
+  BUG-1231 (PR #1976) added an explicit Message.subject and an "aida mailbox send --subject" flag. The MCP surface was not mirrored:
+
+  - aida-cli-lib/src/mcp.rs send_message handler constructs Message { subject: None, .. } unconditionally, so an MCP-native agent cannot set a subject.
+  - The send_message inputSchema has no "subject" property.
+  - The read_inbox documented response shape (id, thread_id, from, to, timestamp, in_reply_to, body, urgent, intent) omits subject, so an MCP reader cannot see one either.
+
+  CLAUDE.md states: "When you add a new CLI filter or field, mirror it onto the matching MCP tool schema + handler so the two surfaces do not drift."
+
+  Not a regression - MCP keeps the pre-BUG-1231 first-body-line behavior - so this was filed as a follow-up rather than blocking the merge.
+
+  ## Acceptance
+
+  - send_message inputSchema exposes an optional "subject" string with a description and example.
+  - The handler threads it onto Message.subject.
+  - The read_inbox response shape and its documented description include subject.
+  - A test covers an MCP send-with-subject then read-inbox roundtrip that observes the subject (the existing mcp_mailbox_send_then_read_inbox_roundtrip test does not).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T17:43:54.000177243Z
+modified_at: 2026-09-20T17:43:54.000177243Z
+req_type: Bug
+tags:
+- agent-ux mailbox mcp parity from:review-pr-1976
