@@ -35,12 +35,26 @@ description: |
   NOT IN SCOPE: the reaper's other predicates, and the question of whether stale remote branches should ever be deleted. Both are settled and neither is this.
 
   Found by running `aida session reap --dry-run` after rebuilding onto a binary containing the fix, and comparing against the same measurement taken three hours earlier at review time.
+
+  ADDED 2026-09-20 BY THE ADVISOR, from the product seat's review of this filing. Both items below are binding acceptance, not commentary.
+
+  5. THE REGRESSION TEST MUST MOVE THE WORLD. Every test on the original change was a point-in-time fixture, which is exactly why they all passed then and still pass now while the mechanism is inert. A test that constructs a squash-merged branch and immediately asserts it is classified as landed cannot detect decay, because decay needs time to pass and commits to land.
+
+  The test must: construct the branch, squash-merge it, THEN land one or more further commits on the default branch that touch at least one file the branch also touched, and only then assert the classification is unchanged. Against the current implementation that test fails. Against a patch-id implementation it passes. That is the whole point — a regression test for this defect has to be able to fail on the code that has it.
+
+  6. ASK OF ANY COMPARISON WHETHER ITS ANSWER DECAYS. This is the generalisable half and it is worth stating on the spec rather than leaving in a review thread.
+
+  "Does this branch's content match the default branch right now" is true until somebody edits those files. "Is this commit's patch-id among the default branch's patch-ids since the merge-base" is true permanently. Both answer "did this work land" correctly at the moment you ask. Only one still answers it next week.
+
+  A tree comparison in a steadily-merging repository is a mechanism with a half-life, and the situation it decays fastest in is precisely the situation it exists for: worktrees accumulate BECAUSE nobody reaps promptly, which means merges are landing the whole time it waits. Any future check in this area should be asked the same question before it is accepted — does this answer expire, and if so what is the durable form.
+
+  WHY THIS SPEC SHOULD JUMP THE QUEUE, recorded so the priority is not mistaken for enthusiasm: a fix that is inert is worse than an open bug, because the spec that carries it reads Completed. The failure direction is safe — it keeps rather than deletes, so no work is at risk while this waits — but BUG-1287 currently claims an outcome it does not deliver, and every reader of that spec will believe the problem is solved.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:08:00.383333375Z
-modified_at: 2026-09-20T07:15:22.183610393Z
+modified_at: 2026-09-20T07:19:42.205800268Z
 req_type: Bug
 tags:
 - batch:night-0920
