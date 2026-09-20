@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-20T05:48:07.093859799Z
+modified_at: 2026-09-20T05:52:40.619592469Z
 req_type: Task
 tags:
 - acceptance
@@ -69,6 +69,23 @@ comments:
   created_at: 2026-09-19T21:31:34.379881871Z
   modified_at: 2026-09-19T21:31:34.379881871Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bd5f-b2ab-7ab3-b17d-5fdcf873edf0
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2003
+    agent: codex
+    ran-at: 2026-09-19 22:52 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 1
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1293-drain-01a0bd5e-fb5d-7472-a2e7-70a170581649.json
+    ? SEM (0.90) — The machine-readable criteria report exposes each criterion's classification as a kebab-case `state` value (`traced`, `untraced`, or `post-deployment`) and also exposes a top-level `post_deployment` list of criterion IDs, while excluding those IDs from `untested`.
+    ? SEM (0.76) — Post-deployment classification takes precedence over trace presence: a criterion matching the post-deployment heuristic is reported as `post-deployment` rather than `traced` even if traced tests are attached.
+    - SEM skipped (matches a deny keyword) — Post-deployment detection is case-insensitive and whitespace-normalized; it recognizes `measured on the next`, `measure on the next`, `over the following`, `after this ships`, `after the change ships`, `once deployed`, `after deployment`, and `post-deployment`, plus `after <number> <spec|specs|runs|deployments>` with punctuation tolerated around the number and unit.
+  created_at: 2026-09-20T05:52:40.619592469Z
+  modified_at: 2026-09-20T05:52:40.619592469Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
