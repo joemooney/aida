@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:33.544062298Z
-modified_at: 2026-09-20T03:22:17.625609712Z
+modified_at: 2026-09-20T03:39:47.284917548Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -143,3 +143,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-20T03:21:32.429000052Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: reviewer verdict is RequestChanges — not Approved
+  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1286 --work`'
+  shelved_by: advisor
+  shelved_at: 2026-09-20T03:39:47.284917548Z
