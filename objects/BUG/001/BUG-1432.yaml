@@ -1,0 +1,50 @@
+id: 01a0be03-7550-7a71-98d8-c33dc6b75825
+spec_id: BUG-1432
+agreed_id: BUG-1432
+title: Stranded-spec resolution silently skips any spec whose forge lookup fails, so an expired token makes the feature inert and indistinguishable from idle
+description: |
+  TASK-1296's stranded-spec resolver silently skips any spec whose forge lookup fails, so a `gh` error is indistinguishable from "the PR is still open". A Windows test failure surfaced it; the production consequence is larger than the test.
+
+  THE TEST FAILURE, from cross-platform run 35499761021 on 2026-09-20:
+
+    auto_bump_done_tests::auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup ... FAILED
+    panicked at aida-cli-lib\src\tests\auto_bump_done_tests.rs:2080:5:
+    PR closed without merging should reject the review spec, was Approved
+
+  Windows only; Linux and macOS pass. The test drives a fake `gh` through `AIDA_TEST_GH_BINARY`, and a shell-script fake does not execute on Windows the way it does on Unix. So the forge call fails, and the spec is left untouched at Approved rather than being Rejected.
+
+  THE UNDERLYING DEFECT IS NOT THE TEST. In `collect_stranded_review_pr_resolutions`:
+
+    let Ok(metadata) = crate::forge::forge_for(project_root).change_metadata(pr_n, &mut sink) else {
+        continue;
+    };
+
+  A failed forge call takes the same path as a PR that is genuinely still open: skip quietly, report nothing. In production that means an expired `gh` token, a network failure, a rate limit or an API change causes the feature to do nothing, with no error, no warning and no record — and `aida pull` reports success. The specs it exists to resolve stay stranded, which is exactly the condition it was written to end, and nothing indicates why.
+
+  The failure direction is safe in the sense that nothing is wrongly closed. It is unsafe in the sense that the feature can be entirely inert and look identical to having no work to do.
+
+  I REVIEWED PAST THIS. I checked that the forge cost was properly bounded — that the collector only reaches the network for specs that are Approved or InProgress, carry a parseable PR number, and are not already resolvable from the git log — and I said so in the ledger. I looked at that `continue` as part of the filtering and read it as one more narrowing condition rather than as an error being swallowed. Bounding the calls and handling their failures are different questions and I only asked the first.
+
+  ACCEPTANCE
+  1. A forge lookup that FAILS is distinguishable from a PR that is open. At minimum it is reported; it must not be silently equivalent to "nothing to do".
+  2. `aida pull` says when stranded-spec resolution could not run, naming how many specs were skipped and why. One line is enough, and it must not be silent when the count is non-zero.
+  3. The Windows test failure is fixed at its cause rather than by disabling the test: either the fake forge is made executable on Windows, or the test injects the forge boundary rather than shelling to a script. Do NOT add a cfg(windows) skip — that hides the platform where the defect showed itself.
+  4. A test asserts the failure path directly: given a forge that errors, the spec is left untouched AND the failure is reported. That test should pass on every platform.
+
+  NOT IN SCOPE: the Rejected-on-closed-unmerged semantics, which I flagged separately at review time — a PR closed in favour of a replacement should arguably follow its successor rather than terminate the spec. That is a different question and needs its own evidence.
+
+  Found by dispatching a cross-platform run on an unrelated branch, which is the only reason this surfaced at all — PR CI is Linux-only.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T08:51:32.816783219Z
+modified_at: 2026-09-20T08:51:32.816783219Z
+req_type: Bug
+tags:
+- diagnostic-decay
+- drain-safe
+- forge
+- from:session-0919
+- observability
+- windows
