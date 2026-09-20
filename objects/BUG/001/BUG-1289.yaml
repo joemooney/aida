@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:07:00.436499599Z
-modified_at: 2026-09-20T05:32:18.576532005Z
+modified_at: 2026-09-20T05:32:21.295067910Z
 req_type: Bug
 tags:
 - agent-ux
@@ -70,6 +70,31 @@ comments:
   created_at: 2026-09-20T05:11:05.449791093Z
   modified_at: 2026-09-20T05:11:05.449791093Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bd4d-17af-7551-a976-2867dac65d99
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2002 fix(cli): honor --format json on status/ps/queue-progress/findings-list (BUG-1289)
+    verdict: APPROVE + merged 2026-09-20 05:32:00Z at head 4d1b5d00
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — neither implemented nor briefed by this advisor
+    gates cleared: required Build SUCCESS; no reviewer live on this PR; status set manually because the spec was Approved rather than Done, so the trailer's auto-bump could not fire (see BUG-1287 for the same shape)
+
+    I REPRODUCED THE TWO MISSING COMMANDS before reading the diff:
+
+      aida queue progress --json  -> error: unexpected argument '--json' found
+      aida findings list --json   -> error: unexpected argument '--json' found
+
+    Both are named in the contract manifest and the contract document. A consumer following the contract hit a hard parse error on a command the contract promised.
+
+    THE TEST SHAPE MATTERS MORE THAN THE FIXES HERE. It runs the real binary via CARGO_BIN_EXE_aida and parses the output, rather than unit-testing a function that happens to emit JSON, and `queue_progress_and_findings_list_format_json_parse` covers exactly the two surfaces that could not run. The regression is pinned at the boundary a consumer uses rather than one layer below it. Asserting that `--json` and `--format json` produce the same document is the other property worth having: two spellings of one intent diverging silently is how a contract acquires a second undocumented dialect.
+
+    THE `aida usage` DETAIL IS THE STRONGEST ARGUMENT IN THIS PR. It needed the fix in two places and the one that mattered was the live git-canonical dispatch, not the legacy arm. A lane reading code alone would plausibly have patched the dead path, watched the tests pass, and shipped a fix that did nothing, with nothing in the diff looking wrong. Running the binary is what told them apart.
+
+    WHAT THIS EXPOSED ABOUT THE CONTRACT GUARD, corrected on STORY-1352 rather than here. verify.py invokes exactly one aida command — the manifest — and compares it against hand-authored fixtures. The manifest is hand-authored too; its command strings are literals that are never executed. Both sides agreed perfectly while two of the commands they described were unrunnable. I merged that guard an hour ago and wrote that it compares fixtures "against reality". It does not. I had confirmed enforcement existed and stopped, without checking what it enforces against.
+  created_at: 2026-09-20T05:32:21.295067910Z
+  modified_at: 2026-09-20T05:32:21.295067910Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bd4c-e03a-7802-846d-31cdec86a42e
   author: aida-auto-bump
