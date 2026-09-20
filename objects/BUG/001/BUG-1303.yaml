@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:22:29.721225410Z
-modified_at: 2026-09-20T07:57:46.939424001Z
+modified_at: 2026-09-20T08:05:36.830800444Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -114,4 +114,11 @@ relationships:
   target_id: 01a0b5e0-7244-7451-89a9-f8c561574633
   created_at: 2026-09-20T00:23:22.524564511Z
   created_by: joe
+comments:
+- id: 01a0bdd9-67be-7290-9eaa-612c389b0c50
+  author: joe
+  content: 'Implemented shared fs2 try-lock error classification. Findings: the deterministic Windows failure is confirmed by fs2 source semantics (ERROR_LOCK_VIOLATION/raw 33 is its platform contention sentinel, while Rust does not expose it as WouldBlock). Interrupted syscalls are classified distinctly and retried; descriptor exhaustion and other errors remain genuine failures. The reported Linux full-suite flake could not be reproduced: 200 runs of tick_lock_is_nonblocking_and_reusable at parallelism 16 all passed. This supports EINTR as a plausible but unconfirmed transient explanation rather than genuine blocking; the fix handles EINTR without masking EMFILE/ENFILE. Targeted helper and unchanged scheduler tests pass. Windows cargo check was attempted but the host lacks x86_64-w64-mingw32-gcc for bundled SQLite.'
+  created_at: 2026-09-20T08:05:36.830800444Z
+  modified_at: 2026-09-20T08:05:36.830800444Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
