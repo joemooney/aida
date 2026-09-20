@@ -1,0 +1,89 @@
+id: 01a0bf74-5f98-7373-9045-cf15ec2b3d78
+spec_id: STORY-1392
+agreed_id: STORY-1392
+title: A spec's position in the build loop has no canonical model, so it can only be reconstructed by joining four sources and knowing which to distrust
+description: |
+  A spec's position in the build loop is reconstructable only by an expert reading four sources and knowing which to trust. There is no canonical state model, so nothing can draw it — and an observer who wants to see where work actually is has to ask someone who has been watching all night.
+
+  THE ASK, from the operator 2026-09-20: aida-monitor should VISUALISE where a spec sits in the workflow — a graph with its forks and decision points, legible to someone observing progress rather than driving it.
+
+  That cannot be built today, and the reason is not that the data is missing. It is that the model is implicit.
+
+  WHAT EXISTS NOW, and what each source can and cannot answer:
+
+    aida drain status      batch, current, current_phase, current_vendor, members[].state
+                           — only for the ONE spec a live drain is on, and only while it lives
+    .aida/events.jsonl     RunStarted, PhaseEntered, CiTerminal, PhaseDonePr, PrMerged,
+                           SpecRetried, SpecShelved, PuntFiled, AdvisorEscalated, QueueDrained,
+                           UnshippedWorkDetected, MailReceived
+                           — 12 kinds, and terminality is POSITIONAL: a trailing PhaseDonePr or
+                           UnshippedWorkDetected lands after PrMerged, so last-event-wins reports
+                           a shipped spec as in-flight (BUG-1286)
+    spec status            the lifecycle verb — but an epic's is a rollup, and Done vs Completed
+                           is set at different points than the phase events suggest
+    merge-hold list        whether a human gate is open, and why — in prose, unstructured
+
+  So "where is BUG-1297 right now" requires joining four sources and knowing that the feed's last
+  word is unreliable, that drain status is blind to anything not currently driving, and that a hold
+  is invisible in all of the above. That is why only a session that has watched the whole night can
+  answer it.
+
+  THE MODEL THE LOOP ACTUALLY HAS. Documented in prose as the rework-loop discipline entry; this
+  spec asks for the same thing as data. Nodes and the forks between them:
+
+      approved ─▶ dispatched ─▶ implementer ─▶ CI ─▶ reviewer ─▶ merge ─▶ pull ─▶ build ─▶ completed
+                        │            │          │        │          │
+                        │            │          │        │          ├─ held        (human gate open)
+                        │            │          │        │          └─ refused     (policy/conflict)
+                        │            │          │        ├─ approved
+                        │            │          │        └─ changes-requested ─▶ rework ─┐
+                        │            │          ├─ green                                  │
+                        │            │          └─ red ─────────────────────────▶ rework ─┤
+                        │            ├─ produced a PR                                      │
+                        │            ├─ punted        (design fork → advisor)              │
+                        │            └─ no PR / tool-exit ─▶ retry ─▶ shelve ──────────────┤
+                        └─ ineligible (guided / operator / blocked)                        │
+                                                                                            └─▶ back to dispatched
+
+  The forks are the interesting part for an observer: retry-vs-shelve, held-vs-merged, punt-vs-proceed,
+  rework-vs-park. Those are where a spec stops being predictable, and they are exactly what is not
+  represented anywhere today.
+
+  PROPOSED: a canonical, versioned state model plus one read surface that answers "where is this spec,
+  how did it get here, and what is it waiting on". Not a new verb if an existing one can carry it —
+  `aida status <SPEC>` already synthesises status, liveness and parked-reason and is the natural home.
+
+  ACCEPTANCE
+  1. The node and fork set is declared in one place, versioned, and is the same model the discipline
+     entry describes in prose. If they disagree, that is a bug in one of them.
+  2. A read surface reports, for any spec: current node, the path taken to reach it, what it is waiting
+     on, and how long it has been there.
+  3. "Waiting on" distinguishes at minimum: a live phase, a human gate (with the hold reason), a
+     review round, and nothing (terminal). A spec sitting in a held PR must not read the same as one
+     mid-implementer.
+  4. Terminality is derived from event KIND, not position — a shipped spec must never render as
+     in-flight because a trailing event followed its merge (BUG-1286).
+  5. It works for a spec no live drain is driving. Most specs, most of the time, are not being driven.
+  6. The output is machine-readable so a monitor can draw it, and the fork set is stable enough to
+     render as a graph rather than requiring the consumer to infer topology.
+
+  EXPLICITLY OUT OF SCOPE: the drawing itself. That is aida-monitor's job and it is a separate repo.
+  This spec's deliverable is the model and the data; if the monitor still has to guess at topology,
+  this has failed.
+
+  Filed by the product seat at the operator's request; disposition is the advisor's. Note the
+  dependency: STORY-1352's monitor contract governs the read surfaces a consumer may rely on, so
+  whatever this exposes should land inside that contract rather than beside it.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T15:34:30.040702070Z
+modified_at: 2026-09-20T15:34:30.040702070Z
+req_type: Story
+tags:
+- contract
+- from:operator-0920
+- monitor
+- observability
+- parent:EPIC-26
