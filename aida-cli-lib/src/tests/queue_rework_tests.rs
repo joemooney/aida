@@ -652,6 +652,73 @@ fn rework_moves_existing_entry_from_other_user_instead_of_duplicating() {
     );
 }
 
+/// BUG-1427: the move guarantee covers every queue identity, not only the
+/// first match returned by the backend. A rework must sweep all stale copies
+/// before leaving the single destination entry.
+// trace:BUG-1427 | ai:codex
+#[test]
+fn rework_moves_existing_entries_from_every_other_identity() {
+    let _guard = crate::test_env::env_lock();
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let req = req_for_test("BUG-1427", RequirementStatus::Done);
+    let req_id = req.id;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+
+    for identity in ["advisor-one", "advisor-two"] {
+        storage
+            .queue_add(queue_entry_for_test(
+                identity,
+                req_id,
+                1000,
+                Some("implementer"),
+            ))
+            .unwrap();
+    }
+
+    handle_queue_rework(
+        &storage,
+        "BUG-1427",
+        false,
+        Some("implementer"),
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        None,
+    )
+    .unwrap();
+
+    for identity in ["advisor-one", "advisor-two"] {
+        assert!(
+            storage
+                .queue_list(identity, true)
+                .unwrap()
+                .iter()
+                .all(|entry| entry.requirement_id != req_id),
+            "stale entry under {identity} must be removed"
+        );
+    }
+    let destination = storage.queue_list("role:implementer", true).unwrap();
+    assert_eq!(
+        destination
+            .iter()
+            .filter(|entry| entry.requirement_id == req_id)
+            .count(),
+        1,
+        "rework must leave one destination entry after sweeping every source"
+    );
+}
+
 /// BUG-1277: an explicit `--user` is still honoured verbatim — the fix only
 /// changes the DEFAULT destination, never overrides an explicit choice.
 // trace:BUG-1277 | ai:claude
