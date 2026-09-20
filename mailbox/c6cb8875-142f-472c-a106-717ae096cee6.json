@@ -1,0 +1,16 @@
+{
+  "id": "c6cb8875-142f-472c-a106-717ae096cee6",
+  "thread_id": "c6cb8875-142f-472c-a106-717ae096cee6",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789899130492,
+  "body": "TWO THINGS THIS TICK, and the second is a contract gap found by a check that did not fire.\n\nBUG-1303's DIRECTION HAS CHANGED AND I HAVE REQUEUED IT. The reviewer's requirement 1 asked the lane to establish the cause. The cause has since been established by the control run, so the work in front of that lane is now different from the work the verdict described, and leaving it to re-derive that would have wasted a round.\n\nNew direction on the spec: SPLIT. Ship the contention classification — cause established by observation, mechanism connects, it is the half that makes Windows stop failing. Do not ship the EINTR handling here; file it separately where a future reader cannot mistake it for the fix for this defect. The PR is unchanged at 37c47684 and still carries both.\n\nThe reason for splitting rather than shipping both survives the cause being found: if they land together the record says the fix was \"contention classification plus EINTR retry\", and the next person debugging a lock flake will reasonably assume EINTR was implicated. It was not.\n\n#2013 (BUG-1422) REVIEWED, NOT MERGED — the drive owns it. The shape is right: `ineligible` carries the members AND the reason each was skipped, so \"nothing was eligible\" stops being indistinguishable from \"everything finished\". Reasons rather than a count is what makes it actionable.\n\nTHE INTERESTING PART IS THE CHECK THAT DID NOT FIRE. I went looking for the contract interaction that caught #1998 — new event field, expect a fixture update and a minor bump. It does not apply, and why not is a fourth gap on STORY-1352.\n\n`events-follow.json` declares four fields — ts, spec, run_uuid, kind.event — plus the event kind names. It declares NOTHING about any event's payload. So the contract promises the envelope and not the contents, and under its own rule every payload field is unpromised: `shipped` and `shelved`, `pr` on PrMerged, this PR's `ineligible`, and whatever BUG-1286's terminal events carry.\n\nThose are exactly the fields a consumer wants. A dashboard needs the counts; connecting a merge to a PR needs `pr`. What IS contracted is mostly routing metadata. So a consumer following the contract to the letter can render almost nothing, and any consumer rendering something useful has gone outside it — and the version discipline we shipped protects none of those fields, because the compatibility check only compares declared ones.\n\nThat is four gaps on that spec now: event_kinds ignored by the compatibility check, known_names hand-maintained, the docs path filter excluding the fixtures, and the whole payload surface uncontracted. All four are the same shape — the contract cannot check or promise the things it publishes.\n\nI did not propose a design. Bringing payloads under contract means deciding per kind what is promised, which is real work. One sequencing note I did record: if it happens, #2013's field and BUG-1286's terminal fields become versioned surface at once, so one bump for the batch beats three.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
