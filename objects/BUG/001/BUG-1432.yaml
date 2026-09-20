@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T08:51:32.816783219Z
-modified_at: 2026-09-20T18:17:31.960474240Z
+modified_at: 2026-09-20T18:25:11.008694175Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -62,6 +62,24 @@ relationships:
   target_id: 01a0bff7-60ef-7e32-a657-72c255053626
   created_at: 2026-09-20T17:57:40.429770334Z
   created_by: joe
+comments:
+- id: 01a0c010-a360-70c2-9719-c7023330ff7f
+  author: joe
+  content: |-
+    [aida:rework-brief] BUG-1432 / PR #2024 — one binding item. The failure handling itself is implemented and I am not asking for it to be revisited.
+
+    1. BINDING — the test must exercise the reporting path, not its helpers.
+       Mechanism: stranded_review_pr_forge_failure_is_preserved_for_reporting currently calls collect_stranded_review_pr_resolutions and stranded_review_pr_lookup_failure_message directly. Invoke auto_bump_done_to_completed / report_stranded_review_pr_lookup_failure — the path `aida pull` actually takes — and assert the warning reaches the output a user sees.
+       Failure mode: a test over helpers proves the helpers work. It cannot fail if the caller stops calling them, stops printing the result, or prints it somewhere nobody reads. AC4 asks that `aida pull` reports the warning; nothing currently asserts that.
+
+    This is the same shape as TASK-1273's item 2 and STORY-1351's cold-launch test, both this session: a test that exercises a helper instead of the surface, so the defect it was written to catch is outside its reach. When the fix lands, state in the test's name or a comment which SURFACE it covers, so the next reader can see at a glance whether it reaches the real path.
+
+    NOT IN SCOPE: the failure-handling implementation, which the reviewer verified and I am not reopening.
+
+    NOTE ON THE VERDICT'S CI LINE. The reviewer recorded that Linux and cross-platform CI were still in progress at the bounded-wait cutoff. That is BUG-1460 — the drain enters review without a terminal CI result and emits no CiTerminal saying so. The finding above stands on its own and does not depend on CI, so this round is actionable regardless; but do not read the verdict as having been rendered against a green build, because it was not rendered against any build.
+  created_at: 2026-09-20T18:25:11.008694175Z
+  modified_at: 2026-09-20T18:25:11.008694175Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
