@@ -1,0 +1,26 @@
+id: 01a0c01c-ab8d-7292-b633-943c2a1116d5
+spec_id: STORY-1398
+agreed_id: STORY-1398
+title: 'Review PR-2025: [AI:codex] fix(orchestrator): type merge-hold refusals (BUG-1435)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0c018`) for branch `bug-1435-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2025>
+  - Branch: `bug-1435-work` → `main`
+
+  ## Covers
+
+  - BUG-1435
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2025` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T18:38:19.533666999Z
+modified_at: 2026-09-20T18:38:19.533666999Z
+req_type: Story
