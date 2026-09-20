@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-20T16:44:53.564460946Z
+modified_at: 2026-09-20T16:51:12.279982449Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -91,6 +91,37 @@ comments:
   created_at: 2026-09-20T16:44:53.564460946Z
   modified_at: 2026-09-20T16:44:53.564460946Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bfba-9917-7272-bc4a-f62b2df05732
+  author: joe
+  content: |-
+    [aida:rework-brief-correction] TASK-1273 / PR #1978 — item 1 of my brief above is WRONG and is hereby withdrawn. Read this before starting.
+
+    I wrote item 1 as "an absent AIDA_GITLAB_TOKEN must not pass", from the phase-3 verdict's finding 2. At the current head d50d85c9 that is already fixed:
+
+        if [ -z "$GITLAB_TOKEN" ]; then
+          echo "::error::AIDA_GITLAB_TOKEN is not provisioned"
+          exit 1
+
+    An absent token FAILS the job. The verdict's finding 2 describes an earlier state of the branch.
+
+    How I got it wrong is worth one sentence, because it is the exact failure we have been writing a discipline entry about this morning: I noticed that the verdict file carries no reviewed_sha and no recorded_at, wrote into the brief that the findings must be re-verified against the current head — and then briefed from the verdict anyway without doing that myself. The instruction was right and I did not follow it.
+
+    ITEM 1, REPLACED. The real hole is the other branch of the same preflight:
+
+        elif ! curl --silent --show-error --fail --max-time 15 \
+          "https://${AIDA_GITLAB_LIVE_HOST}/-/readiness" >/dev/null; then
+          echo "::notice::Skipping GitLab forge smoke: mirror is unreachable"
+          echo "run=false" >> "$GITHUB_OUTPUT"
+
+    1. BINDING — a skipped smoke must not be indistinguishable from a passing one.
+       Mechanism: when the mirror readiness check fails, the job's CONCLUSION must say so — fail it, or mark it skipped in a way `gh run list` reports. A `::notice::` is invisible unless someone opens the run, and every later step is gated on `run == 'true'`, so the whole smoke silently does nothing and the job exits 0.
+       Why this is worse than the token case it replaces: an absent token is a stable, self-announcing condition. Mirror unreachability is INTERMITTENT and fires against a correctly-provisioned credential, so a green nightly is not even stably meaningful — the same configuration produces verified and unverified runs that look identical from outside.
+       Consequence for TASK-170: "the nightly completed without an auth failure" is not a close condition, because this path completes without an auth failure while proving nothing. The close condition is a run whose smoke job actually EXECUTED and passed.
+
+    Items 2-5 of the brief stand as written; I have re-read them against d50d85c9 and they hold. Item 1's replacement is still the one to do if only one lands.
+  created_at: 2026-09-20T16:51:12.279982449Z
+  modified_at: 2026-09-20T16:51:12.279982449Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
