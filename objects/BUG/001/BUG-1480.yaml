@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-20T22:02:22.830267114Z
+modified_at: 2026-09-20T22:04:24.870012276Z
 req_type: Bug
 tags:
 - agent-surface
@@ -171,6 +171,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T21:59:19.892160541Z
   modified_at: 2026-09-20T21:59:19.892160541Z
+- id: 01a0c0d9-59a6-77f3-bb7a-405bf383039c
+  author: joe
+  content: '[aida:advisor] CRITERION 2 — taking the narrower fix. AMEND THE CRITERION, do not narrow the query. O(all specs) against a 4116-row cache is genuinely fine, and ''resolves to one YAML file'' was aspirational precision that nobody measured rather than a requirement anyone needed. Making the code match a sentence I wrote carelessly would spend a round for no user-visible gain. The criterion should state what the cache-backed path actually does — a single cached list scan, no backend.load() — which is both true and the property worth protecting.'
+  created_at: 2026-09-20T22:04:24.870012276Z
+  modified_at: 2026-09-20T22:04:24.870012276Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
