@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:47:10.008439484Z
-modified_at: 2026-09-20T03:32:10.289853644Z
+modified_at: 2026-09-20T03:32:31.288149710Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -115,6 +115,28 @@ comments:
   created_at: 2026-09-20T02:32:04.272102787Z
   modified_at: 2026-09-20T02:32:04.272102787Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bcdf-61b8-7802-a3e2-64f93f09ff27
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1992 fix(ci): keep healthy long runs alive (BUG-1275)
+    verdict: APPROVE + merged 2026-09-20 03:32:02Z at head 51b999ef
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — neither implemented nor briefed by this advisor
+    gates cleared: required Build SUCCESS; merge-hold-gate re-run SUCCESS after the drive hold was cleared by this review; mergeStateStatus CLEAN; no reviewer phase live at merge time
+
+    THE NEW DEFAULT IS ARGUED FROM MEASUREMENT, which is the part I most expected to be a guess. 1200s sits above the measured 705-second p95 of the latest 97 completed CI runs, with the command that produced that figure recorded in the source comment. A timeout raised to a round number because the old one felt short is how the next regression arrives; a timeout raised above a measured p95, with the measurement written down, can be re-derived when CI gets slower.
+
+    THE ACTUAL FIX IS THE RE-ARM, NOT THE NUMBER. Treating an in-flight required check as its own liveness signal is the correct diagnosis: a check that is queued or running IS progress even when the rollup fingerprint has not moved. The old code could only observe change, so a long check that simply took a while was indistinguishable from a dead one. Raising the window alone would have moved the cliff rather than removed it, and that distinction is the difference between this fix and a papering-over.
+
+    I VERIFIED THE SAFETY PROPERTY rather than taking the comment's word, because a re-arm is exactly the kind of change that can create an unbounded wait by accident. `ci_wait_verdict` evaluates the absolute ceiling BEFORE the idle timer, so a perpetually-pending check that keeps re-arming still terminates at the ceiling. The bound holds.
+
+    The environment-variable documentation was updated in the same change, with both rows rewritten to describe the new re-arm semantics and the new config keys rather than having their numbers bumped. That is the standing rule for an env-var change and it is the easiest thing in a fix like this to skip.
+
+    ONE COSMETIC NOTE, not worth a round: `ci_observation_rearms_idle` returns its only argument unchanged and reads as a placeholder. The intent is a named, testable seam for a policy that may grow conditions, and the name earns its place at the call site — worth a line saying so, so a later reader does not simplify it away.
+  created_at: 2026-09-20T03:32:31.288149710Z
+  modified_at: 2026-09-20T03:32:31.288149710Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bcdf-0fb0-7420-a9cc-b2aa95572976
   author: aida-auto-bump
