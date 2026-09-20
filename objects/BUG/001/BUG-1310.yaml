@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-20T14:42:45.611302134Z
+modified_at: 2026-09-20T14:44:49.123297353Z
 req_type: Bug
 tags:
 - diagnostic-decay
@@ -194,6 +194,38 @@ comments:
   created_at: 2026-09-20T14:35:41.142613247Z
   modified_at: 2026-09-20T14:35:41.142613247Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf46-e363-7451-af3e-e58070e89987
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #2016 [AI:codex] fix(classifiers): inventory external prose contracts (BUG-1310)
+
+    verdict: APPROVE + merged
+    proxy: claude driver-advisor, session 01a0adee
+    timestamp: 2026-09-20 14:42:34Z
+
+    independent: yes, on the code — the implementer was headless codex across three rounds; this advisor wrote none of it.
+    PARTIAL CAVEAT, recorded rather than glossed: I authored the scope-1 narrowing this PR was finally judged against, so on that one criterion I am not an independent reader. I am independent on items 2, 3 and 4, which came from the original spec and are what the substance of this change actually satisfies. The phase-3 reviewer approved at the same head independently of me and named the narrowed scope explicitly.
+
+    gates cleared:
+      - reviewer verdict APPROVED at 499bbc69, the current head, no findings
+      - Build (ubuntu-latest) pass at that head
+      - merge-hold-gate failed only on this advisor's own label; cleared after review, re-ran green
+      - no drive owned PR-2016 at merge time (drain was on BUG-1426, lease held bug-1426-work)
+      - merge-hold marker and label both removed before shipping
+
+    what I verified myself rather than taking from the verdict:
+      - the registry is genuinely single-place: ~18 named constants in aida-core/src/external_tool_output.rs, with the call sites in forge.rs, git_ops.rs, compete.rs, overlay.rs, pr_ship.rs and terminal_cmd.rs referencing them instead of carrying literals
+      - producer versions are recorded per site, not just tool names — GitHub CLI 2.81.0, GitLab CLI 1.36.0, Claude Code 2.1.276, systemd 255 — which is what makes a future drift findable
+      - scope item 4 is applied per site and stated in the doc: unknown GitHub merge output does not authorize recovery, an unknown GitLab response can never authorize a retry against a newly read head, and refusal remains refusal on no-match
+      - round 2's finding on gitlab_merge_response_* is actually fixed, not argued away: raw stderr is now parsed as JSON and wrapper prose discarded, which was the structured alternative the reviewer asked for
+      - a test exists for the property that matters: registry_matches_case_insensitively_and_fails_closed_on_unknown_prose
+
+    cost of getting here, recorded because it is the useful part: three implementer cycles, three reviewer cycles, three CI slots. Round 3 was rebase-only — identical patch-ids to rounds 1 and 2 — which is BUG-1445. The loop ended only when the unbounded scope-1 criterion was withdrawn into TASK-1300, not because the work changed.
+
+    remaining debt: the workspace-wide classifier inventory does not exist. TASK-1300 carries it as a mechanical enumerator. This merge does not discharge it.
+  created_at: 2026-09-20T14:44:49.123297353Z
+  modified_at: 2026-09-20T14:44:49.123297353Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bf45-00e6-72f1-a493-9dab04434c44
   author: aida-auto-bump
