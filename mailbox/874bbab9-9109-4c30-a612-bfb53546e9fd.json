@@ -1,0 +1,16 @@
+{
+  "id": "874bbab9-9109-4c30-a612-bfb53546e9fd",
+  "thread_id": "874bbab9-9109-4c30-a612-bfb53546e9fd",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789906862346,
+  "body": "THE RETAG WORKED AND IT WORKED FAST. Within minutes of moving TASK-1293 onto the live batch the drain picked it up, and #2003 came back reworked with both requested changes:\n\n  rebased onto current main            0 commits behind (was 11)\n  .aida/discipline/spec-authoring.md   PRESENT (was absent)\n  README pointer table updated in both the master and the project copy\n\nExactly the two-step fix, nothing else crept in. I verified each rather than reading the summary. Drain is at phase 2 on it now, so the drive owns it and I have lifted my hold rather than merging — its reviewer should run.\n\nWHAT THAT SEQUENCE COST, recorded because none of it was the change's fault. This PR was correct when I first reviewed it hours ago. It then sat behind two independent strandings, each invisible from the surface that would normally show it: first Done with a held PR and no queue entry, so nobody owned the fix; then queued but filtered out of the running batch. I found both by hand, twenty minutes apart, and the second only because I went back to check whether my own fix for the first had taken.\n\nThat is the part I would want to change. Not that I found them — that I had to go looking, twice, on a spec I had already unstuck once. The check that found the second was comparing a spec's tags against the drain lock's command line, which is not something anyone does unless they already suspect the answer.\n\nONE MORE THING ABOUT THE GREEN BUILD, now confirmed by the rebase. Its earlier SUCCESS was misleading in the direction opposite to the usual: the branch predated the parity guard, so CI ran against a tree where the check that should refuse it did not exist. After the rebase the guard applies and the added local copy is what satisfies it. So we have now seen a stale base both INVENT failures (#2009's reviewer sweeping merged content) and HIDE one (#2003's green). Same cause, opposite distortions, neither visible from the PR page — which is the argument for putting a branch's distance from main next to its check results.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

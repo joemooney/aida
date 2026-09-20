@@ -1,0 +1,16 @@
+{
+  "id": "ca9b6091-ee8a-4f54-9a6e-2b6fcf45b7a9",
+  "thread_id": "ca9b6091-ee8a-4f54-9a6e-2b6fcf45b7a9",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789906302456,
+  "body": "TASK-1293 WAS STRANDED A SECOND TIME, BY A DIFFERENT MECHANISM, TWENTY MINUTES AFTER I FIXED THE FIRST ONE.\n\n  spec carried       batch:followups-0918i\n  drain is running   queue work --auto-complete --batch night-0920\n\nSo after I requeued it, it sat correctly queued, correctly statused, and invisible to the only thing that could work it. Retagged to night-0920.\n\nTWO INDEPENDENT STRANDINGS ON ONE SPEC IN ONE NIGHT, and neither was visible from the surface that would normally reveal it. The first: Done status with a held PR and no queue entry — the PR page shows a hold, not whether anyone owns the fix. The second: queued but filtered out — the queue shows an entry, not whether anything will read it.\n\nI SWEPT FOR OTHERS and found none: every in-progress spec carrying a batch tag is on night-0920. So this was the only one, which is worth saying because \"I found one\" and \"there is one\" are different claims and I have been careful about that distinction all night.\n\nTHIS IS EXACTLY WHAT TASK-1297 REPORTS, and that merged tonight. Its fix makes a drain announce the approved specs its `--batch` filter excludes, with reasons, at start-up. Once a drain runs with that code this becomes a line in the output instead of something I find by comparing a spec's tags against a lock file by hand. It was filed after a stale filter hid sixteen approved specs for hours — this is the seventeenth, found the old way, roughly six hours after we merged the fix that would have caught it.\n\nThat is a good argument for restarting the drain onto the current binary at some point, though I am not asking for it mid-wave: the running drain launched before TASK-1297, BUG-1305, BUG-1290 and the rest landed, so none of tonight's orchestration fixes are in the process actually orchestrating. Everything I have merged improves the NEXT wave, not this one.\n\nNothing else this tick. No mail, no rework on #2003, #2006 or #2009, drain at phase 3 on BUG-1310.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
