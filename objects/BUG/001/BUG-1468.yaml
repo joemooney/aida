@@ -31,12 +31,12 @@ description: |
   - Regression fixture reproduces the shape: a PR green at T, a guard-strengthening commit on main at T+1, the PR still reporting green at T+2.
 
   Related: this is the same family as the report-vs-artifact discipline entry — a green check is a REPORT about a past state of the world, and the artifact it describes has since changed underneath it.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:01:14.943970052Z
-modified_at: 2026-09-20T18:17:22.840126407Z
+modified_at: 2026-09-20T20:14:46.100793284Z
 req_type: Bug
 tags:
 - ci
@@ -47,3 +47,4 @@ relationships:
   target_id: 01a0bfc7-368c-7c70-94d6-b609b5b5e524
   created_at: 2026-09-20T18:17:22.840121460Z
   created_by: joe
+execution_mode: drain
