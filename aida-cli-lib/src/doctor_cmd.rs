@@ -1263,8 +1263,25 @@ pub(crate) struct AgentWorktreeFacts {
     pub(crate) pr_merged: bool,
     /// Count of commits on the branch not reachable from origin/main. Zero means
     /// nothing unique is at risk; non-zero with no ancestor signal means the
-    /// branch carries unique unmerged work that must be KEPT.
+    /// branch carries unique unmerged work that must be KEPT — UNLESS
+    /// `content_fully_landed` clears it (see below).
     pub(crate) unique_unmerged_commits: u32,
+    /// True when a CONTENT comparison (not ancestry) proves every file the
+    /// branch's own commits touched already matches origin/main's current
+    /// tree byte-for-byte. A squash merge gives the branch's original commits
+    /// a permanently different SHA from the squash commit on main, so plain
+    /// ancestry — and a naive commit count derived from it — can NEVER clear
+    /// a squash-merged branch; `unique_unmerged_commits` stays positive
+    /// forever even when nothing unique remains (BUG-1287). This field is the
+    /// squash-aware refinement: computed only when `pr_merged` is true, it
+    /// lets a confirmed-merged branch with a positive commit count still be
+    /// classified Removable when content proves the count is an ancestry
+    /// artifact, while a branch that genuinely carries post-merge work (extra
+    /// commits whose content is NOT yet reflected on main) still Keeps.
+    /// Never set true when there is any doubt — the caller (`scan_*`) leaves
+    /// it false whenever the git probes needed to prove it are inconclusive.
+    // trace:BUG-1287 | ai:claude
+    pub(crate) content_fully_landed: bool,
 }
 
 /// Pure squash-aware classification of one agent-managed worktree. No git/forge
@@ -1300,6 +1317,19 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
     // — removing it would lose work. Ancestor-of-main implies zero unique
     // commits, so this only bites the squash-merge path.
     if facts.unique_unmerged_commits > 0 && !facts.ancestor_of_main {
+        // BUG-1287: a positive commit count on the squash-merge path is not
+        // proof of unique WORK — it is guaranteed positive forever by ancestry
+        // alone, squash or no squash. `content_fully_landed` is the content-level
+        // check that clears the ancestry artifact: every file the branch's own
+        // commits touched already matches main byte-for-byte, so nothing is at
+        // risk despite the non-zero count.
+        if facts.content_fully_landed {
+            return AgentWorktreeVerdict::Removable(format!(
+                "{merged_reason}, {} commit(s) content-verified fully landed on origin/main \
+                 (ancestry alone can't clear a squash-merged branch)",
+                facts.unique_unmerged_commits
+            ));
+        }
         return AgentWorktreeVerdict::Keep(format!(
             "{merged_reason}, but {} unique unmerged commit(s) — keep, operator decision",
             facts.unique_unmerged_commits
@@ -1307,6 +1337,82 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
     }
 
     AgentWorktreeVerdict::Removable(merged_reason.to_string())
+}
+
+/// Content-level (not ancestry) proof that `branch`'s own commits are already
+/// fully reflected in `default_ref`'s current tree. A squash merge gives the
+/// original commits a permanently different SHA than the squash commit that
+/// landed on `default_ref`, so `rev-list --count default_ref..branch` — the
+/// input to `unique_unmerged_commits` — stays positive FOREVER for a
+/// squash-merged branch, whether or not any content is actually unshipped
+/// (BUG-1287). This checks the thing that actually matters: does every file
+/// the branch's own commits touched (since its merge-base with `default_ref`)
+/// now match `default_ref`'s current content byte-for-byte? If yes, nothing
+/// unique is at risk. If a later commit on the branch added content that
+/// never shipped, that file still differs and this correctly returns false —
+/// the same probe naturally covers the partial case (some of the branch's
+/// commits landed, later ones didn't) without extra bookkeeping.
+///
+/// Conservative on any doubt: an unresolvable merge-base or a failed git call
+/// returns `false` (stay KEPT), never `true`. Read-only — no writes, no
+/// network.
+// trace:BUG-1287 | ai:claude
+pub(crate) fn branch_content_fully_landed(
+    project_root: &std::path::Path,
+    default_ref: &str,
+    branch: &str,
+) -> bool {
+    use std::process::Command as PCmd;
+
+    let run = |args: &[&str]| -> Option<std::process::Output> {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+    };
+
+    let Some(mb_out) = run(&["merge-base", default_ref, branch]) else {
+        return false;
+    };
+    if !mb_out.status.success() {
+        return false;
+    }
+    let merge_base = String::from_utf8_lossy(&mb_out.stdout).trim().to_string();
+    if merge_base.is_empty() {
+        return false;
+    }
+
+    // The files the branch's OWN commits touched, since it diverged from
+    // default_ref — the footprint that must be checked against default_ref's
+    // current content.
+    let Some(files_out) = run(&["diff", "--name-only", &merge_base, branch]) else {
+        return false;
+    };
+    if !files_out.status.success() {
+        return false;
+    }
+    let files: Vec<String> = String::from_utf8_lossy(&files_out.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    if files.is_empty() {
+        // The branch range touched nothing relative to its merge-base —
+        // trivially nothing unique.
+        return true;
+    }
+
+    let mut diff_args: Vec<&str> = vec!["diff", "--quiet", default_ref, branch, "--"];
+    diff_args.extend(files.iter().map(String::as_str));
+    let Some(diff_out) = run(&diff_args) else {
+        return false;
+    };
+    // `git diff --quiet` exits 0 when the two sides are identical for the
+    // given paths and 1 when they differ. Any other exit (bad ref, git error)
+    // is inconclusive — stay conservative.
+    matches!(diff_out.status.code(), Some(0))
 }
 
 /// TASK-878: scan AIDA/Agent-tool managed worktrees and classify each under the
@@ -1391,11 +1497,21 @@ fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFind
             false
         };
 
+        // Only pay for the content probe when it could actually change the
+        // verdict: a confirmed merged PR with a positive (ancestry-only)
+        // commit count is exactly the case ancestry can never clear on its own.
+        let content_fully_landed = if pr_merged && unique_unmerged_commits > 0 {
+            branch_content_fully_landed(project_root, &default_ref, branch)
+        } else {
+            false
+        };
+
         let facts = AgentWorktreeFacts {
             dirty,
             ancestor_of_main,
             pr_merged,
             unique_unmerged_commits,
+            content_fully_landed,
         };
 
         match classify_agent_worktree(&facts) {
@@ -3039,6 +3155,7 @@ mod story_462_doctor_tests {
             ancestor_of_main: false,
             pr_merged: false,
             unique_unmerged_commits: 0,
+            content_fully_landed: false,
         }
     }
 
@@ -3083,6 +3200,145 @@ mod story_462_doctor_tests {
             classify_agent_worktree(&facts),
             AgentWorktreeVerdict::Keep(_)
         ));
+    }
+
+    #[test]
+    fn classify_content_verified_squash_merge_is_removable() {
+        // BUG-1287: PR merged, ancestry reports a positive commit count (the
+        // squash-merge case can NEVER clear this by ancestry alone — the
+        // branch's original commits keep a different SHA from the squash
+        // commit forever) BUT a content-level check proves every file the
+        // branch touched already matches origin/main byte-for-byte → the
+        // count is an ancestry artifact, not real unshipped work → Removable.
+        let facts = AgentWorktreeFacts {
+            pr_merged: true,
+            unique_unmerged_commits: 1,
+            content_fully_landed: true,
+            ..agent_wt_facts()
+        };
+        assert!(matches!(
+            classify_agent_worktree(&facts),
+            AgentWorktreeVerdict::Removable(_)
+        ));
+    }
+
+    #[test]
+    fn classify_partially_landed_squash_merge_is_kept() {
+        // BUG-1287 companion: content_fully_landed stays false when even ONE
+        // of the branch's touched files still differs from main — e.g. later
+        // commits added after the PR squash-merged that never shipped. The
+        // positive commit count keeps this KEPT, exactly like the plain
+        // unmerged-commits case above.
+        let facts = AgentWorktreeFacts {
+            pr_merged: true,
+            unique_unmerged_commits: 4,
+            content_fully_landed: false,
+            ..agent_wt_facts()
+        };
+        assert!(matches!(
+            classify_agent_worktree(&facts),
+            AgentWorktreeVerdict::Keep(_)
+        ));
+    }
+
+    /// BUG-1287 fixture: a real git repo with two squash-merged branches —
+    /// one where the squash-merge shipped ALL of the branch's content (the
+    /// false-positive case ancestry alone can never clear), and one where a
+    /// later commit was added to the branch AFTER the squash landed and never
+    /// shipped (genuinely unique, must stay kept). Asserts
+    /// `branch_content_fully_landed` tells them apart — the reapable one from
+    /// the not-yet-reapable one — by content, not by ancestry.
+    // trace:BUG-1287 | ai:claude
+    #[test]
+    fn branch_content_fully_landed_distinguishes_shipped_from_unshipped_squash_branches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+
+        std::process::Command::new("git")
+            .arg("init")
+            .arg(&root)
+            .output()
+            .unwrap();
+        run(&["config", "user.name", "Test"]);
+        run(&["config", "user.email", "test@example.com"]);
+        std::fs::write(root.join("README.md"), "base\n").unwrap();
+        run(&["add", "README.md"]);
+        run(&["commit", "-m", "init"]);
+        run(&["branch", "-M", "main"]);
+
+        // Branch A: the branch's single commit is squash-merged onto main
+        // verbatim (content-identical, different SHA — the classic squash
+        // case). Nothing unique remains once the squash lands.
+        run(&["checkout", "-b", "shipped-work"]);
+        std::fs::write(root.join("a.txt"), "shipped content\n").unwrap();
+        run(&["add", "a.txt"]);
+        run(&["commit", "-m", "add a.txt"]);
+        run(&["checkout", "main"]);
+        // Simulate a forge squash-merge: same file content lands on main as a
+        // brand-new commit, unrelated by ancestry to the branch's own commit.
+        std::fs::write(root.join("a.txt"), "shipped content\n").unwrap();
+        run(&["add", "a.txt"]);
+        run(&["commit", "-m", "squash-merge shipped-work (#1)"]);
+
+        // Branch B: its FIRST commit is squash-merged the same way, but a
+        // SECOND commit is added afterward that never ships — genuinely
+        // unique, unmerged work that must never be reported as landed.
+        run(&["checkout", "-b", "partial-work"]);
+        run(&["reset", "--hard", "main~1"]); // back to pre-squash main tip
+        std::fs::write(root.join("b.txt"), "partial content\n").unwrap();
+        run(&["add", "b.txt"]);
+        run(&["commit", "-m", "add b.txt"]);
+        std::fs::write(root.join("b2.txt"), "never shipped\n").unwrap();
+        run(&["add", "b2.txt"]);
+        run(&["commit", "-m", "follow-up never merged"]);
+        run(&["checkout", "main"]);
+        std::fs::write(root.join("b.txt"), "partial content\n").unwrap();
+        run(&["add", "b.txt"]);
+        run(&["commit", "-m", "squash-merge partial-work (#2)"]);
+
+        // shipped-work: ancestry can never clear this (different SHA forever)
+        // but content-wise everything the branch touched matches main.
+        let count_out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["rev-list", "--count", "main..shipped-work"])
+            .output()
+            .unwrap();
+        let ancestry_count: u32 = String::from_utf8_lossy(&count_out.stdout)
+            .trim()
+            .parse()
+            .unwrap();
+        assert_eq!(
+            ancestry_count, 1,
+            "ancestry must still see the squash-merged branch as 1 unique commit"
+        );
+        assert!(
+            branch_content_fully_landed(&root, "main", "shipped-work"),
+            "content-identical squash-merged branch must be reported fully landed"
+        );
+
+        // partial-work: one file matches main, but b2.txt never shipped — the
+        // content check must stay conservative and report NOT fully landed.
+        assert!(
+            !branch_content_fully_landed(&root, "main", "partial-work"),
+            "a branch carrying a genuinely-unshipped file must never be reported fully landed"
+        );
     }
 
     #[test]

@@ -28,6 +28,7 @@ fn finished_but_live_facts() -> ReapFacts {
             ancestor_of_main: true,
             pr_merged: false,
             unique_unmerged_commits: 0,
+            content_fully_landed: false,
         },
     }
 }
