@@ -1,0 +1,53 @@
+id: 01a0bee2-ce3a-75c1-a00e-86d532d228c0
+spec_id: BUG-1442
+agreed_id: BUG-1442
+title: aida show in TOON collapses every relationship type to Related and drops the Blockers section, so agents cannot see a spec is blocked
+description: |
+  `aida show <SPEC>` in TOON (the agent default when piped/captured) flattens every relationship type to `Related` and omits the Blockers section entirely, so an agent cannot tell a blocked spec from an unblocked one while a human reading the same command can.
+
+  OBSERVED 2026-09-20 on BUG-1420, which is stored with four edges (verified in .aida-store/objects/BUG/001/BUG-1420.yaml).
+
+  Human format — correct, and carries the consequence:
+      is child of EPIC-62
+      related TASK-1289
+      implemented-by STORY-1376
+      is blocked by TASK-1289
+    Blockers:
+      TASK-1289 (Needs Attention)
+      blocked — 1 blocker(s) not yet Completed; `aida queue work` will refuse pickup
+
+  TOON format — same spec, same moment:
+      Parent,EPIC-62
+      Related,TASK-1289
+      Related,STORY-1376
+      Related,TASK-1289
+
+  Two distinct types collapse onto `Related`: the core `BlockedBy` and the custom `implemented-by`. The result is a duplicate-looking pair of `Related,TASK-1289` rows where one of them is the blocking edge. `aida graph blocked-by BUG-1420` resolves it correctly, so the data is intact and only this projection loses it.
+
+  WHY THIS MATTERS MORE THAN A FORMATTING NIT. TOON is the agent surface, and the CLI is the primary agent surface by decision — MCP measured ~2x the tokens for equal-or-lower success, so headless implementers, reviewers and drains all read this projection. The Blockers section is where `aida show` states the consequence in words: pickup will be refused. An agent reading TOON sees neither the blocking edge nor the refusal warning, so it can reasonably decide to pick up a spec the queue will then refuse, and the refusal will look like a defect rather than the blocker doing its job.
+
+  The asymmetry is the bug. A human triaging BUG-1420 learns it is blocked; an agent triaging the same spec with the same command does not. Anything that makes the agent-facing view weaker than the human one inverts the thing the surface is for.
+
+  ACCEPTANCE
+  1. TOON renders each relationship with its actual type. `BlockedBy` reads as blocked-by and a custom type reads as its own name; neither collapses onto `Related`.
+  2. A custom rel_type round-trips through TOON under its stored name rather than a fallback label.
+  3. TOON carries the blocked state and its consequence. If the human format prints a Blockers section, the agent format conveys the same fact in some machine-legible form — a field or a row, shape is open.
+  4. A test asserts the two formats agree on relationship types for one spec holding a core edge, a custom edge, and a blocker. Agreement is the property under test, not the exact strings.
+  5. Check whether other TOON projections share the fallback. If `list` or `graph` collapse types the same way, say so; if this is the only site, say that, because a shared helper would mean fixing one place and a local mapping would mean auditing several.
+
+  Found while recording a BlockedBy edge on BUG-1420: the confirmation said BlockedBy, the piped `show` said Related, and the store said BlockedBy. The disagreement is the projection.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T12:55:30.106400060Z
+modified_at: 2026-09-20T12:55:30.106400060Z
+req_type: Bug
+tags:
+- agent-surface
+- batch:night-0920
+- diagnostic-decay
+- drain-safe
+- observability
+- parent:EPIC-62
+- toon
