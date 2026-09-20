@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:51:40.834379762Z
-modified_at: 2026-09-20T23:41:22.325565566Z
+modified_at: 2026-09-20T23:42:38.720787371Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -135,6 +135,19 @@ comments:
     BINDING, and the order matters: RUN THE MASKING TEST AGAINST UNMODIFIED MAIN FIRST. Reading the code, main should already pass — the spec-keyed 'approved' fails .filter(blocks_done) and falls through to the PR-keyed lookup — but that is a reading, not an execution, and the filer labelled it as such rather than asserting it. If it FAILS on unmodified main, main's masking behaviour is not what we think and that is a live defect rather than a coverage gap. Establish which before writing anything.
   created_at: 2026-09-20T23:07:01.168229066Z
   modified_at: 2026-09-20T23:07:01.168229066Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c133-4880-77e1-97eb-1ac004c44a8b
+  author: joe
+  content: |-
+    [aida:advisor] CORRECTION TO THIS SPEC'S SALVAGE INSTRUCTION, recorded after completion so nobody acts on it. I added #2029's masking test to this acceptance on claude-reviewer-1's recommendation; they have since retracted it and I verified the retraction on origin/main.
+
+    main's pr_keyed_reviewer_verdict_arms_rework_guard ALREADY records a stale spec-keyed 'Approved' alongside a PR-keyed 'RequestChanges' and asserts the returned kind is RequestChanges. That IS the masking case. The recommendation came from reading the test's NAME and assuming it covered only the positive path.
+
+    So there is nothing to salvage from #2029 whole. The only residue is one line — assert_eq!(verdict.reviewed_sha.as_deref(), Some("abc123")) — which asserts WHICH verdict was returned rather than just its kind. I have moved that to BUG-1466 rather than leaving it here, because identity-of-verdict is precisely that spec's subject.
+
+    Do not open a PR to salvage a test that already exists.
+  created_at: 2026-09-20T23:42:38.720787371Z
+  modified_at: 2026-09-20T23:42:38.720787371Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c132-1df3-7233-9a61-9bbb5faab8e9
