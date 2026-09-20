@@ -14,12 +14,12 @@ description: |-
   Acceptance: a dated report comment on this spec giving median rounds-to-merge before and after with the per-cause split, the spec ids in the sample, and an explicit statement of which other changes landed inside the measurement window. A null or negative result is a valid outcome and must be reported as such rather than re-cut until it looks positive.
 
   Convention this exists to honour: an acceptance criterion that can only be measured after shipping belongs on a follow-up spec, never on the spec that ships the change.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-20T02:35:55.739611842Z
+modified_at: 2026-09-20T02:36:31.940714754Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -65,3 +65,11 @@ comments:
   modified_at: 2026-09-20T02:35:55.739611842Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: no-pr
+  detail: the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting (attempt 2/2)
+  recovery_hint: 'The implementer exited without opening a PR — resume the session and run `/aida-pr`: `aida queue work TASK-1294 --resume 01a0bcaa72b0`'
+  shelved_by: advisor
+  shelved_at: 2026-09-20T02:36:31.940714754Z
