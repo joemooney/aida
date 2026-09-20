@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:22:32.343565248Z
-modified_at: 2026-09-20T16:22:32.343565248Z
+modified_at: 2026-09-20T16:22:43.802245050Z
 req_type: Bug
 tags:
 - auto-bump
@@ -48,3 +48,8 @@ tags:
 - from:session-0920
 - lifecycle
 - observability
+relationships:
+- rel_type: !Custom related
+  target_id: 01a0bb13-581b-78a1-9c12-8221052bb1ed
+  created_at: 2026-09-20T16:22:43.802236414Z
+  created_by: joe
