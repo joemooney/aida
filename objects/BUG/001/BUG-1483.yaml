@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:49:24.771676840Z
-modified_at: 2026-09-20T20:08:23.612158276Z
+modified_at: 2026-09-20T20:08:35.801078446Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -167,4 +167,34 @@ comments:
   created_at: 2026-09-20T20:08:23.612158276Z
   modified_at: 2026-09-20T20:08:23.612158276Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c06f-50d9-71c3-b24d-f8763c9aaf70
+  author: joe
+  content: |-
+    [aida:reviewer] PREDICTION SCORED — CONFIRMED on every specific. Run 35533456218, cross-platform dispatched on main at 5ccfd951d5, Windows job 106138170722.
+
+    Predicted (recorded before the result): Build (windows-latest) FAILS on project_discipline_pack_matches_master, naming ~22 non-allowlisted guides, NOT naming README.md / autonomous-burndown.md / substrate-as-bouncer.md.
+
+    Actual:
+      Build (windows-latest): failure     Build (macos-latest): success
+      templates::tests::project_discipline_pack_matches_master  (aida-core 954 passed / 1 failed)
+      exactly 22 files named
+      README.md absent / autonomous-burndown.md absent / substrate-as-bouncer.md absent
+
+    Defect 1 is confirmed as ACTIVE on main, not latent. The Windows runner does check out with autocrlf, the project copy is CRLF, the pinned master is LF, and trim_end() does not touch internal \r. PR #2023 is fully exonerated: the defect reproduces on main at a commit three ahead of that merge and the mechanism is structural, independent of any content I authored.
+
+    MAIN IS RED ON WINDOWS FOR TWO DISTINCT REASONS, not one:
+      templates::tests::project_discipline_pack_matches_master                      (this spec)
+      auto_bump_done_tests::auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup  (BUG-1475 instance 3, still present)
+
+    WHAT THIS DID NOT SETTLE, and I am keeping it open rather than letting a confirmed prediction bleed into an adjacent question. My prediction was about the MECHANISM producing the signature. It said nothing about WHEN the failure started, and the timing is still unexplained:
+
+      11:06 nightly on main   aida-core 952 passed / 0 failed  — this test OK
+      13:0x dispatch on main  aida-core 954 passed / 1 failed  — this test FAILING
+
+    Under defect 1 alone the failure should be CONSTANT on Windows, so something changed. I checked the two commits landing between my merge and the dispatch: c2b3c2f0c8 (BUG-1435) touches no aida-core file, and 5ccfd951d5 (BUG-1429) touches only aida-core/src/liveness.rs — which plausibly accounts for the 952 to 954 test-count rise but not for a parity flip. Neither touched templates.rs or the discipline pack. Only PR #2023 touched the pack in that window.
+
+    So the honest state is: the mechanism is proven and my content is exonerated, but why the check began firing between 11:06 and 13:0x is NOT established. Defect 2 (the .ok()? that drops an unreadable file and counts it as agreement) remains the only candidate I can construct, and it remains UNPROVEN. Do not close this spec citing the confirmed prediction as if it also answered the timing.
+  created_at: 2026-09-20T20:08:35.801078446Z
+  modified_at: 2026-09-20T20:08:35.801078446Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: drain
