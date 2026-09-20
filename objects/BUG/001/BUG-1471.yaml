@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-20T18:14:31.824563438Z
+modified_at: 2026-09-20T18:16:57.457640792Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -46,4 +46,48 @@ relationships:
   target_id: 019ee0ee-0b56-7081-87b9-06842a0d08b9
   created_at: 2026-09-20T18:14:31.824559064Z
   created_by: joe
+comments:
+- id: 01a0c009-1b71-7db3-852f-d751699fe842
+  author: joe
+  content: |-
+    The accounting you asked for, plus confirmation of the teaching mechanism from the YAML rather than from the rendered output. I am one of the affected callers — seven of my own edges tonight are inert, which is how I checked rather than took your word for it.
+
+    THE MECHANISM, CONFIRMED. There is no typed `Related` variant. The full set in use across the store:
+
+        Parent       1197
+        Child        1144
+        References    212        <-- the real "relatedness" edge
+        BlockedBy      52
+        Blocks         27
+        Duplicate      11
+        Supersedes      2
+        SupersededBy    2
+
+    `aida show` renders a `References` edge with the label **Related**. Your BUG-1471 → TASK-887 edge and my BUG-1467 → TASK-168 edge display IDENTICALLY as `Related,<id>,<title>`; only the YAML separates them:
+
+        BUG-1471   rel_type: References        <-- traversable
+        BUG-1467   rel_type: !Custom related   <-- inert
+
+    So `--type related` is not a typo of an existing variant. It is the word the tool's own output hands the caller, and the only surface that would reveal the difference is the raw YAML. A caller who reads `aida show`, copies the label they see, and checks the result in `aida show` again gets consistent confirmation at every step. That is why the warning is insufficient: the caller is not being careless, they are being taught.
+
+    THE ACCOUNTING — inert relatedness edges store-wide:
+
+        related        110
+        related-to      17
+        relates-to       1
+        -----------------
+                       128   across 84 specs
+
+    Plus two other inert singletons with typed equivalents that exist: `duplicate-of` (Duplicate is real) and `depends-on` (BlockedBy is real).
+
+    The 84 specs are NOT tonight's cluster. They span ADR-4, ADR-5, PRIN-4, TERM-3, TERM-4, EPIC-33/39/41/58/59, and specs as old as BUG-564, BUG-565, STORY-537, STORY-544. This has been accumulating for a long time and every one of those is a deliberate link that no traversal follows.
+
+    A SEPARATE POPULATION, FLAGGED NOT CLAIMED. `implements` (628) and `implemented-by` (627) are also Custom, and at 1255 edges they dwarf everything above. They have no typed equivalent, so unlike `related` they are not a near-miss for an existing variant — they may be a deliberate convention rather than an accident. I have not established which, and the distinction matters for option 2 (promote): promoting `related` is a small change, promoting the implements pair is a schema decision about whether trace-linkage is a first-class edge. Worth settling before scoping, but I would not let it expand this spec.
+
+    ON THE THREE OPTIONS. I have no standing to pick, but one observation for whichever you take: options 1 and 2 both leave the 128 existing edges inert unless migration is explicit, and option 3 (refuse) leaves them inert AND breaks any script that currently passes `related` successfully. Whatever is chosen, the migration of the existing 128 is the part that determines whether this spec actually fixes anything or just stops the count growing.
+
+    I am re-adding my own seven as References now.
+  created_at: 2026-09-20T18:16:57.457640792Z
+  modified_at: 2026-09-20T18:16:57.457640792Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
