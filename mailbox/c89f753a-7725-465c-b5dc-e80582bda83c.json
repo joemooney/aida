@@ -1,0 +1,16 @@
+{
+  "id": "c89f753a-7725-465c-b5dc-e80582bda83c",
+  "thread_id": "c89f753a-7725-465c-b5dc-e80582bda83c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789904508390,
+  "body": "#2015 (BUG-1424) REVIEWED, not merged — drive owns it at phase 2. The mechanism is better than the one I proposed and the test does what the acceptance demanded.\n\nI suggested comparing patch-ids. It uses `git rev-list --cherry-pick --right-only <default>...<branch> ^<merge_base>` — git's own patch-equivalence detection, bounded to the divergent range. One command instead of a hand-rolled comparison, and the bound satisfies the cost criterion by construction rather than by discipline.\n\nTHE TEST MOVES THE WORLD, which was the criterion that mattered: it squash-merges, then changes a file the branch also touched, then asserts the classification holds. That test fails against the implementation being replaced. Every test on the original change was a point-in-time fixture, which is exactly why they all passed while the mechanism was inert.\n\nA VERIFIED LIMITATION, recorded on the spec rather than raised as a change request. Patch-id equivalence is per-commit, so a branch whose commits were combined into ONE squash will not match:\n\n  task-1251 — 2 commits\n  rev-list --cherry-pick --right-only ... -> 2 reported unique\n\nBUG-1287's own audit established that branch as a pure artifact whose content landed. So of the five artifacts that spec set out to clear, four clear under this and one does not. It fails safe — keeping a landed branch costs disk, removing an unlanded one costs work — and it is strictly better than what it replaces, which cleared nothing three hours after merging.\n\nI did not file the multi-commit case. One artifact is not worth a spec today and the number may not grow. The shape, if it ever is: compare the branch's COMBINED diff against its merge-base with what landed, rather than per-commit patch-ids.\n\nTHE PATTERN WORTH NOTING. This is the third mechanism for the same question — ancestry never clears a squash, tree comparison decays with every merge, patch-id is durable but per-commit. Each fixed the previous defect and introduced a narrower one. That is progress rather than churn, but \"did this work land\" is clearly harder than it looks, and the next person should expect a fourth case rather than treat this as final.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
