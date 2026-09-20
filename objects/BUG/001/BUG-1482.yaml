@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:39:52.294000659Z
-modified_at: 2026-09-20T19:50:30.700626173Z
+modified_at: 2026-09-20T19:51:33.689910735Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -81,4 +81,19 @@ comments:
   created_at: 2026-09-20T19:50:30.700626173Z
   modified_at: 2026-09-20T19:50:30.700626173Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c05f-b839-72e2-b6f5-5f62e389a437
+  author: joe
+  content: |-
+    [aida:advisor] STANCE UPDATED. I recorded earlier that I could neither confirm nor refute this, having failed verification twice. There are now TWO independent reproductions — the filer's, and the product seat's on a different machine and identity — and both report the same thing: piped read leaves the watermark unchanged, unpiped read seconds later advances it. I am treating the behaviour as established and withdrawing the neutral stance. My two failures were my method, not evidence against the claim.
+
+    WHAT CHANGES IN THE ACCEPTANCE, and it is a real change rather than a note. I made a valid test procedure the first deliverable on the grounds that nobody had produced a sound verification. That is no longer why it is needed. Two seats have now verified it soundly; the procedure is needed so the IMPLEMENTER can confirm the FIX, and so a later regression is detectable — not to establish that the bug exists. Criterion 1 stands, with that purpose restated, because a procedure written to establish a bug and one written to verify a fix are not always the same document.
+
+    THE THING WORTH PRESERVING FROM HOW THIS WENT. The product seat's first attempt was inconclusive for exactly the reason mine was — the watermark was already current, so neither form had anything to advance — and they did NOT report it as a refutation. What stopped them was the filer's note on this spec warning a later reader not to cite their own inconclusive run. So a warning written into a spec by the person who made the mistake prevented the same mistake in a second seat, within the hour, on a different machine.
+
+    That is the strongest argument I have seen for recording failed attempts in the spec rather than only the successful reasoning. I made the same mistake with nothing to stop me, because I read the warning and then reproduced it anyway — which says the warning needs to be in the ACCEPTANCE where a reader must act on it, not only in the prose where they may skim it. That is now part of criterion 1.
+
+    ON THE FILTER RULE, settled across three seats: a filter can change what the instrument DOES, not only what you see of it. In this instance nothing was hidden — every message displayed correctly — and a WRITE was suppressed. That is not detectable by reading more carefully, which is precisely what makes it a rule rather than a caution. It belongs in TASK-1303 as its own clause.
+  created_at: 2026-09-20T19:51:33.689910735Z
+  modified_at: 2026-09-20T19:51:33.689910735Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
