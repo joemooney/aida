@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-20T13:57:44.816489498Z
+modified_at: 2026-09-20T14:03:24.751729216Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -162,6 +162,23 @@ comments:
   created_at: 2026-09-20T13:57:44.816489498Z
   modified_at: 2026-09-20T13:57:44.816489498Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf20-facf-7242-b83a-20ec542c8d48
+  author: joe
+  content: |-
+    [aida:acceptance-narrowed] scope 1 reduced, remainder filed as TASK-1300. Advisor decision, 2026-09-20.
+
+    WHAT CHANGED. Scope 1 as filed required enumerating EVERY external-tool prose classifier in the workspace. That criterion is withdrawn from this spec. It is replaced by: the classifiers this change centralizes are documented, and the sites the three review rounds named are either centralized or explicitly justified.
+
+    WHY. Three review rounds refused this spec, each correctly, and each named a different set of unenumerated sites — round 1 glab_stderr_is_transient; round 2 git_ops/forge/compete/overlay; round 3 remote_create, cache.rs, git_ops 'autostash'. No round was complete, because completeness over "a string literal compared against external prose" is not reachable by reading. A reviewer holding this criterion would refuse indefinitely and be right every time.
+
+    WE DID NOT MEET THE ORIGINAL BAR. This is a narrowing, not an achievement. The workspace-wide inventory does not exist and this spec will not produce it. TASK-1300 carries it in a form that can actually be discharged — a mechanical enumerator whose predicate is stated, tested against the nine-plus known sites as a fixture, and able to flag a newly added one.
+
+    WHAT STILL HOLDS. Scopes 2 and 3 are unchanged and still binding: structured alternatives where a response can be parsed rather than substring-matched, and unavoidable tokens moved to the single-place registry with producer comments. The reviewer should hold this PR to those.
+
+    COST OF THE LOOP, recorded so it is visible: three implementer cycles, three reviewer cycles, three CI slots, and the third round was rebase-only (BUG-1445) — identical patch-ids to rounds 1 and 2, so it changed nothing while every surface reported a moved head.
+  created_at: 2026-09-20T14:03:24.751729216Z
+  modified_at: 2026-09-20T14:03:24.751729216Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
