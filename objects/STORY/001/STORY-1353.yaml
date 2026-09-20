@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:02:54.706318011Z
-modified_at: 2026-09-20T01:30:50.568500898Z
+modified_at: 2026-09-20T01:49:16.562816226Z
 req_type: Story
 tags:
 - authority
@@ -96,4 +96,19 @@ comments:
   created_at: 2026-09-19T21:23:51.682886483Z
   modified_at: 2026-09-19T21:23:51.682886483Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bc80-db92-79a3-8811-0bb17e277fd1
+  author: joe
+  content: |-
+    Call-site audit (31 pre-change has_advisor_authority references), 2026-09-19:
+
+    DISPATCH (repointed): queue_cmd.rs QueueCommand::Add execution routes; mcp.rs queue_add/queue_rework authority wrapper; lib.rs maybe_autoqueue for already-Approved unparked work. Fresh queue-work auto-complete and burndown wave launch were adjacent team-gate sites and now use the same dispatch predicate. Queue remove/move/rework are also dispatch-gated.
+
+    DISPOSITION (kept advisor): git_backend_cmd.rs add/intake status, add/edit --mode, finding promotion/archive/status transition sites; queue_cmd.rs approve/done completion/status transitions and rework's optional status transition; lib.rs DecisionRequest resolution promotion, direct status update, intake downgrade, answer promotion; mcp.rs execution_mode and status-transition gates. triage_lease.rs and lock_cmd.rs references describe this same disposition boundary. The statusline tests and MCP helper/tests remain disposition coverage.
+
+    INTEGRITY FLOOR (new named predicate; no advisor call site reclassified): merge-hold clear now requires a present human through integrity_floor_authority_from. Existing supervised merge/CI/reviewer fences remain untouched.
+
+    AMBIGUOUS: none. Every surviving runtime has_advisor_authority call is a status/mode/finding/archive disposition. No integrity-floor path was weakened.
+  created_at: 2026-09-20T01:49:16.562816226Z
+  modified_at: 2026-09-20T01:49:16.562816226Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
