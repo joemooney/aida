@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:13.869367085Z
-modified_at: 2026-09-20T18:08:16.097266687Z
+modified_at: 2026-09-20T18:08:40.862322960Z
 req_type: Bug
 tags:
 - drain-safe
@@ -50,3 +50,7 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T18:08:16.097266687Z
+- rel_type: Parent
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-20T18:08:40.862314723Z
+  created_by: joe
