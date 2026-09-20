@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:33.668555610Z
-modified_at: 2026-09-20T19:37:16.490234320Z
+modified_at: 2026-09-20T19:37:51.406411346Z
 req_type: Bug
 tags:
 - awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
@@ -76,5 +76,11 @@ comments:
     trace note for the implementer: criterion 5 is not busywork. I merged five PRs today on this surface's information.
   created_at: 2026-09-20T19:37:13.272204636Z
   modified_at: 2026-09-20T19:37:13.272204636Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c053-2c2e-74a1-89d2-398c6afd38d2
+  author: joe
+  content: '[aida:advisor] CRITERION 5, partial answer from this seat''s own merges — audited before asking anyone else to. All four PRs I merged today carried Build (ubuntu-latest) on the merged head: PR-1976 f1c2b5e6, PR-1986 d941fadc, PR-2016 499bbc69, PR-2021 d5077ad6. None merged on an incomplete required set. The reason is not that the surface protected me: for each merge I ran `gh pr checks <n>` and read the ubuntu row directly, because `aida awaiting`''s ci column is a rollup and I wanted the named required check. So the practice that saved these four is exactly the workaround this bug forces, which is itself the argument for fixing it — a surface whose users have all independently learned not to trust it is not providing the service it appears to. The wider sweep across every PR merged today, by every seat, is still criterion 5 and still needed.'
+  created_at: 2026-09-20T19:37:51.406411346Z
+  modified_at: 2026-09-20T19:37:51.406411346Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
