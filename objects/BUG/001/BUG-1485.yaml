@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-20T20:08:47.903141848Z
+modified_at: 2026-09-20T20:08:53.355092100Z
 req_type: Bug
 tags:
 - drain-safe
@@ -69,4 +69,31 @@ relationships:
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T19:59:00.166321874Z
   created_by: joe
+comments:
+- id: 01a0c06f-956b-7091-9e5a-1d93da1925b3
+  author: joe
+  content: |-
+    [aida:advisor] Approved HIGH, mode drain. The stranding consequence is what earns the priority, not the frequency.
+
+    Four occurrences, three today, is a rate worth fixing on its own. What makes it high is the outcome in one of them: BUG-1442's implementer finished its work and pushed it — 6c692a496b, 142 insertions across three files — and the run then shelved on the lease mismatch after both attempts, leaving a spec marked Done with real work on a branch and NO PR. That is BUG-1450's shape reached by a different route: finished work invisible to every PR-based surface, discoverable only through `unshipped_work`, and it needed a human to open PR #2027 by hand.
+
+    So this is not only an orchestrator papercut. It is a fifth way for completed work to become invisible, and the ones we already know about are BUG-1450 (watchdog kills the phase before the PR step), BUG-1452 (refusal leaves the spec Done and unqueued), BUG-1454 (auto-bump marks a multi-deliverable spec Completed too early), and BUG-1476 (a rework round does nothing and the pipeline proceeds). Whoever takes this should read those four first; if there is a shared seam — a single point where "the phase ended" and "the work reached a PR" are decided independently — that is worth finding before adding a fifth local fix.
+
+    MY FINDING TASK-1-155 IS LOAD-BEARING HERE and I want its conclusion stated as a constraint rather than as context. Stale leases are the NORMAL resting state of this repo: `aida session reap --dry-run` correctly refuses all six because each has unmerged work, and the population grows with the open-PR backlog rather than shrinking. So:
+
+      - "Clean up the leases" is not an available remedy and must not appear in the fix.
+      - The matcher must TOLERATE an arbitrary number of stale leases. If it disambiguates by
+        scanning and taking a first match, that is the defect; if it keys on spec or pid, the
+        stale ones are irrelevant and the error text is misleading.
+
+    ACCEPTANCE — additions:
+    1. Establish HOW the matcher disambiguates — spec, branch, pid, or scan — and state it. The remedy differs completely between "it scans and picks wrong" and "it keys correctly and the error text is noise".
+    2. A mismatch must not strand pushed work. Whatever the matching fix, a phase that has committed and pushed must surface that work before the run ends — the same requirement BUG-1450 makes for the watchdog path. Cross-reference it rather than re-deriving it.
+    3. The error text stops printing seven lease ids. It currently prints them "for diagnosis only (NOT `--resume` arguments — these are lease ids, not claude session ids)", which is a parenthetical warning the reader not to use what it just showed them. If stale leases are normal, that list is noise in every instance and the warning exists because the list invites the misuse it forbids. Print what identifies the mismatch, not the whole population.
+    4. A test reproduces the failure with several stale leases present, since that is the ordinary condition rather than an edge case.
+
+    Filed by the product seat after BUG-1445 hit the identical failure twenty-five minutes after BUG-1442 — two in under half an hour is the signal that took this from a note to a spec.
+  created_at: 2026-09-20T20:08:53.355092100Z
+  modified_at: 2026-09-20T20:08:53.355092100Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
