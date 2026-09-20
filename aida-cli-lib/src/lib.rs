@@ -62283,6 +62283,44 @@ impl AutoBumpFlip {
     }
 }
 
+/// Emit the durable ship record after the store confirms a transition to
+/// `Completed`. Best-effort like every event-stream write.
+// trace:BUG-1286 | ai:codex
+fn emit_spec_completed(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    sha: &str,
+    pr: Option<u64>,
+    closed_by: &str,
+) {
+    let pr = pr.or_else(|| {
+        if sha.is_empty() {
+            return None;
+        }
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["show", "-s", "--format=%s", sha])
+            .output()
+            .ok()?;
+        output.status.success().then_some(())?;
+        extract_pr_number_from_commit_subject(String::from_utf8_lossy(&output.stdout).trim())
+    });
+    let (_, run_uuid) = drain_state::current_context(project_root);
+    events::emit(
+        project_root,
+        &events::Event::new(
+            Some(spec_id.to_string()),
+            run_uuid,
+            events::EventKind::SpecCompleted {
+                commit: sha.to_string(),
+                pr,
+                closed_by: closed_by.to_string(),
+            },
+        ),
+    );
+}
+
 fn completing_ref_label(project_root: &std::path::Path, sha: &str) -> String {
     if sha.is_empty() {
         return "completion evidence".to_string();
@@ -63605,6 +63643,26 @@ fn auto_bump_done_to_completed(
         record_role_activity(spec_id, "auto-completed");
     }
 
+    // BUG-1286: one terminal record per completed spec, including every
+    // member named by a multi-spec merge trailer.
+    for flip in &confirmed {
+        emit_spec_completed(project_root, &flip.spec_id, &flip.sha, None, "auto-bump");
+    }
+    for (spec_id, sha, pr_n, _) in &confirmed_stale {
+        emit_spec_completed(project_root, spec_id, sha, Some(*pr_n), "auto-bump");
+    }
+    for resolution in &confirmed_stranded {
+        if resolution.outcome == StrandedReviewPrOutcome::Merged {
+            emit_spec_completed(
+                project_root,
+                &resolution.spec_id,
+                "",
+                Some(resolution.pr_n),
+                "auto-bump",
+            );
+        }
+    }
+
     // ── Step 6: activity log ──
     for flip in &confirmed {
         record_role_activity(&flip.spec_id, "auto-completed");
@@ -64167,6 +64225,20 @@ fn handle_db_reconcile_status(
     }
     for (spec_id, _, _, _) in &confirmed_stale {
         record_role_activity(spec_id, "reconcile-status");
+    }
+
+    // BUG-1286: reconcile-status is a first-class completion source too.
+    for flip in &confirmed {
+        emit_spec_completed(
+            project_root,
+            &flip.spec_id,
+            &flip.sha,
+            None,
+            "reconcile-status",
+        );
+    }
+    for (spec_id, sha, pr_n, _) in &confirmed_stale {
+        emit_spec_completed(project_root, spec_id, sha, Some(*pr_n), "reconcile-status");
     }
 
     print_auto_bump_summary(&confirmed);
@@ -89555,6 +89627,21 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "`cargo build --release` failed",
             ));
         }
+        // BUG-1286: the trailing pull+build sequence finished. This is useful
+        // duration telemetry, but terminality remains kind-based (PrMerged /
+        // SpecCompleted), never dependent on this event being last.
+        let (_, run_uuid) = drain_state::current_context(&self.project_root);
+        events::emit(
+            &self.project_root,
+            &events::Event::new(
+                Some(self.spec.clone()),
+                run_uuid,
+                events::EventKind::RunCompleted {
+                    pull_completed: true,
+                    build_completed: true,
+                },
+            ),
+        );
         Ok(())
     }
 

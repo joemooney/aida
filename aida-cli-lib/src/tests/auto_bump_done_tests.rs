@@ -341,6 +341,63 @@ fn auto_bump_picks_up_subject_refs_on_default_branch() {
         "completion_sha should match landing commit"
     );
     assert!(info.completed_at.is_some(), "completed_at should be set");
+
+    let completion_events: Vec<_> = crate::events::read_all(&project_root)
+        .into_iter()
+        .filter(|event| {
+            event.spec.as_deref() == Some(spec_id.as_str())
+                && matches!(event.kind, crate::events::EventKind::SpecCompleted { .. })
+        })
+        .collect();
+    assert_eq!(
+        completion_events.len(),
+        1,
+        "one terminal event per flipped spec"
+    );
+}
+
+// trace:BUG-1286 | ai:codex
+#[test]
+fn auto_bump_multi_spec_trailer_emits_one_terminal_event_per_spec() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    for id in ["BUG-9001", "BUG-9002", "BUG-9003"] {
+        seed_done_spec(&store_path, id);
+    }
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    std::fs::write(project_root.join("cluster.txt"), "land\n").unwrap();
+    run_git(&project_root, &["add", "cluster.txt"]);
+    run_git(
+        &project_root,
+        &[
+            "commit",
+            "-m",
+            "fix: cluster (BUG-9001 BUG-9002 BUG-9003) (#42)",
+        ],
+    );
+
+    let storage = Storage::new(store_path.clone());
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert_eq!(flips.len(), 3);
+
+    let events = crate::events::read_all(&project_root);
+    for id in ["BUG-9001", "BUG-9002", "BUG-9003"] {
+        let matching: Vec<_> = events
+            .iter()
+            .filter(|event| {
+                event.spec.as_deref() == Some(id)
+                    && matches!(
+                        event.kind,
+                        crate::events::EventKind::SpecCompleted { pr: Some(42), .. }
+                    )
+            })
+            .collect();
+        assert_eq!(
+            matching.len(),
+            1,
+            "{id} should have exactly one terminal event"
+        );
+    }
 }
 
 /// TASK-1192: when a spec reaches Completed via the merge auto-bump, stale
@@ -1636,6 +1693,14 @@ fn reconcile_status_replays_missed_bump() {
     let info = req.implementation_info.as_ref().expect("info populated");
     assert!(info.completed_at.is_some());
     assert!(info.completion_sha.is_some());
+    assert!(crate::events::read_all(&project_root).iter().any(|event| {
+        event.spec.as_deref() == Some(spec_id.as_str())
+            && matches!(
+                &event.kind,
+                crate::events::EventKind::SpecCompleted { closed_by, .. }
+                    if closed_by == "reconcile-status"
+            )
+    }));
 }
 
 /// BUG-418: when a spec's referencing commit IS on the default branch but
