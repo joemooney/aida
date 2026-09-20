@@ -83,7 +83,7 @@ description: |-
   10. Do NOT weaken or serialise the test to make it pass. It asserts a real property. A test that flakes is evidence about the code, not a problem with the test.
 
   Second sighting reported by an implementer on BUG-1299's lane; first sighting was the Windows nightly recorded above. Two independent platforms is why the scope moved.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
