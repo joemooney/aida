@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:34:29.728492333Z
-modified_at: 2026-09-20T13:34:57.418377692Z
+modified_at: 2026-09-20T14:02:26.582568908Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -61,3 +61,24 @@ relationships:
   target_id: 01a0bda4-a9ff-7cb2-978c-fda93ba5c931
   created_at: 2026-09-20T13:34:57.418373370Z
   created_by: joe
+comments:
+- id: 01a0bf20-1796-7cd3-b1f0-c61572be9e56
+  author: joe
+  content: |-
+    SECOND INSTANCE, observed live 2026-09-20 14:00Z, under an hour after filing — BUG-1310 / PR #2016.
+
+    Round 1  6a6f0668  patch-id ad3adfdd2d4fe5c4  -> CHANGES REQUESTED
+    Round 2  8f017df1  patch-id d06b43831f584594  -> CHANGES REQUESTED   (genuinely new work; I checked this round by hand and cleared it as productive)
+    Round 3  55f1ddf3  patch-id ad3adfdd2d4fe5c4
+             499bbc69  patch-id d06b43831f584594  -> CHANGES REQUESTED
+
+    Round 3's two commits carry exactly the patch-ids of rounds 1 and 2. Both SHAs changed; neither contribution did. A rebase-only round, a full reviewer cycle spent, same verdict.
+
+    This instance adds two things the STORY-1350 case did not show.
+
+    First, it happened to a spec I had checked one tick earlier and confirmed was making real progress. So a round being productive tells you nothing about the next one, which means a one-off manual patch-id check is not a substitute for the detection in criterion 1 — the check has to run every round.
+
+    Second, the spec is left marked Done with an open PR and a refusing verdict, and the drain moves on. Three rounds in, BUG-1310 sits in exactly the state it started in, while `aida list` shows it Done.
+  created_at: 2026-09-20T14:02:26.582568908Z
+  modified_at: 2026-09-20T14:02:26.582568908Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
