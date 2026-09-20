@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T04:07:54.265428714Z
-modified_at: 2026-09-20T19:02:35.637205251Z
+modified_at: 2026-09-20T19:02:37.716243019Z
 req_type: Story
 tags:
 - from:session-0919
@@ -105,4 +105,28 @@ comments:
   created_at: 2026-09-20T18:59:10.094348714Z
   modified_at: 2026-09-20T18:59:10.094348714Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c032-eb94-7c50-b18b-21508576c899
+  author: joe
+  content: |-
+    [aida:advisor] Approved, priority raised Medium → HIGH, mode drain. The reframing is what earns the raise: this is not about block exhaustion, it is about removing a network-dependent write from the critical path of the operation agents perform most often.
+
+    I VERIFIED THE CORRECTION and it is right — block_allocation.rs states it in its own module doc: "when the aggregate … threshold, the next spec-creating command quietly claims a fresh block", auto_claim defaults to true. Nothing is broken. A SPIKE block below threshold would have topped up the moment anyone filed a spike. The filing was correct to withdraw the defect framing.
+
+    WHY THE TIMING ARGUMENT IS STRONGER THAN THE ORIGINAL ONE. A block claim writes to the orphan store and can need the remote. Lazy means that write happens INSIDE `aida add` — so the most common agent operation inherits a network dependency, and it fires under load rather than at rest, because load is when blocks drain.
+
+    The incident is on the record from today rather than hypothetical: a reviewer seat filing two specs hit "origin unreachable" plus a "Cannot rebase onto multiple branches" retry, and BUG-1461 and BUG-1462 stayed local-only until another seat ran `aida db sync --push` by hand. Two findings from an independent review existed on one machine and nowhere else. Under a fleet where seats file constantly and machines have uneven connectivity, that is the failure mode to design against.
+
+    A scheduled top-up does not replace auto-claim and must not try to. Auto-claim is the correctness floor — it guarantees a spec can always be filed. The scheduled job is the availability improvement that makes the floor never load-bearing. Both, not either.
+
+    ACCEPTANCE — additions:
+    1. The scheduled job is PURELY additive. Auto-claim stays exactly as it is, and a test asserts a spec can still be filed with the scheduler disabled and the block below threshold. Removing the lazy path because a job now exists is the failure this spec could cause.
+    2. The job is idempotent and safe to run concurrently with an `aida add` that is claiming lazily. Two claimants must not produce overlapping or lost ranges; say which way the race resolves.
+    3. The job's own failure is silent to the user and visible to the operator. A top-up that cannot reach the remote must not break anything and must not be invisible — this is a background job, so it needs the opposite of a lazy claim's behaviour.
+    4. State the per-type policy. Topping up every type on a schedule is not obviously right for a store with nineteen types and long-tail usage; say whether the job tops up all types, only those below threshold, or only those with recent filing activity, and why.
+    5. Do NOT add a top-up to the critical path as a belt-and-braces measure. The point is to take work off that path.
+
+    The candidate-job list is good and I am not second-guessing the individual entries; the spec should keep them as candidates with a stated selection rule rather than as a fixed set, so the list can grow without a spec amendment.
+  created_at: 2026-09-20T19:02:37.716243019Z
+  modified_at: 2026-09-20T19:02:37.716243019Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
