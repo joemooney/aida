@@ -14,12 +14,32 @@ description: |-
   Acceptance: a dated report comment on this spec giving median rounds-to-merge before and after with the per-cause split, the spec ids in the sample, and an explicit statement of which other changes landed inside the measurement window. A null or negative result is a valid outcome and must be reported as such rather than re-cut until it looks positive.
 
   Convention this exists to honour: an acceptance criterion that can only be measured after shipping belongs on a follow-up spec, never on the spec that ships the change.
+
+  SAMPLE MATURITY AND HETEROGENEITY, added 2026-09-20 — the precondition is now MET and a new confound has appeared that matters more than the original one.
+
+  THE SAMPLE IS RIPE. TASK-1291 merged 2026-09-19T20:07:33Z and 25 specs have merged since, against the 20 this measurement requires. The earlier blocker — dispatched before its sample existed, six merges against twenty — has expired. That was the honest reason this could not run and it no longer applies.
+
+  BUT THE 25 ARE NOT ONE POPULATION, and a single median across them would be a number without a meaning. Three things changed inside the window and they push in different directions:
+
+    TASK-1291  should REDUCE rounds — round 1 became an exhaustive sweep rather than one finding at a time
+    TASK-1290  should reduce them further — untraced criteria now reach the reviewer's first round
+    BUG-1277   changed how reworks are QUEUED mid-window, so the mechanism being measured moved during the measurement
+
+  And several specs in the sample were implemented by parallel lanes rather than by the drain. Those never passed through `queue done`, their rounds were gated by the advisor rather than by an orchestrator reviewer, and some were merged at the gate without a reviewer phase at all. They are a different process being measured by the same ruler.
+
+  ADDITIONAL ACCEPTANCE
+  11. Report the per-cause split as the primary result, not the median. The causes were the point when this was filed and they are more so now, because a total conflates three changes that should move rounds in different directions.
+  12. Report lane-driven specs as a SEPARATE population from drain-driven ones, named individually. Do not let them dilute the drain figures, and do not silently exclude them either — a reader needs to know how many there were and that they were governed differently.
+  13. State which of the three in-window changes each measured spec was exposed to. A spec that merged before TASK-1290 landed cannot show its effect, and treating the window as uniform would attribute to one change what belongs to another or to none.
+  14. If the per-cause split is too thin to support a conclusion once it is partitioned this way, SAY SO and report the counts. A partitioned sample of 25 may simply be too small, and reporting that honestly is a real result — it tells us what a later measurement needs rather than manufacturing a finding from a sample that cannot carry one.
+
+  Heterogeneity analysis contributed by the product seat; the maturity figures verified against the store's own history.
 status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-20T02:46:50.594365743Z
+modified_at: 2026-09-20T10:31:38.430518930Z
 req_type: Task
 tags:
 - follow-up:TASK-1291
