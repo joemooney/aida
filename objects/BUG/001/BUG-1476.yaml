@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:28:53.617328309Z
-modified_at: 2026-09-20T18:31:29.512631074Z
+modified_at: 2026-09-20T18:31:30.937583580Z
 req_type: Bug
 tags:
 - drain-safe
@@ -89,4 +89,59 @@ relationships:
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T18:29:31.259778578Z
   created_by: joe
+comments:
+- id: 01a0c016-6f79-77c1-b254-59c207c79ae5
+  author: joe
+  content: |-
+    [aida:advisor] Approved HIGH, mode drain, ahead of BUG-1470 as the filing recommends. I verified the correlation and then read the entry conditions the filing deliberately left unasserted. A guard for exactly this ALREADY EXISTS and does not fire; why it does not fire is now the spec.
+
+    CORRELATION VERIFIED, and slightly larger than measured: 15 implementer phases under 60s against 442 of normal length. The filing's eleven plus BUG-1213 (9s), BUG-1241 (10s) and a second TASK-1289 (21s, 09-19).
+
+    THE EXISTING GUARD — lib.rs, `rework_no_op_failure`, trace:BUG-1213:
+
+        fn rework_no_op_failure(&mut self) -> Option<PhaseFailure> {
+            let (pr, before, reason, round) = self.rework_guard.as_ref()?;        // (a)
+            if self.phase_done_pr != Some(*pr) { return None; }                   // (b)
+            let after = pr_head_sha_best_effort(self, *pr)?;                      // (c)
+            if rework_heads_content_changed(&self.project_root, before, &after) != Some(false) {
+                return None;                                                      // (d)
+            }
+            Some(PhaseFailure::of(FailureKind::ReworkNoOp, ...))
+        }
+
+    `FailureKind::ReworkNoOp` exists, is shelvable, has cause_slug "rework-no-op", and has a written recovery hint: "The rework round produced no new PR commit… do not retry unchanged work." So the fix the filing asks for was designed and built. It is inert on these runs.
+
+    FOUR WAYS IT RETURNS None, ALL FAIL-OPEN. Every one lets the run proceed to CI and review as though a round occurred:
+      (a) rework_guard unset
+      (b) phase_done_pr != the guarded PR
+      (c) the head cannot be read
+      (d) the content comparison is anything but Some(false) — including None, i.e. inconclusive
+
+    TWO CANDIDATES I CAN NAME BUT HAVE NOT DISTINGUISHED, and I am not asserting either:
+
+      (b) is self-referential in the way SPIKE-85 describes. `phase_done_pr` is set when the
+          implementer signals phase completion with a PR. A phase that does nothing plausibly
+          never signals completion — so the guard against a no-op phase may require the phase
+          to have not been a no-op. If that is it, the guard cannot fire on the case it exists for.
+
+      (d) fails open on INCONCLUSIVE. `!= Some(false)` means a None — comparison unavailable —
+          is treated identically to "content changed". Absence of evidence is read as evidence
+          of work.
+
+    WHAT WOULD DISTINGUISH THEM, and it is cheap: instrument the four returns on one reproduction and print which one fires. Do that BEFORE writing any fix. Three causal claims from two seats have been wrong today, all by reasoning from correct observations to unverified mechanisms, and this is the point where that would happen again.
+
+    ONE DETAIL WORTH A LOOK RATHER THAN A CONCLUSION: BUG-1213 is the spec that introduced this guard, and BUG-1213 itself appears in the short-run list at 10:51:31 with a 9-second implementer phase. That may be coincidence — it may predate its own fix. Establish which; if the guard's own spec produced the failure the guard exists to catch, that belongs on SPIKE-85.
+
+    ACCEPTANCE — replacing the filing's criterion 1 with something stronger, since the diagnostic it proposes already exists:
+    1. Determine, by instrumenting a reproduction rather than by reading, which of (a)-(d) returns None on a short rework run. State it in the spec.
+    2. The guard does not fail open on an inconclusive comparison. If content change cannot be determined, that is not a pass.
+    3. The guard does not depend on the phase having signalled completion, if (b) is the cause. A no-op-detector gated on non-no-op behaviour is not a detector.
+    4. A run whose branch head is unchanged between implementer entry and exit does not advance to CI and review. This is the filing's criterion and it stands — but as a backstop to a working guard, not as its replacement.
+    5. `aida findings list` distinguishes a rework-no-op shelve from a genuine verdict:request-changes. The filing is right that this is worth fixing regardless of root cause: an unknown fraction of today's 22 request-changes shelves are the loop re-reviewing unchanged code, and today the two are indistinguishable.
+    6. A test asserts the guard fires on the observed shape: an existing PR, a rework round that pushes nothing, an unchanged head. If a test for this already exists, say why it passes while production does not — that is the more useful finding.
+
+    ON THE FILING'S RETRACTION. Reporting "a real round, the first any of these five has had since its verdict" and then correcting it to "a run happened, a round did not" is the right distinction and the right way to withdraw it. That distinction should survive into the vocabulary: a run is a pipeline traversal, a round is a change to the work.
+  created_at: 2026-09-20T18:31:30.937583580Z
+  modified_at: 2026-09-20T18:31:30.937583580Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
