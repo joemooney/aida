@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-20T21:53:36.019194199Z
+modified_at: 2026-09-20T21:59:16.918997215Z
 req_type: Bug
 tags:
 - agent-surface
@@ -98,6 +98,62 @@ comments:
   created_at: 2026-09-20T21:40:28.193047234Z
   modified_at: 2026-09-20T21:40:28.193047234Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c0d4-a6b7-7a70-b6ff-557a2ed8a743
+  author: joe
+  content: |-
+    [aida:rework-brief] BUG-1480 / PR #2033 — the production change is right and I am not asking for it to be revisited. Two binding items, both about the test, plus a criterion of MINE that needs fixing.
+
+    THE CODE IS GOOD, recorded first so a rework round does not disturb it. The diff's comment identifies the true cause correctly: serialize_pairs called collect_spec_files PER REQUIREMENT, so a batch of N members performed N complete repository walks. Collapsing to one scan_trace_graph is the right fix and almost certainly the dominant win. Removing the two backend.load() calls, one unconditional on every show, is also right.
+
+    1. BINDING — the sole new test cannot fail. Verified by reading the file, not by reasoning:
+
+           626:  let source = include_str!("git_backend_cmd.rs");
+           628:      .split_once("let id = &resolved_id;")      <- FIRST occurrence is this line
+           631:      .split_once("Command::Approvals {")        <- FIRST occurrence is this line
+           3471: let id = &resolved_id;                          <- the production code, never scanned
+           4236: Command::Approvals {
+
+       include_str! pulls in the test module itself and split_once takes the first match, so the
+       scanned span is the ~93 characters between the test's own two string literals. The assertion
+       examines the test's source, not the function it names. It passed before the fix, passes now,
+       and would pass if the fix were reverted.
+
+       Mechanism: do not merely fix the markers. The anchor is wrong too — show_cached_context, the
+       helper this PR introduces, is defined at line 39, far above any region bounded by the
+       line-3471 marker. A backend.load() inside the new helper would be invisible even with correct
+       markers. Whatever replaces this must cover the code the PR actually adds.
+
+       Prove it fails: revert the production change with the test in place and show it red. A
+       structural test that has never been observed failing has not been shown to test anything.
+
+    2. BINDING — criterion 2 is not literally met, and it needs an explicit decision rather than a
+       silent pass. show_cached_context calls list_summaries with ArchiveFilter and DeferFilter Both
+       — all ~4116 rows — then linear-scans them, for every show including non-epics with no batch
+       tag. Cache-backed and fast, and a large improvement on backend.load(), but it is O(all specs)
+       per single-spec read, not the "resolves to one YAML file" the criterion states. Either narrow
+       the query or amend the criterion; do not leave the spec claiming something the code does not do.
+
+    MY CRITERION 1 IS WRONG AND I AM FIXING IT. I wrote "sub-second on a store of this size". The
+    reviewer measured `aida show` at 0.36s repeatedly on main WITHOUT this fix, against a healthy
+    4116/4116 cache — so that criterion was already satisfiable before the change, and this PR could
+    be closed against a number that was already true.
+
+    What saved the measurement is this spec's own verification query. `aida usage --cmd show
+    --slower-than 1000ms events` shows a live population today including 8455ms, 38864ms and 39033ms.
+    The variance fits the diagnosed cause exactly: a full repository walk per batch member is fast on
+    a warm page cache and catastrophic when cold or contended.
+
+    CRITERION 1 IS RESTATED as a TAIL target: p95 and max over the recorded `aida usage` population,
+    not a warm-case median. A median was the wrong instrument for a defect whose signature is variance.
+
+    NOT DISPUTED, and I want this explicit so it is not relitigated: acceptance 4 asked for a latency
+    regression test and a structural one was substituted, on the stated grounds that timing assertions
+    are noisy on shared CI. That reasoning is sound and I accept the substitution. The objection is
+    only that a substitution weakening a named criterion belongs on the spec rather than in a PR
+    comment — and that whichever form is chosen must be capable of failing.
+  created_at: 2026-09-20T21:59:16.918997215Z
+  modified_at: 2026-09-20T21:59:16.918997215Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
