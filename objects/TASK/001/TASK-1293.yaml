@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-20T12:34:32.296249636Z
+modified_at: 2026-09-20T12:35:06.817499657Z
 req_type: Task
 tags:
 - acceptance
@@ -130,6 +130,34 @@ comments:
   content: 'Headless implementation handoff: rebased PR #2003 onto current main, addressed advisor hold by adding the project-local spec-authoring discipline mirror and README pointer in 9f7d0199bf, and cleared the satisfied merge hold. Local verification passed: cargo test -p aida-cli-lib criteria (24 tests), cargo test -p aida-core project_discipline_pack_matches_master, and cargo fmt --all -- --check. PR remains open because drive implementer seats cannot self-merge; independent reviewer story STORY-1370 is approved. CI run 35510172946 was still building when the bounded headless wait expired.'
   created_at: 2026-09-20T12:18:31.929046570Z
   modified_at: 2026-09-20T12:18:31.929046570Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bed0-23c1-7a92-8125-70a6b40cdbef
+  author: joe
+  content: |-
+    [rework round 2] PR #2003 — CHANGES REQUESTED, three findings. Two of them are the same class, and that class has now appeared six times tonight. Stating them as numbered requirements.
+
+    REQUIREMENT 1 — FILTER ON THE TYPE, NOT A PROXY FOR IT.
+    `criteria_gate::untraced_lines` filters with `row.tests.is_empty()` instead of `CriterionState::Untraced`. A post-deployment criterion legitimately has zero tests, so the proxy classifies it as untraced and `reviewer_prompt_block` re-labels it — which is exactly what this spec exists to stop.
+
+    `tests.is_empty()` is a fact ABOUT a criterion; `CriterionState::Untraced` is the JUDGEMENT the type already encodes. The whole point of introducing the state was that "has no tests" and "is untraced" are different things for exactly this case. Match the variant.
+
+    REQUIREMENT 2 — DO NOT DETECT A CATEGORY BY MATCHING THE WORD FOR IT.
+    `is_post_deployment_criterion` treats any occurrence of the bare substring `post-deployment` as an outcome criterion. So `aida criteria TASK-1293 --json` labels TASK-1293.ac1c7c47 and TASK-1293.ac595b58 as post-deployment — because this spec's own criteria discuss post-deployment criteria. The detector fires on its own subject matter.
+
+    That is not an edge case, it is the predictable failure: any spec ABOUT a category will mention that category's name in criteria that are not members of it. A convention doc, a discipline entry, a follow-up spec — all of them trip it.
+
+    Decide what actually marks a criterion as post-deployment and encode THAT. Candidates: an explicit marker in the criterion, a structural property (it references a state only reachable after merge), or a field. Whatever you choose, the test must include a criterion that MENTIONS post-deployment without being one — this spec's own ac1c7c47 is that fixture and it is already failing.
+
+    THE CLASS, because it is worth seeing rather than fixing six times. Tonight: BUG-1295 (orchestrator matched `pr rebase` prose), BUG-1297 (ambiguous vs not-found by error text), BUG-1310 (external tool prose), BUG-1316's own fix (hold detected by matching the refusal sentence), BUG-1424 (per-commit proxy for a cumulative question), and now these two. Every one is a decision made by matching a string or a proxy when a type was available or constructible. Every one is reasonable-looking code. I have filed STORY-1382 proposing a ratchet rule so the seventh is refused mechanically.
+
+    REQUIREMENT 3 — TRACE THE THREE CRITERIA.
+    All three criterion IDs in the supplied untraced list still have no criterion-qualified tests: acb68aa3 to the scaffolded discipline content, ac1c7c47 to the pure and mixed traced/untraced/post-deployment cases, ac595b58 likewise. This spec ships the gate that reports untraced criteria; shipping it with its own criteria untraced is the same shape as the two findings above — the tool not applied to itself.
+
+    Note the drain retagged this onto the live batch after it was stranded twice, and it came back reworked within minutes. The mechanism is working; these are content findings, not process ones.
+
+    Push fixups to the existing branch. Do not open a new PR.
+  created_at: 2026-09-20T12:35:06.817499657Z
+  modified_at: 2026-09-20T12:35:06.817499657Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
