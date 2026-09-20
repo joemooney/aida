@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:47:10.008439484Z
-modified_at: 2026-09-20T02:06:44.247833512Z
+modified_at: 2026-09-20T02:32:04.272102787Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -97,6 +97,23 @@ comments:
   content: Implemented GitHub CI liveness re-arming for every InProgress observation; absent/NoSignal observations do not re-arm. Raised default idle window to 1200s based on a measured 705s p95 across the latest 97 completed GitHub CI runs on 2026-09-19. Added tracked [drain] ci_idle/ci_absolute duration knobs with env precedence, documentation, and pure/config tests (16 focused tests pass).
   created_at: 2026-09-20T02:05:54.535799604Z
   modified_at: 2026-09-20T02:05:54.535799604Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bca8-09b0-7662-819d-d5adf2f35db1
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1992
+    agent: codex
+    ran-at: 2026-09-19 19:32 -07:00
+    mode: propose-only (drain)
+    proposed: 3
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1275-drain-01a0bca7-43ca-7852-8c19-bc2633a77908.json
+    ? AC (0.97) — When neither a per-process override nor a project drain setting is supplied, the CI idle window defaults to 1200 seconds (20 minutes), chosen against a measured GitHub CI p95 of 705 seconds across the latest 97 completed CI runs on 2026-09-19.
+    ? SEM (0.99) — CI wait bounds are durably configurable per project as `[drain] ci_idle` and `[drain] ci_absolute` in `.aida/config.toml`; `AIDA_WORKER_CI_IDLE` and `AIDA_WORKER_CI_ABSOLUTE` take precedence when they contain valid numeric seconds, while an absent or non-numeric environment value falls through to the corresponding project setting and then to the built-in default.
+    ? SEM (0.96) — The `[drain] ci_idle` and `[drain] ci_absolute` settings accept duration values as bare seconds or with `s` or `m` suffixes (for example, `ci_idle = "25m"` resolves to 1500 seconds).
+  created_at: 2026-09-20T02:32:04.272102787Z
+  modified_at: 2026-09-20T02:32:04.272102787Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
