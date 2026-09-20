@@ -1,0 +1,32 @@
+id: 01a0c001-5608-7293-8f3c-789a0c995a97
+spec_id: TASK-1303
+agreed_id: TASK-1303
+title: 'Session-discipline report-vs-artifact entry: add the pinning rule and correct the two command caveats'
+description: |-
+  Follow-up to TASK-1302 / PR #2023, which is approved and merged. Three additions to the "Verify against the artifact that ships" section of the session-discipline guide. Master first, then mirror to the project copy - the two are required byte-identical by the discipline-pack parity test.
+
+  1. THE PINNING RULE (the advisor flagged this on TASK-1302 as a follow-up rather than a round; recording it here so it survives).
+  An artifact reference must be PINNED, not re-derived: capture the identifier and its content in the same operation, and quote that identifier. A head can move between two individually-correct commands a minute apart and both readings will look authoritative. This is the gap the table does not close - its first row recommends "git show HEAD:<path>" and HEAD is exactly the thing that can move underneath you.
+
+  2. THE RECOMMENDED COMMAND EXITS 1 ON THE CLEAN CASE.
+  Verified empirically: grep -c with that alternation returns count 0 and exit status 1 when no markers are present, and exit 0 with a count when they are. The SUCCESS outcome therefore looks like a failure to set -e or to any caller checking the pipeline status. This matters more than usual here because the entry is scaffolded to downstream projects and the command will be pasted into scripts, and because an entry whose thesis is "a step report can mislead" should not ship a check whose exit status misleads. Either note the inversion inline or recommend a form that does not invert, for example piping to a count comparison rather than relying on the grep exit.
+
+  3. THE MARKER REGEX FALSE-POSITIVES ON MARKDOWN.
+  Verified empirically: the ^=======$ branch matches a markdown setext heading underline of exactly seven equals signs, reporting count 1 and exit 0 on a file with no conflict at all. The incident the entry documents was a conflict in a markdown discipline file containing a table, so this is the exact file class the advice targets. It fails safe by over-reporting, so this is precision rather than correctness - but a one-line caveat costs nothing.
+
+  ## Acceptance
+
+  - The section states the pinning rule, tied to the table row that recommends reading HEAD.
+  - The exit-status inversion is either fixed in the recommended command or called out inline where the command appears.
+  - The setext false-positive is noted, or the regex is tightened so a markdown heading underline does not match.
+  - Master and project copy remain byte-identical and project_discipline_pack_matches_master still passes.
+  - No SPEC-IDs appear in the guide text, since it is scaffolded downstream.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T18:08:28.168866180Z
+modified_at: 2026-09-20T18:08:28.168866180Z
+req_type: Task
+tags:
+- discipline docs drain-safe scaffolding from:review-pr-2023
