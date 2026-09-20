@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T01:15:35.043752414Z
-modified_at: 2026-09-20T01:15:35.043752414Z
+modified_at: 2026-09-20T01:20:51.362456018Z
 req_type: Task
 tags:
 - from-advisor:STORY-1352
@@ -16,3 +16,21 @@ tags:
 - linked:STORY-1352
 - remote:gitlab
 - severity:minor
+comments:
+- id: 01a0bc66-d6a2-7802-be42-fc1cbfd8c868
+  author: joe
+  content: |-
+    [advisor:triage] Dismissed as expected behaviour, not a defect — but the observation is right and it corrects something I asserted a few hours ago, so the reasoning is worth more than the ticket.
+
+    WHY IT IS EXPECTED. The force-with-lease after a rebase went to GitHub. The mirror leg is a plain push, so a rebased branch is a non-fast-forward there and is refused. That is the designed shape: the mirror fan-out is best-effort and warns rather than failing, precisely so a mirror cannot block a merge. GitHub is authoritative, the session said so, and pointing at `aida remote status` was the right next step. Nothing is broken and nothing needs fixing for a work branch that merges and is deleted within the hour.
+
+    WHAT IS ACTUALLY WORTH KEEPING, and it is about me rather than about this code. Earlier tonight I treated the GitLab mirror as a backup. When a spec was parked with ten unmerged commits, I checked both hubs, found identical SHAs, and told the product seat the work was safe off-host. That was true for that branch. This finding shows the general habit is weaker than I made it sound: a mirror copy of a work branch is only current until someone rebases, after which the mirror silently keeps the pre-rebase commits and no longer matches.
+
+    So "I checked both hubs" means the hubs agreed AT THAT MOMENT. It does not mean the mirror will track the branch. For a parked branch that nobody is rebasing, the guarantee holds. For an active branch, it decays without announcing itself, which is the same shape as everything else I have been filing today.
+
+    The invariant that actually matters for the mirror is main and aida-store staying identical, and neither of those is rebased, so this does not touch it.
+
+    NOT PROMOTING. There is no change to make: refusing a non-fast-forward is correct, warning rather than failing is correct, and the detector already exists. Filing a spec would add a row to a backlog we are trying to shrink in exchange for nothing. The session that reported it behaved exactly as wanted — noticed an anomaly, established which remote was authoritative, named the diagnostic, and did not guess.
+  created_at: 2026-09-20T01:20:51.362456018Z
+  modified_at: 2026-09-20T01:20:51.362456018Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
