@@ -85138,6 +85138,55 @@ fn lease_ids_in(sessions_dir: &std::path::Path) -> Vec<String> {
     ids
 }
 
+const ORCHESTRATED_LEASE_RECEIPT_ENV: &str = "AIDA_ORCHESTRATED_LEASE_RECEIPT";
+
+fn orchestrated_lease_receipt_path(
+    project_root: &std::path::Path,
+    claude_session_id: &str,
+) -> std::path::PathBuf {
+    project_root
+        .join(".aida")
+        .join("orchestrator-handoffs")
+        .join(format!("{claude_session_id}.json"))
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+struct OrchestratedLeaseReceipt {
+    claude_session_id: String,
+    lease_id: String,
+    branch: String,
+    worktree_path: std::path::PathBuf,
+}
+
+fn write_orchestrated_lease_receipt(
+    path: &std::path::Path,
+    claude_session_id: &str,
+    lease: &SessionLease,
+) -> Result<()> {
+    let receipt = OrchestratedLeaseReceipt {
+        claude_session_id: claude_session_id.to_string(),
+        lease_id: lease.id.clone(),
+        branch: lease.branch.clone(),
+        worktree_path: lease.worktree_path.clone(),
+    };
+    let body = serde_json::to_string(&receipt)?;
+    Ok(write_atomic(path, &body)?)
+}
+
+fn read_orchestrated_lease_receipt(
+    path: &std::path::Path,
+    claude_session_id: &str,
+) -> Option<(String, String, std::path::PathBuf, Option<u32>)> {
+    let body = std::fs::read_to_string(path).ok()?;
+    let receipt: OrchestratedLeaseReceipt = serde_json::from_str(&body).ok()?;
+    (receipt.claude_session_id == claude_session_id).then_some((
+        receipt.lease_id,
+        receipt.branch,
+        receipt.worktree_path,
+        None,
+    ))
+}
+
 /// Find the session lease that `aida queue work --session-id <uuid>` created,
 /// by matching the orchestrator-minted `claude_session_id` against the value
 /// `aida queue work` records in each session manifest. This is the
@@ -86977,6 +87026,12 @@ impl RealPhaseDriver {
         claude_session_id: &str,
     ) -> Result<(String, String, std::path::PathBuf), auto_complete::PhaseFailure> {
         find_orchestrated_lease(&self.project_root, claude_session_id)
+            .or_else(|| {
+                read_orchestrated_lease_receipt(
+                    &orchestrated_lease_receipt_path(&self.project_root, claude_session_id),
+                    claude_session_id,
+                )
+            })
             .map(|(id, branch, worktree, _)| (id, branch, worktree))
             .ok_or_else(|| {
                 let candidates = lease_ids_in(&self.sessions_dir());
@@ -87000,21 +87055,13 @@ impl RealPhaseDriver {
                     // trace:BUG-1285 | ai:claude
                     conflict_failure
                 } else {
-                    // TASK-271: suggest BARE `--resume` (continues the most recent
-                    // recorded claude session for the scope) — never paste a listed
-                    // id into `--resume`, because these are LEASE ids and `--resume`
-                    // resolves against claude SESSION ids, so a pasted lease id hits
-                    // a second clean error. The lease list is diagnostic-only.
-                    // trace:TASK-271 trace:BUG-114 | ai:claude
+                    // trace:BUG-1485 | ai:codex
                     auto_complete::PhaseFailure::new(format!(
-                        "could not match the orchestrated session (claude id {}) to a \
-                     session lease. Resume the most recent recorded session with \
-                     `aida queue work {} --resume` (bare — no id needed). \
-                     Active lease id(s), for diagnosis only (NOT `--resume` \
-                     arguments — these are lease ids, not claude session ids): {}.",
+                        "the child session {} neither retained its session lease nor wrote its \
+                         orchestrator handoff receipt. Resume the recorded child with \
+                         `aida queue work {} --resume`; unrelated active leases were ignored.",
                         &claude_session_id[..claude_session_id.len().min(8)],
                         self.spec,
-                        candidates.join(", "),
                     ))
                 }
             })
@@ -88489,6 +88536,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         );
         let mut cmd = std::process::Command::new(self.aida_exe());
         cmd.current_dir(&self.project_root).args(&args);
+        // BUG-1485: the child may complete `queue done` / `pr ship` and release
+        // its lease before this parent regains control. Give queue-work a
+        // durable, session-keyed handoff path so phase 1 can still recover the
+        // exact branch and worktree instead of inspecting unrelated leases.
+        // trace:BUG-1485 | ai:codex
+        let lease_receipt = orchestrated_lease_receipt_path(&self.project_root, &session_uuid);
+        if let Some(parent) = lease_receipt.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::remove_file(&lease_receipt);
+        cmd.env(ORCHESTRATED_LEASE_RECEIPT_ENV, &lease_receipt);
         // BUG-233: the corroboration token proves the bare auto-complete env
         // belongs to this live run. TASK-306 names the phase for statusline
         // context. BUG-742 carries the run variant so pickup prompts preserve
@@ -88784,7 +88842,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // minted into `--session-id`, not a lease-set diff (BUG-114).
         let (lease_id, recorded_branch, worktree_path) =
             self.discover_orchestrated_lease(&session_uuid)?;
-        self.implementer_lease = Some(lease_id.clone());
+        // A BUG-1485 receipt can outlive the lease it describes. Preserve its
+        // branch/worktree recovery data, but do not later try to end a lease
+        // the child already released.
+        self.implementer_lease = lease_path(&self.project_root, &lease_id)
+            .exists()
+            .then(|| lease_id.clone());
         // STORY-306: remember the worktree — `resume_implementer` must run
         // `claude --resume` with this exact cwd so Claude's project-slug
         // derivation finds the persisted session.

@@ -2,9 +2,10 @@ use super::{
     agent_gate_matches_req, branch_commits_ahead_main, build_auto_punt_args,
     build_integrate_rebase_args, build_phase3_auto_rebase_args, ensure_implementer_branch_pushed,
     find_orchestrated_lease, head_commit_message, headless_log_is_zero_bytes, list_leases,
-    orchestrator_phase_child_env, orchestrator_pr_title_and_body, parse_agent_gates_from_config,
-    pushed_branch_commits_ahead_default, watchdog_failure_with_committed_work, AgentGateOnFail,
-    RealPhaseDriver,
+    orchestrated_lease_receipt_path, orchestrator_phase_child_env,
+    orchestrator_pr_title_and_body, parse_agent_gates_from_config,
+    pushed_branch_commits_ahead_default, watchdog_failure_with_committed_work,
+    AgentGateOnFail, OrchestratedLeaseReceipt, RealPhaseDriver,
 };
 use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure, PhaseReconcile};
 use aida_core::{
@@ -834,11 +835,10 @@ fn discover_lease_one_match_resolves_branch_and_worktree() {
 }
 
 #[test]
-fn discover_lease_n_candidates_unmatched_id_lists_them_diagnostically() {
+fn discover_lease_n_candidates_unmatched_id_ignores_unrelated_leases() {
     // Multiplicity N: several concurrent leases on disk, but the
-    // orchestrator's claude id matches none of them (e.g. the manifest
-    // write raced). The failure must (a) suggest bare `--resume` and
-    // (b) list the live lease ids for diagnosis only.
+    // orchestrator's claude id matches none of them. They are not actionable
+    // and must not be presented as resume candidates. trace:BUG-1485 | ai:codex
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     mint_lease(
@@ -858,10 +858,72 @@ fn discover_lease_n_candidates_unmatched_id_lists_them_diagnostically() {
         err.reason
     );
     assert!(
-        err.reason.contains("019e1111-aaaa") && err.reason.contains("019e2222-bbbb"),
-        "N-candidate failure should list the live lease ids; got {:?}",
+        !err.reason.contains("019e1111-aaaa") && !err.reason.contains("019e2222-bbbb"),
+        "N-candidate failure should ignore unrelated lease ids; got {:?}",
         err.reason
     );
+}
+
+#[test]
+fn discover_lease_recovers_start_position_after_live_lease_disappears() {
+    // BUG-1445 shape: the child gets only far enough to establish its lease,
+    // then its lifecycle removes the live files before waitpid returns.
+    // trace:BUG-1485 | ai:codex
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let claude_id = "cccccccc-3333-7000-8000-000000000000";
+    let receipt_path = orchestrated_lease_receipt_path(root, claude_id);
+    std::fs::create_dir_all(receipt_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &receipt_path,
+        serde_json::to_string(&OrchestratedLeaseReceipt {
+            claude_session_id: claude_id.to_string(),
+            lease_id: "019e3333-start".to_string(),
+            branch: "bug-1485-start".to_string(),
+            worktree_path: root.join("start-worktree"),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+
+    let recovered = driver(root, "BUG-1485")
+        .discover_orchestrated_lease(claude_id)
+        .unwrap();
+    assert_eq!(recovered.0, "019e3333-start");
+    assert_eq!(recovered.1, "bug-1485-start");
+}
+
+#[test]
+fn discover_lease_recovers_post_push_position_after_live_lease_disappears() {
+    // BUG-1442 shape: completed work is pushed, then the live lease disappears
+    // before PR recovery. The durable receipt retains the exact branch and
+    // worktree needed by the existing open-PR recovery path.
+    // trace:BUG-1485 | ai:codex
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let claude_id = "dddddddd-4444-7000-8000-000000000000";
+    let worktree = root.join("pushed-worktree");
+    std::fs::create_dir_all(&worktree).unwrap();
+    std::fs::write(worktree.join("pushed.marker"), "origin/bug-1485-pushed\n").unwrap();
+    let receipt_path = orchestrated_lease_receipt_path(root, claude_id);
+    std::fs::create_dir_all(receipt_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &receipt_path,
+        serde_json::to_string(&OrchestratedLeaseReceipt {
+            claude_session_id: claude_id.to_string(),
+            lease_id: "019e4444-pushed".to_string(),
+            branch: "bug-1485-pushed".to_string(),
+            worktree_path: worktree.clone(),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+
+    let recovered = driver(root, "BUG-1485")
+        .discover_orchestrated_lease(claude_id)
+        .unwrap();
+    assert_eq!(recovered.1, "bug-1485-pushed");
+    assert_eq!(recovered.2, worktree);
 }
 
 #[cfg(unix)]
