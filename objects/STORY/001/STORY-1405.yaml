@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T21:22:32.534380767Z
-modified_at: 2026-09-20T21:22:57.014881731Z
+modified_at: 2026-09-20T21:23:00.199332235Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -45,4 +45,9 @@ tags:
 - from:session-0920
 - integrity
 - merge-safety
+relationships:
+- rel_type: References
+  target_id: 01a0c099-577c-73c1-bbf3-e54a1a76da73
+  created_at: 2026-09-20T21:23:00.199321447Z
+  created_by: joe
 execution_mode: drain
