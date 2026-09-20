@@ -1,0 +1,43 @@
+id: 01a0c006-9a4b-7080-a650-c8117a9803e2
+spec_id: STORY-1397
+agreed_id: STORY-1397
+title: 'A recused merge-hold routes to nobody: the independence rule stops the author merging and nothing tells another seat it is needed'
+description: |
+  When a seat is recused from merging its own work, nothing routes the PR to anyone else. The independence rule is enforced by the recused seat remembering to recuse itself, and then the work simply stops.
+
+  OBSERVED 2026-09-20. Three PRs sat open for hours, all correct, all green, none with a finding against them:
+
+    #2023  TASK-1302  the advisor ratified the text, chose its framing, cut a paragraph
+    #1991  BUG-1279   the advisor wrote it
+    #1979  TASK-1295  the advisor co-authored it
+
+  Each carried a merge-hold whose recorded reason was, in substance, "I wrote this, so I am not the merger — needs a second reader." That is the rule working. What did not happen is the next step: nothing told any other seat they were needed, nothing listed these as awaiting a reader rather than awaiting work, and `aida awaiting` showed them to the recused seat — the one person who cannot act on them — and to nobody else.
+
+  They moved only when the advisor noticed a third seat existed and dispatched it by hand. Two of the three had been open for hours by then, and two also sat behind specs reading Completed (BUG-1454), so the open-work surfaces had already dropped them.
+
+  WHY THIS IS A SUBSTRATE GAP RATHER THAN A STAFFING ONE. The independence rule is load-bearing and should not be weakened. But it is currently a rule in the `substrate-as-bouncer.md` sense — it depends on a seat remembering both to recuse itself AND to find a replacement, and only the first half has any support. A recusal today is indistinguishable, to every surface, from a hold pending rework. Those need opposite actions: one needs a different person, the other needs the same person to do more work.
+
+  There is also no record of WHY a hold exists in any queryable form. The reason lives in free text in `.aida/merge-holds/PR-N`, which nothing parses. A seat scanning for "what can I help with" cannot find "a PR whose only blocker is that its author cannot merge it".
+
+  ACCEPTANCE
+  1. A merge-hold carries a typed reason, at minimum distinguishing recusal (needs a different reader) from rework (needs more work) from a decision (needs a human call). Free text may remain alongside it.
+  2. A recusal names who is recused and, where the substrate knows of other seats, surfaces the PR to them. Shape is open — a brief, a queue entry, a row in `aida awaiting` for other seats — but a recused PR must become visible to somebody who can act.
+  3. `aida awaiting` does not present, to a recused seat, a PR that seat cannot merge, as though it were theirs to action. If it is shown at all it is labelled as awaiting another reader.
+  4. A recusal with no available reader says so explicitly. "Nobody else can review this" is a real state the operator needs to see, and it is the state this project was actually in until a third seat appeared.
+  5. Do not add an override that lets a seat merge its own work under time pressure. The failure this addresses is invisibility, not strictness, and an escape hatch would be used exactly when the rule matters most.
+
+  Filed by the advisor after dispatching the three PRs above by hand. The rule was right every time; the routing did not exist.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T18:14:13.323242098Z
+modified_at: 2026-09-20T18:14:13.323242098Z
+req_type: Story
+tags:
+- batch:night-0920
+- coordination
+- drain-safe
+- from:session-0920
+- merge-safety
+- substrate-as-bouncer
