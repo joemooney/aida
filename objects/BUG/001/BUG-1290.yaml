@@ -41,12 +41,12 @@ description: |
   Reported by the aida-monitor project as "deduplicate at the emission site"; the recommendation is deliberately NOT followed as written, for the reason set out above.
 
   6. THE FIX MUST NOT KEY ON THE ABSENCE OF THE seat FIELD. In all 292 spurious back-to-back pairs measured 2026-09-19, the second event has no `seat` field (292 of 292) while the first carries one 172 times, because seat is Option<String> with skip_serializing_if at events.rs:70. That fingerprint identifies WHICH emitter is the spurious one and makes locating the two call sites a lookup instead of a search. It is NOT a runtime rule: 120 first-of-pair events also lack seat, because seat is legitimately unknown for phase 1. A dedup that drops PhaseEntered with no seat would be a second wrong fix inside the same spec, of exactly the shape this spec was filed to prevent. A test must cover a legitimate seat-less phase-1 entry surviving the fix.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:07:25.301380079Z
-modified_at: 2026-09-20T00:52:37.825878892Z
+modified_at: 2026-09-20T01:12:56.640033716Z
 req_type: Bug
 tags:
 - drain-safe
@@ -105,4 +105,22 @@ comments:
   created_at: 2026-09-20T00:52:37.825878892Z
   modified_at: 2026-09-20T00:52:37.825878892Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bc5f-9838-7b00-b1f1-bfab781bf2ad
+  author: aida-auto-bump
+  timestamp: 2026-09-20T01:12:56.632780010Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0bc5f-9840-75c2-9556-3a45716a3f86
+  timestamp: 2026-09-20T01:12:56.640032342Z
+  agent: aida
+  commit_sha: 4226a2e09a45dd4146366df5a962162e2139eeca
+  summary: Completed via merge 4226a2e0
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-20T01:12:56.632571072Z
+  completion_sha: 4226a2e09a45dd4146366df5a962162e2139eeca
