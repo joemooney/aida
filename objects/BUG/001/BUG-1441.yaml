@@ -1,0 +1,47 @@
+id: 01a0bedb-f28f-7ba1-b0d2-6c6ddce5b60a
+spec_id: BUG-1441
+agreed_id: BUG-1441
+title: aida drain status shows an empty in-progress view while actively working a spec, because current and members disagree
+description: |
+  `aida drain status` reports `current: <SPEC>` while that spec has no row in the members table, so the in-progress view is empty and an operator reasonably concludes nothing is running.
+
+  OBSERVED 2026-09-20 12:47Z, drain pid 795254, running 34 minutes:
+
+    status: active
+    current: BUG-1424
+    members[11]:
+      TASK-1293  failed   PR-2003
+      BUG-1425   queued
+      BUG-1426   queued
+      ... nine more, all `queued`
+
+  BUG-1424 does not appear in that list at all. No member carries an in-phase state. The drain-state file confirms the work is real — `current_phase: 2 (ci)`, entered 12:39:20 — and the process has been alive for 34 minutes. So the drain is genuinely working a spec that its own members table cannot see.
+
+  WHY IT HAPPENS. The batch was formed at launch. BUG-1424 was requeued afterwards, via `aida queue rework`, and the launcher's batch refresh picked it up as work without adding it to the members list. So `current` and `members` are populated by different paths and can disagree.
+
+  WHY IT MATTERS MORE THAN A DISPLAY GLITCH. This is the surface an operator uses to answer "is anything happening". It said no while the answer was yes, and the only way to establish the truth was to read `.aida/drain-state.json` and the process table by hand. A status surface that can be wrong in the reassuring direction is worse than one that is merely incomplete — a false "nothing in progress" invites a restart, which would have killed a live CI wait.
+
+  LIKELY THE SAME ROOT CAUSE AS THE EMPTY DRAIN SUMMARY. Earlier tonight a drain exited reporting `QueueDrained { shipped: 0, shelved: 0 }` after thirteen specs had merged. If shipped/shelved counts are derived from member rows, then every spec worked-but-not-a-member is invisible to the summary for the same reason it is invisible here. Worth testing that hypothesis before fixing either in isolation — one cause, two symptoms, and BUG-1286 carries the other.
+
+  ACCEPTANCE
+  1. A spec being worked appears in the members table with its phase, regardless of how it entered the batch. `current` and `members` cannot disagree about what is running.
+  2. A member added by a batch refresh after launch is recorded the same way as one present at launch. If refresh-added work is deliberately tracked differently, the status output says so rather than omitting it.
+  3. `aida drain status` never renders an empty in-progress view while `current` names a spec. If there is genuinely nothing in progress, that is stated explicitly rather than implied by an absence.
+  4. A test covers the refresh path specifically: form a batch, add a spec after launch, and assert it appears with its phase in the status output.
+  5. Verify whether the shipped/shelved counts in `QueueDrained` share this cause. If they do, fix both together and record it on BUG-1286; if not, say so, because that rules out the simplest explanation for a thirteen-merge drain reporting zero.
+
+  Reported by the operator, who observed the empty in-progress view directly; the drain state, process liveness and member list verified by the advisor before filing.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T12:48:00.655624765Z
+modified_at: 2026-09-20T12:48:00.655624765Z
+req_type: Bug
+tags:
+- diagnostic-decay
+- drain
+- drain-safe
+- from:operator-0920
+- observability
+- parent:EPIC-62
