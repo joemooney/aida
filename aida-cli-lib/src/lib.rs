@@ -7393,9 +7393,9 @@ fn finalize_answer(
     Ok(())
 }
 
-/// Queue a fully-unparked spec via the same advisor-gated enqueue path a groom
-/// uses (R3). Honors the advisor-authority gate (queueing IS the advisor
-/// sign-off, ADR-3 / TASK-647) and only queues Approved work (the burndown
+/// Queue a fully-unparked spec via the dispatch-gated enqueue path a groom
+/// uses (R3). The spec is already Approved, so this routes rather than disposes,
+/// and only queues Approved work (the burndown
 /// ready scope); reports honestly when it can't. Idempotent — skips a spec
 /// already queued. trace:STORY-555 | ai:claude
 fn maybe_autoqueue(store_path: &std::path::Path, req: &Requirement) -> Result<()> {
@@ -7407,9 +7407,9 @@ fn maybe_autoqueue(store_path: &std::path::Path, req: &Requirement) -> Result<()
         );
         return Ok(());
     }
-    if !has_advisor_authority() {
+    if !has_dispatch_authority() {
         println!(
-            "  {} unparked, but this session lacks advisor authority — re-run as the advisor to queue",
+            "  {} unparked, but this session lacks dispatch authority — ask product, advisor, or integrator to queue",
             crate::glyph(crate::glyphs::Glyph::InFlight).dimmed()
         );
         return Ok(());
@@ -29964,61 +29964,72 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             }
             Ok(())
         }
-        crate::cli::MergeHoldAction::Clear { pr, stale } => match (pr, stale) {
-            (Some(_), true) => {
+        crate::cli::MergeHoldAction::Clear { pr, stale } => {
+            // Clearing a supervised hold is a non-grantable human integrity
+            // floor, independent of dispatch/disposition roles.
+            // trace:STORY-1353 | ai:codex
+            if !has_integrity_floor_authority() {
                 anyhow::bail!(
+                    "clearing a merge-hold requires a human at an interactive terminal; \
+                     dispatch or advisor authority cannot override this integrity floor"
+                );
+            }
+            match (pr, stale) {
+                (Some(_), true) => {
+                    anyhow::bail!(
                         "give a PR number OR --stale, not both: `aida merge-hold clear <pr>` clears one, `aida merge-hold clear --stale` sweeps every already-merged marker"
                     );
-            }
-            (None, false) => {
-                anyhow::bail!(
+                }
+                (None, false) => {
+                    anyhow::bail!(
                         "nothing to clear: `aida merge-hold clear <pr>` clears one hold, `aida merge-hold clear --stale` sweeps every already-merged marker"
                     );
-            }
-            (Some(pr), false) => {
-                let existed = merge_hold::read_hold(&root, *pr).is_some();
-                merge_hold::clear_hold(&root, *pr)?;
-                if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
-                    eprintln!(
+                }
+                (Some(pr), false) => {
+                    let existed = merge_hold::read_hold(&root, *pr).is_some();
+                    merge_hold::clear_hold(&root, *pr)?;
+                    if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
+                        eprintln!(
                         "  {} label not dropped on PR #{pr}: {err} — drop it by hand or re-run `aida merge-hold clear {pr}`",
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                     );
-                }
-                if existed {
-                    println!(
+                    }
+                    if existed {
+                        println!(
                             "Cleared merge-hold on PR #{pr} (marker removed, `aida:merge-hold` label dropped)."
                         );
-                } else {
-                    println!(
+                    } else {
+                        println!(
                             "No merge-hold marker for PR #{pr}; dropped the `aida:merge-hold` label anyway in case it lingered."
                         );
-                }
-                Ok(())
-            }
-            (None, true) => {
-                let holds = merge_hold::list_holds(&root);
-                let (stale, _live) = partition_stale_holds(holds, |pr| {
-                    let mut sink = network_retry::StderrSink;
-                    pr_is_merged_with_sink(&root, pr as u32, &mut sink)
-                });
-                if stale.is_empty() {
-                    println!("No stale merge-holds (every marker's PR is still open).");
-                    return Ok(());
-                }
-                for (pr, _reason) in &stale {
-                    let _ = merge_hold::clear_hold(&root, *pr);
-                    if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
-                        eprintln!(
-                            "  {} label not dropped on PR #{pr}: {err}",
-                            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-                        );
                     }
-                    println!("Cleared stale merge-hold on PR #{pr} (PR already merged).");
+                    Ok(())
                 }
-                println!("Swept {} stale merge-hold(s).", stale.len());
-                Ok(())
+                (None, true) => {
+                    let holds = merge_hold::list_holds(&root);
+                    let (stale, _live) = partition_stale_holds(holds, |pr| {
+                        let mut sink = network_retry::StderrSink;
+                        pr_is_merged_with_sink(&root, pr as u32, &mut sink)
+                    });
+                    if stale.is_empty() {
+                        println!("No stale merge-holds (every marker's PR is still open).");
+                        return Ok(());
+                    }
+                    for (pr, _reason) in &stale {
+                        let _ = merge_hold::clear_hold(&root, *pr);
+                        if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
+                            eprintln!(
+                                "  {} label not dropped on PR #{pr}: {err}",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                            );
+                        }
+                        println!("Cleared stale merge-hold on PR #{pr} (PR already merged).");
+                    }
+                    println!("Swept {} stale merge-hold(s).", stale.len());
+                    Ok(())
+                }
             }
-        },
+        }
     }
 }
 
@@ -44395,6 +44406,22 @@ pub(crate) fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: boo
     role == "advisor" || is_tty || orchestrated
 }
 
+/// Dispatch authority permits routing already-disposed work without granting
+/// the advisor's power to dispose it. Product, advisor, and integrator seats
+/// may dispatch; a corroborated live orchestrator may continue its own routing.
+/// Implementers and reviewers remain consumers of routed work.
+// trace:STORY-1353 | ai:codex
+pub(crate) fn dispatch_authority_from(role: &str, orchestrated: bool) -> bool {
+    matches!(role, "product" | "advisor" | "integrator") || orchestrated
+}
+
+/// Integrity floors require a human who is present at an interactive terminal.
+/// No workflow role or orchestrator corroboration can grant this authority.
+// trace:STORY-1353 | ai:codex
+pub(crate) fn integrity_floor_authority_from(human_present: bool) -> bool {
+    human_present
+}
+
 // trace:STORY-1133 | ai:codex
 pub(crate) fn current_role_instance_is_companion() -> bool {
     std::env::var("AIDA_ROLE_INSTANCE")
@@ -44444,6 +44471,27 @@ fn has_advisor_authority() -> bool {
         std::io::stdin().is_terminal(),
         orchestrated,
     )
+}
+
+// trace:STORY-1353 | ai:codex
+fn has_dispatch_authority() -> bool {
+    if current_role_instance_is_companion() {
+        return false;
+    }
+    let orchestrated = find_main_worktree_root()
+        .map(|root| {
+            matches!(
+                orchestrator::detect(&root),
+                orchestrator::OrchestratorContext::Orchestrated
+            )
+        })
+        .unwrap_or(false);
+    dispatch_authority_from(&effective_role_with_roster().0, orchestrated)
+}
+
+// trace:STORY-1353 | ai:codex
+fn has_integrity_floor_authority() -> bool {
+    integrity_floor_authority_from(std::io::stdin().is_terminal())
 }
 
 /// TASK-754: why `aida add --queue` would refuse to enqueue the freshly-filed
@@ -44531,7 +44579,7 @@ fn for_route_is_request_only(for_role: &str) -> bool {
     matches!(canonical.as_str(), "advisor" | "human" | "reviewer")
 }
 
-// BUG-631: does this queue-add `--for` target require advisor authority?
+// BUG-631: does this queue-add `--for` target require dispatch authority?
 //
 // TRUE (gated) for dispatch-for-execution routes — `implementer`, any
 // unknown/custom role, and the unrouted cases (`--for any` or no `--for` at
@@ -49763,12 +49811,14 @@ fn handle_burndown_run(
              seat for this role, or run `aida burndown run` from the driver."
         );
     }
-    // STORY-647: team RBAC guardrail — starting an autonomous drain is an
-    // advisor-gated op by default (tunable via `[team.permissions] drain_start`).
-    // Checked FIRST, before any sync/preflight, so even `--dry-run` (the safe
-    // gate-probe path the harness uses) is refused for a non-advisor. `--force` /
-    // advisor authority (TTY / live drain / advisor role) bypass. trace:STORY-647
-    enforce_team_gate(permissions::GatedOp::DrainStart, force)?;
+    // Starting a wave is dispatch, not disposition. `--force` remains the
+    // audited guardrail escape hatch. trace:STORY-647 trace:STORY-1353 | ai:codex
+    if !force && !has_dispatch_authority() {
+        anyhow::bail!(
+            "starting an autonomous drain needs dispatch authority (product, advisor, or \
+             integrator role, or a live orchestrator)"
+        );
+    }
 
     // TASK-1116: install the per-invocation headless-vendor override (top
     // precedence) and export `AIDA_HEADLESS_VENDOR` so the drain inherits it.
