@@ -258,7 +258,8 @@ These three support the autonomy machinery rather than driving work directly.
 
 The per-seat **job registry**: which periodic jobs each seat runs, whether one is overdue, and who last ran it. One command, one registry, two kinds of job:
 
-- **substrate** — `command = "session reap"` (an allow-listed `aida` subcommand: `cache verify`, `session reap`, `queue gc`, `notify check`, `doctor`, `fetch --code-only`, `store compact`). Needs no LLM. `aida schedule tick` runs the due ones (the per-turn hook calls it with `--hook`, which skips network-touching jobs) or paste `aida schedule emit-cron` into a real crontab. Idempotent, quiet when idle.
+<!-- trace:TASK-176 | ai:codex -->
+- **substrate** — `command = "session reap"` (an allow-listed `aida` subcommand: `cache verify`, `session reap`, `queue gc`, `notify check`, `doctor`, `fetch --code-only`, `store compact`). Needs no LLM. `aida schedule tick` runs the due ones (the per-turn hook calls `aida schedule tick --hook`, which skips network-touching jobs) or paste `aida schedule emit-cron` into a real crontab. Idempotent, quiet when idle.
 - **seat** — `prompt = "Triage the mailbox…"`, `seats = ["advisor"]`. Needs the seat's judgment, so the scheduler **never executes it**: it becomes *due* and is delivered as text to whoever holds the seat — the `aida awaiting --notice` per-turn line (`⏰ 1 due seat job — mailbox-triage (every 30m, last 47m ago) → …`), a `DUE JOBS (seat: advisor)` block leading the pickup prompt, and a `## Due Jobs` section in `aida agent new`'s launch context. Identical under every vendor; a Claude launch is additionally told it may mirror the jobs as in-session cron entries. The seat reports back with `aida schedule done <job> [--note "…"]`.
 
 A job's **schedule** is any of three, on the same entry (`every` + `on` combine — event fast path, interval fallback):
