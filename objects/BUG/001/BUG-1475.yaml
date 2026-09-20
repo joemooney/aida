@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:25:25.984047465Z
-modified_at: 2026-09-20T20:15:05.870392877Z
+modified_at: 2026-09-20T20:16:17.620330416Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -240,7 +240,4 @@ comments:
   created_at: 2026-09-20T20:15:05.870392877Z
   modified_at: 2026-09-20T20:15:05.870392877Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
-deferred: true
-deferred_at: 2026-09-20T20:15:04.458577966Z
-deferred_until: 'Windows matters again: a non-Linux user exists, or a release is actually being cut and pre-release-check must pass'
 execution_mode: drain
