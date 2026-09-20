@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:59.058325197Z
-modified_at: 2026-09-20T04:20:41.268565866Z
+modified_at: 2026-09-20T04:42:08.344353987Z
 req_type: Bug
 tags:
 - diagnostics
@@ -93,4 +93,28 @@ comments:
   created_at: 2026-09-20T01:01:46.414493672Z
   modified_at: 2026-09-20T01:01:46.414493672Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bd1f-1e58-7422-8b18-9ab0d49f0117
+  author: joe
+  content: |-
+    Investigation (2026-09-19, this repo): classified every lease `aida session reap --dry-run` currently holds against the three reap predicates (spec Done/Completed, branch merged, process exited). 17 leases total (3 harness/protected, excluded):
+
+    1 held on "process still running" — correctly deferred (notify path fires instead).
+    4 held on "spec not finished" — all genuinely In Progress / Approved / Needs Attention (verified via `aida show`), none are a silently-shipped-but-mislabeled case, so NOT a BUG-1286 symptom here.
+    4 held on "no merge signal" — all verified via `gh pr list` to have a genuinely OPEN PR (BUG-1288 #1999, STORY-1351 #1986, STORY-1353 #1989, TASK-1272 #1981). Predicate correctly kept them.
+    7 held on "PR merged, but N unique unmerged commit(s)" — the interesting bucket. Verified each with git patch-id / merge-base content diffs against the actual squash-merge commit on origin/main:
+       - BUG-1163 (1), BUG-1167 (1), BUG-1268 (1), STORY-1129 (1): CONFIRMED pure ancestry-test artifacts — `git patch-id` of the branch's sole commit is byte-identical to the patch-id of the commit that already landed on main via squash-merge. Zero real unshipped content. These are the false positives the spec's "strong prior" predicted: a squash merge gives the branch's own commits a permanently different SHA from the squash commit, so `rev-list --count default_ref..branch` (ancestry) can never reach zero for them, regardless of whether anything is actually unshipped.
+       - TASK-1251 (2): CONFIRMED same artifact — the squash-merge commit on main (PR #1881) literally combined BOTH of the branch's "unique" commits into one squash (its message lists both original subjects + Aida-Store trailers). `git diff <merge-base> task-1251` is byte-identical to the diff the squash commit introduced on main.
+       - BUG-1177 (4): MIXED — commit 1 of 4 matches an already-landed squash-merge commit (PR #1882), but commits 2-4 ("finish stale ultraplan reference sweep", "remove stale ultraplan flow references", "finish removed ultraplan sweep", dated Sep 17) never landed on main under any PR — genuinely unshipped follow-up work. Correctly kept.
+       - TASK-1285 (10): likely genuine active/in-flux work (recent commits, non-matching patch-ids against the one TASK-1285 commit that did land). Not confirmed as an artifact; left kept, unaffected by the fix below.
+
+    WORLD: this is predicate 2 (branch merged) being at fault via an ancestry-only unique-commit count, exactly the "strong prior" — not a BUG-1286 (terminal-event) symptom. 5 of 12 non-live, non-protected sessions (BUG-1163, BUG-1167, BUG-1268, STORY-1129, TASK-1251) were being incorrectly held back from reap by an ancestry artifact that can never self-clear.
+
+    FIX: added a content-level check (`branch_content_fully_landed` in doctor_cmd.rs) that runs only when the forge already confirms `pr_merged=true` and the ancestry-only `unique_unmerged_commits` count is positive — the exact case ancestry can never resolve on its own. It compares, file-by-file, everything the branch's own commits touched (since merge-base with the default branch) against the default branch's CURRENT content; only a byte-for-byte match clears the "unique commits" gate to Removable. Any doubt (unresolvable merge-base, a failed git call, or ANY touched file still differing) stays conservative and leaves the branch Kept — this naturally also handles the BUG-1177 partial case (1 of 4 commits landed, 3 didn't) without special-casing it, since the touched-files diff still shows a difference for the still-unshipped files.
+
+    Reused the existing safety checks verbatim (dirty/locked/live-process gates untouched); no change to the liveness primitive (already pid+start-time per TASK-1284); stale remote branches are still only reported, never deleted. 141 GiB reclaimable is not a reason to relax anything — the fix only reclassifies cases proven byte-identical to what's already on main, nothing else.
+
+    Tests: classify_content_verified_squash_merge_is_removable / classify_partially_landed_squash_merge_is_kept (pure predicate), branch_content_fully_landed_distinguishes_shipped_from_unshipped_squash_branches (real git-repo fixture: one branch whose squash-merge shipped 100% of its content vs one where a second commit was added after the squash and never shipped — asserts the function tells them apart), and content_verified_squash_merge_is_reaped_despite_ancestry_count (session_reap fixture: two facts, both squash-merged with the same positive ancestry count, one content-verified -> Reap, one not -> Skip). cargo test -p aida-cli-lib: 5121 passed, 0 failed. cargo fmt --all -- --check: clean.
+  created_at: 2026-09-20T04:42:08.344353987Z
+  modified_at: 2026-09-20T04:42:08.344353987Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
