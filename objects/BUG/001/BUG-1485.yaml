@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-20T20:53:16.844831196Z
+modified_at: 2026-09-20T20:53:18.493958168Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -162,6 +162,22 @@ comments:
   created_at: 2026-09-20T20:53:13.863568202Z
   modified_at: 2026-09-20T20:53:13.863568202Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c098-3f04-7b12-92cb-ff0a299e86fe
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-1485):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8ba48f5b98
+    Recorded: 2026-09-20T20:52:03.255289225+00:00
+    Findings:
+    1. BLOCKING, acceptance 4. The spec requires a regression fixture that REPRODUCES both positions. Neither new test reproduces anything. Both hand-write the receipt JSON with std::fs::write, then call discover_orchestrated_lease and assert it reads back what the test itself just wrote. They exercise the READER against a fixture, not the failure. A true reproduction starts from the BUG-1445 / BUG-1442 state - a child that established a lease and then released it - and asserts recovery still works.
+    2. BLOCKING and the reason the above matters rather than being pedantry: the WRITER is entirely untested. git grep across the whole branch for write_orchestrated_lease_receipt and ORCHESTRATED_LEASE_RECEIPT_ENV returns ZERO hits under any test path. So the env-var plumbing in RealPhaseDriver, the directory creation, the remove-then-set sequence, and the queue_cmd hook that actually calls the writer are all unexercised. If the child never inherits the env var, or the hook's (Ok(path), Some(claude_id)) guard never matches because claude_session_id is None on the orchestrated path, the receipt is never written - and BOTH new tests still pass, because they write it themselves. This is a gap the change's own tests structurally cannot see: no assertion added to either test would reach the writer.
+    3. The two fixtures are the same test with different constants. discover_lease_recovers_post_push_position writes worktree/pushed.marker containing 'origin/bug-1485-pushed' and NOTHING reads it - not the assertions, not discover_orchestrated_lease, not the receipt. Strip that file and the post-push test is byte-equivalent in behaviour to the start-position test. So the spec's requirement for TWO positions is satisfied in name only; one position is currently unrepresented.
+    4. NOT A DEFECT, recorded so it is not re-raised: the candidates binding from lease_ids_in survives the message change and is still used by the is_empty() branch above, so removing it from the error text leaves no unused variable. I checked because the diff removes its only other use.
+    5. CODE IS GOOD, stated so a rework round does not disturb it. Acceptance 1 is met - the new message names what did not match ('neither retained its session lease nor wrote its orchestrator handoff receipt') instead of listing leases. Acceptance 3 is met - the diagnostic lease list is gone, and the existing N-candidate test was correctly inverted to assert the unrelated ids are NOT present. Keeping the receipt outside the lease directory is the load-bearing design decision and it is the right one.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T20:53:18.212246684Z
+  modified_at: 2026-09-20T20:53:18.212246684Z
 execution_mode: drain
 implementation_info:
   implemented: true
