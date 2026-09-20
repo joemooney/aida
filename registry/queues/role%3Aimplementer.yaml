@@ -63,14 +63,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0bac0-0f79-7ec0-9e4a-ca3f33c5d621
-  position: 111000
-  added_by: role:implementer
-  note: 'drive: dated report under docs/spikes/, no collectors/schema/writes; Part 1 must name the CODE PATH and CONDITION behind the zero records and say whether zeros correlate with outcome/vendor/shelve; Part 4 use today''s measured inputs (40 shelves/19 specs, 0.75 merges per hour, ~2.9M tokens per spec) and report cost in wall-clock as well as tokens'
-  added_at: 2026-09-19T21:32:52.376159968Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
   position: 113000
   added_by: role:implementer
