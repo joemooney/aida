@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:06:24.777604114Z
-modified_at: 2026-09-20T22:48:28.349413042Z
+modified_at: 2026-09-20T22:48:29.943167375Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -146,6 +146,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T18:05:50.004535321Z
   modified_at: 2026-09-20T18:05:50.004535321Z
+- id: 01a0c101-b4db-79e3-a713-c7f798112889
+  author: joe
+  content: Requeued after the orchestrator rebuild. BUG-1445's no-op guard is now live in the running binary (wave b09197ab72), so a round that produces no new commit is detected rather than silently re-reviewed. Verdict reviewed_sha matches this branch head exactly, so the findings describe current code. No acceptance change.
+  created_at: 2026-09-20T22:48:29.659874577Z
+  modified_at: 2026-09-20T22:48:29.659874577Z
 execution_mode: drain
 implementation_info:
   implemented: true
