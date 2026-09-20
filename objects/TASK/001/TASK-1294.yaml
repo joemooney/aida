@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-20T10:31:38.430518930Z
+modified_at: 2026-09-20T17:06:59.657291943Z
 req_type: Task
 tags:
 - follow-up:TASK-1291
@@ -127,6 +127,38 @@ comments:
   created_at: 2026-09-20T02:46:50.594365743Z
   modified_at: 2026-09-20T02:46:50.594365743Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bfc9-0dc9-7201-867c-4449558bb379
+  author: joe
+  content: |-
+    Ran this spec's measurement against `.aida/events.jsonl`, and the headline result looks like a win that I do not believe. The useful contribution here is the reason it cannot be read that way yet, because the metric as this spec words it will flatter ANY intervention measured mid-flight.
+
+    THE RAW NUMBERS — rework rounds counted as `SpecShelved kind=verdict:request-changes`, summed per spec across all days, attributed to the day that spec's PR merged:
+
+        2026-09-18   23 merged   median 0 rounds   mean 0.13   dist {0:20, 1:3}
+        2026-09-19   16 merged   median 1 round    mean 1.19   dist {0:4, 1:6, 2:5, 3:1}
+        2026-09-20   10 merged   median 0 rounds   mean 0.20   dist {0:8, 1:2}
+
+    TASK-1291 landed as PR #1971 (b1f25b98c2). The naive reading is that 09-19 was the bad day, the round-1 full sweep landed, and 09-20 is back to 09-18 levels. That reading is wrong, or at least unsupported, for one dominant reason.
+
+    SURVIVORSHIP. The statistic is "rounds per MERGED spec". Today has 10 merges and 34 shelves — 22 of them `verdict:request-changes`. The specs accumulating rounds right now have not merged, so they are not in the sample. Seven sit in NeedsAttention as I write this, several on their second or third round. Every one of them will enter the statistic only when it finally merges, and until then today's median is computed over the specs that needed the fewest rounds, by construction.
+
+    That is not a small correction. The measurement is taken while the cohort is still in flight, so the bias is largest exactly when the number is most interesting. And it is systematically in the flattering direction: an intervention measured this way looks best on the day with the biggest backlog of unresolved work.
+
+    09-18's median of 0 deserves the same suspicion in the other direction. Twenty of twenty-three merged with zero recorded rework rounds, which is less likely to mean the work was cleaner than that rounds were not being recorded the same way then — the reviewer phase and its verdict events changed across this window.
+
+    WHAT I THINK THIS SPEC SHOULD MEASURE INSTEAD. Not "rounds per merged spec on day D", but one of:
+
+    - **Rounds per spec, cohorted by the day the spec FIRST entered the pipeline**, reported only once every spec in the cohort has reached a terminal state (merged or rejected). Slower, and the only version that is not survivorship-biased.
+    - **Round-1 finding count per spec**, which is what TASK-1291 actually changed. The sweep's claim is that round 1 enumerates every criterion rather than tailing one finding at a time; that predicts MORE findings in round 1 and fewer rounds afterwards. Findings-per-round is observable immediately from the verdict files and does not need the spec to finish.
+
+    The second is the better test of this specific intervention and is available today. The first is the honest version of what this spec currently asks for.
+
+    ONE OBSTACLE, worth naming because it constrains both. Verdict files at `.aida/review-verdicts/PR-N.json` are OVERWRITTEN per round — only the final verdict survives. So round-1 finding counts are not reconstructible for any spec that has already been through more than one round. Whatever this spec measures, the round-by-round series has to be captured going FORWARD; the historical half can only be recovered from the shelve events, which record that a round happened but not what it found.
+
+    I have not changed this spec's acceptance. The choice between those two metrics is a real fork and the second narrows the spec's claim, so it wants the advisor rather than me.
+  created_at: 2026-09-20T17:06:59.657291943Z
+  modified_at: 2026-09-20T17:06:59.657291943Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: operator
 failure_reason:
   phase: implementer
