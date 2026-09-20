@@ -1,0 +1,79 @@
+id: 01a0bf6f-03cc-76c0-891b-0b7acbc4c8fa
+spec_id: STORY-1391
+agreed_id: STORY-1391
+title: A finding that survives a review round is evidence the brief is unimplementable, and nothing can detect it because verdict files are overwritten each round
+description: |
+  A review finding that survives a round is evidence about the BRIEF, not about the implementer — and nothing detects it, because verdict files are overwritten each round so the previous findings are destroyed.
+
+  THE OBSERVATION, from three specs in one night:
+
+    STORY-1350   the same two findings for THREE consecutive rounds. Round 2 framed them as advice,
+                 round 3 as numbered requirements with failure modes. Neither worked. The cause was
+                 that requirement 1 — "use one shared constant for the `## Implementer approach`
+                 marker" — had no available mechanism: the writer is a markdown template
+                 (aida-pickup.md:389) and the reader is Rust (lib.rs:76330), and markdown cannot
+                 import a Rust constant. It moved the round I supplied a coupling test instead.
+
+    BUG-1310     "enumerate every external-tool prose classifier" repeated because the instruction
+                 had no terminating condition. It moved when the brief carried ~40 named sites and
+                 a three-part definition of what counts.
+
+    BUG-1297     "type the outcome" repeated twice. It moved when the brief carried the actual enum.
+
+  In every case escalating FIRMNESS failed and supplying a MECHANISM worked. Restating an
+  unimplementable requirement more forcefully just makes the same impossible request louder.
+
+  THE RULE: when a finding survives a round, stop restating it and establish whether it can be done
+  as written. Either supply the mechanism — code, a checklist, a terminating definition — or split
+  the finding, or say explicitly that it is blocked and why.
+
+  WHY THIS NEEDS A GATE RATHER THAN A HABIT. Noticing a repeat requires holding the previous round's
+  findings in mind, and a rework brief is usually written by whoever is awake, from the CURRENT
+  verdict. I missed it twice tonight and I was the same agent across all rounds with the history in
+  my own context. An agent picking the spec up cold has no chance.
+
+  THE BLOCKER, and it is why this is a spec rather than a lint. `.aida/review-verdicts/PR-N.json` is
+  OVERWRITTEN each round. One file per PR (plus a `-advisor` variant), 510 files, no round history.
+  So round N's findings are destroyed when round N+1 is recorded, and nothing can compare them. TASK-168
+  merged tonight adding `reviewed_sha` and `recorded_at`, so per-verdict provenance now exists — what
+  is missing is not discarding the prior verdict.
+
+  PROPOSED, in order:
+  1. Retain verdict history per round rather than overwriting — a round suffix, or an append-only list
+     inside the file. `reviewed_sha` already distinguishes rounds.
+  2. When a new verdict is recorded, compare its findings against the previous round's and surface any
+     that persist, on the spec and in the rework prompt.
+  3. Word the surfaced signal as what it means: this finding survived a round, so check whether it is
+     implementable as written before restating it. NOT as an implementer-performance signal — that
+     framing would produce exactly the escalating firmness that failed three times tonight.
+
+  DELIBERATELY NOT PROPOSED: automatic escalation, blocking, or any count-based threshold that parks a
+  spec after N rounds. TASK-1289 went five rounds and needed a design decision, not a park. The signal
+  informs the brief-writer; it does not decide.
+
+  ACCEPTANCE
+  1. Verdict history is retained per round and the prior round's findings remain readable.
+  2. A finding present in consecutive rounds is surfaced when the later verdict is recorded.
+  3. The wording points at the brief's implementability, not at the implementer.
+  4. Matching tolerates rewording — compare on substance, and state what similarity test is used and
+     what it deliberately misses. A brittle exact-match test would catch none of tonight's three.
+  5. Fixtures: STORY-1350 rounds 2-4 (same two findings, three rounds), BUG-1297 rounds 2-3, and a
+     negative — BUG-1297's round 3 also carried a genuinely NEW finding, which must NOT be flagged.
+  6. No blocking, no escalation, no round-count threshold.
+
+  Filed by the product seat at the operator's prompt — he asked whether this rule should be encoded or
+  gated, and the answer is both: the reasoning belongs in the discipline pack, the detection belongs
+  here. Disposition is the advisor's.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T15:28:38.860398318Z
+modified_at: 2026-09-20T15:28:38.860398318Z
+req_type: Story
+tags:
+- from:session-0919
+- observability
+- parent:EPIC-62
+- review
+- substrate-as-bouncer
