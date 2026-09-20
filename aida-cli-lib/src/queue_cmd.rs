@@ -6767,18 +6767,23 @@ pub(crate) fn handle_queue_rework(
     // route-inheritance fallback below and the move-not-duplicate step
     // after it need to find it wherever it actually lives.
     // trace:BUG-1277 | ai:claude
-    let existing_entry_elsewhere: Option<(String, aida_core::QueueEntry)> = storage
-        .queue_users()
-        .unwrap_or_default()
+    // BUG-1427: retain every matching identity. Rework promises a move, so a
+    // stale duplicate in a third queue must not survive merely because it was
+    // not the first match returned by queue_users(). trace:BUG-1427 | ai:codex
+    let existing_entries_elsewhere: Vec<(String, aida_core::QueueEntry)> = storage
+        .queue_users()?
         .into_iter()
-        .find_map(|candidate_user| {
-            storage
-                .queue_list(&candidate_user, true)
-                .ok()?
+        .map(|candidate_user| {
+            let entry = storage
+                .queue_list(&candidate_user, true)?
                 .into_iter()
-                .find(|entry| entry.requirement_id == req_id)
-                .map(|entry| (candidate_user, entry))
-        });
+                .find(|entry| entry.requirement_id == req_id);
+            Ok(entry.map(|entry| (candidate_user, entry)))
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect();
 
     // Route resolution: --for wins; otherwise rework preserves the existing
     // queue route so reviewer-requested fixups stay visible to the intended
@@ -6787,8 +6792,8 @@ pub(crate) fn handle_queue_rework(
     let for_role_resolved: Option<String> = match for_role {
         Some("any") => None,
         Some(role) => Some(canonical_role_name(role)),
-        None => existing_entry_elsewhere
-            .as_ref()
+        None => existing_entries_elsewhere
+            .first()
             .and_then(|(_, entry)| entry.for_role.as_deref())
             .filter(|role| !role.trim().is_empty())
             .map(canonical_role_name)
@@ -6818,11 +6823,16 @@ pub(crate) fn handle_queue_rework(
     // the entry instead of leaving a stale duplicate behind — the queue_add
     // below only upserts within the destination user's own file.
     // trace:BUG-1277 | ai:claude
-    if let Some((old_user, _)) = &existing_entry_elsewhere {
+    let mut moved_from = Vec::new();
+    for (old_user, _) in &existing_entries_elsewhere {
         if aida_core::node::canonical_user_id(old_user)
             != aida_core::node::canonical_user_id(&user_id)
         {
-            let _ = storage.queue_remove(old_user, &req_id);
+            // A failed removal leaves the duplicate that this operation exists
+            // to prevent, so it is a command failure rather than best-effort
+            // cleanup. trace:BUG-1427 | ai:codex
+            storage.queue_remove(old_user, &req_id)?;
+            moved_from.push(old_user.clone());
         }
     }
 
@@ -6851,6 +6861,12 @@ pub(crate) fn handle_queue_rework(
         added_by_machine: None,
     };
     storage.queue_add(entry)?;
+    for old_user in moved_from {
+        println!(
+            "  Moved {} queue entry: {} -> {}",
+            display_id, old_user, user_id
+        );
+    }
     record_role_activity(&spec_id, "queue-add");
     let routing = match &for_role_resolved {
         Some(r) => format!(" [for:{}]", r).cyan().to_string(),
