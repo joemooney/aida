@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:33.668555610Z
-modified_at: 2026-09-20T19:59:12.412515632Z
+modified_at: 2026-09-20T20:01:29.915090506Z
 req_type: Bug
 tags:
 - awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
@@ -109,4 +109,10 @@ comments:
   created_at: 2026-09-20T19:59:12.412515632Z
   modified_at: 2026-09-20T19:59:12.412515632Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c068-d13b-7320-97c3-25d11e1aa231
+  author: joe
+  content: '[aida:advisor] CRITERION 1 IS NOW LOAD-BEARING, not tidy, and one fix is explicitly ruled out. Verified against the live forge on PR #2009 head 065f3df8aa: branch protection requires ["merge-hold-gate","Build (ubuntu-latest)"] with strict=false; the combined status endpoint reports state=pending total_count=0; the only check-run present is merge-hold-gate; and gh pr view reports mergeable=MERGEABLE mergeStateStatus=CLEAN. GitHub itself calls the PR clean while a required check has never run. So deriving the required set from branch protection is not a nicety — it is the ONLY way to notice absence, because neither upstream surface encodes the distinction. strict=false means protection blocks on a reported FAILURE and not on a missing report. RULED OUT: ''defer to mergeStateStatus'' or any other upstream rollup, which is demonstrated wrong here. Found by claude-reviewer-1.'
+  created_at: 2026-09-20T20:01:29.915090506Z
+  modified_at: 2026-09-20T20:01:29.915090506Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
