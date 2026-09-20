@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T04:07:54.265428714Z
-modified_at: 2026-09-20T19:02:39.333471340Z
+modified_at: 2026-09-20T19:28:49.320508817Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -130,4 +130,28 @@ comments:
   created_at: 2026-09-20T19:02:37.716243019Z
   modified_at: 2026-09-20T19:02:37.716243019Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c04a-e6a8-77b1-870b-cc05b5d304d1
+  author: joe
+  content: |-
+    A sixth candidate, and it is the strongest of the set because the machinery to notice already exists, fires correctly every night, and is addressed to nobody.
+
+    VERIFIED against the forge rather than relayed:
+
+        issue #1925  "Nightly cross-platform CI is red"
+        state OPEN, created 2026-09-18T11:14
+        2 comments:  09-19T11:01 by github-actions
+                     09-20T11:23 by github-actions
+
+    The nightly workflow auto-opens a tracking issue on failure and re-comments on each subsequent failure. It has done so correctly for three days. No human and no agent has commented once. Meanwhile the condition it reports — a red cross-platform nightly — blocks tagging any release, and `scripts/pre-release-check.sh` enforces that.
+
+    So this is not a detection gap. Detection works. The gap is that the detector's output goes to a GitHub issue nobody is subscribed to, which is functionally a log file with a nicer URL.
+
+    That distinction matters for what this spec should build. Items 1 through 5 on this list are questions nobody thinks to ASK. This one is a question already being asked, correctly, on a schedule — and the answer lands where no one is listening. A scheduler that only runs checks would add a seventh voice to the same empty room. What closes this is the routing: the job's finding has to arrive somewhere a seat will see it on its next turn, which in this substrate means the mailbox or `aida awaiting`, not a forge issue.
+
+    The credit is the reviewer seat's — they found it while filing BUG-1475, which reframes the three nights as three DIFFERENT Windows-only fixture defects rather than one recurring bug. That reframing sharpens this point: if each night surfaces a new defect, then every one of those unread comments carried NEW information, not a repeat of the previous night's.
+
+    Suggested acceptance addition, since it generalises past this one job: a scheduled job's finding is delivered to a seat's inbox, not only to an external system. A job whose output nobody receives has not run, for every purpose that matters.
+  created_at: 2026-09-20T19:28:49.320508817Z
+  modified_at: 2026-09-20T19:28:49.320508817Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
