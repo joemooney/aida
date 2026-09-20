@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:04:59.020397925Z
-modified_at: 2026-09-20T18:15:22.329129751Z
+modified_at: 2026-09-20T18:15:23.886111853Z
 req_type: Task
 tags:
 - discipline
@@ -91,3 +91,9 @@ comments:
   created_at: 2026-09-20T18:08:49.348491478Z
   modified_at: 2026-09-20T18:08:49.348491478Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c007-adee-7e50-8d95-954269c6ba25
+  author: joe
+  content: '[aida:advisor] Status forced Draft → Completed. The work merged as 53e3176e6e (PR #2023); the spec never entered the lifecycle, so the auto-bump — which only promotes done → completed — never fired and merged work sat reading Draft. Flagged by claude-reviewer-1, who correctly declined to touch it since approved/planned are advisor-gated. This is the mirror image of BUG-1454 and I have added it there as a criterion rather than filing a second spec: that one bumps too early on the first trailered commit, this one never bumps because the spec skipped every intermediate state. Merged work reading Draft is the same lie in the other direction, and both are blind spots of one condition.'
+  created_at: 2026-09-20T18:15:23.886111853Z
+  modified_at: 2026-09-20T18:15:23.886111853Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
