@@ -41,12 +41,12 @@ description: |
   - Verification: `aida usage --cmd show --slower-than 1000ms events` shows no entries after the fix; the same query today should show the population.
 
   Related: the `--fields` projection on `list`/`search` (STORY-734) is the reason the batch-refresh workaround exists. If `show` cannot be made fast, the alternative is projecting `execution_mode` through `--fields`, but that treats the symptom.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-20T21:59:20.194807492Z
+modified_at: 2026-09-20T22:02:22.830267114Z
 req_type: Bug
 tags:
 - agent-surface
@@ -176,3 +176,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-20T21:40:57.331996221Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: reviewer verdict is RequestChanges — not Approved
+  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1480 --work`'
+  shelved_by: advisor
+  shelved_at: 2026-09-20T22:02:22.830267114Z
