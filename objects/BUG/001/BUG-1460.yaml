@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:35:48.162497532Z
-modified_at: 2026-09-20T22:57:30.964861164Z
+modified_at: 2026-09-20T23:13:21.418553473Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -271,4 +271,4 @@ failure_reason:
   detail: reviewer verdict is RequestChanges — not Approved
   recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1460 --work`'
   shelved_by: advisor
-  shelved_at: 2026-09-20T22:27:51.174900704Z
+  shelved_at: 2026-09-20T23:13:21.418553473Z
