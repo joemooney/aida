@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:51:12.872457642Z
-modified_at: 2026-09-20T01:41:38.720569395Z
+modified_at: 2026-09-20T01:42:39.502969507Z
 req_type: Bug
 tags:
 - diagnostics
@@ -67,6 +67,30 @@ comments:
   created_at: 2026-09-20T00:12:42.426941932Z
   modified_at: 2026-09-20T00:12:42.426941932Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bc7a-cc8e-7b72-b8fc-a63ed43997bb
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1980 [AI:claude] fix(drain): reclaim a dead predecessor lease before phase 1 (BUG-1285)
+    verdict: APPROVE + merged 2026-09-20 01:41:28Z at head 7357751e
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — this advisor neither implemented it nor wrote its rework brief
+    gates cleared: required Build (ubuntu-latest) SUCCESS; merge-hold-gate SUCCESS; mergeStateStatus CLEAN; no reviewer phase live at merge time
+
+    ON THE HOLD I PLACED AND WHY I LIFTED IT. I held this earlier tonight saying it must not merge unattended, because it changes the machinery the drain uses to recover itself, and a subtly wrong version fails at three in the morning with the rescue mechanism being the thing that broke. I lifted it on the merits, and the merits changed in two ways.
+
+    First, the fix is not new machinery. It calls `release_dead_phase_predecessor_leases`, which already exists and which the Reviewer phase has been using since BUG-906, at one additional site before phase 1. The identity check underneath it is TASK-1284's pid-plus-start-time comparison, also already in service. So this extends a guarded path rather than introducing one, which is a materially smaller risk than I assumed when I wrote the hold.
+
+    Second, holding was no longer the safe option. The failure this addresses is live: STORY-1351 shelved at 01:00:47 with "lease-conflict: phase 1 retry cannot reclaim predecessor lease 01a0bc51 after 3 liveness re-probe(s)". Keeping the hold preserved a recovery path that is already failing rather than protecting a working one.
+
+    I WANT THE CORROBORATION STATED ACCURATELY, because it was relayed to me as stronger than it is. That shelve is a predecessor the probe found LIVE after three re-probes — an orphaned child still running. This PR deliberately does NOT reclaim a live holder, and should not. So that incident evidences the SECOND half of this change, the typed LeaseConflict cause excluded from the transient-retry set so a correct refusal stops burning the retry budget. It does not evidence the first half, the dead-predecessor reclaim. Both halves are right; only one of them is the thing that happened at 01:00:47, and a future reader should not conclude this merge closed that incident.
+
+    WHAT THE TESTS COVER, which is the failure directions rather than the happy path: a dead clean predecessor is reclaimed; a dead DIRTY predecessor is refused with a typed cause, which is the data-loss guard; the refusal does not spend a transient retry, asserted directly against `is_transient_retry_cause`; a live holder is named rather than stolen; the check is identity-aware rather than a bare pid comparison, which is the pid-reuse hazard; and it degrades to pid-only when a start time is unavailable.
+
+    ON PRESENCE. I was told the operator is at the keyboard and agreed to this route. I did not verify that, and it is not what I merged on — the hold was mine to lift, merging is within my standing authority, and I lifted it on the two reasons above. Recording the distinction so the ledger does not imply an approval I did not witness.
+  created_at: 2026-09-20T01:42:39.502969507Z
+  modified_at: 2026-09-20T01:42:39.502969507Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bc79-df12-7803-9e33-12cf237b81b6
   author: aida-auto-bump
