@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:06:24.777604114Z
-modified_at: 2026-09-20T03:40:21.979961394Z
+modified_at: 2026-09-20T03:41:39.150374482Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -55,4 +55,10 @@ comments:
   created_at: 2026-09-19T21:11:58.171198614Z
   modified_at: 2026-09-19T21:11:58.171198614Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bce7-bdce-74b0-b457-33d079e222fc
+  author: joe
+  content: 'Profile before fix (2026-09-19, current repo): `aida awaiting --json` completed in 2.31s warm but Git trace showed 23 subprocess invocations; the implementation constructs candidates from every local + origin remote ref (1,545 refs here), then for each plausible ref may run `git log default..ref`, patch-equivalence (`git cherry`/rev-list), and tip-age probes. Cost therefore scales O(all refs) with subprocess fan-out, matching the earlier 70-77s observation at 301 stale remotes. `aida status --full` measured 18.74s warm; its remaining cost includes repeated forge snapshots plus cleanup diagnostics. Chosen fix: bound unshipped candidate discovery to session lease branches (including stale leases, which are the salvage case) plus canonical branches for active InProgress/Done specs; retain patch-equivalence and forge correctness checks on that bounded set. Target bounds: awaiting --json <3s; status --full <30s warm on this repo.'
+  created_at: 2026-09-20T03:41:39.150374482Z
+  modified_at: 2026-09-20T03:41:39.150374482Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
