@@ -84000,6 +84000,13 @@ struct PhaseWatchdog {
     /// interactive phase already streams its own progress.
     // trace:STORY-726 | ai:claude
     heartbeat: Option<(String, String)>,
+    /// BUG-1299: the recovery hint [`Self::trip_reason`] resolved alongside
+    /// the just-returned trip detail, in the same `watchdog_trip_report`
+    /// call — the caller `take`s it right after `check()` reports a trip and
+    /// attaches it to the `PhaseFailure` as `hint_override`, so the hint the
+    /// operator sees is guaranteed to describe the SAME trip as the detail.
+    // trace:BUG-1299 | ai:claude
+    last_trip_hint: Option<String>,
 }
 
 impl PhaseWatchdog {
@@ -84035,6 +84042,7 @@ impl PhaseWatchdog {
             idle_detector: aida_core::idle::IdleDetector::new(idle_defaults),
             idle_log_pos: 0,
             heartbeat: None,
+            last_trip_hint: None,
         }
     }
 
@@ -84298,32 +84306,31 @@ impl PhaseWatchdog {
         verdict.map(|t| self.trip_reason(t))
     }
 
-    fn trip_reason(&self, trip: auto_complete::WatchdogTrip) -> String {
-        match trip {
-            auto_complete::WatchdogTrip::NoProgress => match self.progress_signal {
-                WatchdogProgressSignal::OutputOnly => format!(
-                    "no session output for {}m — likely a degenerate session",
-                    self.no_progress.as_secs() / 60
-                ),
-                WatchdogProgressSignal::WorktreeAndOutput => format!(
-                    "no commit, file-change, or session output for {}m — likely a degenerate session",
-                    self.no_progress.as_secs() / 60
-                ),
-            },
-            auto_complete::WatchdogTrip::Ceiling if self.pr_ship_wait_seen => format!(
-                "phase exceeded the {}m wall-clock ceiling while `aida pr ship` was waiting on CI",
-                self.ceiling.as_secs() / 60
-            ),
-            auto_complete::WatchdogTrip::Ceiling => {
-                format!(
-                    "phase exceeded the {}m wall-clock ceiling",
-                    self.ceiling.as_secs() / 60
-                )
-            }
-            auto_complete::WatchdogTrip::Spinning { template, count } => format!(
-                "watchdog:spinning — low-information session output repeated `{template}` x{count}"
-            ),
-        }
+    /// BUG-1299: resolve BOTH the failure detail (returned) and the recovery
+    /// hint (stashed on `self.last_trip_hint`, fetched by the caller via
+    /// [`Self::take_trip_hint`]) from `auto_complete::watchdog_trip_report` —
+    /// one function, one match on `trip`, so the two strings the operator
+    /// eventually sees cannot name different trips.
+    // trace:BUG-1299 | ai:claude
+    fn trip_reason(&mut self, trip: auto_complete::WatchdogTrip) -> String {
+        let output_only = matches!(self.progress_signal, WatchdogProgressSignal::OutputOnly);
+        let (detail, hint) = auto_complete::watchdog_trip_report(
+            &trip,
+            self.no_progress,
+            self.ceiling,
+            self.pr_ship_wait_seen,
+            output_only,
+        );
+        self.last_trip_hint = Some(hint);
+        detail
+    }
+
+    /// Take the recovery hint resolved alongside the most recent trip detail
+    /// [`Self::check`] returned. `None` once taken, or if the watchdog never
+    /// tripped.
+    // trace:BUG-1299 | ai:claude
+    fn take_trip_hint(&mut self) -> Option<String> {
+        self.last_trip_hint.take()
     }
 }
 
@@ -86212,13 +86219,22 @@ impl RealPhaseDriver {
             )
         })?;
         if let exit_signal::ExitOutcome::WatchdogTripped(reason) = &outcome {
-            return Err(auto_complete::PhaseFailure::of(
+            // BUG-1299: the hint was resolved alongside `reason` in the same
+            // `watchdog_trip_report` match arm — attach it verbatim rather
+            // than let `recovery_hint` re-derive one from `FailureKind`
+            // alone (which cannot tell NoProgress from Ceiling).
+            // trace:BUG-1299 | ai:claude
+            let mut failure = auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Watchdog,
                 format!(
                     "agent gate `{}` watchdog stopped the session — {reason}",
                     gate.name
                 ),
-            ));
+            );
+            if let Some(hint) = watchdog.as_mut().and_then(|w| w.take_trip_hint()) {
+                failure = failure.with_hint_override(hint);
+            }
+            return Err(failure);
         }
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
             if !status.success() {
@@ -86740,10 +86756,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // it as a shelvable phase-1 failure so a batch drain parks the spec and
         // advances. trace:BUG-420 | ai:claude
         if let exit_signal::ExitOutcome::WatchdogTripped(reason) = &outcome {
-            return Err(auto_complete::PhaseFailure::of(
+            // BUG-1299: attach the hint resolved alongside `reason` in the
+            // same `watchdog_trip_report` match arm rather than let
+            // `recovery_hint` re-derive one from `FailureKind` alone.
+            // trace:BUG-1299 | ai:claude
+            let mut failure = auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Watchdog,
                 format!("the implementer phase watchdog stopped the session — {reason}"),
-            ));
+            );
+            if let Some(hint) = watchdog.as_mut().and_then(|w| w.take_trip_hint()) {
+                failure = failure.with_hint_override(hint);
+            }
+            return Err(failure);
         }
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
             if !status.success() {
@@ -87829,10 +87853,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             )
         })?;
         if let exit_signal::ExitOutcome::WatchdogTripped(reason) = &outcome {
-            return Err(auto_complete::PhaseFailure::of(
+            // BUG-1299: attach the hint resolved alongside `reason` in the
+            // same `watchdog_trip_report` match arm rather than let
+            // `recovery_hint` re-derive one from `FailureKind` alone.
+            // trace:BUG-1299 | ai:claude
+            let mut failure = auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Watchdog,
                 format!("the reviewer phase watchdog stopped the session — {reason}"),
-            ));
+            );
+            if let Some(hint) = watchdog.as_mut().and_then(|w| w.take_trip_hint()) {
+                failure = failure.with_hint_override(hint);
+            }
+            return Err(failure);
         }
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
             if !status.success() {
@@ -88935,6 +88967,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         cause: &str,
         attempt: u32,
         max: u32,
+        detail: Option<&str>,
     ) {
         let vendor = session::resolve_headless_vendor(&self.project_root);
         let seat = agent_seat_for_phase(phase);
@@ -88987,6 +89020,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     max,
                     model_before,
                     model_after,
+                    // trace:BUG-1299 | ai:claude
+                    detail: detail.map(str::to_string),
                 },
             ),
         );
