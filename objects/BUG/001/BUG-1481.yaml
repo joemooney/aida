@@ -32,10 +32,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:33.668555610Z
-modified_at: 2026-09-20T19:37:13.272204636Z
+modified_at: 2026-09-20T19:37:14.409035781Z
 req_type: Bug
 tags:
 - awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
+- batch:night-0920
 comments:
 - id: 01a0c052-9738-7212-ae0b-eb73ec78d494
   author: joe
