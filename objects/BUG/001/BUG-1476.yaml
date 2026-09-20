@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:28:53.617328309Z
-modified_at: 2026-09-20T20:32:27.274841510Z
+modified_at: 2026-09-20T20:51:45.261042080Z
 req_type: Bug
 tags:
 - drain-safe
@@ -241,6 +241,49 @@ comments:
   created_at: 2026-09-20T20:32:27.274841510Z
   modified_at: 2026-09-20T20:32:27.274841510Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c096-d3ed-73b2-9693-6fcdd1e52676
+  author: joe
+  content: |-
+    [aida:advisor] DO NOT SUPERSEDE. This is an OVERLAP with BUG-1445, not a duplicate of it, and superseding would close the half that is still broken. Narrowing instead.
+
+    WHAT BUG-1445 ACTUALLY FIXED, verified on origin/main after I merged PR #2028:
+      classify_rework_head_change  — present, three-state (Unchanged / RebaseOnly / ContentChanged)
+      rework_no_op_message         — present
+      blocking_rework_verdict      — present
+    So when the guard RUNS, it now classifies a rebase-only round correctly and says so. That was BUG-1445's scope and it is done.
+
+    WHAT REMAINS, and it is this spec's actual subject. `rework_no_op_failure` on main today:
+
+        fn rework_no_op_failure(&mut self) -> Option<PhaseFailure> {
+            let (pr, before, reason, round) = self.rework_guard.as_ref()?;          // (a) still
+            if self.phase_done_pr != Some(*pr) { return None; }                     // (b) still
+            let after = pr_head_sha_best_effort(self, *pr)?;                         // (c) still
+            let change = classify_rework_head_change(&self.project_root, before, &after)?;  // (d) still
+            if change == ReworkHeadChange::ContentChanged { return None; }
+            ...
+
+    All four fail-open returns I flagged on this spec this morning are intact. (d) changed shape — it now returns None from a three-state classifier instead of from an Option<bool> — and still treats an inconclusive comparison as "proceed". And (b) is unchanged: the guard against a no-op phase still requires `phase_done_pr` to be set, which a phase that did nothing plausibly never sets.
+
+    So the merged work made the guard's OUTPUT correct. This spec is about the guard not FIRING, and about why the implementer phase exits in fifteen seconds in the first place. Neither is addressed.
+
+    NARROWED SCOPE — criteria 1 through 3 stand exactly as written; criterion 4 is withdrawn as delivered by BUG-1445:
+      1. Instrument which of (a)-(d) returns None on a short rework run. Still the first deliverable.
+      2. The guard must not fail open on an inconclusive classification.
+      3. The guard must not depend on the phase having signalled completion.
+      4. WITHDRAWN — head-unchanged classification and reporting shipped in BUG-1445.
+      5. `aida findings list` distinguishes rework-no-op from verdict:request-changes. Stands.
+      6. A test asserting the guard fires on the observed shape. Stands, and see the salvage below.
+
+    SALVAGE — CONFIRMED AND WORTH DOING. Verified on main: `pr_keyed_reviewer_verdict_arms_rework_guard` exists; `rework_guard_ignores_non_blocking_pr_verdict` does NOT. So nothing asserts an APPROVED verdict fails to arm the guard, and an implementation that armed on any verdict would pass the current suite. That failure direction is the worse one — it reports a genuine round as a no-op and stalls work that was progressing. Cherry-pick that one test onto main as a test-only change.
+
+    PR #2029 should close. Its implementation overlaps what merged, and its only unique value is that test.
+
+    ON THE SEMANTIC-CONFLICT OBSERVATION, which is the transferable part and I agree it belongs in the discipline pack: a merge conflict where both sides are correct, equivalent, and differ only in naming is a DUPLICATE-SPEC signal rather than integrator work. `trace:` comments name the owning spec, so provenance is one grep away before anyone starts resolving. That generalises well beyond this instance.
+
+    MY SHARE OF HOW THIS HAPPENED. I filed BUG-1445 and I groomed BUG-1476 four hours later, writing a long analysis of the four None returns onto it, with both specs in front of me. I did not connect them either. The reason given — two symptoms of adjacent defects, keyword search on either missing the other — is right, and the correction is also right: read the titles of the batch you are already shepherding. What I would add is that connecting them would NOT have been correct here: they are genuinely different scopes, and the useful output of noticing would have been "these overlap, narrow one", not "these are duplicates, close one".
+  created_at: 2026-09-20T20:51:45.261042080Z
+  modified_at: 2026-09-20T20:51:45.261042080Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
