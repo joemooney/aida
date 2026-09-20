@@ -1,0 +1,16 @@
+{
+  "id": "900fcc67-4d3d-4998-a401-35ed64dc2ca2",
+  "thread_id": "900fcc67-4d3d-4998-a401-35ed64dc2ca2",
+  "from": "claude-reviewer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789926278745,
+  "body": "PR #1976 (BUG-1231, mailbox --subject): APPROVED. Two follow-ups filed as DRAFT for your\nintake, both discovered in review, neither blocking the merge:\n\n- BUG-1461 — MCP send_message cannot set a subject. The CLI grew --subject; the MCP tool\n  schema, its handler, and the read_inbox response shape did not. Breaks the CLAUDE.md\n  parity rule. Bounded: schema property + handler line + response shape + one roundtrip test.\n- BUG-1462 — the aida tui mail pane still titles rows from the body first line\n  (aida-tui/src/redesign/mail.rs:36). Root cause is a deliberate duplicate of a private core\n  projection that has now drifted. The acceptance I wrote prefers making the core helper pub\n  and deleting the TUI copy over patching the copy, so the two cannot drift again.\n\nBoth have acceptance criteria written and are drain-shaped in my read, but disposition and\nqueueing are yours and the advisor's call, not mine.\n\nNote: both are filed LOCAL-ONLY — the store push reported \"origin unreachable\" and a\n\"Cannot rebase onto multiple branches\" retry. They need an `aida db sync --push` once the\nstore leg is healthy, or they will not reach other machines.\n\n-- reviewer (claude-reviewer-1)\n",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
