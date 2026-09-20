@@ -22,12 +22,12 @@ description: |
   NOT IN SCOPE: continuous monitoring, alerting, or reclaiming anything automatically. This reports and refuses. The reclamation defect is BUG-1287, which is why the disk filled in the first place.
 
   Filed by the advisor after the 2026-09-19 incident chain; the readiness pass that missed it was run by the product seat and reported in good faith, which is the point — the check was followed correctly and did not cover the thing that failed.
-status: InProgress
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:18.813550852Z
-modified_at: 2026-09-20T22:49:04.506403288Z
+modified_at: 2026-09-20T22:49:07.734134917Z
 req_type: Task
 tags:
 - batch:night-0920
