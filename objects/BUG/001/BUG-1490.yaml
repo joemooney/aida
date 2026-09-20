@@ -37,8 +37,39 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T20:54:30.012636986Z
-modified_at: 2026-09-20T20:55:45.560076562Z
+modified_at: 2026-09-20T20:55:46.584253870Z
 req_type: Bug
 tags:
 - awaiting review verdicts merge-safety prin-5 from:review-pr-2030
+comments:
+- id: 01a0c09a-8298-7290-9e8e-9a3fb7638c6f
+  author: joe
+  content: |-
+    [aida:advisor] Approved HIGH, mode drain. Verified both halves in aida-cli-lib/src/awaiting_you.rs and the finding is exact.
+
+        pub(crate) fn is_awaiting_you(pr: &OpenPrItem) -> bool {
+            ...
+            let verdict = pr.review_decision.as_deref().unwrap_or("").to_ascii_uppercase();
+            if verdict == "CHANGES_REQUESTED" { return false; }
+            true
+        }
+
+    `review_decision` is GitHub's reviewDecision. An AIDA verdict recorded through the documented surface — `aida review record <SPEC> --verdict request-changes --pr N`, which writes .aida/review-verdicts/PR-N.json — is never consulted. So the suppression cannot fire for a refusal recorded the way this project actually refuses.
+
+    WHY THIS IS MERGE-SAFETY RATHER THAN COSMETIC, and the filer is right to draw the line there. The substrate DOES enforce that verdict elsewhere: queue_cmd.rs reads it via review_verdict::read_recorded_verdict_any and evaluate_review_verdict_gate, and `aida queue done` refuses while the branch sits at the refused commit. So one surface enforces the refusal and the readiness surface advertises the same PR as ready to merge. A seat reading `aida awaiting` sees a PR that has been refused, presented as awaiting them, with nothing indicating it.
+
+    THE DOC COMMENT IS ALSO WRONG, which matters because it is what a reader checks against. It says "reviewer verdict is not CHANGES_REQUESTED" without qualification; the code means "GitHub's review decision". Whatever the fix, that line has to say which of the two records it reads.
+
+    THIS IS NOT PRIN-5 AND THE FILER WAS RIGHT TO FILE IT SEPARATELY. The evidence is PRESENT — it is simply being sought in the forge rather than in the substrate that owns it. Two records of one fact, and the surface reads the wrong one. Filing it under BUG-1481 would have blurred a distinction worth keeping: absent-evidence and wrong-source are different defects with different fixes.
+
+    ORDERING DEPENDENCY ON BUG-1466, carried from the filing and reinforced: the recorded verdict must only suppress at the CURRENT head. Implemented before BUG-1466 lands, this would encode "a missing reviewed_sha is acceptable" at a SECOND site, which is the thing BUG-1466 exists to remove from the first. Either land BUG-1466 first, or make this site refuse on a missing sha from the start — do not defer that to a follow-up.
+
+    ACCEPTANCE — additions:
+    1. The gate reads the recorded AIDA verdict, and does so at the current head. A verdict recorded against an older head does not suppress and does not silently pass either — it is a third state.
+    2. The doc comment names which record it reads. A comment that says "reviewer verdict" when it means the forge's is how this survived.
+    3. Where the forge decision and the recorded verdict disagree, say which wins and why. Both exist; a fix that reads only the substrate has the mirror-image gap for a PR refused on GitHub.
+    4. A test covers the workflow this project actually uses: record a refusal via `aida review record` with no GitHub review posted, assert the PR is not surfaced as awaiting-you.
+  created_at: 2026-09-20T20:55:46.584253870Z
+  modified_at: 2026-09-20T20:55:46.584253870Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
