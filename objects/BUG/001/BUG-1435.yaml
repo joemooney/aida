@@ -27,12 +27,12 @@ description: |
   5. A grep finds no other place classifying a merge outcome by matching refusal prose.
 
   Filed by the advisor after the hold it was raised on failed to gate the merge. Same class as BUG-1295, BUG-1310 and BUG-1297 — and the third instance this week of prose matching appearing inside a fix for an adjacent problem.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T10:42:03.598350636Z
-modified_at: 2026-09-20T18:53:09.019630040Z
+modified_at: 2026-09-20T18:53:23.322494637Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -71,8 +71,24 @@ comments:
   created_at: 2026-09-20T18:53:09.019630040Z
   modified_at: 2026-09-20T18:53:09.019630040Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0c02a-75dd-7802-be8e-e9da719cca0b
+  author: aida-auto-bump
+  timestamp: 2026-09-20T18:53:23.293285059Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0c02a-75fa-7c30-8a64-cf361fd25ea6
+  timestamp: 2026-09-20T18:53:23.322490543Z
+  agent: aida
+  commit_sha: c2b3c2f0c8a3072d24dd088a61bcde849516ee01
+  summary: Completed via merge c2b3c2f0
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T18:38:27.292936940Z
   implemented_by: joe
+  completed_at: 2026-09-20T18:53:23.292419830Z
+  completion_sha: c2b3c2f0c8a3072d24dd088a61bcde849516ee01
