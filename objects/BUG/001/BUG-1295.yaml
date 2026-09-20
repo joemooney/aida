@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:49:09.217213996Z
-modified_at: 2026-09-20T02:43:16.511991829Z
+modified_at: 2026-09-20T02:44:31.632119995Z
 req_type: Bug
 tags:
 - coupling
@@ -93,6 +93,26 @@ comments:
   created_at: 2026-09-20T02:28:01.267423182Z
   modified_at: 2026-09-20T02:28:01.267423182Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bcb3-7110-7fd0-bf31-fb97ea1c141c
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1993 fix(orchestrator): classify rebase failures by exit code, not prose (BUG-1295)
+    verdict: APPROVE + merged 2026-09-20 02:43:14Z at head e2408980
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — neither implemented nor briefed by this advisor; two acceptance guards written during grooming, which is advisor work rather than authorship
+    gates cleared: required Build SUCCESS; merge-hold-gate SUCCESS; mergeStateStatus CLEAN; no reviewer phase live at merge time
+
+    THE GUARD I ASKED FOR IS BUILT THE RIGHT WAY ROUND. The test does not merely assert that reworded messages still classify — it asserts the fixture itself contains none of the six old triggers, and fails with a message telling the next person to pick different wording. Without that meta-assertion the test would pass while proving nothing, which is precisely how a guard of this shape rots. It also covers the signal-death case where a killed process yields no exit code, so the fall-through was considered rather than assumed.
+
+    The mechanism satisfies the other guard: shared exit-code constants plus a sentinel error the entry point downcasts, so the producer owns the classification and the printed prose stays human. Reworded text classifying on exit code alone is the property, and it is tested.
+
+    ON THE THREE SITES JUDGED NOT TO NEED FIXING, recorded so a later reader knows they were judged rather than missed: two turn on reachability and on a consumer checking only process status. Both are properties that can change without anyone noticing, and if they do the argument stops holding silently. Not a reason to widen this change; a reason to have written it down.
+
+    THE EXTERNAL-TOOL EXCLUSION IS RIGHT AS A CLASS BOUNDARY AND WRONG AS A DISMISSAL. We can give our own producers exit codes and cannot give `gh` or SQLite one, so the remedy genuinely differs and folding them in here would have made this change worse. But not controlling a tool's wording argues for more care, not less: an upstream release can reword its output with no deprecation we would read, and the classifier fails in exactly the way this spec exists to prevent, without even our own edit as a trigger. Filed Draft as a sibling rather than left as a non-issue.
+  created_at: 2026-09-20T02:44:31.632119995Z
+  modified_at: 2026-09-20T02:44:31.632119995Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bcb2-4b98-7122-b15e-cea286532078
   author: aida-auto-bump
