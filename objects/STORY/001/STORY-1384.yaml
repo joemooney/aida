@@ -1,0 +1,26 @@
+id: 01a0beb6-0ccc-78d1-a7c4-344bb7401eff
+spec_id: STORY-1384
+agreed_id: STORY-1384
+title: 'Review PR-2016: [AI:codex] fix(classifiers): inventory external prose contracts (BUG-1310)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0bea4`) for branch `bug-1310-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2016>
+  - Branch: `bug-1310-work` → `main`
+
+  ## Covers
+
+  - BUG-1310
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2016` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T12:06:37.004977199Z
+modified_at: 2026-09-20T12:06:37.004977199Z
+req_type: Story
