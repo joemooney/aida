@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T05:53:25.916051220Z
-modified_at: 2026-09-20T09:52:41.346804354Z
+modified_at: 2026-09-20T10:41:43.308710398Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -121,6 +121,35 @@ comments:
   created_at: 2026-09-20T09:52:18.770486101Z
   modified_at: 2026-09-20T09:52:18.770486101Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0be68-538c-7b31-b027-489278d23cae
+  author: joe
+  content: |-
+    [advisor] THIS MERGED OVER MY HOLD AND THE FAULT IS MINE — my hold was never enforced. Recording it here with the defect that shipped as a result.
+
+    PR #2012 merged at 09:52:33Z while `.aida/merge-holds/PR-2012` was present. It is still present now. The merge happened anyway because that marker file alone does not gate anything on the forge: the `merge-hold-gate` check is driven by the `aida:merge-hold` LABEL, and I never applied it.
+
+    I checked all eleven of my holds. Four carry the label — 1972, 1981, 1989, 2001 — and every one of those was placed by the DRAIN for drive-mode specs, not by me. The seven I placed by writing a marker file carried no label at all. So for most of tonight I have been recording holds that stopped `aida pr ship` and nothing else, while believing they held the PR.
+
+    I have now labelled the six that remain open. That is a correction, not a fix — the fix is that I stop assuming a marker is a gate.
+
+    WHAT SHIPPED AS A RESULT, and it is exactly what the hold was for:
+
+      aida-cli-lib/src/lib.rs:847-848
+      let hold_prefix = format!("refusing to merge PR-{pr}: supervised merge-hold");
+      if detail.contains(&hold_prefix) {
+
+    The classifier decides a typed failure kind by matching the producer's own sentence, and the producer is ours at forge.rs:1527. I wrote on this spec before the work started that I would refuse exactly this in review, refused it, and it merged anyway.
+
+    The rest of the change is right and should stay: `FailureKind::MergeHold` is a real variant, `should_retry_transient_failure` excludes it with a direct assertion, and the test covers both directions. Only the classification is wrong.
+
+    THE FAILURE MODE THAT IS NOW LIVE ON MAIN: reword that refusal — a word, a dash, the branch name — and the match misses, the hold falls back to a generic tool failure, and a supervised gate burns both retries again. Silently, with no test failing, because every test constructs the current wording. That is the behaviour this spec existed to end, reachable by editing a string.
+
+    Filed as a follow-up rather than reverting, because reverting would also remove the typed variant and the retry exclusion, which are correct and valuable. The follow-up is to type the refusal at `forge::merge_change` and have the classifier match a variant rather than text — the same move BUG-1295 made with exit codes one layer over.
+
+    I am not asking anyone to treat this as a process failure by whoever merged it. There was no enforced gate and no reason for them to know there was meant to be one.
+  created_at: 2026-09-20T10:41:43.308710398Z
+  modified_at: 2026-09-20T10:41:43.308710398Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0be3b-6f80-7961-a84f-594a635f2ac2
   author: aida-auto-bump
