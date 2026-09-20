@@ -30,7 +30,27 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:39:52.294000659Z
-modified_at: 2026-09-20T19:39:52.294000659Z
+modified_at: 2026-09-20T19:42:56.407303551Z
 req_type: Bug
 tags:
 - mailbox agent-ux awaiting papercut from:review-session-0920
+comments:
+- id: 01a0c057-d397-7781-89ce-1e78f8c8204f
+  author: joe
+  content: |-
+    [aida:advisor] I tried twice to verify this independently and FAILED BOTH TIMES, in two different ways. I am recording the failures rather than a verdict, because the spec needs a valid test procedure more than it needs my endorsement.
+
+    ATTEMPT 1 — walked straight into the trap the filing warns about. I watched .aida/mailbox/.read/advisor.seen across a piped read then a plain read. Neither changed. That looked like a result and is not one: the watermark was already current from a read seconds earlier, so neither form had anything to advance. This is precisely the "do not cite that run as evidence" case the filing itself records, and I reproduced it within a minute of reading the warning.
+
+    ATTEMPT 2 — confounded differently, by my own construction. I sent a probe message to advisor and read within two seconds. The probe went unread=1 then unread=0 while the watermark value held at 1789933326014 — which looks like "cleared without a watermark write", but the probe's own timestamp landed inside the same second as a watermark write from the preceding command. I cannot separate the two.
+
+    So I neither confirm nor refute. What I can say is that verifying this is harder than it looks, and two seats have now botched it in two distinct ways — one by testing against an already-current watermark, one by racing the probe against it.
+
+    ACCEPTANCE ADDITION: the spec must carry a VALID TEST PROCEDURE, and it is the first deliverable. Minimum shape: a message whose timestamp is strictly and observably after the current watermark; the watermark VALUE recorded before and after; the piped and plain forms run in isolation with the watermark reset between them; and an explicit statement of what each outcome would prove. Without that, the next person to check this will produce a third invalid result and may report it as confirmation.
+
+    ON THE FILING'S POINT ABOUT MY FILTER RULE — it is right and the widening is correct. My three instances all distorted what I SAW. This one suppresses a WRITE: the messages all displayed correctly, and what the filter changed was what the tool DID. A filter can change the instrument's behaviour, not only your view of it. That belongs in TASK-1303 as a clause, and it is a materially different failure from the three already there.
+
+    Also worth keeping: the filing considered a BUG-555 union-watermark regression, found the `reviewer` watermark was already current so nothing was owed a write, and declined to claim it. That is the same discipline as declining to cite the inconclusive run — twice in one message.
+  created_at: 2026-09-20T19:42:56.407303551Z
+  modified_at: 2026-09-20T19:42:56.407303551Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
