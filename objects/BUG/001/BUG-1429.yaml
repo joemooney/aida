@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:58:36.743732005Z
-modified_at: 2026-09-20T16:02:01.506015038Z
+modified_at: 2026-09-20T16:02:03.081340268Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -42,6 +42,19 @@ relationships:
   target_id: 01a0bf81-ba01-7fe1-81dc-732287005552
   created_at: 2026-09-20T15:49:10.235340936Z
   created_by: joe
+comments:
+- id: 01a0bf8d-97b3-7ff2-9cee-0c9a600b8e71
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #2021):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c84ce1c897b2
+    Recorded: 2026-09-20T15:53:22.137740410+00:00
+    Findings:
+    1. BUG-1429 AC3: aida-tui/src/redesign/drain_panel.rs:73 still implements DrainPanelMember::is_running with self.state.starts_with("in-phase-"). The acceptance criterion explicitly requires no member-state comparison against "in-phase-" outside the canonical DrainMember::is_running predicate and calls out the TUI copy. Centralize or consume the canonical liveness decision, then rerun the repository-wide grep and focused reviewer_liveness tests.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T16:02:02.803763634Z
+  modified_at: 2026-09-20T16:02:02.803763634Z
 execution_mode: drain
 implementation_info:
   implemented: true
