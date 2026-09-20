@@ -19,12 +19,12 @@ description: |
   - The reviewer prompt includes the statement so round 1 can compare intent against diff.
   - Opt-in [preview] gate = advisor escalates it for drive/guided specs and waits; default is off (no round-trip).
   - Measured: of the next 20 specs, how many round-1 findings were already named as questions in the statement — recorded here.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:57.872533301Z
-modified_at: 2026-09-20T22:53:45.097176452Z
+modified_at: 2026-09-20T23:13:24.876563068Z
 req_type: Story
 tags:
 - batch:followups-0918i
