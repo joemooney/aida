@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:35:48.162497532Z
-modified_at: 2026-09-20T22:36:21.303404125Z
+modified_at: 2026-09-20T22:36:22.909580076Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -237,6 +237,22 @@ comments:
   created_at: 2026-09-20T22:36:19.571533406Z
   modified_at: 2026-09-20T22:36:19.571533406Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c0f6-9ce2-7ef2-bf99-03eab8a480ef
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-1460):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dd5f259819
+    Recorded: 2026-09-20T22:35:14.172901798+00:00
+    Findings:
+    1. BLOCKING, criterion 5 only. 'Regression test reproduces the observed ordering: reviewer phase entered before the reviewed commit's checks have started.' reviewer_announcement_follows_registration_and_current_head_proof does not reproduce that ordering - it include_str!s lib.rs and asserts that the byte offset of 'let current = pr_head_sha_best_effort' is less than the offset of 'mark_drain_phase(Phase::Reviewer)'. Source order is not execution order: either line could move into a branch, a closure or an early return and the assertion would still hold. THE REMEDY EXISTS IN-TREE: MockPhaseDriver in auto_complete.rs already drives orchestrate() through phases and is used exactly this way by orchestrate_branch_policy_refusal_never_rebases_or_retries (BUG-1447, merged today). A driver whose CI phase reports PrNoChecks and whose head advances mid-phase would reproduce the real thing.
+    2. CREDIT WHERE IT IS DUE, and I am recording it because it is evidence of a fix propagating. The test uses concat!("wait_for_checks_to_", "register(") and concat!("impl auto_complete::PhaseDriver ", "for RealPhaseDriver {") so the searched strings do not appear contiguously in the test's own source. That is a deliberate defence against the PR-2033 defect where include_str! plus split_once matched the test's own literals and scanned 93 characters of itself. Unlike that test, this one IS capable of failing - remove wait_for_checks_to_register and the first assertion goes red. Per the advisor's new rule, someone should still observe that before merge.
+    3. CRITERION 4 IS PROPERLY MET and is the best-tested part. ci_terminal_sha / ci_terminal_green are written into the verdict artifact and a real behavioural test reads the JSON back and asserts both fields. That is a verdict recording the CI conclusion it saw, which is exactly what the criterion asked for, tested the way the others should be.
+    4. QUESTION, not a defect - I checked and will not assert it. The no_ci_wait short-circuit inside finish_ci is removed, so a CI phase that RUNS now always waits. My first search of lib.rs alone returned zero remaining uses and I nearly reported the documented lifecycle:no-ci-wait tag as a silent no-op. A full-workspace search shows 14 live uses in auto_complete.rs, including the orchestrator branch at line 3794 that can skip the CI phase entirely. So the tag is NOT dead. What I cannot tell without tracing is whether any spec that previously relied on the finish_ci escape now waits where CLAUDE.md line 160 promises it will not. Please confirm, and if behaviour changed for a documented tag, say so in the spec and update CLAUDE.md in the same change.
+    5. NON-BLOCKING fixture bug, one character. The new line in the cfg(all(test, unix)) fake-gh script is 'if [ "$1 $2" = "pr view" ]' under set -eu, while the pre-existing line directly above correctly guards '${1:-}'. Demonstrated: with one argument the script dies 'parameter not set' exit 2, with zero arguments likewise. Any invocation of the fake gh with fewer than two arguments that is not --version now fails instead of falling through. Use "${1:-} ${2:-}". Noting also that the module IS unix-gated, so this is NOT an instance of BUG-1475's Windows fake-binary class - recording that so nobody 'fixes' it in the wrong direction.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T22:36:22.626268443Z
+  modified_at: 2026-09-20T22:36:22.626268443Z
 execution_mode: drain
 implementation_info:
   implemented: true
