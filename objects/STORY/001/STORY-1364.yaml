@@ -1,0 +1,26 @@
+id: 01a0bc90-b473-7d30-8166-4ff6c1749378
+spec_id: STORY-1364
+agreed_id: STORY-1364
+title: 'Review PR-1992: fix(ci): keep healthy long runs alive (BUG-1275)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0bc8b`) for branch `bug-1275-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1992>
+  - Branch: `bug-1275-work` → `main`
+
+  ## Covers
+
+  - BUG-1275
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1992` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T02:06:35.123177934Z
+modified_at: 2026-09-20T02:06:35.123177934Z
+req_type: Story
