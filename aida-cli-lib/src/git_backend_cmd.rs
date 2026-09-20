@@ -29,6 +29,62 @@ struct ListTableOptions {
     terminal_width: Option<usize>,
 }
 
+/// Resolve the two whole-store facts used by `aida show` from the cache.
+///
+/// The cache already projects an EPIC's derived status and the durable
+/// `serialize:<group>` tags used to sequence collision-prone batch members.
+/// Keeping this helper free of `backend.load()` and live repository scans is
+/// the load-bearing part of the single-spec read latency contract.
+// trace:TASK-1268 trace:BUG-1480 | ai:codex
+fn show_cached_context(
+    backend: &aida_core::CachedGitBackend,
+    req: &Requirement,
+) -> (Option<String>, Option<String>) {
+    let mut effective_status = None;
+    let mut serialize_command = None;
+    let mut batches: Vec<&str> = req
+        .tags
+        .iter()
+        .filter_map(|tag| tag.strip_prefix("batch:"))
+        .collect();
+    batches.sort_unstable();
+
+    let all = backend.list_summaries(&aida_core::ListFilter {
+        archive: aida_core::ArchiveFilter::Both,
+        defer: aida_core::DeferFilter::Both,
+        ..Default::default()
+    });
+    let Ok(summaries) = all else {
+        return (effective_status, serialize_command);
+    };
+
+    if req.req_type == RequirementType::Epic {
+        effective_status = summaries
+            .iter()
+            .find(|summary| summary.id == req.id)
+            .map(|summary| summary.status.clone());
+    }
+
+    for batch in batches {
+        let tag = format!("batch:{batch}");
+        let has_durable_serialize_verdict = summaries.iter().any(|summary| {
+            summary.tags.iter().any(|t| t.eq_ignore_ascii_case(&tag))
+                && summary
+                    .tags
+                    .iter()
+                    .any(|t| t.to_ascii_lowercase().starts_with("serialize:"))
+        });
+        if has_durable_serialize_verdict {
+            serialize_command = Some(format!(
+                "aida queue work --batch {batch} --auto-complete --single-branch"
+            ));
+            break;
+        }
+    }
+
+    (effective_status, serialize_command)
+}
+
 // trace:BUG-1207 | ai:codex
 fn render_list_table<F>(
     reqs: &[aida_core::RequirementSummary],
@@ -555,6 +611,30 @@ mod proxy_approval_tests {
         );
 
         assert!(parse_proxy_approval_comment("STORY-1173", "Proxy ledger", &comment).is_none());
+    }
+}
+
+#[cfg(test)]
+mod show_latency_regression_tests {
+    #[test]
+    fn canonical_spec_show_path_never_loads_the_full_store() {
+        // A timing assertion is noisy on shared CI. This structural contract
+        // directly guards the operation responsible for BUG-1480's 7.5s
+        // regression: after PR aliases are resolved, canonical SPEC-ID show
+        // must remain cache-backed and use targeted YAML reads only.
+        // trace:BUG-1480 | ai:codex
+        let source = include_str!("git_backend_cmd.rs");
+        let canonical_path = source
+            .split_once("let id = &resolved_id;")
+            .expect("show canonical-path marker")
+            .1
+            .split_once("Command::Approvals {")
+            .expect("command following show")
+            .0;
+        assert!(
+            !canonical_path.contains("backend.load()"),
+            "aida show must not scan the full requirement store"
+        );
     }
 }
 
@@ -3454,38 +3534,13 @@ pub(crate) fn handle_git_backend_command(
                     // the cache (recomputed on rebuild from the relationship
                     // graph; never stored in YAML). trace:STORY-632 | ai:claude
                     let degrees = backend.degrees(&req.id).unwrap_or_default();
-                    // BUG-626: an EPIC's status is the read-only rollup of its
-                    // children, not the stored field. Derive it from the full
-                    // store (a one-shot load on a single-spec view — not a hot
-                    // loop) so `aida show <epic>` agrees with `aida list` and
-                    // `aida graph tree`. Non-epics keep `effective_status()`.
-                    // trace:BUG-626 | ai:claude
-                    let effective_status_str: String = if req.req_type == RequirementType::Epic {
-                        backend
-                            .load()
-                            .ok()
-                            .and_then(|store| aida_core::rollup::derive_epic_status(&store, req.id))
-                            .map(|s| format!("{s}"))
-                            .unwrap_or_else(|| format!("{}", req.effective_status()))
-                    } else {
-                        format!("{}", req.effective_status())
-                    };
-                    // Keep a groomed serialize verdict discoverable from any
-                    // member after the grooming command has left scrollback.
-                    // trace:TASK-1268 | ai:codex
-                    let serialize_cluster_command = backend.load().ok().and_then(|store| {
-                        let project_root = find_project_root().unwrap_or_else(|_| {
-                            store_path
-                                .parent()
-                                .map(|p| p.to_path_buf())
-                                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
-                        });
-                        backlog::member_serialize_batch_command(
-                            &store.requirements,
-                            &req,
-                            &project_root,
-                        )
-                    });
+                    let (cached_epic_status, serialize_cluster_command) =
+                        show_cached_context(&backend, &req);
+                    // BUG-626: the cache projects an EPIC's read-only child
+                    // rollup. Using that projection avoids loading every YAML
+                    // object merely to render one spec. trace:BUG-626
+                    let effective_status_str =
+                        cached_epic_status.unwrap_or_else(|| format!("{}", req.effective_status()));
                     // STORY-632: `--json` emits the spec as a machine object,
                     // including the centrality fields, then returns early.
                     // trace:STORY-632 | ai:claude
