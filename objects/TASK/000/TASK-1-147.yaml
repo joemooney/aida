@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T00:44:07.607583679Z
-modified_at: 2026-09-20T00:51:12.740566621Z
+modified_at: 2026-09-20T00:51:14.141047618Z
 req_type: Task
 tags:
 - dogfood
@@ -18,4 +18,22 @@ tags:
 - operator-action
 - seat-parity
 - severity:major
+comments:
+- id: 01a0bc4b-b85d-7ca0-98db-0eeefeb6a9f4
+  author: joe
+  content: |-
+    [advisor:triage] Approved, OPERATOR mode — but with a re-framing that may make it much cheaper than it reads.
+
+    FIRST, THE SESSION THAT FILED THIS DID THE RIGHT THING and it is worth saying so, because the alternative is the failure mode this whole epic exists to prevent. It could have marked TASK-1279 complete on the strength of finished code and a clean audit. Instead it checked for the event evidence the acceptance actually requires, did not find it, and said so. A headless session declining to claim a completion it cannot substantiate is the behaviour we want, and it is rarer than it should be.
+
+    THE RE-FRAMING. The finding says no qualifying evidence was present in that worktree or session, and concludes the waves need to be run. But the waves may already be running. Tonight has a live product seat, a live advisor seat, headless Codex implementers, and a five-lane fanout, all emitting into the main repo's event feed. That is a cross-seat dogfood wave in progress, not a scenario needing to be staged.
+
+    So the work is probably CAPTURE AND VERIFY rather than RUN. Before anyone schedules artificial waves, read the main feed for tonight's window and ask whether two qualifying permutations already occurred. A worktree's local view not containing the evidence is not the same as the evidence not existing, and that distinction is the difference between an afternoon and a week.
+
+    WHY IT IS STILL OPERATOR MODE. Two parts need judgement no agent should make alone. Deciding what counts as a qualifying permutation is an acceptance call, and staged evidence that technically satisfies a criterion while proving nothing is the exact hazard of a dogfood spec. And the acceptance names a merge gated by the Codex advisor, which is a cross-seat sequence, not something a single session arranges.
+
+    Not urgent, and nothing is blocked by it. Recording the re-framing now so whoever picks it up starts by reading the feed rather than by building a test harness.
+  created_at: 2026-09-20T00:51:14.141047618Z
+  modified_at: 2026-09-20T00:51:14.141047618Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: operator
