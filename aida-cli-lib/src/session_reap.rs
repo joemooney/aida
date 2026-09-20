@@ -39,7 +39,9 @@
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::doctor_cmd::{classify_agent_worktree, AgentWorktreeFacts, AgentWorktreeVerdict};
+use crate::doctor_cmd::{
+    branch_content_fully_landed, classify_agent_worktree, AgentWorktreeFacts, AgentWorktreeVerdict,
+};
 use crate::*;
 
 /// The reap verdict for one session lease. `Reap` carries the reason the pass
@@ -455,6 +457,17 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
         } else {
             false
         };
+        // BUG-1287: a squash-merged branch's own commits keep a different SHA
+        // from the squash commit on main forever, so `unique_unmerged_commits`
+        // (plain ancestry) stays positive whether or not anything is actually
+        // unshipped. Only pay for the extra content probe when it could change
+        // the verdict — a confirmed-merged PR with a positive ancestry count.
+        let content_fully_landed = match (pr_merged && unique_unmerged_commits > 0, &default_ref) {
+            (true, Some(default_ref)) => {
+                branch_content_fully_landed(project_root, default_ref, branch)
+            }
+            _ => false,
+        };
 
         let facts = ReapFacts {
             spec_finished,
@@ -465,6 +478,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
                 ancestor_of_main,
                 pr_merged,
                 unique_unmerged_commits,
+                content_fully_landed,
             },
         };
 

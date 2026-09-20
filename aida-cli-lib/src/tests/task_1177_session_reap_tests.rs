@@ -22,6 +22,7 @@ fn reapable_facts() -> ReapFacts {
             ancestor_of_main: true,
             pr_merged: false,
             unique_unmerged_commits: 0,
+            content_fully_landed: false,
         },
     }
 }
@@ -116,6 +117,34 @@ fn squash_merged_branch_with_extra_unique_commits_is_kept() {
     match classify_session_reap(&facts) {
         ReapVerdict::Skip(reason) => assert!(reason.contains("unique unmerged"), "{reason}"),
         v => panic!("expected a skip, got {v:?}"),
+    }
+}
+
+#[test]
+fn content_verified_squash_merge_is_reaped_despite_ancestry_count() {
+    // BUG-1287: the fixture — one worktree reapable, one not. Both are
+    // squash-merged with a positive ancestry-only commit count (the count
+    // ancestry produces for a squash-merged branch can never reach zero, by
+    // construction). The reapable one's content is PROVEN to already match
+    // origin/main (`content_fully_landed`); the not-yet-reapable one's isn't.
+    let mut reapable = reapable_facts();
+    reapable.worktree.ancestor_of_main = false;
+    reapable.worktree.pr_merged = true;
+    reapable.worktree.unique_unmerged_commits = 1;
+    reapable.worktree.content_fully_landed = true;
+    assert!(
+        matches!(classify_session_reap(&reapable), ReapVerdict::Reap(_)),
+        "content-verified squash-merged branch must be reaped"
+    );
+
+    let mut not_yet_reapable = reapable_facts();
+    not_yet_reapable.worktree.ancestor_of_main = false;
+    not_yet_reapable.worktree.pr_merged = true;
+    not_yet_reapable.worktree.unique_unmerged_commits = 1;
+    not_yet_reapable.worktree.content_fully_landed = false;
+    match classify_session_reap(&not_yet_reapable) {
+        ReapVerdict::Skip(reason) => assert!(reason.contains("unique unmerged"), "{reason}"),
+        v => panic!("a branch that failed content verification must stay kept, got {v:?}"),
     }
 }
 
