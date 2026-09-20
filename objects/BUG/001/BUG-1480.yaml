@@ -46,10 +46,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-20T19:37:58.698463045Z
+modified_at: 2026-09-20T19:38:02.229881285Z
 req_type: Bug
 tags:
 - agent-surface
+- batch:night-0920
 - drain-safe
 - papercut
 - performance
