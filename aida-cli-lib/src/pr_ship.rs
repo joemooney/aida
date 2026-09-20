@@ -341,6 +341,53 @@ pub enum ShipMergeBlockReason {
     DriveOwnedPr,
 }
 
+/// TASK-1292: whether a reviewer phase is currently live against a given PR
+/// number — the pure decision behind `aida pr ship`'s drive-ownership check.
+///
+/// The 2026-09-18 near-miss: a reviewer phase running under BUG-1236 was
+/// live on PR #1948, but the drive's "current spec" bookkeeping pointed at
+/// STORY-1221 (shelved). A check that asks "does the drive's current spec
+/// own this PR" misses that case entirely; the only question that can't miss
+/// it is "is ANY live member — whichever spec it belongs to — phase-bound to
+/// THIS PR". That's what this function answers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewerLiveness {
+    /// A live (`in-phase-*`) member is phase-bound to exactly this PR.
+    OnThisPr,
+    /// At least one member is live and phase-bound to a PR — just not this
+    /// one. Not grounds to block a ship of an unrelated PR.
+    Elsewhere,
+    /// No live member is phase-bound to any PR (including: no drive at all).
+    None,
+}
+
+/// `members` is `(state, pr)` per drive member — state is the raw
+/// `DrainMember::state` string (`"in-phase-N"` while running), pr is the
+/// member's currently-bound PR (STORY-1033/TASK-1292 binds it live, at
+/// phase-entry, not only at the member's terminal outcome).
+// trace:TASK-1292 | ai:claude
+pub fn reviewer_liveness_for_pr<'a>(
+    members: impl IntoIterator<Item = (&'a str, Option<u32>)>,
+    pr: u32,
+) -> ReviewerLiveness {
+    let mut saw_other_live_pr = false;
+    for (state, member_pr) in members {
+        if !state.starts_with("in-phase-") {
+            continue;
+        }
+        match member_pr {
+            Some(bound) if bound == pr => return ReviewerLiveness::OnThisPr,
+            Some(_) => saw_other_live_pr = true,
+            None => {}
+        }
+    }
+    if saw_other_live_pr {
+        ReviewerLiveness::Elsewhere
+    } else {
+        ReviewerLiveness::None
+    }
+}
+
 /// BUG-710/BUG-716/TASK-1253: a drive seat may not merge any PR, and no caller
 /// may merge the live drive's own PR. Merely observing an unrelated live drain
 /// is not grounds to block: those merges serialize on the merge lease.
@@ -1051,6 +1098,85 @@ mod tests {
             Some(ShipMergeBlockReason::DriveSeat)
         );
         assert_eq!(ship_merge_block_reason(true, true, true), None);
+    }
+
+    // TASK-1292: the pure PR-keyed liveness decision. trace:TASK-1292 | ai:claude
+    #[test]
+    fn reviewer_liveness_on_this_pr_when_a_live_member_is_bound_to_it() {
+        let members = [("in-phase-3", Some(1948))];
+        assert_eq!(
+            reviewer_liveness_for_pr(members, 1948),
+            ReviewerLiveness::OnThisPr
+        );
+    }
+
+    #[test]
+    fn reviewer_liveness_elsewhere_when_live_member_bound_to_a_different_pr() {
+        let members = [("in-phase-3", Some(1965))];
+        assert_eq!(
+            reviewer_liveness_for_pr(members, 1948),
+            ReviewerLiveness::Elsewhere
+        );
+    }
+
+    #[test]
+    fn reviewer_liveness_none_with_no_drive_members() {
+        let members: [(&str, Option<u32>); 0] = [];
+        assert_eq!(
+            reviewer_liveness_for_pr(members, 1948),
+            ReviewerLiveness::None
+        );
+    }
+
+    #[test]
+    fn reviewer_liveness_none_when_the_only_member_bound_to_this_pr_is_terminal() {
+        // A member that finished (`completed`/`failed`, not `in-phase-*`)
+        // keeps its `pr` field, but it is no longer LIVE — its reviewer
+        // is not running, so it must not block a ship.
+        let members = [("completed", Some(1948))];
+        assert_eq!(
+            reviewer_liveness_for_pr(members, 1948),
+            ReviewerLiveness::None
+        );
+    }
+
+    #[test]
+    fn reviewer_liveness_ignores_live_member_with_no_pr_bound_yet() {
+        // An implementer phase that hasn't discovered a PR yet is live but
+        // unbound — it must not read as "elsewhere" (which would be a false
+        // "some other reviewer is busy" signal) or "on this PR".
+        let members = [("in-phase-1", None)];
+        assert_eq!(
+            reviewer_liveness_for_pr(members, 1948),
+            ReviewerLiveness::None
+        );
+    }
+
+    // TASK-1292 regression fixture: the sibling-spec case from the spec's
+    // acceptance criteria — a reviewer live on PR-N under spec A must refuse
+    // a ship of PR-N even though the drive's "current spec" is B.
+    // trace:TASK-1292 | ai:claude
+    #[test]
+    fn sibling_spec_reviewer_still_blocks_the_pr_it_is_reviewing() {
+        // spec A (BUG-1236) is live-reviewing PR #1948; spec B (STORY-1221)
+        // is the drive's nominal "current" member but is shelved/terminal
+        // and carries no PR binding of its own — exactly the 2026-09-18
+        // near-miss shape.
+        let members = [("failed", None), ("in-phase-3", Some(1948))];
+        assert_eq!(
+            reviewer_liveness_for_pr(members, 1948),
+            ReviewerLiveness::OnThisPr,
+            "a live reviewer on PR-1948 under a sibling spec must still be found"
+        );
+        let is_owned = reviewer_liveness_for_pr(members, 1948) == ReviewerLiveness::OnThisPr;
+        assert!(
+            ship_merge_block_reason(false, is_owned, false).is_some(),
+            "aida pr ship must refuse PR-1948 while the sibling-spec reviewer is live"
+        );
+        // A ship of an UNRELATED PR (not the one being reviewed) still goes
+        // through — this is not a blanket "any live drive blocks everything".
+        let unrelated_owned = reviewer_liveness_for_pr(members, 9999) == ReviewerLiveness::OnThisPr;
+        assert!(ship_merge_block_reason(false, unrelated_owned, false).is_none());
     }
 
     #[test]

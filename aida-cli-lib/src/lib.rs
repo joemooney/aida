@@ -85372,7 +85372,15 @@ impl RealPhaseDriver {
     /// STORY-301: stamp the drain-state file with the phase about to run, so
     /// `aida drain status` (and the `/aida-pickup` banner) show live progress.
     /// Best-effort — a missing file is a silent no-op, never blocks the phase.
-    /// trace:STORY-301 | ai:claude
+    ///
+    /// TASK-1292: also carries the run's frozen PR binding (`phase_done_pr`,
+    /// falling back to the raw `pr_number` before phase 1 has frozen it) so
+    /// the member's `pr` field is live the moment a phase starts, not only
+    /// once it finishes. This is what makes `aida pr ship`'s drive-ownership
+    /// check PR-keyed instead of spec-keyed — see
+    /// `pr_ship::reviewer_liveness_for_pr`.
+    // trace:STORY-301 | ai:claude
+    // trace:TASK-1292 | ai:claude
     fn mark_drain_phase(&self, phase: auto_complete::Phase) {
         let vendor = session::resolve_headless_vendor(&self.project_root);
         let seat = agent_seat_for_phase(phase);
@@ -85386,6 +85394,7 @@ impl RealPhaseDriver {
             Some(seat.as_str()),
             tuning.model.as_deref(),
             tuning.effort.as_deref(),
+            self.phase_done_pr.or(self.pr_number),
         );
     }
 
