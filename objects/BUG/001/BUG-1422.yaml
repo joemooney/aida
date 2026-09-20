@@ -1,0 +1,53 @@
+id: 01a0bd83-26a9-7a91-aba8-ce5523d6d29c
+spec_id: BUG-1422
+agreed_id: BUG-1422
+title: A batch whose remaining members are all ineligible relaunches forever, because a drain that touched nothing is indistinguishable from a drain that finished
+description: |
+  A batch whose only remaining members are ineligible for autonomous execution relaunches forever. The drain exits immediately with `shipped:0 shelved:0`, a supervising launcher sees approved members still in the batch, relaunches, and the cycle repeats with no signal that it can never progress.
+
+  OBSERVED 2026-09-20 06:24 to 06:30, batch followups-0918i:
+
+    06:19:26  QueueDrained  shipped:0  shelved:5
+    06:23:51  QueueDrained  shipped:0  shelved:1
+    06:24:33  QueueDrained  shipped:0  shelved:0
+    06:27:35  QueueDrained  shipped:0  shelved:0
+    06:30:36  QueueDrained  shipped:0  shelved:0
+
+  Three consecutive drains that touched nothing, every three minutes, and it would have continued indefinitely. The launcher's log reads identically each time: "relaunched batch followups-0918i with 2 approved".
+
+  THE DISAGREEMENT. A supervisor decides whether to launch by counting APPROVED members of the batch. The drain then applies further eligibility rules the counter does not model. The two remaining members were:
+
+    STORY-1218  execution_mode: guided   — the drain refuses guided specs by design; they are keyboard work
+    TASK-1277   approved, but its work collides with an unmerged PR, so driving it produces a conflict
+
+  Neither is a defect in the drain. Refusing a guided spec is correct. The defect is that "approved and in the batch" and "the drain will act on it" are different predicates, and only the first is visible to anything deciding whether to start a drain.
+
+  WHY IT MATTERS BEYOND THE WASTED CYCLES. Each relaunch is a process start, a store read and a lock acquisition, which is cheap. The real cost is that `shipped:0 shelved:0` is indistinguishable from "the queue is empty and we are done" — which is the signal a supervisor, a monitor, or a human uses to decide the night is over. A wave that cannot progress and a wave that has finished look identical, so a permanently-stuck batch reads as success.
+
+  This is the same shape as TASK-1297, filed for the inverse case: there, a batch drain silently EXCLUDED approved routed work; here, a batch reports approved work it will never execute. Both are the gap between what the batch says and what the drain does.
+
+  PROPOSED: when a drain exits having touched nothing, say WHY in the QueueDrained event and on the closing line — distinguishing "no members remained" from "N members remained but none were eligible", and naming the ineligibility reason per member (guided, blocked, in-flight elsewhere). A supervisor can then stop rather than loop, and a monitor can alarm on a batch that is stuck rather than done.
+
+  Optionally, expose the eligible count directly so a launcher can ask the question it actually means: not "are there approved members" but "is there anything you would act on".
+
+  ACCEPTANCE
+  1. A drain that ends with nothing done reports whether the batch was empty or had ineligible members.
+  2. Each ineligible member is named with its reason.
+  3. QueueDrained carries the distinction so a consumer reading only events can tell a stuck wave from a finished one.
+  4. A drain that genuinely completed a batch is unchanged — this must not add noise to the success path.
+  5. The 2026-09-20 sequence above is the regression fixture: two members, one guided and one blocked, must report as ineligible rather than as an empty queue.
+
+  Filed by the product seat as a proposal; disposition is the advisor's. Workaround applied tonight: removed both members from the batch so the supervising launcher's count reached zero and it could exit.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T06:31:24.073637202Z
+modified_at: 2026-09-20T06:31:24.073637202Z
+req_type: Bug
+tags:
+- drain
+- from:session-0919
+- observability
+- orchestrator
+- parent:EPIC-62
