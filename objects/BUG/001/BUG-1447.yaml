@@ -44,12 +44,12 @@ description: |
   6. The observed PR-2014 message is the fixture, verbatim.
 
   Filed by the product seat; disposition is the advisor's. Note this is a direct consequence of holds being enforced properly for the first time — the defect existed all along and could not fire while the gate was inert.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:30:25.285712180Z
-modified_at: 2026-09-20T21:19:17.915891158Z
+modified_at: 2026-09-20T21:19:35.919751182Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -326,8 +326,25 @@ comments:
   created_at: 2026-09-20T21:19:17.915891158Z
   modified_at: 2026-09-20T21:19:17.915891158Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0c0b0-51ee-7851-a0f7-e0be1f90b8e4
+  author: aida-auto-bump
+  timestamp: 2026-09-20T21:19:35.918779445Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0c0b0-51ef-79b2-896a-21a6ba7bc6e2
+  timestamp: 2026-09-20T21:19:35.919750109Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1447-2026-09-20T211920Z.md
+  commit_sha: b09197ab727ff79aef2dc981a58fd55af9a3ab4c
+  summary: Completed via merge b09197ab
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T20:59:50.055321868Z
   implemented_by: joe
+  completed_at: 2026-09-20T21:19:35.918226095Z
+  completion_sha: b09197ab727ff79aef2dc981a58fd55af9a3ab4c
