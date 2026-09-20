@@ -14,12 +14,12 @@ description: |-
   Fix: at wave start-up, and again in the closing summary, the drain states both numbers — "batch <name>: 3 members; 16 other approved specs routed to role:implementer are not in this batch". Both are in hand at start-up, since resolving batch members already requires reading the role-routed queue. Emit it as an event as well as a line so a monitor can render it; a wave that drains its batch while the queue holds other ready work is the exact condition an operator wants surfaced.
 
   Acceptance: a wave launched with --batch on a batch of N, while M other approved specs are routed to that role outside the batch, prints both counts at start and at QueueDrained and emits them as an event; M == 0 renders no extra noise; the counts are correct with the role fallback in play (queue_list_with_role_fallback, per BUG-1264); unit test on the pure count derivation.
-status: Done
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:01:47.445199182Z
-modified_at: 2026-09-20T06:07:11.627450458Z
+modified_at: 2026-09-20T06:28:06.455521182Z
 req_type: Task
 tags:
 - drain
