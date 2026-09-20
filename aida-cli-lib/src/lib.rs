@@ -78581,11 +78581,24 @@ fn handle_from_pr(
             );
             std::process::exit(1);
         }
-        drain_resume::FromPrOutcome::DriveFrom(start_phase) => {
-            // A prior run's phase number does not carry the head SHA for which
-            // CI terminated. Re-enter phase 2 before any reviewer so the new
-            // process establishes that proof for the current head.
-            // trace:BUG-1460 | ai:codex
+        drain_resume::FromPrOutcome::DriveFrom(probed_start_phase) => {
+            // `aida drain resume` pins the failed phase from the newest
+            // SpecShelved row; the normal --from-pr path stays reality-based.
+            // trace:TASK-1272 | ai:codex
+            let start_phase = std::env::var("AIDA_DRAIN_RESUME_PHASE")
+                .ok()
+                .as_deref()
+                .and_then(drain_resume::shelved_resume_phase)
+                .unwrap_or(probed_start_phase);
+            // A RECORDED PHASE DOES NOT CARRY THE HEAD IT WAS RECORDED FOR.
+            // Whatever phase we resume from, never enter a reviewer without
+            // re-establishing CI proof for the CURRENT head: a spec shelved
+            // ci-red and pushed again would otherwise resolve to Reviewer,
+            // skip finish_ci, and reach merge on an unvalidated pipeline.
+            // finish_ci probes the current head first, so an already-green
+            // pipeline is reused rather than waited on — the cost is a probe,
+            // and the alternative is merging without the proof.
+            // trace:BUG-1460 trace:TASK-1272 | ai:claude
             let start_phase = if start_phase == auto_complete::Phase::Reviewer {
                 auto_complete::Phase::Ci
             } else {

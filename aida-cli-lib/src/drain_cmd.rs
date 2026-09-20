@@ -60,6 +60,7 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             vendor.as_deref(),
             model.as_deref(),
         ),
+        DrainCommand::Resume { spec, json } => handle_shelved_resume(spec, *json),
         DrainCommand::Stop { now, project } => handle_drain_stop(project.as_deref(), *now),
         DrainCommand::Clear => {
             let project_root = find_main_worktree_root()
@@ -178,6 +179,82 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             *no_timestamp,
             *annotate,
         ),
+    }
+}
+
+/// `aida drain resume <SPEC>` — recover the latest deliberately parked run.
+/// The event stream is authoritative for both the failed phase and the PR
+/// produced by that same run; using the correlated `PhaseDonePr` prevents a
+/// stale or unrelated open PR from being reviewed or merged.
+// trace:TASK-1272 | ai:codex
+fn handle_shelved_resume(spec: &str, json: bool) -> Result<()> {
+    let project_root = find_main_worktree_root().or_else(|_| std::env::current_dir())?;
+    let events = events::read_all(&project_root);
+    let shelf = events::latest_spec_shelved(&events, spec).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no recorded failure for `{spec}` — `aida drain resume` only re-drives a shelved run"
+        )
+    })?;
+    let phase_slug = match &shelf.kind {
+        events::EventKind::SpecShelved { phase, .. } => phase.as_str(),
+        _ => unreachable!("latest_spec_shelved returned a non-shelving event"),
+    };
+    let phase = drain_resume::shelved_resume_phase(phase_slug).ok_or_else(|| {
+        anyhow::anyhow!(
+            "recorded failure for `{spec}` is at `{phase_slug}`; resume requires an existing PR and supports phases ci through build"
+        )
+    })?;
+    let pr = events
+        .iter()
+        .rev()
+        .find(|event| {
+            event.run_uuid == shelf.run_uuid
+                && event
+                    .spec
+                    .as_deref()
+                    .is_some_and(|id| id.eq_ignore_ascii_case(spec))
+                && matches!(event.kind, events::EventKind::PhaseDonePr { .. })
+        })
+        .and_then(|event| match event.kind {
+            events::EventKind::PhaseDonePr { pr } => Some(pr),
+            _ => None,
+        })
+        .ok_or_else(|| {
+            anyhow::anyhow!("no PhaseDonePr was recorded for `{spec}` in the shelved run")
+        })?;
+
+    eprintln!(
+        "{} resuming `{}` at phase {} ({}) with PR-{} from run {}",
+        "↩".cyan().bold(),
+        spec,
+        phase.index(),
+        phase.slug(),
+        pr,
+        shelf.run_uuid
+    );
+    let exe = aida_exe_path();
+    let mut cmd = std::process::Command::new(exe);
+    cmd.current_dir(&project_root)
+        .args([
+            "queue",
+            "work",
+            &format!("PR-{pr}"),
+            "--auto-complete",
+            "--from-pr",
+            "--force-claim",
+        ])
+        .env("AIDA_DRAIN_RESUME_PHASE", phase.slug());
+    if json {
+        cmd.arg("--json");
+    }
+    let status = cmd.status().context("launching the resumed drain")?;
+    if status.success() {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "resumed drain exited with status {}",
+            status.code().unwrap_or(-1)
+        )
     }
 }
 

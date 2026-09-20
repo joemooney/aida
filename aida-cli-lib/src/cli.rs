@@ -7206,6 +7206,16 @@ pub enum DrainCommand {
         model: Option<String>,
     },
 
+    /// Re-drive a deliberately shelved spec from the phase that failed.
+    // trace:TASK-1272 | ai:codex
+    Resume {
+        /// Shelved requirement to resume.
+        spec: String,
+        /// Emit JSON progress from the underlying drain.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Request that the live drain stop at the next spec boundary.
     // trace:STORY-1130 | ai:codex
     Stop {

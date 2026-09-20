@@ -26,6 +26,24 @@
 
 use crate::auto_complete::Phase;
 
+/// Select the re-entry phase recorded by a `SpecShelved` event.
+///
+/// Shelving happens at the phase whose postcondition is still unmet, so the
+/// safe re-drive point is that same phase. Phase 1 is intentionally rejected:
+/// a fresh implementation has no reusable PR pipeline and must use normal
+/// `queue work`. Unknown/legacy phase strings also fail closed.
+// trace:TASK-1272 | ai:codex
+pub(crate) fn shelved_resume_phase(slug: &str) -> Option<Phase> {
+    match slug.trim().to_ascii_lowercase().as_str() {
+        "ci" => Some(Phase::Ci),
+        "reviewer" => Some(Phase::Reviewer),
+        "merge" => Some(Phase::Merge),
+        "pull" => Some(Phase::Pull),
+        "build" => Some(Phase::Build),
+        _ => None,
+    }
+}
+
 /// Whether a crashed or parked drain member may be auto-resumed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Resumability {
@@ -294,6 +312,21 @@ pub(crate) fn from_pr_plan(pr_exists: bool, facts: &ResumeFacts) -> FromPrOutcom
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shelved_resume_reenters_the_failed_phase() {
+        assert_eq!(shelved_resume_phase("ci"), Some(Phase::Ci));
+        assert_eq!(shelved_resume_phase("reviewer"), Some(Phase::Reviewer));
+        assert_eq!(shelved_resume_phase("merge"), Some(Phase::Merge));
+        assert_eq!(shelved_resume_phase("pull"), Some(Phase::Pull));
+        assert_eq!(shelved_resume_phase("build"), Some(Phase::Build));
+    }
+
+    #[test]
+    fn shelved_resume_refuses_fresh_or_unknown_work() {
+        assert_eq!(shelved_resume_phase("implementer"), None);
+        assert_eq!(shelved_resume_phase("legacy-phase"), None);
+    }
 
     #[test]
     fn orchestrator_alive_never_resumes() {
