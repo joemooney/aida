@@ -8,10 +8,9 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-20T14:35:44.838207538Z
+modified_at: 2026-09-20T14:40:40.844347857Z
 req_type: Bug
 tags:
-- batch:night-0920
 - diagnostic-decay
 - diagnostics
 - drain-safe
