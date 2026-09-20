@@ -37,12 +37,12 @@ description: |
   5. A test covers the observed case: a branch rebased onto newer main with no content change, under a reviewer that refuses, asserting the round is classified rebase-only and not reported as an ordinary requested-changes failure.
 
   Evidence gathered by the advisor after requeueing STORY-1350 and checking whether the requeue accomplished anything. The first hypothesis, that the implementer had touched nothing, was wrong — the head did move — and the patch-id comparison is what settled it.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:34:29.728492333Z
-modified_at: 2026-09-20T20:24:48.939196729Z
+modified_at: 2026-09-20T20:26:30.061702884Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -112,8 +112,25 @@ comments:
   created_at: 2026-09-20T20:20:40.146091510Z
   modified_at: 2026-09-20T20:20:40.146091510Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0c07f-b52c-7b71-95c7-e4e12fe56a58
+  author: aida-auto-bump
+  timestamp: 2026-09-20T20:26:30.060837772Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0c07f-b52d-7ec0-a67c-e1a525ab898e
+  timestamp: 2026-09-20T20:26:30.061700986Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1445-2026-09-20T202041Z.md
+  commit_sha: a8c18775768cd25ff9936cc644c40720b7ade5d3
+  summary: Completed via merge a8c18775
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T20:05:03.359892541Z
   implemented_by: joe
+  completed_at: 2026-09-20T20:26:30.060584747Z
+  completion_sha: a8c18775768cd25ff9936cc644c40720b7ade5d3
