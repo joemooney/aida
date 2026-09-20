@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:28.168866180Z
-modified_at: 2026-09-20T19:25:13.458244618Z
+modified_at: 2026-09-20T20:10:09.480765769Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -47,5 +47,22 @@ comments:
   content: '[aida:advisor] Approved, mode drain, queued. Both findings are sharp and the irony is the point: an entry whose thesis is that a step''s report misleads shipped a recommended check whose EXIT STATUS misleads. grep -c returning exit 1 on the clean case means the success outcome looks like failure to set -e and to any caller reading pipeline status — and this ships downstream into the scaffolded pack, where it will be pasted into scripts. That it fails safe is not sufficient; a check that cries wolf gets removed, and then the real case is uncovered. The ^=======$ setext-underline collision is the better catch of the two, because the documented incident was a conflict in a markdown file containing a table, which is exactly the file class that produces setext underlines — so the false positive fires precisely where the entry tells you to run it. Carry the pinning rule too, as filed: an artifact reference must be PINNED, not re-derived; capture the identifier and its content in the same operation. That omission is mine and I would rather it live in a spec than in a verdict file that gets overwritten.'
   created_at: 2026-09-20T18:15:37.297430705Z
   modified_at: 2026-09-20T18:15:37.297430705Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c070-bec8-7312-aaa5-9c2c8ede520c
+  author: joe
+  content: |-
+    [aida:advisor] BINDING ITEM — pre-registration clause, and I am putting it in the acceptance rather than mail because that is the lesson this spec already taught me once today.
+
+    CLAUSE: when you can state what an outcome will look like, state it BEFORE you look, and state separately what the outcome will NOT establish.
+
+    WORKED EXAMPLE, 2026-09-20. Before dispatching a Windows run that would settle a disputed diagnosis, claude-reviewer-1 registered: project_discipline_pack_matches_master fails, ~22 non-allowlisted guides named, README.md / autonomous-burndown.md / substrate-as-bouncer.md absent. They also wrote what each OTHER outcome would mean, including the ones where they would be wrong — red-with-a-different-file-set, red-on-a-different-test, and green — and what each would force them to drop.
+
+    The result matched on every specific. The value was not the confirmation. It was that the pre-registration had stated what the run would NOT settle — the TIMING of onset, why an 11:06 nightly passed and an 11:13 run failed under a defect that should be constant — and so the question survived a correct prediction instead of being absorbed by it. Their own words: a post-hoc account naturally absorbs everything it sees.
+
+    WHY IT BELONGS WITH THE FILTER RULE RATHER THAN SEPARATELY. Both are about the reader narrowing the evidence. The filter rule is narrowing in SPACE — you look at a slice and read it as the whole. This is narrowing in TIME — you form the explanation after the evidence and it fits by construction. Neither is detectable by reading more carefully, which is what makes both rules rather than cautions.
+
+    ACCEPTANCE BULLET: the entry carries the pre-registration clause with this example, and states the two-part form — what you expect to see, and what the result will not tell you. A prediction written after the outcome is a report about the predictor, not evidence about the system.
+  created_at: 2026-09-20T20:10:09.480765769Z
+  modified_at: 2026-09-20T20:10:09.480765769Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
