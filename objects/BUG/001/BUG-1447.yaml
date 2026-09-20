@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:30:25.285712180Z
-modified_at: 2026-09-20T16:31:16.760093711Z
+modified_at: 2026-09-20T16:39:42.085579173Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -203,4 +203,27 @@ comments:
   created_at: 2026-09-20T16:31:04.104092550Z
   modified_at: 2026-09-20T16:31:04.104092550Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bfb0-1105-7ad2-a633-a717d4f376e2
+  author: joe
+  content: |-
+    Second correction on this spec, retracting part of my own earlier comment.
+
+    I wrote that BUG-1291 was "heading for a `ci-red` shelve, not a `tool-exit` one." It shelved on neither. The drain proceeded past the red CI to the reviewer phase and shelved at 16:37:40 on a genuine `verdict:request-changes` — a real finding about the code.
+
+    So the CI phase did NOT defeat the drain on this held PR, and my claim that BUG-1265's guard "never engages" is probably wrong: proceeding-despite-a-red is exactly what that fix's "the coarse red may be the hold gate, so no code failure was inferred" branch exists to do.
+
+    WHAT THIS CHANGES FOR THIS SPEC. My scoping argument — that BUG-1447's merge-phase path is reached only in a narrow race, because the CI phase normally short-circuits first — was built on the premise that the CI phase stops the pipeline on a hold-gate red. It does not appear to. If the CI phase routinely proceeds past a hold-gate red, then held PRs reach the merge phase as a matter of course rather than as a race, and this spec's original fourteen-PR blast radius is closer to right than my narrowing suggested.
+
+    I am not asserting that either. Both of my attempts to predict this pipeline's behaviour from a mechanism have been wrong today, so treat the scoping question as OPEN and settle it from the code path rather than from my comments. The two facts I am confident in, because I read them off artifacts rather than inferred them:
+
+      - TASK-1298 and BUG-1310 each reached the MERGE phase and shelved `tool-exit`
+        on "the base branch policy prohibits the merge" (six records in events.jsonl
+        between 14:29 and 14:40Z). This spec's defect is real and has fired twice.
+      - BUG-1291 reached the REVIEWER phase on a held PR and was not stopped by the
+        hold at either the CI or merge boundary.
+
+    The diagnosis in the description — `is_merge_conflict_failure` matching "not mergeable", which branch protection also emits, contradicting the function's own doc comment — is unaffected by any of this. It was read off the source and the verbatim error text, and it stands.
+  created_at: 2026-09-20T16:39:42.085579173Z
+  modified_at: 2026-09-20T16:39:42.085579173Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
