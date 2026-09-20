@@ -1,5 +1,6 @@
 id: 01a0bca9-a7d4-7152-bc70-91e4601fe90a
 spec_id: TASK-1-149
+agreed_id: TASK-173
 title: Post-deployment measurement dispatched before its sample matured
 description: TASK-1294 was routed to a headless implementer only 6h25m after TASK-1291 landed, with 5/20 required subsequent merges visible and only one post-boundary PrMerged event. Time/sample-gated measurement specs need a readiness gate so drains do not repeatedly spend sessions on an acceptance contract that is not yet executable.
 status: Draft

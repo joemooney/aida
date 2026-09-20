@@ -1,5 +1,6 @@
 id: 01a0bcab-96af-76d1-87f7-c50c28989403
 spec_id: TASK-1-150
+agreed_id: TASK-174
 title: Post-deployment sample has Completed specs without PrMerged events
 description: While executing TASK-1294, five specs had reached Completed after TASK-1291 merged, but only BUG-1234 had a matching post-intervention PrMerged event. BUG-1268, BUG-1290, BUG-1285, and TASK-1296 lack the event boundary required by the specified first-RunStarted-to-PrMerged calculation. Triage whether direct/forge-confirmed completion paths should emit or backfill PrMerged-equivalent evidence before the 20-spec measurement closes.
 status: Draft
