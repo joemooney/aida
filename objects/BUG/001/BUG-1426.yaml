@@ -22,12 +22,12 @@ description: |
   3. A test constructs a locally-edited copy and asserts the chosen behaviour, so the distinction between "missing" and "stale" is pinned rather than implied by a name.
 
   Deferred from PR #1988 review, where the pack restoration was merged on the operator's throughput directive with this recorded rather than blocking.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:13:13.644915988Z
-modified_at: 2026-09-20T14:40:41.186349908Z
+modified_at: 2026-09-20T14:45:18.862981070Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -42,3 +42,7 @@ relationships:
   created_at: 2026-09-20T07:13:47.252592156Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-20T14:45:18.862981070Z
+  implemented_by: joe
