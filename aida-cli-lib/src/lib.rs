@@ -78645,6 +78645,49 @@ fn resolve_batch_members(
     )
 }
 
+/// Return queued members carrying `batch:NAME` that the autonomous drain will
+/// not pick up, preserving the same reason label shown by queue diagnostics.
+// trace:BUG-1422 | ai:codex
+fn resolve_batch_ineligible_members(
+    storage: &Storage,
+    user_id: &str,
+    batch_name: &str,
+    role: Option<&str>,
+) -> Result<Vec<events::IneligibleBatchMember>> {
+    let store = storage.load()?;
+    let want = format!("batch:{batch_name}");
+    let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+    let (role_filter, _only_unrouted) =
+        resolve_queue_role_filter(role, false, session_role.as_deref());
+    let entries = queue_role_fallback::queue_list_with_role_fallback(
+        storage,
+        user_id,
+        role_filter.as_deref(),
+        false,
+    )?;
+    let mut ineligible = Vec::new();
+    for entry in entries {
+        if !entry_matches_role_filter(entry.for_role.as_deref(), role_filter.as_deref(), false) {
+            continue;
+        }
+        let Some(req) = storage.resolve_queued_requirement(&entry.requirement_id)? else {
+            continue;
+        };
+        if !req.tags.iter().any(|tag| tag.eq_ignore_ascii_case(&want)) {
+            continue;
+        }
+        if let Some(reason) = queue_cmd::queue_fresh_pickup_reason_label(
+            &queue_cmd::queue_drain_pickup_policy(&req, &store, false),
+        ) {
+            ineligible.push(events::IneligibleBatchMember {
+                spec: req.display_id(),
+                reason,
+            });
+        }
+    }
+    Ok(ineligible)
+}
+
 /// Injectable shell around batch resolution so the missing-object diagnostic
 /// and event contract can be regression-tested without changing process cwd.
 // trace:BUG-1264 | ai:codex
@@ -79262,6 +79305,11 @@ fn handle_auto_complete_batch(
         drain_clock,
         &mut cap_stop,
     );
+    // BUG-1422: re-resolve the members the drain refuses so an empty eligible
+    // set is distinguishable from a genuinely completed batch.
+    // trace:BUG-1422 | ai:codex
+    let ineligible =
+        resolve_batch_ineligible_members(storage, user_id, batch_name, role).unwrap_or_default();
     // An empty batch (nothing shipped, nothing punted, nothing to drain) is a
     // user error — the named batch tag matched no queued work. Surface it with
     // a non-zero exit so scripts notice, even though `drain_batch` calls it
@@ -79295,6 +79343,7 @@ fn handle_auto_complete_batch(
         json,
         closing_excluded_count,
         closing_excluded_role.as_deref(),
+        &ineligible,
     );
     // TASK-967: permanent exit summary + cost-per-drain telemetry.
     finalize_drain_summary(
@@ -79318,6 +79367,7 @@ fn handle_auto_complete_batch(
         // in this batch" figure, echoed onto the terminal QueueDrained event
         // so a monitor can alarm on it. trace:TASK-1297 | ai:claude
         closing_excluded_count,
+        &ineligible,
     );
     // STORY-493: at drain-end, durably digest any mailbox traffic the drain
     // produced into the git-canonical orphan store. Best-effort + non-fatal —
@@ -79965,6 +80015,7 @@ fn handle_auto_complete_batches(
         // fix, which targets the single-batch drain the 2026-09-19 incident
         // hit. trace:TASK-1297 | ai:claude
         0,
+        &[],
     );
     // STORY-493: same best-effort drain-end mailbox digest as the single-batch
     // path. Non-fatal — never affects the drain's exit code. trace:STORY-493
@@ -80297,6 +80348,7 @@ fn emit_batch_drain_summary(
     json: bool,
     excluded_from_batch: usize,
     excluded_from_batch_role: Option<&str>,
+    ineligible: &[events::IneligibleBatchMember],
 ) {
     use auto_complete::BatchDrainOutcome;
 
@@ -80387,6 +80439,10 @@ fn emit_batch_drain_summary(
             "excluded_from_batch".to_string(),
             serde_json::Value::Number((excluded_from_batch as u64).into()),
         );
+        obj.insert(
+            "ineligible".to_string(),
+            serde_json::to_value(ineligible).unwrap_or_else(|_| serde_json::Value::Array(vec![])),
+        );
         println!("{}", serde_json::Value::Object(obj));
         return;
     }
@@ -80403,12 +80459,31 @@ fn emit_batch_drain_summary(
         BatchDrainOutcome::Drained
             if result.shipped.is_empty()
                 && result.punted.is_empty()
-                && result.escalated.is_empty() =>
+                && result.escalated.is_empty()
+                && ineligible.is_empty() =>
         {
             eprintln!(
                 "{} no queued items tagged `batch:{batch_name}` — tag members \
                  via `aida edit <id> --tags batch:{batch_name}` first",
                 crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
+            );
+        }
+        BatchDrainOutcome::Drained
+            if result.shipped.is_empty()
+                && result.punted.is_empty()
+                && result.escalated.is_empty() =>
+        {
+            let rendered = ineligible
+                .iter()
+                .map(|member| format!("{} ({})", member.spec, member.reason))
+                .collect::<Vec<_>>()
+                .join(", ");
+            eprintln!(
+                "{} batch `batch:{batch_name}` cannot progress — {} member{} remain but none are eligible: {}",
+                "⏸".yellow().bold(),
+                ineligible.len(),
+                if ineligible.len() == 1 { "" } else { "s" },
+                rendered,
             );
         }
         BatchDrainOutcome::Drained => {
@@ -80877,6 +80952,7 @@ fn finalize_drain_summary(
     // the terminal QueueDrained event so a monitor can alarm on it without
     // scraping the human closing line. trace:TASK-1297 | ai:claude
     excluded_from_batch: usize,
+    ineligible: &[events::IneligibleBatchMember],
 ) {
     // A budget-cap stop reports the cap that fired; otherwise the drain outcome.
     let outcome = match cap_stop {
@@ -80955,6 +81031,8 @@ fn finalize_drain_summary(
                     shelved: summary.tallies.shelved,
                     // trace:TASK-1297 | ai:claude
                     excluded_from_batch,
+                    // trace:BUG-1422 | ai:codex
+                    ineligible: ineligible.to_vec(),
                 },
             ),
         );
@@ -81381,6 +81459,7 @@ fn handle_auto_complete_next_n(
         // TASK-1297: a nextN drain has no `--batch` filter, so there is
         // nothing excluded to report. trace:TASK-1297 | ai:claude
         0,
+        &[],
     );
     // STORY-301: clean exit removes the drain-state file; a crash leaves it.
     if let Some(root) = &drain_root {

@@ -214,6 +214,12 @@ pub enum EventKind {
         // trace:TASK-1297 | ai:claude
         #[serde(default)]
         excluded_from_batch: usize,
+        /// BUG-1422: batch members that remained queued but were not eligible
+        /// for autonomous execution. Empty means the batch genuinely had no
+        /// remaining members (or this was not a batch drain).
+        // trace:BUG-1422 | ai:codex
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        ineligible: Vec<IneligibleBatchMember>,
     },
     /// The supervisor's mailbox has unread mail — preserves the one
     /// event-driven trigger that exists today (TASK-776). **Actionable.**
@@ -281,6 +287,14 @@ pub enum EventKind {
     /// so an unknown future event is wake-safe (never silently dropped).
     #[serde(other)]
     Unknown,
+}
+
+/// A queued batch member that the autonomous drain deliberately refused.
+// trace:BUG-1422 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct IneligibleBatchMember {
+    pub(crate) spec: String,
+    pub(crate) reason: String,
 }
 
 impl EventKind {
@@ -753,13 +767,42 @@ mod tests {
                 shipped,
                 shelved,
                 excluded_from_batch,
+                ineligible,
             } => {
                 assert_eq!(shipped, 8);
                 assert_eq!(shelved, 1);
                 assert_eq!(excluded_from_batch, 0);
+                assert!(ineligible.is_empty());
             }
             other => panic!("expected QueueDrained, got {other:?}"),
         }
+    }
+
+    // The incident fixture: a supervisor consuming only QueueDrained can tell
+    // that the batch is stuck on one guided and one blocked member.
+    // trace:BUG-1422 | ai:codex
+    #[test]
+    fn queue_drained_names_ineligible_members_and_reasons() {
+        let kind = EventKind::QueueDrained {
+            shipped: 0,
+            shelved: 0,
+            excluded_from_batch: 0,
+            ineligible: vec![
+                IneligibleBatchMember {
+                    spec: "STORY-1218".into(),
+                    reason: "guided execution mode".into(),
+                },
+                IneligibleBatchMember {
+                    spec: "TASK-1277".into(),
+                    reason: "blocked by in-flight work".into(),
+                },
+            ],
+        };
+        let json = serde_json::to_value(&kind).unwrap();
+        let members = json["ineligible"].as_array().unwrap();
+        assert_eq!(members.len(), 2);
+        assert_eq!(members[0]["spec"], "STORY-1218");
+        assert_eq!(members[1]["reason"], "blocked by in-flight work");
     }
 
     #[test]
@@ -838,6 +881,7 @@ mod tests {
             shipped: 8,
             shelved: 1,
             excluded_from_batch: 0,
+            ineligible: vec![],
         }
         .is_actionable());
         assert!(EventKind::UnreadMail.is_actionable());
@@ -1129,6 +1173,7 @@ mod tests {
                     shipped: 8,
                     shelved: 0,
                     excluded_from_batch: 0,
+                    ineligible: vec![],
                 },
             ),
         );

@@ -444,14 +444,28 @@ fn evaluate_rules(body: &str, rules: &NotifyRules) -> Vec<RuleFire> {
                 shipped,
                 shelved,
                 excluded_from_batch,
+                ineligible,
             } => {
                 // TASK-1297: a batch drain excluding approved, role-routed
                 // work is alarm-worthy even when it shipped fine — that is
                 // exactly the "3 open members re-driven for hours while 16
                 // sat outside the filter" incident shape.
                 // trace:TASK-1297 | ai:claude
-                if shipped == 0 || shelved > 0 || excluded_from_batch > 0 {
+                if shipped == 0 || shelved > 0 || excluded_from_batch > 0 || !ineligible.is_empty()
+                {
                     let mut msg = format!("drain shipped {shipped}, shelved {shelved}");
+                    if !ineligible.is_empty() {
+                        msg.push_str(&format!(
+                            "; {} member{} remain ineligible: {}",
+                            ineligible.len(),
+                            if ineligible.len() == 1 { "" } else { "s" },
+                            ineligible
+                                .iter()
+                                .map(|member| format!("{} ({})", member.spec, member.reason))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
+                    }
                     if excluded_from_batch > 0 {
                         msg.push_str(&format!(
                             "; {excluded_from_batch} other approved routed spec{} excluded by the batch filter",
@@ -732,7 +746,8 @@ mod tests {
                 EventKind::QueueDrained {
                     shipped: 0,
                     shelved: 1,
-                    excluded_from_batch: 0
+                    excluded_from_batch: 0,
+                    ineligible: vec![],
                 }
             )
         );
@@ -758,6 +773,7 @@ mod tests {
                 shipped: 3,
                 shelved: 0,
                 excluded_from_batch: 16,
+                ineligible: vec![],
             },
         );
         let fires = evaluate_rules(&format!("{body}\n"), &NotifyRules::default());
@@ -772,6 +788,29 @@ mod tests {
             "{}",
             fires[0].message
         );
+    }
+
+    // trace:BUG-1422 | ai:codex
+    #[test]
+    fn queue_drained_with_ineligible_members_fires_idle_with_work_and_names_them() {
+        let body = event(
+            None,
+            EventKind::QueueDrained {
+                shipped: 0,
+                shelved: 0,
+                excluded_from_batch: 0,
+                ineligible: vec![crate::events::IneligibleBatchMember {
+                    spec: "TASK-1277".into(),
+                    reason: "blocked by in-flight work".into(),
+                }],
+            },
+        );
+        let fires = evaluate_rules(&format!("{body}\n"), &NotifyRules::default());
+        assert_eq!(fires.len(), 1);
+        assert_eq!(fires[0].rule, "idle_with_work");
+        assert!(fires[0]
+            .message
+            .contains("TASK-1277 (blocked by in-flight work)"));
     }
 
     #[test]

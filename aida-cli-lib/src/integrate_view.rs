@@ -284,6 +284,7 @@ mod tests {
                 shipped: 4,
                 shelved: 1,
                 excluded_from_batch: 0,
+                ineligible: vec![],
             },
         );
         drained.ts = ts(1, now);

@@ -339,6 +339,7 @@ mod tests {
                     shipped: 1,
                     shelved: 0,
                     excluded_from_batch: 0,
+                    ineligible: vec![],
                 },
             )],
         );
@@ -368,6 +369,7 @@ mod tests {
                         shipped: 2,
                         shelved: 0,
                         excluded_from_batch: 0,
+                        ineligible: vec![],
                     },
                 )],
             );
