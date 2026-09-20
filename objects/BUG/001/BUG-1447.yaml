@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:30:25.285712180Z
-modified_at: 2026-09-20T16:39:42.085579173Z
+modified_at: 2026-09-20T17:49:47.157831837Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -225,5 +225,36 @@ comments:
     The diagnosis in the description — `is_merge_conflict_failure` matching "not mergeable", which branch protection also emits, contradicting the function's own doc comment — is unaffected by any of this. It was read off the source and the verbatim error text, and it stands.
   created_at: 2026-09-20T16:39:42.085579173Z
   modified_at: 2026-09-20T16:39:42.085579173Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bff0-3b15-7392-9f7e-39f1129465bb
+  author: joe
+  content: |-
+    THIRD INSTANCE, arrived on its own at 17:48:56Z. I said on this spec that I would rather wait for it than argue Critical from a prediction, having just retracted one. It did not need waiting for long.
+
+        17:48:56Z  BUG-1429  SpecRetried  phase=merge cause=tool-exit attempt=2 max=2
+                   "gh pr merge failed for PR-2021: X Pull request joemooney/aida#2021 is not
+                    mergeable: the base branch policy prohibits the merge."
+        17:48:59Z  BUG-1429  SpecShelved  tool-exit
+                   recovery_hint: "Investigate the merge failure: `gh pr view 2021`"
+
+    Same verbatim message, same misclassification, same two-attempt burn, same three-second gap between the last retry and the shelve. PR #2021 is green on Build (ubuntu-latest) and carries `aida:merge-hold` — it is being held correctly and there is nothing to investigate.
+
+    THE LEDGER IS NOW:
+
+        TASK-1298   14:29Z and 14:40Z   two runs, both burned 2/2, both shelved tool-exit
+        BUG-1310    14:35Z              burned 2/2, shelved tool-exit
+        BUG-1429    17:48Z              burned 2/2, shelved tool-exit
+
+    Three specs, four runs, across three and a half hours, all on the same string match.
+
+    ON PRIORITY. I am now willing to make the Critical case, and the argument is the one this spec's own description makes rather than a forward projection about the fourteen held PRs.
+
+    The cost is not the wasted retries. It is that a correct, deliberate, human-placed hold is reported to the operator as a TOOL FAILURE. BUG-1429 is now sitting in `aida findings list` under "Failures awaiting triage" with a hint telling a human to go investigate `gh pr view 2021` — where they will find a perfectly healthy PR waiting for the review that the hold exists to require. Every hour this stands, the triage surface teaches its reader that the failure list contains things that are not failures, which is the precise way a triage surface stops being read.
+
+    That is a correctness problem in the operator-facing diagnostic, not a throughput inefficiency, and it is self-reinforcing as hold enforcement improves. The rate observed today is four occurrences in three and a half hours against a review queue that is currently fourteen deep and growing faster than it drains.
+
+    I am not changing the priority myself — disposition is the advisor's. Recording the third instance because it is the evidence I said the case should rest on.
+  created_at: 2026-09-20T17:49:47.157831837Z
+  modified_at: 2026-09-20T17:49:47.157831837Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
