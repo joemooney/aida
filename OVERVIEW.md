@@ -193,6 +193,12 @@ aida/
 
 ## Feature surface (high level)
 
+External wall displays and dashboards use a narrow, versioned read-only
+contract rather than depending on incidental CLI JSON fields. The eleven
+polling lenses and local event follow feed are declared by `aida contract
+--json`, guarded by fixtures in CI, and documented in
+[`docs/monitor-contract.md`](docs/monitor-contract.md).
+
 For details on any of these see the [CLI reference](docs/cli/README.md).
 
 ### Requirements

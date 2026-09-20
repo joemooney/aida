@@ -69,6 +69,9 @@ pub struct WatchOpts {
     /// Also print the benign (non-actionable) events as an indented debug feed.
     /// Default (`false`) absorbs them silently — the whole point of the lever.
     pub all: bool,
+    /// Preserve each event as JSONL for contract consumers.
+    // trace:STORY-1352 | ai:codex
+    pub json: bool,
     /// Verbose live-debugging feed: implies [`all`](Self::all), timestamps and
     /// run-tags every line, and appends each event's raw payload.
     // trace:TASK-994 | ai:claude
@@ -91,6 +94,7 @@ pub struct WatchOpts {
 struct Feed {
     /// Surface the benign (non-actionable) events too.
     all: bool,
+    json: bool,
     /// Stamp each line with local time + run tag and append the raw payload.
     verbose: bool,
 }
@@ -103,6 +107,7 @@ impl Feed {
     fn from_opts(opts: &WatchOpts) -> Self {
         Self {
             all: opts.all || opts.verbose,
+            json: opts.json,
             verbose: opts.verbose,
         }
     }
@@ -236,6 +241,9 @@ fn render_one(line: &str, feed: Feed) -> Option<String> {
         return None;
     }
     let ev: Event = serde_json::from_str(trimmed).ok()?;
+    if feed.json {
+        return Some(trimmed.to_string());
+    }
     render(&ev, feed)
 }
 
@@ -441,18 +449,27 @@ mod tests {
     /// The default machine feed: wake lines only.
     const WAKES: Feed = Feed {
         all: false,
+        json: false,
         verbose: false,
     };
     /// `--all`: benign events surface too, in the terse one-line form.
     const ALL: Feed = Feed {
         all: true,
+        json: false,
         verbose: false,
     };
     /// `--verbose`: the live-debugging feed (implies `--all`).
     // trace:TASK-994 | ai:claude
     const VERBOSE: Feed = Feed {
         all: true,
+        json: false,
         verbose: true,
+    };
+
+    const JSON: Feed = Feed {
+        all: true,
+        json: true,
+        verbose: false,
     };
 
     fn fixture(path: &Path, events: &[Event]) {
@@ -674,6 +691,22 @@ mod tests {
         assert!(render_one("", WAKES).is_none());
         assert!(render_one("   ", WAKES).is_none());
         assert!(render_one("{not json", WAKES).is_none());
+    }
+
+    // trace:STORY-1352 | ai:codex
+    #[test]
+    fn json_feed_preserves_the_typed_event_object() {
+        let event = Event::new(
+            Some("STORY-1352".into()),
+            "run-1",
+            EventKind::CiTerminal { green: true },
+        );
+        let raw = serde_json::to_string(&event).unwrap();
+        let rendered = render_one(&raw, JSON).unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&rendered).unwrap(),
+            serde_json::to_value(event).unwrap()
+        );
     }
 
     /// `--verbose` implies `--all`: asking for the debugging feed must not

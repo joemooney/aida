@@ -1,0 +1,1 @@
+{"name":"drain-status","command":"aida drain status --json","fields":{"drain.running":"boolean","in_flight":"array"}}

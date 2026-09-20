@@ -280,6 +280,13 @@ jobs:
           export PATH="$PWD/target/debug:$PATH"
           python3 docs/cli/verify-manual.py
 
+      # trace:STORY-1352 | ai:codex
+      - name: Monitor contract drift guard
+        if: steps.changes.outputs.full_ci == 'true'
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          python3 docs/monitor-contract-fixtures/verify.py "$BASE"
+
       - name: Check formatting
         if: steps.changes.outputs.full_ci == 'true'
         run: cargo fmt --all -- --check

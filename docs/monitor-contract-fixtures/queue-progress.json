@@ -1,0 +1,1 @@
+{"name":"queue-progress","command":"aida queue progress --json","fields":{"queued":"integer","in_progress":"integer","done":"integer"}}

@@ -333,3 +333,12 @@ You now have every read-only lens: live orientation (`status`), the audit trail 
 - **[Chapter 1 — Getting started](01-getting-started.md)**: `list` / `show` — the graph lenses these reporting views send you to drill into.
 - **[Chapter 4 — Git & lifecycle](04-git-lifecycle.md)**: the transitions `history` and `digest` are *reporting on* — where Done, Completed, and Released come from.
 - **[Chapter 3 — Work & autonomy](03-work-autonomy.md)**: `backlog` / `burndown` — the survey-the-stuck-set counterparts to single-spec `why`, and the drains that `metrics`/`usage drains` measure.
+
+## Monitor contract
+
+### `aida contract`
+
+Print the versioned JSON field subset promised to read-only external monitor
+consumers. See [the monitor contract](../monitor-contract.md) for compatibility
+rules, fixtures, and the event-follow example. Use `aida contract --json` in
+automation; monitor consumers must not parse human-formatted command output.

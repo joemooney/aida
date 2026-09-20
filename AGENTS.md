@@ -68,9 +68,16 @@ aida integrate --run
 aida brief list --for-agent <agent>
 aida brief ack .aida/agent-briefs/<agent>/<brief>.md
 aida --asciinema --cast-title "Demo" queue work --batch <name> --auto-complete
+aida contract --json
+aida watch --all --json
 tests/test_mcp_stdio.sh --skip-agent-contract
 tests/test_mcp_doc_consistency.sh
 ```
+
+External dashboards consume the versioned, read-only field subset documented
+in `docs/monitor-contract.md`. `aida contract --json` advertises it and
+`aida watch --all --json` is its local JSONL follow feed; consumers must not
+parse human output or read `.aida-store` directly.
 
 Type protocols are editable META requirements tagged `protocol:<type>`; the
 optional lane overlay uses `protocol:lane:<lane>` (`research`, `docs`, or

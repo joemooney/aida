@@ -1071,6 +1071,7 @@ pub(crate) fn handle_git_backend_command(
         // trace:TASK-1167
         Command::Tail { .. } => unreachable!("tail is dispatched before storage init"),
         Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
+        Command::Contract { .. } => unreachable!("contract is dispatched before storage init"),
         // trace:TASK-1034
         Command::Integrate { .. } => {
             unreachable!("integrate is dispatched before storage init")

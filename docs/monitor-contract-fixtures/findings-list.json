@@ -1,0 +1,1 @@
+{"name":"findings-list","command":"aida findings list --json","fields":{"findings":"array"}}
