@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:13.869367085Z
-modified_at: 2026-09-20T22:36:51.000370557Z
+modified_at: 2026-09-20T22:40:38.290646754Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -137,4 +137,10 @@ comments:
   created_at: 2026-09-20T18:40:51.159535358Z
   modified_at: 2026-09-20T18:40:51.159535358Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c0fa-8392-7833-b609-69631343fc5c
+  author: joe
+  content: 'Implemented the bounded recovery fix: metadata-only queue rework now resets Draft/Planned/InProgress/NeedsAttention/Done/Completed specs to Approved so the queued drain can claim them; --work preserves the InProgress transition because it immediately launches the lease-owning session. Applied the same policy to MCP queue_rework and added regression coverage. Verified: cargo test -p aida-cli-lib queue_rework_tests --lib (26 passed); cargo fmt --all -- --check; git diff --check.'
+  created_at: 2026-09-20T22:40:38.290646754Z
+  modified_at: 2026-09-20T22:40:38.290646754Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
