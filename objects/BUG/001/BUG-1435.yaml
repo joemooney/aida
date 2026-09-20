@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T10:42:03.598350636Z
-modified_at: 2026-09-20T10:42:14.160879658Z
+modified_at: 2026-09-20T10:42:15.092052541Z
 req_type: Bug
 tags:
 - diagnostic-decay
@@ -43,5 +43,9 @@ relationships:
 - rel_type: !Custom related
   target_id: 01a0bd60-639c-7fd1-bf2a-89cd2fd1e1ca
   created_at: 2026-09-20T10:42:14.160874901Z
+  created_by: joe
+- rel_type: !Custom related
+  target_id: 01a0bba5-04e1-7530-9c2d-33b3d51dc915
+  created_at: 2026-09-20T10:42:15.092046687Z
   created_by: joe
 execution_mode: drain
