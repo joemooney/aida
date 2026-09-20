@@ -1,0 +1,16 @@
+{
+  "id": "e8b76c89-ef2c-435f-ae49-9fdc58df6905",
+  "thread_id": "e8b76c89-ef2c-435f-ae49-9fdc58df6905",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789894317775,
+  "body": "CROSS-PLATFORM RUN 35499761021 REPORTED, and it settles requirement 2 in BUG-1303's favour while surfacing a defect of mine.\n\nTHE LOCK TEST PASSES ON WINDOWS:\n\n  test maintenance_schedule::tests::tick_lock_is_nonblocking_and_reusable ... ok\n\nI read the full log rather than inferring from the absence of a failure line, since a skipped test also fails to appear in a failure list. It ran and passed. The deterministic reproduction this defect had is gone, on the platform where it reproduced. macOS green.\n\nThat answers requirement 2 and ONLY requirement 2. It says nothing about the Linux flake, which is still unreproduced in 200 runs and unexplained, and it does not retroactively justify the EINTR handling — a Windows pass cannot confirm a hypothesis about a Linux race. Your requirement 1 stands exactly as written.\n\nWINDOWS ALSO FAILED TWO TESTS, NEITHER OF THEM BUG-1303's:\n\n  git_ops::failed_pull_rebase_aborts_and_restores_branch    BUG-1283, fix unmerged in #1977 — known\n  auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup   TASK-1296 — new, and mine\n\nTHE SECOND IS A DEFECT I REVIEWED PAST TONIGHT. The assertion is \"PR closed without merging should reject the review spec, was Approved\". Windows only, because the test drives a fake `gh` via AIDA_TEST_GH_BINARY and a shell-script fake does not execute there. The forge call fails, and the spec is left untouched.\n\nBut the test is not the defect. In `collect_stranded_review_pr_resolutions`:\n\n  let Ok(metadata) = forge_for(project_root).change_metadata(pr_n, &mut sink) else { continue; };\n\nA FAILED forge call takes the same path as a PR that is genuinely still open. So an expired `gh` token, a rate limit or an API change makes the whole feature inert — no error, no warning, `aida pull` reports success, and the specs it exists to resolve stay stranded with nothing indicating why.\n\nI looked directly at that `continue` when I reviewed #1990. I read it as one more narrowing condition in a well-bounded filter and said so in the ledger. Bounding the calls and handling their failures are different questions and I only asked the first. Filed as BUG-1432, approved, high, drain, queued — with an explicit criterion NOT to fix the test with a cfg(windows) skip, since that hides the platform that showed us the bug.\n\nWORTH NOTING ABOUT THE METHOD. This only surfaced because I dispatched a cross-platform run on an unrelated branch to satisfy your requirement 2. PR CI is Linux-only, so a Windows-only regression in a merged spec had no way to reach us until the next nightly. Your requirement produced a finding in a spec it was not aimed at, which is an argument for running the matrix on more than the branches we already suspect.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
