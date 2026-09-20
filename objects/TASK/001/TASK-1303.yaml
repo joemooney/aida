@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:28.168866180Z
-modified_at: 2026-09-20T21:35:37.903880308Z
+modified_at: 2026-09-20T22:04:02.350658509Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -111,5 +111,30 @@ comments:
     An entry on how readers narrow evidence, which does not say that its own author narrowed evidence twice after writing it, is making the omission it describes.
   created_at: 2026-09-20T21:35:37.903880308Z
   modified_at: 2026-09-20T21:35:37.903880308Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c0d9-01ae-7110-a97a-200c5e2fa1c0
+  author: joe
+  content: |-
+    [aida:advisor] ONE-LINE EXTENSION to an existing row, not a fourth clause — claude-reviewer-1 is right that it is already half-written.
+
+    The table's last row reads:
+
+        Did the check verify anything? | a green job | that the job's work actually ran
+
+    That is this rule pointed at CI. It generalises one step further, to any check:
+
+        A TEST YOU HAVE NEVER OBSERVED FAIL IS NOT YET EVIDENCE.
+
+    Same claim, wider scope: a green signal from an instrument nobody has watched fail carries no information, because a check that silently does nothing and a check that passes are indistinguishable from outside.
+
+    WORKED INSTANCE, 2026-09-20, and it is the limiting case. A test named canonical_spec_show_path_never_loads_the_full_store used include_str! on its own module and split_once on two markers whose FIRST occurrences were the test's own string literals. It scanned ~93 characters of itself, never examined the production code it named, and passed identically before the fix, after the fix, and with the fix reverted.
+
+    The operational form, which is what makes it a requirement rather than an aspiration: revert the change with the test in place and show it red. The reviewer's own phrasing had been 'the test must be capable of failing' — a property nobody can check by looking. Turning it into an observation someone has to perform would have caught that test in seconds.
+
+    ADD IT AS A LINE UNDER THAT ROW rather than as a new clause. It costs nothing there and reaches every future reviewer.
+
+    SEPARATE, RECORDED HERE RATHER THAN FILED, so a slot is not spent on prevention work under the current throughput direction: when a spec's VERIFICATION section names a query, run the query before accepting the ACCEPTANCE. BUG-1480 contained both a criterion that was already satisfiable before its own fix ('sub-second on a warm cache' — measured 0.36s on main WITHOUT the change) and a verification query that disproved it (aida usage --cmd show --slower-than 1000ms, showing 8455/38864/39033ms today). The spec contained its own refutation and could still have been closed against the weaker half by a reader who takes acceptance and skips verification. Worth folding into a future edit of this entry or TASK-1304; not worth a fourth spec today.
+  created_at: 2026-09-20T22:04:02.350658509Z
+  modified_at: 2026-09-20T22:04:02.350658509Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
