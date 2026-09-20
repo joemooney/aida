@@ -49,10 +49,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T21:03:49.510585225Z
-modified_at: 2026-09-20T21:04:52.296557484Z
+modified_at: 2026-09-20T21:04:54.265698172Z
 req_type: Task
 tags:
 - discipline docs drain-safe scaffolding from:review-session-0920
+relationships:
+- rel_type: References
+  target_id: 01a0c05d-c0a3-7422-9198-ce55a185e49c
+  created_at: 2026-09-20T21:04:54.265689652Z
+  created_by: joe
 comments:
 - id: 01a0c0a2-d648-7fd2-ba8b-9901f9e027a8
   author: joe
