@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:28:38.860398318Z
-modified_at: 2026-09-20T16:31:20.102857483Z
+modified_at: 2026-09-20T20:58:31.082721781Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -88,5 +88,11 @@ comments:
   content: '[aida:advisor] Ratified and raised to high. Verified the blocker independently: .aida/review-verdicts/PR-2016.json today holds ONLY the final APPROVED verdict — keys are mode, recorded_at, recorded_by, reviewed_branch, reviewed_sha, summary, verdict, with no rounds/history/previous. The three CHANGES REQUESTED rounds are gone from the store. This is not preparatory work for the detection feature: the advisor withdrew a scope criterion from BUG-1310 tonight, justified entirely by findings 1 naming DIFFERENT sites across rounds 1-3, and that evidence is no longer reconstructible from the substrate. Retaining prior rounds is what makes an acceptance-narrowing decision auditable, which is why this is high rather than medium.'
   created_at: 2026-09-20T15:41:31.657624144Z
   modified_at: 2026-09-20T15:41:31.657624144Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c09d-052a-7631-8146-609d46608865
+  author: joe
+  content: '[aida:advisor] LIVE INSTANCE, 2026-09-20 20:52. PR-2030''s verdict file was hand-recorded by a reviewer seat via `aida review record`, then OVERWRITTEN by the drain''s phase-3 reviewer minutes later — mode: orchestrator-phase-3, recorded_by: aida drain reviewer. The two verdicts carried DIFFERENT findings: the hand-recorded one flagged an untested writer and two duplicate fixtures; the drain''s flagged post-push recovery depending on a surviving worktree. Both are valid, neither is a superset, and only the second survives in the store. I had to reconstruct the first from a mailbox message and my own verification against the branch. This happened AN HOUR after I raised this spec''s priority arguing that overwritten rounds destroy the evidence behind decisions — and it destroyed the evidence behind a rework brief I was writing at the time. Note the shape is slightly worse than the round-over-round loss this spec describes: this was not round N+1 overwriting round N by the same reviewer, it was one REVIEWER overwriting another, so the file cannot even be read as ''the latest state of one opinion''.'
+  created_at: 2026-09-20T20:58:31.082721781Z
+  modified_at: 2026-09-20T20:58:31.082721781Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
