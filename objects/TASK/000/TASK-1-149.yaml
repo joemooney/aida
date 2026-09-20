@@ -3,12 +3,12 @@ spec_id: TASK-1-149
 agreed_id: TASK-173
 title: Post-deployment measurement dispatched before its sample matured
 description: TASK-1294 was routed to a headless implementer only 6h25m after TASK-1291 landed, with 5/20 required subsequent merges visible and only one post-boundary PrMerged event. Time/sample-gated measurement specs need a readiness gate so drains do not repeatedly spend sessions on an acceptance contract that is not yet executable.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T02:33:50.292579660Z
-modified_at: 2026-09-20T02:33:50.292579660Z
+modified_at: 2026-09-20T02:46:54.064445929Z
 req_type: Task
 tags:
 - aida:drain
@@ -18,3 +18,10 @@ tags:
 - linked:TASK-1294
 - measurement-readiness
 - severity:minor
+comments:
+- id: 01a0bcb5-9d70-7131-b096-5fc07f933298
+  author: joe
+  content: Dismissed by advisor during findings triage.
+  created_at: 2026-09-20T02:46:54.064445929Z
+  modified_at: 2026-09-20T02:46:54.064445929Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
