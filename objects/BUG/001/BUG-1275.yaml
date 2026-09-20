@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:47:10.008439484Z
-modified_at: 2026-09-20T02:01:22.071554873Z
+modified_at: 2026-09-20T02:05:54.535799604Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -87,5 +87,11 @@ comments:
     Product-seat note on the config amendment, which matters more than it looks: ci_idle_window_secs() reads AIDA_WORKER_CI_IDLE and nothing else — there is no config path (ci_idle_timeout.rs:126-130). So the mitigation currently in use, a launcher exporting the env var, is itself a MEMORY-backed rule: every present and future launch site must remember to set it, and any that forgets shelves healthy work. That is exactly the failure mode STORY-1351 documents (memory 0 for 3, substrate 6 for 6) and it argues for the config knob being part of THIS fix rather than a follow-up: a value in .aida/config.toml protects every launch path — the advisor's, a human's, the shift tick's and the launcher's — without anyone remembering anything.
   created_at: 2026-09-19T17:53:53.262571562Z
   modified_at: 2026-09-19T17:53:53.262571562Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bc90-15e7-7e13-9222-0257d37c2ac1
+  author: joe
+  content: Implemented GitHub CI liveness re-arming for every InProgress observation; absent/NoSignal observations do not re-arm. Raised default idle window to 1200s based on a measured 705s p95 across the latest 97 completed GitHub CI runs on 2026-09-19. Added tracked [drain] ci_idle/ci_absolute duration knobs with env precedence, documentation, and pure/config tests (16 focused tests pass).
+  created_at: 2026-09-20T02:05:54.535799604Z
+  modified_at: 2026-09-20T02:05:54.535799604Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
