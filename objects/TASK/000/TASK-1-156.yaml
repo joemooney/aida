@@ -1,0 +1,27 @@
+id: 01a0c101-f635-7600-ad50-abe0e70608ed
+spec_id: TASK-1-156
+title: 'Repeated unchanged review findings: BUG-1297'
+description: |-
+  Identical reviewer findings recurred twice for BUG-1297; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (PR #2006):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: 5a857b7df435
+  Recorded: 2026-09-20T15:08:49.506392012+00:00
+  Findings:
+  1. BUG-1297 AC1/AC2: aida mailbox send accepts --thread and --in-reply-to together, but mailbox_cmd.rs takes the --thread branch first and never resolves in_reply_to. An unknown or ambiguous reply id is therefore written instead of refused, and a unique prefix is stored non-canonically. Resolve/validate --in-reply-to even when --thread is present, or make the flags conflict, and add a regression test for the combined invocation.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-20T22:48:46.389478664Z
+modified_at: 2026-09-20T22:48:46.389478664Z
+req_type: Task
+tags:
+- from-advisor:BUG-1297
+- kind:observation
+- linked:BUG-1297
+- loop-guard
+- review-recurrence
+- severity:major
