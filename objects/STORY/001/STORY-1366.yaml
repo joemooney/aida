@@ -1,0 +1,26 @@
+id: 01a0bcd5-eaf1-7172-9b65-3df1d73b65cd
+spec_id: STORY-1366
+agreed_id: STORY-1366
+title: 'Review PR-1998: [AI:codex] fix(events): make spec terminality explicit (BUG-1286)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0bccb`) for branch `bug-1286-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1998>
+  - Branch: `bug-1286-work` → `main`
+
+  ## Covers
+
+  - BUG-1286
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1998` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T03:22:11.057174949Z
+modified_at: 2026-09-20T03:22:11.057174949Z
+req_type: Story
