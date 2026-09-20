@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:22:29.721225410Z
-modified_at: 2026-09-20T09:31:00.768526787Z
+modified_at: 2026-09-20T09:41:14.959237700Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -181,6 +181,45 @@ comments:
     WHY THE NON-REPRODUCTION READING WAS WRONG, worth recording because it is a reusable error. Two non-reproductions of an intermittent fault are not evidence of absence; they are two samples from the passing side. Agreement between them felt like corroboration and was not. The asymmetry is the rule: for an intermittent defect only a REPRODUCTION is informative, and a pass is close to worthless.
   created_at: 2026-09-20T09:31:00.768526787Z
   modified_at: 2026-09-20T09:31:00.768526787Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0be30-f64f-7d63-be18-197a208df326
+  author: joe
+  content: |-
+    [advisor] THE CONTROL RUN ON MAIN SETTLES THE WINDOWS CAUSE WITH A REAL OBSERVATION. Requirement 1 is satisfied for Windows. Criterion 11's instrumentation is not needed for that half — the panic already carries the number.
+
+      run 35502040911, branch MAIN (does NOT contain the fix), Windows:
+
+      maintenance_schedule::tests::tick_lock_is_nonblocking_and_reusable ... FAILED
+      panicked at aida-cli-lib\src\maintenance_schedule.rs:1979:43:
+      called `Result::unwrap()` on an `Err` value: The process cannot access the file
+      because another process has locked a portion of the file. (os error 33)
+
+    OS ERROR 33 IS THE ANSWER. That is ERROR_LOCK_VIOLATION, which is what fs2 returns as its platform contention sentinel on Windows and which Rust does not surface as `ErrorKind::WouldBlock`. So the guard at the old call site never matched, and a contended lock took the hard-failure arm. That is hypothesis (a) — genuine contention, mis-classified — established from a failure rather than inferred.
+
+    It also means the fix is connected to the cause by MECHANISM, not merely by correlation with a green run. The fix classifies raw 33 as contention and returns Ok(None); the observed failure is raw 33 reaching the error arm. That is a much stronger claim than "the test passed once on a branch that contains it", which is all we had an hour ago.
+
+    WHAT THE EXPERIMENT DID AND DID NOT DO, since I stated its asymmetry in advance and should hold myself to it:
+
+      main FAILS   -> informative. Delivered: the defect is present without the fix, and it carries its cause.
+      branch PASSES -> still uninformative on its own. One sample from the passing side of an intermittent fault.
+
+    So I am NOT claiming the fix is proven by the branch's green run. I am claiming the cause is known and the fix addresses that cause. Those are different, and the second is the one that matters.
+
+    REVISED NEXT STEPS, superseding criteria 11 and 12 for the Windows half:
+
+    11 (revised). No instrumentation change is needed to identify the Windows cause; it is identified. If instrumentation is still wanted for the LINUX flake — which remains unexplained and may be a different error entirely — that is worth doing on its own terms, and the value is in seeing whether Linux ever produces something other than WouldBlock.
+    12 (revised). The contention classification may ship: its cause is established by observation, and the mechanism connects. The EINTR handling still may not — nothing observed points to it, and the Linux flake is the only thing it could be addressing.
+    13 stands unchanged. EINTR, if wanted, goes in its own spec.
+
+    MAIN IS CURRENTLY RED ON WINDOWS ON THREE TESTS, worth recording together since this run shows all of them:
+
+      tick_lock_is_nonblocking_and_reusable          this spec, fix pending
+      failed_pull_rebase_aborts_and_restores_branch  BUG-1283, fix ready in #1977 and unmerged
+      auto_bump_resolves_stranded_review_pr_specs    BUG-1432, filed tonight
+
+    Two of the three have fixes waiting. That is worth knowing before anyone reads a red nightly as three new problems.
+  created_at: 2026-09-20T09:41:14.959237700Z
+  modified_at: 2026-09-20T09:41:14.959237700Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
