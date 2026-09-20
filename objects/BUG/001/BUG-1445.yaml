@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:34:29.728492333Z
-modified_at: 2026-09-20T20:28:13.894059385Z
+modified_at: 2026-09-20T20:32:39.743559218Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -157,6 +157,36 @@ comments:
   created_at: 2026-09-20T20:28:13.894059385Z
   modified_at: 2026-09-20T20:28:13.894059385Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c085-593f-7982-961c-6f3d0d269ce7
+  author: joe
+  content: |-
+    Evidence transferred from BUG-1476, which I filed five hours after this one on the same defect and am recommending be superseded by it. The measurement is worth keeping here rather than losing with the duplicate.
+
+    IMPLEMENTER PHASE DURATIONS across every drain run on 2026-09-20 (PhaseEntered idx=1 to idx=2):
+
+        under 60s:  11 runs        normal length:  40 runs
+
+        06:02  TASK-1289   27s     15:01  BUG-1297   50s     18:23  BUG-1297   14s
+        13:23  STORY-1350  16s     17:00  BUG-1288   16s     18:23  BUG-1288   17s
+        14:29  BUG-1310    17s     17:04  BUG-1286   16s     18:27  BUG-1432   16s
+        14:35  TASK-1298   15s     18:17  TASK-1298  18s
+
+    Every one of those eight specs already had an open PR created BEFORE its short run. Eleven runs, no exceptions. The forty normal-length runs are first passes with no PR yet.
+
+    THE CONTROLLED COMPARISON, BUG-1432 on the same day, same binary, forty minutes apart:
+
+        17:57     first run opens PR-2024    normal-length implementer, real work, real PR
+        18:17:32  shelved verdict:request-changes
+        18:27:29  second run: implementer 16s, no commit
+
+    One variable changed between the two runs — the PR now exists — and the implementer went from doing real work to exiting in sixteen seconds. The advisor independently verified run 01a0bff2's implementer at 311 seconds against the event log.
+
+    DOWNSTREAM SHAPE traced on three specs requeued and watched: a three-second CI phase follows necessarily (cached result for an unmoved head), then the reviewer spends three to five real minutes re-reviewing code it has already reviewed and correctly reaches the same conclusion. Branch tips were unchanged in all three.
+
+    This is the same defect this spec describes, observed from the phase-duration side rather than the rebase-only side. Recording it here because your fix is the one that landed.
+  created_at: 2026-09-20T20:32:39.743559218Z
+  modified_at: 2026-09-20T20:32:39.743559218Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0c07f-b52c-7b71-95c7-e4e12fe56a58
   author: aida-auto-bump
