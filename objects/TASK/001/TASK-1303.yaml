@@ -2,8 +2,8 @@ id: 01a0c001-5608-7293-8f3c-789a0c995a97
 spec_id: TASK-1303
 agreed_id: TASK-1303
 title: 'Session-discipline report-vs-artifact entry: add the pinning rule and correct the two command caveats'
-description: |-
-  Follow-up to TASK-1302 / PR #2023, which is approved and merged. Three additions to the "Verify against the artifact that ships" section of the session-discipline guide. Master first, then mirror to the project copy - the two are required byte-identical by the discipline-pack parity test.
+description: |
+  Follow-up to TASK-1302 / PR #2023, which is approved and merged. Four additions to the "Verify against the artifact that ships" section of the session-discipline guide. Master first, then mirror to the project copy - the two are required byte-identical by the discipline-pack parity test.
 
   1. THE PINNING RULE (the advisor flagged this on TASK-1302 as a follow-up rather than a round; recording it here so it survives).
   An artifact reference must be PINNED, not re-derived: capture the identifier and its content in the same operation, and quote that identifier. A head can move between two individually-correct commands a minute apart and both readings will look authoritative. This is the gap the table does not close - its first row recommends "git show HEAD:<path>" and HEAD is exactly the thing that can move underneath you.
@@ -14,9 +14,14 @@ description: |-
   3. THE MARKER REGEX FALSE-POSITIVES ON MARKDOWN.
   Verified empirically: the ^=======$ branch matches a markdown setext heading underline of exactly seven equals signs, reporting count 1 and exit 0 on a file with no conflict at all. The incident the entry documents was a conflict in a markdown discipline file containing a table, so this is the exact file class the advice targets. It fails safe by over-reporting, so this is precision rather than correctness - but a one-line caveat costs nothing.
 
+  4. A FILTER YOU APPLY IS PART OF THE INSTRUMENT.
+  Added at the advisor's request after it superseded its own BUG-1443. Checking the artifact rather than the step's report - which is what the merged entry already says - does not help if you then look only at the part of the artifact you already believe. The advisor's own case: it grepped each of three CI logs for a test name it had already found, read "it matched in all three" as "the same test failed in all three", and filed a spec generalising one defect to three unrelated ones. The grep could only ever have returned that. Two sibling instances the same day: filtering an "aida rel add" run to its success line and discarding twelve warnings that the new edges were not traversable, and running a command under 2>/dev/null and then describing the manufactured silence.
+  This is the STRONGER of the two rules in this spec, because it survives a disciplined reader: the pinning rule catches a stale reading, but the filter rule catches a fresh reading of a pre-selected slice. State it as its own short paragraph, not a table row - a grep, a jq selector, a --json field list, a 2>/dev/null and a tail are all filters, and the check is whether the filter could have returned anything other than what you expected.
+
   ## Acceptance
 
   - The section states the pinning rule, tied to the table row that recommends reading HEAD.
+  - The section states the filter rule as its own paragraph, with the general test: ask whether the filter you applied could have returned a result other than the one you expected.
   - The exit-status inversion is either fixed in the recommended command or called out inline where the command appears.
   - The setext false-positive is noted, or the regex is tightened so a markdown heading underline does not match.
   - Master and project copy remain byte-identical and project_discipline_pack_matches_master still passes.
@@ -26,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:28.168866180Z
-modified_at: 2026-09-20T18:15:40.560663857Z
+modified_at: 2026-09-20T19:25:13.458244618Z
 req_type: Task
 tags:
 - batch:night-0920
