@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:33.544062298Z
-modified_at: 2026-09-20T03:11:03.124814600Z
+modified_at: 2026-09-20T03:20:49.537899688Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -127,5 +127,11 @@ comments:
     Verified live on a fresh same-day case, so this is current behaviour and not a historical artifact — which matters given the no-backfill guard.
   created_at: 2026-09-19T21:52:06.038691793Z
   modified_at: 2026-09-19T21:52:06.038691793Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bcd4-ac81-7063-9465-67445183cda6
+  author: joe
+  content: 'Implementation: added additive SpecCompleted and RunCompleted event kinds; EventKind::is_terminal plus latest_terminal_for_spec makes terminality queryable by kind while preserving trailing phase telemetry. SpecCompleted emits after confirmed Completed transitions from pull auto-bump and db reconcile-status (one per spec, including multi-spec trailers), carrying commit, PR when known, and closure path. RunCompleted emits after successful trailing pull/build. Added positional/crash, multi-spec, pull, and reconcile regression coverage; documented no-backfill/unknown semantics. trace:BUG-1286'
+  created_at: 2026-09-20T03:20:49.537899688Z
+  modified_at: 2026-09-20T03:20:49.537899688Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
