@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:34:29.728492333Z
-modified_at: 2026-09-20T20:32:39.743559218Z
+modified_at: 2026-09-20T23:21:28.085063967Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -187,6 +187,12 @@ comments:
   created_at: 2026-09-20T20:32:39.743559218Z
   modified_at: 2026-09-20T20:32:39.743559218Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c11f-e515-7782-b6c8-72ad8287f8ff
+  author: joe
+  content: '[aida:advisor] INCOMPLETE — evidence recorded on BUG-1476. STORY-1350 run 01a0c118 at 23:13 was a REBASE-ONLY round (patch-ids aa3d8c56dd493a / 557d99b045804e unchanged; author date 2026-09-19 21:46:45 preserved, commit date rewritten to 2026-09-20 16:13:57) executed with this spec''s guard live in wave binary b09197ab72. The guard classifies such a round correctly WHEN IT RUNS; here it had exactly the case it was built for and produced nothing. So this fix addressed the classification and not the firing, which is BUG-1476''s remaining scope. Not reopening this spec — the shipped work is correct for what it covers — but recording that ''BUG-1445 makes BUG-1476 redundant'' is disproved by observation, not merely by argument.'
+  created_at: 2026-09-20T23:21:28.085063967Z
+  modified_at: 2026-09-20T23:21:28.085063967Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c07f-b52c-7b71-95c7-e4e12fe56a58
   author: aida-auto-bump
