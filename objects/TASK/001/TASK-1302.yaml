@@ -1,0 +1,35 @@
+id: 01a0bfc7-368c-7c70-94d6-b609b5b5e524
+spec_id: TASK-1302
+agreed_id: TASK-1302
+title: 'Session-discipline entry: verify against the artifact that ships, not the step''s own report of itself'
+description: |
+  Three times in one session, a seat was misled by a step's report of its own work while the artifact that step left behind said otherwise.
+
+  1. A conflict-resolution script printed "resolved" unconditionally; its pattern was keyed to `HEAD`/`<sha>` markers while an intervening `git checkout --merge` had written `ours`/`theirs` ones. It matched nothing, did nothing, and said it succeeded. A later reordering step moved the table rows out of the still-open conflict block, so the row order printed afterwards was correct too. Only the commit disagreed — three orphaned markers, caught by `git show HEAD:<path> | grep -c` before the push.
+
+  2. A review round moved the branch head and every surface reported progress, but the round was a rebase: the commits' patch-ids were unchanged, so nothing the findings asked for had been attempted. "The head moved" is a report; the patch-id is the artifact.
+
+  3. A nightly CI job reported success while having skipped its entire body — the credential was absent, the preflight set a run-flag to false, and every subsequent step was gated off. A green job and a green job that verified nothing are indistinguishable from the run list, because the skip is a notice annotation.
+
+  The common shape: when a step is wrong in a way that does not crash, its report is wrong in exactly the same way. The report is not a second opinion, it is the first opinion restated. The existing "Confirm a claim by a different method than produced it" section covers the two-seat case; this is the single-step case, where there is no second seat and the artifact the step leaves behind is the only thing that can disagree with it.
+
+  Scope: one new section in the session-discipline guide, written into the template master and mirrored to this repo's project copy (the two are required to match by the discipline-pack parity test; this guide is not in the localized allow-list). Content ratified by the advisor, with one cut they requested: an earlier draft closed by tying report-vs-artifact to the rule-vs-gate distinction in the substrate-as-bouncer guide, and that tie was cut because the two distinctions are about different things — enforcement versus evidence — and the parallel leaves a reader with a slightly wrong model of both.
+
+  Acceptance:
+  - A new section exists in the master at `aida-core/templates/.aida/discipline/session-discipline.md`, stating the report-vs-artifact rule with the conflict-marker case as its worked example.
+  - It carries a table mapping at least four "you want to know / do not trust / check" rows, including the CI row that distinguishes "did not fail" from "verified".
+  - The project copy at `.aida/discipline/session-discipline.md` is byte-identical to the master.
+  - No SPEC-IDs appear in the new section, since the guide is scaffolded to downstream projects.
+  - The discipline-pack parity test passes.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T17:04:59.020397925Z
+modified_at: 2026-09-20T17:04:59.020397925Z
+req_type: Task
+tags:
+- discipline
+- docs
+- drain-safe
+- scaffolding
