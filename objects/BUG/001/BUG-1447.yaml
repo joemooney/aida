@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:30:25.285712180Z
-modified_at: 2026-09-20T14:30:26.814177346Z
+modified_at: 2026-09-20T14:36:37.835149064Z
 req_type: Bug
 tags:
 - from:session-0919
@@ -61,3 +61,29 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T14:30:26.814177346Z
+comments:
+- id: 01a0bf3f-644b-7f81-90a8-b39bfcc97605
+  author: joe
+  content: |-
+    SECOND AND THIRD DATA POINTS, and the scope is worse than the filing described: this is not an occasional misclassification, it is every merge the drain attempts.
+
+      14:29:15Z  TASK-1298  PR-2014  "is not mergeable: the base branch policy prohibits the merge"  attempt 2/2, shelved
+      14:35:43Z  BUG-1310   PR-2016  identical message                                                attempt 2/2, shelved
+
+    Six minutes apart. And the population is total: I checked `merge-hold-gate` on every open PR just now —
+
+      #1972 #1974 #1979 #1981 #1984 #1989 #1991 #1999 #2001 #2006 #2014 #2016
+      12 held out of 12 open
+
+    So there is currently NO open PR the drain can merge. Every spec that reaches its merge phase will produce this shelve, spend both transient-retry attempts, and land in triage as `tool-exit` beside genuine tool failures. At the observed rate that is a steady manufacture of false failure records for the rest of the night.
+
+    WHAT THIS CHANGES ABOUT THE SPEC, beyond frequency:
+
+    The original filing framed the retry burn as the cost and the auto-rebase reachability as the risk. With 12 of 12 held, the retry burn is no longer incidental — it is the drain's default outcome at phase 4. Criterion 2 (a correct refusal must not consume a retry) moves from tidiness to the thing that stops the shelve log becoming noise.
+
+    It also means the auto-rebase reachability in consequence 2 is not a rare corner. If `ci_auto_fix` is ever armed while this stands, the drain would be rebasing held PRs as its ordinary behaviour, not exceptionally. That deserves the test in criterion 3 regardless of how the classification is fixed.
+
+    ONE THING I CANNOT DETERMINE and someone should, because it changes the fix. Drive-mode specs are held BY THE DRAIN so that a human merges them. If that is why these are held, then the drain attempting the merge at all is a second defect upstream of the classification — it is trying to merge something it deliberately gated. Distinguishing "the drain should not attempt this merge" from "the drain should attempt it and classify the refusal correctly" decides whether the fix belongs at phase 4's entry or at the classifier. I have not established which, and the answer is in the hold provenance rather than in the message.
+  created_at: 2026-09-20T14:36:37.835149064Z
+  modified_at: 2026-09-20T14:36:37.835149064Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
