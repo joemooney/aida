@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:30:25.285712180Z
-modified_at: 2026-09-20T16:21:53.751477777Z
+modified_at: 2026-09-20T16:22:30.612482728Z
 req_type: Bug
 tags:
 - from:session-0919
@@ -142,4 +142,21 @@ comments:
     No change requested to the diagnosis or the fix. This is a note that the cost is being paid now, at a known rate, against a queue whose depth is the multiplier.
   created_at: 2026-09-20T16:21:53.751477777Z
   modified_at: 2026-09-20T16:21:53.751477777Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bfa0-53d4-7052-912f-4b67b7fc0c79
+  author: joe
+  content: |-
+    Prediction logged in advance, 2026-09-20 16:23 local, so it is falsifiable rather than a story told afterwards.
+
+    `aida drain status` currently reports `current: BUG-1291`. BUG-1291 is status Done with PR #2001 open, and #2001 carries `aida:merge-hold` with `merge-hold-gate: failure`.
+
+    If this diagnosis is right, the drain's merge phase on #2001 will produce the same sequence already recorded for TASK-1298 and BUG-1310: a `gh pr merge` failure containing "is not mergeable: the base branch policy prohibits the merge", classified by `is_merge_conflict_failure` as a conflict, one `SpecRetried` at attempt 2/2, then `SpecShelved` with kind `tool-exit`. BUG-1291 should then appear under "Failures awaiting triage" despite #2001 being green on Build and simply awaiting review.
+
+    If instead BUG-1291 completes, or shelves with a kind that names the hold, the diagnosis is wrong or incomplete and this comment should be treated as evidence against it.
+
+    I am deliberately NOT removing BUG-1291 from the batch to prevent this. Pulling individual specs out is whack-a-mole against a fourteen-PR hold queue, and a third instance recorded against a stated prediction is worth more than a spec spared.
+
+    (Separately, the same `drain status` output shows `current: BUG-1291` while `members[9]` does not list BUG-1291 at all — the batch reporter is blind to its own current member. Noted here only because it made the drain's actual position hard to read; it is a different defect.)
+  created_at: 2026-09-20T16:22:30.612482728Z
+  modified_at: 2026-09-20T16:22:30.612482728Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
