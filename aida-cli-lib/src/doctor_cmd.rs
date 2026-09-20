@@ -1340,15 +1340,12 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
 }
 
 /// Content-level (not ancestry) proof that `branch`'s own commits are already
-/// represented by patch-equivalent commits in `default_ref`. A squash merge
-/// gives the original commits a permanently different SHA than the squash
-/// commit that landed on `default_ref`, so `rev-list --count default_ref..branch` — the
-/// input to `unique_unmerged_commits` — stays positive FOREVER for a
-/// squash-merged branch, whether or not any content is actually unshipped
-/// (BUG-1287). Patch equivalence is durable: later default-branch commits may
-/// change the same files without making already-landed work appear unique
-/// again. The comparison is bounded to commits since the merge-base rather
-/// than scanning the full default-branch history.
+/// represented by patch-equivalent commits in `default_ref`. This accepts both
+/// per-commit equivalence and a branch's cumulative patch matching one squash
+/// commit, because a multi-commit branch has no individual patch equivalent to
+/// that combined commit. Patch equivalence is durable: later default-branch
+/// commits may change the same files without making already-landed work appear
+/// unique again. Every comparison is bounded to commits since the merge-base.
 ///
 /// Conservative on any doubt: an unresolvable merge-base or a failed git call
 /// returns `false` (stay KEPT), never `true`. Read-only — no writes, no
@@ -1360,7 +1357,8 @@ pub(crate) fn branch_content_fully_landed(
     default_ref: &str,
     branch: &str,
 ) -> bool {
-    use std::process::Command as PCmd;
+    use std::io::Write;
+    use std::process::{Command as PCmd, Stdio};
 
     let run = |args: &[&str]| -> Option<std::process::Output> {
         PCmd::new("git")
@@ -1369,6 +1367,32 @@ pub(crate) fn branch_content_fully_landed(
             .args(args)
             .output()
             .ok()
+    };
+    let patch_id = |patch: &[u8]| -> Option<Option<String>> {
+        let mut child = PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["patch-id", "--stable"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok()?;
+        child.stdin.take()?.write_all(patch).ok()?;
+        let output = child.wait_with_output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let stdout = String::from_utf8(output.stdout).ok()?;
+        let mut lines = stdout.lines().filter(|line| !line.trim().is_empty());
+        let Some(line) = lines.next() else {
+            return Some(None);
+        };
+        let id = line.split_whitespace().next()?.to_string();
+        if lines.next().is_some() {
+            return None;
+        }
+        Some(Some(id))
     };
 
     let Some(mb_out) = run(&["merge-base", default_ref, branch]) else {
@@ -1399,9 +1423,47 @@ pub(crate) fn branch_content_fully_landed(
     if !unique_out.status.success() {
         return false;
     }
-    String::from_utf8_lossy(&unique_out.stdout)
+    if String::from_utf8_lossy(&unique_out.stdout)
         .trim()
         .is_empty()
+    {
+        return true;
+    }
+
+    // A forge commonly combines every branch commit into one squash commit.
+    // `rev-list --cherry-pick` cannot recognize that N-to-1 equivalence, so
+    // compare the branch's combined diff with each bounded default-side commit.
+    let Some(branch_diff) = run(&["diff", "--binary", &merge_base, branch]) else {
+        return false;
+    };
+    if !branch_diff.status.success() {
+        return false;
+    }
+    let Some(Some(branch_patch_id)) = patch_id(&branch_diff.stdout) else {
+        return false;
+    };
+
+    let default_range = format!("{merge_base}..{default_ref}");
+    let Some(default_commits) = run(&["rev-list", &default_range]) else {
+        return false;
+    };
+    if !default_commits.status.success() {
+        return false;
+    }
+    for commit in String::from_utf8_lossy(&default_commits.stdout).lines() {
+        let Some(commit_diff) = run(&["show", "--format=", "--binary", commit]) else {
+            return false;
+        };
+        if !commit_diff.status.success() {
+            return false;
+        }
+        match patch_id(&commit_diff.stdout) {
+            Some(Some(id)) if id == branch_patch_id => return true,
+            Some(_) => {}
+            None => return false,
+        }
+    }
+    false
 }
 
 /// TASK-878: scan AIDA/Agent-tool managed worktrees and classify each under the
@@ -3273,18 +3335,22 @@ mod story_462_doctor_tests {
         run(&["commit", "-m", "init"]);
         run(&["branch", "-M", "main"]);
 
-        // Branch A: the branch's single commit is squash-merged onto main
-        // verbatim (content-identical, different SHA — the classic squash
-        // case). Nothing unique remains once the squash lands.
+        // Branch A: two branch commits are combined into one squash commit on
+        // main. Neither source commit is patch-equivalent to the cumulative
+        // squash, but the branch's merge-base-to-tip patch is.
         run(&["checkout", "-b", "shipped-work"]);
         std::fs::write(root.join("a.txt"), "shipped content\n").unwrap();
         run(&["add", "a.txt"]);
         run(&["commit", "-m", "add a.txt"]);
+        std::fs::write(root.join("a2.txt"), "second shipped change\n").unwrap();
+        run(&["add", "a2.txt"]);
+        run(&["commit", "-m", "add a2.txt"]);
         run(&["checkout", "main"]);
-        // Simulate a forge squash-merge: same file content lands on main as a
-        // brand-new commit, unrelated by ancestry to the branch's own commit.
+        // Simulate a forge squash-merge: both files land in one brand-new
+        // commit, unrelated by ancestry to either branch commit.
         std::fs::write(root.join("a.txt"), "shipped content\n").unwrap();
-        run(&["add", "a.txt"]);
+        std::fs::write(root.join("a2.txt"), "second shipped change\n").unwrap();
+        run(&["add", "a.txt", "a2.txt"]);
         run(&["commit", "-m", "squash-merge shipped-work (#1)"]);
 
         // Branch B: its FIRST commit is squash-merged the same way, but a
@@ -3325,8 +3391,27 @@ mod story_462_doctor_tests {
             .parse()
             .unwrap();
         assert_eq!(
-            ancestry_count, 1,
-            "ancestry must still see the squash-merged branch as 1 unique commit"
+            ancestry_count, 2,
+            "ancestry must still see both squash-merged branch commits as unique"
+        );
+        let per_commit_out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args([
+                "rev-list",
+                "--cherry-pick",
+                "--right-only",
+                "main...shipped-work",
+            ])
+            .output()
+            .unwrap();
+        assert!(per_commit_out.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&per_commit_out.stdout)
+                .lines()
+                .count(),
+            2,
+            "per-commit patch matching must miss both commits combined by the squash"
         );
         assert!(
             branch_content_fully_landed(&root, "main", "shipped-work"),
