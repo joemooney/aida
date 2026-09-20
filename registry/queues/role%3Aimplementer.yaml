@@ -63,14 +63,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0bae3-3204-7040-a898-dc92c87ca6d1
-  position: 109000
-  added_by: role:implementer
-  note: 'DETECTION only, not prose: heuristic flagging post-deployment criteria at filing/done (''measured over the next N'', ''after this ships'', median/rate needing a post-merge window); the convention is already written on TASK-1290 and in STORY-1351''s pack; fold into TASK-1290''s report if that is the natural home'
-  added_at: 2026-09-19T21:31:36.081479885Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0bac0-0f79-7ec0-9e4a-ca3f33c5d621
   position: 111000
   added_by: role:implementer
