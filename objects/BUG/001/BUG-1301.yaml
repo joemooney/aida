@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:13:35.045002259Z
-modified_at: 2026-09-20T09:05:21.745675755Z
+modified_at: 2026-09-20T09:26:01.391655979Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -83,6 +83,24 @@ comments:
   content: Implemented rule-attributed portability baselines with rules in portability-rules.json, a growth verifier that permits only entries from newly introduced rule IDs, removed-rule tolerance, and CI execution of the verifier from the trusted base revision. Added focused regression coverage for unchanged rules, mixed old/new additions, rule removal, and comparison-only bypass.
   created_at: 2026-09-20T09:04:39.836344245Z
   modified_at: 2026-09-20T09:04:39.836344245Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0be23-05af-72c3-8366-b1aa2ae6bb94
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2011
+    agent: codex
+    ran-at: 2026-09-20 02:26 -07:00
+    mode: propose-only (drain)
+    proposed: 4
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1301-drain-01a0be22-9594-7492-ac50-1d7716682267.json
+    ? SEM (0.98) — A portability rule is considered newly added only when its rule ID is absent from the base rule manifest; changing the label or regular expression of an existing rule ID does not authorize any allowlist growth.
+    ? SEM (0.92) — Portability rules are loaded from a shared JSON manifest containing an ID, diagnostic label, and regular expression; both scanning and allowlist-growth validation use that manifest, while allowlist attribution uses the stable rule ID.
+    ? SEM (0.91) — When multiple portability rules match the same source line, the finding is attributed only to the first matching rule in manifest order.
+    ? SEM (0.86) — During rollout from a base revision that lacks the new growth verifier, pull-request CI falls back to the legacy allowlist-growth check; once the base contains the verifier, CI executes that base-revision verifier and then independently runs the current portability scan.
+  created_at: 2026-09-20T09:26:01.391655979Z
+  modified_at: 2026-09-20T09:26:01.391655979Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
