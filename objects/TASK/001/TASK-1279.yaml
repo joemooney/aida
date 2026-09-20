@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:29:01.811098746Z
-modified_at: 2026-09-20T06:20:37.795632098Z
+modified_at: 2026-09-20T06:23:10.859554152Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -85,4 +85,10 @@ comments:
   created_at: 2026-09-20T01:16:00.733894758Z
   modified_at: 2026-09-20T01:16:00.733894758Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bd7b-a00b-7992-9033-dacee1634e64
+  author: joe
+  content: '[codex:headless pickup 2026-09-19 23:21 MST] Verified PR #1984 is OPEN/CLEAN with CI green. Event audit for 2026-09-20T00:36:49Z–06:20:39Z: RunStarted=16, PhaseEntered=55, SpecShelved=13, PhaseDonePr=2, PrMerged=1, QueueDrained=2; Codex implementer entries=12, Codex reviewer entries=11, advisor-seat events=0, product-seat events=0. Therefore the feed does not prove the two required coordination-seat permutations or a Codex-advisor-gated merge. The prescribed from-PR recovery was preflighted, but actual launch correctly refused because serialized batch drain pid 371222 is live; no force override was used. Filed draft finding TASK-1-148. TASK-1279 remains In Progress rather than falsely completed.'
+  created_at: 2026-09-20T06:23:10.859554152Z
+  modified_at: 2026-09-20T06:23:10.859554152Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
