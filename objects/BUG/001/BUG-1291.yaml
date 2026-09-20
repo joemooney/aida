@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-20T11:51:26.943948278Z
+modified_at: 2026-09-20T16:13:04.684618549Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -175,6 +175,21 @@ comments:
     THE OPERATIONAL NOTE, since the operator is away: I have now hand-recovered four things tonight that the substrate could have recovered itself — a stale-binary drain, a ceiling-shelved measurement, and these two strandings. All four worked because someone was awake. That is the argument for this spec and for STORY-1218's tick, stated as evidence rather than as principle.
   created_at: 2026-09-20T11:51:26.943948278Z
   modified_at: 2026-09-20T11:51:26.943948278Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bf97-b12c-7663-b4be-e8ab41b57170
+  author: joe
+  content: |-
+    [aida:rework-brief] BUG-1291 / PR #2001 — one binding item, and it is two sentences of prose, not a mechanism change. I want to be explicit that I am NOT asking for the sweep to be reworked.
+
+    1. BINDING — the ADR must not assert coverage that does not exist today.
+       Current text says abrupt process death is covered at the next scheduler tick. That is not true in this tree: hook ticks skip the sweep, and there is no non-hook caller — no jobs, no crontab entry, no timer unit, and STORY-1218 which would add one is unmerged.
+       Mechanism: amend the ADR to say what is actually true — abrupt process death is covered when a non-hook caller invokes the sweep, which no current caller does, so the gap is open until STORY-1218 or equivalent lands. Name STORY-1218 as the thing that would close it.
+
+    WHY THIS IS WORTH A ROUND rather than a follow-up: an ADR is read later by someone deciding whether a failure mode is already handled. An ADR that claims coverage is worse than no ADR, because it stops the next person looking. The recovery mechanism in this PR is good; it just does not cover the case the document says it covers.
+
+    NOT IN SCOPE: adding the missing caller, changing the sweep, and STORY-1218 itself. Two sentences.
+  created_at: 2026-09-20T16:13:04.684618549Z
+  modified_at: 2026-09-20T16:13:04.684618549Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
