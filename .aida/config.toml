@@ -39,8 +39,15 @@ mirror_remotes = ["gitlab"]
 vendor = "codex"
 
 [drain]
-# STORY-975: retry a transient phase failure once before parking NeedsAttention.
-retry_transient = 1
+# STORY-975: retry a transient phase failure before parking NeedsAttention.
+# BUG-1485 (2026-09-20): raised 1 -> 2 as an interim mitigation. The orchestrator's
+# session-to-lease mismatch fired 7 times in one day and self-recovered on attempt 2
+# in 6 of them — so the old budget of 1 retry put every recovery on the LAST available
+# attempt. If attempt 2 ever failed for an unrelated reason, the spec burned out on a
+# defect we know self-heals. This is a blunt instrument: it widens the budget for every
+# transient cause, not just the lease mismatch. Revert to 1 once BUG-1485 types that
+# cause distinctly or fixes the root cause. Clamp is 3 (clamp_transient_retry_budget).
+retry_transient = 2
 
 # Contained-launch egress allowlist (BUG-1178 workaround): the native sandbox
 # PROMPTS on a new network domain, and a dontAsk launch auto-denies that prompt —
