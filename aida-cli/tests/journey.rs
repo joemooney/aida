@@ -323,6 +323,80 @@ fn agent_journey_toon_list_search_queue_done_and_status() {
     );
     let spec = parse_spec_id(&String::from_utf8_lossy(&add.stdout));
 
+    // BUG-1442: one requirement carrying an ordinary core edge, a custom
+    // edge, and a blocker must expose the same relationship types to humans
+    // and TOON consumers. The TOON view also carries the blocker's pickup
+    // consequence instead of forcing an agent to make a second graph query.
+    // trace:BUG-1442 | ai:codex
+    let mut targets = Vec::new();
+    for title in [
+        "Reference target",
+        "Implementation target",
+        "Blocking target",
+    ] {
+        let target = aida(&repo, &home)
+            .env("AIDA_AGENT_OUTPUT", "toon")
+            .env("AIDA_SESSION_ROLE", "advisor")
+            .args([
+                "add", "--type", "task", "--status", "approved", "--title", title,
+            ])
+            .output()
+            .expect("add relationship target");
+        assert!(
+            target.status.success(),
+            "target add failed: {}",
+            String::from_utf8_lossy(&target.stderr)
+        );
+        targets.push(parse_spec_id(&String::from_utf8_lossy(&target.stdout)));
+    }
+    for (target, rel_type) in targets
+        .iter()
+        .zip(["references", "implemented-by", "blocked-by"])
+    {
+        let rel = aida(&repo, &home)
+            .env("AIDA_AGENT_OUTPUT", "toon")
+            .args(["rel", "add", &spec, target, "--type", rel_type])
+            .output()
+            .expect("add relationship");
+        assert!(
+            rel.status.success(),
+            "relationship add failed: {}",
+            String::from_utf8_lossy(&rel.stderr)
+        );
+    }
+    let human_show = aida(&repo, &home)
+        .env("AIDA_AGENT_OUTPUT", "0")
+        .args(["show", &spec])
+        .output()
+        .expect("show human relationship types");
+    let toon_show = aida(&repo, &home)
+        .env("AIDA_AGENT_OUTPUT", "toon")
+        .args(["show", &spec])
+        .output()
+        .expect("show TOON relationship types");
+    let human_show = String::from_utf8_lossy(&human_show.stdout);
+    let toon_show = String::from_utf8_lossy(&toon_show.stdout);
+    for (human_type, toon_type) in [
+        ("references", "references"),
+        ("implemented-by", "implemented-by"),
+        ("is blocked by", "blocked-by"),
+    ] {
+        assert!(
+            human_show.contains(human_type),
+            "human show lost {human_type}:\n{human_show}"
+        );
+        assert!(
+            toon_show.contains(toon_type),
+            "TOON show disagrees on {toon_type}:\n{toon_show}"
+        );
+    }
+    assert!(
+        toon_show.contains("blockers[1]{id,status,satisfied}")
+            && toon_show.contains("blocked: true")
+            && toon_show.contains("pickup: refused until all blockers are Completed"),
+        "TOON show must convey blocked state and pickup consequence:\n{toon_show}"
+    );
+
     // ---- STORY-734 / BUG-668 / BUG-672: lean TOON list, not the box-table. ----
     let list = aida(&repo, &home)
         .env("AIDA_AGENT_OUTPUT", "toon")

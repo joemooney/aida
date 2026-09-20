@@ -2293,6 +2293,19 @@ fn card_rel_label_buckets_relationships() {
     );
 }
 
+/// BUG-1442: the TOON relationship column uses canonical stored type labels,
+/// including custom names; it must not reuse the lossy card buckets.
+// trace:BUG-1442 | ai:codex
+#[test]
+fn toon_relationship_labels_preserve_core_and_custom_types() {
+    assert_eq!(rel_type_label(&RelationshipType::Child), "child");
+    assert_eq!(rel_type_label(&RelationshipType::BlockedBy), "blocked-by");
+    assert_eq!(
+        rel_type_label(&RelationshipType::Custom("implemented-by".into())),
+        "implemented-by"
+    );
+}
+
 /// STORY-67: spec ID detection inside a `(...)` group at end of
 /// commit subject. Matches AIDA-format SPEC-IDs and rejects
 /// anything else (e.g., issue refs, version strings).

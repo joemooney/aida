@@ -3625,10 +3625,13 @@ pub(crate) fn handle_git_backend_command(
                         println!("{}", lines.join("\n"));
 
                         // Relationships as a uniform TOON table (rel,id,title).
+                        // Unlike the human card's presentation buckets, the
+                        // agent surface must preserve the stored edge type.
+                        // trace:BUG-1442 | ai:codex
                         if !req.relationships.is_empty() {
                             let mut rows: Vec<Vec<String>> = Vec::new();
                             for rel in &req.relationships {
-                                let label = card_rel_label(&rel.rel_type).to_string();
+                                let label = rel_type_label(&rel.rel_type);
                                 let (tid, ttitle) = match backend.get_requirement(&rel.target_id) {
                                     Ok(Some(t)) => (t.display_id(), t.title.clone()),
                                     _ => ("(unknown)".to_string(), String::new()),
@@ -3643,6 +3646,57 @@ pub(crate) fn handle_git_backend_command(
                                     &rows
                                 )
                             );
+                        }
+                        let blocker_targets: Vec<uuid::Uuid> = req
+                            .relationships
+                            .iter()
+                            .filter(|rel| matches!(rel.rel_type, RelationshipType::BlockedBy))
+                            .map(|rel| rel.target_id)
+                            .collect();
+                        if !blocker_targets.is_empty() {
+                            let mut rows = Vec::new();
+                            let mut unsatisfied = 0usize;
+                            for target in blocker_targets {
+                                let (id, status, satisfied) = match backend
+                                    .get_requirement(&target)?
+                                {
+                                    Some(blocker) => {
+                                        let satisfied =
+                                            matches!(blocker.status, RequirementStatus::Completed);
+                                        (
+                                            blocker.display_id(),
+                                            blocker.status.to_string(),
+                                            satisfied,
+                                        )
+                                    }
+                                    None => (target.to_string(), "missing".to_string(), false),
+                                };
+                                if !satisfied {
+                                    unsatisfied += 1;
+                                }
+                                rows.push(vec![id, status, satisfied.to_string()]);
+                            }
+                            println!(
+                                "{}",
+                                crate::toon::table_raw(
+                                    "blockers",
+                                    &["id", "status", "satisfied"],
+                                    &rows
+                                )
+                            );
+                            println!(
+                                "{}",
+                                crate::toon::scalar("blocked", &(unsatisfied > 0).to_string())
+                            );
+                            if unsatisfied > 0 {
+                                println!(
+                                    "{}",
+                                    crate::toon::scalar(
+                                        "pickup",
+                                        "refused until all blockers are Completed"
+                                    )
+                                );
+                            }
                         }
                         // TASK-974 (AXI #9): lifecycle-aware next-step block —
                         // the valid next transition(s) for THIS spec's current
