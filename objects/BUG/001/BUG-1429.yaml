@@ -1,0 +1,34 @@
+id: 01a0bdd2-fec7-7d13-aa03-21a66f089037
+spec_id: BUG-1429
+agreed_id: BUG-1429
+title: The in-drive ship guard decides liveness by matching a state string another module formats, so a reword opens the gate
+description: |
+  `reviewer_liveness_for_pr` decides whether a member is live by matching its state string:
+
+      if !state.starts_with("in-phase-") { continue; }
+
+  That is a prose match against a value another module produces with `format!("in-phase-{phase_index}")`. If that format ever changes, no member is ever considered live, the function returns None, and the gate OPENS — the failure direction is "permit the merge". `Member::is_running()` already exists and is exactly this predicate, so the fix is to take a bool and let the one prose contract live in one place.
+
+  WHY IT WAS ACCEPTED ANYWAY, and the reasoning is the point of this filing. TASK-1292 fixes the live PR binding, without which the drive-ownership check has nothing to read while a member is mid-phase. Holding it left that guard broken, and on 2026-09-20 at roughly 07:56Z the broken guard let the advisor merge PR #2007 while the drain was at phase 2 on the same spec, before the orchestrator's independent reviewer had run.
+
+  So the trade was: a latent fail-open that requires someone to reword a format string, against an active fail-open that had already produced an independence breach that night. Merging the fix and filing the hardening was the better trade, and I had it the wrong way round until the guard's absence bit me.
+
+  ACCEPTANCE
+  1. `reviewer_liveness_for_pr` takes the liveness decision as a bool (`member.is_running()`) rather than a state string, so it cannot drift from the producer's format.
+  2. The tests pass `true`/`false` rather than literal state strings, which also shortens them.
+  3. A grep finds no remaining comparison of a member state against `"in-phase-"` outside `Member::is_running()`. There are currently several open-coded copies — pr_cmd.rs has two, the TUI has one — and each is a place the same drift lands.
+  4. The behaviour is unchanged: a member that is live and bound to this PR still reports OnThisPr, a live member bound elsewhere still reports Elsewhere, and a finished member with a stale binding is still ignored.
+
+  Deferred from PR #1983 review. The hold was lifted once the cost of holding it was demonstrated rather than hypothetical.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T07:58:36.743732005Z
+modified_at: 2026-09-20T07:58:36.743732005Z
+req_type: Bug
+tags:
+- diagnostic-decay
+- drain-safe
+- from:session-0919
+- orchestrator
