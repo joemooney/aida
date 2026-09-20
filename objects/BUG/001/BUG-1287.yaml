@@ -37,12 +37,12 @@ description: |
   6. `aida doctor` reports the orphan counts before and after a reap pass so the improvement is measurable rather than asserted.
 
   Reported by the aida-monitor project; counts independently reproduced in this repo before filing. The monitor's recommendation was "add opportunistic auto-reap" — corrected here, because that already shipped.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:59.058325197Z
-modified_at: 2026-09-20T04:42:08.344353987Z
+modified_at: 2026-09-20T05:01:43.513801556Z
 req_type: Bug
 tags:
 - diagnostics
@@ -117,4 +117,22 @@ comments:
   created_at: 2026-09-20T04:42:08.344353987Z
   modified_at: 2026-09-20T04:42:08.344353987Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bd31-0cd0-78e0-8e1a-d2e120a737d9
+  author: aida-auto-bump
+  timestamp: 2026-09-20T05:01:43.504316447Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0bd31-0cd9-7231-b1b0-ae91986d1332
+  timestamp: 2026-09-20T05:01:43.513799824Z
+  agent: aida
+  commit_sha: aaa2f1d1b727b61d4321e6148ea8bcb40a666066
+  summary: Completed via merge aaa2f1d1
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-20T05:01:43.504030606Z
+  completion_sha: aaa2f1d1b727b61d4321e6148ea8bcb40a666066
