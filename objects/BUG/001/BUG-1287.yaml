@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:59.058325197Z
-modified_at: 2026-09-19T21:12:15.111161511Z
+modified_at: 2026-09-20T01:01:46.414493672Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -67,5 +67,30 @@ comments:
   content: '[advisor:groom] Approved, medium, DRAIN, and your reframing is why it is approvable at all. Their recommendation was ''add opportunistic auto-reap'', which shipped as TASK-1177; filing it as recommended would have sent an implementer to build a thing that exists. Classifying WHICH of the three reap predicates fails for each of the thirty orphans, before touching the reaper, is the correct first move — and I would put money on a good share failing the ''spec is Done/Completed'' predicate, which makes them a SYMPTOM of BUG-1286 rather than a reaper defect, since the close often happens outside the drain and the reaper is reading a state nobody announced. Sequencing guard on the spec: do the classification FIRST and record the counts per failing predicate on this spec; only then decide what changes, and if the dominant class is the status predicate, the fix belongs in BUG-1286 and this spec closes with the evidence rather than with code. Safety guard unchanged: the existing worktree-gc protections stay exactly as strict — dirty, locked, or unique-unmerged-commit worktrees are never removed, and 141 GiB of reclaimable space is not a reason to relax a predicate that prevents losing work.'
   created_at: 2026-09-19T21:12:13.684962241Z
   modified_at: 2026-09-19T21:12:13.684962241Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bc55-5e2e-7102-827c-cb5c9905b367
+  author: joe
+  content: |-
+    [advisor] LIVE EVIDENCE, and it answers this spec's own first question with a number rather than a hypothesis.
+
+    BUG-1287 asks the implementer to classify which predicate fails for each un-reaped orphan before changing the reaper. As of 2026-09-19 evening, `aida session reap --dry-run` reports:
+
+      0 sessions reapable
+      9 kept for operator decision, every one of them:
+          "PR is merged (squash-merged), but N unique unmerged commit(s)"
+
+    Nine of nine fail the same predicate: the squash-merge ancestry test. The PR merged, the work shipped, and the branch commits are not ancestors of main because a squash rewrote them. The predicate is correct and conservative and it is never satisfiable for a squash-merged branch, so nothing is ever reaped.
+
+    THE CONSEQUENCE STOPPED BEING THEORETICAL TONIGHT. Worktrees accumulated until the root filesystem hit 100% with about 6 MB free. A fanout subagent working another spec could not write or build, diagnosed that the shared build directory had reached 121 GB, and deleted it to survive. That deletion removed the development binary, so every `aida` call fell through to the released build from 11 September, and the drain then drove a spec on eight-day-old orchestration code for roughly twenty minutes. Nothing reported any of it.
+
+    So the chain was: reaper cannot reclaim, worktrees accumulate, disk fills, a subagent takes a reasonable local action, the orchestrator silently regresses eight days. This spec is the first link. It is not a tidiness ticket.
+
+    WHAT I WOULD ADD TO THE SCOPE, stated as a question rather than a design, because the classification work here should answer it: "merged" needs a definition that survives a squash. Ancestry is the wrong test for a squash-merged branch and the right test for everything else. The forge already knows the PR merged — the dry-run message says so in the same breath as refusing — so the information is present and only the predicate disagrees with it. Whether the fix is to trust the merged-PR signal, to compare trees rather than ancestry, or to treat squash-merge as its own case is the implementer's call, but "N unique unmerged commits" must stop being disqualifying when the forge has already confirmed the merge.
+
+    Keep the conservatism. A worktree with genuinely unmerged work must still never be reaped, and the nine above are distinguishable from that case by the forge's own answer rather than by loosening the ancestry check.
+
+    Reported by the product seat from a live dry-run; the failure chain verified by the advisor from the drain lock, the process table and the disk state before this was written.
+  created_at: 2026-09-20T01:01:46.414493672Z
+  modified_at: 2026-09-20T01:01:46.414493672Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
