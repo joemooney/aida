@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:42:27.085616663Z
-modified_at: 2026-09-19T23:50:56.557052756Z
+modified_at: 2026-09-20T00:12:30.887117208Z
 req_type: Bug
 tags:
 - drain-safe
@@ -56,4 +56,29 @@ comments:
   created_at: 2026-09-19T23:50:56.557052756Z
   modified_at: 2026-09-19T23:50:56.557052756Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bc28-4527-7261-96ed-c8d5b4e6f86b
+  author: joe
+  content: |-
+    [advisor:rework] Required Build FAILED at c87ac9e4, and the failure is structural rather than a coding mistake. Requeued with direction, not a brief.
+
+      error: scripts/portability-allowlist.txt grew relative to origin/main
+
+    THE PR CANNOT PASS AS DESIGNED. The ratchet's growth check at scripts/check-portability.sh:56 runs comm -13 across the sorted allowlists and fails on ANY new entry, unconditionally. There is no concept of a new rule having been added. So widening the rule set surfaces pre-existing instances, those instances must be allowlisted, and allowlisting them trips the guard. The change is self-blocking.
+
+    The earlier read that baselining is the established pattern here was reasonable from the file's size — roughly 169 entries — but it does not survive contact with the code. Those entries predate the growth check or arrived at bootstrap. Under the check as it stands today, they could not be added.
+
+    DO THIS AS A SPLIT. The two halves have different costs and only one of them is urgent.
+
+    1. LAND THE TEST FIX ALONE, unchanged. Asserting the committed blob via git show rather than the checked-out file is the actual fix for the actual Windows failure, it is already correct, and it is the only part that stops the nightly being red for a third night. Drop the two new PATTERNS entries and the 22 allowlist additions from this PR entirely. It should then be a three-file change reduced to one, and it should pass.
+
+    2. THE RULE WIDENING WAITS on the ratchet being able to accept a rule addition, which is now BUG-1300. Do not work around the check to land the rules — not by trimming the allowlist to fit, not by fixing all 22 in this spec, and not by touching the check to let this one case through. The first loses the rules' value, the second is unbounded scope hiding inside a test-only spec, and the third is the guard being weakened by the first change that found it inconvenient.
+
+    KEEP THE WORK. The two regexes, the multi-line assert scanner, and the 22-entry survey are all correct and should be preserved for BUG-1300's follow-on rather than rewritten later. Move them to a branch or attach them to that spec; do not delete them to make this PR green.
+
+    WHAT I ALREADY VERIFIED, so it is not re-done: the trailing-newline change is right, because the git helper at aida-core/src/git_ops.rs:48 trims stdout, and trim() strips carriage returns as well, giving the assertion two independent guarantees. The one baselined entry that looked most dangerous — git_ops.rs comparing against "one\ndirty edit\n", same file and same shape as this bug — is already guarded by core.autocrlf=false three lines above it, trace:BUG-1021. It is a true false positive of the new rule and a known blind spot: the scanner cannot see that guard. Record that with the rules when they land.
+
+    The cross-platform run I dispatched, 35477670366, is still in progress and its result is still wanted — it validates the test fix regardless of which PR carries it.
+  created_at: 2026-09-20T00:12:30.887117208Z
+  modified_at: 2026-09-20T00:12:30.887117208Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
