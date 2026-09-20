@@ -43,10 +43,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:24:16.280507219Z
-modified_at: 2026-09-20T18:26:15.642285448Z
+modified_at: 2026-09-20T18:26:16.679561735Z
 req_type: Bug
 tags:
 - agent-surface
+- batch:night-0920
 - docs
 - drain-safe
 - drift
