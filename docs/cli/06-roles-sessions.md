@@ -167,8 +167,9 @@ So registration is what turns "a stranger handles the punt" into "your advisor, 
 **Don't reach for it when** — you're *assigning* work rather than discussing it — that's `aida brief` (one-directional, with `aida brief --notify` for urgency). And don't expect a message to survive a fresh clone until you `aida mailbox sync` — the local layer is per-clone until digested into the store.
 
 **Key options (rationale only).**
+<!-- trace:TASK-176 | ai:codex -->
 - `send --to` vs `--broadcast` — single recipient or everyone; mutually the two addressing modes (omit `--to` and pass `--broadcast` to reach all).
-- `send <BODY>` vs `--body-file <path>` vs `--stdin` — exactly one body source. Prefer `--body-file` or `--stdin` for rich multi-line agent notes so the shell cannot expand backticks or `$()` before AIDA receives the message.
+- `aida mailbox send <BODY>` vs `aida mailbox send --body-file <path>` vs `aida mailbox send --stdin` — exactly one body source. Prefer `--body-file` or `--stdin` for rich multi-line agent notes so the shell cannot expand backticks or `$()` before AIDA receives the message.
 - `send --thread` / `--in-reply-to` — attach to an existing conversation rather than starting a new thread; how a back-and-forth stays grouped.
 - `send --urgent` — surface out-of-band (statusline nag) instead of sitting unseen in a chronological inbox. Lightweight: normal-vs-urgent only, the same interrupt/no-interrupt choice `brief --notify` makes.
 - `send --from` — override the sender id (default is this shell's agent/user identity); for when you're sending on another identity's behalf.
