@@ -23,12 +23,12 @@ description: |
   - The convention exists in the discipline pack with the TASK-1291 example.
   - The criteria gate distinguishes three states for a criterion: traced, untraced, and post-deployment (cannot be traced by construction); the third does not block done and says why.
   - A spec carrying a post-deployment criterion is reported with the suggested split, naming the follow-up spec shape.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-20T05:29:19.562381284Z
+modified_at: 2026-09-20T05:36:09.060440682Z
 req_type: Task
 tags:
 - acceptance
@@ -66,3 +66,7 @@ comments:
   modified_at: 2026-09-19T21:31:34.379881871Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-20T05:36:09.060440682Z
+  implemented_by: joe
