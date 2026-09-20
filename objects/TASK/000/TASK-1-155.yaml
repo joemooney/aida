@@ -1,0 +1,32 @@
+id: 01a0c056-6a6d-7052-8876-d2b734ab0299
+spec_id: TASK-1-155
+title: 'Stale leases are the normal state, not garbage: the reaper correctly refuses all six, so anything failing in their presence must tolerate them'
+description: |-
+  Stale session leases are a NORMAL steady state, not garbage to clear, so anything that fails in their presence must tolerate them rather than expect cleanup.
+
+  OBSERVED 2026-09-20 19:40Z. `aida session leases --all` shows six stale leases with worktrees still attached — BUG-1145, TASK-1274, STORY-1353, TASK-1294, TASK-1279, BUG-1436. A drain run for BUG-1442 shelved with "could not match the orchestrated session to a session lease", listing seven lease ids for diagnosis. Seven is the six stale plus the one live.
+
+  I ran the designed cleanup pass to see whether the leases were removable. They are not:
+
+      $ aida session reap --dry-run
+        No session is reapable (finished + merged + process exited).
+
+  Every one of the six has unmerged work — each carries an open PR or unpushed commits — so the reaper refuses, correctly. That is the TASK-1177 safety predicate doing exactly its job.
+
+  THE IMPLICATION, which is why this is worth recording rather than just cleaning up. Stale-with-unmerged-work is not a degraded state that someone forgot to tidy. It is the ordinary condition of a repo with open PRs, and it will get MORE common as the backlog of unmerged work grows — today six, and the reaper will keep refusing every one until those PRs land. So any component that misbehaves when several stale leases exist is misbehaving in the normal case, and "clean up the leases" is not an available remedy.
+
+  NOT ASSERTING A CAUSE. I have not read the session-matching code and do not know whether the six stale leases cause the BUG-1442 mismatch or merely appear in its error text. The run recovered on its own — BUG-1442 is live again under lease 01a0c04e. What I have established is only that the cleanup remedy someone would reach for first is unavailable and should not be attempted.
+
+  WHAT WOULD SETTLE IT: does the matcher disambiguate by spec, by branch, by pid, or by scanning? If it scans and takes a first match, six stale candidates is a plausible mechanism. If it keys on the spec, they are irrelevant and the error text is merely noisy — which would itself be worth fixing, since listing seven lease ids in a failure that has nothing to do with them sends the reader where I just went.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-20T19:41:23.949746312Z
+modified_at: 2026-09-20T19:41:23.949746312Z
+req_type: Task
+tags:
+- from-advisor:BUG-1442
+- kind:observation
+- linked:BUG-1442
+- severity:minor
