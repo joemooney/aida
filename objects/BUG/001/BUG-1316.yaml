@@ -1,0 +1,54 @@
+id: 01a0bd60-639c-7fd1-bf2a-89cd2fd1e1ca
+spec_id: BUG-1316
+agreed_id: BUG-1316
+title: A supervised merge-hold burns the drain's entire transient-retry budget and shelves as tool-exit, when the truth is a human gate is open and waiting
+description: |
+  A supervised merge-hold is a DELIBERATE refusal that will not succeed until a human clears it, and the drain spends its whole transient-retry budget on it. This is BUG-1285's principle — a correct refusal must not consume a retry — applied to a different site.
+
+  OBSERVED 2026-09-20 05:52 on TASK-1293, PR-2003:
+
+    05:52:43  SpecRetried  phase=merge  cause=tool-exit  attempt=2  max=2
+    05:52:45  SpecShelved  kind=tool-exit  (attempt 2/2)
+
+  Two seconds apart. The detail on both reads:
+
+    "refusing to merge PR-2003: supervised merge-hold — advisor hold: ... A human/advisor
+     must review, then clear the hold (`aida merge-hold clear 2003`) before merging."
+
+  The message states plainly that a human must act. The drain retried it anyway, immediately, then shelved having learned nothing and having spent a budget meant to absorb transient failure.
+
+  THE MECHANISM, confirmed in code. `is_transient_retry_cause` (aida-cli-lib/src/auto_complete.rs:1078) matches:
+
+    "watchdog" | "no-verdict" | "no-pr" | "tool-exit" | "cache-locked" | "headless-wait"
+
+  A merge-hold refusal surfaces as a non-zero exit from the merge subprocess and is classified `tool-exit`, which is in that set. So a refusal that is CORRECT, INTENTIONAL and STABLE is handled identically to a vendor process dying mid-run.
+
+  WHY THIS IS THE SAME CLASS AS BUG-1285, WHICH MERGED TONIGHT. That spec's second remedy was "a refusal that IS correct must not consume a retry", and its fix added a typed LeaseConflict cause deliberately excluded from the transient set. The reasoning transfers exactly: a lease held by a live process and a merge held by an advisor are both stable states that a retry cannot change. Only the site differs.
+
+  THE COST is small per instance and structural. Two wasted attempts are cheap; the damage is that the spec shelves with kind `tool-exit`, which reads as "the tool broke" when the truth is "a human gate is open and waiting". Triage then treats a correctly-functioning hold as a failure to investigate, and the recovery hint says "Investigate the merge failure" when the actual next action is a one-line `merge-hold clear`. That is PRIN-4's class: the decision was right and the diagnostic describing it is wrong.
+
+  PROPOSED: give a supervised merge-hold refusal its own typed cause, keep it OUT of `is_transient_retry_cause`, and shelve it with a kind and hint that say a human gate is open — quoting the hold reason and the `merge-hold clear <pr>` command, both of which are already in the refusal text and are discarded.
+
+  WORTH DECIDING EXPLICITLY, not silently: whether a hold should shelve at all, or whether the drain should SKIP the spec and continue, leaving it queued for when the hold clears. Shelving is defensible — the work genuinely cannot proceed — but a shelve implies something went wrong, and nothing did.
+
+  ACCEPTANCE
+  1. A merge refused by a supervised merge-hold does not consume a transient retry attempt.
+  2. It shelves (or skips — see above, decide and state) with a typed cause distinguishable from `tool-exit`.
+  3. The recovery hint names the hold reason and the exact `aida merge-hold clear <pr>` command rather than "investigate the merge failure".
+  4. A genuine merge tool failure — network, auth, a real gh error — still retries as it does today. A test covers both so the distinction is pinned.
+  5. TASK-1293 / PR-2003 is the regression fixture.
+
+  Filed by the product seat as a proposal; disposition is the advisor's. Note the hold itself was CORRECT and caught a real cross-PR interaction — #2003 adds a discipline master while #1988 adds a guard requiring every master to have a project-local copy, so whichever merged second would have gone red. The hold did its job; only the drain's reaction to it is wrong.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T05:53:25.916051220Z
+modified_at: 2026-09-20T05:53:25.916051220Z
+req_type: Bug
+tags:
+- from:session-0919
+- merge-hold
+- orchestrator
+- parent:EPIC-62
+- retry
