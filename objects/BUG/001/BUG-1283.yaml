@@ -20,12 +20,12 @@ description: |-
   2. The ratchet. scripts/check-portability.sh did not catch this, and did not catch BUG-1233 either. Add a check for the two shapes now seen twice: (a) an assertion comparing file content read from a working tree against a literal containing \n; (b) opening a DIRECTORY as a File (the BUG-1233 shape). Both are greppable patterns in test code, and the ratchet exists precisely so Linux-only PR CI does not ship Windows failures.
 
   Acceptance: the test passes on windows-latest (verify by a cross-platform.yml dispatch, not by assertion); scripts/check-portability.sh flags a newly added assertion of either shape on a fixture; the nightly returns green and the tracking issue closes. Do NOT cfg-away the test on Windows — the behaviour it proves (BUG-1229's fail-closed store write path) matters most on the platform with the most surprising filesystem semantics.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:42:27.085616663Z
-modified_at: 2026-09-20T00:15:33.342487196Z
+modified_at: 2026-09-20T06:07:19.073612497Z
 req_type: Bug
 tags:
 - drain-safe
@@ -91,3 +91,7 @@ comments:
   modified_at: 2026-09-20T00:15:33.342487196Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-20T06:07:19.073612497Z
+  implemented_by: joe
