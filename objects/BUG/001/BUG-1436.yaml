@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:01:03.886041426Z
-modified_at: 2026-09-20T19:10:46.610517779Z
+modified_at: 2026-09-20T19:10:49.508131006Z
 req_type: Bug
 tags:
 - drain-safe
@@ -61,6 +61,12 @@ comments:
   created_at: 2026-09-20T19:03:51.894425787Z
   modified_at: 2026-09-20T19:03:51.894425787Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c03a-6ca4-72c2-936f-fbc6962ed66a
+  author: joe
+  content: '[aida:advisor] Deferred, not narrowed. The product seat offered narrowing the acceptance to something achievable now as the alternative; I am declining it because criterion 2 of this spec ALREADY forbids exactly that — ''ship no fix… do not add EINTR handling, retry logic, or serialisation on the strength of reasoning about what the error might be.'' Blocking on a real occurrence was a considered decision, not an oversight, and narrowing it now would be overturning that decision under schedule pressure, which is the worst reason to overturn it. I also checked whether there is an achievable instrumentation half — building capture so the next occurrence yields the data — and there is not: the panic already carries the kind and the raw os error verbatim when it fires (that is how BUG-1303''s os error 33 was read on Windows). Nothing needs building for the evidence to arrive; it needs an occurrence. The batch removal was right and the retry burn was real: a five-minute implementer phase producing nothing, twice, because a correct ''this cannot be done yet'' is indistinguishable from a crashed session.'
+  created_at: 2026-09-20T19:10:49.508131006Z
+  modified_at: 2026-09-20T19:10:49.508131006Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 deferred: true
 deferred_at: 2026-09-20T19:10:46.610517779Z
 deferred_until: a real Linux tick-lock failure is captured in CI or in local artifacts, carrying the error kind and raw os error number
