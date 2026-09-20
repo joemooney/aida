@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T13:24:10.800340531Z
-modified_at: 2026-09-20T08:32:36.626878532Z
+modified_at: 2026-09-20T16:24:19.548533371Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -160,6 +160,35 @@ comments:
     ? SEM (0.93) — Per-check row-read failures are retried only when a local hold marker or confirmed hold label is present; without either form of supervised hold, refinement returns the first row-read error without retrying.
   created_at: 2026-09-19T19:14:10.643965650Z
   modified_at: 2026-09-19T19:14:10.643965650Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bfa1-fd5c-76a3-8ed1-253b2ed07521
+  author: joe
+  content: |-
+    Fourth occurrence, observed live 2026-09-20 16:22 local on BUG-1291 / PR #2001, with a detail that sharpens this spec's claim.
+
+    From events.jsonl:
+
+        16:15:35  PhaseEntered idx=1 implementer
+        16:22:08  PhaseEntered idx=2 ci
+        16:22:40  CiTerminal green=false
+
+    The PR's check rollup at 16:22:40:
+
+        Build (ubuntu-latest) = in_progress
+        merge-hold-gate       = failure
+
+    The CI phase concluded terminal-red in 32 seconds while the required build was STILL RUNNING. The only check that had reached a conclusion was the hold gate.
+
+    So the defect is not only "a hold-gate red is misread as a CI red". It is that ONE concluded failing check ends the CI wait, regardless of whether the checks that actually describe code health have finished. The hold gate fails immediately by construction — it is a marker/label check with nothing to compute — so on a held PR it is always the first to conclude, and it therefore always decides. That is why this fires so reliably rather than occasionally.
+
+    Two consequences worth folding into acceptance if they are not already covered:
+
+    - The CI phase must not treat a terminal state as reached while any REQUIRED check is still `in_progress` or `queued`. Concluding on a partial rollup is the mechanism; ignoring the hold gate specifically would fix this instance and leave the general early-exit in place.
+    - A red whose only failing check is the hold gate is not a CI verdict at all and should not produce a `ci-red` shelve. The spec already says this; the addition is that it must also not produce a terminal CI verdict EARLY, because the early exit is what prevents the real build's result from ever being consulted.
+
+    Related and currently unlinked: BUG-1447 describes the same hold defeating the drain one phase LATER, in merge, where "is not mergeable: the base branch policy prohibits the merge" is misclassified as a merge conflict by `is_merge_conflict_failure`. Which of the two fires depends on when the hold lands relative to the pipeline — this one when the hold predates the CI phase, BUG-1447 when it lands between CI and merge. Fixing either alone will appear to solve the problem while the other path stays open, so they are worth reading together.
+  created_at: 2026-09-20T16:24:19.548533371Z
+  modified_at: 2026-09-20T16:24:19.548533371Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0bb17-41c1-7902-a689-8d78890f0c78
