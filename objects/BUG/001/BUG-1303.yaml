@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:22:29.721225410Z
-modified_at: 2026-09-20T11:01:28.599929331Z
+modified_at: 2026-09-20T11:01:30.657889348Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -293,6 +293,23 @@ comments:
   created_at: 2026-09-20T10:54:51.932775100Z
   modified_at: 2026-09-20T10:54:51.932775100Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0be7a-71a1-7250-bf71-41eefc06a361
+  author: joe
+  content: |-
+    [advisor] CLOSED COMPLETED WITH ITS WINDOWS HALF FIXED AND ITS LINUX HALF UNEXPLAINED. The remainder is now BUG-1436 rather than an orphan inside a closed spec.
+
+    The Windows cause was established by observation — run 35502040911 on main, which lacked the fix, failed with os error 33, the lock-violation code fs2 returns for contention and Rust does not surface as WouldBlock. PR #2008 classifies that code as contention, so the fix connects to the cause by mechanism rather than by correlation with a passing run. That half is genuinely done.
+
+    Nothing in it explains Linux, where contention DOES map to WouldBlock and the old guard matched correctly. The Linux sighting — one failure under full-suite parallelism, not reproduced in 200 deliberate attempts — has no established cause, and the two candidate explanations were never evidenced.
+
+    I warned three times on this spec not to close on the Windows answer, and it closed anyway. I am not reopening it: the work it describes was done, done well, and reopening would put finished work back in the queue. That is the same call I made on BUG-1287, and the same remedy — split the unfinished half into its own spec so the record is honest in both directions.
+
+    WHAT A READER SHOULD TAKE FROM THE PAIR. Do not read this Completed status as "the lock test is fixed". It is fixed on Windows. On Linux it may still flake, nobody knows why, and BUG-1436 carries that with everything we learned recorded in it — including the method that cracked Windows, which is that the panic already prints the os error number and we spent two days reading past it.
+
+    WORTH NAMING AS A PATTERN, since this is the third tonight. BUG-1287 closed Completed with a fix that clears nothing. BUG-1289 and BUG-1287 both needed manual status bumps because lane-implemented specs skip `queue done`. And now this. In each case the spec's acceptance was met while the thing a reader would assume from its status was not true. A status is a claim, and the claim it makes is broader than the acceptance it was measured against.
+  created_at: 2026-09-20T11:01:30.657889348Z
+  modified_at: 2026-09-20T11:01:30.657889348Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0be74-9392-74d0-905a-bd8863c64d20
   author: aida-auto-bump
