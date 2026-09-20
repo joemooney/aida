@@ -1,0 +1,34 @@
+id: 01a0bda9-b6c4-7da2-8754-66ce279bf8f0
+spec_id: BUG-1427
+agreed_id: BUG-1427
+title: queue rework moves an entry between identities silently, and discards the removal result so a failed move reports success
+description: |
+  `aida queue rework` moves a pre-existing queue entry for the target spec out of another identity's queue, and does so silently in both directions:
+
+  1. No output names the move. An entry vanishes from one identity's queue and appears in another's, with nothing printed and no event recorded. From that identity's side the entry simply disappeared.
+  2. The removal's result is discarded — `let _ = storage.queue_remove(old_user, &req_id);`. If it fails, nothing reports it and the duplicate the change exists to prevent survives, while the command reports success.
+
+  So the code can silently remove an entry someone expected to keep, or silently keep one it was meant to remove, and from outside those look identical.
+
+  A THIRD, SMALLER POINT: the pre-scan uses `find_map`, returning only the FIRST match across queue identities. The test's guarantee is "moved, not duplicated", and with a single match that holds against one other queue rather than against all of them. Three queues is probably unreachable today, but the guarantee is written as though it were not.
+
+  WHY IT WAS ACCEPTED ANYWAY. The fix lands requeued entries on the role queue a batch drain actually reads, which removes a queue-remove-plus-queue-add step from every reviewer-finding cycle — directly reducing the per-round cost of the advisor gate. Holding it for three lines of reporting, while the operator is asking for throughput, was the wrong trade.
+
+  ACCEPTANCE
+  1. A moved entry prints one line naming the spec, the identity it came from and the one it landed in. A cross-queue write triggered by a command scoped to one spec and one queue should say so.
+  2. The `queue_remove` result is not discarded. A failed removal is the feature not working and must surface rather than be swallowed.
+  3. Either sweep every queue identity rather than the first match, or state in the test and the doc that the guarantee holds against one.
+
+  Deferred from PR #1996 review, where the fix was merged on the operator's throughput directive with this recorded rather than blocking.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T07:13:31.332560143Z
+modified_at: 2026-09-20T07:13:31.332560143Z
+req_type: Bug
+tags:
+- diagnostic-decay
+- drain-safe
+- from:session-0919
+- queue
