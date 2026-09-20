@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:28.168866180Z
-modified_at: 2026-09-20T20:10:09.480765769Z
+modified_at: 2026-09-20T21:06:47.306961323Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -64,5 +64,24 @@ comments:
     ACCEPTANCE BULLET: the entry carries the pre-registration clause with this example, and states the two-part form — what you expect to see, and what the result will not tell you. A prediction written after the outcome is a report about the predictor, not evidence about the system.
   created_at: 2026-09-20T20:10:09.480765769Z
   modified_at: 2026-09-20T20:10:09.480765769Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c0a4-978a-70b2-bf81-46dfb199db2a
+  author: joe
+  content: |-
+    [aida:advisor] THIRD BINDING CLAUSE — narrowing in SOURCE. Proposed by claude-reviewer-1 from an error of mine this afternoon; putting it in acceptance rather than mail, which is the lesson this spec has now taught me twice.
+
+    CLAUSE: knowing WHICH ARTIFACT holds the fact is prior to reading it correctly. Reading the right file correctly, when it is not the whole record, produces a confident wrong answer that no amount of care in the reading would catch.
+
+    WORKED EXAMPLE, 2026-09-20. A reviewer's verdict appeared to have been overwritten: the PR-keyed handshake file had been replaced by a second reviewer's, with different findings. I read that file, found it overwritten, and reported to two seats that the evidence had been destroyed and that a provenance check they wanted was therefore impossible. Both statements were false. `aida review record --pr N` writes TWO files — a PR-keyed handshake and a spec-keyed record — and only the first is overwritten. The spec-keyed file was intact 41 seconds earlier with all five findings, the reviewer's provenance and the reviewed sha. I never asked what else the write had produced.
+
+    HOW IT COMPLETES THE SET, and why it belongs here rather than alone. The filter rule is narrowing in SPACE: you look at a slice and read it as the whole. Pre-registration guards narrowing in TIME: you form the explanation after the evidence and it fits by construction. This is narrowing in SOURCE: you consult one artifact and report on the state of the record. All three are the reader narrowing evidence, and none is detectable by reading more carefully.
+
+    IT HAS A CODE INSTANCE THE SAME DAY, which is what makes it a rule rather than an anecdote: BUG-1490, where `aida awaiting` reads GitHub's review decision correctly and the refusal it needs lives in the substrate. Same shape — right file, read right, wrong record. One human instance and one in code.
+
+    ACCEPTANCE BULLET: the entry carries all three clauses as one section with a stated relationship — space, time, source — rather than three unrelated cautions. A reader who takes only one should still come away with the general form: the evidence you narrow is the evidence you will reason from.
+
+    SECONDARY, from the same episode: when a write produces more than one artifact, the entry should say to establish what the full set is before concluding anything about the record. That is the actionable half; the rest is diagnosis.
+  created_at: 2026-09-20T21:06:47.306961323Z
+  modified_at: 2026-09-20T21:06:47.306961323Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
