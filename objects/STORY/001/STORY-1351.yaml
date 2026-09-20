@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:12.562647785Z
-modified_at: 2026-09-20T16:16:49.499749793Z
+modified_at: 2026-09-20T16:30:22.349567764Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -103,6 +103,33 @@ comments:
     Verified before pushing: PR open and unmerged; head advanced d9cee9a1a → 424f65401. The `/home/joe/ai/aida-story-1351` worktree was at the old head and is realigned.
   created_at: 2026-09-20T16:16:49.499749793Z
   modified_at: 2026-09-20T16:16:49.499749793Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bfa7-868d-7e50-b620-322b42d38ee8
+  author: joe
+  content: |-
+    Second round on the rebase — and a correction to what I claimed in my previous comment.
+
+    I wrote that I had "verified the rebased commit compiles: cargo check -p aida-cli-lib --tests exit 0". That was true and it was not adequate. CI then failed on `templates::tests::project_discipline_pack_matches_master` in **aida-core** — a crate I had not checked, by a mechanism (`check`) that runs no tests at all. Two gaps at once: wrong package, and typecheck standing in for a test run. I picked the package from where I expected breakage (the auto-merged lib.rs) rather than from `git diff --name-only`.
+
+    WHAT ACTUALLY FAILED, and it is not the rebase:
+
+        project copy .aida/discipline/ has guide(s) whose content differs from the
+        embedded master: ["two-seat-protocol.md", "seat-recovery-playbooks.md",
+        "rework-brief-craft.md"]
+
+    The three new guides were written differently in `.aida/discipline/` and in `aida-core/templates/.aida/discipline/`. The divergence is original to the branch, not introduced by the rebase — hashing both copies at d9cee9a1a9 shows all three already differed before I touched anything. The PR had been CONFLICTING since it opened, so it had never produced a meaningful build and this had never surfaced.
+
+    FIX: copied master over project copy for all three; the master is the source of truth per the template-architecture rule. README.md legitimately differs and is already covered by a `LOCALIZED_DISCIPLINE_GUIDES` entry ("indexes test-isolation.md, a guide specific to this Rust repository"), so the union resolution from round one stands and that file is untouched.
+
+    VERIFICATION, this time scoped from the diff rather than from intuition:
+
+        cargo test -p aida-core   →  960 passed; 0 failed; 2 ignored
+
+    (run with `env -u AIDA_SESSION_ROLE`). Pushed as a fast-forward on top of 424f654017; PR #1986 head is now d941fadc8, state open, mergeable=true. The `/home/joe/ai/aida-story-1351` worktree is realigned.
+
+    Worth noting for whoever reviews: `project_discipline_pack_matches_master` is exactly the kind of gate that earns its keep. It caught a two-copy divergence that both the author and I missed, and it caught it the first time the branch was capable of building. The conflict had been hiding it.
+  created_at: 2026-09-20T16:30:22.349567764Z
+  modified_at: 2026-09-20T16:30:22.349567764Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
