@@ -2105,6 +2105,44 @@ fn role_guidance_for_integrator_is_first_class() {
     );
 }
 
+// trace:STORY-1351 | ai:codex
+#[test]
+fn cold_advisor_launch_context_names_gate_prohibition_and_next_command() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    let config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let plan = AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project,
+        role: Some("advisor".into()),
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "cold-advisor".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+
+    let context = render_agent_launch_context(&config, &plan, "token-1351").unwrap();
+    assert!(context.contains("## Seat Gate"), "{context}");
+    assert!(context.contains("Independent gate"), "{context}");
+    assert!(
+        context.contains("Never implement or merge code you authored"),
+        "{context}"
+    );
+    assert!(context.contains("At your gate now"), "{context}");
+    assert!(
+        context.contains("**What do I do next?** `aida advisor`"),
+        "{context}"
+    );
+}
+
 #[test]
 fn stakeholder_personas_get_shared_launch_guidance_but_real_roles_do_not() {
     let guest = default_role_guidance("guest");

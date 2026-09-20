@@ -7,6 +7,9 @@ How to work effectively with AIDA — habits, vocabulary, and workflow patterns 
 | Guide | What it covers |
 |-------|----------------|
 | [`advisor-role.md`](advisor-role.md) | The advisor seat — its responsibilities, what it does *not* do, and the three autonomy modes |
+| [`two-seat-protocol.md`](two-seat-protocol.md) | Product/advisor independence, handoffs, and ownership of judgment gates |
+| [`rework-brief-craft.md`](rework-brief-craft.md) | Turning a reviewer verdict into a cold-session-safe implementation handoff |
+| [`seat-recovery-playbooks.md`](seat-recovery-playbooks.md) | Recovery for stale/diverged branches, stranded commits, hold shelves, and store divergence |
 | [`implementer-discipline.md`](implementer-discipline.md) | The implementer's six rules: one-spec-per-session, exit-after-ship, poll-briefs, ship-full-acceptance, read-pending-brief-banner, advise-escape — each linked to the runtime substrate-bouncer that enforces it |
 | [`integrator-role.md`](integrator-role.md) | The integrator seat — owns the merge cascade (rebase, mechanical-conflict resolution, CI watch, squash-merge, `aida pull`); escalates semantic conflicts to the advisor, missing verdicts to the reviewer, real failures to the implementer |
 | [`docs-lane.md`](docs-lane.md) | The single-writer docs lane (SPIKE-10 MVP) — one agent owns `docs/`, every other agent FLAGS via the `needs-docs` routing primitive instead of editing; drain via `/aida-burndown` filtered to docs + a periodic `/aida-docs-review` sweep; single-writer stays conventional |

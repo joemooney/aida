@@ -20332,26 +20332,31 @@ fn human_route_is_open(archived: bool, status: &aida_core::RequirementStatus) ->
 // trace:TASK-608 | ai:claude
 // trace:STORY-460 | ai:claude — integrator joins the agent-wired starter set
 // trace:TASK-1200 | ai:codex — product joins the first-machine starter set
-const STARTER_ROLES: &[(&str, &str)] = &[
+const STARTER_ROLES: &[(&str, &str, Option<&str>)] = &[
     (
         "implementer",
         "Heads-down coding on a specific feature or fix. Drive a requirement to completed.",
+        None,
     ),
     (
         "product",
         "Intake and product-owner seat. Groom drafts, capture requirements, sharpen acceptance criteria, and route work to the right queue. Distinct from advisor: product owns requirement capture; advisor owns strategic counsel, disposition, and design-fork judgment.",
+        Some("You own product intake and wave continuity. Turn observed needs into bounded specs with testable acceptance, order the ready queue, and launch the next eligible wave; never approve your own disputed product judgment or merge implementation. The advisor independently gates disposition, design forks, rework quality, and merge readiness. Read `.aida/discipline/two-seat-protocol.md`; use `.aida/discipline/rework-brief-craft.md` and `.aida/discipline/seat-recovery-playbooks.md` when those cases arise. Recurring duties arrive as due jobs, not as rules to remember."),
     ),
     (
         "advisor",
         "Trusted counsel across the project's lifetime. Surfaces friction, articulates mental models, gardens the queue, curates memory across sessions. Produces specs and comments, not code; routes implementation to doer roles via `aida queue add --for <role>`.",
+        Some("You are the independent judgment gate. You approve or reject dispositions, resolve grounded design forks, gate merges/rework, and turn review verdicts into actionable rework briefs. Never implement or merge code you authored, and never waive an unresolved gate merely to keep work moving. Read `.aida/discipline/two-seat-protocol.md`; follow `.aida/discipline/rework-brief-craft.md` for every requested-change handoff and `.aida/discipline/seat-recovery-playbooks.md` for recovery. Recurring duties arrive as due jobs, not as rules to remember."),
     ),
     (
         "reviewer",
         "Code/PR review. Walk diffs, check trace comments, verify against requirements.",
+        None,
     ),
     (
         "integrator",
         "Owns the merge cascade — rebases PRs, resolves mechanical conflicts, watches CI, squash-merges CI-green-and-verdict-present PRs, deletes merged branches, runs `aida pull`. Escalates design-judgment conflicts to the advisor; routes missing-verdict PRs to the reviewer.",
+        None,
     ),
 ];
 
@@ -20366,7 +20371,7 @@ fn scaffold_starter_roles(
 ) -> Result<(Vec<&'static str>, Vec<&'static str>)> {
     let mut created: Vec<&'static str> = Vec::new();
     let mut skipped: Vec<&'static str> = Vec::new();
-    for (name, purpose) in STARTER_ROLES {
+    for (name, purpose, system_prompt) in STARTER_ROLES {
         if load_role(project_root, name).is_ok() {
             skipped.push(name);
             continue;
@@ -20382,7 +20387,7 @@ fn scaffold_starter_roles(
             activity: Vec::new(),
             scope_tags: Vec::new(),
             scope_status: None,
-            system_prompt: None,
+            system_prompt: system_prompt.map(|prompt| (*prompt).to_string()),
         };
         let path = role_save_path(project_root, &state)?;
         save_role_at(&state, &path)?;
@@ -26545,6 +26550,16 @@ fn render_agent_launch_context(
     out.push_str(&role_guidance_for(&plan.project_root, role));
     out.push_str("\n\n");
 
+    // A cold product/advisor session must see the independence boundary and
+    // the live item at its gate without relying on a prior conversation.
+    // Mechanised recurring duties stay in the Due Jobs section below.
+    // trace:STORY-1351 | ai:codex
+    if matches!(canonical_role_name(role).as_str(), "product" | "advisor") {
+        out.push_str("## Seat Gate\n\n");
+        out.push_str(&render_seat_gate_section(&plan.project_root, role));
+        out.push('\n');
+    }
+
     out.push_str("## Active Session\n\n");
     if let Some(spec) = &plan.current_spec {
         let ship_instruction = orchestrated_implementer_ship_instruction(
@@ -26641,6 +26656,10 @@ fresh `aida agent new ... --spec NEXT-ID` session.\n"
     out.push('\n');
 
     out.push_str("## Next Commands\n\n");
+    out.push_str(&format!(
+        "- **What do I do next?** `{}`\n",
+        seat_next_command(role)
+    ));
     out.push_str("- Read AGENTS.md and any agent-specific setup document under docs/agents/.\n");
     out.push_str("- Check pending briefs with `aida brief list --for-agent ");
     out.push_str(config.agent_type);
@@ -26656,6 +26675,28 @@ fresh `aida agent new ... --spec NEXT-ID` session.\n"
     ));
     out.push('\n');
     Ok(out)
+}
+
+// trace:STORY-1351 | ai:codex
+fn seat_next_command(role: &str) -> String {
+    match canonical_role_name(role).as_str() {
+        "advisor" => "aida advisor".to_string(),
+        "product" => "aida queue next --for product".to_string(),
+        other => format!("aida queue next --for {other}"),
+    }
+}
+
+// trace:STORY-1351 | ai:codex
+fn render_seat_gate_section(project_root: &std::path::Path, role: &str) -> String {
+    let seat = canonical_role_name(role);
+    let responsibility = match seat.as_str() {
+        "advisor" => "Independent gate: disposition, grounded design forks, rework sufficiency, and merge readiness. Never implement or merge code you authored.",
+        "product" => "Product gate: requirement quality, acceptance, ordering, and wave continuity. Never approve your own disputed judgment or merge implementation.",
+        _ => "Follow the active role contract.",
+    };
+    let waiting = queue_head_line(project_root, Some(&seat))
+        .unwrap_or_else(|| format!("- Nothing is waiting on the `{seat}` role queue."));
+    format!("{responsibility}\n\nAt your gate now:\n{waiting}\n")
 }
 
 /// STORY-619: build the launch-context `## Mailbox` body for a spawned agent.
