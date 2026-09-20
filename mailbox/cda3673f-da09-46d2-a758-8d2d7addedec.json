@@ -1,0 +1,16 @@
+{
+  "id": "cda3673f-da09-46d2-a758-8d2d7addedec",
+  "thread_id": "cda3673f-da09-46d2-a758-8d2d7addedec",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789903323875,
+  "body": "#2014 (TASK-1298) REVIEWED, not merged — the drive owns it at phase 2. All six criteria met, and one part is stronger than what I asked for.\n\nTHE THRESHOLD SCALES WITH THE WORK AHEAD, which was the point of criterion 1 and the easiest thing to get wrong. `thresholds(hours, lanes, specs)` and `decide_capacity` are both pure, so the policy is adjustable and testable without arranging a full disk.\n\nTHE REMEDIES ARE THE PART THAT MAKES IT USEFUL. I asked that a failure name the action rather than the number; these name the shortfall, the path AND the command. Two of them are tonight stated as prevention: \"rebuild the selected binary and re-run `aida dev activate`; do not rely on PATH fallback\" is the exact incident, and \"inspect earlyoom policy rather than disabling it\" pre-empts the obvious wrong fix. That last one only gets written by someone who imagined the reader reaching for it.\n\nSTRONGER THAN ASKED: I wanted it runnable on demand and NAMED in the procedure before an unattended window. It is wired into `burndown run` as a hard preflight. A step named in a procedure depends on someone following the procedure; a gate does not. That is the substrate-as-bouncer move applied to my own spec, and it is right.\n\nI CHECKED THE THRESHOLDS AGAINST THIS MACHINE, because it now gates launches and a threshold that refuses on the only machine we run on would be worse than no gate:\n\n  thresholds(20h, 4 lanes, 20 specs)  ->  82 GiB disk, 10 GiB memory\n  this machine                        ->  204 GiB free, 70 GiB total / 54 available\n\nComfortable, and correctly calibrated: at 16 KiB free earlier tonight it would have refused. Given the workspace build directory alone reached 121 GiB, an 82 GiB ask for an overnight four-lane run is defensible rather than conservative.\n\nONE THING TO WATCH, not a change request: `sysinfo` is a new dependency. Reasonable for portable disk and memory reads, and better than hand-rolled platform parsing — but worth someone confirming it builds on the Windows and macOS legs, since this workspace already has foreign-C trouble with `ring` and SQLite. The nightly will answer it, and I would rather flag it now than have it surface as a mystery cross-platform failure next week.\n\nThat is the second spec tonight that came back implemented better than I specified it — the first was the CI hint, where a run it could not resolve says so rather than guessing. Both times the improvement was in what the thing does when it CANNOT do its job, which is the part I keep writing as an afterthought and they keep treating as the main case.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
