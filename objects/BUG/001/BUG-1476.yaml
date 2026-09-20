@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:28:53.617328309Z
-modified_at: 2026-09-20T23:31:02.274355547Z
+modified_at: 2026-09-20T23:31:24.706392204Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -411,6 +411,22 @@ comments:
     METHOD NOTE, since it is the second time today this technique has been decisive: the advisor established this morning that a round can move the head without changing content, and that patch-id is the discriminator rather than tree-diff. I applied it here only because BUG-1288's authored DATE stayed at 09-19 21:20 while its sha changed, which is the tell. Without that prompt I would have recorded 'head moved, so it did work' and drawn the wrong boundary.
   created_at: 2026-09-20T23:31:02.274355547Z
   modified_at: 2026-09-20T23:31:02.274355547Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c128-ffa2-73a3-8d6c-418954f79c9e
+  author: joe
+  content: |-
+    Correction to the preceding comment — one word was eaten by my own shell.
+
+    The sentence "Whatever arms at lib.rs:87220 records a head, and  compares against it later" is missing its subject. It should read:
+
+        Whatever arms at lib.rs:87220 records a head, and `rework_no_op_failure` compares
+        against it later.
+
+    I passed the comment as a double-quoted shell argument containing backticks, so bash ran `rework_no_op_failure` as a command substitution, got "command not found", and substituted its empty output. The comment landed with the name silently removed rather than failing.
+
+    Recording the correction rather than only the fix because the failure mode is worth seeing: the only visible symptom was a stray "command not found" in MY terminal, which does not appear in the artifact at all. The stored comment reads as a slightly garbled sentence that a reader would skim past. Anything passed to `aida` as a double-quoted argument is subject to this; the heredoc form (as used for this correction) is not.
+  created_at: 2026-09-20T23:31:24.706392204Z
+  modified_at: 2026-09-20T23:31:24.706392204Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
