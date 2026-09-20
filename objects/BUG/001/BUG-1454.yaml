@@ -1,0 +1,50 @@
+id: 01a0bfa0-5a97-7cb3-8382-f90973400e83
+spec_id: BUG-1454
+agreed_id: BUG-1454
+title: The Done to Completed auto-bump fires on the first trailered commit, so a multi-deliverable spec is marked Completed with unmerged work in an open PR that no open-work surface will ever show again
+description: |
+  The Done→Completed auto-bump fires on the first trailered commit to reach main, so a spec with more than one deliverable is marked Completed while its remaining work sits in an open PR — and a Completed spec is excluded from every open-work lens, so that remainder becomes permanently invisible.
+
+  OBSERVED on two specs simultaneously, 2026-09-20.
+
+  TASK-1295, status Completed:
+    on main    ba3e9745  pid c8742317…  "docs(discipline): review independence as a property of method (TASK-1295)"
+    PR #1979   3ae8f937  pid d588de15…  "docs(discipline): why purpose-holding reviewers miss failures (TASK-1295)"
+
+  BUG-1279, status Completed:
+    on main    ecb71041  pid 2a062ab4…  "docs(discipline): resync project discipline pack with master, add link/parity guard (BUG-1279)"
+    PR #1991   272e4353  pid 2697e74f…  "docs: correct the .aida/ gitignore convention and name the info/exclude trap (BUG-1279)"
+
+  Different patch-ids, different subjects, different work. In BUG-1279's case the two deliverables are barely related — a discipline-pack resync landed, and a CLAUDE.md documentation correction is still open. The auto-bump read the first trailer and declared the spec finished.
+
+  WHY THIS IS WORSE THAN A WRONG STATUS. Completed is terminal. It drops the spec from the default `aida list` lens, from the `aida status` open tally, and from every candidate and ready surface. So the open PR is not merely mislabelled — nothing that looks for outstanding work will ever mention it again. Both of these PRs have been open for hours behind a status that says there is nothing to do.
+
+  The convention that should have prevented it is already written down: a trailer completes a spec only if THAT merge finishes it. It depends on every commit author making that judgement correctly, every time, with no check anywhere. That is a rule where a gate belongs — an author who puts a trailer on a partial deliverable gets no warning, and neither does anyone else.
+
+  LIKELY NOT MANUALLY RECOVERABLE, which is the part that needs deciding rather than assuming. Setting these specs back to Done looks like the obvious fix, but the trailered commit is already on main, so the next `aida pull` should re-bump them to Completed and the correction would silently undo itself. I have NOT tested this — it is the first thing the implementer should establish, because it decides whether this is a bug in the bump condition or also needs a way to pin a spec against re-bumping.
+
+  ACCEPTANCE
+  1. Establish first whether a manual Done correction survives the next `aida pull`, and say so in the spec. If it does not, the fix needs a durable way to express "this trailer did not finish the spec".
+  2. A spec is not auto-bumped to Completed while it has an open PR referencing it. An open PR is the cheapest available evidence that work remains, and it is already queryable.
+  3. Where the bump is ambiguous, prefer Done over Completed. Done keeps the spec visible and costs someone a glance; Completed hides it and costs the work.
+  4. Recover the two known instances: TASK-1295 and BUG-1279 must become visible again with PRs #1979 and #1991 attached, by whatever mechanism criterion 1 establishes is durable.
+  5. Sweep for others. Any Completed spec with an open PR referencing it is a candidate; report the count. Two were found by accident while chasing something else, so the population is unknown.
+  6. A test covers the shape: two commits carrying the same spec trailer, one merged and one on an open PR, must not leave the spec Completed.
+
+  NOT IN SCOPE: changing the trailer convention itself, or the auto-bump for the ordinary single-deliverable case, which works and is relied on.
+
+  Found while checking why two held PRs showed Completed specs. Both are advisor-authored documentation PRs held for an independent second reader, which is why neither had an implementer watching it to notice.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T16:22:32.343565248Z
+modified_at: 2026-09-20T16:22:32.343565248Z
+req_type: Bug
+tags:
+- auto-bump
+- batch:night-0920
+- drain-safe
+- from:session-0920
+- lifecycle
+- observability
