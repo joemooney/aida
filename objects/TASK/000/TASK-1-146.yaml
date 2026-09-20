@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T23:52:53.703891368Z
-modified_at: 2026-09-20T16:20:39.475461704Z
+modified_at: 2026-09-20T16:40:45.756042774Z
 req_type: Task
 tags:
 - credential
@@ -74,5 +74,46 @@ comments:
     Recording this rather than closing, because a credential spec that closes on "the secret exists" is exactly the kind that looks done and is not.
   created_at: 2026-09-20T16:20:39.475461704Z
   modified_at: 2026-09-20T16:20:39.475461704Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bfb1-09bc-7041-a33a-9695ed2624e4
+  author: joe
+  content: |-
+    CORRECTION — my previous comment's conclusion is inverted, and the correction came from the advisor. I said PR #1978 was "the gate on closing this spec". It is currently a way to close this spec FALSELY.
+
+    I verified their finding against the branch rather than relaying it. `.github/workflows/cross-platform.yml` on origin/task-1273-work, the `GitLab live forge smoke` job:
+
+        env:
+          GITLAB_TOKEN: ${{ secrets.AIDA_GITLAB_TOKEN }}
+        ...
+          - name: Check mirror availability and credentials
+            id: preflight
+            run: |
+              if [ -z "$GITLAB_TOKEN" ]; then
+                echo "::notice::Skipping GitLab forge smoke: AIDA_GITLAB_TOKEN is not provisioned"
+                echo "run=false" >> "$GITHUB_OUTPUT"
+              elif ! curl ... "https://${AIDA_GITLAB_LIVE_HOST}/-/readiness" >/dev/null; then
+                echo "::notice::Skipping GitLab forge smoke: mirror is unreachable"
+                echo "run=false" >> "$GITHUB_OUTPUT"
+              else
+                echo "run=true" >> "$GITHUB_OUTPUT"
+              fi
+
+    Every subsequent step is gated on `steps.preflight.outputs.run == 'true'`, and the job carries no failure path for either skip. So the job reports SUCCESS in three distinct states:
+
+      (a) the smoke actually ran and passed        — verifies the credential
+      (b) the token was absent                     — verifies nothing
+      (c) the mirror was unreachable               — verifies nothing
+
+    Only (a) is evidence. The advisor named (b); (c) is a second path to the same false green, and it is the more insidious of the two because it can happen intermittently on a correctly-provisioned credential. A `::notice::` is invisible unless someone opens the run, so from `gh run list` all three look identical.
+
+    WHAT THIS MEANS FOR THIS SPEC. The close condition I proposed — "the first nightly GitLab smoke run after #1978 merges completes without an auth failure" — is exactly wrong, because (b) and (c) both complete without an auth failure while proving nothing. A green nightly would have closed an operator-action item on no evidence, and the first REAL use would fail in whatever situation prompted provisioning the credential in the first place.
+
+    REVISED CLOSE CONDITION: a nightly run whose GitLab smoke job actually EXECUTED — `steps.preflight.outputs.run == 'true'` — and passed. Not "did not fail". The distinction needs to be readable without opening the run, which means the skip should be visible in the job's conclusion rather than only in a notice.
+
+    This is the same family as the ungated Windows fixture in BUG-1453 and the hold gate in BUG-1447: an instrument whose charter is to verify something, and whose failure mode is to report success while verifying nothing. A smoke test whose skip is indistinguishable from its pass is not a smoke test.
+
+    The advisor has held #1978, promoted this to item 1 of a five-item rework brief as the one to do if only one lands, and requeued it. Leaving this spec open on that basis.
+  created_at: 2026-09-20T16:40:45.756042774Z
+  modified_at: 2026-09-20T16:40:45.756042774Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: operator
