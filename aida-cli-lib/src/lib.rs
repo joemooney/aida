@@ -1679,6 +1679,8 @@ pub(crate) fn handle_tail_cli(
     no_timestamp: bool,
     annotate: bool,
 ) -> Result<()> {
+    // trace:BUG-1289 | ai:claude
+    let json = json || output_format_is_json();
     let project_root = find_main_worktree_root()
         .or_else(|_| find_project_root())
         .or_else(|_| std::env::current_dir())
@@ -3462,7 +3464,8 @@ fn run() -> Result<()> {
         ..
     } = &cli.command
     {
-        return handle_status_spec(spec, *idle_minutes, *json);
+        // trace:BUG-1289 | ai:claude
+        return handle_status_spec(spec, *idle_minutes, *json || output_format_is_json());
     }
 
     // STORY-769: the `aida awaiting --notice` per-turn hook ALWAYS leads with a
@@ -3492,7 +3495,8 @@ fn run() -> Result<()> {
     // (to find orphaned In-Progress specs), so it needs no shared storage
     // handle — dispatch early. trace:STORY-696 | ai:claude
     if let Command::Ps { json, all } = &cli.command {
-        return handle_ps(*json, *all);
+        // trace:BUG-1289 | ai:claude
+        return handle_ps(*json || output_format_is_json(), *all);
     }
 
     // `aida merge-lock` shows active branch merge-leases (STORY-1171). Read-only
@@ -3578,7 +3582,8 @@ fn run() -> Result<()> {
             &project_root,
             &watch::WatchOpts {
                 all: *all,
-                json: *json,
+                // trace:BUG-1289 | ai:claude
+                json: *json || output_format_is_json(),
                 // trace:TASK-994 | ai:claude
                 verbose: *verbose,
                 once: *once,
@@ -3621,7 +3626,8 @@ fn run() -> Result<()> {
     } = &cli.command
     {
         return handle_integrate(IntegrateCommandOpts {
-            json: *json,
+            // trace:BUG-1289 | ai:claude
+            json: *json || output_format_is_json(),
             run: *run,
             dry_run: *dry_run,
             watch: *watch,
@@ -5018,7 +5024,8 @@ fn run() -> Result<()> {
                 since,
                 unused,
                 errors,
-                *json,
+                // trace:BUG-1289 | ai:claude
+                *json || output_format_is_json(),
                 *limit,
                 auto_complete,
                 failures,
@@ -5645,7 +5652,10 @@ fn handle_findings_command(
             source,
             kind,
             count,
+            json,
         } => {
+            // trace:BUG-1289 | ai:claude
+            let json = *json || output_format_is_json();
             // Findings are draft requirements carrying a `from-review:` or
             // `from-implementer:` tag. `aida list --tags` is exact-match, so
             // the prefix glob can't be a list filter — query all drafts, then
@@ -5700,6 +5710,66 @@ fn handle_findings_command(
                 shelved.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
             }
             let total = findings_total + punts.len() + shelved.len();
+
+            // trace:BUG-1289 | ai:claude
+            // Matches `docs/monitor-contract-fixtures/findings-list.json`
+            // (`{findings: array}`) plus the punt/shelve axes the human view
+            // triages alongside findings.
+            if json {
+                let findings_json: Vec<serde_json::Value> = sections
+                    .iter()
+                    .flat_map(|section| {
+                        let source_label = section.source.label();
+                        section.groups.iter().flat_map(move |group| {
+                            let origin = group.origin.clone();
+                            group.rows.iter().map(move |row| {
+                                serde_json::json!({
+                                    "id": row.display_id,
+                                    "title": row.title,
+                                    "severity": row.severity.label(),
+                                    "kind": row.kind,
+                                    "recurrence": row.recurrence,
+                                    "source": source_label,
+                                    "origin": origin,
+                                })
+                            })
+                        })
+                    })
+                    .collect();
+                let punts_json: Vec<serde_json::Value> = punts
+                    .iter()
+                    .map(|r| {
+                        serde_json::json!({
+                            "id": r.display_id(),
+                            "title": r.title,
+                            "category": r.attention_reason.as_ref().map(|a| a.category.to_string()),
+                            "detail": r.attention_reason.as_ref().map(|a| a.detail.clone()),
+                        })
+                    })
+                    .collect();
+                let shelved_json: Vec<serde_json::Value> = shelved
+                    .iter()
+                    .map(|r| {
+                        serde_json::json!({
+                            "id": r.display_id(),
+                            "title": r.title,
+                            "phase": r.failure_reason.as_ref().map(|f| f.phase.clone()),
+                            "kind": r.failure_reason.as_ref().map(|f| f.kind.clone()),
+                        })
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "findings": findings_json,
+                        "findings_total": findings_total,
+                        "punts": punts_json,
+                        "shelved": shelved_json,
+                        "total": total,
+                    }))?
+                );
+                return Ok(());
+            }
 
             if *count {
                 println!("{total}");

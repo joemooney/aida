@@ -186,6 +186,12 @@ pub(crate) struct LiveDrainProbe {
 pub(crate) struct LiveDrainSpec {
     pub(crate) pid: u32,
     pub(crate) phase: String,
+    /// 1-based attempt count ("round") for the current phase — BUG-1290's
+    /// `DrainState::phase_attempt`, carried through for machine consumers
+    /// (`aida status <spec> --json`). `None` for a legacy/mid-transition
+    /// state file that hasn't recorded an attempt count yet.
+    // trace:BUG-1289 | ai:claude
+    pub(crate) round: Option<u32>,
 }
 
 /// Return the live orchestrator activity for `spec`, when that member is in a
@@ -199,11 +205,11 @@ pub(crate) fn live_drain_spec(project_root: &Path, spec: &str) -> Option<LiveDra
         .members
         .iter()
         .find(|m| m.spec.eq_ignore_ascii_case(spec) && m.is_running())?;
-    let raw_phase = if state
+    let is_current = state
         .current
         .as_deref()
-        .is_some_and(|s| s.eq_ignore_ascii_case(spec))
-    {
+        .is_some_and(|s| s.eq_ignore_ascii_case(spec));
+    let raw_phase = if is_current {
         state
             .current_phase
             .clone()
@@ -211,9 +217,18 @@ pub(crate) fn live_drain_spec(project_root: &Path, spec: &str) -> Option<LiveDra
     } else {
         member.state.clone()
     };
+    // trace:BUG-1289 | ai:claude
+    // `phase_attempt` is only meaningful for the CURRENT member — a
+    // between-members entry has no attempt count of its own.
+    let round = if is_current {
+        state.phase_attempt
+    } else {
+        None
+    };
     Some(LiveDrainSpec {
         pid: lock.pid,
         phase: drain_phase_display(&raw_phase),
+        round,
     })
 }
 
@@ -1829,6 +1844,7 @@ mod tests {
             Some(LiveDrainSpec {
                 pid: std::process::id(),
                 phase: "2/6 (CI wait)".to_string(),
+                round: None,
             })
         );
         assert_eq!(live_drain_spec(dir.path(), "STORY-301"), None);

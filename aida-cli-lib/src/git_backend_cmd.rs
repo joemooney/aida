@@ -836,7 +836,14 @@ pub(crate) fn handle_git_backend_command(
             verbose,
             no_ci,
         } => {
-            return handle_awaiting_command(*notice, *json, *verbose, *no_ci, &backend);
+            // trace:BUG-1289 | ai:claude
+            return handle_awaiting_command(
+                *notice,
+                *json || output_format_is_json(),
+                *verbose,
+                *no_ci,
+                &backend,
+            );
         }
         // — `aida focus` set/show/clear.
         Command::Focus {
@@ -925,7 +932,8 @@ pub(crate) fn handle_git_backend_command(
                 since,
                 unused,
                 errors,
-                *json,
+                // trace:BUG-1289 | ai:claude
+                *json || output_format_is_json(),
                 *limit,
                 auto_complete,
                 failures,
@@ -5124,6 +5132,7 @@ pub(crate) fn handle_git_backend_command(
                 source: None,
                 kind: None,
                 count: false,
+                json: false,
             };
             let cmd = findings_cmd.as_ref().unwrap_or(&default_list);
             handle_findings_command(cmd, &backend, store_path)?;

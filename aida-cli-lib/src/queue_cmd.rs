@@ -5840,6 +5840,7 @@ pub(crate) fn handle_queue_command(
             batch,
             since,
             verbose,
+            json,
         } => {
             handle_queue_progress(
                 storage,
@@ -5849,6 +5850,8 @@ pub(crate) fn handle_queue_command(
                 batch.as_deref().map(normalize_batch_name),
                 since.as_deref(),
                 *verbose,
+                // trace:BUG-1289 | ai:claude
+                *json || crate::output_format_is_json(),
             )?;
         }
         // TASK-218: encapsulate the implementer → reviewer → fixup
@@ -6058,6 +6061,8 @@ pub(crate) fn handle_queue_progress(
     batch: Option<&str>,
     since: Option<&str>,
     verbose: bool,
+    // trace:BUG-1289 | ai:claude
+    json: bool,
 ) -> Result<()> {
     let project_root = find_project_root()?;
     let store = storage.load()?;
@@ -6080,6 +6085,28 @@ pub(crate) fn handle_queue_progress(
         },
     }
 
+    // trace:BUG-1289 | ai:claude
+    // A valid, parseable JSON document for the "nothing to report" edge cases
+    // below — `--format json` / `--json` must never fall back to the human
+    // prose lines on these early-return paths.
+    let empty_progress_json = |note: &str| -> Result<()> {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "queued": 0,
+                "in_progress": 0,
+                "done": 0,
+                "shipped": 0,
+                "total": 0,
+                "unresolved": 0,
+                "shelved": 0,
+                "buckets": {},
+                "note": note,
+            }))?
+        );
+        Ok(())
+    };
+
     let source: Source = if let Some(name) = batch {
         let tag = format!("batch:{}", name);
         let specs: Vec<String> = store
@@ -6089,6 +6116,9 @@ pub(crate) fn handle_queue_progress(
             .map(|r| r.display_id())
             .collect();
         if specs.is_empty() {
+            if json {
+                return empty_progress_json(&format!("no requirements tagged `batch:{name}`"));
+            }
             println!(
                 "{} (no requirements tagged `batch:{}` — tag members via `aida edit --tags`)",
                 "Batch progress:".bold(),
@@ -6109,6 +6139,12 @@ pub(crate) fn handle_queue_progress(
             .map(|r| r.display_id())
             .collect();
         if specs.is_empty() {
+            if json {
+                return empty_progress_json(&format!(
+                    "no requirements modified since {}",
+                    cutoff.to_rfc3339()
+                ));
+            }
             println!(
                 "{} (no requirements modified since {})",
                 "Progress:".bold(),
@@ -6137,6 +6173,11 @@ pub(crate) fn handle_queue_progress(
                 .or_else(|| leases.last().cloned())
         };
         let Some(lease) = lease else {
+            if json {
+                return empty_progress_json(
+                    "no active sessions; pass --batch NAME or --since 2d for a non-session view",
+                );
+            }
             println!(
                 "{} (no active sessions; pass --batch NAME or --since 2d for a non-session view)",
                 "Progress:".bold()
@@ -6145,6 +6186,12 @@ pub(crate) fn handle_queue_progress(
         };
         let manifest_path = session_manifest::manifest_path(&project_root, &lease.id);
         if !manifest_path.exists() {
+            if json {
+                return empty_progress_json(&format!(
+                    "session {} ({}) has no planned-cluster manifest yet",
+                    lease.id, lease.scope
+                ));
+            }
             println!(
                 "{} session {} ({}) has no planned-cluster manifest yet.",
                 "Progress:".bold(),
@@ -6271,6 +6318,45 @@ pub(crate) fn handle_queue_progress(
     }
 
     let bucket_count = |label: &str| -> usize { buckets.get(label).map(|v| v.len()).unwrap_or(0) };
+
+    // trace:BUG-1289 | ai:claude
+    // The contract-promised shape (`aida queue progress --json` /
+    // `--format json`): `queued` = Remaining, `in_progress` = Working now,
+    // `done` = In flight (status Done — work finished on a branch, not yet
+    // merged; distinct from `shipped`, which is Completed/Rejected on the
+    // default branch). Mirrors `docs/monitor-contract-fixtures/queue-progress.json`.
+    if json {
+        let shipped = bucket_count("Shipped");
+        let in_flight = bucket_count("In flight");
+        let working = bucket_count("Working now");
+        let remaining = bucket_count("Remaining");
+        let total = shipped + in_flight + working + remaining + unresolved.len();
+        let buckets_json: serde_json::Value = bucket_order
+            .iter()
+            .map(|(label, _)| {
+                let items: Vec<serde_json::Value> = buckets[label]
+                    .iter()
+                    .map(|(id, title)| serde_json::json!({"id": id, "title": title}))
+                    .collect();
+                (label.to_string(), serde_json::Value::Array(items))
+            })
+            .collect::<serde_json::Map<_, _>>()
+            .into();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "queued": remaining,
+                "in_progress": working,
+                "done": in_flight,
+                "shipped": shipped,
+                "total": total,
+                "unresolved": unresolved,
+                "shelved": shelved_count,
+                "buckets": buckets_json,
+            }))?
+        );
+        return Ok(());
+    }
 
     let bucket_color = |label: &str, n: usize| -> colored::ColoredString {
         match label {

@@ -75,7 +75,8 @@ pub(crate) fn handle_schedule_command(
         }
         ScheduleCommand::List { json } => {
             let file = schedule::load(project_root);
-            if *json {
+            // trace:BUG-1289 | ai:claude
+            if *json || crate::output_format_is_json() {
                 println!("{}", serde_json::to_string_pretty(&file.schedules)?);
                 return Ok(());
             }
