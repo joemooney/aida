@@ -41,7 +41,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:55:30.106400060Z
-modified_at: 2026-09-20T19:38:09.657285368Z
+modified_at: 2026-09-20T19:42:09.896175779Z
 req_type: Bug
 tags:
 - agent-surface
@@ -59,6 +59,22 @@ relationships:
   target_id: 01a0bedb-f28f-7ba1-b0d2-6c6ddce5b60a
   created_at: 2026-09-20T18:13:10.348804632Z
   created_by: joe
+- rel_type: References
+  target_id: 01a0c005-bcda-7c91-ad95-710ca43bb888
+  created_at: 2026-09-20T19:42:09.896166346Z
+  created_by: joe
+comments:
+- id: 01a0c057-18dc-7610-843a-ee7253efda30
+  author: joe
+  content: |-
+    Opened PR #2027 for work that was already finished and pushed. This spec has been `done` since its drain run committed 6c692a496b; that run then shelved on "could not match the orchestrated session to a session lease" after both retry attempts, so no PR was ever created and the work sat unshipped. The commit is unchanged from what the implementer produced — the only missing step was the PR.
+
+    Surfaced by `aida session reap --dry-run`, which correctly refused to reap anything ("No session is reapable") but listed the unshipped-work recovery set alongside it. That listing is doing real work: it is how this was found, and it currently holds eleven branches with commits ahead and no merged PR, four of them more than eleven days old (TASK-724 at 79 days, STORY-993-2/3, TASK-1189-2/4).
+
+    Worth noting for whoever reviews: this fix also removes half of BUG-1471's mechanism. There is no typed `Related` variant — `References` is the real edge — but because `show` rendered `References` as "Related", a caller copying the label they saw got `--type related", which creates an inert `Custom("related")` edge no traversal follows. Both forms rendered identically, so re-checking in `aida show` confirmed the mistake. 128 inert edges exist across 84 specs as a result. This PR does not fix the input side, but after it the rendered type is the stored type, which is what made the error invisible.
+  created_at: 2026-09-20T19:42:08.604778203Z
+  modified_at: 2026-09-20T19:42:08.604778203Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 implementation_info:
   implemented: true
   test_coverage_notes: |-
