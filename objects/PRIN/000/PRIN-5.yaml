@@ -1,0 +1,48 @@
+id: 01a0c058-3d0c-7eb1-993d-3976581722cb
+spec_id: PRIN-5
+agreed_id: PRIN-5
+title: A coordination surface must distinguish absent evidence from good evidence, because computing a verdict over what is present always errs toward reassurance
+description: |
+  A coordination surface must distinguish "the evidence is absent" from "the evidence is good". Computing a verdict over the evidence that happens to be present, with no check that the expected evidence exists, produces a confident answer from an incomplete set — and it always errs toward the reassuring direction.
+
+  THE CLAUSE. Any surface that answers a gating question — is this mergeable, is this reviewed, is anything awaiting me, did CI pass — must treat missing evidence as a distinct outcome from satisfied evidence. Three states, not two: the evidence is present and good; the evidence is present and bad; the evidence is not there. Collapsing the third into the first is the failure this principle exists to prevent.
+
+  WHY IT NEEDS TO BE A PRINCIPLE RATHER THAN THREE BUG FIXES. Three independent instances surfaced on 2026-09-20, in three different subsystems, found by three different seats, none of them by looking for this pattern:
+
+    BUG-1466  the drain's `reviewed` gate matches only on Verdict::Approved and never compares
+              reviewed_sha to the head, so an approval authorizes a merge at ANY later head.
+              452 of 481 verdict files carry no reviewed_sha at all, so for 94% the comparison
+              could not happen even if it were attempted.
+
+    BUG-1481  `aida awaiting` computes ci_rollup green over the checks that EXIST, with no
+              concept of which are REQUIRED. A head carrying one trivial green check and no
+              build reads identically to a fully-passing pipeline.
+
+    BUG-1482  a piped `aida mailbox inbox` displays every message and does not advance the read
+              watermark, so a surface reports unread mail that was read.
+
+  Each was filed as its own defect and each would be fixed locally. The shape is the same in all three and a local fix in one does not protect the other two — which is how the third one shipped after the first two existed.
+
+  THE ASYMMETRY THAT MAKES IT DANGEROUS. Every one of these fails toward "fine". An approval authorizes more than it should; an incomplete pipeline reads as complete; unread mail reads as unread when it is not, which trains the reader to discount the counter. A surface that errs toward alarm gets fixed because it annoys people. A surface that errs toward reassurance gets trusted until something lands that should not have.
+
+  AND THE CONSEQUENCE IS COMPOUNDING. An inbox that cries wolf gets discounted, and the next real item goes with it. These are the surfaces agents use to decide what to act on; when they are individually slightly wrong in the same direction, the aggregate effect is that seats stop reading them and build private workarounds — which is already happening. Every seat checking merge-readiness today independently learned to run `gh pr checks` and read the named required row rather than trust the rollup.
+
+  HOW TO APPLY IT
+  - When computing a verdict from a set of evidence, ask what SHOULD be in the set and check that it is, before judging what is there.
+  - Make "cannot determine" a first-class outcome in the type, not a fallback branch. A Result that collapses unknown into ok will collapse it silently.
+  - Test the DERIVATION, not the classifier. In all three instances the existing tests fed a prepared verdict into the classifier and passed; none exercised how the verdict was derived, so none could have failed.
+  - A guard that returns "fine" on an error path is failing open. Say so explicitly and decide it deliberately, rather than letting `?` or a `!= Some(false)` make the decision.
+
+  Recorded by the advisor after the third instance in one day. The three specs are linked to this; a fourth should be linked here rather than filed as unrelated.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T19:43:23.404765693Z
+modified_at: 2026-09-20T19:43:23.404765693Z
+req_type: Principle
+tags:
+- diagnostic-decay
+- from:session-0920
+- merge-safety
+- observability
