@@ -9,6 +9,11 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 use sysinfo::{Disks, System};
 
+#[cfg(unix)]
+use std::ffi::CString;
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt;
+
 const GIB: u64 = 1024 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -32,6 +37,7 @@ pub(crate) struct Report {
     pub lanes: usize,
     pub specs: usize,
     pub disk_required_bytes: u64,
+    pub inode_required: u64,
     pub memory_warn_bytes: u64,
     pub checks: Vec<Check>,
 }
@@ -52,6 +58,18 @@ pub(crate) fn thresholds(hours: u64, lanes: usize, specs: usize) -> (u64, u64) {
     let disk_gib = 6 + lanes * 5 + specs * 2 + (hours.saturating_sub(1) / 4) * lanes;
     let memory_gib = (2 + lanes * 2).max(4);
     (disk_gib.saturating_mul(GIB), memory_gib.saturating_mul(GIB))
+}
+
+/// Inodes are consumed by checkouts, dependency trees, compiler outputs, and
+/// logs even when those files are small. Keep this independent of byte space.
+pub(crate) fn inode_threshold(hours: u64, lanes: usize, specs: usize) -> u64 {
+    let hours = hours.max(1);
+    let lanes = lanes.max(1) as u64;
+    let specs = specs.max(1) as u64;
+    10_000u64
+        .saturating_add(lanes.saturating_mul(5_000))
+        .saturating_add(specs.saturating_mul(2_000))
+        .saturating_add(hours.saturating_mul(lanes).saturating_mul(250))
 }
 
 pub(crate) fn decide_capacity(available: u64, required: u64, warn_only: bool) -> Level {
@@ -104,7 +122,33 @@ fn nearest_existing(mut path: PathBuf) -> PathBuf {
     path
 }
 
-fn disk_checks(root: &Path, required: u64, hours: u64) -> Vec<Check> {
+#[cfg(unix)]
+fn available_inodes(path: &Path) -> std::io::Result<u64> {
+    let path = CString::new(path.as_os_str().as_bytes()).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "filesystem path contains a NUL byte",
+        )
+    })?;
+    let mut stats = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    // SAFETY: path is NUL-terminated and stats is writable storage.
+    if unsafe { libc::statvfs(path.as_ptr(), stats.as_mut_ptr()) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // SAFETY: statvfs returned success and initialized the structure.
+    let stats = unsafe { stats.assume_init() };
+    Ok(stats.f_favail as u64)
+}
+
+#[cfg(not(unix))]
+fn available_inodes(_path: &Path) -> std::io::Result<u64> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "inode accounting is not available on this platform",
+    ))
+}
+
+fn disk_checks(root: &Path, required: u64, required_inodes: u64, hours: u64) -> Vec<Check> {
     let disks = Disks::new_with_refreshed_list();
     let paths = [
         ("repo", root.to_path_buf()),
@@ -125,11 +169,25 @@ fn disk_checks(root: &Path, required: u64, hours: u64) -> Vec<Check> {
         };
         let key = disk.mount_point().to_path_buf();
         let free = disk.available_space();
-        let level = decide_capacity(free, required, false);
+        let inode_result = available_inodes(&probe);
+        let inode_level = inode_result.as_ref().map_or(Level::Fail, |available| {
+            decide_capacity(*available, required_inodes, false)
+        });
+        let level = if decide_capacity(free, required, false) == Level::Fail
+            || inode_level == Level::Fail
+        {
+            Level::Fail
+        } else {
+            Level::Pass
+        };
+        let inode_detail = inode_result.as_ref().map_or_else(
+            |error| format!("inode availability unavailable ({error})"),
+            |available| format!("{available} inodes free; {required_inodes} required"),
+        );
         out.push(Check {
             name: format!("disk:{}", key.display()), level,
-            detail: format!("{} free; {} required for this {}h / {}-path workload", human_bytes(free), human_bytes(required), hours, label),
-            remedy: (level == Level::Fail).then(|| format!("reclaim at least {} on {}; the build directory is {} — inspect it with `du -sh {}` and reclaim Rust artifacts with `cargo clean --target-dir {}`", human_bytes(required.saturating_sub(free)), key.display(), target_dir(root).display(), target_dir(root).display(), target_dir(root).display())),
+            detail: format!("{} free; {} required; {inode_detail} for this {}h / {}-path workload", human_bytes(free), human_bytes(required), hours, label),
+            remedy: (level == Level::Fail).then(|| format!("reclaim at least {} and {} inodes on {}; the build directory is {} — inspect bytes with du -sh {} and inode-heavy paths with du --inodes -d 2 {}, then reclaim Rust artifacts with cargo clean --target-dir {}", human_bytes(required.saturating_sub(free)), inode_result.map_or(required_inodes, |available| required_inodes.saturating_sub(available)), key.display(), target_dir(root).display(), target_dir(root).display(), key.display(), target_dir(root).display())),
         });
     }
     out
@@ -137,7 +195,8 @@ fn disk_checks(root: &Path, required: u64, hours: u64) -> Vec<Check> {
 
 pub(crate) fn probe(root: &Path, hours: u64, lanes: usize, specs: usize) -> Report {
     let (disk_required_bytes, memory_warn_bytes) = thresholds(hours, lanes, specs);
-    let mut checks = disk_checks(root, disk_required_bytes, hours);
+    let inode_required = inode_threshold(hours, lanes, specs);
+    let mut checks = disk_checks(root, disk_required_bytes, inode_required, hours);
     let mut system = System::new();
     system.refresh_memory();
     let memory = system.available_memory();
@@ -165,6 +224,7 @@ pub(crate) fn probe(root: &Path, hours: u64, lanes: usize, specs: usize) -> Repo
         lanes,
         specs,
         disk_required_bytes,
+        inode_required,
         memory_warn_bytes,
         checks,
     }
@@ -216,8 +276,12 @@ mod tests {
         let overnight = thresholds(20, 4, 20);
         assert!(overnight.0 > short.0);
         assert!(overnight.1 > short.1);
+        assert!(inode_threshold(20, 4, 20) > inode_threshold(1, 1, 1));
         assert_eq!(decide_capacity(short.0, short.0, false), Level::Pass);
         assert_eq!(decide_capacity(short.0 - 1, short.0, false), Level::Fail);
+        let inodes = inode_threshold(1, 1, 1);
+        assert_eq!(decide_capacity(inodes, inodes, false), Level::Pass);
+        assert_eq!(decide_capacity(inodes - 1, inodes, false), Level::Fail);
         assert_eq!(decide_capacity(short.1 - 1, short.1, true), Level::Warn);
     }
 }
