@@ -25,9 +25,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:58:36.743732005Z
-modified_at: 2026-09-20T07:58:52.080644391Z
+modified_at: 2026-09-20T12:12:20.852408559Z
 req_type: Bug
 tags:
+- batch:night-0920
 - diagnostic-decay
 - drain-safe
 - from:session-0919
