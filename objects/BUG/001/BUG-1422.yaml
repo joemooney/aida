@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:31:24.073637202Z
-modified_at: 2026-09-20T09:58:59.675657832Z
+modified_at: 2026-09-20T10:05:18.555971010Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -104,5 +104,11 @@ comments:
     Commit and open a PR even if incomplete — a PR with a stated gap is reviewable; a third session exiting with nothing is not.
   created_at: 2026-09-20T09:58:59.675657832Z
   modified_at: 2026-09-20T09:58:59.675657832Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0be46-fd5b-7af2-b1be-1e635d4d716f
+  author: joe
+  content: 'Implemented in c25f1f2001. QueueDrained now carries named ineligible batch members with pickup-policy reasons; human/JSON summaries, watch, and notifications distinguish stuck from empty. Regression covers guided STORY-1218 plus blocked TASK-1277. Tests: cargo test -p aida-cli-lib queue_drained --lib (11 passed); cargo fmt --all -- --check; git diff --check.'
+  created_at: 2026-09-20T10:05:18.555971010Z
+  modified_at: 2026-09-20T10:05:18.555971010Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
