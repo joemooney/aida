@@ -1,0 +1,26 @@
+id: 01a0c081-bdd1-70d2-9f96-96c624243e57
+spec_id: STORY-1402
+agreed_id: STORY-1402
+title: 'Review PR-2029: [AI:codex] fix(drain): arm no-change guard from PR verdicts (BUG-1476)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0c07b`) for branch `bug-1476-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2029>
+  - Branch: `bug-1476-work` → `main`
+
+  ## Covers
+
+  - BUG-1476
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2029` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T20:28:43.345022803Z
+modified_at: 2026-09-20T20:28:43.345022803Z
+req_type: Story
