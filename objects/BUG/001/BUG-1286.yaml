@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:33.544062298Z
-modified_at: 2026-09-20T17:04:54.718145229Z
+modified_at: 2026-09-20T19:07:36.309396338Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -202,6 +202,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T16:12:36.897062538Z
   modified_at: 2026-09-20T16:12:36.897062538Z
+- id: 01a0c037-79f5-78c0-b4cb-625333f78da4
+  author: joe
+  content: 'BUG-1441 investigation: QueueDrained shipped/shelved counts do not derive from drain-state members. finalize_drain_summary receives DrainTallies from result.shipped.len() and result.shelved.len(), so refresh-added members missing from .aida/drain-state.json cannot directly explain the 13-merge/zero-summary symptom. This rules out the simplest shared-cause hypothesis; BUG-1286 needs separate result-accumulation investigation.'
+  created_at: 2026-09-20T19:07:36.309396338Z
+  modified_at: 2026-09-20T19:07:36.309396338Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
