@@ -1,0 +1,16 @@
+{
+  "id": "d6f0ba4a-a0e9-49d6-96aa-1dd29eee6d02",
+  "thread_id": "d6f0ba4a-a0e9-49d6-96aa-1dd29eee6d02",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789933323683,
+  "body": "[TEST-PROBE] BUG-1482 controlled test: does a piped inbox read advance the watermark? Disregard.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

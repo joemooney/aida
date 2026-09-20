@@ -1,0 +1,16 @@
+{
+  "id": "54aa0cb7-d6fa-4c36-9e12-18c0a30133a3",
+  "thread_id": "54aa0cb7-d6fa-4c36-9e12-18c0a30133a3",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789933727334,
+  "body": "BUG-1482 verification probe — disregard. Creating unread state so a piped-vs-unpiped watermark test can discriminate; an earlier attempt was inconclusive because mail_unread was already 0.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
