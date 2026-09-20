@@ -1,0 +1,45 @@
+id: 01a0bcff-c699-75d0-b1c3-9e97936a6f5a
+spec_id: STORY-1367
+agreed_id: STORY-1367
+title: 'AIDA ships a job scheduler with nothing registered in it, so every recurring check runs only when someone remembers: 32 hours of silent hub drift is the proof'
+description: |
+  AIDA ships a per-seat job scheduler and nothing is registered in it. `aida schedule list` reports "No scheduled jobs configured" on this repo and globally, so every recurring check in this project runs only when a human or an agent happens to think of it. That is the failure mode the substrate-first rule exists to prevent, and it cost us a real incident today.
+
+  THE MECHANISM ALREADY EXISTS. `aida schedule` (alias `aida cron`) is a merged project+global registry with two job kinds: SUBSTRATE jobs the tick executes autonomously, and SEAT jobs delivered as a prompt to whoever holds a seat. `aida schedule tick` evaluates every enabled job, `run` forces one, `due` reports what is pending, `done` ledgers a seat job on the aida-store branch, and `emit-cron` prints crontab lines for substrate jobs with an `every`. None of that needs building. The registry is simply empty.
+
+  THE INCIDENT THAT PROVES IT. On 2026-09-19 the gitlab mirror was found 41 commits behind on `main`, last updated 2026-09-18 13:05 — roughly 32 hours of silent drift — with `aida-store` separately diverged. Detection already existed: `aida remote status` and `aida doctor --category remote-drift` both report it accurately and did. Nobody ran either, because nothing runs them. Every push in that window landed on one hub with a best-effort warning as the only trace. Two agents independently hit non-fast-forward rejections on the mirror leg and both correctly treated it as out of scope, so the signal was produced three times and consumed zero times.
+
+  That is the whole shape of the problem: the check works, the surface works, and the cadence does not exist.
+
+  THREE FIRST JOBS, all substrate-kind, all things that actually bit us in one day:
+
+  1. HUB DRIFT — run `aida remote status`; report when any tracked ref is not in sync across hubs. The 2026-09-19 incident is the fixture.
+  2. DISK HEADROOM — report when free space on the filesystem holding the repo drops below a threshold. Root hit 100% with 16K free today; a fanout agent deleted a 121 GB shared build directory to survive, which removed the dev binary and silently sent a drain onto an eight-day-old released binary for twenty minutes. A cadence check at 60 GB would have surfaced it hours earlier. There is currently a shell script doing this, which is the wrong home.
+  3. STRANDED BRANCHES — twelve worktree branches carry commits with no PR and no live lease (BUG-1307). `session reap` holds them as operator decisions rather than reporting them, and `aida awaiting` does not look at branches.
+
+  WHAT THIS SPEC IS AND IS NOT. It is: register the first substrate jobs and prove the tick runs them. It is NOT building the scheduler, which exists, and NOT building the night-shift runner, which is STORY-1218 — that spec is the thing that calls the tick when nobody is awake, and the advisor already assigned BUG-1291's ownerless-PR backstop to it rather than building a second sweeper. So the tick is already the designated home for substrate work with nobody watching; it has no jobs and, outside a cron, no caller.
+
+  Sequencing note: `emit-cron` means these jobs are useful via plain crontab BEFORE STORY-1218 lands, so this does not have to wait on it.
+
+  ACCEPTANCE
+  1. The three jobs above are registered as substrate jobs with an `every` cadence, in the layer appropriate to each (hub drift and stranded branches are project-scoped; disk headroom is arguably global).
+  2. `aida schedule tick` runs them and each reports through an existing surface rather than a new one — `aida awaiting` is the natural home, since it already answers "where am I the gate".
+  3. A job that finds nothing is silent. A cadence check that reports every run trains people to ignore it, which is how the existing drift warnings were ignored.
+  4. `aida schedule emit-cron` produces working crontab lines for all three, and the README or docs state how to install them without waiting for STORY-1218.
+  5. A test drives the tick against a fixture where each condition is true and asserts each job reports; and against a clean fixture and asserts silence.
+  6. Scaffolding question to answer explicitly, not silently: should `aida init` register any of these by default in a downstream project? Hub drift is meaningless without a second hub; disk headroom is universal. State the decision either way.
+
+  Filed by the product seat as a proposal; disposition and sequencing against STORY-1218 are the advisor's.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T04:07:54.265428714Z
+modified_at: 2026-09-20T04:07:54.265428714Z
+req_type: Story
+tags:
+- from:session-0919
+- observability
+- parent:EPIC-62
+- scheduler
+- substrate-as-bouncer
