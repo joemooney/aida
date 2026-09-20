@@ -1,7 +1,7 @@
 id: 01a0bc31-6859-7971-b588-a2814b48e2b2
 spec_id: BUG-1303
 agreed_id: BUG-1303
-title: 'Every try-lock in the workspace reports Windows contention as a hard failure: three sites compare against WouldBlock, which Windows never returns'
+title: 'A try-lock contention contract is not honoured: contended or interrupted locks surface as hard failures, deterministically on Windows and as a parallel-load flake on Linux'
 description: |-
   Every try-lock in this workspace detects contention by comparing the error kind to ErrorKind::WouldBlock. That comparison is false on Windows, so a lock held by another process is reported as a hard failure instead of as contention. Three sites, one root cause, and the fix is a helper the dependency already provides.
 
@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:22:29.721225410Z
-modified_at: 2026-09-20T03:10:57.618118272Z
+modified_at: 2026-09-20T03:10:58.936264199Z
 req_type: Bug
 tags:
 - drain-safe
@@ -97,7 +97,6 @@ tags:
 - nightly
 - parent:EPIC-62
 - portability
-- windows
 relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
