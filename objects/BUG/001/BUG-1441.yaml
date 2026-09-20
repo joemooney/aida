@@ -31,12 +31,12 @@ description: |
   5. Verify whether the shipped/shelved counts in `QueueDrained` share this cause. If they do, fix both together and record it on BUG-1286; if not, say so, because that rules out the simplest explanation for a thirteen-merge drain reporting zero.
 
   Reported by the operator, who observed the empty in-progress view directly; the drain state, process liveness and member list verified by the advisor before filing.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:48:00.655624765Z
-modified_at: 2026-09-20T12:49:59.418704621Z
+modified_at: 2026-09-20T19:04:30.493157597Z
 req_type: Bug
 tags:
 - batch:night-0920
