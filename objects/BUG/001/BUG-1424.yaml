@@ -1,0 +1,49 @@
+id: 01a0bda4-a9ff-7cb2-978c-fda93ba5c931
+spec_id: BUG-1424
+agreed_id: BUG-1424
+title: BUG-1287's content check compares against main as it is today, so it decays with every merge and already clears nothing three hours later
+description: |
+  BUG-1287's fix works only while the default branch has not moved on the files the branch touched. It decays with every subsequent merge, and it has already stopped working — three hours after it merged, it clears nothing.
+
+  MEASURED, SAME BRANCH, SAME COMMAND, THREE HOURS APART:
+
+    ~21:00 local   git diff --quiet origin/main bug-1163-work -- <files>  -> exit 0  (content landed -> Removable)
+    ~00:04 local   git diff --quiet origin/main bug-1163-work -- <files>  -> exit 1  (differs -> Keep)
+
+  Nothing about the branch changed. Thirteen merges landed on main in between, and some touched files that branch had also touched. `aida session reap --dry-run` now reports "its PR is merged (squash-merged), but 1 unique unmerged commit(s) — keep, operator decision" for BUG-1163, BUG-1167, BUG-1268, STORY-1129 and TASK-1251 — the exact five the fix was written to clear, and the five I verified it cleared when I reviewed it.
+
+  THE MECHANISM IS THE PROBLEM, NOT THE POLICY. `branch_content_fully_landed` compares the branch tip against the default ref's CURRENT tree for the files the branch's own commits touched. That answers "does this branch's content match main right now", which is only the same question as "did this branch's content land" for as long as nobody else edits those files. Every later merge that touches an overlapping file breaks it, permanently, for that branch.
+
+  The failure direction is safe — it keeps rather than deletes — so nothing is at risk. But the fix is self-limiting in a way that makes it useless in exactly the situation it was built for: a repository merging steadily, where worktrees accumulate precisely because nobody reaps promptly.
+
+  PATCH-ID IS ROBUST AND I VERIFIED IT ON THE SAME BRANCH:
+
+    branch commit patch-id                       38cbaeb323b7
+    patch-ids on main since the merge-base       136
+    38cbaeb323b7 present among them              YES
+
+  A squash rewrites commit SHAs but preserves the diff, so the patch-id of the branch's own commit still matches what landed. That comparison does not care how far main has advanced since, because it asks whether this change is in main's history rather than whether the trees agree today.
+
+  WORTH NOTING ABOUT THE ORIGINAL REVIEW: the classification audit reported on BUG-1287 verified each branch "by patch-id against the actual squash commit". So patch-id was the method used to establish the finding, and tree comparison is what shipped. The audit method was the more robust of the two, and the gap between them was not noticed by the implementer, the product seat, or me — I verified the shipped mechanism empirically at merge time and my verification happened to fall inside the window where it still worked.
+
+  ACCEPTANCE
+  1. The content check identifies landed work by patch-id equivalence against the default branch's history since the merge-base, not by comparing trees as they stand today.
+  2. A test proves the time-independence directly: construct a squash-merged branch, advance the default branch with an unrelated commit touching a file that branch also touched, and assert the branch is still classified as fully landed. A test that only checks a freshly-merged branch would pass against the current implementation.
+  3. Conservatism is preserved unchanged. Any inconclusive git call still returns false and the branch is kept; a branch with genuinely unique work is still kept. BUG-1177's three unshipped commits and TASK-1285's ten must remain KEPT under the new mechanism, and a test should pin at least one of them by construction.
+  4. Bounded cost. Computing patch-ids over the whole default-branch history is not acceptable on a hot path; bound it to commits since the merge-base, which is what makes this cheap.
+
+  NOT IN SCOPE: the reaper's other predicates, and the question of whether stale remote branches should ever be deleted. Both are settled and neither is this.
+
+  Found by running `aida session reap --dry-run` after rebuilding onto a binary containing the fix, and comparing against the same measurement taken three hours earlier at review time.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T07:08:00.383333375Z
+modified_at: 2026-09-20T07:08:00.383333375Z
+req_type: Bug
+tags:
+- diagnostic-decay
+- from:session-0919
+- session-reap
+- worktree
