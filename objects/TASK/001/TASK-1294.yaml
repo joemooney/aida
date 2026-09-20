@@ -9,7 +9,7 @@ description: |-
 
   Baseline, already measured and not to be re-derived: over 2026-09-18 12:00 to 2026-09-19 09:30, 40 shelves across 19 specs — 26 verdict:request-changes, 10 ci-red, 4 tool-exit — with worst tails of five rounds (BUG-1244) and four (TASK-1285, BUG-1265, TASK-1271, BUG-1232). Source: .aida/events.jsonl, SpecShelved events in that window, counted per spec.
 
-  Method: once TASK-1291 is merged, take the next 20 specs that reach Completed. For each, count SpecShelved events between its first RunStarted and its PrMerged. Report median and distribution against the baseline, and split the shelve causes the same three ways, since a drop in verdict:request-changes with ci-red unchanged is the specific effect this change predicts. Note the confound honestly: TASK-1289 (pre-flight guards) and TASK-1290 (criteria gate) target the other two categories and may land inside the same window, so attribute by CAUSE rather than by total, and say so if the windows overlap.
+  Method (CORRECTED 2026-09-19 — the earlier PrMerged-bound form is wrong and would produce a false null; this correction was previously written only as a comment, which does not bind an implementer, so it is now in the description where it belongs): once TASK-1291 is merged, take the next 20 specs that reach Completed. BOUND THE WINDOW WITH THE STORE, NOT WITH A FEED EVENT. Each spec's Done-to-Completed transition is a real commit in the aida-store branch's git log, which is the authoritative time series for spec state, so use that commit's timestamp as the window's close and the spec's first RunStarted in the feed as its open. Then count SpecShelved events in the feed within that window. DO NOT bound the window with PrMerged. Per BUG-1286, PrMerged is buried by trailing phase events for drain-driven specs and is absent entirely for specs closed outside a drain, so exactly one closed spec in the entire recorded history ends on it. An implementer following the old form would measure a window that closes for roughly one spec in five hundred, produce a null result for mechanical reasons, and report it honestly as a null — which this spec's acceptance permits. That is the worst available outcome: a correct-looking negative finding about TASK-1291's value, caused by a measurement bug rather than by the change being ineffective. If the store-bound window cannot be built for some spec, say so and exclude it by name rather than substituting a feed event. Report median and distribution against the baseline, and split the shelve causes the same three ways, since a drop in verdict:request-changes with ci-red unchanged is the specific effect this change predicts. Note the confound honestly: TASK-1289 (pre-flight guards) and TASK-1290 (criteria gate) target the other two categories and may land inside the same window, so attribute by CAUSE rather than by total, and say so if the windows overlap.
 
   Acceptance: a dated report comment on this spec giving median rounds-to-merge before and after with the per-cause split, the spec ids in the sample, and an explicit statement of which other changes landed inside the measurement window. A null or negative result is a valid outcome and must be reported as such rather than re-cut until it looks positive.
 
@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-20T02:36:31.940714754Z
+modified_at: 2026-09-20T02:41:06.104810456Z
 req_type: Task
 tags:
 - batch:followups-0918i
