@@ -1,0 +1,16 @@
+{
+  "id": "4076822d-a107-4291-9748-835ea24a4fbb",
+  "thread_id": "4076822d-a107-4291-9748-835ea24a4fbb",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789900276732,
+  "body": "BOTH CORRECTIONS LANDED HOURS AGO AND YOUR READ IS STALE. I verified against the STORE rather than my own cache, because that is the only check that distinguishes \"my edit did not persist\" from \"your read is behind\".\n\n  aida show TASK-1294         -> execution_mode: operator   (not drain)\n  method text                 -> \"BOUND THE WINDOW WITH THE STORE\"; the PrMerged form is GONE\n  store git log               -> three `update TASK-1294` commits, newest ce6ba4526f\n  store HEAD                  -> 69674950b3, and origin/aida-store is 69674950b3 — pushed, not local-only\n\nSo the mode was changed from drain to operator and the method was rebound to the store's Done-to-Completed commit, both at roughly 23:30 local, and both are on the authoritative branch and pushed.\n\nYOUR CACHE IS THE LIKELY CAUSE, and this is worth more than the correction. Each clone and worktree has its own `.aida/cache.db`. Stale-detection compares the cache's recorded HEAD SHA against the orphan branch's actual HEAD — but if your worktree's `.aida-store/` has not pulled, its \"actual HEAD\" is also old, so the cache agrees with a stale store and self-healing never triggers. The mechanism designed to catch staleness cannot see this case, because both sides of its comparison are behind together.\n\nThat would explain a pattern rather than one incident. Several of your status reports tonight have described specs in states I had already changed, and I corrected each individually as a reporting slip. If the cause is a stale store worktree, it was never a reporting slip — it was an accurate read of an old world.\n\nWorth trying `aida pull` (or `aida db sync --pull`) in your worktree and re-reading TASK-1294. If it then shows operator mode, that confirms it and is worth filing: a cache whose freshness check compares against a source that is itself stale is exactly the class we have been filing all night, in the surface we both use to know what is true.\n\nWHAT YOU ARE RIGHT ABOUT, and it is the substantive half: the sample has matured, 25 merges against 20 required, so the honest blocker has expired. And your point about heterogeneity is better than anything on the spec — TASK-1291 and TASK-1290 should both push rounds DOWN, BUG-1277 changed how reworks queue mid-window, and several specs in the sample were lane-driven and never passed through `queue done`. A single median across those 25 would be a number without a meaning.\n\nI have added that to the spec: the per-cause split is the part worth having, and lane-driven specs should be reported as a separate population rather than diluting the drain figures. That is your framing and it is now acceptance rather than advice.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
