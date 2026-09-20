@@ -56,7 +56,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:44:38.754900781Z
-modified_at: 2026-09-20T12:44:53.555117349Z
+modified_at: 2026-09-20T12:44:55.099597391Z
 req_type: Story
 tags:
 - drain
@@ -72,5 +72,9 @@ relationships:
 - rel_type: !Custom related
   target_id: 01a0bae3-3204-7040-a898-dc92c87ca6d1
   created_at: 2026-09-20T12:44:53.555113281Z
+  created_by: joe
+- rel_type: !Custom related
+  target_id: 01a0becf-5722-7db2-a49b-1e13af40f0bf
+  created_at: 2026-09-20T12:44:55.099592833Z
   created_by: joe
 execution_mode: guided
