@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-20T20:53:18.493958168Z
+modified_at: 2026-09-20T20:53:48.253813474Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -178,6 +178,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T20:53:18.212246684Z
   modified_at: 2026-09-20T20:53:18.212246684Z
+- id: 01a0c098-b334-7650-b2e9-ce6724a04fb8
+  author: joe
+  content: 'Round 2: reviewer findings are specific and implementable. (1) post-push recovery still requires the recorded worktree to exist — when the child released it, branch_commits_ahead_main returns zero and recovery falls through to the generic no-PR failure. That is the exact shape that stranded BUG-1442''s pushed commit today and required a human to open PR #2027. (2) the regression tests serialize OrchestratedLeaseReceipt directly instead of exercising the real lifecycle positions. No acceptance change.'
+  created_at: 2026-09-20T20:53:47.956576703Z
+  modified_at: 2026-09-20T20:53:47.956576703Z
 execution_mode: drain
 implementation_info:
   implemented: true
