@@ -1,0 +1,26 @@
+id: 01a0bd0b-b047-7811-aafc-df7526a4854f
+spec_id: STORY-1368
+agreed_id: STORY-1368
+title: 'Review PR-1999: [AI:codex] fix(awaiting): bound machine-readable status polling (BUG-1288)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0bce6`) for branch `bug-1288-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1999>
+  - Branch: `bug-1288-work` → `main`
+
+  ## Covers
+
+  - BUG-1288
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1999` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T04:20:54.983865278Z
+modified_at: 2026-09-20T04:20:54.983865278Z
+req_type: Story
