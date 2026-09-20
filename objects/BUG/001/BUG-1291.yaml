@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-20T16:13:46.199790204Z
+modified_at: 2026-09-20T16:21:23.157381232Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -206,6 +206,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T16:13:09.524151103Z
   modified_at: 2026-09-20T16:13:09.524151103Z
+- id: 01a0bf9f-4c55-7992-a817-63595e57dbbd
+  author: joe
+  content: 'Round 2 review fixes: RealPhaseDriver integration regression now shelves BUG-1268/PR-1970 and verifies STORY-1354 is queued; reviewer queue insertion errors propagate and leave the open story as a durable retry signal; sweep recognizes Approved, RequestChanges, Rejected, and escalation verdicts, respects holds/live owners, and never reports claimed after queue failure. Focused tests pass.'
+  created_at: 2026-09-20T16:21:23.157381232Z
+  modified_at: 2026-09-20T16:21:23.157381232Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
   implemented: true
