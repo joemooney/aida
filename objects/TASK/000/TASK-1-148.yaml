@@ -2,12 +2,12 @@ id: 01a0bc62-0303-7150-90b4-abf4c96b854f
 spec_id: TASK-1-148
 title: GitLab mirror rejected rebased story branch
 description: While shipping STORY-1352, the GitHub force-with-lease push after rebasing succeeded and PR-1987 opened, but the configured GitLab mirror rejected story-1352-work as non-fast-forward. GitHub is authoritative for this PR; inspect aida remote status before relying on the mirror branch.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T01:15:35.043752414Z
-modified_at: 2026-09-20T01:20:51.362456018Z
+modified_at: 2026-09-20T01:20:52.364709499Z
 req_type: Task
 tags:
 - from-advisor:STORY-1352
@@ -33,4 +33,10 @@ comments:
     NOT PROMOTING. There is no change to make: refusing a non-fast-forward is correct, warning rather than failing is correct, and the detector already exists. Filing a spec would add a row to a backlog we are trying to shrink in exchange for nothing. The session that reported it behaved exactly as wanted — noticed an anomaly, established which remote was authoritative, named the diagnostic, and did not guess.
   created_at: 2026-09-20T01:20:51.362456018Z
   modified_at: 2026-09-20T01:20:51.362456018Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bc66-da8c-7361-94c6-c443cdd2454a
+  author: joe
+  content: Dismissed by advisor during findings triage.
+  created_at: 2026-09-20T01:20:52.364709499Z
+  modified_at: 2026-09-20T01:20:52.364709499Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
