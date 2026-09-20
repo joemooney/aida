@@ -29,12 +29,12 @@ description: |
   RELATED AND DELIBERATELY SEPARATE: TASK-1298 asks the readiness check to verify the binary exists before an unattended window. This spec is about the status surface being truthful whenever anyone asks. The readiness check is a moment; this is the permanent answer.
 
   This is the PRIN-4 class at its second grade: not a diagnostic that degrades, but one that asserts something its own subject disproves.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:52.759483961Z
-modified_at: 2026-09-20T04:01:29.810986059Z
+modified_at: 2026-09-20T07:11:22.063830323Z
 req_type: Bug
 tags:
 - dev-workflow
