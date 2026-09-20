@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-20T22:50:05.390739301Z
+modified_at: 2026-09-20T22:50:26.940394137Z
 req_type: Bug
 tags:
 - agent-surface
@@ -265,6 +265,52 @@ comments:
   content: Requeued after the orchestrator rebuild. BUG-1445's no-op guard is now live in the running binary (wave b09197ab72), so a round that produces no new commit is detected rather than silently re-reviewed. Verdict reviewed_sha matches this branch head exactly, so the findings describe current code. No acceptance change.
   created_at: 2026-09-20T22:48:41.733530686Z
   modified_at: 2026-09-20T22:48:41.733530686Z
+- id: 01a0c103-7efc-7b91-8f1c-157991257b2e
+  author: joe
+  content: |-
+    [aida:advisor] LOOP-GUARD DISPOSITION — TASK-1-156 fired correctly and its recommendation is right, but NOT for the reason the guard infers. Do not rewrite the brief; the brief is not what failed.
+
+    THE GUARD SAYS identical reviewer findings recurred twice and an advisor must choose a different implementer/seat or resolve the dispute before a third round. I applied the precondition we added to the brief-implementability entry — establish that a round ATTEMPTED the work before drawing any conclusion from a repeated finding — and it did not.
+
+        branch head   5a857b7df4   committed 2026-09-20 08:02:55, ONE commit on the branch
+        verdict       5a857b7df4   recorded  2026-09-20 15:08:49
+
+        run 01a0bda3  implementer 07:07:16  365s  -> tool-exit
+        run 01a0bf56  implementer 15:01:55   50s  -> verdict:request-changes
+        run 01a0c00e  implementer 18:23:00   14s  -> stale-base-conflict
+
+    The 08:02 commit is from the FIRST run. The 15:01 run ran 50 seconds and produced nothing; the reviewer then reviewed the same unchanged commit and reached the same conclusion, correctly. The 18:23 run ran 14 seconds and shelved on a stale base.
+
+    So the finding did not survive a round. It survived a NON-ROUND, twice. This is BUG-1476's shape — the guard's premise, "identical findings recurred", is true of the reviewer's output and false about the work.
+
+    THE FINDING ITSELF IS CORRECT AND I VERIFIED IT IN THE CODE:
+
+        let thread_id = if let Some(t) = thread.clone() {
+            t                                          // --thread taken first
+        } else if let Some(reply_target) = in_reply_to.as_deref() {
+            ... resolve_mailbox_message ...            // never reached when --thread is present
+        };
+        ...
+        in_reply_to: in_reply_to.clone(),              // raw, unresolved, possibly ambiguous
+
+    When both flags are given, --thread wins and in_reply_to is never resolved or validated, then stored non-canonically. mailbox_cmd.rs:173-181, 198.
+
+    DISPOSITION — the guard's recommendation stands, on the corrected reasoning:
+
+    1. DO NOT requeue a third implementer round on the current branch. Two of the last three runs produced nothing; a fourth would very likely be a fourth non-round, and BUG-1445's rebase-only guard is NOT in the running binary (wave binary c2b3c2f0c8 predates it), so nothing will report it as such.
+
+    2. The brief does NOT need a mechanism added. The existing finding names the file, the branch precedence, the line, and the remedy. An implementer that produced no commit was not defeated by an unclear requirement.
+
+    3. What this needs is a seat that will produce a commit — which is the guard's own suggestion and I am adopting it. Route to a fresh implementer, not another round on this branch.
+
+    4. The 18:23 stale-base-conflict must be cleared first regardless; the branch is behind and a fourth run would hit the same wall before reaching the code.
+
+    NOT A DISPUTE. I am not disagreeing with any reviewer finding here, so there is nothing for an advisor to resolve in that sense. The guard offers two exits — different seat, or resolve the dispute — and this is squarely the first.
+
+    WORTH RECORDING FOR THE GUARD ITSELF: it cannot currently distinguish "the implementer could not do it" from "the implementer did not run". Both present as an unchanged head with a repeated verdict. Adding the patch-id / commit-count check that BUG-1445 shipped would let it say which, and the two need opposite responses — a better brief versus a different seat.
+  created_at: 2026-09-20T22:50:26.940394137Z
+  modified_at: 2026-09-20T22:50:26.940394137Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
