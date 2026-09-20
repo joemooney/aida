@@ -1112,6 +1112,10 @@ mod bug_1265_finish_ci_tests {
 set -eu
 printf '%s\n' "$*" >> '{}'
 if [ "${{1:-}}" = "--version" ]; then echo 'gh version test'; exit 0; fi
+if [ "$1 $2" = "pr view" ]; then
+  printf '%s\n' '{{"state":"OPEN","title":"test","baseRefName":"main","headRefName":"bug-1265","headRefOid":"deadbeefdeadbeefdeadbeef","isCrossRepository":false,"isDraft":false}}'
+  exit 0
+fi
 if [ "$1 $2" = "pr list" ]; then
   printf '%s\n' '[{{"number":1265,"statusCheckRollup":[{{"name":"merge-hold-gate","status":"COMPLETED","conclusion":"FAILURE"}}]}}]'
   exit 0
@@ -1385,6 +1389,59 @@ mod bug_1205_ci_phase_fallthrough_tests {
         );
         assert!(body.contains(concat!("let refined_", "green")));
         assert!(body.contains(concat!("self.end_implementer_", "session()")));
+    }
+}
+
+#[cfg(test)]
+mod bug_1460_current_head_ci_gate_tests {
+    /// Regression for the observed ordering where phase 3 was announced before
+    /// the reviewed head's checks had even registered.
+    // trace:BUG-1460 | ai:codex
+    #[test]
+    fn reviewer_announcement_follows_registration_and_current_head_proof() {
+        let src = include_str!("lib.rs");
+        let real_impl = src
+            .find(concat!(
+                "impl auto_complete::PhaseDriver ",
+                "for RealPhaseDriver {"
+            ))
+            .expect("real phase driver");
+        let finish = src[real_impl..]
+            .find(concat!("fn finish_", "ci(&mut self)"))
+            .map(|i| real_impl + i)
+            .expect("production CI phase");
+        let review = src[finish..]
+            .find(concat!("fn run_", "reviewer("))
+            .map(|i| finish + i)
+            .expect("production reviewer phase");
+        let finish_body = &src[finish..review];
+        assert!(
+            finish_body.contains(concat!("wait_for_checks_to_", "register(")),
+            "fresh heads must wait for their checks to register"
+        );
+        assert!(
+            finish_body.contains(concat!("self.ci_terminal_", "sha =")),
+            "terminal CI must be bound to a head"
+        );
+
+        let review_end = src[review..]
+            .find(concat!("    fn ", "merge("))
+            .map(|i| review + i)
+            .unwrap_or(src.len());
+        let review_body = &src[review..review_end];
+        let current_head = review_body
+            .find(concat!("let current = pr_head_sha_", "best_effort"))
+            .expect("current-head guard");
+        let announced = review_body
+            .find(concat!(
+                "mark_drain_phase(auto_complete::Phase::",
+                "Reviewer)"
+            ))
+            .expect("reviewer announcement");
+        assert!(
+            current_head < announced,
+            "PhaseEntered(reviewer) must follow current-head CI validation"
+        );
     }
 }
 
@@ -8140,8 +8197,10 @@ fn stamp_pr_review_verdict(
     pr: u32,
     reviewed_sha: Option<&str>,
     reviewed_branch: Option<&str>,
+    ci_terminal_sha: Option<&str>,
+    ci_terminal_green: Option<bool>,
 ) -> std::io::Result<std::path::PathBuf> {
-    review_verdict::record_verdict(
+    let path = review_verdict::record_verdict(
         project_root,
         &format!("PR-{pr}"),
         None,
@@ -8150,7 +8209,29 @@ fn stamp_pr_review_verdict(
         None,
         &[],
         "aida drain reviewer",
-    )
+    )?;
+    if ci_terminal_sha.is_some() || ci_terminal_green.is_some() {
+        let body = std::fs::read_to_string(&path)?;
+        let mut value: serde_json::Value = serde_json::from_str(&body)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let object = value.as_object_mut().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "review verdict is not an object",
+            )
+        })?;
+        if let Some(sha) = ci_terminal_sha {
+            object.insert(
+                "ci_terminal_sha".into(),
+                serde_json::Value::String(sha.into()),
+            );
+        }
+        if let Some(green) = ci_terminal_green {
+            object.insert("ci_terminal_green".into(), serde_json::Value::Bool(green));
+        }
+        std::fs::write(&path, serde_json::to_vec_pretty(&value)?)?;
+    }
+    Ok(path)
 }
 
 #[cfg(test)]
@@ -8173,6 +8254,8 @@ mod task_168_pr_verdict_metadata_tests {
             1965,
             Some("deadbeefdeadbeefdeadbeef"),
             Some("task-168-work"),
+            Some("deadbeefdeadbeefdeadbeef"),
+            Some(true),
         )
         .unwrap();
 
@@ -8184,6 +8267,8 @@ mod task_168_pr_verdict_metadata_tests {
         assert_eq!(value["mode"], "deep");
         assert_eq!(value["reviewed_sha"], "deadbeefdeadbeefdeadbeef");
         assert_eq!(value["reviewed_branch"], "task-168-work");
+        assert_eq!(value["ci_terminal_sha"], "deadbeefdeadbeefdeadbeef");
+        assert_eq!(value["ci_terminal_green"], true);
         assert_eq!(value["recorded_by"], "aida drain reviewer");
         assert!(value["recorded_at"].as_str().is_some());
     }
@@ -78094,6 +78179,15 @@ fn handle_from_pr(
             std::process::exit(1);
         }
         drain_resume::FromPrOutcome::DriveFrom(start_phase) => {
+            // A prior run's phase number does not carry the head SHA for which
+            // CI terminated. Re-enter phase 2 before any reviewer so the new
+            // process establishes that proof for the current head.
+            // trace:BUG-1460 | ai:codex
+            let start_phase = if start_phase == auto_complete::Phase::Reviewer {
+                auto_complete::Phase::Ci
+            } else {
+                start_phase
+            };
             println!(
                 "{} driving `{}` from phase {} ({}) — implementation shipped outside the \
                  orchestrator (skipping the implementer phase).",
@@ -79381,7 +79475,10 @@ impl auto_complete::PipelinedBatchDriver for RealBatchDriver<'_> {
             _ => return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Reviewer),
         };
         let resume = Some(ResumeEntry {
-            start_phase: auto_complete::Phase::Reviewer,
+            // Re-probe phase 2 in this process so the reviewer carries a
+            // head-bound CI conclusion, even if the pipelined child already
+            // observed green. trace:BUG-1460 | ai:codex
+            start_phase: auto_complete::Phase::Ci,
             branch,
             pr,
             from_pr: true,
@@ -81516,7 +81613,10 @@ impl auto_complete::PipelinedBatchDriver for RealNextNDriver<'_> {
             _ => return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Reviewer),
         };
         let resume = Some(ResumeEntry {
-            start_phase: auto_complete::Phase::Reviewer,
+            // Re-probe phase 2 in this process so the reviewer carries a
+            // head-bound CI conclusion, even if the pipelined child already
+            // observed green. trace:BUG-1460 | ai:codex
+            start_phase: auto_complete::Phase::Ci,
             branch,
             pr,
             from_pr: true,
@@ -85320,6 +85420,11 @@ struct RealPhaseDriver {
     // trace:BUG-1244 | ai:codex
     phase_done_pr: Option<u32>,
     ci_run_id: Option<String>,
+    /// PR head for which phase 2 observed terminal CI. Phase 3 may only review
+    /// this exact head and records the conclusion in its verdict artifact.
+    // trace:BUG-1460 | ai:codex
+    ci_terminal_sha: Option<String>,
+    ci_terminal_green: Option<bool>,
     /// Cached aida binary path, resolved once at construction. Re-resolving
     /// per-call broke in BUG-217 when the implementer's phase-1 `cargo build`
     /// replaced the running dev binary: `/proc/self/exe` then includes a
@@ -85667,6 +85772,8 @@ impl RealPhaseDriver {
             pr_number: None,
             phase_done_pr: None,
             ci_run_id: None,
+            ci_terminal_sha: None,
+            ci_terminal_green: None,
             aida_exe: resolve_aida_exe(),
             no_human,
             autonomy_mode,
@@ -88063,18 +88170,41 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         })?;
         self.ensure_implementer_branch_pushed(&branch)?;
 
-        // Probe, then block until CI is terminal unless the spec opted into
-        // lifecycle:no-ci-wait / lifecycle:trivial. The non-waiting path still
-        // records the PR number and still ends the implementer lease below;
-        // it just lets CI finish in parallel with review/merge. trace:STORY-442
-        let mut probe = ci_probe_with_forge(&self.project_root, self.lifecycle_forge, &branch); // STORY-516: forge-routed
-        if matches!(probe, CiProbe::InProgress { .. }) && self.lifecycle_skip.no_ci_wait {
-            eprintln!(
-                "  {} CI still running on `{}` — skipping wait per lifecycle tag.",
-                "↷".cyan(),
-                branch
-            );
-        } else if matches!(probe, CiProbe::InProgress { .. }) {
+        // Probe, then block until CI is terminal. `lifecycle:trivial` remains
+        // represented by a forge-level NoCi result, but a running check is
+        // never allowed to overlap review: a verdict without terminal CI for
+        // its exact head cannot drive a shelf or merge. trace:BUG-1460
+        // STORY-516: forge-routed.
+        let mut probe = ci_probe_with_forge(&self.project_root, self.lifecycle_forge, &branch);
+        // A freshly pushed head briefly has no check rows. On a hosted forge,
+        // wait for workflow registration before treating that as a conclusion;
+        // otherwise phase 3 can start before the new head's checks exist.
+        // trace:BUG-1460 | ai:codex
+        if let CiProbe::PrNoChecks { pr_number } = probe {
+            let change = crate::forge::ChangeRef {
+                id: u64::from(pr_number),
+                url: String::new(),
+                branch: branch.clone(),
+                base: String::new(),
+                title: None,
+            };
+            let forge = self.lifecycle_forge();
+            crate::ci_gate::wait_for_checks_to_register(
+                forge.as_ref(),
+                &change,
+                std::time::Duration::from_secs(60),
+                std::time::Duration::from_secs(10),
+            )
+            .map_err(|error| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CiTimeout,
+                    format!("CI checks did not register for PR-{pr_number}: {error:#}"),
+                )
+            })?;
+            probe = ci_probe_with_forge(&self.project_root, self.lifecycle_forge, &branch);
+        }
+        let mut terminal_event_emitted = false;
+        if matches!(probe, CiProbe::InProgress { .. }) {
             eprintln!(
                 "  {} waiting for CI on `{}` to finish…",
                 crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
@@ -88094,11 +88224,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 )
                 // STORY-516
             };
+            terminal_event_emitted =
+                !matches!(probe, CiProbe::InProgress { .. } | CiProbe::NoSignal(_));
         }
 
         match probe {
             CiProbe::Green { pr_number } => {
                 self.set_pr_number(pr_number);
+                self.ci_terminal_green = Some(true);
             }
             CiProbe::Red {
                 pr_number,
@@ -88209,10 +88342,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         format!("CI is red on PR-{pr_number}: {failed_summary}"),
                     ));
                 }
+                self.ci_terminal_green = Some(true);
                 // Treated as Green from here: the post-probe steps below run.
             }
             CiProbe::PrNoChecks { pr_number } => {
                 self.set_pr_number(pr_number);
+                self.ci_terminal_green = Some(true);
                 eprintln!(
                     "  {} PR-{pr_number} has no CI checks — nothing to gate on.",
                     crate::glyph(crate::glyphs::Glyph::Info).cyan()
@@ -88220,12 +88355,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
             CiProbe::InProgress { pr_number } => {
                 self.set_pr_number(pr_number);
-                if !self.lifecycle_skip.no_ci_wait {
-                    return Err(auto_complete::PhaseFailure::of(
-                        auto_complete::FailureKind::CiTimeout,
-                        format!("CI on PR-{pr_number} did not reach a terminal state in time"),
-                    ));
-                }
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CiTimeout,
+                    format!("CI on PR-{pr_number} did not reach a terminal state in time"),
+                ));
             }
             CiProbe::NoSignal(reason) => {
                 // Phase 1 confirmed a PR, so an unreadable CI state must keep
@@ -88238,6 +88371,26 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
         }
 
+        // Bind the conclusion to the forge's current PR head. If the head is
+        // unavailable, phase 3 cannot prove it is reviewing what CI tested.
+        // trace:BUG-1460 | ai:codex
+        let pr = self.pr_number.expect("terminal CI probe resolves a PR");
+        self.ci_terminal_sha = pr_head_sha_best_effort(self, pr);
+        if self.ci_terminal_sha.is_none() && self.lifecycle_forge != crate::forge::ForgeKind::None {
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::CiUnavailable,
+                format!(
+                    "CI reached a conclusion for PR-{pr}, but its current head SHA is unavailable"
+                ),
+            ));
+        }
+        if !terminal_event_emitted {
+            emit_ci_terminal(
+                Some(&self.project_root),
+                self.ci_terminal_green == Some(true),
+            );
+        }
+
         // CI cleared — end the implementer session (releases the lease,
         // returns the pool worktree, and — only if an OPEN PR still exists —
         // auto-queues the `Review PR-N` item for the reviewer).
@@ -88247,13 +88400,42 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn run_reviewer(
         &mut self,
     ) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
-        self.mark_drain_phase(auto_complete::Phase::Reviewer);
         let pr = self.pr_number.ok_or_else(|| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Internal,
                 "internal: PR number not resolved before the review phase",
             )
         })?;
+        if self.ci_terminal_sha.is_none() && self.lifecycle_forge != crate::forge::ForgeKind::None {
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::CiUnavailable,
+                format!("review of PR-{pr} refused: this run has no terminal CI result for a known head"),
+            ));
+        }
+        // A verdict is valid only for the exact head whose CI conclusion phase
+        // 2 observed. Fail closed before launching the reviewer if it moved.
+        // trace:BUG-1460 | ai:codex
+        if let Some(ci_sha) = self.ci_terminal_sha.as_deref() {
+            let current = pr_head_sha_best_effort(self, pr).ok_or_else(|| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CiUnavailable,
+                    format!("cannot verify the current head of PR-{pr} before review"),
+                )
+            })?;
+            if !ci_sha.eq_ignore_ascii_case(current.trim()) {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CiUnavailable,
+                    format!(
+                        "PR-{pr} moved after CI concluded ({} -> {}); re-run CI for the current head",
+                        &ci_sha[..ci_sha.len().min(9)],
+                        &current[..current.len().min(9)]
+                    ),
+                ));
+            }
+        }
+        // Announce phase 3 only after the current head has been proven to be
+        // the head that received phase 2's terminal CI conclusion.
+        self.mark_drain_phase(auto_complete::Phase::Reviewer);
 
         // STORY-501: ensure the "Review PR-N" hand-off story exists before we
         // hand the PR to `aida queue work PR-N`. Normally phase 2 (finish_ci →
@@ -88794,6 +88976,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 pr,
                 pre_review_head_sha.as_deref(),
                 self.branch.as_deref(),
+                self.ci_terminal_sha.as_deref(),
+                self.ci_terminal_green,
             );
         }
 
