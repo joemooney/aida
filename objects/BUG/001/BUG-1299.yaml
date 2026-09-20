@@ -56,7 +56,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T23:03:57.581552445Z
-modified_at: 2026-09-20T03:21:31.205700213Z
+modified_at: 2026-09-20T03:21:48.673061361Z
 req_type: Bug
 tags:
 - diagnostic-decay
@@ -133,6 +133,30 @@ comments:
   created_at: 2026-09-20T03:03:31.795892757Z
   modified_at: 2026-09-20T03:03:31.795892757Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bcd5-9381-7d53-9442-35330e1c5731
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1997 fix(drain): resolve watchdog detail and hint from one trip value (BUG-1299)
+    verdict: APPROVE + merged 2026-09-20 03:21:24Z at head 936cc918
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — neither implemented nor briefed by this advisor
+    gates cleared: required Build SUCCESS; merge-hold-gate SUCCESS; mergeStateStatus CLEAN; no reviewer phase live at merge time
+
+    THE MECHANISM IS NARROWER AND BETTER THAN WHAT EITHER SEAT HAD. Both of us had accepted "the hint is hardcoded for one trip and emitted for both" as the explanation. The real cause is that `failure_with_retry_attempt` rebuilt the failure through `PhaseFailure::of()`, which starts a fresh `hint_override: None`, discarding the trip-specific hint on the retry-exhaustion-to-shelve path and only there.
+
+    That explanation PREDICTS the evidence rather than merely accommodating it: a contradiction on an attempt-2/2 shelve that would not appear on a first-attempt one, which is exactly the shape observed on TASK-1274. Ours accommodated it. That difference is why this diagnosis is worth recording over the one in the original report.
+
+    THE GENERAL FIX IS STRUCTURAL RATHER THAN DISCIPLINED. `watchdog_trip_report` resolves the tagged detail and the recovery hint in the SAME match arm, so there is no second independently-maintained switch for the two to drift apart in. Two strings assembled from one resolved value cannot contradict each other; two assembled from separate matches on a shared enum eventually will. That is the criterion-7 requirement met by construction rather than by convention.
+
+    WHAT I CHECKED BEYOND THE CLAIM — whether the same reconstruct-and-lose can recur elsewhere. It cannot today: that wrapper is the only site in the workspace that rebuilds a `PhaseFailure` from an existing one's parts, and the 89 other constructor calls create fresh failures where a None override is correct.
+
+    ONE RESIDUAL RISK, recorded rather than blocked on. The regression test pins that one wrapper but would not catch a future second reconstruction site. Someone writing `PhaseFailure::of(f.kind, format!("{} …", f.reason))` later drops the override again, silently, with no test failing. A two-line doc comment on the constructor would put the warning where that person is looking.
+
+    The end-to-end test through `orchestrate()` asserting detail and hint agree for both trips is the one that matters most, because it tests the property rather than the implementation and would still fail if a second switch were reintroduced.
+  created_at: 2026-09-20T03:21:48.673061361Z
+  modified_at: 2026-09-20T03:21:48.673061361Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bcd5-4f3e-7bd1-9516-26177545f64b
   author: aida-auto-bump
