@@ -35,7 +35,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:23:44.192885433Z
-modified_at: 2026-09-20T02:46:21.914926513Z
+modified_at: 2026-09-20T02:47:12.678418342Z
 req_type: Bug
 tags:
 - agent-ux
@@ -61,6 +61,26 @@ comments:
   created_at: 2026-09-20T02:29:27.082310887Z
   modified_at: 2026-09-20T02:29:27.082310887Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bcb5-e626-7602-9576-32055190cad0
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1994 fix(cli): accept hyphen-leading values on prose-taking flags (BUG-1294)
+    verdict: APPROVE + merged 2026-09-20 02:46:19Z at head 366f2578
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — neither implemented nor briefed by this advisor
+    gates cleared: required Build SUCCESS; merge-hold-gate SUCCESS; mergeStateStatus CLEAN; no reviewer phase live at merge time
+
+    THE TRADEOFF WAS PUT TO ME EXPLICITLY AND GETS A DELIBERATE YES. After this change `aida add --title --force` creates a spec titled "--force" rather than erroring. That is worse than an error and better than the alternative: it is visible in the next list, obviously wrong to any reader, fixable with one edit, and it corrupts nothing. What it replaces is a hard block on a legitimate title with no workaround the user would find without help.
+
+    THE PROPOSED NARROWING WOULD HAVE RECREATED THE BUG, which is the substantive part of the ruling. The suggestion was to apply this only where a hyphen-leading value is plausible. That is what the sweep already is — the 64 are titles, descriptions, reasons, notes, content, summaries, prompts and conditions, while tags, ids, paths, SHAs, enum tokens and short identifiers are excluded. Narrowing further would mean excluding some prose flags because a missing value is the likelier mistake there, and that line cannot be drawn honestly: every prose field can legitimately quote a flag. A bug titled "--format json returns human text", a punt reason naming "--no-human", a defer condition mentioning "--single-branch". Excluding any of them means someone hits this again on a field nobody considered.
+
+    THE TYPO GUARD IS WHAT MAKES IT SAFE AND I VERIFIED IT RATHER THAN TRUSTING THE MECHANISM. `allow_hyphen_values` widens only what a flag's own value may look like; clap still matches `--foo` tokens against declared names, so `aida add --titel probe` still errors, tested for both add and edit. Had that not held this would have been a different review, because an unknown flag silently becoming a title is far worse than a forgotten value becoming one.
+
+    ON THE fmt PROCESS NOTE, recorded so the standing rule is not mis-applied later: that rule exists so a bare format run does not silently absorb unrelated drift ahead of a check. Running it deliberately to fix drift from a mechanical 64-site edit and then verifying with the check flag is the intended order, not the failure the rule guards against.
+  created_at: 2026-09-20T02:47:12.678418342Z
+  modified_at: 2026-09-20T02:47:12.678418342Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bcb5-1fd3-7562-a4ad-1cd9248aec41
   author: aida-auto-bump
