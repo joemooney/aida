@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:35:48.162497532Z
-modified_at: 2026-09-20T17:38:04.049691262Z
+modified_at: 2026-09-20T17:38:05.875531369Z
 req_type: Bug
 tags:
 - ci
@@ -76,4 +76,56 @@ relationships:
   target_id: 01a0bfa2-d47c-7030-915e-cda1205d9ce4
   created_at: 2026-09-20T17:36:15.896915545Z
   created_by: joe
+comments:
+- id: 01a0bfe5-87b3-76e2-938f-d2f86fc547d6
+  author: joe
+  content: |-
+    [aida:advisor] Approved High, mode drain. I read the CI phase's exit conditions — the thing the filing correctly flagged as unestablished — and the mechanism is in the code, not inferred from the timing.
+
+    THE PATH, all in aida-cli-lib/src/lib.rs:
+
+    1. The CI wait loop. On timeout it returns WITHOUT emitting CiTerminal:
+
+         CiWaitVerdict::IdleTimeout => {
+             return CiProbe::NoSignal(format!("CI idle for {idle_window}s with no progress — giving up"));
+         }
+         CiWaitVerdict::AbsoluteTimeout => {
+             return CiProbe::NoSignal(format!("CI wait hit absolute ceiling ({}m) — giving up", ...));
+         }
+
+       Only the terminal-probe arm emits it:
+
+         _ => {
+             emit_ci_terminal(project_root, matches!(probe, CiProbe::Green { .. }));
+             return probe;
+         }
+
+       So CiTerminal is emitted when CI reaches a verdict and NOT when the wait gives up. Its absence therefore means "we stopped waiting", which is precisely the case where a reader most needs a record.
+
+    2. decide_ci_action maps that straight to Proceed:
+
+         CiProbe::NoSignal(reason) => { ...quiet logging...  CiAction::Proceed }
+
+    So: timeout → NoSignal → no CiTerminal → Proceed → reviewer phase, with no CI result and no event saying so. That is the reported behaviour, and it is the designed path rather than a race.
+
+    CONFIRMS THE FILING'S TIMELINE, verified independently against the event log and git:
+      17:10:46Z  PhaseEntered ci
+      17:20:17Z  PhaseEntered reviewer     — no CiTerminal between, none in the run
+      17:20:22Z  f4e2cb3c committed        — 5s AFTER its reviewer phase began
+      17:27:50Z  verdict recorded, reviewed_sha f4e2cb3c6, RequestChanges
+    The CI phase ran 571s. Contrast the same spec's earlier run at 00:25:57→00:26:29, which DID emit CiTerminal green=false after 32s — so the event works; this path skips it.
+
+    ONE TENSION TO CHECK, NOT AN ASSERTION. The doc comment above CiProbeFailureAction says exhaustion returns NoSignal "so the drain gate can shelve with the typed ci-unavailable cause". decide_ci_action returns Proceed. These may be different concerns — that comment is on BUG-1250's probe-failure retry policy, which governs failures DURING a wait, while decide_ci_action handles the final probe — so I am not claiming the comment describes this function. But if there is a drain gate that is supposed to shelve on ci-unavailable, establish whether it runs on this path, because the observed behaviour is that nothing shelved.
+
+    ACCEPTANCE — my additions to whatever the filing carries:
+    1. A CI wait that gives up must emit a terminal event distinguishing "gave up" from "CI concluded". Absence of CiTerminal must not be the only signal, because absence is also what a crash looks like.
+    2. The reviewer phase must not be entered against a head whose required checks have not concluded, or if it is, the verdict must record that CI was incomplete at review time so the finding can be weighted.
+    3. Decide deliberately whether NoSignal should still Proceed. It may be right — blocking a drain on an unreachable forge is its own failure mode — but it must be a recorded decision rather than a default, and the event stream must say which way it went.
+    4. Sweep the eight verdict files that say required CI was incomplete (PR-1846, 1956, 1974, 1981, 1998, 1999, 2006, 253) and report which were APPROVED. Two reportedly were; an approval rendered against an un-built head carries unverified code toward merge, which is the more dangerous direction than a wasted round.
+    5. Answer BUG-1455 from the same read, since both turn on these exit conditions.
+
+    ON THE BROADER CLAIM. The filing suggests some fraction of today's 22 request-changes shelves are the loop arguing with itself about code whose build had not run. That is the right worry and I would not yet put a number on it — criterion 4's sweep is what turns it from plausible into counted. Until then, treat "the reviewer is too strict" and "the implementer is too sloppy" as unproven readings of the same data.
+  created_at: 2026-09-20T17:38:05.875531369Z
+  modified_at: 2026-09-20T17:38:05.875531369Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
