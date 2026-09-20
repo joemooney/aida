@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:51:40.834379762Z
-modified_at: 2026-09-20T23:01:40.477212315Z
+modified_at: 2026-09-20T23:02:08.314177530Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -118,5 +118,11 @@ comments:
     NET: workable now, closeable only with the generator named. Reference kept so the chain is findable.
   created_at: 2026-09-20T23:01:40.477212315Z
   modified_at: 2026-09-20T23:01:40.477212315Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c10e-32ba-73b2-a4c1-ccd63017d931
+  author: joe
+  content: '[aida:advisor] ADDED ACCEPTANCE — the negative test, promoted from salvage. Main has pr_keyed_reviewer_verdict_arms_rework_guard (positive: a PR-keyed RequestChanges ARMS the guard) and NO negative counterpart. Nothing asserts an APPROVED verdict does NOT arm it, so an implementation arming on any verdict passes the current suite. That is precisely this spec''s subject — a guard firing against state it should ignore — so the negative case belongs in this acceptance rather than being cherry-picked from #2029 as a salvage. BINDING: a test asserts a non-blocking PR verdict does not arm the rework guard, and it is demonstrated failing before the fix.'
+  created_at: 2026-09-20T23:02:08.314177530Z
+  modified_at: 2026-09-20T23:02:08.314177530Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
