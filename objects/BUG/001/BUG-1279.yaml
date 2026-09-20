@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:52:27.202206555Z
-modified_at: 2026-09-20T01:51:56.896829834Z
+modified_at: 2026-09-20T01:52:09.630367766Z
 req_type: Bug
 tags:
 - discipline
@@ -70,5 +70,11 @@ comments:
   content: 'Drift cause: ensure_discipline_pack_scaffold (aida-cli-lib/src/lib.rs) only writes a discipline-pack file when the destination is entirely absent and never overlays an existing one against the embedded master, unlike the checksum-based overlay aida scaffold refresh uses for skills/commands/codex/antigravity (TASK-1170) — so once a guide exists locally it can drift forever, and this repo''s own project copy had simply never had a refresh run since ten guides were added to the master and four existing guides were revised (root cause is now recorded; not yet fixed in code — that overlay gap is left open as a follow-up, see PR).'
   created_at: 2026-09-20T01:51:56.896829834Z
   modified_at: 2026-09-20T01:51:56.896829834Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bc83-7f9e-7bd0-8d54-d68c484b4b94
+  author: joe
+  content: 'Two files were left untouched during the sync because the project copy carries content the master lacks (a genuine local edit per the spec''s ''do not clobber'' scope) and need a human to reconcile: .aida/discipline/autonomous-burndown.md has one extra bullet (''Read liveness from the lease, never a process name'') not in the master file (candidate to upstream); .aida/discipline/substrate-as-bouncer.md diverged in both directions — the project copy has two STORY-469 guard sections (Guard 1 trailer validation, Guard 3 claimed-done divergence) the master lacks, while the master has grown substantially (Core Principle, cargo-fmt bouncer, reviewer-phase gate, worktree-scope guard, summary) that the project copy lacks. Everything else was either identical, a pure-staleness overlay (glossary.yaml, machinery-glossary.md, skill-prompt-kinds.md, backlog-grooming.md), or a wholesale add of a previously-missing master guide.'
+  created_at: 2026-09-20T01:52:09.630367766Z
+  modified_at: 2026-09-20T01:52:09.630367766Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
