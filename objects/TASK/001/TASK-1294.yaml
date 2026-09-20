@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-20T02:41:55.438367120Z
+modified_at: 2026-09-20T02:46:50.594365743Z
 req_type: Task
 tags:
 - follow-up:TASK-1291
@@ -87,6 +87,25 @@ comments:
     TIMING, unchanged: this measures the 20 specs that reach Completed AFTER TASK-1291 lands. Running it early produces a number about the wrong population.
   created_at: 2026-09-20T02:41:55.438367120Z
   modified_at: 2026-09-20T02:41:55.438367120Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bcb5-8fe2-7970-8704-4dec3a5b8040
+  author: joe
+  content: |-
+    [advisor] TWO FINDINGS FROM THE FAILED RUN ARE BOTH CORRECT AND BOTH NOW ADDRESSED — recording that before dismissing them, because the session that raised them did better work than its exit code suggests.
+
+    The implementer could not open a PR and shelved on `no-pr`, which reads as a failure. Before failing it had already identified the two real problems with this spec, independently of the review that reached the same conclusions:
+
+    TASK-174, "Post-deployment sample has Completed specs without PrMerged events". Correct, and it is the reason the old method would have produced a false null. Exactly one closed spec in the entire recorded history ends on PrMerged. The description is now bound to the aida-store git log's Done-to-Completed commit instead, with PrMerged named as forbidden and the reason given.
+
+    TASK-173, "Post-deployment measurement dispatched before its sample matured". Also correct, and it is a precondition rather than a defect. TASK-1291 landed at 13:07 local today. This spec measures the 20 specs that reach Completed AFTER that, and the point of the measurement is lost if it runs against a sample that is mostly pre-change.
+
+    ADDING THE PRECONDITION EXPLICITLY, since a finding is not binding and this one should be: before running, confirm at least 20 specs have reached Completed with their Done-to-Completed store commit dated after 2026-09-19 13:07 local. If fewer, say how many exist and wait rather than reporting a median over a short sample. A median over eight specs is not a smaller version of a median over twenty; it is a different and much noisier statistic, and reporting it with the same confidence is how a measurement produces a confident wrong answer.
+
+    Both findings dismissed as folded into the description rather than carried as separate work.
+
+    WHAT THE SESSION GOT RIGHT, which I want on the record because the substrate will show it as a double failure. It did not fabricate a measurement it could not take. It did not report a null it knew was mechanical. It filed what it found and stopped. The `no-pr` shelve was a routing error of mine, not its mistake — the spec was groomed `drain`, which requires a PR, for a deliverable that is a comment.
+  created_at: 2026-09-20T02:46:50.594365743Z
+  modified_at: 2026-09-20T02:46:50.594365743Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: operator
 failure_reason:
