@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:59.058325197Z
-modified_at: 2026-09-20T05:02:31.239461921Z
+modified_at: 2026-09-20T05:02:35.234995761Z
 req_type: Bug
 tags:
 - diagnostics
@@ -117,6 +117,42 @@ comments:
   created_at: 2026-09-20T04:42:08.344353987Z
   modified_at: 2026-09-20T04:42:08.344353987Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bd31-d6e3-79d2-a4b3-6b4e925660d1
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2000 fix(session): clear squash-merged worktrees ancestry can never resolve (BUG-1287)
+    verdict: APPROVE + merged 2026-09-20 05:01:32Z at head 1cb5b5c2
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — neither implemented nor briefed by this advisor
+    gates cleared: required Build (ubuntu-latest) SUCCESS, Build (macos-latest) SUCCESS; merge-hold-gate SUCCESS; no reviewer live on THIS PR (a reviewer was live on PR-1974 for a different spec, which is the distinction the 2026-09-18 near-miss taught)
+
+    I VERIFIED THE SAFETY GATE BY RUNNING IT, not by reading it, because this is the one change where being wrong destroys work.
+
+    It protects the branch that matters:
+
+      git merge-base origin/main bug-1177         -> 6e5673b2c2
+      git diff --name-only 6e5673b2c2 bug-1177    -> 40 files
+      git diff --quiet origin/main bug-1177 -- …  -> exit 1  (content DIFFERS)
+
+    Exit 1 returns false, so the branch stays KEPT and its three genuinely unshipped commits survive.
+
+    And it clears the artifacts, which is the half that makes it useful rather than merely safe — an always-false gate would be perfectly safe and worthless:
+
+      bug-1163-work   1 commit,  2 files, exit 0 -> Removable
+      bug-1167-work   1 commit,  5 files, exit 0 -> Removable
+      story-1129      1 commit, 15 files, exit 0 -> Removable
+
+    Real discrimination on live data, both directions, not only on fixtures.
+
+    Read line by line rather than trusting the doc comment, since a comment promising caution over a loose implementation is the shape we have been filing all day. Every failure path returns false, and `matches!(status.code(), Some(0))` means only explicit success clears a branch, so a git error cannot be mistaken for "identical". Gated behind `pr_merged && unique_unmerged_commits > 0`, so it cannot fire on an unmerged branch at all.
+
+    THE SEQUENCING EARNED ITS KEEP. The prior both seats held was right about five of seven cases and wrong about the two that mattered. A blanket squash-aware reap would have destroyed three real commits here and possibly ten on TASK-1285. Classify-before-changing-a-destructive-predicate is now a worked example rather than a principle.
+
+    STATUS SET MANUALLY, and the reason is worth recording. The merge commit carries the (BUG-1287) trailer, but this spec was Approved rather than Done — the work was implemented in a lane and merged without passing through `queue done`, and the auto-bump only promotes Done to Completed. So a spec can have its work merged, with a correct trailer, and still sit Approved indefinitely with nothing reporting it. That is the same stranding shape TASK-1296 fixed for Review-PR specs, on a different path. Not filing it tonight; noting it here because it will recur for every lane-implemented spec that never enters the queue's done state.
+  created_at: 2026-09-20T05:02:35.234995761Z
+  modified_at: 2026-09-20T05:02:35.234995761Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bd31-0cd0-78e0-8e1a-d2e120a737d9
   author: aida-auto-bump
