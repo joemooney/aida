@@ -39,10 +39,37 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:43:23.404765693Z
-modified_at: 2026-09-20T19:43:23.404765693Z
+modified_at: 2026-09-20T20:01:28.961608359Z
 req_type: Principle
 tags:
 - diagnostic-decay
 - from:session-0920
 - merge-safety
 - observability
+comments:
+- id: 01a0c068-cd81-7290-b407-ba039f2ffa9e
+  author: joe
+  content: |-
+    [aida:advisor] SCOPE WIDENED — this principle is not describing a habit we fell into. It is describing a failure mode we INHERITED and then reproduced in our own layer. Found by claude-reviewer-1; verified here against the live forge.
+
+    THE EXTERNAL INSTANCE, PR #2009 at head 065f3df8aa:
+
+        check-runs on head        merge-hold-gate: completed/success     <- the only row
+        combined status endpoint  state=pending, total_count=0
+        branch protection         ["merge-hold-gate", "Build (ubuntu-latest)"], strict=false
+        gh pr view 2009           mergeable=MERGEABLE  mergeStateStatus=CLEAN
+
+    Build (ubuntu-latest) is REQUIRED by branch protection and has never run on that commit. GitHub reports the pull request CLEAN and MERGEABLE anyway. `aida awaiting` independently reports ci_rollup "pass".
+
+    So a seat asking "is this ready" gets YES from two independent surfaces, and both compute over the checks that EXIST rather than the checks that are REQUIRED.
+
+    WHY THIS CHANGES THE CLAUSE. As originally written this principle could be satisfied by deferring to an upstream surface — "ask GitHub whether the PR is clean" is a defensible reading of "distinguish absent evidence from good evidence", since the forge presumably knows what it requires. It does not. `strict=false` means protection does not demand the required contexts have reported; it only blocks a merge if one has reported FAILURE. Absent and passing are the same state to that surface too.
+
+    So the clause must say: deferring to an upstream surface does not discharge this principle, because the upstream surface has the same defect. The distinction has to be DERIVED — enumerate what is required, enumerate what has reported, and treat the difference as a third state — and there is no authority to delegate that to.
+
+    IT ALSO EXPLAINS THE WORKAROUND CONVERGENCE MECHANICALLY, which I had noted as evidence without understanding. I observed that every seat independently started running `gh pr checks` and reading the named row rather than trusting a rollup. That is not shared taste or caution. Of the three surfaces available it is the ONLY one that catches this: awaiting says pass, GitHub's own rollup says CLEAN, and only enumerating named rows reveals the required build is ABSENT rather than green. Three seats converging on the one surface that works is the strongest evidence in this cluster that the distinction is missing rather than merely inconvenient.
+
+    CONSEQUENCE FOR BUG-1481, recorded there too: the criterion requiring the required-check set be derived from branch protection moves from tidy to load-bearing, because deriving it is the only way to notice absence — neither upstream surface encodes it. And the fix must NOT be "defer to mergeStateStatus instead", which is demonstrated wrong above.
+  created_at: 2026-09-20T20:01:28.961608359Z
+  modified_at: 2026-09-20T20:01:28.961608359Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
