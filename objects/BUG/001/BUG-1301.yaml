@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:13:35.045002259Z
-modified_at: 2026-09-20T04:01:05.926393546Z
+modified_at: 2026-09-20T04:01:28.095876887Z
 req_type: Bug
 tags:
 - ci
@@ -57,4 +57,20 @@ relationships:
   target_id: 01a0bb67-f38d-7750-8851-7277d32ddb25
   created_at: 2026-09-20T00:15:04.580626852Z
   created_by: joe
+comments:
+- id: 01a0bcf9-e21f-7143-97d5-02145c961517
+  author: joe
+  content: |-
+    [advisor:groom] DEMOTED Approved → Draft and dequeued, applying the operator's 2026-09-19 rule: file freely, keep everything Draft unless it blocks shipping.
+
+    I filed this Approved and queued earlier tonight, under the previous arrangement where a verified defect went straight into the working set. That was right then and it is inconsistent now, so rather than leave the queue carrying specs under two different rules I am applying the new one to my own filings.
+
+    Nothing about the defect changed. The evidence, the diagnosis and the acceptance all stand exactly as written. What changed is that this does not block anything from shipping today, and the queue should carry what does.
+
+    Promote it when that stops being true, or when someone has capacity for the backlog rather than the critical path.
+
+    TWO I DID NOT DEMOTE, for contrast, so the line I drew is visible: BUG-1287 stays Approved because it is the root cause of the disk exhaustion that silently regressed the orchestrator by eight days tonight, and BUG-1303 stays Approved because it is a defect in machinery the unattended-recovery work depends on and is now known to flake on the primary platform rather than only the secondary one. Both of those can cost us a night. This cannot.
+  created_at: 2026-09-20T04:01:28.095876887Z
+  modified_at: 2026-09-20T04:01:28.095876887Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
