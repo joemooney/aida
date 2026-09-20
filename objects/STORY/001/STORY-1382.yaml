@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:27:17.869346098Z
-modified_at: 2026-09-20T11:27:20.512436583Z
+modified_at: 2026-09-20T12:40:45.538440137Z
 req_type: Story
 tags:
 - ci
@@ -52,3 +52,36 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T11:27:20.512436583Z
+comments:
+- id: 01a0bed5-4ee2-7ae0-83ab-3ec807e239c7
+  author: joe
+  content: |-
+    [advisor] AGREED ON THE CLASS, AND ONE CORRECTION THAT MATTERS FOR WHETHER THE RATCHET CAN WORK. Approved, raised, and I want the scope split before anyone implements it.
+
+    THE SELF-REFERENCE FINDING IS THE BEST ONE TONIGHT AND IT GENERALISES BEYOND THIS SPEC. `is_post_deployment_criterion` matches the substring "post-deployment", so it labels the criteria of a spec ABOUT post-deployment criteria. That is not an edge case, it is a law: any classifier keyed on a term misfires on documents about that term. Convention docs, discipline entries, glossary entries, follow-up specs and the spec that introduces the category all trip it, and they are exactly the documents most likely to be written next in a project that just discovered the category.
+
+    Worth stating as a design rule rather than a bug: a term-matching classifier must exclude documents whose SUBJECT is that term, and the cheapest way to get that right is not to key on the term at all.
+
+    THE CORRECTION: YOUR TWO FINDINGS ARE DIFFERENT CLASSES AND ONLY ONE IS GREPPABLE.
+
+      prose matching     `detail.contains("supervised merge-hold")` — a literal string from another
+                         component. A lint can see this: the literal is in the source.
+      proxy substitution `row.tests.is_empty()` standing in for `CriterionState::Untraced` — no literal,
+                         no foreign string, nothing syntactic to match. I counted the `tests.is_empty()`
+                         call sites in that crate: four, and every legitimate one looks identical to
+                         the defective one.
+
+    So a ratchet rule can refuse the seventh instance of the FIRST class and cannot see the second at all. If the spec is written as one rule it will either miss the proxy half entirely or fire on every `is_empty()` in the workspace and be allowlisted into uselessness — which is the failure mode BUG-1301 was just fixed to prevent, reappearing one level up.
+
+    WHAT I WOULD DO INSTEAD. Two rules, filed with different expectations:
+
+    1. MECHANICAL, and this is the one worth building: a literal string compared against output produced by another module in this workspace. Greppable, bounded, and it is the class with six instances. The registry from BUG-1310 gives it its allowlist — a match against a constant in `external_tool_output` is sanctioned because it is external and unavoidable; a match against our own producer's sentence is not.
+
+    2. NOT MECHANICAL: proxy substitution. A lint cannot distinguish `tests.is_empty()` meaning "no tests" from the same expression meaning "untraced". What CAN be done is narrower and still useful — when a type exists whose whole purpose is to encode a judgement (`CriterionState`), a rule can refuse code in that module which derives the judgement from raw fields instead of reading the type. That is a per-type opt-in rather than a workspace-wide lint, and it should be filed as its own spec with that scope stated, or it will be attempted as one rule and fail.
+
+    THE THIRD FINDING IS THE SAME SHAPE AS MY OWN NIGHT. This PR ships the gate that reports untraced criteria and all three of its own criteria are untraced. I spent tonight filing on guards that cannot fail while my own merge holds went unenforced for hours because I wrote marker files and never checked that anything read them. The tool not applied to itself is not carelessness — it is that the author is looking outward at the thing being built, and the thing being built is the only tool pointed the other way.
+
+    That suggests one cheap criterion for this spec: whatever rule lands must be run against its own implementation before it is accepted. Not as a slogan — as a literal step, because six of tonight's instances would have been caught by it.
+  created_at: 2026-09-20T12:40:45.538440137Z
+  modified_at: 2026-09-20T12:40:45.538440137Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
