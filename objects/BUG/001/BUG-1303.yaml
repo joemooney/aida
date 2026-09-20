@@ -39,11 +39,17 @@ description: |
   5. A test covers the helper directly against a synthesised raw OS error 33, so the Windows path is proven on Linux CI and does not depend on the nightly to catch a regression.
   6. A grep finds no remaining comparison of a lock error against WouldBlock outside the helper.
 
-  SECOND BLOCKER ON THE SAME NIGHTLY, recorded here rather than as its own spec to avoid a fifth filing for one red run. The same Windows job failed twice with:
+  WITHDRAWN: THE conflict.txt REPORT WAS A FALSE ALARM, and this is recorded rather than deleted because the near-miss is instructive.
+
+  This spec briefly carried a criterion 7 about a test leaving conflict.txt behind and a later test's merge tripping over it. That was reported in good faith from the Windows log, where the line does appear twice:
 
     error: The following untracked working tree files would be overwritten by merge: conflict.txt
 
-  A test leaves conflict.txt in a shared working tree and a later test's merge trips over it. Ordering-dependent, which is why it is Windows-visible rather than Windows-specific. Criterion 7: no test leaves files behind in a tree another test uses; whichever test creates conflict.txt cleans it up or works in its own tempdir.
+  It is intentional. aida-cli-lib/src/tests/handle_pull_command_tests.rs:235-242 deliberately writes an untracked conflict.txt so that git pull --ff-only aborts, because the abort is the behaviour under test. The comment above it says so. The git error text is expected output captured in the log, and the test passes: both Windows runs read 5009 passed, 1 failed, and the single failure is the lock test.
+
+  So there is no hygiene defect, nothing is ordering-dependent, and a criterion telling an implementer to stop that test leaving files behind would have sent them to break a correct test to silence a log line that is supposed to be there. Removed before anyone picked it up.
+
+  Worth keeping visible: the report was plausible, came with a mechanism, and was wrong. Reading the log is not the same as reading the test.
 
   THIS SHAPE IS LINTABLE AND SHOULD JOIN THE RATCHET. A try_lock result compared against ErrorKind::WouldBlock with no raw-OS-error fallback is a greppable pattern, not a semantic judgement. It belongs in BUG-1283's rule widening once BUG-1301 makes the ratchet extensible. Fix the three sites here; add the rule there so the fourth site cannot be written.
 
@@ -53,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:22:29.721225410Z
-modified_at: 2026-09-20T00:23:22.524569014Z
+modified_at: 2026-09-20T00:24:13.776985592Z
 req_type: Bug
 tags:
 - drain-safe
