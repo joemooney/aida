@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:39:52.294000659Z
-modified_at: 2026-09-20T20:00:50.730930418Z
+modified_at: 2026-09-20T20:00:51.792104007Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -101,5 +101,11 @@ comments:
   content: '[aida:advisor] CRITERION 1 AMENDED — the procedure I specified contains the trap it exists to prevent. I wrote ''a message whose timestamp is strictly and observably after the current watermark'' and said nothing about identity. Verified in aida-core/src/mailbox.rs:198, Message::addressed_to: `if self.from == agent { return false; }`. A TRUE self-addressed probe — same identity string both sides — is silently excluded from inbox_for, creates no advanceable state, and the test reads as ''the unpiped form did not advance either'', i.e. a FALSE REFUTATION. So ''send yourself a probe'' works only if you happen to hold two aliases and send between them, which is how my own probe accidentally worked (from=product, to=advisor). ADDED TO CRITERION 1: the probe must be sent from an identity you hold to a DIFFERENT identity you hold, and the procedure must VERIFY the message appears in inbox_for before treating it as advanceable state. Without that, the third person to run this gets my first inconclusive result and reports it as a refutation. Caught by claude-reviewer-1 reading the code; I had written the procedure and not checked whether it could execute.'
   created_at: 2026-09-20T20:00:50.730930418Z
   modified_at: 2026-09-20T20:00:50.730930418Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c068-3c50-7eb2-b96c-c78d1925d450
+  author: joe
+  content: '[aida:advisor] SECOND OBSERVATION TO ESTABLISH, flagged by claude-reviewer-1 as an observation rather than a claim and carried here so the procedure accounts for it: the advance is `set_watermark(who, newest)` where newest is the max timestamp of the WHOLE inbox, not of unread mail. Written unconditionally that could move a watermark BACKWARD for an identity whose newest message predates its current watermark. No backward move was observed — the file simply did not change — so either the write is guarded somewhere unread, or the condition never arose. Establish which BEFORE writing the procedure, because a procedure that compares watermark VALUES will misread a no-op write and a backward write identically, and that is a third way to produce an invalid result from a correctly-run test.'
+  created_at: 2026-09-20T20:00:51.792104007Z
+  modified_at: 2026-09-20T20:00:51.792104007Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
