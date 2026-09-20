@@ -834,18 +834,20 @@ fn drain_merge_lease_failure(
 }
 
 /// BUG-1316: distinguish the substrate's deliberate supervised-hold refusal
-/// from a forge CLI failure. The refusal text is emitted at the single
-/// `Forge::merge_change` chokepoint and includes both the persisted hold reason
-/// and exact clear command, so carry that same evidence into the shelve hint.
-// trace:BUG-1316 | ai:codex
+/// from a forge CLI failure. The typed error is emitted at the single
+/// `Forge::merge_change` chokepoint and its display includes both the persisted
+/// hold reason and exact clear command, so carry that evidence into the hint.
+// trace:BUG-1316 trace:BUG-1435 | ai:codex
 fn classify_drain_merge_failure(
     forge: crate::forge::ForgeKind,
     pr: u32,
     error: &anyhow::Error,
 ) -> auto_complete::PhaseFailure {
     let detail = format!("{error:#}");
-    let hold_prefix = format!("refusing to merge PR-{pr}: supervised merge-hold");
-    if detail.contains(&hold_prefix) {
+    if error
+        .downcast_ref::<crate::forge::MergeHoldRefusal>()
+        .is_some()
+    {
         let reason = format!(
             "{} merge refused for {}-{pr}: {detail}",
             forge
@@ -874,10 +876,23 @@ mod bug_1316_merge_hold_failure_tests {
 
     #[test]
     fn task_1293_pr_2003_hold_is_typed_and_real_tool_failure_stays_retryable() {
-        let held = anyhow::anyhow!(
+        let production = crate::forge::MergeHoldRefusal::new(2003, "advisor hold: PR interaction");
+        assert_eq!(
+            production.to_string(),
             "refusing to merge PR-2003: supervised merge-hold — advisor hold: PR interaction. \
              A human/advisor must review, then clear the hold (`aida merge-hold clear 2003`) before merging."
         );
+
+        // Deliberately unlike the production sentence: classification follows
+        // the error type and cannot decay when the human-facing prose changes.
+        // trace:BUG-1435 | ai:codex
+        let held = anyhow::Error::new(crate::forge::MergeHoldRefusal::with_detail(
+            2003,
+            "advisor hold: PR interaction",
+            "aida merge-hold clear 2003",
+            "PR-2003 remains gated for advisor hold: PR interaction; release it with \
+             `aida merge-hold clear 2003` after review.",
+        ));
         let failure = classify_drain_merge_failure(crate::forge::ForgeKind::GitHub, 2003, &held);
         assert_eq!(failure.kind, auto_complete::FailureKind::MergeHold);
         assert!(!auto_complete::is_transient_retry_cause(

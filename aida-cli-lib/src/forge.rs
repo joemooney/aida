@@ -28,6 +28,63 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// A supervised merge-hold deliberately refused a merge.
+///
+/// Keep this as a typed error so orchestrator callers can distinguish a human
+/// gate from a transient forge-tool failure without parsing diagnostic prose.
+// trace:BUG-1435 | ai:codex
+#[derive(Debug)]
+pub(crate) struct MergeHoldRefusal {
+    pr: u64,
+    reason: String,
+    clear_command: String,
+    #[cfg(test)]
+    detail_override: Option<String>,
+}
+
+impl MergeHoldRefusal {
+    pub(crate) fn new(pr: u64, reason: &str) -> Self {
+        Self {
+            pr,
+            reason: reason.to_owned(),
+            clear_command: format!("aida merge-hold clear {pr}"),
+            #[cfg(test)]
+            detail_override: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_detail(
+        pr: u64,
+        reason: impl Into<String>,
+        clear_command: impl Into<String>,
+        detail: impl Into<String>,
+    ) -> Self {
+        Self {
+            pr,
+            reason: reason.into(),
+            clear_command: clear_command.into(),
+            detail_override: Some(detail.into()),
+        }
+    }
+}
+
+impl std::fmt::Display for MergeHoldRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        #[cfg(test)]
+        if let Some(detail) = &self.detail_override {
+            return f.write_str(detail);
+        }
+        write!(
+            f,
+            "refusing to merge PR-{}: supervised merge-hold — {}. A human/advisor must review, then clear the hold (`{}`) before merging.",
+            self.pr, self.reason, self.clear_command
+        )
+    }
+}
+
+impl std::error::Error for MergeHoldRefusal {}
+
 /// Which forge backs a project's collaboration lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ForgeKind {
@@ -1523,12 +1580,7 @@ impl Forge for GitHubForge {
         // clear <pr>`). A drain-mode PR is never marked, so its auto-merge is
         // untouched. trace:BUG-1167 | ai:claude
         if let Some(reason) = crate::merge_hold::read_hold(&self.project_root, c.id) {
-            anyhow::bail!(
-                "refusing to merge PR-{}: supervised merge-hold — {reason}. A human/advisor \
-                 must review, then clear the hold (`aida merge-hold clear {}`) before merging.",
-                c.id,
-                c.id
-            );
+            return Err(MergeHoldRefusal::new(c.id, &reason).into());
         }
         let args: Vec<String> = match opts.method {
             MergeMethod::Squash => {
