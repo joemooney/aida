@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:02.542178535Z
-modified_at: 2026-09-20T00:18:22.043550666Z
+modified_at: 2026-09-20T00:25:04.331535138Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -30,4 +30,10 @@ comments:
   created_at: 2026-09-19T16:39:37.107482251Z
   modified_at: 2026-09-19T16:39:37.107482251Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bc33-c44b-76d2-87ee-88032d6ffc82
+  author: joe
+  content: 'Implemented aida drain resume <SPEC>: reads the latest SpecShelved event, correlates the same run''s PhaseDonePr, refuses without either checkpoint, and re-enters the existing orchestrator at the failed phase. CI resumes through the existing head probe, so terminal-green pipelines are reused immediately. Added phase-selection unit tests and verified CLI build/help plus formatting.'
+  created_at: 2026-09-20T00:25:04.331535138Z
+  modified_at: 2026-09-20T00:25:04.331535138Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
