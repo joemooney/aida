@@ -1052,7 +1052,7 @@ fn handle_role_scaffold() -> Result<()> {
     println!();
     let (created, skipped) = scaffold_starter_roles(&project_root)?;
     // Report per role in STARTER_ROLES order (created vs already-present).
-    for (name, purpose) in STARTER_ROLES {
+    for (name, purpose, _) in STARTER_ROLES {
         if created.contains(name) {
             println!("  {} {} — {}", "+".green(), name, purpose);
         } else {

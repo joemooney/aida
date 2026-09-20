@@ -73,16 +73,16 @@ fn other_roles_pass_through_canonicalization() {
 #[test]
 fn starter_set_uses_advisor_not_dialog() {
     assert!(
-        STARTER_ROLES.iter().any(|(name, _)| *name == "advisor"),
+        STARTER_ROLES.iter().any(|(name, _, _)| *name == "advisor"),
         "advisor must be a starter role"
     );
     assert!(
-        !STARTER_ROLES.iter().any(|(name, _)| *name == "dialog"),
+        !STARTER_ROLES.iter().any(|(name, _, _)| *name == "dialog"),
         "dialog must no longer be a starter role name"
     );
-    let (_, purpose) = STARTER_ROLES
+    let (_, purpose, _) = STARTER_ROLES
         .iter()
-        .find(|(name, _)| *name == "advisor")
+        .find(|(name, _, _)| *name == "advisor")
         .expect("advisor is a starter role");
     assert!(
         !purpose.contains("PO hat"),
@@ -96,7 +96,7 @@ fn starter_set_uses_advisor_not_dialog() {
 // ship as starter roles. trace:TASK-608 | ai:claude
 #[test]
 fn starter_set_is_agent_wired_only() {
-    let names: Vec<&str> = STARTER_ROLES.iter().map(|(name, _)| *name).collect();
+    let names: Vec<&str> = STARTER_ROLES.iter().map(|(name, _, _)| *name).collect();
     assert!(
         names.contains(&"implementer"),
         "implementer must be scaffolded"
@@ -132,9 +132,9 @@ fn starter_set_is_agent_wired_only() {
 
 #[test]
 fn product_starter_purpose_is_intake_not_advisor() {
-    let (_, purpose) = STARTER_ROLES
+    let (_, purpose, prompt) = STARTER_ROLES
         .iter()
-        .find(|(name, _)| *name == "product")
+        .find(|(name, _, _)| *name == "product")
         .expect("product is a starter role");
 
     assert!(purpose.contains("Intake"), "{purpose}");
@@ -143,6 +143,29 @@ fn product_starter_purpose_is_intake_not_advisor() {
     assert!(
         purpose.contains("advisor owns strategic counsel"),
         "{purpose}"
+    );
+    assert!(prompt.unwrap().contains("two-seat-protocol.md"));
+    assert!(prompt.unwrap().contains("never approve your own"));
+}
+
+// trace:STORY-1351 | ai:codex
+#[test]
+fn advisor_starter_role_carries_cold_session_handoff_protocol() {
+    let (_, _, prompt) = STARTER_ROLES
+        .iter()
+        .find(|(name, _, _)| *name == "advisor")
+        .expect("advisor is a starter role");
+    let prompt = prompt.expect("advisor must ship durable role guidance");
+    assert!(prompt.contains("independent judgment gate"), "{prompt}");
+    assert!(
+        prompt.contains("Never implement or merge code you authored"),
+        "{prompt}"
+    );
+    assert!(prompt.contains("rework-brief-craft.md"), "{prompt}");
+    assert!(prompt.contains("seat-recovery-playbooks.md"), "{prompt}");
+    assert!(
+        !prompt.contains("mailbox inbox"),
+        "mechanised duties stay out of prose: {prompt}"
     );
 }
 

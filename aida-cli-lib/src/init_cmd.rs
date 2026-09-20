@@ -2188,12 +2188,37 @@ fn init_schedule_config_section() -> &'static str {
 #   when  = "mail.oldest_unread_age > 15m"   predicate; fires once per episode
 # Machine-wide jobs go in ~/.aida/schedule.toml (same shape); a project entry
 # with the same name wins. Every run is ledgered on the aida-store branch
-# (schedule/<job>.yaml). Fresh projects stay silent: every sample is commented.
-# trace:STORY-1047 trace:STORY-1226
-#
-# [schedule]
-# min_gap = "60s"
-#
+# (schedule/<job>.yaml). The product/advisor handoff duties are enabled
+# defaults; infrastructure examples remain commented. Seat jobs only mark work
+# due — they never execute an LLM or mutate product state without the seat.
+# trace:STORY-1047 trace:STORY-1226 trace:STORY-1351
+
+[schedule]
+min_gap = "60s"
+
+[[schedule.jobs]]
+name = "mailbox-triage"
+seats = ["advisor"]
+every = "30m"
+on = ["MailReceived"]
+prompt = "Triage the mailbox: read each item, answer bounded requests, and route or escalate the rest."
+enabled = true
+
+[[schedule.jobs]]
+name = "product-wave-relaunch"
+seats = ["product"]
+every = "5m"
+when = "drain.lock_free == true && queue.drain_mode_ready > 0"
+prompt = "The drain lock is free and eligible work is queued. Verify the queue head and launch the next product wave."
+enabled = true
+
+[[schedule.jobs]]
+name = "shelf-triage"
+seats = ["advisor"]
+on = ["QueueDrained"]
+prompt = "Triage newly shelved work from the completed queue run: classify the failure, write a concrete rework brief, and requeue or escalate it."
+enabled = true
+
 # [[schedule.jobs]]
 # name = "session-reap"
 # command = "session reap"
@@ -2225,25 +2250,10 @@ fn init_schedule_config_section() -> &'static str {
 # enabled = false
 #
 # [[schedule.jobs]]
-# name = "mailbox-triage"
-# seats = ["advisor"]
-# every = "30m"
-# on = ["MailReceived"]
-# prompt = "Triage the mailbox: `aida mailbox inbox`, answer or route each item."
-# enabled = false
-#
-# [[schedule.jobs]]
 # name = "groom-drafts"
 # seats = ["advisor"]
 # every = "1h"
 # prompt = "Groom the draft inbox: `aida groom` (propose), then `aida groom --apply`."
-# enabled = false
-#
-# [[schedule.jobs]]
-# name = "capture-sweep"
-# seats = ["product"]
-# on = ["QueueDrained"]
-# prompt = "Run /aida-capture: file every requirement the drain surfaced but nobody wrote down."
 # enabled = false
 #
 "#
@@ -2265,8 +2275,9 @@ mod story_1226_init_schedule_section_tests {
             "queue-gc",
             "mailbox-latency",
             "mailbox-triage",
+            "product-wave-relaunch",
+            "shelf-triage",
             "groom-drafts",
-            "capture-sweep",
         ] {
             assert!(
                 section.contains(&format!("name = \"{job}\"")),
@@ -2277,18 +2288,12 @@ mod story_1226_init_schedule_section_tests {
         assert!(section.contains("seats = [\"product\"]"));
         assert!(section.contains("on = [\"MailReceived\"]"));
         assert!(section.contains("when = \"mail.oldest_unread_age > 15m\""));
-        // Every sample is commented → a fresh project is silent.
-        assert!(section.lines().all(|l| l.is_empty() || l.starts_with('#')));
-        // Uncommented, the sample is a valid registry.
-        let start = section.find("# [schedule]").expect("sample table present");
-        let uncommented: String = section[start..]
-            .lines()
-            .map(|l| l.trim_start_matches('#').trim_start())
-            .collect::<Vec<_>>()
-            .join("\n");
-        let parsed: toml::Value = toml::from_str(&uncommented).expect("sample parses");
+        let parsed: toml::Value = toml::from_str(section).expect("defaults parse");
         let jobs = parsed["schedule"]["jobs"].as_array().unwrap();
-        assert_eq!(jobs.len(), 8);
+        assert_eq!(jobs.len(), 3);
+        assert!(jobs
+            .iter()
+            .all(|job| job["enabled"].as_bool() == Some(true)));
     }
 }
 
