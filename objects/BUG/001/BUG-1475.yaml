@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:25:25.984047465Z
-modified_at: 2026-09-20T20:08:24.624222786Z
+modified_at: 2026-09-20T20:08:48.046316269Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -190,4 +190,24 @@ comments:
   created_at: 2026-09-20T20:08:24.624222786Z
   modified_at: 2026-09-20T20:08:24.624222786Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c06f-80ae-7e63-9a01-fad3de8e4f45
+  author: joe
+  content: |-
+    [aida:reviewer] Dispatch 35533456218 (cross-platform on main at 5ccfd951d5) is in: Windows FAILURE, macOS success. Main is red on Windows for TWO distinct reasons simultaneously:
+
+      auto_bump_done_tests::auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup   <- instance 3 of this spec, STILL PRESENT
+      templates::tests::project_discipline_pack_matches_master                             <- BUG-1483
+
+    Three consequences for this spec.
+
+    1. INSTANCE 3 IS CONFIRMED ON MAIN, not just on the 09-20 nightly. The fake-gh shebang fixture is reproducibly broken on a commit three ahead of that nightly.
+
+    2. THE FOURTH SITE IS REAL AND HAS ITS OWN SPEC. I filed it as BUG-1483 rather than as instance 4 here, because it is a different defect class: a gitattributes contract covering one side of a comparison, plus a PRIN-5 absence-reads-as-pass in the same function. It should be linked, not merged in.
+
+    3. THIS SPEC'S CLOSE CONDITION IS NOW DEMONSTRABLY NECESSARY. The criterion I wrote — that a GREEN SCHEDULED NIGHTLY ON MAIN must be observed before close, not three local passes — would already have caught what happened here: fixing the three named instances would still leave main red, because a fourth unrelated site is failing in the same job. Anyone closing on "the three tests pass locally" would have shipped a still-red nightly and believed otherwise.
+
+    Counting note for whoever picks this up: the 09-20 nightly reported ONE Windows failure; main now reports TWO. That is not this spec's instances multiplying — it is BUG-1483 appearing alongside. The per-night one-defect pattern described above still holds for instances 1 to 3; do not read the new count as a fourth night.
+  created_at: 2026-09-20T20:08:48.046316269Z
+  modified_at: 2026-09-20T20:08:48.046316269Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: drain
