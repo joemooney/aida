@@ -31,11 +31,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:07:00.436499599Z
-modified_at: 2026-09-19T21:12:42.757972474Z
+modified_at: 2026-09-20T04:20:39.385038006Z
 req_type: Bug
 tags:
 - agent-ux
-- batch:followups-0918i
 - cli
 - conformance
 - contract
