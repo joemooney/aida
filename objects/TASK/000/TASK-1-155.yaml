@@ -1,5 +1,6 @@
 id: 01a0c056-6a6d-7052-8876-d2b734ab0299
 spec_id: TASK-1-155
+agreed_id: TASK-179
 title: 'Stale leases are the normal state, not garbage: the reaper correctly refuses all six, so anything failing in their presence must tolerate them'
 description: |-
   Stale session leases are a NORMAL steady state, not garbage to clear, so anything that fails in their presence must tolerate them rather than expect cleanup.
