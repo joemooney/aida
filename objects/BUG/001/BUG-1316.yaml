@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T05:53:25.916051220Z
-modified_at: 2026-09-20T09:46:29.381852523Z
+modified_at: 2026-09-20T09:52:18.770486101Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -105,6 +105,22 @@ comments:
   created_at: 2026-09-20T07:41:17.978503064Z
   modified_at: 2026-09-20T07:41:17.978503064Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0be3b-1752-7230-a3c3-bdbe97c8edf6
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2012
+    agent: codex
+    ran-at: 2026-09-20 02:52 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1316-drain-01a0be3a-76c8-7b42-b1cb-e9c1cd0f3fd3.json
+    ? SEM (0.99) — A supervised merge-hold ends the drain attempt by shelving the spec; it does not skip the spec and leave it queued.
+    ? SEM (0.91) — The drain recognizes a supervised merge-hold only when the rendered merge error chain contains `refusing to merge PR-<current-pr>: supervised merge-hold`; merge errors that do not contain that PR-specific marker remain ordinary retryable tool failures.
+  created_at: 2026-09-20T09:52:18.770486101Z
+  modified_at: 2026-09-20T09:52:18.770486101Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
