@@ -24,8 +24,9 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:44:06.450584423Z
-modified_at: 2026-09-20T17:52:12.424163043Z
+modified_at: 2026-09-20T17:52:14.810368201Z
 req_type: Bug
 tags:
+- batch:night-0920
 - mailbox tui duplication from:review-pr-1976
 execution_mode: drain
