@@ -1,0 +1,37 @@
+id: 01a0bda9-71ac-72c3-bfa0-8c9d65243f09
+spec_id: BUG-1426
+agreed_id: BUG-1426
+title: The discipline-pack guard is named for matching masters but only checks that files exist, so a stale local copy passes
+description: |
+  The discipline-pack parity guard is named `project_discipline_pack_matches_master` and does not check that anything matches. It asserts that every embedded master has a project-local file of the SAME NAME, and separately that the README has no dead links. A local copy whose content has fallen behind its master passes.
+
+  That gap is not hypothetical. PR #1979 adds a section to the MASTER `session-discipline.md`; the local copy is a separate file. Different paths, so no git conflict — and the moment that merges, the local copy is stale in exactly the way BUG-1279 exists to prevent, with the guard still green.
+
+  So the guard prevents the pack being INCOMPLETE and permits it being WRONG, which is the weaker of the two failures and the one a reader cannot detect by looking.
+
+  WHY IT WAS ACCEPTED ANYWAY. The pack restoration is correct and valuable on its own — nine missing guides and four dead README links, fixed — and the guard genuinely prevents recurrence of the incompleteness that caused the bug. Holding all of it for a test name, while the operator is asking for throughput, was the wrong trade.
+
+  TWO ACCEPTABLE RESOLUTIONS, and the first is better:
+
+  1. Compare CONTENT and fail on divergence, which is what the name already promises. The checksum machinery for exactly this comparison exists in the scaffolding refresh path, where a file whose body still hashes to its marker is overlaid and an edited one is left alone.
+  2. Rename to `project_discipline_pack_has_every_master_guide` and file the content check separately. Honest, but leaves the gap open.
+
+  ACCEPTANCE
+  1. A project-local guide whose content differs from its embedded master fails the guard, or the guard is renamed to state what it actually checks.
+  2. If content comparison lands, an exclusion path exists for guides this repo deliberately localises, and any such exclusion is recorded with its reason rather than silently skipped.
+  3. A test constructs a locally-edited copy and asserts the chosen behaviour, so the distinction between "missing" and "stale" is pinned rather than implied by a name.
+
+  Deferred from PR #1988 review, where the pack restoration was merged on the operator's throughput directive with this recorded rather than blocking.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T07:13:13.644915988Z
+modified_at: 2026-09-20T07:13:13.644915988Z
+req_type: Bug
+tags:
+- diagnostic-decay
+- discipline
+- drain-safe
+- from:session-0919
+- scaffolding
