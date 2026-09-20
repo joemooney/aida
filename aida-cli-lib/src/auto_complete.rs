@@ -1009,10 +1009,26 @@ pub(crate) fn red_ci_action(budget: usize, attempts_made: usize, kind: FailureKi
 /// the `gh pr merge` error text carried in the failure reason. Conservative:
 /// only a conflict is rebase-recoverable, so anything unrecognized is not.
 // trace:TASK-975 | ai:claude
+// trace:BUG-1447 | ai:codex
 pub(crate) fn is_merge_conflict_failure(reason: &str) -> bool {
+    if is_branch_policy_merge_refusal(reason) {
+        return false;
+    }
     aida_core::external_tool_output::contains_any_case_insensitive(
         reason,
         aida_core::external_tool_output::GH_MERGE_CONFLICT,
+    )
+}
+
+/// BUG-1447: GitHub prefixes both policy refusals and genuine conflicts with
+/// "not mergeable". Recognize the stable policy detail before consulting the
+/// broader conflict vocabulary so a supervised hold can neither spend the
+/// transient retry budget nor reach the destructive auto-rebase path.
+// trace:BUG-1447 | ai:codex
+pub(crate) fn is_branch_policy_merge_refusal(reason: &str) -> bool {
+    aida_core::external_tool_output::contains_any_case_insensitive(
+        reason,
+        aida_core::external_tool_output::GH_BRANCH_POLICY_MERGE_REFUSAL,
     )
 }
 
@@ -6120,6 +6136,8 @@ mod tests {
         conflict_rebase_ok: bool,
         /// TASK-975: how many times `attempt_merge_conflict_rebase` was called.
         conflict_rebase_calls: usize,
+        /// BUG-1447: forge-side branch-policy refusals before merge succeeds.
+        merge_policy_refusals: usize,
         /// BUG-727: when `Some`, `merge_supervision_hold` reports the spec's
         /// execution mode as holding the merge — the substrate supervised-merge
         /// gate fires before phase 4. `None` (default) keeps every
@@ -6202,6 +6220,7 @@ mod tests {
                 merge_conflicts: 0,
                 conflict_rebase_ok: false,
                 conflict_rebase_calls: 0,
+                merge_policy_refusals: 0,
                 merge_hold: None,
                 recorded_merge_holds: Vec::new(),
                 pr_number: Some(46),
@@ -6249,6 +6268,16 @@ mod tests {
                 merge_conflicts: conflicts,
                 ci_fix_budget: budget,
                 conflict_rebase_ok: rebase_ok,
+                ..Self::base()
+            }
+        }
+
+        // trace:BUG-1447 | ai:codex
+        fn merge_policy_refusal(budget: usize) -> Self {
+            Self {
+                merge_policy_refusals: 1,
+                ci_fix_budget: budget,
+                transient_retry_budget: 2,
                 ..Self::base()
             }
         }
@@ -6544,6 +6573,14 @@ mod tests {
         }
         fn merge(&mut self) -> Result<(), PhaseFailure> {
             self.record(Phase::Merge)?;
+            if self.merge_policy_refusals > 0 {
+                self.merge_policy_refusals -= 1;
+                return Err(PhaseFailure::of(
+                    FailureKind::MergeHold,
+                    "gh pr merge failed for #2014: X Pull request joemooney/aida#2014 is not mergeable:\n\
+                     the base branch policy prohibits the merge.",
+                ));
+            }
             // TASK-975: simulate a merge conflict a clean rebase resolves.
             if self.merge_conflicts > 0 {
                 self.merge_conflicts -= 1;
@@ -7268,6 +7305,14 @@ mod tests {
             "`gh pr merge 46` failed: base branch policy prohibits the merge"
         ));
         assert!(!is_merge_conflict_failure("mock failure at Merge"));
+
+        // BUG-1447: verbatim PR-2014 refusal. The generic prefix overlaps the
+        // conflict vocabulary; the policy detail must win.
+        let held =
+            "gh pr merge failed for #2014: X Pull request joemooney/aida#2014 is not mergeable:\n\
+                    the base branch policy prohibits the merge.";
+        assert!(is_branch_policy_merge_refusal(held));
+        assert!(!is_merge_conflict_failure(held));
     }
 
     /// TASK-975: the conflict-rebase gate — armed only by a non-zero budget,
@@ -7449,6 +7494,34 @@ mod tests {
         );
         assert_eq!(result.failed_phase, Some(Phase::Merge));
         assert_eq!(driver.conflict_rebase_calls, 0);
+    }
+
+    /// BUG-1447: a forge-enforced supervised hold is stable policy, not a
+    /// conflict or transient tool exit. It gets one merge call, zero rebase
+    /// calls, and zero retry records even when both budgets are armed.
+    // trace:BUG-1447 | ai:codex
+    #[test]
+    fn orchestrate_branch_policy_refusal_never_rebases_or_retries() {
+        let mut driver = MockPhaseDriver::merge_policy_refusal(2);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1447",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Merge));
+        assert_eq!(driver.conflict_rebase_calls, 0, "held PR must never rebase");
+        assert!(
+            driver.transient_retry_events.is_empty(),
+            "policy refusal must not spend transient retries"
+        );
+        assert_eq!(
+            driver.calls.iter().filter(|p| **p == Phase::Merge).count(),
+            1,
+            "policy refusal is attempted once"
+        );
     }
 
     /// BUG-657: driving an already-COMPLETED spec is a clean NO-OP — the

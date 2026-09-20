@@ -837,7 +837,7 @@ fn drain_merge_lease_failure(
 /// from a forge CLI failure. The typed error is emitted at the single
 /// `Forge::merge_change` chokepoint and its display includes both the persisted
 /// hold reason and exact clear command, so carry that evidence into the hint.
-// trace:BUG-1316 trace:BUG-1435 | ai:codex
+// trace:BUG-1316 trace:BUG-1435 trace:BUG-1447 | ai:codex
 fn classify_drain_merge_failure(
     forge: crate::forge::ForgeKind,
     pr: u32,
@@ -859,6 +859,22 @@ fn classify_drain_merge_failure(
         );
         return auto_complete::PhaseFailure::of(auto_complete::FailureKind::MergeHold, &reason)
             .with_hint_override(format!("A human/advisor merge-hold is open: {detail}"));
+    }
+    // GitHub's forge-enforced branch protection is the remote half of the
+    // same supervised hold. It arrives as CLI text rather than our local typed
+    // `MergeHoldRefusal`, so promote its distinctive policy detail to the same
+    // non-transient kind before generic tool-exit handling.
+    if forge == crate::forge::ForgeKind::GitHub
+        && auto_complete::is_branch_policy_merge_refusal(&detail)
+    {
+        return auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::MergeHold,
+            format!("gh merge refused for PR-{pr}: {detail}"),
+        )
+        .with_hint_override(format!(
+            "A human/advisor merge-hold is enforcing branch policy on PR-{pr}. \
+             Clear it after review with `aida merge-hold clear {pr}`."
+        ));
     }
     let merge_tool = match forge.cli_name() {
         "" => "pure-git",
@@ -908,6 +924,27 @@ mod bug_1316_merge_hold_failure_tests {
         assert!(auto_complete::is_transient_retry_cause(
             failure.kind.cause_slug()
         ));
+    }
+
+    /// BUG-1447: the exact forge refusal observed on PR-2014 is the remote
+    /// supervised-hold shape, despite sharing "not mergeable" with conflicts.
+    // trace:BUG-1447 | ai:codex
+    #[test]
+    fn pr_2014_branch_policy_refusal_is_typed_with_clear_hint() {
+        let observed = anyhow::anyhow!(
+            "gh pr merge failed for #2014: X Pull request joemooney/aida#2014 is not mergeable:\n\
+             the base branch policy prohibits the merge."
+        );
+        let failure =
+            classify_drain_merge_failure(crate::forge::ForgeKind::GitHub, 2014, &observed);
+        assert_eq!(failure.kind, auto_complete::FailureKind::MergeHold);
+        assert!(!auto_complete::is_transient_retry_cause(
+            failure.kind.cause_slug()
+        ));
+        assert!(!auto_complete::is_merge_conflict_failure(&failure.reason));
+        let hint = failure.hint_override.expect("hold-specific recovery hint");
+        assert!(hint.contains("merge-hold"), "{hint}");
+        assert!(hint.contains("aida merge-hold clear 2014"), "{hint}");
     }
 }
 

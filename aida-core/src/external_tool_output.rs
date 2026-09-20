@@ -27,6 +27,11 @@ pub const GH_MERGE_CONFLICT: &[&str] = &[
     "merge commit cannot be cleanly created",
     "conflicts must be resolved",
 ];
+/// GitHub CLI 2.81.0: a branch-protection policy deliberately refused merge.
+/// This must be checked before [`GH_MERGE_CONFLICT`] because the surrounding
+/// CLI sentence also says "not mergeable".
+// trace:BUG-1447 | ai:codex
+pub const GH_BRANCH_POLICY_MERGE_REFUSAL: &[&str] = &["the base branch policy prohibits the merge"];
 /// GitHub CLI 2.81.0: no pull request exists for the selected branch.
 pub const GH_NO_PULL_REQUEST: &[&str] = &["no pull requests found", "no prs found"];
 /// GitHub CLI 2.81.0 plus its Go net/TLS stack: transient API errors.
