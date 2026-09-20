@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T21:22:32.534380767Z
-modified_at: 2026-09-20T21:23:01.742533491Z
+modified_at: 2026-09-20T21:29:39.211372271Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -54,4 +54,49 @@ relationships:
   target_id: 01a0bdd2-fec7-7d13-aa03-21a66f089037
   created_at: 2026-09-20T21:23:01.742528312Z
   created_by: joe
+comments:
+- id: 01a0c0b9-868b-7773-aaa9-dfda92032b34
+  author: joe
+  content: |-
+    [aida:advisor] CRITERION 5 SETTLED, and neither of the two accounts we had was right. I checked the call sites myself.
+
+    WHAT IS ACTUALLY TRUE. The worktree-less review lease exists (BUG-511) AND has a production caller:
+
+        aida-cli-lib/src/lib.rs:75583
+          let _review_lease = acquire_review_lease_with_mode(
+              project_root, &spec_id, &surface_branch, review_lease_mode)?;
+
+    So it is not dead code and it is not an unwired slice. `aida review <SPEC>` takes the lease today, with RAII release via Drop, a prompt-vs-refuse conflict mode, and the spec appearing in flight to the footer, `aida why` and burndown-explain.
+
+    WHAT IS MISSING IS NARROWER AND SHARPER. Two review paths do not take it:
+
+      1. `aida review record` — the verb a reviewer uses to record a verdict, and the one used
+         for both of today's post-merge-verdict incidents. It writes the verdict; it takes no lease.
+      2. Reading a diff by hand with no aida verb at all. Nothing can be wired here; this needs the
+         reviewer to take a lease deliberately, which is a UX question rather than a plumbing one.
+
+    AND ONE EXCLUSION IS DELIBERATE — do not "fix" it. The comment above the gate says so outright:
+
+        // This gate is scoped to THIS verb; the orchestrator's drain review phase
+        // (`run_reviewer`) never reaches here — it launches its headless reviewer via
+        // `aida queue work PR-N` on purpose — so drains are untouched.
+
+    `aida review` also hard-requires an interactive terminal (`if !no_agent && !interactive { bail }`). So wiring the lease into the drain's reviewer would overturn a documented decision, not close a gap. If it should change, that is its own spec with its own argument.
+
+    REVISED SCOPE, replacing criterion 5:
+    5a. `aida review record` takes the review lease for the duration of the verdict write, or states
+        why it should not. It is the verb reviewers actually use and where both incidents occurred.
+    5b. The merge surfaces — `aida awaiting`, `aida pr ship`, the drain's merge phase — consult the
+        review lease. The lease already exists and already refuses a second reviewer; nothing
+        currently asks it before merging. This is the half that makes the existing mechanism useful.
+    5c. The drain's exclusion stays. Do not wire `run_reviewer`; it is deliberate and documented.
+    5d. For by-hand review with no verb, say whether a deliberate `aida review --claim`-style
+        entry point is in scope or deferred. Do not silently leave it as the uncovered case.
+
+    This is smaller than "extend leases to cover reviewers" and much smaller than a new mechanism. Most of it is 5b — asking a lock that already exists.
+
+    Both seats had this wrong in opposite directions: I said reviewers hold nothing, the reviewer seat said nothing calls it. The truth is one verb calls it, the verb reviewers use does not, and the drain is excluded on purpose.
+  created_at: 2026-09-20T21:29:39.211372271Z
+  modified_at: 2026-09-20T21:29:39.211372271Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
