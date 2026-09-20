@@ -37,8 +37,41 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-20T18:03:24.672432390Z
+modified_at: 2026-09-20T18:03:25.620608327Z
 req_type: Bug
 tags:
 - review verdicts orchestrator substrate-as-bouncer severity:high from:review-pr-1976
+comments:
+- id: 01a0bffc-b834-7032-bfd9-fd3d9a54c617
+  author: joe
+  content: |-
+    [aida:advisor] Approved HIGH, mode drain. I verified the drain half independently, and it is the most consequential finding of this session — it should not be read as the enforcement half of a provenance-cosmetics bug. It is a merge-safety hole with a cosmetic bug attached.
+
+    VERIFIED AT drain_cmd.rs:
+
+        let reviewed = pr.map(|n| {
+            let path = project_root.join(".aida").join("review-verdicts").join(format!("PR-{n}.json"));
+            matches!(read_verdict_file(&path),
+                     Ok(auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Approved)))
+        }).unwrap_or(false);
+
+    The gate reads the verdict, matches on Approved, and never touches reviewed_sha. There is no comparison to the current head anywhere in the expression. An Approved verdict authorizes a merge at ANY later head.
+
+    WHY THE TWO HALVES COMPOUND RATHER THAN STACK. The writer does not stamp provenance on 452 of 481 verdict files, so for 94% of them the consumer could not compare even if it tried. Fixing the writer alone leaves the gate ignoring the field it now receives; fixing the gate alone makes it refuse almost everything, because the field is null. They have to land together, and the spec should say so rather than leaving an implementer to discover it by shipping half.
+
+    AND IT INTERSECTS WITH BUG-1460. That bug establishes the drain can enter the reviewer phase against a head that did not exist when the CI phase began — verified on TASK-1272, where the reviewer phase started five seconds before its subject commit was authored. So the sequence "verdict rendered against head A, implementer pushes head B, drain merges B on A's approval" is not hypothetical: we have already observed the first half of it happening for unrelated reasons. I have linked them.
+
+    Given that EPIC-62's premise is the drain not merging unreviewed code, this is the gap that most directly contradicts it.
+
+    ACCEPTANCE — additions to whatever the filing carries:
+    1. Writer and gate land together. A test must fail if either ships alone.
+    2. The gate refuses on a MISSING reviewed_sha as well as a mismatched one. Absent provenance is not evidence of review; treating null as "fine" preserves today's behaviour under a new name.
+    3. Decide explicitly what a mismatch does — refuse, or re-request review — and emit an event saying which. A silent refusal is the failure mode BUG-1460 is about.
+    4. No backfill of the 452, agreeing with the filing. But state what happens to them: if the gate refuses on null, every existing verdict stops authorizing, and that is a behaviour change on a live drain which someone must be ready for. Say whether that is intended.
+    5. Replace the hand-written fixtures in bug_775_commits_ahead_tests.rs rather than adding assertions to them. The filing is right that they never exercise the writer, and that is the stronger claim: the tests cannot reach the path, so coverage is part of the fix, not just code.
+
+    ON THE FILING'S METHOD. Naming that the fixtures structurally cannot reach the path is exactly right and is a different instruction to an implementer than "the writer is broken". Keep doing that.
+  created_at: 2026-09-20T18:03:25.620608327Z
+  modified_at: 2026-09-20T18:03:25.620608327Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
