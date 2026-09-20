@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:59.058325197Z
-modified_at: 2026-09-20T05:02:35.234995761Z
+modified_at: 2026-09-20T07:08:19.926794431Z
 req_type: Bug
 tags:
 - diagnostics
@@ -152,6 +152,30 @@ comments:
     STATUS SET MANUALLY, and the reason is worth recording. The merge commit carries the (BUG-1287) trailer, but this spec was Approved rather than Done — the work was implemented in a lane and merged without passing through `queue done`, and the auto-bump only promotes Done to Completed. So a spec can have its work merged, with a correct trailer, and still sit Approved indefinitely with nothing reporting it. That is the same stranding shape TASK-1296 fixed for Review-PR specs, on a different path. Not filing it tonight; noting it here because it will recur for every lane-implemented spec that never enters the queue's done state.
   created_at: 2026-09-20T05:02:35.234995761Z
   modified_at: 2026-09-20T05:02:35.234995761Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bda4-f656-7111-b5ba-6e5d501d9766
+  author: joe
+  content: |-
+    [advisor:correction] THE FIX I VERIFIED AND MERGED HAS ALREADY STOPPED WORKING, and my verification is why I did not see it coming. Filed as BUG-1424.
+
+    Three hours after this merged, `aida session reap --dry-run` clears nothing. The same five branches this spec was written to clear — BUG-1163, BUG-1167, BUG-1268, STORY-1129, TASK-1251 — are all back to "its PR is merged (squash-merged), but N unique unmerged commit(s) — keep, operator decision".
+
+    Same branch, same command, three hours apart:
+
+      ~21:00  git diff --quiet origin/main bug-1163-work -- <files>  -> exit 0  (Removable)
+      ~00:04  git diff --quiet origin/main bug-1163-work -- <files>  -> exit 1  (Keep)
+
+    Nothing about the branch changed. Thirteen merges landed on main between those two runs, some touching files that branch had also touched.
+
+    THE MECHANISM ANSWERS THE WRONG QUESTION. Comparing the branch tip against main's CURRENT tree asks "does this match main right now", which coincides with "did this land" only until someone else edits those files. So the fix is self-limiting in exactly the situation it exists for: a repo merging steadily, where worktrees accumulate because nobody reaps promptly. The failure direction is safe — it keeps rather than deletes — but it is inert.
+
+    PATCH-ID IS ROBUST AND I CONFIRMED IT ON THE SAME BRANCH. Its commit's patch-id still appears among main's patch-ids since the merge-base, because a squash rewrites SHAs while preserving the diff. That comparison does not care how far main has moved.
+
+    WHAT I WANT ON THE RECORD ABOUT MY OWN REVIEW. I verified this empirically before merging, ran the exact comparison the code runs, checked both directions, and reported that it protects the branch with real work and clears the artifacts. All of that was true when I ran it. None of it was true three hours later, and nothing in my method would have revealed that, because I tested the mechanism at a single moment against a repository that was about to change underneath it.
+
+    The classification audit on this spec used PATCH-ID to establish which branches were artifacts. The implementation shipped tree comparison. The audit method was the more robust of the two and the gap between them was not noticed by the implementer, the product seat, or me. That is the more useful lesson than the bug: when the investigation and the implementation use different methods to answer the same question, the difference is worth a sentence in the review, and I did not ask for one.
+  created_at: 2026-09-20T07:08:19.926794431Z
+  modified_at: 2026-09-20T07:08:19.926794431Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bd31-0cd0-78e0-8e1a-d2e120a737d9
