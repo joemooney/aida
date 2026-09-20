@@ -1,0 +1,37 @@
+id: 01a0bd7a-3a2e-76f3-8d1d-c1b092a6a732
+spec_id: BUG-1420
+agreed_id: BUG-1420
+title: The implementer preflight runs CI's guards under a more permissive shell than CI does, so a guard can pass locally and fail in CI
+description: |
+  The implementer preflight runs CI's guards under plain `bash -c`, while GitHub Actions runs them under `bash --noprofile --norc -e -o pipefail`. So a guard whose script has a failing intermediate command followed by a succeeding one PASSES locally and FAILS in CI — which is the precise failure the preflight exists to prevent, reproduced by the preflight itself.
+
+  WHY THIS IS ITS OWN SPEC. It was found as one of four findings on TASK-1289, but it shares only a file with the others. That spec's central problem is a design one — the guard runs after publication, so it cannot gate publication — and this is a self-contained change to how one subprocess is spawned. Carrying it as a blocking finding on a spec that needs a keyboard design decision means it waits on something unrelated, and a round that fixes it still shelves for the others.
+
+  THE MISMATCH IN FULL. Without `-e`, a script continues past a failing command and exits with the status of its LAST command. Without `-o pipefail`, a pipeline reports only its final stage, so `cargo check | tee log` succeeds when cargo fails. GitHub sets both by default for `run:` steps. The preflight sets neither, so the two environments disagree exactly on multi-command and piped guards — which is most real guards.
+
+  The direction of the disagreement is the bad one: the local check is more permissive than CI. A guard that fails in CI and passes in preflight is worse than no preflight, because it converts "CI will catch this" into "preflight said it was fine."
+
+  ACCEPTANCE
+  1. Guards are spawned with the same shell flags GitHub uses for a `run:` step — `--noprofile --norc -e -o pipefail` — so a failing intermediate command or pipeline stage fails the guard.
+  2. A test proves the difference rather than asserting the flags are present: a guard script whose first command fails and whose last succeeds must FAIL under the preflight. Asserting the argv would pass even if the shell ignored the flags.
+  3. A pipeline test covers `pipefail` specifically: a script of the form `false | true` must fail.
+  4. The flags are derived from, or documented against, the CI workflow's own shell configuration, so the two cannot drift silently apart. If GitHub's defaults change, something should say so rather than the preflight quietly becoming permissive again.
+  5. Any existing guard whose behaviour changes under the stricter shell is identified before the change lands, and either fixed or explicitly recorded — a guard that starts failing because it was always broken is a finding, not a regression.
+
+  NOT IN SCOPE: TASK-1289's publication-boundary problem, and the fail-open where a skipped guard permits publication. Both are defects in the same file and neither is this.
+
+  Found as finding 3 of four on TASK-1289's round-4 review; split out so it can land independently.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T06:21:39.246217841Z
+modified_at: 2026-09-20T06:21:39.246217841Z
+req_type: Bug
+tags:
+- ci
+- drain-safe
+- from:session-0919
+- orchestrator
+- parent:EPIC-62
+- preflight
