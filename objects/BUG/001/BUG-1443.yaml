@@ -1,0 +1,49 @@
+id: 01a0bef3-82ca-7f50-8722-5f4cb9fb75da
+spec_id: BUG-1443
+agreed_id: BUG-1443
+title: 'Cross-platform nightly red three nights on one Windows test: a new bash fake-gh harness regressed the class BUG-1127 fixed, and the portability ratchet has no rule for it'
+description: |
+  The cross-platform nightly has been red three consecutive nights on one Windows-only test failure, which blocks tagging any release, and the cause is a regression of a class BUG-1127 already fixed and named.
+
+  THE FAILURE. Runs 35502040911, 35505417293 and 35506914381 all fail the same single test and nothing else — 5092 passed, 1 failed:
+
+    auto_bump_done_tests::auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup
+    aida-cli-lib\src\tests\auto_bump_done_tests.rs:2080
+    "PR closed without merging should reject the review spec, was Approved"
+
+  macOS is green. The product code is fine on Windows; the fixture is not.
+
+  THE CAUSE. `write_fake_gh_for_pr_states` (auto_bump_done_tests.rs:1986) writes a bash script to `root/gh` with a `#!/usr/bin/env bash` shebang and sets the executable bit under `#[cfg(unix)]` only. Windows has no shebang handling and the file carries no `.cmd`/`.bat`/`.exe` extension, so `AIDA_TEST_GH_BINARY` points at something Windows cannot execute. The forge lookup fails, no spec is resolved, and STORY-1234 stays Approved — which is exactly the assertion that fires. The failure message is honest; it just describes a harness that never ran.
+
+  WHY THIS IS A REGRESSION AND NOT A DISCOVERY. BUG-1127, completed 2026-09-13, is titled "Cross-platform nightly red on main: three Windows-only test failures (gitdir drive-prefix, mtime-only activity signature, bash fake-gh harness)". The bash fake-gh harness is one of the three causes it fixed. Six days later TASK-1296 introduced a new bash fake-gh harness and the nightly went red on the same class again.
+
+  The convention to follow already exists and is followed everywhere else. Four sibling test files write shebang fake binaries — bug_779_wrapper_eval_tests, task_1171_eval_channel_tests, drain_reliability_wiring_tests, real_phase_driver_wiring_tests — and every one carries a cfg gate. auto_bump_done_tests.rs is the only one that does not. So this is not a missing convention; it is an unenforced one.
+
+  WHY NOTHING CAUGHT IT. scripts/check-portability.sh is the required PR-time ratchet that exists to stop Linux-only test assumptions reaching the nightly. Its rules (scripts/portability-rules.json) are five: proc literal, tmp literal, PATH separator join, PATH separator split, and `Command::new("sh"|"bash"|"/bin/sh")`. None matches a shebang script written to disk as a fake executable. The ratchet was working as written; the rule for this class was never added, even though this is the class that took the nightly down in September and has now done it twice.
+
+  Three nights is also the second time this has gone unnoticed for days — TASK-687 was filed for exactly that after a three-day red blocked v0.12.0.
+
+  ACCEPTANCE
+  1. The Windows nightly passes `auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup`, either by making the fake binary executable on Windows or by gating the test the way its four siblings are gated. If gated rather than fixed, the gate carries a comment saying what is untested on Windows as a result.
+  2. `scripts/portability-rules.json` gains a rule for this class: a shebang string literal written to a path used as an executable, or the equivalent shape. Adding the rule must flag the current site before it is fixed — a rule that only passes after the fix has not been shown to detect anything.
+  3. Adding the rule does not turn the existing tree red. Pre-existing sites are allowlisted with the growth check that BUG-1301 established, so the ratchet blocks new instances rather than demanding a sweep.
+  4. A note records why the earlier fix did not hold. BUG-1127 fixed the instances and not the class, which is why six days bought a repeat; the rule in criterion 2 is what closes it.
+  5. State whether the four gated siblings are gated for this same reason or a different one. If they are skipping real Windows coverage rather than working around a harness limit, say so — that is a separate gap and should be filed, not folded in here.
+
+  Not autonomous-safe to verify: the fix can be written headlessly, but the proof is a green Windows nightly, which needs a cross-platform workflow dispatch rather than PR CI. Verification is a `gh workflow run cross-platform.yml` and reading the result.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T13:13:44.906814813Z
+modified_at: 2026-09-20T13:13:44.906814813Z
+req_type: Bug
+tags:
+- batch:night-0920
+- ci
+- cross-platform
+- drain-safe
+- from:session-0920
+- regression
+- release-blocker
+- windows
