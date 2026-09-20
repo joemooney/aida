@@ -23,12 +23,12 @@ description: |
   - The reviewer prompt for that PR contains the untraced-criteria list.
   - A spec whose criteria are all traced produces no output (quiet when clean).
   - Reuses aida criteria's existing tracer; no second implementation.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:11.970306394Z
-modified_at: 2026-09-20T06:16:09.768778630Z
+modified_at: 2026-09-20T06:18:47.724657160Z
 req_type: Task
 tags:
 - acceptance
@@ -71,3 +71,7 @@ comments:
   modified_at: 2026-09-20T06:16:09.768778630Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-20T06:18:47.724657160Z
+  implemented_by: joe
