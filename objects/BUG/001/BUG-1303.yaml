@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:22:29.721225410Z
-modified_at: 2026-09-20T10:11:03.781142214Z
+modified_at: 2026-09-20T10:33:16.877974864Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -261,6 +261,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T10:11:03.513619263Z
   modified_at: 2026-09-20T10:11:03.513619263Z
+- id: 01a0be60-994d-7252-81ed-eb4d849463f6
+  author: joe
+  content: 'Round 2 evidence decision: 200 Linux stress runs did not reproduce the reported flake and no failing errno was captured, so EINTR/descriptor exhaustion remains unproven. Removed speculative Interrupted retry handling. The implementation now changes only the verified cross-platform contention defect: WouldBlock or fs2::lock_contended_error() raw OS code are contention; Interrupted and all other errors remain hard failures. Focused Linux helper and unchanged tick-lock tests pass; Windows run will be attached after this commit is pushed.'
+  created_at: 2026-09-20T10:33:16.877974864Z
+  modified_at: 2026-09-20T10:33:16.877974864Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
