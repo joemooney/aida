@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:25:25.984047465Z
-modified_at: 2026-09-20T19:26:41.581080255Z
+modified_at: 2026-09-20T19:46:18.441560977Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -131,4 +131,51 @@ comments:
   created_at: 2026-09-20T19:26:41.581080255Z
   modified_at: 2026-09-20T19:26:41.581080255Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c05a-e8c9-7442-9891-f940296b96cd
+  author: joe
+  content: |-
+    [aida:reviewer] A FOURTH Windows-only failure, now on main — and I cannot rule out that I caused it. Escalating rather than concluding.
+
+    WHAT FAILED. PR #2024 (BUG-1432), Windows job 106124356720 at 18:13Z:
+      templates::tests::project_discipline_pack_matches_master  (aida-core, 954 passed / 1 failed)
+      "project copy .aida/discipline/ has guide(s) whose content differs from the embedded master"
+      followed by ALL 22 non-allowlisted guides.
+    Build (ubuntu-latest) PASSED on the same commit. So it is platform-specific, not stale content.
+
+    WHY IT MATTERS FOR THIS SPEC. It is a fourth distinct Windows defect, it is on main (not a PR-only artifact — #2024's base is current main and its own diff touches only aida-cli-lib/src/lib.rs and one test file), and it means fixing the three instances above will NOT produce the green nightly this spec requires. The close condition still holds; the work is larger than filed.
+
+    THE TIMING IMPLICATES MY MERGE AND I AM SAYING SO RATHER THAN CLEARING MYSELF.
+      11:06 local  nightly run 35506914381 on main: aida-core 952 passed / 0 failed,
+                   project_discipline_pack_matches_master ... ok  on Windows.
+      11:09 local  I merged PR #2023 (53e3176e6e) — the only discipline-pack change in the window.
+      11:13 local  PR #2024's Windows run, base includes my merge: same test FAILS, 22 files.
+    #1979 (10:51) and STORY-1351 (10:54) both touched the pack and were already inside the passing nightly.
+
+    EVIDENCE AGAINST IT BEING MINE, which is why I am not simply owning it:
+      - My change touched TWO files. The failure reports TWENTY-TWO. No 2-file content change produces that.
+      - Verified on current origin/main from Linux: of 22 pairs, exactly 3 differ in git —
+        README.md, autonomous-burndown.md, substrate-as-bouncer.md — and those are the allowlisted
+        ones, correctly absent from the Windows failure list. session-discipline.md, the file I
+        merged, is byte-identical between master and project copy on main.
+      - The signature (every non-allowlisted file mismatching at once) is a line-ending or
+        path-separator mismatch between the on-disk project copy and the build.rs-embedded master,
+        not a content drift.
+
+    I CANNOT SETTLE IT FROM LINUX and will not assert either way. The decisive test is a
+    cross-platform run pinned to a0ec8fb22f (pre-merge) versus 53e3176e6e (my merge). If pre-merge
+    is red, my merge is exonerated and the 11:06 nightly pass needs its own explanation — most
+    likely a cached target dir where build.rs had not re-run, which would mean this defect was
+    latent and my merge only triggered the re-embed that exposed it. That hypothesis is testable
+    and I have not tested it.
+
+    IF IT IS MINE, the remedy is not a revert: the content is correct on Linux and the entry is
+    sound. It would mean the parity test compares bytes across a boundary where one side is
+    checkout-normalized and the other is compile-time-embedded, which is BUG-1475 instance 2's CRLF
+    class at a different site — and that is the ratchet rule this spec already asks for.
+
+    NOTE FOR WHOEVER TAKES THIS: the 09-20 nightly used --no-fail-fast, so aida-core did run and
+    did pass. This is not a masked failure; it is a state change between 11:06 and 11:13.
+  created_at: 2026-09-20T19:46:18.441560977Z
+  modified_at: 2026-09-20T19:46:18.441560977Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: drain
