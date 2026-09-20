@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-20T05:29:11.315440761Z
+modified_at: 2026-09-20T05:29:45.242587316Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -126,6 +126,34 @@ comments:
   content: 'Implemented per advisor decision in docs/plans/2026-09-19-adr-47-orphaned-review-ownership.md (ADR-47): successful shelves hand open PRs to the reviewer queue with phase/stop context; full scheduler ticks provide a bounded clean+green+unverdicted+unheld+unowned PR sweep using TASK-1284 PID/start identity; the single-drain lock is unchanged. Regression fixture names BUG-1268 / PR 1970 / STORY-1354.'
   created_at: 2026-09-20T05:12:19.655292797Z
   modified_at: 2026-09-20T05:12:19.655292797Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bd4a-b61a-76b2-b0e6-a90737251ff7
+  author: joe
+  content: |-
+    [rework round 2] PR #2001 — CHANGES REQUESTED, three findings. All binding. Numbered as requirements, each with its own acceptance, because advisory framing in a brief gets skipped — that cost STORY-1350 an extra round tonight.
+
+    REQUIREMENT 1 — TEST THROUGH THE REAL PATH, NOT A MOCK HOOK.
+    `reviewer_phase_shelve_hands_open_pr_to_reviewer_queue` asserts only that a mock hook was invoked. It never exercises RealPhaseDriver's queue handoff, never creates or uses STORY-1354, and never asserts the review spec actually lands where a reviewer would find it.
+
+    That proves the hook is callable. It does not prove the handoff happens. The acceptance is about a PR gaining an owner; a mock cannot fail in the way production fails. Drive the real shelve path and assert the review entry exists on the queue a reviewer reads — the same distinction BUG-1277's acceptance turned on, where a zero exit coexisted with an invisible entry.
+
+    Worth knowing: this is the single largest reviewer-round category across the last two days — acceptance names a boundary, implementation tests below it, at least seven prior instances. TASK-1290 is in flight right now to catch exactly this automatically. Do not make it the eighth.
+
+    REQUIREMENT 2 — A HANDOFF THAT CANNOT FAIL SILENTLY.
+    `handoff_open_pr_after_shelve` and the sweep both call `aida_subcmd_queue_add_for_reviewer`, which DISCARDS queue-add failures. So `try_auto_queue_pr_review` can report "Filed" when nothing was filed, and `sweep_orphaned_reviews` can report success for a PR it did not actually hand off.
+
+    This spec exists because work reached a state where nobody was responsible for it. A handoff that reports success without succeeding recreates that exact condition and adds a false record on top — strictly worse than not trying, because the next reader believes it is owned. Propagate the failure: report it, and do not claim Filed unless the entry is there. A test must cover the add failing.
+
+    REQUIREMENT 3 — EVERY TERMINAL VERDICT COUNTS, NOT ONLY APPROVED.
+    `sweep_orphaned_reviews` treats only an Approved local verdict as a verdict. If `PR-N.json` holds RequestChanges or Rejected while GitHub's reviewDecision is empty, `no_verdict` is true and the PR is swept as ownerless.
+
+    That is backwards in the most damaging direction: a PR that HAS been reviewed and rejected is the one most likely to be re-queued and re-driven, wasting a full round on work a reviewer already refused. A verdict is a verdict whatever it says. Treat Approved, RequestChanges and Rejected alike as "this PR has been reviewed"; only the genuine absence of a verdict makes it ownerless. Test all three.
+
+    SCOPE REMINDER, unchanged: the advisor's decision stands — the shelve-path handoff is the PRIMARY mechanism and the periodic sweep is a BOUNDED BACKSTOP for runs that are KILLED rather than shelved, living in STORY-1218's tick. Do not build a second always-on sweeper, do not relax the single-drain-per-repo lock, and the sweep CLAIMS for review and never merges.
+
+    Push fixups to the existing branch. Do not open a new PR.
+  created_at: 2026-09-20T05:29:45.242587316Z
+  modified_at: 2026-09-20T05:29:45.242587316Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
