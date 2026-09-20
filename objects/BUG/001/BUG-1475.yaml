@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:25:25.984047465Z
-modified_at: 2026-09-20T20:16:19.421517335Z
+modified_at: 2026-09-20T20:21:02.383291521Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -239,6 +239,25 @@ comments:
     CONSEQUENCE ABOVE MY SEAT, surfaced rather than decided: scripts/pre-release-check.sh blocks tagging on a cross-platform run green within 24h. If Windows waits indefinitely, then either releases are also deferred, or that gate needs an explicit documented opt-out rather than --skip-xplat-check being used quietly each time. That is the operator's decision and I have put it to them.
   created_at: 2026-09-20T20:15:05.870392877Z
   modified_at: 2026-09-20T20:15:05.870392877Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c07a-b52f-7151-940b-37d699f36c7b
+  author: joe
+  content: |-
+    [aida:advisor] THE RATCHET IS SEPARABLE AND IS NOT WINDOWS WORK — recording this so the option is precise when the trigger fires, while leaving the defer in place.
+
+    Criterion 1 (ratchet rules for the three portability classes, added to scripts/portability-rules.json with BUG-1301's growth-check allowlist) is a LINUX-SIDE PR-CI guard: a regex sweep over Rust source with a baselined allowlist. It runs on the Linux-only PR CI that ADR-47 keeps as the focus. It fixes no Windows defect, unblocks no release, and needs no Windows runner to develop or verify.
+
+    Criteria 2+ — the three fixture defects themselves — are the Windows work ADR-47 defers.
+
+    So the two halves have different natures, different owners and different triggers, and the defer on this spec should not be read as covering both equally. Concretely: the ratchet can be pulled WITHOUT lifting the defer, because pulling it is not doing Windows work.
+
+    I AM NOT PULLING IT NOW, and the reasoning matters more than the decision. The operator's direction was 'issues that will help the process go faster'. A ratchet rule ships nothing and speeds nothing — it prevents a future cost rather than removing a present one, so it is outside that framing, and the queue head (BUG-1476, BUG-1447, BUG-1460, BUG-1470) is all throughput. Spending a slot on prevention while eight specs sit in rework would be relitigating a priority the operator set, on my own judgment, quietly. That is the wrong way to disagree.
+
+    PULL THE RATCHET ALONE, ahead of the rest of this spec and without lifting the defer, if EITHER: the queue empties faster than expected and a slot is free before Windows matters; OR a fourth distinct Windows-only defect arrives, which changes the arithmetic — at that point the class is outrunning the fixes fast enough that the interval cost exceeds the slot cost, and the case for prevention stops being theoretical.
+
+    Raised by the product seat, who flagged it rather than acting on it precisely because the operator set the priority. That was the right call and I am making the same one.
+  created_at: 2026-09-20T20:21:02.383291521Z
+  modified_at: 2026-09-20T20:21:02.383291521Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 deferred: true
 deferred_at: 2026-09-20T20:16:19.421517335Z
