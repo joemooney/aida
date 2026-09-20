@@ -1766,6 +1766,7 @@ impl Forge for GitLabForge {
         Ok(check_rows_from_glab_jobs(
             &String::from_utf8_lossy(&jobs.stdout),
             &workflow,
+            Some(id),
         ))
     }
     // trace:STORY-1166 | ai:claude
@@ -2972,7 +2973,7 @@ pub(crate) fn gh_pr_checks_json(project_root: &Path, pr: u64, extra: &[&str]) ->
     cmd.current_dir(project_root)
         .args(["pr", "checks", &pr.to_string()])
         .args(extra)
-        .args(["--json", "name,bucket,workflow"]);
+        .args(["--json", "name,bucket,workflow,link"]);
     let out = crate::process_retry::command_output_retrying_etxtbsy(&mut cmd)?;
     let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if stdout.starts_with('[') {
@@ -3001,6 +3002,7 @@ pub(crate) fn registration_from_glab_pipelines(body: &str) -> CheckRegistration 
 pub(crate) fn check_rows_from_glab_jobs(
     body: &str,
     workflow: &str,
+    pipeline_id: Option<u64>,
 ) -> Vec<crate::ci_gate::CheckRow> {
     let Ok(serde_json::Value::Array(jobs)) = serde_json::from_str::<serde_json::Value>(body.trim())
     else {
@@ -3024,6 +3026,7 @@ pub(crate) fn check_rows_from_glab_jobs(
                     .to_string(),
                 workflow: workflow.to_string(),
                 bucket: bucket.to_string(),
+                run_id: pipeline_id.map(|id| id.to_string()),
             }
         })
         .collect()
@@ -4453,7 +4456,7 @@ mod tests {
         );
         let jobs = r#"[{"name":"build","status":"success"},{"name":"merge-hold-gate","status":"failed"},
             {"name":"lint","status":"running"},{"name":"deploy","status":"manual"},{"name":"old","status":"canceled"}]"#;
-        let rows = check_rows_from_glab_jobs(jobs, "gitlab-ci");
+        let rows = check_rows_from_glab_jobs(jobs, "gitlab-ci", Some(42));
         let buckets: Vec<(&str, &str)> = rows
             .iter()
             .map(|r| (r.name.as_str(), r.bucket.as_str()))
@@ -4469,7 +4472,7 @@ mod tests {
             ]
         );
         assert!(rows.iter().all(|r| r.workflow == "gitlab-ci"));
-        assert!(check_rows_from_glab_jobs("nope", "x").is_empty());
+        assert!(check_rows_from_glab_jobs("nope", "x", None).is_empty());
     }
 
     #[test]

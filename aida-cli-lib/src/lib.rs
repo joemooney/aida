@@ -83108,6 +83108,76 @@ fn latest_run_id_for_branch(branch: &str) -> Option<String> {
     first_run_id_from_gh_json(&String::from_utf8_lossy(&out.stdout))
 }
 
+/// Build the red-CI recovery route from the exact rows that caused the gate
+/// to fail. In particular, never perform a second branch-level run lookup:
+/// another attached workflow may be newer and have colliding job names.
+// trace:BUG-1298 | ai:codex
+fn ci_red_recovery_hint(
+    forge: crate::forge::ForgeKind,
+    spec: &str,
+    branch: &str,
+    failed: &[ci_gate::CheckRow],
+) -> String {
+    let subjects = failed
+        .iter()
+        .map(|row| match row.run_id.as_deref() {
+            Some(run) => forge
+                .ci_view_cmd(run)
+                .map(|cmd| format!("{} (run {run}; `{cmd}`)", row.name))
+                .unwrap_or_else(|| format!("{} (run {run})", row.name)),
+            None => format!("{} (owning run unavailable)", row.name),
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    let fallback = match forge {
+        crate::forge::ForgeKind::GitHub => format!("`gh run list --branch {branch}`"),
+        crate::forge::ForgeKind::GitLab => "`glab ci status`".to_string(),
+        crate::forge::ForgeKind::None => "your CI dashboard".to_string(),
+    };
+    let route = if subjects.is_empty() {
+        format!("CI failed — inspect {fallback}")
+    } else {
+        format!("CI failed: {subjects}")
+    };
+    format!(
+        "{route}. Push fixups to the same branch: `aida queue work {spec} --branch {branch} --steal`"
+    )
+}
+
+#[cfg(test)]
+mod bug_1298_tests {
+    use super::*;
+
+    #[test]
+    fn ci_red_hint_uses_failing_required_checks_own_run_not_newer_colliding_workflow() {
+        let rows = ci_gate::parse_check_rows(
+            r#"[
+                {"name":"Build (ubuntu-latest)","workflow":"CI","bucket":"fail","link":"https://github.com/acme/repo/actions/runs/35471997271/job/1"},
+                {"name":"Build (windows-latest)","workflow":"Cross-platform (nightly)","bucket":"pending","link":"https://github.com/acme/repo/actions/runs/35471997274/job/2"}
+            ]"#,
+        )
+        .unwrap();
+        let refined = ci_gate::classify_red(
+            &rows,
+            &["Build (ubuntu-latest)".to_string()],
+            &ci_gate::CiGateConfig::default(),
+            false,
+            false,
+        );
+        let hint = ci_red_recovery_hint(
+            crate::forge::ForgeKind::GitHub,
+            "BUG-1231",
+            "bug-1231-work",
+            &refined.real,
+        );
+
+        assert!(hint.contains("Build (ubuntu-latest)"), "{hint}");
+        assert!(hint.contains("gh run view 35471997271"), "{hint}");
+        assert!(!hint.contains("35471997274"), "{hint}");
+        assert!(!hint.contains("Build (windows-latest)"), "{hint}");
+    }
+}
+
 /// Read + parse a `.aida/review-verdicts/PR-N.json` verdict file written by
 /// the `/aida-review` skill.
 ///
@@ -87662,7 +87732,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                             ));
                         }
                         Ok(r) => {
-                            self.ci_run_id = latest_run_id_for_branch(&branch);
+                            let failed_names = r
+                                .real
+                                .iter()
+                                .map(|row| row.name.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            self.ci_run_id = r.real.first().and_then(|row| row.run_id.clone());
+                            let hint = ci_red_recovery_hint(
+                                self.lifecycle_forge,
+                                &self.spec,
+                                &branch,
+                                &r.real,
+                            );
                             return Err(auto_complete::PhaseFailure::of(
                                 auto_complete::FailureKind::CiRed,
                                 format!(
@@ -87671,9 +87753,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                     // failed check. A ci-red shelf must name
                                     // only the genuine required failures.
                                     // trace:BUG-1265 | ai:codex
-                                    r.real.join(", ")
+                                    failed_names
                                 ),
-                            ));
+                            )
+                            .with_hint_override(hint));
                         }
                         Err(error) if hold_present || hold_label_present => {
                             self.ci_run_id = latest_run_id_for_branch(&branch);
