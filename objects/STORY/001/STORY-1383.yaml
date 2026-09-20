@@ -1,0 +1,26 @@
+id: 01a0be95-7700-71c1-9a3f-9a6c646caaab
+spec_id: STORY-1383
+agreed_id: STORY-1383
+title: 'Review PR-2015: [AI:codex] fix(reap): make landed-content proof durable (BUG-1424)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0be91`) for branch `bug-1424-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2015>
+  - Branch: `bug-1424-work` → `main`
+
+  ## Covers
+
+  - BUG-1424
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2015` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T11:31:01.504880225Z
+modified_at: 2026-09-20T11:31:01.504880225Z
+req_type: Story
