@@ -3,7 +3,7 @@ spec_id: TASK-1272
 agreed_id: TASK-1272
 title: 'aida drain resume <SPEC>: re-drive parked work from the phase that failed, reusing an already-green pipeline'
 description: 'Observed 2026-09-18 (TASK-1254 live validation): a throwaway spec needed seven headless drain runs to get through the lifecycle on the GitLab mirror. Every re-run of aida queue work SPEC --auto-complete replayed phase 1 with the error ''SPEC is not pickable for fresh work: Done — awaiting merge; route via aida queue work --from-pr'', then recovered (''continuing from the CI gate on the PR''s branch''), then waited a full cold CI cycle even when the MR''s newest pipeline was already green, then ran the reviewer. The old --resume-drain (BUG-478 lineage) cannot replay phases 1-2 because they are lease-coupled. Proposal: one verb, aida drain resume SPEC (or aida queue work SPEC --resume), that reads the last SpecShelved event, starts at THAT phase, skips phase 1 silently when the spec is Done with an open PR, and treats an existing terminal-green pipeline on the PR head as the CI verdict instead of re-waiting. Acceptance: a spec shelved at reviewer with a green head pipeline resumes at the reviewer in seconds; a spec shelved ci-red resumes at the CI wait after a new push; the ''not pickable'' error no longer prints on a resume; unit tests on the phase-selection logic.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
