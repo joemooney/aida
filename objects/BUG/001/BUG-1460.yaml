@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:35:48.162497532Z
-modified_at: 2026-09-20T18:25:24.295667260Z
+modified_at: 2026-09-20T19:26:49.698338754Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -135,4 +135,42 @@ comments:
   created_at: 2026-09-20T18:25:24.295667260Z
   modified_at: 2026-09-20T18:25:24.295667260Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c049-1362-7a90-b15c-503b2cf8e5b1
+  author: joe
+  content: |-
+    COUNTER-EVIDENCE that narrows this spec. I filed it at High on the strength of one run; a second run today behaves correctly, and the difference between them is not what the title claims.
+
+    BUG-1441 / PR #2026, a FIRST-PASS spec driven today:
+
+        19:04:32  PhaseEntered implementer
+        19:08:28  PhaseEntered ci
+        19:09:00  CiTerminal green=false          (premature — see BUG-1455)
+        19:20:19  Build (ubuntu-latest) SUCCESS
+        19:21:03  PhaseEntered reviewer           <-- 44s AFTER terminal CI
+        19:25:49  SpecShelved verdict:request-changes
+
+    Here the drain waited twelve minutes past its own premature `green=false`, let the required build finish, and entered the reviewer only once CI was genuinely terminal. That is correct behaviour and it is the opposite of what this spec describes.
+
+    COMPARE THE RUN THIS SPEC WAS FILED ON, TASK-1272 / PR #1981:
+
+        17:10:46  PhaseEntered ci
+        17:20:17  PhaseEntered reviewer     <-- no CiTerminal in the run at all
+        17:20:22  commit f4e2cb3c67 committed   <-- the reviewer phase began 5s BEFORE its subject existed
+        17:31:23  Build completes, SUCCESS
+        17:27:50  verdict recorded against f4e2cb3c6
+
+    So both are real and they are different. On a first-pass spec the CI phase waits for terminal CI. On TASK-1272 it did not, and the distinguishing feature is that the implementer pushed DURING the CI phase — the phase was watching a head that was superseded underneath it and left without ever recording a terminal result for the new one.
+
+    WHAT THIS MEANS FOR THIS SPEC:
+
+    - The title overstates it. "The drain enters the reviewer phase with no terminal CI result" is not the general behaviour; it is what happens when the head moves mid-phase.
+    - The real defect is narrower and more precise: the CI phase does not re-probe when the implementer pushes during it, so it can conclude — or fail to conclude — against a head that no longer exists.
+    - The eight verdicts mentioning "CI incomplete at review time" remain the reason to care, but I can no longer claim they all share this cause. Some may be this; BUG-1441 shows at least one shape where the drain gets it right.
+
+    I am not retitling or re-prioritising unilaterally since this is now groomed and queued, but the acceptance criteria as written would drive someone toward a general "always wait for terminal CI" change when the existing wait already works. The criterion that survives and should probably lead is: if the PR head changes during the CI phase, the phase re-probes against the new head rather than concluding on the old one.
+
+    Fourth causal claim of mine to need correcting today, and the third where the correction came from simply watching one more run rather than from any new technique.
+  created_at: 2026-09-20T19:26:49.698338754Z
+  modified_at: 2026-09-20T19:26:49.698338754Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
