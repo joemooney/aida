@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-20T22:48:40.422675817Z
+modified_at: 2026-09-20T22:48:42.017102352Z
 req_type: Bug
 tags:
 - agent-surface
@@ -260,6 +260,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T18:05:55.915376477Z
   modified_at: 2026-09-20T18:05:55.915376477Z
+- id: 01a0c101-e405-7d52-ad4c-618c887970a7
+  author: joe
+  content: Requeued after the orchestrator rebuild. BUG-1445's no-op guard is now live in the running binary (wave b09197ab72), so a round that produces no new commit is detected rather than silently re-reviewed. Verdict reviewed_sha matches this branch head exactly, so the findings describe current code. No acceptance change.
+  created_at: 2026-09-20T22:48:41.733530686Z
+  modified_at: 2026-09-20T22:48:41.733530686Z
 execution_mode: drain
 implementation_info:
   implemented: true
