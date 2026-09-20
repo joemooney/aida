@@ -91,7 +91,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:34:14.434033357Z
-modified_at: 2026-09-20T12:36:29.104602168Z
+modified_at: 2026-09-20T12:36:49.489610427Z
 req_type: Story
 tags:
 - acceptance
@@ -100,6 +100,8 @@ tags:
 - parent:EPIC-62
 - process
 - review-debt
+- reviewer
+- stretch-criteria
 relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
