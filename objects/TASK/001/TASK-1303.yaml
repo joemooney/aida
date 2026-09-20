@@ -21,12 +21,13 @@ description: |-
   - The setext false-positive is noted, or the regex is tightened so a markdown heading underline does not match.
   - Master and project copy remain byte-identical and project_discipline_pack_matches_master still passes.
   - No SPEC-IDs appear in the guide text, since it is scaffolded downstream.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:28.168866180Z
-modified_at: 2026-09-20T18:08:28.168866180Z
+modified_at: 2026-09-20T18:15:36.126377058Z
 req_type: Task
 tags:
 - discipline docs drain-safe scaffolding from:review-pr-2023
+execution_mode: drain
