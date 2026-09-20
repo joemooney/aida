@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:12.562647785Z
-modified_at: 2026-09-20T16:30:22.349567764Z
+modified_at: 2026-09-20T17:54:14.681387581Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -131,6 +131,40 @@ comments:
   created_at: 2026-09-20T16:30:22.349567764Z
   modified_at: 2026-09-20T16:30:22.349567764Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bff4-5019-7730-b7f5-c3746ddf6a4f
+  author: joe
+  content: |-
+    [aida:acceptance-narrowed] STORY-1351 ships covering FRESH installs only. Existing machines are NOT covered and this spec will not cover them. Advisor decision, 2026-09-20, before merge.
+
+    THE DECISION I WAS ASKED FOR. claude-reviewer-1 approved PR #1986, filed BUG-1464 for the delivery gap, did not block on it, and asked me to rule on whether this spec's scope includes already-initialized machines — offering to revise to RequestChanges on my word.
+
+    It does include them. The spec's own goal sentence is "a NEW product or advisor session, started cold on any vendor, reaches the same reliable behaviour ... without being told anything by the operator." That is a claim about SESSIONS, not installations. Every session from here starts on an already-initialized machine; that is the normal case, not an edge. So the reviewer's instinct was right and their own phrasing of why is the best statement of it: a durable-looking channel that silently carries nothing is the failure mode this spec exists to kill, and here both documented upgrade paths — `aida init` and `aida scaffold refresh` — no-op without a warning.
+
+    WHY I AM MERGING ANYWAY, and it is a judgement rather than a technicality. The implementation is correct for what it does, there is no regression, it passes its written acceptance on both vendors under an independent test, and the gap is filed HIGH and queued. Blocking would leave correct work unshipped while the delivery fix is written, which helps nobody. I am not overruling the reviewer — I am agreeing with their reading and disagreeing about the remedy.
+
+    WHAT WE DID NOT ACHIEVE, recorded plainly so nobody later reads Completed as "cold sessions get the handoff pack":
+      - On any machine whose ~/.aida/roles/advisor.toml predates this change, the launch
+        context prints "Purpose:" and NO "System prompt:" block, so nothing in it names
+        rework-brief-craft.md. Acceptance clause (c) — "how it writes a rework brief" — FAILS there.
+      - scaffold_starter_roles skips existing role files; role_guidance_for falls through to
+        default_role_guidance when system_prompt is absent; `aida scaffold refresh` does not
+        cover ~/.aida/roles/ at all.
+      - That includes both of the seats working tonight. The feature currently reaches
+        machines that do not yet exist.
+
+    CARRIED BY: BUG-1464, High. Until it lands, this spec's goal is met for new installs and unmet everywhere else.
+
+    ACCEPTANCE EVIDENCE, copied here from the verdict at the reviewer's request because a verdict file is overwritten each round (STORY-1391) and this is the clause that asked to be "recorded on this spec". Independently produced by building the branch binary and init'ing a throwaway project against a clean HOME:
+      criterion 1, fresh install, claude -> all four clauses PASS
+      criterion 1, fresh install, codex  -> all four clauses PASS (byte-identical guidance block)
+      criterion 2, due seat jobs within one tick -> PASS (mailbox-triage renders under ## Due Jobs)
+      criterion 3, nothing mechanised delivered as prose -> PASS (negative assertion in the PR;
+        two-seat-protocol.md defers recurring work to `aida schedule due`)
+
+    The reviewer also retracted an earlier claim that scope bullet 3 was unimplemented — they had grepped aida-core/templates/ without reading init_cmd.rs, which is where the [schedule] block is emitted. Verified: all three jobs land enabled in a fresh project's .aida/config.toml.
+  created_at: 2026-09-20T17:54:14.681387581Z
+  modified_at: 2026-09-20T17:54:14.681387581Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
