@@ -84,6 +84,7 @@ pub mod ears_lint;
 pub mod export;
 // trace:STORY-476 | ai:claude
 pub mod external_refs;
+pub mod external_tool_output;
 #[cfg(feature = "native")]
 pub mod file_lock;
 pub mod fs_atomic;

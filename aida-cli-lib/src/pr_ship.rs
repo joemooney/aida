@@ -474,9 +474,9 @@ pub fn gh_pr_checks_output_has_registered_checks(stdout: &str, stderr: &str) -> 
     if trimmed.is_empty() {
         return false;
     }
-    if crate::external_tool_output::contains_any_case_insensitive(
+    if aida_core::external_tool_output::contains_any_case_insensitive(
         trimmed,
-        crate::external_tool_output::GH_NO_REGISTERED_CHECKS,
+        aida_core::external_tool_output::GH_NO_REGISTERED_CHECKS,
     ) {
         return false;
     }
@@ -489,9 +489,9 @@ pub fn gh_pr_checks_output_has_registered_checks(stdout: &str, stderr: &str) -> 
 // trace:BUG-344 | ai:codex
 pub fn gh_pr_checks_output_is_unregistered(stdout: &str, stderr: &str) -> bool {
     let combined = format!("{stdout}\n{stderr}");
-    crate::external_tool_output::contains_any_case_insensitive(
+    aida_core::external_tool_output::contains_any_case_insensitive(
         &combined,
-        crate::external_tool_output::GH_NO_REGISTERED_CHECKS,
+        aida_core::external_tool_output::GH_NO_REGISTERED_CHECKS,
     )
 }
 

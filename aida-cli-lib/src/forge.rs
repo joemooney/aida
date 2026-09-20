@@ -2541,19 +2541,10 @@ fn glab_lookup_from_list_output(
 /// (auth, not-found)? Mirrors the spirit of the gh-side BUG-257 classification.
 /// trace:STORY-509 trace:BUG-257 | ai:claude
 fn glab_stderr_is_transient(stderr: &str) -> bool {
-    let s = stderr.to_ascii_lowercase();
-    s.contains("timeout")
-        || s.contains("timed out")
-        || s.contains("connection refused")
-        || s.contains("could not resolve")
-        || s.contains("dial tcp")
-        || s.contains("no such host")
-        || s.contains("network is unreachable")
-        || s.contains("temporary failure")
-        || s.contains("503")
-        || s.contains("502")
-        || s.contains("504")
-        || s.contains("eof")
+    aida_core::external_tool_output::contains_any_case_insensitive(
+        stderr,
+        aida_core::external_tool_output::GLAB_NETWORK_TRANSIENT,
+    )
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -2666,31 +2657,64 @@ fn parse_gitlab_merge_snapshot(body: &str) -> Result<GitLabMergeSnapshot> {
 // mergeability race: retrying against a newly read SHA could merge unreviewed
 // code. trace:BUG-1232 | ai:codex
 fn gitlab_merge_response_is_stale_head(stderr: &[u8]) -> bool {
-    let stderr = String::from_utf8_lossy(stderr).to_ascii_lowercase();
-    stderr.contains("sha does not match")
-        || stderr.contains("sha mismatch")
-        || (stderr.contains("sha") && stderr.contains("head of source branch"))
+    let Some(response) = parse_gitlab_api_error(stderr) else {
+        return false;
+    };
+    let tokens = aida_core::external_tool_output::GITLAB_STALE_HEAD_MESSAGES;
+    aida_core::external_tool_output::contains_any_case_insensitive(&response.message, &tokens[..2])
+        || (response.message.to_ascii_lowercase().contains("sha")
+            && aida_core::external_tool_output::contains_any_case_insensitive(
+                &response.message,
+                &tokens[2..],
+            ))
 }
 
 fn gitlab_merge_response_is_retryable(stderr: &[u8]) -> bool {
-    let stderr = String::from_utf8_lossy(stderr).to_ascii_lowercase();
-    stderr.contains("405")
-        || stderr.contains("409")
-        || stderr.contains("method not allowed")
-        || stderr.contains("cannot be merged")
+    let Some(response) = parse_gitlab_api_error(stderr) else {
+        return false;
+    };
+    response.status.is_some_and(|status| {
+        aida_core::external_tool_output::GITLAB_RETRYABLE_MERGE_STATUSES.contains(&status)
+    }) || aida_core::external_tool_output::contains_any_case_insensitive(
+        &response.message,
+        aida_core::external_tool_output::GITLAB_RETRYABLE_MERGE_MESSAGES,
+    )
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct GitLabApiError {
+    message: String,
+    status: Option<u64>,
+}
+
+/// Parse only documented GitLab REST error fields. `glab` wrapper prose is not
+/// part of the API response and must never influence merge authorization.
+// trace:BUG-1310 | ai:codex
+fn parse_gitlab_api_error(stderr: &[u8]) -> Option<GitLabApiError> {
+    let value: serde_json::Value = serde_json::from_slice(stderr).ok()?;
+    let message = value
+        .get("message")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string();
+    let status = value
+        .get("status")
+        .or_else(|| value.get("status_code"))
+        .and_then(|value| {
+            value
+                .as_u64()
+                .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+        });
+    Some(GitLabApiError { message, status })
 }
 
 /// Extract only GitLab's JSON message. Arbitrary CLI prose is deliberately
 /// discarded because glab's wrapper is the source of BUG-1232's false auth
 /// diagnosis.
 fn gitlab_api_message(stderr: &[u8]) -> String {
-    let Ok(value) = serde_json::from_slice::<serde_json::Value>(stderr) else {
-        return String::new();
-    };
-    value
-        .get("message")
-        .and_then(|v| v.as_str())
-        .map(|message| format!(": {message}"))
+    parse_gitlab_api_error(stderr)
+        .filter(|response| !response.message.is_empty())
+        .map(|response| format!(": {}", response.message))
         .unwrap_or_default()
 }
 
@@ -4224,15 +4248,16 @@ mod tests {
         ));
 
         for response in [
-            br#"glab: 405 Method Not Allowed"#.as_slice(),
-            br#"{"message":"405 Cannot be merged"}"#.as_slice(),
-            br#"HTTP 409 Conflict"#.as_slice(),
+            br#"{"message":"Method Not Allowed","status":405}"#.as_slice(),
+            br#"{"message":"Cannot be merged"}"#.as_slice(),
+            br#"{"message":"Conflict","status_code":"409"}"#.as_slice(),
         ] {
             assert!(gitlab_merge_response_is_retryable(response));
         }
         assert!(!gitlab_merge_response_is_retryable(
-            b"HTTP 401 Unauthorized"
+            br#"{"message":"Unauthorized","status":401}"#
         ));
+        assert!(!gitlab_merge_response_is_retryable(b"glab: 409 Conflict"));
     }
 
     #[test]

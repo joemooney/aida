@@ -700,9 +700,9 @@ impl PhaseFailure {
 /// isolated so the classification rule is unit-testable without a driver.
 /// trace:BUG-455 | ai:claude
 pub(crate) fn is_database_locked_message(reason: &str) -> bool {
-    crate::external_tool_output::contains_any_case_insensitive(
+    aida_core::external_tool_output::contains_any_case_insensitive(
         reason,
-        crate::external_tool_output::SQLITE_LOCKED,
+        aida_core::external_tool_output::SQLITE_LOCKED,
     )
 }
 
@@ -716,9 +716,9 @@ pub(crate) fn is_database_locked_message(reason: &str) -> bool {
 /// hides in `groom`/`room`).
 // trace:BUG-657 | ai:claude
 pub(crate) fn is_environmental_failure(message: &str) -> bool {
-    crate::external_tool_output::contains_any_case_insensitive(
+    aida_core::external_tool_output::contains_any_case_insensitive(
         message,
-        crate::external_tool_output::OS_RESOURCE_EXHAUSTION,
+        aida_core::external_tool_output::OS_RESOURCE_EXHAUSTION,
     )
 }
 
@@ -1010,9 +1010,9 @@ pub(crate) fn red_ci_action(budget: usize, attempts_made: usize, kind: FailureKi
 /// only a conflict is rebase-recoverable, so anything unrecognized is not.
 // trace:TASK-975 | ai:claude
 pub(crate) fn is_merge_conflict_failure(reason: &str) -> bool {
-    crate::external_tool_output::contains_any_case_insensitive(
+    aida_core::external_tool_output::contains_any_case_insensitive(
         reason,
-        crate::external_tool_output::GH_MERGE_CONFLICT,
+        aida_core::external_tool_output::GH_MERGE_CONFLICT,
     )
 }
 

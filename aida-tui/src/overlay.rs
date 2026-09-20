@@ -383,20 +383,13 @@ fn pr_lines(pr: Option<&PrInfo>) -> Vec<Line<'static>> {
 
 /// Colour a CI rollup string by keyword — green pass / red fail / yellow
 /// in-flight. The exact rollup wording varies, so match on substrings.
-// GitHub/GitLab CI rollup prose observed through AIDA's forge adapters. These
-// cosmetic tokens stay named beside their sole consumer; unknown text is dim.
-// trace:BUG-1310 | ai:codex
-const CI_ROLLUP_GREEN: &[&str] = &["pass", "green", "success"];
-const CI_ROLLUP_RED: &[&str] = &["fail", "red", "error"];
-const CI_ROLLUP_YELLOW: &[&str] = &["pend", "run", "progress"];
-
 fn ci_style(rollup: &str) -> Style {
-    let r = rollup.to_ascii_lowercase();
-    if CI_ROLLUP_GREEN.iter().any(|token| r.contains(token)) {
+    use aida_core::external_tool_output as output;
+    if output::contains_any_case_insensitive(rollup, output::CI_ROLLUP_SUCCESS) {
         Style::default().fg(Color::Green)
-    } else if CI_ROLLUP_RED.iter().any(|token| r.contains(token)) {
+    } else if output::contains_any_case_insensitive(rollup, output::CI_ROLLUP_FAILURE) {
         Style::default().fg(Color::Red)
-    } else if CI_ROLLUP_YELLOW.iter().any(|token| r.contains(token)) {
+    } else if output::contains_any_case_insensitive(rollup, output::CI_ROLLUP_PENDING) {
         Style::default().fg(Color::Yellow)
     } else {
         dim()
