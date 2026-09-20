@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:52.759483961Z
-modified_at: 2026-09-20T09:11:20.200653258Z
+modified_at: 2026-09-20T09:11:47.825589542Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -100,6 +100,26 @@ comments:
   created_at: 2026-09-20T09:02:16.143031745Z
   modified_at: 2026-09-20T09:02:16.143031745Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0be15-ff71-7420-8ebd-4017d3253362
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2010 fix(dev): report missing activated binary truthfully (BUG-1305)
+    verdict: APPROVE + merged 2026-09-20 09:11:10Z at head c99f66e4
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — neither implemented nor briefed by this advisor
+    gates cleared: required Build SUCCESS; mergeStateStatus CLEAN; live-drive check performed — the drain was at phase 2 on BUG-1301, a different spec
+
+    ALL FIVE CRITERIA MET, checked individually. Activation is classified from the pinned BINARY rather than the PATH entry, by a pure function taking both the pinned and the resolved path. The missing state renders as "ACTIVATED BUT MISSING" in red, which was criterion 2 and the one most easily satisfied in name only. The resolved binary, its version and its SHA are printed, so a fallthrough is visible on the surface whose whole job is to say which binary you are running. The PS1 marker carries it too, which is the ambient signal a long session actually reads.
+
+    THE TEST IS THE ONE I WOULD HAVE ASKED FOR. `dev_activation_state_distinguishes_present_missing_and_path_fallthrough` asserts Missing for a pinned path that does not exist while something else resolves on PATH, then writes the file and asserts Active. That is tonight's sequence exactly: the pinned binary was deleted to recover a full disk, the directory entry survived, and every call fell through to an eight-day-old release while this surface reported ACTIVE.
+
+    WHY THIS MATTERED MORE THAN ITS SIZE. A drain ran eight-day-old orchestration for twenty minutes while every health surface read normal. I caught it only because a flag I had used for hours stopped existing — the broken command was the symptom, and the surface built to answer "which binary am I running" was no help in diagnosing it. With this, the next occurrence announces itself on the first `aida dev status`.
+
+    PROCESS NOTE. I checked the live drive before merging, comparing the drain's current spec against this PR's spec. That is the rule I wrote for myself two hours ago after merging over a live drive on #2007, and this is the second time tonight it changed what I did — the first was declining to merge #2008.
+  created_at: 2026-09-20T09:11:47.825589542Z
+  modified_at: 2026-09-20T09:11:47.825589542Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0be15-9380-7630-8c02-a0d57c7d96bf
   author: aida-auto-bump
