@@ -592,7 +592,16 @@ pub fn main_entry() {
                     eprintln!("  {}", hint.dimmed());
                 }
             }
-            1
+            // BUG-1295: `aida pr rebase` bail sites that must be
+            // distinguishable to a subprocess caller (conflict vs.
+            // refused-force-push) wrap themselves in a `RebaseFailureExit`
+            // instead of a bare `anyhow::bail!`. The printed message above is
+            // unchanged either way — only the exit code this process returns
+            // to its parent (the orchestrator's `attempt_phase3_auto_rebase`)
+            // differs, so the parent can classify by exit code instead of by
+            // matching this process's prose. Every other error keeps exit 1.
+            // trace:BUG-1295 | ai:claude
+            exit_code_for_error(&err)
         }
     };
 
@@ -83670,6 +83679,41 @@ fn build_phase3_auto_rebase_args(pr_number: u64) -> Vec<String> {
     ]
 }
 
+/// BUG-1295: classify a finished `aida pr rebase <N> --no-smoke` subprocess
+/// by its EXIT CODE alone — never by matching its stdout/stderr text. Pure
+/// so the classification is unit-testable without spawning: feed it a
+/// process exit code and it names the `FailureKind` the orchestrator routes
+/// on, independent of whatever prose the bail site that produced that code
+/// happened to print. `None` covers every other outcome (unrecognized code,
+/// signal death) — the caller falls back to an untyped
+/// `auto_complete::PhaseFailure`.
+// trace:BUG-1295 | ai:claude
+fn classify_rebase_subprocess_exit(code: Option<i32>) -> Option<auto_complete::FailureKind> {
+    match code {
+        Some(c) if c == pr_rebase::REBASE_EXIT_CODE_REFUSED => {
+            Some(auto_complete::FailureKind::StaleBaseRefused)
+        }
+        Some(c) if c == pr_rebase::REBASE_EXIT_CODE_CONFLICT => {
+            Some(auto_complete::FailureKind::StaleBaseConflict)
+        }
+        _ => None,
+    }
+}
+
+/// BUG-1295: the process exit code `main_entry` returns for a top-level
+/// error. Pulled out of `main_entry` so it's unit-testable: a
+/// `pr_rebase::RebaseFailureExit` (the sentinel a `pr rebase` conflict /
+/// force-push-refusal bail site wraps its message in) carries its own exit
+/// code; every other error keeps the historical exit code 1. This is the
+/// producer-side half of the exit-code contract `classify_rebase_subprocess_exit`
+/// reads on the consumer side.
+// trace:BUG-1295 | ai:claude
+fn exit_code_for_error(err: &anyhow::Error) -> i32 {
+    err.downcast_ref::<pr_rebase::RebaseFailureExit>()
+        .map(|sig| sig.code)
+        .unwrap_or(1)
+}
+
 /// STORY-335: the argv `aida queue integrate --rebase` hands to the `aida`
 /// subprocess to rebase a ready member's PR branch onto current main before
 /// merging it. Mirrors the phase-3 auto-rebase (`pr rebase <N> --no-smoke`):
@@ -84893,6 +84937,9 @@ impl RealPhaseDriver {
         &mut self,
         pr_number: u64,
     ) -> Result<(), auto_complete::PhaseFailure> {
+        // (classification helper `classify_rebase_subprocess_exit` lives at
+        // crate scope — see below — so it's unit-testable without spawning
+        // a subprocess. trace:BUG-1295 | ai:claude)
         if !self.json {
             eprintln!(
                 "  {} stale-base + overlap detected on PR-{pr_number}; attempting one clean auto-rebase…",
@@ -84929,27 +84976,45 @@ impl RealPhaseDriver {
                 if !detail.is_empty() {
                     eprint!("{detail}");
                 }
-                if detail.contains("force-push refused")
-                    || detail.contains("Force-pushing would DROP")
-                {
-                    self.record_auto_rebase(pr_number, "stale-base-refused");
-                    return Err(auto_complete::PhaseFailure::of(
-                        auto_complete::FailureKind::StaleBaseRefused,
-                        detail.trim().to_string(),
-                    ));
-                }
-                if detail.contains("rebase aborted due to conflicts")
-                    || detail.contains("rebase hit") && detail.contains("conflict")
-                {
-                    self.record_auto_rebase(pr_number, "conflict");
-                    let recipe = format!(
-                        "{}\n\nManual recovery: `aida pr rebase {pr_number} --interactive`",
-                        detail.trim()
-                    );
-                    return Err(auto_complete::PhaseFailure::of(
-                        auto_complete::FailureKind::StaleBaseConflict,
-                        recipe,
-                    ));
+                // BUG-1295: classify on the subprocess's EXIT CODE via the
+                // pure `classify_rebase_subprocess_exit` helper, not by
+                // substring-matching its stdout/stderr prose. The six bail
+                // sites this used to match (pr_cmd.rs conflict/force-push
+                // bails, rebase_cmd.rs, pr_rebase.rs) could be reworded
+                // independently and silently fall through to the untyped
+                // arm below — a conflict losing `StaleBaseConflict` (and the
+                // `--interactive` recovery recipe attached to it) or a
+                // safety refusal being reclassified as a generic failure,
+                // with nothing to catch the drift. `pr_cmd.rs`'s conflict
+                // and force-push-refused bails now return
+                // `pr_rebase::rebase_conflict_error` / `rebase_refused_error`,
+                // which `main_entry` downcasts to pick
+                // `pr_rebase::REBASE_EXIT_CODE_CONFLICT` /
+                // `REBASE_EXIT_CODE_REFUSED` as this process's exit code —
+                // the one signal both ends read from the same shared
+                // constant. See
+                // `tests/bug_1295_rebase_exit_code_tests.rs` for the drift
+                // guard. trace:BUG-1295 | ai:claude
+                match classify_rebase_subprocess_exit(output.status.code()) {
+                    Some(auto_complete::FailureKind::StaleBaseRefused) => {
+                        self.record_auto_rebase(pr_number, "stale-base-refused");
+                        return Err(auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::StaleBaseRefused,
+                            detail.trim().to_string(),
+                        ));
+                    }
+                    Some(auto_complete::FailureKind::StaleBaseConflict) => {
+                        self.record_auto_rebase(pr_number, "conflict");
+                        let recipe = format!(
+                            "{}\n\nManual recovery: `aida pr rebase {pr_number} --interactive`",
+                            detail.trim()
+                        );
+                        return Err(auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::StaleBaseConflict,
+                            recipe,
+                        ));
+                    }
+                    _ => {}
                 }
                 self.record_auto_rebase(pr_number, "failed");
                 Err(auto_complete::PhaseFailure::new(detail.trim().to_string()))
@@ -90374,3 +90439,11 @@ mod task_1175_queue_insertion_order_tests;
 #[cfg(test)]
 #[path = "tests/task_1265_rework_no_op_tests.rs"]
 mod task_1265_rework_no_op_tests;
+
+// BUG-1295: the orchestrator's phase-3 auto-rebase failure classification
+// must ride on the `aida pr rebase` subprocess's EXIT CODE, never on
+// substring-matching its message text — the drift guard.
+// trace:BUG-1295 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1295_rebase_exit_code_tests.rs"]
+mod bug_1295_rebase_exit_code_tests;

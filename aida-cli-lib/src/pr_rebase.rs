@@ -28,6 +28,74 @@
 
 use std::path::{Path, PathBuf};
 
+// BUG-1295: exit-code contract that lets the orchestrator's phase-3
+// auto-rebase driver (`attempt_phase3_auto_rebase` in `lib.rs`) classify a
+// finished `aida pr rebase` subprocess by its EXIT CODE, not by
+// substring-matching the human-readable message the bail sites below print.
+// Six independently-worded call sites across pr_cmd.rs/rebase_cmd.rs/
+// pr_rebase.rs used to all have to keep agreeing on wording for the
+// orchestrator's `FailureKind::StaleBaseConflict` / `StaleBaseRefused`
+// recovery-recipe routing to keep working — nothing enforced that, so a
+// reword silently downgraded a conflict (or a safety refusal) to a generic,
+// unrecoverable failure (PRIN-4: a diagnostic must be unable to drift away
+// from the decision it explains). Every `pr rebase` conflict bail now
+// constructs a `RebaseFailureExit` carrying `REBASE_EXIT_CODE_CONFLICT`, and
+// every force-push-refusal bail carries `REBASE_EXIT_CODE_REFUSED`; the
+// message text stays free-form prose for humans (unchanged Display output)
+// and can be reworded with zero effect on classification.
+//
+// Codes are chosen above 1 (anyhow's generic error code, still the fallback
+// for every OTHER `pr rebase` failure) and well below 126 (shell-reserved).
+// This is the ONE shared copy both the producer (this module + pr_cmd.rs)
+// and the consumer (lib.rs) read from — see `pr_rebase::REBASE_EXIT_CODE_*`.
+// trace:BUG-1295 | ai:claude
+pub const REBASE_EXIT_CODE_CONFLICT: i32 = 17;
+// trace:BUG-1295 | ai:claude
+pub const REBASE_EXIT_CODE_REFUSED: i32 = 18;
+
+/// Sentinel error a `pr rebase` bail site wraps its human-readable message
+/// in via [`rebase_conflict_error`] / [`rebase_refused_error`]. `main_entry`
+/// downcasts the top-level `anyhow::Error` to this type to pick the process
+/// exit code (`self.code`) instead of the default 1; `Display` renders
+/// `self.message` unchanged, so the printed diagnostic a human sees is
+/// byte-identical to before this fix — only the EXIT CODE the orchestrator
+/// reads back changed.
+// trace:BUG-1295 | ai:claude
+#[derive(Debug)]
+pub struct RebaseFailureExit {
+    pub code: i32,
+    pub message: String,
+}
+
+impl std::fmt::Display for RebaseFailureExit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for RebaseFailureExit {}
+
+/// Build the `anyhow::Error` a conflict bail site returns. The message is
+/// free-form prose for a human reading the terminal; classification rides
+/// on `REBASE_EXIT_CODE_CONFLICT` alone.
+// trace:BUG-1295 | ai:claude
+pub fn rebase_conflict_error(message: impl Into<String>) -> anyhow::Error {
+    anyhow::Error::new(RebaseFailureExit {
+        code: REBASE_EXIT_CODE_CONFLICT,
+        message: message.into(),
+    })
+}
+
+/// Build the `anyhow::Error` a force-push-refusal bail site returns. See
+/// [`rebase_conflict_error`].
+// trace:BUG-1295 | ai:claude
+pub fn rebase_refused_error(message: impl Into<String>) -> anyhow::Error {
+    anyhow::Error::new(RebaseFailureExit {
+        code: REBASE_EXIT_CODE_REFUSED,
+        message: message.into(),
+    })
+}
+
 /// PR metadata captured from `gh pr view <N> --json ...`. Enough to
 /// drive the rebase + cross-fork detection.
 #[derive(Debug, Clone, PartialEq, Eq)]
