@@ -63,6 +63,7 @@ mod drain_caps;
 mod drain_cmd;
 mod drain_lock;
 mod git_backend_cmd;
+mod machine_readiness;
 mod mcp_cmd;
 mod orchestrator_cmd;
 mod pr_cmd;
@@ -49286,6 +49287,12 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             )
         }
         crate::cli::BurndownCommand::Explain { json } => handle_burndown_explain(*json),
+        crate::cli::BurndownCommand::Readiness {
+            hours,
+            lanes,
+            specs,
+            json,
+        } => machine_readiness::run_command(*hours, *lanes, *specs, *json),
         crate::cli::BurndownCommand::Run {
             status,
             tag,
@@ -49621,6 +49628,24 @@ fn handle_burndown_run(
         ready.len(),
         ready.join(", ").cyan()
     );
+
+    // TASK-1298: an unattended run must prove the host can sustain the work,
+    // not merely that the spec substrate is healthy. Keep dry-run observational;
+    // the real launch refuses on hard machine-readiness failures.
+    // trace:TASK-1298 | ai:codex
+    if !dry_run {
+        let lanes = concurrency.unwrap_or(4).max(1);
+        let specs = max.unwrap_or(ready.len()).min(ready.len()).max(1);
+        let readiness_root =
+            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        let report = machine_readiness::probe(&readiness_root, 20, lanes, specs);
+        machine_readiness::print_human(&report);
+        if !report.ready() {
+            anyhow::bail!(
+                "machine readiness failed — apply the remedies above, then re-run `aida burndown readiness --hours 20 --lanes {lanes} --specs {specs}`"
+            );
+        }
+    }
 
     // The skill re-resolves the ready set authoritatively (same gate), so the
     // preflight list is what WILL drain. Build the headless invocation.

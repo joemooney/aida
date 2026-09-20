@@ -2053,6 +2053,23 @@ pub enum RoleScopeCommand {
 /// `aida burndown` — plan an autonomous backlog drain.
 #[derive(Subcommand, Debug)]
 pub enum BurndownCommand {
+    /// Check whether this machine has enough disk, memory, and a real caller
+    /// binary for an unattended window. Read-only; exits non-zero on failure.
+    // trace:TASK-1298 | ai:codex
+    Readiness {
+        /// Planned unattended duration in hours.
+        #[clap(long, default_value_t = 20)]
+        hours: u64,
+        /// Maximum concurrent build/implementation lanes.
+        #[clap(long, default_value_t = 4)]
+        lanes: usize,
+        /// Approximate number of specs expected in the window.
+        #[clap(long, default_value_t = 20)]
+        specs: usize,
+        /// Emit the complete report as JSON.
+        #[clap(long)]
+        json: bool,
+    },
     /// Resolve which specs are ready to fan out vs parked, applying the
     /// pickability gate: bounded (not an epic), unblocked (no unsatisfied
     /// BlockedBy), decision-free (no pending question), not parking-tagged.
