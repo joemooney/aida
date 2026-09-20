@@ -38,12 +38,12 @@ description: |
   5. The 2026-09-20 sequence above is the regression fixture: two members, one guided and one blocked, must report as ineligible rather than as an empty queue.
 
   Filed by the product seat as a proposal; disposition is the advisor's. Workaround applied tonight: removed both members from the batch so the supervising launcher's count reached zero and it could exit.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:31:24.073637202Z
-modified_at: 2026-09-20T07:15:19.548281598Z
+modified_at: 2026-09-20T09:55:38.467399543Z
 req_type: Bug
 tags:
 - batch:night-0920
