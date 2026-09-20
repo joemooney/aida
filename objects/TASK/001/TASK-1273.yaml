@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-20T16:32:14.995283468Z
+modified_at: 2026-09-20T16:32:16.659769757Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -65,6 +65,20 @@ comments:
   created_at: 2026-09-20T16:32:10.442757270Z
   modified_at: 2026-09-20T16:32:10.442757270Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bfa9-43fb-71e0-8ce3-263660ddc9c6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1978):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. TASK-1273 lifecycle-event acceptance is unimplemented: gitlab_live_mr_round_trip directly invokes Forge methods but never runs the AIDA spec/drain lifecycle and never asserts SpecShelved kinds, CiTerminal, or the merge lifecycle event, so regressions in the orchestration path that motivated this task remain invisible.
+    2. TASK-1273 credential handling can make every nightly appear green without testing GitLab: cross-platform.yml treats an absent AIDA_GITLAB_TOKEN as a successful skip, although the requirement says the token is needed and only permits skipping when the mirror is unreachable. A deleted or misnamed secret therefore disables the acceptance signal indefinitely.
+    3. TASK-1273 does not record or validate a review verdict: the review-verdict phase only calls change_reviews and prints review.decision; it creates no verdict and makes no assertion about the returned decision, so incorrect GitLab review mapping still passes.
+    4. TASK-1273 cleanup/deletion is not proven: merge_change is asked to delete the branch but the test never checks branch absence, and the Drop cleanup discards project-deletion failures while the docs claim deletion even after panic. A delete_branch or cleanup regression can leave artifacts while the smoke stays green.
+    5. TASK-1273 does not name every failing Forge phase as required: open_change and the pre/post-merge change_status calls use generic expect/assert messages without a phase label, so regressions in those Forge methods turn the job red without the failing phase named.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T16:32:16.379545900Z
+  modified_at: 2026-09-20T16:32:16.379545900Z
 execution_mode: drain
 implementation_info:
   implemented: true
