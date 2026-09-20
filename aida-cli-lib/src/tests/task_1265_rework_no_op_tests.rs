@@ -135,3 +135,26 @@ fn no_op_failure_names_the_actual_rework_round() {
     assert!(message.starts_with("ROUND 3 rework"), "{message}");
     assert!(message.contains("fix the guard"), "{message}");
 }
+
+// A non-blocking PR-keyed verdict must NOT arm the guard. The positive case
+// above proves a PR-keyed RequestChanges arms it; without this, an
+// implementation that armed on ANY verdict would pass the suite and report a
+// genuine round as a no-op — stalling work that was actually progressing.
+// trace:BUG-1495 | ai:codex
+#[test]
+fn rework_guard_ignores_non_blocking_pr_verdict() {
+    let tmp = tempfile::tempdir().unwrap();
+    review_verdict::record_verdict(
+        tmp.path(),
+        "PR-2024",
+        Some("approved"),
+        Some("abc123"),
+        Some("bug-1432-work"),
+        None,
+        &[],
+        "test reviewer",
+    )
+    .unwrap();
+
+    assert!(blocking_rework_verdict(tmp.path(), "BUG-1432", 2024).is_none());
+}
