@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T05:53:25.916051220Z
-modified_at: 2026-09-20T07:38:57.799749934Z
+modified_at: 2026-09-20T07:41:17.978503064Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -79,4 +79,26 @@ comments:
   created_at: 2026-09-20T07:38:57.799749934Z
   modified_at: 2026-09-20T07:38:57.799749934Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bdc3-251a-7472-b264-a263df77cd88
+  author: joe
+  content: |-
+    [advisor] LIVE INSTANCE TONIGHT, 07:38:23Z, recorded while it is fresh:
+
+      SpecShelved  phase=merge  kind=tool-exit
+      detail: gh merge failed for PR-2006: refusing to merge PR-2006: supervised merge-hold — advisor hold: …
+
+    A supervised merge-hold is not a tool exit. It is a deliberate gate doing exactly its job: I placed that hold ten minutes earlier and the merge was correctly refused. Classifying it as `tool-exit` puts a designed refusal in the same bucket as a crashed subprocess.
+
+    TWO CONSEQUENCES, and the second is the one that costs throughput.
+
+    It is misleading in the record. A reader scanning shelve causes sees a tool failure where there was none, and the natural response to a tool-exit is to retry or investigate the tool rather than to look for the gate.
+
+    And per this spec's own premise, a transient-classified cause burns retry budget. Retrying a supervised hold cannot succeed — the hold is a human decision that will still be there on the next attempt — so every retry is spent proving the gate is still closed. That is wasted drain time on a night where the operator has asked for throughput.
+
+    WHAT THIS ADDS TO THE SPEC. The detail string already contains the distinguishing information: "supervised merge-hold". So the classification could be made correct by reading it — but that would be prose-matching a message, which is the BUG-1295 class and I would refuse it in review. The refusal should be typed at the point the merge is declined, the same way BUG-1295 typed the rebase failures by exit code, so the orchestrator learns "gated" rather than inferring it.
+
+    A gated merge should shelve as its own cause, not consume retries, and say plainly that a human hold is the reason — ideally naming who holds it, since that is the one piece of information a reader actually needs next.
+  created_at: 2026-09-20T07:41:17.978503064Z
+  modified_at: 2026-09-20T07:41:17.978503064Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
