@@ -194,7 +194,8 @@ pub enum MergeHoldAction {
         /// PR number to hold.
         pr: u64,
         /// Hold reason recorded on the marker (default: "held by hand").
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         reason: Option<String>,
     },
     /// Clear a merge-hold: remove the marker file and drop the
@@ -408,12 +409,14 @@ pub enum ReportCommand {
     /// Compose and optionally file an upstream AIDA bug report.
     Bug {
         /// Short report title. The pasted subject becomes `aida: <title>`.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         title: String,
 
         /// Report description. If omitted, reads stdin when piped or opens
         /// $EDITOR at a TTY.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
 
         /// Copy the rendered report to the system clipboard as well as stdout.
@@ -428,12 +431,14 @@ pub enum ReportCommand {
     /// Compose and optionally file an upstream AIDA idea report.
     Idea {
         /// Short report title. The pasted subject becomes `aida: <title>`.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         title: String,
 
         /// Report description. If omitted, reads stdin when piped or opens
         /// $EDITOR at a TTY.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
 
         /// Copy the rendered report to the system clipboard as well as stdout.
@@ -866,7 +871,8 @@ pub enum ReviewCommand {
 
         /// One-line rationale stored with the verdict and shown wherever
         /// the verdict surfaces.
-        #[clap(long, value_name = "TEXT")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         summary: Option<String>,
 
         /// Concrete review finding to hand to the rework implementer. Repeat
@@ -1080,7 +1086,8 @@ pub enum SessionCommand {
     New {
         /// Title for the session (shown in `aida session list`). When
         /// omitted, you'll be prompted interactively.
-        #[clap(long, short = 't')]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, short = 't', allow_hyphen_values = true)]
         title: Option<String>,
 
         /// Claude Code permission mode. When omitted, no `--permission-mode`
@@ -1183,7 +1190,8 @@ pub enum SessionCommand {
         /// Shown in `aida session list`. Prompted interactively when
         /// omitted; pass an empty string to skip the prompt.
         // trace:STORY-54 | ai:claude
-        #[clap(long, short = 't')]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, short = 't', allow_hyphen_values = true)]
         title: Option<String>,
 
         /// Do not set the terminal/tab title for this launch.
@@ -1827,7 +1835,8 @@ pub enum PrCommand {
     Hold {
         /// Why the PR is held — the gate you're running first. Surfaced in the
         /// drain epilogue.
-        #[clap(long, value_name = "REASON")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, value_name = "REASON", allow_hyphen_values = true)]
         reason: Option<String>,
     },
 }
@@ -1970,7 +1979,8 @@ pub enum RolePromptCommand {
 
         /// Addendum text (alternative to positional, useful for shells
         /// that mangle special characters in arguments)
-        #[clap(long, conflicts_with = "content")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, conflicts_with = "content", allow_hyphen_values = true)]
         content_flag: Option<String>,
 
         /// Read addendum from stdin
@@ -3145,7 +3155,8 @@ pub enum DocCommand {
     /// Capture a documentation entry — narrative tied to one or more specs.
     Add {
         /// Title of the doc entry (e.g., "When to use `aida queue work --steal`").
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         title: String,
 
         /// Specs this entry is about. Repeat or comma-separate. Each id is
@@ -3160,7 +3171,8 @@ pub enum DocCommand {
         /// (e.g., "muddle recovery", "first-time setup"). Stored in
         /// `custom_fields["scenario"]`; used as a filter axis by
         /// `aida doc list --scenario <name>`.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         scenario: Option<String>,
 
         /// Audience tags (repeat or comma-separate) — who this doc is for:
@@ -3171,7 +3183,8 @@ pub enum DocCommand {
 
         /// Description body. For long-form prose use --description-from-file
         /// or --description-stdin (mirrors `aida add`).
-        #[clap(long, conflicts_with_all = ["description_from_file", "description_stdin"])]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, conflicts_with_all = ["description_from_file", "description_stdin"], allow_hyphen_values = true)]
         description: Option<String>,
 
         /// Read the description body from a file.
@@ -3293,7 +3306,8 @@ pub enum DbCommand {
         push: bool,
 
         /// Commit message for pending changes
-        #[clap(long, short = 'm')]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, short = 'm', allow_hyphen_values = true)]
         message: Option<String>,
     },
 
@@ -4136,7 +4150,8 @@ pub enum TypeCommand {
         prefix: String,
 
         /// Description of the type
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
     },
 
@@ -4174,7 +4189,8 @@ pub enum RelDefCommand {
         display_name: Option<String>,
 
         /// Description of what this relationship means
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
 
         /// Name of the inverse relationship (e.g., "child" for "parent")
@@ -4212,7 +4228,8 @@ pub enum RelDefCommand {
         display_name: Option<String>,
 
         /// New description
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
 
         /// New allowed source types (comma-separated)
@@ -4396,7 +4413,8 @@ pub enum CommentCommand {
         /// keep working.
         // trace:TASK-778 — de-duplicated from the positional [CONTENT];
         // hidden from --help so the two forms don't read as distinct args.
-        #[clap(long, hide = true)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, hide = true, allow_hyphen_values = true)]
         content: Option<String>,
 
         /// Comment content (positional argument)
@@ -4433,7 +4451,8 @@ pub enum CommentCommand {
         comment_id: String,
 
         /// New content
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         content: Option<String>,
 
         /// Use interactive mode (prompts)
@@ -4649,7 +4668,8 @@ pub enum BacklogCommand {
         #[clap(long)]
         dry_run: bool,
         /// Optional note recorded on every produced queue entry.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         note: Option<String>,
         /// Override the queue user (defaults to AIDA_USER / system user).
         #[clap(long)]
@@ -4713,7 +4733,8 @@ pub enum AutopilotCommand {
         #[clap(value_name = "TARGET")]
         target: String,
         /// Why the decision is being reversed.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         note: Option<String>,
     },
     /// List every action autopilot actually EXECUTED, with the prior state each
@@ -4760,7 +4781,8 @@ pub enum AutopilotCommand {
         #[clap(long)]
         dry_run: bool,
         /// Why the action is being undone.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         note: Option<String>,
         /// Emit a stable JSON shape instead of the human summary.
         #[clap(long)]
@@ -6018,7 +6040,8 @@ pub enum QueueCommand {
         /// Capture a comment on the spec at rework time (added via the
         /// same path as `aida comment add`). Useful for the audit trail
         /// of why a Done or Completed spec is being re-opened.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         reason: Option<String>,
         /// Chain `aida queue work --resume` to resume a prior claude
         /// session for this spec instead of cold-launching. Implies
@@ -6239,7 +6262,8 @@ pub enum QuestionsCommand {
         recommend: Option<usize>,
 
         /// Why the recommended default is recommended.
-        #[clap(long, value_name = "TEXT")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         rationale: Option<String>,
 
         /// Overwrite an existing pending DecisionRequest on this spec.
@@ -6322,7 +6346,8 @@ pub enum QuestionsCommand {
         /// non-interactive form of the interactive prompt's "type something"
         /// escape; pair with <spec> <choice>.
         // trace:TASK-791 | ai:claude
-        #[clap(long, value_name = "TEXT")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         note: Option<String>,
     },
 }
@@ -6344,7 +6369,8 @@ pub enum FindingsCommand {
     Add {
         /// The observation body. Required — without a note the finding has
         /// nothing to triage. Use `-` to read from stdin.
-        #[clap(long, value_name = "TEXT")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         note: String,
 
         /// What kind of finding this is. Free-form so future kinds (e.g.
@@ -6356,7 +6382,8 @@ pub enum FindingsCommand {
 
         /// One-line title. Defaults to the first line of `--note`,
         /// truncated to 80 characters.
-        #[clap(long, value_name = "TEXT")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         title: Option<String>,
 
         /// Severity — `major`, `minor`, or `cosmetic`. Absent → unknown
@@ -6386,7 +6413,8 @@ pub enum FindingsCommand {
         id: String,
 
         /// What you saw this time. Appended as a timestamped audit comment.
-        #[clap(long, value_name = "TEXT")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         note: Option<String>,
     },
 
@@ -6424,7 +6452,8 @@ pub enum FindingsCommand {
         /// marker — so the *why* lands in one command instead of two.
         // trace:TASK-404 | ai:claude
         // trace:TASK-420 | ai:claude
-        #[clap(long, value_name = "TEXT")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         reason: Option<String>,
     },
 
@@ -6444,7 +6473,8 @@ pub enum FindingsCommand {
         /// alongside the queue note.
         // trace:TASK-404 | ai:claude
         // trace:TASK-420 | ai:claude
-        #[clap(long, value_name = "TEXT")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         reason: Option<String>,
 
         /// When the finding's origin-ID fix has already merged to the default
@@ -6682,7 +6712,8 @@ pub enum PuntsCommand {
         id: String,
 
         /// Optional note on why it was dismissed
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         reason: Option<String>,
     },
 
@@ -6693,7 +6724,8 @@ pub enum PuntsCommand {
         id: String,
 
         /// Why a human is needed (audit trail)
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         reasoning: String,
 
         /// Categorized reason a human is needed (e.g. strategy, irreversible)
@@ -6792,7 +6824,8 @@ pub enum ZenCommand {
     NeedsHuman {
         /// One line on why a human was needed (for later triage). Only the
         /// marker's presence drives the gate; the reason is recorded alongside.
-        #[clap(long, value_name = "TEXT")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         reason: String,
     },
 }
@@ -6898,7 +6931,8 @@ pub enum AdvisorCommand {
         /// context the child project inherits (e.g. "git-canonical store",
         /// "orchestrator drain"). Used in the brief title and the substrate
         /// section heading.
-        #[clap(long, value_name = "TOPIC")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, value_name = "TOPIC", allow_hyphen_values = true)]
         focus: String,
 
         /// Overwrite an existing brief for the same date instead of
@@ -6929,11 +6963,13 @@ pub enum ScheduleCommand {
         every: String,
 
         /// TASK title filed when the schedule fires.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         template: String,
 
         /// TASK description (optional).
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
 
         /// Extra comma-separated tags applied to the filed TASK (in addition
@@ -7381,7 +7417,8 @@ pub enum AgentCommand {
         name: Option<String>,
 
         /// Optional human-readable description of this agent session.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
     },
 
@@ -7559,7 +7596,8 @@ pub enum AgentNewCommand {
         noexec: bool,
 
         /// Initial message to pass to the spawned Claude session.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         prompt: Option<String>,
 
         /// Do not auto-generate an initial message when --spec is supplied.
@@ -7595,7 +7633,8 @@ pub enum AgentNewCommand {
         name: Option<String>,
 
         /// Optional human-readable description of this agent session.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
 
         /// Dispatch to Claude Code's background supervisor via `claude
@@ -7663,7 +7702,8 @@ pub enum AgentNewCommand {
         noexec: bool,
 
         /// Initial message to pass to the spawned Codex session.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         prompt: Option<String>,
 
         /// Do not auto-generate an initial message when --spec is supplied.
@@ -7699,7 +7739,8 @@ pub enum AgentNewCommand {
         name: Option<String>,
 
         /// Optional human-readable description of this agent session.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
     },
 
@@ -7751,7 +7792,8 @@ pub enum AgentNewCommand {
         noexec: bool,
 
         /// Initial message to pass to the spawned Antigravity session.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         prompt: Option<String>,
 
         /// Do not auto-generate an initial message when --spec is supplied.
@@ -7787,7 +7829,8 @@ pub enum AgentNewCommand {
         name: Option<String>,
 
         /// Optional human-readable description of this agent session.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
     },
 }
@@ -7918,11 +7961,13 @@ pub enum Command {
         title_positional: Option<String>,
 
         /// Title of the requirement
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         title: Option<String>,
 
         /// Description of the requirement
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
 
         /// Read the description body from a file. Mutually exclusive with
@@ -7951,11 +7996,13 @@ pub enum Command {
         r#type: Option<String>,
 
         /// Owner of the requirement (defaults to AIDA_AUTHOR env var or system user)
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         owner: Option<String>,
 
         /// Feature the requirement belongs to (defaults to REQ_FEATURE env var or "Uncategorized")
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         feature: Option<String>,
 
         /// Tags for the requirement (comma-separated)
@@ -8623,11 +8670,13 @@ pub enum Command {
         id: String,
 
         /// New title for the requirement
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         title: Option<String>,
 
         /// New description for the requirement
-        #[clap(long, conflicts_with_all = ["description_from_file", "description_stdin"])]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, conflicts_with_all = ["description_from_file", "description_stdin"], allow_hyphen_values = true)]
         description: Option<String>,
 
         /// Read the new description body from a file. Empty files are refused.
@@ -8664,11 +8713,13 @@ pub enum Command {
         r#type: Option<String>,
 
         /// New owner
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         owner: Option<String>,
 
         /// New feature
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         feature: Option<String>,
 
         /// New tags (comma-separated, replaces existing).
@@ -8725,19 +8776,30 @@ pub enum Command {
         /// Set the narrative implementation summary — the "what shipped and why
         /// it was done this way" that a commit prefix / diff does not capture.
         /// Pass an empty string to clear.
-        #[clap(long = "implementation-summary", value_name = "TEXT")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(
+            long = "implementation-summary",
+            value_name = "TEXT",
+            allow_hyphen_values = true
+        )]
         implementation_summary: Option<String>,
 
         // trace:TASK-1148 | ai:claude
         /// Set the narrative risk notes — residual risk / blast-radius call not
         /// derivable from git, status, or trace. Pass an empty string to clear.
-        #[clap(long = "risk-notes", value_name = "TEXT")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long = "risk-notes", value_name = "TEXT", allow_hyphen_values = true)]
         risk_notes: Option<String>,
 
         // trace:TASK-1148 | ai:claude
         /// Set the narrative test-coverage notes — what was (and was not)
         /// covered, and why. Pass an empty string to clear.
-        #[clap(long = "test-coverage-notes", value_name = "TEXT")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(
+            long = "test-coverage-notes",
+            value_name = "TEXT",
+            allow_hyphen_values = true
+        )]
         test_coverage_notes: Option<String>,
 
         // trace:STORY-776 | ai:claude
@@ -8898,12 +8960,14 @@ pub enum Command {
         category: String,
 
         /// Human-readable description of the fork / obstacle that stopped you.
-        #[clap(long, short = 'r')]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, short = 'r', allow_hyphen_values = true)]
         reason: String,
 
         /// Optional best-guess answer if forced to choose — recorded
         /// distinctly from the reason so triage can see the agent's lean.
-        #[clap(long, short = 'l')]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, short = 'l', allow_hyphen_values = true)]
         lean: Option<String>,
     },
 
@@ -9006,7 +9070,8 @@ pub enum Command {
         /// (free text). Stored alongside the spec and shown in the deferred
         /// view so you can scan what is primed and what returns each item.
         // trace:STORY-584 | ai:claude
-        #[clap(long, value_name = "CONDITION")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, value_name = "CONDITION", allow_hyphen_values = true)]
         until: Option<String>,
     },
 
@@ -9803,7 +9868,8 @@ pub enum Command {
         store_only: bool,
         /// Commit any pending orphan-store changes with this message
         /// before pushing. Same as `aida db sync --message`.
-        #[clap(long, short = 'm')]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, short = 'm', allow_hyphen_values = true)]
         message: Option<String>,
         /// Skip pre-push interactive checks ("branch behind main" and
         /// "PR for this branch already merged"). Useful for CI /
@@ -9881,7 +9947,8 @@ pub enum Command {
         #[clap(long)]
         scope: Option<String>,
         /// The commit description (the part after the colon).
-        #[clap(long, short = 'm')]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, short = 'm', allow_hyphen_values = true)]
         message: String,
         /// Spec id for the (REQ-ID) trailer, e.g. `--spec BUG-N`. When omitted,
         /// inferred from staged trace comments if exactly one spec is present.
@@ -10364,7 +10431,8 @@ pub enum Command {
         /// Commit subject to use when committing uncommitted work. The
         /// `(SPEC-ID)` trailer is appended automatically. When omitted, a
         /// conventional default is used. Ignored when the worktree is clean.
-        #[clap(long, short = 'm', value_name = "MSG")]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, short = 'm', value_name = "MSG", allow_hyphen_values = true)]
         message: Option<String>,
 
         /// Stop after opening the PR — do not watch CI or merge. The PR is
@@ -10576,7 +10644,8 @@ pub enum Command {
         spec: Option<String>,
 
         /// Optional operator context. Use '-' to read a multi-line note from stdin.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         note: Option<String>,
 
         /// SPEC-ID this brief must be picked up after.
@@ -11505,7 +11574,8 @@ pub enum Command {
         #[clap(long, value_name = "STATE")]
         status: Option<String>,
         /// Capture a comment on the spec at rework time.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         reason: Option<String>,
         /// Chain `aida queue work --resume`.
         #[clap(long)]
@@ -12149,7 +12219,8 @@ pub enum HumanCommand {
         /// The choice to record (1-based index, or the choice label).
         choice: String,
         /// Attach a counter-proposal note to the answer.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         note: Option<String>,
     },
 
@@ -12162,7 +12233,8 @@ pub enum HumanCommand {
         /// The choice to record (1-based index, or the choice label).
         choice: String,
         /// Attach a counter-proposal note to the answer.
-        #[clap(long)]
+        // trace:BUG-1294 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
         note: Option<String>,
     },
 
@@ -13742,5 +13814,145 @@ mod tests {
         ));
         let cli = Cli::try_parse_from(["aida", "history", "--events"]).unwrap();
         assert!(matches!(cli.command, Command::History { events: true, .. }));
+    }
+
+    // BUG-1294: a prose value starting with a hyphen (most often a bug title
+    // quoting the offending flag, e.g. "--format json returns human text")
+    // used to be rejected by clap as an unrecognized argument, with a `--`
+    // escape hint that doesn't actually work for a named flag's value. Swept
+    // `allow_hyphen_values = true` across every free-text-authoring flag;
+    // these tests cover the add/edit path plus the two edge cases called out
+    // in the acceptance criteria: a leading single hyphen, a leading double
+    // hyphen, and a value that exactly matches an existing flag name.
+    // trace:BUG-1294 | ai:claude
+    #[test]
+    fn add_title_accepts_leading_single_hyphen() {
+        let cli = Cli::try_parse_from(["aida", "add", "--title", "-not-a-flag"]).unwrap();
+        match cli.command {
+            Command::Add { title, .. } => assert_eq!(title.as_deref(), Some("-not-a-flag")),
+            other => panic!("expected Command::Add, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn add_title_accepts_leading_double_hyphen() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "add",
+            "--title",
+            "--format json returns human text on aida status",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Add { title, .. } => assert_eq!(
+                title.as_deref(),
+                Some("--format json returns human text on aida status")
+            ),
+            other => panic!("expected Command::Add, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn add_title_accepts_value_matching_an_existing_flag_name() {
+        // "--force" is itself a real flag on `aida add`; the value must still
+        // bind to --title rather than being parsed as the --force flag.
+        let cli =
+            Cli::try_parse_from(["aida", "add", "--title", "--force", "--type", "bug"]).unwrap();
+        match cli.command {
+            Command::Add {
+                title,
+                force_parent,
+                ..
+            } => {
+                assert_eq!(title.as_deref(), Some("--force"));
+                assert!(!force_parent);
+            }
+            other => panic!("expected Command::Add, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn add_description_accepts_leading_hyphen() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "add",
+            "--title",
+            "probe",
+            "--description",
+            "--foo does the wrong thing",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Add { description, .. } => {
+                assert_eq!(description.as_deref(), Some("--foo does the wrong thing"))
+            }
+            other => panic!("expected Command::Add, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn edit_title_accepts_leading_hyphen() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "edit",
+            "BUG-1",
+            "--title",
+            "--foo does the wrong thing",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Edit { title, .. } => {
+                assert_eq!(title.as_deref(), Some("--foo does the wrong thing"))
+            }
+            other => panic!("expected Command::Edit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn edit_description_accepts_leading_hyphen() {
+        let cli =
+            Cli::try_parse_from(["aida", "edit", "BUG-1", "--description", "-1 line summary"])
+                .unwrap();
+        match cli.command {
+            Command::Edit { description, .. } => {
+                assert_eq!(description.as_deref(), Some("-1 line summary"))
+            }
+            other => panic!("expected Command::Edit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn edit_title_accepts_value_matching_an_existing_flag_name() {
+        let cli = Cli::try_parse_from(["aida", "edit", "BUG-1", "--title", "--force"]).unwrap();
+        match cli.command {
+            Command::Edit { title, force, .. } => {
+                assert_eq!(title.as_deref(), Some("--force"));
+                assert!(!force);
+            }
+            other => panic!("expected Command::Edit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn add_still_rejects_a_genuinely_mistyped_flag() {
+        // allow_hyphen_values only widens what --title/--description accept
+        // as their OWN value; it must not swallow an unrelated mistyped
+        // flag that was never bound as a value.
+        let err = Cli::try_parse_from(["aida", "add", "--titel", "probe"]).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("unexpected argument") || msg.contains("unrecognized"),
+            "expected a clear parse error for the mistyped flag, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn edit_still_rejects_a_genuinely_mistyped_flag() {
+        let err = Cli::try_parse_from(["aida", "edit", "BUG-1", "--titel", "probe"]).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("unexpected argument") || msg.contains("unrecognized"),
+            "expected a clear parse error for the mistyped flag, got: {msg}"
+        );
     }
 }
