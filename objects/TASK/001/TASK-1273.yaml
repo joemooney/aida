@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-20T17:00:28.547799801Z
+modified_at: 2026-09-20T17:01:38.969562360Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -122,6 +122,34 @@ comments:
   created_at: 2026-09-20T16:51:12.279982449Z
   modified_at: 2026-09-20T16:51:12.279982449Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bfc4-2919-7332-a223-af1a45432774
+  author: joe
+  content: |-
+    ACCEPTANCE ADDITION — round 2 fixed half of a finding and the round-2 verdict does not carry the other half, so it will be lost unless it is written here.
+
+    The advisor's round-2 brief made the false-green skip item 1, "the one to do if only one lands". Commit 17e27888ce addressed ONE of the two paths to a green-without-verifying job:
+
+        FIXED   token absent  →  `::error::AIDA_GITLAB_TOKEN is not provisioned` ; exit 1
+        OPEN    mirror down   →  `::notice::Skipping GitLab forge smoke: mirror is unreachable`
+                                 run=false, every later step gated off, job exits 0
+
+    The second path is untouched on the current head, and neither of the round-2 findings mentions it. Finding 1 asks for live-run evidence; finding 2 asks for docs/policy agreement on the TOKEN path. So a round 3 that satisfies both findings exactly still ships a workflow that reports success when the mirror is unreachable.
+
+    WHY THIS PATH IS THE WORSE OF THE TWO. The token path fails deterministically and loudly once — it is a provisioning error, caught the first time anyone looks. The mirror path fails INTERMITTENTLY on a correctly-provisioned credential: a transient network blip, a mirror restart, a readiness endpoint that is slow past the 15s `--max-time`. Each occurrence produces a green nightly that verified nothing, indistinguishable from a real pass in `gh run list` because the skip is a `::notice::`. So the nightly's green becomes unreliable in exactly the way that makes a smoke test worthless: you cannot tell, from the signal, whether it means anything.
+
+    That also bears on TASK-170, which is an operator-action item whose close condition is "the GitLab smoke actually ran and passed". As long as an unreachable mirror yields green, TASK-170 can be closed on a run that never touched GitLab.
+
+    ACCEPTANCE CRITERIA, added rather than left in a comment because a comment is not binding:
+
+    - The GitLab live forge smoke job's conclusion distinguishes RAN-AND-PASSED from DID-NOT-RUN. A skip for any reason — absent credential, unreachable mirror, anything added later — must not present as `success`. Whether that is a failure, a `neutral`/cancelled conclusion, or a required follow-on step that asserts the smoke executed is an implementation choice; what is not acceptable is a bare green.
+    - The distinction is legible from `gh run list` / the checks UI without opening the run and reading `::notice::` lines.
+    - The rule is stated so it holds for skip conditions not yet written: the job reports success only when `steps.preflight.outputs.run == 'true'` AND the lifecycle step passed.
+    - `docs/forge-providers.md` matches the implemented policy for BOTH paths, not only the token one (round-2 finding 2 covers the token path; this extends it).
+
+    Evidence trail: the three-state analysis is on TASK-170 with the pre-fix YAML quoted; this comment records which state round 2 closed and which it did not.
+  created_at: 2026-09-20T17:01:38.969562360Z
+  modified_at: 2026-09-20T17:01:38.969562360Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
