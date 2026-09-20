@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-20T07:38:22.943599769Z
+modified_at: 2026-09-20T07:40:58.638640255Z
 req_type: Bug
 tags:
 - agent-surface
@@ -82,6 +82,28 @@ comments:
   created_at: 2026-09-20T07:38:18.955294421Z
   modified_at: 2026-09-20T07:38:18.955294421Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bdc2-d98e-70c3-aed5-f5a5a1cd5df9
+  author: joe
+  content: |-
+    [advisor:rework] Shelved at the merge phase by MY hold, which is the designed interaction — the substrate carried my hold reason into the shelve detail, so the next session does not need the PR thread to know why.
+
+    ONE CHANGE NEEDED, and everything else on this spec is done. All five acceptance criteria are met with a named test each, including the one that mattered most to me — a message is now readable without consuming its unread state.
+
+    `resolve_mailbox_thread` distinguishes ambiguous from not-found by substring-matching the error's own prose:
+
+        Err(error) if error.to_string().contains("ambiguous") => Err(error),
+        Err(_) if allow_new => Ok(query.to_string()),
+
+    Reword that message and an ambiguous prefix stops matching the second arm, falls to the third, and on the send path `allow_new` is `true` — so it becomes a NEW THREAD ID. An ambiguous prefix silently starting a detached thread is exactly the defect this spec was filed to fix, and it fails in the permissive direction where nothing announces it.
+
+    THE FIX: give `resolve_mailbox_message` a typed outcome so the caller matches a variant rather than the text. An enum carrying Ambiguous and NotFound, or an error type the caller can downcast — either is fine. The printed message stays human; the control flow stops reading it.
+
+    DO NOT change the ambiguity message's wording to make the match more robust. That is the trap: it would look like a fix and would leave the coupling in place.
+
+    This is the BUG-1295 shape in code written after BUG-1295 merged. Worth knowing rather than worth apologising for — it is a reasonable thing to write, which is why the class recurs.
+  created_at: 2026-09-20T07:40:58.638640255Z
+  modified_at: 2026-09-20T07:40:58.638640255Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
