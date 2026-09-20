@@ -6426,7 +6426,11 @@ pub(crate) fn handle_queue_rework(
     // launching a session. trace:BUG-236 | ai:claude
     let work = work || resume;
 
-    let user_id = current_user_id(user);
+    // The invoking shell's own identity. Used verbatim when `--user` is
+    // explicit; otherwise it's only the fallback for an unrouted (`any`)
+    // rework — a routed one lands on the role's shared queue instead (see
+    // the `user_id` resolution below). trace:BUG-1277 | ai:claude
+    let invoking_user_id = current_user_id(user);
     let store = storage.load()?;
 
     // Resolve the requirement (UUID first, then SPEC-ID).
@@ -6600,10 +6604,24 @@ pub(crate) fn handle_queue_rework(
         }
     }
 
-    let existing_queue_entries = storage.queue_list(&user_id, true)?;
-    let existing_queue_entry = existing_queue_entries
-        .iter()
-        .find(|entry| entry.requirement_id == req_id);
+    // BUG-1277: look for a prior entry for this spec across EVERY queue
+    // file, not just the invoking user's own — a previous `rework`/`add`
+    // may already have routed it to a shared role queue, and both the
+    // route-inheritance fallback below and the move-not-duplicate step
+    // after it need to find it wherever it actually lives.
+    // trace:BUG-1277 | ai:claude
+    let existing_entry_elsewhere: Option<(String, aida_core::QueueEntry)> = storage
+        .queue_users()
+        .unwrap_or_default()
+        .into_iter()
+        .find_map(|candidate_user| {
+            storage
+                .queue_list(&candidate_user, true)
+                .ok()?
+                .into_iter()
+                .find(|entry| entry.requirement_id == req_id)
+                .map(|entry| (candidate_user, entry))
+        });
 
     // Route resolution: --for wins; otherwise rework preserves the existing
     // queue route so reviewer-requested fixups stay visible to the intended
@@ -6612,12 +6630,46 @@ pub(crate) fn handle_queue_rework(
     let for_role_resolved: Option<String> = match for_role {
         Some("any") => None,
         Some(role) => Some(canonical_role_name(role)),
-        None => existing_queue_entry
-            .and_then(|entry| entry.for_role.as_deref())
+        None => existing_entry_elsewhere
+            .as_ref()
+            .and_then(|(_, entry)| entry.for_role.as_deref())
             .filter(|role| !role.trim().is_empty())
             .map(canonical_role_name)
             .or_else(|| Some("implementer".to_string())),
     };
+
+    // BUG-1277: a rework routed to a role (the default — see above) must
+    // land where a batch drain actually reads it: the role's shared queue
+    // (`role:<for_role>`), not the invoking user's personal queue. Before
+    // this fix, the entry was always filed under the invoking user's own
+    // identity, and the command's own printed next-step line advised
+    // `--user <invoking-user>` — a queue a role-scoped drain never reads —
+    // so the requeued fixup silently never got picked up. An explicit
+    // `--user` still overrides verbatim; an unrouted (`--for any`) rework
+    // has no natural shared queue and keeps landing on the invoking
+    // identity. trace:BUG-1277 | ai:claude
+    let user_id: String = match user {
+        Some(_) => invoking_user_id.clone(),
+        None => match &for_role_resolved {
+            Some(role) => format!("role:{role}"),
+            None => invoking_user_id.clone(),
+        },
+    };
+
+    // BUG-1277: if a prior entry for this spec lives under a DIFFERENT
+    // identity than where it's landing now, drop it there so rework MOVES
+    // the entry instead of leaving a stale duplicate behind — the queue_add
+    // below only upserts within the destination user's own file.
+    // trace:BUG-1277 | ai:claude
+    if let Some((old_user, _)) = &existing_entry_elsewhere {
+        if aida_core::node::canonical_user_id(old_user)
+            != aida_core::node::canonical_user_id(&user_id)
+        {
+            let _ = storage.queue_remove(old_user, &req_id);
+        }
+    }
+
+    let existing_queue_entries = storage.queue_list(&user_id, true)?;
     let position = if tail {
         i64::MAX // backend resolves to existing_max + 1000
     } else {

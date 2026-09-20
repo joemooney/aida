@@ -531,3 +531,166 @@ fn queue_destination_contract_renders_json_fields() {
         "aida queue work STORY-1002 --user joe --role reviewer"
     );
 }
+
+/// BUG-1277: `aida queue rework SPEC --for implementer` (no explicit
+/// `--user`) must land the requeued entry on the role's shared queue — the
+/// exact identity a batch drain reads (`--user role:implementer`) — not the
+/// invoking user's personal queue. Assert visibility via that SAME read
+/// path, not merely that the command exits zero: a zero exit is what the
+/// pre-fix bug produced too, while still landing the entry somewhere a
+/// batch drain never looks.
+// trace:BUG-1277 | ai:claude
+#[test]
+fn rework_for_implementer_lands_on_role_queue_visible_to_batch_drain() {
+    let _guard = crate::test_env::env_lock();
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let req = req_for_test("BUG-1277", RequirementStatus::Done);
+    let req_id = req.id;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+
+    handle_queue_rework(
+        &storage,
+        "BUG-1277",
+        false,
+        Some("implementer"),
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        // No explicit --user: this is the default path a reviewer-findings
+        // rework actually takes.
+        None,
+    )
+    .unwrap();
+
+    // This is exactly the read a batch drain performs to pick work up.
+    let role_queue = storage.queue_list("role:implementer", true).unwrap();
+    assert_eq!(
+        role_queue
+            .iter()
+            .filter(|e| e.requirement_id == req_id)
+            .count(),
+        1,
+        "rework --for implementer should leave exactly one entry on the \
+         role:implementer queue"
+    );
+    assert_eq!(role_queue[0].for_role.as_deref(), Some("implementer"));
+}
+
+/// BUG-1277: an entry that already exists under a different (e.g. the
+/// invoking human's own) identity must be MOVED to the role queue, not
+/// duplicated. Forgetting the removal half of the old three-command dance
+/// is exactly the failure mode the bug report named.
+// trace:BUG-1277 | ai:claude
+#[test]
+fn rework_moves_existing_entry_from_other_user_instead_of_duplicating() {
+    let _guard = crate::test_env::env_lock();
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let req = req_for_test("BUG-1277", RequirementStatus::Done);
+    let req_id = req.id;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+
+    // Pre-existing entry under the invoking (human/advisor) identity —
+    // the state a prior `queue add`/`rework` left it in.
+    storage
+        .queue_add(queue_entry_for_test(
+            "claude-product-1",
+            req_id,
+            1000,
+            Some("implementer"),
+        ))
+        .unwrap();
+
+    handle_queue_rework(
+        &storage,
+        "BUG-1277",
+        false,
+        Some("implementer"),
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        None,
+    )
+    .unwrap();
+
+    let old_identity_queue = storage.queue_list("claude-product-1", true).unwrap();
+    assert!(
+        !old_identity_queue
+            .iter()
+            .any(|e| e.requirement_id == req_id),
+        "the stale entry under the old identity must be removed, not left \
+         behind as a duplicate"
+    );
+    let role_queue = storage.queue_list("role:implementer", true).unwrap();
+    assert_eq!(
+        role_queue
+            .iter()
+            .filter(|e| e.requirement_id == req_id)
+            .count(),
+        1
+    );
+}
+
+/// BUG-1277: an explicit `--user` is still honoured verbatim — the fix only
+/// changes the DEFAULT destination, never overrides an explicit choice.
+// trace:BUG-1277 | ai:claude
+#[test]
+fn rework_explicit_user_still_overrides_role_default() {
+    let _guard = crate::test_env::env_lock();
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let req = req_for_test("BUG-1277", RequirementStatus::Done);
+    let req_id = req.id;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+
+    handle_queue_rework(
+        &storage,
+        "BUG-1277",
+        false,
+        Some("implementer"),
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("codex"),
+    )
+    .unwrap();
+
+    let entries = storage.queue_list("codex", true).unwrap();
+    assert_eq!(entries[0].requirement_id, req_id);
+    let role_queue = storage.queue_list("role:implementer", true).unwrap();
+    assert!(
+        !role_queue.iter().any(|e| e.requirement_id == req_id),
+        "an explicit --user must not also land on the role queue"
+    );
+}
