@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:11.970306394Z
-modified_at: 2026-09-20T06:41:01.821427837Z
+modified_at: 2026-09-20T06:41:59.369055824Z
 req_type: Task
 tags:
 - acceptance
@@ -70,6 +70,33 @@ comments:
   created_at: 2026-09-20T06:16:09.768778630Z
   modified_at: 2026-09-20T06:16:09.768778630Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bd8c-d849-7213-aaae-4caaf7269978
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2005 feat(criteria): gate untraced acceptance at queue done and PR create (TASK-1290)
+    verdict: APPROVE + merged 2026-09-20 06:40:53Z at head 07cdc850
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — neither implemented nor briefed by this advisor
+    gates cleared: required Build SUCCESS; mergeStateStatus CLEAN; no reviewer phase live at merge time
+    auto-bump: FIRED. Done → Completed with no manual step, which is the first time tonight a lane-implemented spec has completed itself.
+
+    I CHECKED THE THREE THINGS A GATE-ABOUT-GATES IS MOST LIKELY TO GET WRONG.
+
+    Reuse rather than a second tracer: everything sits on `build_criteria_report`, the function already backing `aida criteria`. The new module adds pure policy and formatting. There is no second implementation to drift from the first, which is the outcome this kind of spec usually fails to get.
+
+    Quiet when clean, tested twice — at the policy level and through the command. That was my binding constraint. A gate that speaks on every run is one people learn to ignore, which is precisely how hub-drift warnings became background noise for thirty-two hours while three separate surfaces reported them correctly.
+
+    The tests drive the real binary through clap dispatch, with a comment noting the real command path produced the output rather than a shortcut. That matters more here than anywhere: this is the spec built to catch "the acceptance named a boundary and the implementation tested below it", and a version of it that tested its own helpers would have been self-refuting.
+
+    THE TASK-1277 SEAM is the part nobody asked for. One evaluate call at a single choke point, and a config reader that takes only the key it needs rather than owning the section, so the next spec folds in without a refactor. Documented in the module doc. A seam described in a doc comment is a seam; the same seam described in a mail thread is a coincidence.
+
+    WARN BY DEFAULT with refusal behind config and a ledgered `--force` is the right default for a gate landing mid-flight. A refuse-by-default gate arriving on a night with twelve held PRs would have been indistinguishable from an outage.
+
+    THIS MERGE ALSO SETTLED A DISAGREEMENT EMPIRICALLY. I had argued the product seat was wrong to set lane specs to Done at PR-open, on evidence that turned out to be a spec in an atypical rework state. Before merging I set this spec to Done per their rule; the merge auto-bumped it to Completed with no manual step. Their rule is correct and is now demonstrated rather than argued. I have restored the other five specs I caused to be reverted.
+  created_at: 2026-09-20T06:41:59.369055824Z
+  modified_at: 2026-09-20T06:41:59.369055824Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bd8b-f772-74a2-8037-11dea903365c
   author: aida-auto-bump
