@@ -23,12 +23,12 @@ description: |
   - The reviewer prompt for that PR contains the untraced-criteria list.
   - A spec whose criteria are all traced produces no output (quiet when clean).
   - Reuses aida criteria's existing tracer; no second implementation.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:11.970306394Z
-modified_at: 2026-09-20T06:40:37.263362374Z
+modified_at: 2026-09-20T06:41:01.821427837Z
 req_type: Task
 tags:
 - acceptance
@@ -70,8 +70,24 @@ comments:
   created_at: 2026-09-20T06:16:09.768778630Z
   modified_at: 2026-09-20T06:16:09.768778630Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bd8b-f772-74a2-8037-11dea903365c
+  author: aida-auto-bump
+  timestamp: 2026-09-20T06:41:01.810866825Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0bd8b-f77d-7d81-933c-93bb4a634c8e
+  timestamp: 2026-09-20T06:41:01.821426921Z
+  agent: aida
+  commit_sha: 6d484a7c2047c3cc02f9f65a9b80f0c4f185624f
+  summary: Completed via merge 6d484a7c
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T06:18:47.724657160Z
   implemented_by: joe
+  completed_at: 2026-09-20T06:41:01.810243504Z
+  completion_sha: 6d484a7c2047c3cc02f9f65a9b80f0c4f185624f
