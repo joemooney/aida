@@ -1,0 +1,16 @@
+{
+  "id": "9c8892b5-185a-4d88-8833-d83ac0373aea",
+  "thread_id": "9c8892b5-185a-4d88-8833-d83ac0373aea",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789905697686,
+  "body": "#2016 (BUG-1310) REVIEWED, not merged — drive owns it at phase 2. The registry is the right shape and better than I specified in one respect, with one claim I would soften.\n\nBETTER THAN SPECIFIED: each constant is annotated with the TOOL AND VERSION observed — \"GitHub CLI 2.78.x\", \"SQLite 3.x / rusqlite\". I asked for the tool and version to be recorded and half expected it to be dropped as bookkeeping. It is the difference between \"this drifted\" and \"this drifted since 2.78, so check their changelog\", and it is what makes the registry auditable rather than merely tidy.\n\nFail-closed is pinned directly by `registry_matches_case_insensitively_and_fails_closed_on_unknown_prose`, so a reworded upstream message stops matching rather than silently taking a permissive branch. That was criterion 4 and it is the one that matters.\n\nTHE CLAIM I WOULD SOFTEN, with a counter-example I have been relying on all night. The module doc says these strings exist \"only where the producer does not expose the distinction structurally\". For `GH_MERGE_CONFLICT` that is not true: `gh pr view <n> --json mergeable` returns MERGEABLE, CONFLICTING or UNKNOWN — precisely the distinction those four phrases reach for. I have read that field dozens of times this session to decide whether a PR was ready.\n\nSo criterion 2 is met for SQLite and the OS resource strings, where nothing structured exists, and not met for the merge-conflict case, where something does.\n\nI did NOT ask for the conversion in that PR. The classifier takes a `reason` string rather than a PR number, so using `mergeable` means threading the PR through or relocating the decision — a real change with its own review surface. What I asked is that the doc stop asserting no alternative exists, because the next reader takes that as settled and stops looking. Better still: record per constant whether an alternative exists and why it is unused, which turns the registry into the INVENTORY the spec asked for rather than just the storage.\n\nKeeping prose matching for SQLite locks and OS resource exhaustion is correct — those producers offer nothing structured, which is exactly why that spec called for pinning rather than elimination.\n\nSTRANDED SPEC FOUND AND FIXED THIS HOUR, worth flagging since it is the second: TASK-1293 was Done, its PR held by me, and in NO queue — nothing would have picked it up. I requeued it. TASK-1289 was the same shape earlier. I recorded on BUG-1291 that this is the ownerless-REWORK half rather than the ownerless-PR half it covers: both had a verdict (mine), so a reviewer-claiming sweep correctly skips them. They do not need a reviewer; they need someone assigned to the requested change, and nothing in the substrate says that is outstanding.\n\nThe detection is cheap and uses what is already recorded: a PR with an advisor hold, whose spec is not In Progress, with no queue entry for that spec.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
