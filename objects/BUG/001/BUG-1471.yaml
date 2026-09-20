@@ -1,0 +1,43 @@
+id: 01a0c005-bcda-7c91-ad95-710ca43bb888
+spec_id: BUG-1471
+agreed_id: BUG-1471
+title: aida rel add --type related succeeds with a note and produces an edge no graph traversal follows, and related is the most natural word to reach for
+description: |
+  `related` is the most natural word for a non-directional link between two specs, it is not a standard relationship type, and typing it silently produces an edge that graph traversals will not follow. TASK-887 shipped the warning that tells you so; the warning is not enough, because the word remains the obvious thing to type and the failure is invisible afterwards.
+
+  WHAT HAPPENED, 2026-09-20. This advisor used `aida rel add <a> <b> --type related` twelve times across a session while filing and linking a set of new bugs. Every call printed TASK-887's note and every call succeeded. The resulting graph was inert: `aida graph` and `query_graph` follow none of those edges, so twelve deliberate links between specs about one cluster of defects existed only as text in a YAML file.
+
+  It was caught by accident — a later call happened not to be filtered. That is the second failure: the note is advisory output on an otherwise successful command, so an agent or script that checks for success, or greps for the confirmation line, never sees it. This one grepped for `'Added relationship.*'` and discarded the note twelve times.
+
+  WHY A WARNING IS THE WRONG SHAPE HERE. TASK-887's note is correct and well-written. But it fires after the write, on a command that reports success, for a word that has no other meaning in this vocabulary. Nothing about "related" suggests it is unsupported — it is the word the `aida show` output itself uses when rendering a Custom edge, so the surface teaches it back. A rule that is only enforced by a message the caller may not read is the shape `substrate-as-bouncer.md` argues against.
+
+  WHAT TO DO — the choice is the substance of this spec, not a detail:
+    (a) alias `related` to `references` and say so in the note, or
+    (b) promote `related` to a standard non-directional type, or
+    (c) refuse it and name the alternative.
+
+  (a) is the smallest and preserves every existing Custom("related") edge's meaning. (c) is the safest and breaks the most scripts. (b) is the largest and needs a real answer about whether a non-directional edge earns a place in the taxonomy. Pick one deliberately; do not do (a) by accident while implementing (c).
+
+  ACCEPTANCE
+  1. `aida rel add --type related` either produces a traversable edge or fails. It does not succeed-with-a-note.
+  2. Whichever of (a)/(b)/(c) is chosen, the reasoning is recorded on this spec — a later reader must be able to see why the other two were rejected.
+  3. Existing `Custom("related")` edges in the store are accounted for. Say how many there are and whether they are migrated, left as-is, or reported; do not silently strand them.
+  4. `aida show` does not render a Custom edge with a label that reads like a standard type. If "Related" in the output taught the wrong word, that is part of this bug.
+  5. A test asserts the chosen behaviour by traversal — after `rel add --type related`, either `aida graph` reaches the target or the command failed. Asserting on the message is not sufficient; the message is what already exists.
+
+  trace-worthy note for whoever takes it: TASK-887 is Completed and its warning works. This is not a regression of it — it is the next question, which is whether a warning was the right remedy.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T18:13:16.634611036Z
+modified_at: 2026-09-20T18:13:16.634611036Z
+req_type: Bug
+tags:
+- batch:night-0920
+- cli
+- drain-safe
+- from:session-0920
+- graph
+- substrate-as-bouncer
+- ux
