@@ -1,0 +1,55 @@
+id: 01a0befb-204c-7e22-95d2-dc433e3e8b52
+spec_id: STORY-1388
+agreed_id: STORY-1388
+title: Deriving a judgement from a raw field when a type should carry it leaves no literal for a lint to find, so it needs a different mechanism from prose matching
+description: |
+  Code derives a judgement from a raw field when a type exists — or should exist — to carry it, and unlike prose matching this leaves NO literal for a lint to find. Split from STORY-1382 at the advisor's direction, because the two halves need different mechanisms and combining them makes both useless.
+
+  THE DISTINCTION THAT FORCED THE SPLIT:
+
+    prose matching      `detail.contains("supervised merge-hold")`  — a literal in the source; a lint can see it
+    proxy substitution  `row.tests.is_empty()` standing in for `CriterionState::Untraced`
+                        — no literal, nothing syntactic, indistinguishable from a legitimate emptiness test
+
+  Written as one rule, it either misses this half or fires on every `is_empty()` and is allowlisted into irrelevance — which is BUG-1301's failure reappearing one level up. STORY-1382 keeps the greppable half.
+
+  THE INSTANCE, from TASK-1293's round-2 verdict. `criteria_gate::untraced_lines` filters with `row.tests.is_empty()`. A post-deployment criterion legitimately has zero tests, so the proxy classifies it as untraced and `reviewer_prompt_block` re-labels it — which is precisely the behaviour TASK-1293 exists to prevent. "Has no tests" is a FACT about a criterion; "is untraced" is a JUDGEMENT. They coincide until the moment a category appears where they do not, and that moment is what the spec was written for.
+
+  MEASURED SURFACE, so the scope is honest rather than guessed:
+
+    aida-cli-lib/src/criteria.rs:134       .filter(|row| row.tests.is_empty())
+    aida-cli-lib/src/criteria.rs:752       if row.tests.is_empty()
+    aida-cli-lib/src/criteria_gate.rs:58   .filter(|row| row.tests.is_empty())   <- the defective one
+    aida-cli-lib/src/reconstitute.rs:482   if real_tests.is_empty()
+
+  Four sites. The advisor's point stands on inspection: every legitimate one is syntactically identical to the defective one. No regex separates them, which is exactly why this cannot ride on the ratchet.
+
+  AND THE TYPE DOES NOT EXIST YET. I checked: `CriterionState` with an `Untraced` variant is not on main. `criteria_gate.rs` carries the concept in doc comments and output strings ("Untraced acceptance criteria...") but not in the type system. So the first job is not a lint — it is to introduce the type the proxy has been standing in for, which is also what TASK-1293's fix needs.
+
+  PROPOSED, in order:
+  1. Introduce the typed criterion state — at minimum Traced / Untraced / PostDeployment — derived once where the criteria report is built, and make the report carry it.
+  2. Replace the four proxy sites with variant matches, or state per site why the raw-field test is correct there.
+  3. Only then consider a narrow, per-module rule: within the criteria modules, refuse deriving a criterion's classification from raw fields when the state field exists. Per-type and per-module, NOT a workspace lint.
+
+  SELF-APPLICATION, carried over from STORY-1382 at the advisor's direction and worth repeating here: whatever rule lands must be run against its own implementation before acceptance. The pattern this spec addresses was introduced by the spec that ships the untraced-criteria gate, whose own three criteria are untraced. The author looks outward at the thing being built, and the thing being built is the only tool pointed the other way.
+
+  ACCEPTANCE
+  1. A typed criterion state exists and the criteria report carries it.
+  2. Each of the four measured sites either matches the variant or documents why the raw test is correct there.
+  3. A post-deployment criterion with zero tests does NOT appear in untraced output — TASK-1293's ac1c7c47 is the fixture.
+  4. Any rule introduced is scoped to the criteria modules; a workspace-wide `is_empty()` rule is explicitly out of scope and rejected if proposed.
+  5. The rule is run against its own implementation before acceptance, and the result recorded.
+
+  Filed by the product seat; disposition is the advisor's. This does not fix TASK-1293 — that spec still needs its own rework — it stops the proxy being reintroduced.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T13:22:03.980585256Z
+modified_at: 2026-09-20T13:22:03.980585256Z
+req_type: Story
+tags:
+- from:session-0919
+- parent:EPIC-62
+- substrate-as-bouncer
+- types
