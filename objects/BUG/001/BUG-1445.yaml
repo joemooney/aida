@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:34:29.728492333Z
-modified_at: 2026-09-20T20:16:29.955198837Z
+modified_at: 2026-09-20T20:20:40.146091510Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -95,6 +95,22 @@ comments:
   content: 'Implemented the rebase-only recurrence guard: resolve canonical PR-N reviewer verdicts (even when a stale non-blocking SPEC verdict exists), classify moved patch-equivalent heads separately from unchanged/content-changing heads, stop before CI/review, and emit a rebase-only diagnostic plus non-retry recovery hint. Tests cover the STORY-1350/PR-1974 artifact shape and a moving-main rebase whose tree diff changes while patch contribution does not.'
   created_at: 2026-09-20T20:04:31.237814297Z
   modified_at: 2026-09-20T20:04:31.237814297Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c07a-5e52-7d32-9660-ffaefd510022
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2028
+    agent: codex
+    ran-at: 2026-09-20 13:20 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1445-drain-01a0c07a-1b86-7190-9750-aaeda0d605f0.json
+    ? SEM (0.96) — The rework no-op guard accepts a blocking reviewer verdict recorded under the PR identifier when the requirement-keyed verdict is absent or non-blocking; a stale non-blocking requirement-keyed verdict must not prevent the PR-keyed blocking verdict from arming the guard.
+    ? SEM (0.86) — A no-op rework failure distinguishes an unchanged PR head from a moved head whose patch contribution is unchanged, reporting the former as 'the PR head did not move' and the latter as rebase-only.
+  created_at: 2026-09-20T20:20:40.146091510Z
+  modified_at: 2026-09-20T20:20:40.146091510Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 implementation_info:
   implemented: true
