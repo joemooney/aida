@@ -1,0 +1,45 @@
+id: 01a0c006-2ca4-73b2-bb34-fd15069a6606
+spec_id: SPIKE-85
+agreed_id: SPIKE-85
+title: 'Sweep for self-referential blind spots: six instruments in twelve hours failed on their own category, and every one was found by accident'
+description: |
+  A diagnostic, gate or detector is systematically blind to its own category, and this session found six instances in twelve hours. The pattern is stable enough to sweep for deliberately rather than keep discovering one at a time.
+
+  THE SHAPE. An instrument built to detect a class of problem is itself an instance of that class, and its author's attention is on the artifact rather than on the instrument. Carefulness does not help, because carefulness is applied to the thing you are looking at.
+
+  THE SIX, all 2026-09-20, all independently found:
+
+  1. The untraced-acceptance-criteria gate shipped with three untraced acceptance criteria of its own (TASK-1293).
+  2. Its post-deployment-criterion detector matched the bare substring "post-deployment" and so misclassified the criteria of the very spec introducing the category (TASK-1293). A classifier keyed on a term misfires on documents ABOUT that term — and convention docs, glossary entries and the category-introducing spec are exactly what a project writes next after naming a category, so the misfire is guaranteed rather than unlucky.
+  3. The supervised merge-hold shipped in a PR that merged over an unenforced merge-hold (BUG-1435).
+  4. `aida drain status` reports a `current` spec that its own members table cannot see, so the surface for "is anything running" answered no while work ran (BUG-1441).
+  5. The thread-detachment fix decides ambiguous-versus-not-found by substring-matching its own `anyhow::bail!` prose three lines away, reintroducing the defect it exists to fix — and its tests assert on the same prose, so a reword breaks guard and test together (BUG-1297).
+  6. The portability ratchet, whose charter is catching Linux-only assumptions at PR time, has no rule for the Linux-only assumption that held the cross-platform nightly red for four consecutive nights (BUG-1443). The charter and the miss are the same sentence.
+
+  WHY FILE THE PATTERN RATHER THAN JUST THE INSTANCES. All six were found by accident, by six different routes, none by looking. Six in twelve hours from unsystematic discovery implies a population, and the population is enumerable: every gate, classifier, detector and status surface in the tree is a candidate, and the test is mechanical — point the instrument at itself and at the documents that describe its own category.
+
+  WHAT THIS IS NOT. Not a proposal to build a general-purpose detector-of-detectors; that would be instance seven. A one-time sweep with a written method, producing a list, is the useful artifact.
+
+  ACCEPTANCE
+  1. Enumerate the project's self-referential surfaces: things that gate, classify, detect or report on a category. The predicate is the hard part and stating it is part of the work — if it cannot be stated usefully, say so with the cases that defeat it rather than shipping an approximation.
+  2. For each, record whether it has been applied to itself and to the documents describing its own category, and the result. A "not applicable" is a valid answer if the reasoning is given.
+  3. Report findings as individual specs, not as one omnibus. Each instance above was independently actionable and would have been diluted by being bundled.
+  4. Write the method down so it can be re-run — this will recur every time a new gate ships, and the value is in the repeatable check, not in this one pass.
+  5. Do NOT attempt to automate the check as a lint. Establish first whether the pattern is even machine-detectable; the honest answer may be no, and that answer is worth having explicitly rather than by omission.
+
+  Named across the session by the advisor and product seats jointly. The formulation that unlocked it, from the product seat: "both are the author's attention pointed outward at the artifact while the artifact is the only instrument facing the other way."
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T18:13:45.252179213Z
+modified_at: 2026-09-20T18:13:45.252179213Z
+req_type: Spike
+tags:
+- batch:night-0920
+- diagnostic-decay
+- drain-safe
+- from:session-0920
+- meta
+- quality
+human_only: true
