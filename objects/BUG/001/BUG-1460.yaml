@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:35:48.162497532Z
-modified_at: 2026-09-20T22:36:22.909580076Z
+modified_at: 2026-09-20T22:57:30.964861164Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -253,6 +253,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T22:36:22.626268443Z
   modified_at: 2026-09-20T22:36:22.626268443Z
+- id: 01a0c109-f754-7cd2-9a5a-96e579aa9060
+  author: joe
+  content: 'Round 2: replaced the include_str source-order proxy with an orchestration-level MockPhaseDriver regression. The fixture models PrNoChecks followed by a mid-phase head advance; orchestrate now performs a head-bound CI proof before emitting reviewer entry and fails in phase 2 when proof is absent/stale. Mutation check observed: removing the boundary call makes the regression test enter reviewer and fail. Confirmed lifecycle:no-ci-wait behavior is unchanged because its orchestrator branch skips phase 2 entirely; CLAUDE.md remains accurate. Also guarded fake-gh positional parameters with /.'
+  created_at: 2026-09-20T22:57:30.964861164Z
+  modified_at: 2026-09-20T22:57:30.964861164Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
