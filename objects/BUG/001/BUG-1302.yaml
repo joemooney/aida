@@ -1,0 +1,52 @@
+id: 01a0bc2d-6fe7-75e3-b93f-8a8b5f7dcfaa
+spec_id: BUG-1302
+agreed_id: BUG-1302
+title: 'auto-complete failure: phase 3 (reviewer) on TASK-1273'
+description: |
+  Auto-drafted by `aida queue work TASK-1273 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  reviewer verdict is RequestChanges — not Approved
+
+  Failure kind: `verdict:request-changes`
+
+  ## Recovery hint shown to the user
+
+  Address the review feedback, then push fixups: `aida queue rework TASK-1273 --work`
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-20T00:18:08.386499602+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 430760 ms
+    - phase 2 (ci): 1117357 ms
+    - phase 3 (reviewer): 274153 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"TASK-1273","started_at":"2026-09-19T23:47:36.577763019+00:00","completed_at":"2026-09-20T00:18:08.386499602+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":430760},{"phase":2,"slug":"ci","elapsed_ms":1117357},{"phase":3,"slug":"reviewer","elapsed_ms":274153}],"total_ms":1824860,"binary_sha":"2ef88f0295"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T00:18:09.511858745Z
+modified_at: 2026-09-20T00:18:09.511858745Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-3
+- failure-kind:verdict:request-changes
+- reviewer
