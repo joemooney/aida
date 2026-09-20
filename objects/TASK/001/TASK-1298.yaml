@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:18.813550852Z
-modified_at: 2026-09-20T22:49:03.078101572Z
+modified_at: 2026-09-20T22:49:04.506403288Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -192,6 +192,18 @@ comments:
   content: Requeued after the orchestrator rebuild. BUG-1445's no-op guard is now live in the running binary (wave b09197ab72), so a round that produces no new commit is detected rather than silently re-reviewed. Verdict reviewed_sha matches this branch head exactly, so the findings describe current code. No acceptance change.
   created_at: 2026-09-20T22:49:02.799494783Z
   modified_at: 2026-09-20T22:49:02.799494783Z
+- id: 01a0c102-3be0-78a2-8947-84cc57348680
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #2014):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f94c08d945d3
+    Recorded: 2026-09-20T18:22:46.874135546+00:00
+    Findings:
+    1. TASK-1298: Distinguish ErrorKind::Unsupported from genuine inode-probe errors. On non-Unix platforms, unsupported inode accounting must be skipped or warned so an otherwise healthy machine can pass; genuine probe errors must remain fail-closed. Add a test asserting the unsupported case remains ready, and document the resulting lack of Windows inode-exhaustion coverage near the fallback.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T22:49:04.224085767Z
+  modified_at: 2026-09-20T22:49:04.224085767Z
 execution_mode: drain
 implementation_info:
   implemented: true
