@@ -1,0 +1,44 @@
+id: 01a0bc56-6157-7cc1-a3c7-bed634b179bd
+spec_id: BUG-1305
+agreed_id: BUG-1305
+title: aida dev status reports ACTIVE when the binary it points at does not exist, so a deleted dev build silently falls through to an older release
+description: |
+  `aida dev status` reports "Activation: ACTIVE" when the binary it points at does not exist. The status is derived from the PATH entry rather than from the file, so it asserts a state that is not true, and every `aida` call meanwhile falls through to whatever the next PATH entry holds — with no error at any layer.
+
+  OBSERVED 2026-09-19. The shared build directory was deleted to recover a full disk, which removed target/release/aida. Afterwards:
+
+    aida dev status   ->  Activation: ACTIVE
+                          Binary dir:  /home/joe/ai/aida/target/release
+                          Build profile: release
+    which aida        ->  /home/joe/.local/bin/aida
+    aida --version    ->  aida 0.15.0 (built 2026-09-11, sha 0bd634c)
+
+  Eight days and roughly thirty merges stale. The status surface whose entire job is to tell you which binary you are running reported the intended one while a different one served every call. I nearly missed it, and only caught it because a flag I had used for hours stopped existing mid-session — the broken command was the symptom, and the status surface was no help in diagnosing it.
+
+  THE DRAIN INHERITED THE SAME BLINDNESS. A drain launched during that window ran the stale binary and reported healthy throughout. Its own lock file is the evidence: `binary_sha` and `binary_path` were both absent, because those fields were added by TASK-1285 and a binary that predates them cannot write them. The lock testified against its own launcher, but nothing read it that way.
+
+  WHY THE FALLBACK IS THE DANGEROUS PART. PATH fallthrough is normally a convenience. Here it converts a missing file into a silent eight-day version regression, and the regression is invisible precisely because the replacement works — it runs, it answers, it just answers as a different version. An error would have been far better than a success.
+
+  ACCEPTANCE
+  1. `aida dev status` reports activation by checking the BINARY FILE, not the PATH entry. A pinned directory whose binary is absent reports a distinct state — activated but missing — and says what to do, which is rebuild.
+  2. That state is visibly not ACTIVE. Whatever the wording, a reader skimming must not come away believing the dev build is in use.
+  3. The status shows the resolved binary the shell will actually run, its version and its build sha, so a fallthrough is visible on the surface that exists to answer this question.
+  4. The PS1 marker reflects the missing state too, since that is the ambient signal a long session actually reads.
+  5. A test covers the pure decision: given a pinned directory, a present-or-absent binary and the next PATH match, assert the reported state.
+
+  RELATED AND DELIBERATELY SEPARATE: TASK-1298 asks the readiness check to verify the binary exists before an unattended window. This spec is about the status surface being truthful whenever anyone asks. The readiness check is a moment; this is the permanent answer.
+
+  This is the PRIN-4 class at its second grade: not a diagnostic that degrades, but one that asserts something its own subject disproves.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T01:02:52.759483961Z
+modified_at: 2026-09-20T01:02:52.759483961Z
+req_type: Bug
+tags:
+- dev-workflow
+- diagnostic-decay
+- diagnostics
+- drain-safe
+- from:session-0919
