@@ -32510,17 +32510,28 @@ fn branch_unshipped_patch_count_default(repo: &std::path::Path, branch: &str) ->
     )
 }
 
-/// Whether `after` contains work that is patch-unique relative to `before`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReworkHeadChange {
+    Unchanged,
+    RebaseOnly,
+    ContentChanged,
+}
+
+/// Classify the branch's contribution between two rework heads.
 ///
 /// A changed SHA alone is not evidence of rework: amend and rebase rewrite
 /// commit identities. Excluding the current default branch keeps a pure rebase
 /// onto a newer main from looking like newly-authored work.
-// trace:TASK-1265 | ai:codex
-fn rework_heads_content_changed(repo: &std::path::Path, before: &str, after: &str) -> Option<bool> {
+// trace:TASK-1265 trace:BUG-1445 | ai:codex
+fn classify_rework_head_change(
+    repo: &std::path::Path,
+    before: &str,
+    after: &str,
+) -> Option<ReworkHeadChange> {
     let before = before.trim();
     let after = after.trim();
     if before.eq_ignore_ascii_case(after) {
-        return Some(false);
+        return Some(ReworkHeadChange::Unchanged);
     }
 
     let tree_diff = std::process::Command::new("git")
@@ -32530,7 +32541,7 @@ fn rework_heads_content_changed(repo: &std::path::Path, before: &str, after: &st
         .status()
         .ok()?;
     match tree_diff.code() {
-        Some(0) => return Some(false),
+        Some(0) => return Some(ReworkHeadChange::Unchanged),
         Some(1) => {}
         _ => return None,
     }
@@ -32553,16 +32564,53 @@ fn rework_heads_content_changed(repo: &std::path::Path, before: &str, after: &st
     if !out.status.success() {
         return None;
     }
-    Some(!String::from_utf8_lossy(&out.stdout).trim().is_empty())
+    Some(if String::from_utf8_lossy(&out.stdout).trim().is_empty() {
+        ReworkHeadChange::RebaseOnly
+    } else {
+        ReworkHeadChange::ContentChanged
+    })
 }
 
-// trace:TASK-1265 | ai:codex
-fn rework_no_op_message(pr: u32, before: &str, after: &str, reason: &str, round: usize) -> String {
+// trace:TASK-1265 trace:BUG-1445 | ai:codex
+fn rework_no_op_message(
+    pr: u32,
+    before: &str,
+    after: &str,
+    reason: &str,
+    round: usize,
+    change: ReworkHeadChange,
+) -> String {
+    let classification = match change {
+        ReworkHeadChange::Unchanged => "the PR head did not move",
+        ReworkHeadChange::RebaseOnly => {
+            "the PR head moved, but its patch-ids are unchanged (rebase-only)"
+        }
+        ReworkHeadChange::ContentChanged => "the branch contribution changed",
+    };
     format!(
-        "ROUND {round} rework implementer added no patch-unique work to PR-{pr} (head `{}` → `{}`); the previous round's commit does not count. Authoritative open items:\n{reason}",
+        "ROUND {round} rework added no patch-unique work to PR-{pr}: {classification} (head `{}` → `{}`). The previous round's commits do not count. Authoritative open items:\n{reason}",
         before.trim(),
         after.trim()
     )
+}
+
+// Reviewers normally persist the verdict under PR-N; older/manual handoffs
+// may use the requirement id. Keep both readable so the no-op guard is armed
+// by the same artifact that the reviewer actually wrote.
+// trace:BUG-1445 | ai:codex
+fn blocking_rework_verdict(
+    project_root: &std::path::Path,
+    spec: &str,
+    pr: u32,
+) -> Option<review_verdict::RecordedVerdict> {
+    if let Some(verdict) = review_verdict::read_recorded_verdict(project_root, spec)
+        .filter(|verdict| verdict.kind.blocks_done())
+    {
+        return Some(verdict);
+    }
+    let pr_id = format!("PR-{pr}");
+    review_verdict::read_recorded_verdict(project_root, &pr_id)
+        .filter(|verdict| verdict.kind.blocks_done())
 }
 
 /// Count how many commits `branch` is ahead of the repo's DEFAULT branch, and
@@ -87041,16 +87089,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         Some(self.project_root.clone())
     }
 
-    // trace:BUG-1213 | ai:codex
+    // trace:BUG-1213 trace:BUG-1445 | ai:codex
     fn begin_rework_guard(&mut self) {
         self.rework_guard = None;
-        let Some(verdict) = review_verdict::read_recorded_verdict(&self.project_root, &self.spec)
-        else {
-            return;
-        };
-        if !verdict.kind.blocks_done() {
-            return;
-        }
         let Ok(crate::forge::ChangeLookup::Found(change)) =
             crate::forge::forge_for(&self.project_root).change_for_spec(&self.spec)
         else {
@@ -87068,6 +87109,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             return;
         }
         let pr = change.id as u32;
+        let Some(verdict) = blocking_rework_verdict(&self.project_root, &self.spec, pr) else {
+            return;
+        };
         let Some(head) = pr_head_sha_best_effort(self, pr) else {
             return;
         };
@@ -87087,19 +87131,20 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         self.rework_guard = Some((pr, head, reason, round));
     }
 
-    // trace:BUG-1213 | ai:codex
+    // trace:BUG-1213 trace:BUG-1445 | ai:codex
     fn rework_no_op_failure(&mut self) -> Option<auto_complete::PhaseFailure> {
         let (pr, before, reason, round) = self.rework_guard.as_ref()?;
         if self.phase_done_pr != Some(*pr) {
             return None;
         }
         let after = pr_head_sha_best_effort(self, *pr)?;
-        if rework_heads_content_changed(&self.project_root, before, &after) != Some(false) {
+        let change = classify_rework_head_change(&self.project_root, before, &after)?;
+        if change == ReworkHeadChange::ContentChanged {
             return None;
         }
         Some(auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::ReworkNoOp,
-            rework_no_op_message(*pr, before, &after, reason, *round),
+            rework_no_op_message(*pr, before, &after, reason, *round, change),
         ))
     }
 
