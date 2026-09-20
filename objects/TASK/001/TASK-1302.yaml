@@ -21,12 +21,12 @@ description: |
   - The project copy at `.aida/discipline/session-discipline.md` is byte-identical to the master.
   - No SPEC-IDs appear in the new section, since the guide is scaffolded to downstream projects.
   - The discipline-pack parity test passes.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:04:59.020397925Z
-modified_at: 2026-09-20T18:08:49.348491478Z
+modified_at: 2026-09-20T18:15:22.329129751Z
 req_type: Task
 tags:
 - discipline
