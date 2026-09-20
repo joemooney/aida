@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:33.544062298Z
-modified_at: 2026-09-20T16:12:35.532601071Z
+modified_at: 2026-09-20T16:12:37.170911294Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -191,6 +191,16 @@ comments:
   created_at: 2026-09-20T16:12:32.560248255Z
   modified_at: 2026-09-20T16:12:32.560248255Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bf97-44a1-7b02-b202-30c40e0c4623
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1998):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. BUG-1286 AC1: SpecCompleted is not emitted for every transition to Completed. emit_spec_completed is called only from auto_bump_done_to_completed and handle_db_reconcile_status (aida-cli-lib/src/lib.rs:63291-63308,63873-63884), while supported completion paths such as aida done (handle_done_command, lib.rs:9677-9723), aida queue done, direct aida edit --status completed, and queue advance epic closure still update the store without emitting an event. A consumer can therefore still see no terminal completion record for specs closed through those paths. Centralize emission at the successful into-Completed transition boundary or wire every production completion path, and add coverage for the omitted commands.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T16:12:36.897062538Z
+  modified_at: 2026-09-20T16:12:36.897062538Z
 execution_mode: drain
 implementation_info:
   implemented: true
