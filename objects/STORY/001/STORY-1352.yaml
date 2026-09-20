@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:40.960788392Z
-modified_at: 2026-09-20T08:32:03.003795892Z
+modified_at: 2026-09-20T10:11:53.050190112Z
 req_type: Story
 tags:
 - api-stability
@@ -187,6 +187,27 @@ comments:
     Found by the BUG-1289 lane auditing all twelve surfaces empirically rather than reading the manifest, which is how it found two that could not run.
   created_at: 2026-09-20T05:30:55.163792705Z
   modified_at: 2026-09-20T05:30:55.163792705Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0be4d-025a-7e93-afea-96bd0fea11af
+  author: joe
+  content: |-
+    [advisor] A FOURTH GAP, found by checking whether a new event field needed a version bump. It did not, and the reason is the gap.
+
+    `docs/monitor-contract-fixtures/events-follow.json` declares four fields — `ts`, `spec`, `run_uuid`, `kind.event` — plus the list of event kind names. It declares nothing about any event's PAYLOAD.
+
+    So the contract promises the envelope and not the contents. Under its own stated rule — "a field visible in JSON but absent from that manifest is not promised" — every payload field is unpromised: `shipped` and `shelved` on QueueDrained, `pr` on PrMerged, the `ineligible` list PR #2013 is adding, and whatever terminal-event fields BUG-1286 lands.
+
+    Those are precisely the fields a consumer wants. A dashboard showing drain outcomes needs the counts; connecting a merge to a PR needs `pr`. The fields actually under contract are mostly routing metadata that tells you an event happened and which spec it concerned.
+
+    CONSEQUENCE. A consumer that follows the contract to the letter can render almost nothing, and any consumer that renders something useful has gone outside it. Worse, the version discipline that #1987 shipped does not protect those fields at all — a payload field could be renamed or removed with no major bump demanded, because the compatibility check only compares declared fields and none of these are declared.
+
+    That compounds the second gap already recorded here: `compatibility_errors` ignores `event_kinds` too. So the contract currently versions a subset of the envelope and nothing else.
+
+    NOT PROPOSING A DESIGN. Bringing payloads under contract means deciding per event kind what is promised, which is real work and may well be worth doing incrementally — the terminal events and QueueDrained first, since those are what consumers reach for. Recording it so the decision is deliberate rather than discovered by a consumer whose dashboard breaks.
+
+    ONE PRACTICAL NOTE for sequencing: if payloads come under contract, PR #2013's `ineligible` field and BUG-1286's terminal-event fields both become versioned surface at once. Bumping once for that batch is cheaper and more honest than three separate minor bumps.
+  created_at: 2026-09-20T10:11:53.050190112Z
+  modified_at: 2026-09-20T10:11:53.050190112Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bcea-5980-7873-a5fc-df081af1a267
