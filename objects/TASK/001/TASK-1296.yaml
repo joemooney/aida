@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:01:07.081451092Z
-modified_at: 2026-09-20T01:40:18.450116914Z
+modified_at: 2026-09-20T01:59:00.615451844Z
 req_type: Task
 tags:
 - drain-safe
@@ -38,4 +38,11 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-19T21:01:11.476931896Z
+comments:
+- id: 01a0bc89-c507-7d62-85fe-5b4dbc2af439
+  author: joe
+  content: Commit cafe9ba6d6 references this requirement
+  created_at: 2026-09-20T01:59:00.615451844Z
+  modified_at: 2026-09-20T01:59:00.615451844Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
