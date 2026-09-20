@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:57.872533301Z
-modified_at: 2026-09-20T22:49:25.088528759Z
+modified_at: 2026-09-20T22:49:26.388145979Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -237,6 +237,19 @@ comments:
   content: Requeued after the orchestrator rebuild. BUG-1445's no-op guard is now live in the running binary (wave b09197ab72), so a round that produces no new commit is detected rather than silently re-reviewed. Verdict reviewed_sha matches this branch head exactly, so the findings describe current code. No acceptance change.
   created_at: 2026-09-20T22:49:24.803997630Z
   modified_at: 2026-09-20T22:49:24.803997630Z
+- id: 01a0c102-9156-76e1-8bbf-3179fb9783d0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1974):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3bd68091afa0
+    Recorded: 2026-09-20T13:28:11.237755947+00:00
+    Findings:
+    1. STORY-1350: The pickup writer and review-prompt reader still hard-code '## Implementer approach' independently. Introduce one shared marker source or a coupling test that fails when either side changes alone, as required by the round-3 rework contract.
+    2. STORY-1350: append_implementer_approach still emits nothing when no marked comment exists, and the regression tests call only the helper/extractor instead of generate_review_prompt. Emit the required explicit absence note and test marked inclusion plus absence through the real generated-prompt path.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T22:49:26.102451925Z
+  modified_at: 2026-09-20T22:49:26.102451925Z
 execution_mode: drain
 implementation_info:
   implemented: true
