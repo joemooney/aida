@@ -886,19 +886,30 @@ fn set_phase_inner_with_tuning(
     state.phase_started_at = Some(chrono::Utc::now().to_rfc3339());
     state.current_session_id = session_id.map(str::to_string);
     state.current_vendor = vendor.map(str::to_string);
-    if let Some(member) = state.members.iter_mut().find(|m| m.spec == spec) {
-        member
-            .started_at
-            .get_or_insert_with(|| chrono::Utc::now().to_rfc3339());
-        member.state = format!("in-phase-{phase_index}");
-        // TASK-1292: bind the PR live, the moment it's known, rather than
-        // only at the member's terminal outcome (`set_member_outcome`) — a
-        // reviewer phase's PR ownership must be visible to a concurrent
-        // `aida pr ship` call WHILE the review is in flight.
-        // trace:TASK-1292 | ai:claude
-        if pr.is_some() {
-            member.pr = pr;
-        }
+    // A batch drain re-resolves its queue head between members. Work tagged
+    // into the batch after launch was therefore absent from the initial
+    // snapshot, even though it could become `current`. Phase entry is the
+    // authoritative point at which a refreshed member joins the live drain.
+    // trace:BUG-1441 | ai:codex
+    if !state.members.iter().any(|m| m.spec == spec) {
+        state.members.push(DrainMember::queued(spec));
+    }
+    let member = state
+        .members
+        .iter_mut()
+        .find(|m| m.spec == spec)
+        .expect("phase member was inserted above");
+    member
+        .started_at
+        .get_or_insert_with(|| chrono::Utc::now().to_rfc3339());
+    member.state = format!("in-phase-{phase_index}");
+    // TASK-1292: bind the PR live, the moment it's known, rather than
+    // only at the member's terminal outcome (`set_member_outcome`) — a
+    // reviewer phase's PR ownership must be visible to a concurrent
+    // `aida pr ship` call WHILE the review is in flight.
+    // trace:TASK-1292 | ai:claude
+    if pr.is_some() {
+        member.pr = pr;
     }
     let _ = state.write(project_root);
     // STORY-712: phase churn is the benign majority — emitted (so a `--all`
@@ -1491,6 +1502,31 @@ fn render_human_inner(
         out.push('\n');
     }
 
+    // Legacy/crash-window files may predate the phase-entry upsert above.
+    // Never let status imply that nothing is running while `current` names a
+    // spec: render the missing active row from the top-level phase fields.
+    // trace:BUG-1441 | ai:codex
+    if let Some(current) = state.current.as_deref() {
+        if !state.members.iter().any(|m| m.spec == current) {
+            let phase_index = state
+                .current_phase
+                .as_deref()
+                .and_then(|phase| phase.split_whitespace().next())
+                .unwrap_or("?");
+            let mut member = DrainMember::queued(current);
+            member.state = format!("in-phase-{phase_index}");
+            member.started_at = state.phase_started_at.clone();
+            out.push_str(&member_line_with_pacing(
+                &member,
+                state,
+                project_root,
+                quiet_warn_minutes,
+                now,
+            ));
+            out.push('\n');
+        }
+    }
+
     // STORY-1041: a pipelined drain can have more than one active member, so
     // the progress line reports merged + active counts instead of pretending
     // there is only one "spec N of M". trace:STORY-1041 trace:ADR-27 | ai:codex
@@ -1899,6 +1935,21 @@ mod tests {
         );
     }
 
+    // BUG-1441: even an old/in-flight state file with a top-level current
+    // spec missing from the launch snapshot must show the active row.
+    // trace:BUG-1441 | ai:codex
+    #[test]
+    fn render_human_synthesizes_missing_current_member() {
+        let mut state = batch_state();
+        state.current = Some("BUG-REFRESHED".to_string());
+        state.current_phase = Some("2 (ci)".to_string());
+        state.phase_started_at = Some("2026-05-18T23:30:00+00:00".to_string());
+
+        let rendered = render_human(&state, false);
+        assert!(rendered.contains("BUG-REFRESHED"));
+        assert!(rendered.contains("ci"));
+    }
+
     #[test]
     fn live_drain_spec_uses_orchestrator_for_ci_wait() {
         let dir = tempfile::tempdir().unwrap();
@@ -2246,6 +2297,29 @@ mod tests {
             Some(1948),
             "the PR must be bound while the member is still running, not only at set_member_outcome"
         );
+    }
+
+    // BUG-1441 acceptance fixture: the batch snapshot is formed first, then a
+    // newly tagged/queued spec is selected by the live refresh path. Entering
+    // its phase must append the same member row launch-time work receives.
+    // trace:BUG-1441 | ai:codex
+    #[test]
+    fn phase_entry_records_member_added_after_batch_launch() {
+        let dir = tempfile::tempdir().unwrap();
+        batch_state().write(dir.path()).unwrap();
+
+        set_phase(dir.path(), "BUG-REFRESHED", 1, "implementer");
+
+        let read = DrainState::read(dir.path()).unwrap();
+        assert_eq!(read.current.as_deref(), Some("BUG-REFRESHED"));
+        assert_eq!(read.current_phase.as_deref(), Some("1 (implementer)"));
+        let refreshed = read
+            .members
+            .iter()
+            .find(|member| member.spec == "BUG-REFRESHED")
+            .expect("refresh-added work must join the members table");
+        assert_eq!(refreshed.state, "in-phase-1");
+        assert!(refreshed.started_at.is_some());
     }
 
     // TASK-1292 regression fixture (full drain_state round trip): a reviewer
