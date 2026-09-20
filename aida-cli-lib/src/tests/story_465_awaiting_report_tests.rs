@@ -50,6 +50,7 @@ fn awaiting_report_folds_in_unread_mail_without_a_network_call() {
     let backend = open_backend(dir.path());
 
     let msg = aida_core::mailbox::Message {
+        subject: None,
         id: "m-awaiting-mail-1".to_string(),
         thread_id: "t1".to_string(),
         from: "other-agent".to_string(),
@@ -100,6 +101,7 @@ fn role_addressed_mail_does_not_inflate_the_operator_mail_count() {
 
     for i in 0..3 {
         let msg = aida_core::mailbox::Message {
+            subject: None,
             id: format!("m-role-{i}"),
             thread_id: "t1".to_string(),
             from: "claude-product-1".to_string(),
@@ -145,6 +147,7 @@ fn ctx_role_includes_shared_role_mail_when_env_role_is_absent() {
     let backend = open_backend(dir.path());
 
     let msg = aida_core::mailbox::Message {
+        subject: None,
         id: "m-advisor-context-role".to_string(),
         thread_id: "t-advisor-context-role".to_string(),
         from: "implementer".to_string(),

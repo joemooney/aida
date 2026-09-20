@@ -288,6 +288,7 @@ fn message_to_agent_type_reaches_inbox() {
     ]);
     let identities = inbox_identities();
     let to_type = Message {
+        subject: None,
         id: "m1".to_string(),
         thread_id: "t1".to_string(),
         from: "coordinator".to_string(),
@@ -416,6 +417,7 @@ fn mailbox_policy_act_on_mail_typo_falls_back_to_safe_default() {
 #[test]
 fn mailbox_mutation_allowed_for_sender_or_operator_only() {
     let msg = aida_core::mailbox::Message {
+        subject: None,
         id: "m1".into(),
         thread_id: "t1".into(),
         from: "codex".into(),
@@ -1181,6 +1183,7 @@ fn promote_surfaces_queue_add_failure() {
 /// Build an urgent broadcast `Message` with the given id, sender, timestamp.
 fn urgent_broadcast(id: &str, from: &str, ts: i64) -> aida_core::mailbox::Message {
     aida_core::mailbox::Message {
+        subject: None,
         id: id.to_string(),
         thread_id: id.to_string(),
         from: from.to_string(),

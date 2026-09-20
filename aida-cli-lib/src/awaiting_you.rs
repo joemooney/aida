@@ -731,6 +731,7 @@ mod tests {
         ts: i64,
     ) -> aida_core::mailbox::Message {
         aida_core::mailbox::Message {
+            subject: None,
             id: id.to_string(),
             thread_id: "t".to_string(),
             from: from.to_string(),

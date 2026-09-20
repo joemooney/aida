@@ -150,6 +150,11 @@ pub struct Message {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub in_reply_to: Option<String>,
     pub body: String,
+    /// Optional explicit subject. Older messages derive their display subject
+    /// from the first non-empty body line.
+    // trace:BUG-1231 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
     /// Light urgency flag (STORY-539): `true` marks an out-of-band escalation /
     /// "stop" that should be surfaced (e.g. statusline nag) instead of sitting
     /// unseen in a purely-chronological inbox. Defaults to `false`, so messages
@@ -617,10 +622,11 @@ fn subject_line(m: &Message, max: usize) -> String {
         return "[withdrawn]".to_string();
     }
     let first = m
-        .body
-        .lines()
+        .subject
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
         .map(str::trim)
-        .find(|l| !l.is_empty())
+        .or_else(|| m.body.lines().map(str::trim).find(|l| !l.is_empty()))
         .unwrap_or("");
     let mut chars = first.chars();
     let head: String = chars.by_ref().take(max).collect();
@@ -813,6 +819,7 @@ mod tests {
 
     fn msg(id: &str, thread: &str, from: &str, to: Recipient, ts: i64) -> Message {
         Message {
+            subject: None,
             id: id.to_string(),
             thread_id: thread.to_string(),
             from: from.to_string(),
@@ -1404,6 +1411,16 @@ mod tests {
         assert!(subj.starts_with("PR ready for review"));
         assert!(subj.ends_with('…'), "long subject is truncated: {subj}");
         assert!(!subj.contains('\n'));
+    }
+
+    // trace:BUG-1231 | ai:codex
+    #[test]
+    fn build_notice_prefers_explicit_subject_over_body_first_line() {
+        let mut m = msg("1", "t", "codex", Recipient::Agent("claude".into()), 10);
+        m.subject = Some("Explicit subject".into());
+        m.body = "different first body line\nmore".into();
+        let n = build_notice(["claude"], &[m], &std::collections::HashMap::new(), 5);
+        assert_eq!(n.shown[0].subject, "Explicit subject");
     }
 
     // ── STORY-701: direct-fs local reads (no `aida` shell-out) ────────────

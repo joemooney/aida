@@ -35,6 +35,7 @@ Rule of thumb: **if the system should *act* on it, make it a state change; if a 
 aida mailbox send "heads-up: rebasing the forge branch, hold your PR" --to codex
 # send rich/multi-line text without shell expansion of backticks or $()
 aida mailbox send --to codex --body-file /tmp/aida-mail.txt
+aida mailbox send --to codex --subject "Review requested" --body-file /tmp/aida-mail.txt
 printf '%s\n' 'please run `aida queue next`' | aida mailbox send --to codex --stdin
 # broadcast to everyone
 aida mailbox send "CI infra is flaky tonight, expect retries" --broadcast

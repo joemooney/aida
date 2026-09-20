@@ -674,6 +674,7 @@ fn notify_finished_live_sessions(project_root: &std::path::Path, rows: &mut [Not
             wt = row.worktree,
         );
         let msg = aida_core::mailbox::Message {
+            subject: None,
             id: id.clone(),
             thread_id: id,
             from: "aida-session-reap".to_string(),

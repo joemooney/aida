@@ -1177,6 +1177,7 @@ fn send_assignment_notification(
         timestamp: chrono::Utc::now().timestamp_millis(),
         in_reply_to: None,
         body: format!("You were assigned {display_id}: {title}"),
+        subject: None,
         urgent: false,
         intent: Intent::Fyi,
         retracted: false,

@@ -2812,6 +2812,10 @@ pub enum MailboxCommand {
         /// cannot expand backticks or `$()` before AIDA receives the text.
         body: Option<String>,
 
+        /// Short subject shown by inbox and notice views.
+        #[clap(long, value_name = "SUBJECT")]
+        subject: Option<String>,
+
         /// Read the message body from a file instead of a shell argument.
         #[clap(long, value_name = "PATH")]
         body_file: Option<PathBuf>,

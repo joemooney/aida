@@ -2598,6 +2598,7 @@ impl<'a> McpServer<'a> {
             None => aida_core::mailbox::Intent::default(),
         };
         let msg = Message {
+            subject: None,
             id: id.clone(),
             thread_id: thread_id.clone(),
             from,

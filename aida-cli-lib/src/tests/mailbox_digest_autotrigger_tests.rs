@@ -8,6 +8,7 @@ use tempfile::tempdir;
 
 fn msg(id: &str) -> Message {
     Message {
+        subject: None,
         id: id.to_string(),
         thread_id: "t1".to_string(),
         from: "codex".to_string(),
