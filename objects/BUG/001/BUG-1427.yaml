@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:13:31.332560143Z
-modified_at: 2026-09-20T15:13:04.775992711Z
+modified_at: 2026-09-20T15:30:08.547090958Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -48,6 +48,22 @@ comments:
   content: 'Implemented exhaustive cross-identity queue sweeping for rework, propagated queue listing/removal failures, and added explicit source-to-destination move diagnostics. Regression covers two stale source queues plus the destination. Verified: cargo test -p aida-cli-lib queue_rework_tests --lib (25 passed); cargo fmt --all -- --check; git diff --check.'
   created_at: 2026-09-20T15:12:17.875625769Z
   modified_at: 2026-09-20T15:12:17.875625769Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf70-6223-7603-a4c4-72d68f33754a
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2020
+    agent: codex
+    ran-at: 2026-09-20 08:30 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1427-drain-01a0bf70-0186-7ff1-bdeb-17e977bdc197.json
+    ? AC (0.96) — If enumerating queue identities or reading any identity's queue fails during `aida queue rework`, the command fails instead of treating that identity as absent and continuing.
+    ? SEM (0.88) — The all-identities move is non-transactional: source entries are removed sequentially before the destination entry is added, so a later removal or destination-add failure may leave already-removed source entries absent without creating the destination entry.
+  created_at: 2026-09-20T15:30:08.547090958Z
+  modified_at: 2026-09-20T15:30:08.547090958Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
