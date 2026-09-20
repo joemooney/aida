@@ -21,12 +21,12 @@ description: |-
   Fix, modelled on a mechanism that already exists: `aida pull` auto-bumps Done → Completed when a commit referencing the spec lands on the default branch. Do the same for review specs against PR state — when a Review-PR spec's PR is observed terminal, resolve the spec (merged → Completed, closed-unmerged → Rejected) and drop its queue entry, recording which PR and which terminal state on the spec so the trail survives. The natural hook is the same post-merge pull path, plus the drain's own merge step which already knows the PR it just merged.
 
   Acceptance: after a PR merges, its Review-PR spec reaches Completed and leaves the reviewer queue without a human edit; a PR closed unmerged resolves its review spec Rejected with the reason recorded; a review spec whose PR is still open is untouched; the six ids above are the regression fixture; no change to aida queue gc's existing target-spec rule.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:01:07.081451092Z
-modified_at: 2026-09-20T01:59:00.615451844Z
+modified_at: 2026-09-20T02:12:07.541769003Z
 req_type: Task
 tags:
 - drain-safe
@@ -45,4 +45,22 @@ comments:
   created_at: 2026-09-20T01:59:00.615451844Z
   modified_at: 2026-09-20T01:59:00.615451844Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bc95-c6ee-7de0-a5cb-ea045adf1a15
+  author: aida-auto-bump
+  timestamp: 2026-09-20T02:12:07.534201687Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0bc95-c6f5-73d1-8c3a-f8297c9716aa
+  timestamp: 2026-09-20T02:12:07.541765612Z
+  agent: aida
+  commit_sha: b75ea81f1192e88ce98f1fa57ee8cf8b601d1437
+  summary: Completed via merge b75ea81f
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-20T02:12:07.534064629Z
+  completion_sha: b75ea81f1192e88ce98f1fa57ee8cf8b601d1437
