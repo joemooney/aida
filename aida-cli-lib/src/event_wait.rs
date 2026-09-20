@@ -249,6 +249,7 @@ mod tests {
                         seat: None,
                         model: None,
                         effort: None,
+                        attempt: 1,
                     },
                 ),
             ],

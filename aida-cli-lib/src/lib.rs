@@ -84942,12 +84942,21 @@ impl RealPhaseDriver {
     /// BUG-872: stamp the phase with the exact headless session id whose log
     /// should be treated as current. Status/tail readers must not select an
     /// older retry's log for the same spec while the fresh phase is starting.
-    // trace:BUG-872 | ai:codex
+    ///
+    /// BUG-1290: `announce` must be `true` ONLY when this call is the phase's
+    /// sole entry point (no preceding `mark_drain_phase` call in this same
+    /// function — today that's just `run_implementer`, phase 1). Every other
+    /// caller already announced the phase via `mark_drain_phase` and must
+    /// pass `false` so this call attaches the session without re-emitting a
+    /// second `PhaseEntered` for the same entry — the duplicate this spec
+    /// fixes.
+    // trace:BUG-872 trace:BUG-1290 | ai:claude
     fn mark_drain_phase_session(
         &self,
         phase: auto_complete::Phase,
         session_id: &str,
         vendor: session::HeadlessVendor,
+        announce: bool,
     ) {
         drain_state::set_phase_session_vendor(
             &self.project_root,
@@ -84956,6 +84965,7 @@ impl RealPhaseDriver {
             phase.slug(),
             session_id,
             vendor,
+            announce,
         );
     }
 
@@ -85755,10 +85765,14 @@ impl RealPhaseDriver {
         let gate_started_at = std::time::SystemTime::now();
         let session_uuid = uuid::Uuid::now_v7().to_string();
         let headless_vendor = session::resolve_headless_vendor(&self.project_root);
+        // BUG-1290: an agent gate always runs after `run_reviewer` already
+        // announced the Reviewer phase — attach this gate's session, don't
+        // re-announce the entry.
         self.mark_drain_phase_session(
             auto_complete::Phase::Reviewer,
             &session_uuid,
             headless_vendor,
+            false,
         );
         let scope = format!("PR-{pr}");
         release_dead_phase_predecessor_leases(
@@ -86149,10 +86163,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // trace:BUG-1063 | ai:codex
         let implementer_started_at = std::time::SystemTime::now();
         let headless_vendor = session::resolve_headless_vendor(&self.project_root);
+        // BUG-1290: phase 1 has no separate `mark_drain_phase` call — this IS
+        // the announcement for the Implementer phase entry.
         self.mark_drain_phase_session(
             auto_complete::Phase::Implementer,
             &session_uuid,
             headless_vendor,
+            true,
         );
         // STORY-306: remember the minted session id — if phase 1 punts and the
         // advisor tier resolves the fork, `resume_implementer` `--resume`s
@@ -87284,10 +87301,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         let session_uuid = uuid::Uuid::now_v7().to_string();
         let headless_vendor = session::resolve_headless_vendor(&self.project_root);
+        // BUG-1290: `mark_drain_phase(Reviewer)` at the top of `run_reviewer`
+        // already announced this entry — this is the duplicate-emission site
+        // the spec measured (292/292 spurious second events had no `seat`
+        // because this path never threaded one). Attach the session only.
         self.mark_drain_phase_session(
             auto_complete::Phase::Reviewer,
             &session_uuid,
             headless_vendor,
+            false,
         );
         let scope = format!("PR-{pr}");
         // BUG-906: a transient retry can relaunch this phase immediately after

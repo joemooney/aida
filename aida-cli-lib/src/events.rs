@@ -44,6 +44,15 @@ use std::path::{Path, PathBuf};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+// BUG-1290: serde default for `EventKind::PhaseEntered`'s `attempt` field —
+// an event line written before the field existed deserializes as attempt 1
+// rather than 0, matching the 1-based convention every other attempt counter
+// in this module uses (e.g. `SpecRetried::attempt`).
+// trace:BUG-1290 | ai:claude
+fn default_phase_attempt() -> u32 {
+    1
+}
+
 /// A single drain state-change verb. Internally tagged on the `event` field so
 /// an [`Unknown`](EventKind::Unknown) catch-all can absorb a kind a *newer*
 /// drain binary wrote that this (older) binary does not recognize — keeping
@@ -74,6 +83,16 @@ pub enum EventKind {
         /// Resolved vendor-native effort token, when AIDA set one.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         effort: Option<String>,
+        /// BUG-1290: 1-based attempt count for this (spec, run, phase) entry.
+        /// `1` on a fresh entry; a retry re-entering the same phase carries a
+        /// value greater than the attempt that preceded it, so a legitimate
+        /// re-entry is distinguishable BY VALUE rather than by whether a
+        /// `SpecRetried` event happens to sit next to it in the feed — a
+        /// consumer reading a filtered or partial stream cannot rely on
+        /// adjacency. Additive: `#[serde(default)]` lets an older event line
+        /// (written before this field existed) deserialize as attempt 1.
+        #[serde(default = "default_phase_attempt")]
+        attempt: u32,
     },
     /// CI reached a terminal verdict (green/red). A real decision point.
     /// **Actionable.**
@@ -849,6 +868,7 @@ mod tests {
             seat: None,
             model: None,
             effort: None,
+            attempt: 1,
         }
         .is_actionable());
     }
@@ -1137,6 +1157,7 @@ mod tests {
                     seat: None,
                     model: None,
                     effort: None,
+                    attempt: 1,
                 },
             );
         }
@@ -1209,6 +1230,7 @@ mod tests {
                     seat: None,
                     model: None,
                     effort: None,
+                    attempt: 1,
                 },
             ),
             Event::new(

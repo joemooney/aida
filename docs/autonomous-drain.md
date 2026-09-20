@@ -92,6 +92,17 @@ state. `aida drain status` shows the current retry as `attempt 2/2`, and the
 drain appends a `SpecRetried` event to `.aida/events.jsonl`.
 trace:STORY-975
 
+**`PhaseEntered` is duplicate-free and carries its own attempt number
+(BUG-1290).** Every phase entry emits exactly one `PhaseEntered` — a consumer
+does not need to deduplicate. A retry that re-enters the same phase still
+emits its own `PhaseEntered`, whose `attempt` field is one greater than the
+attempt that preceded it, so a legitimate re-entry is distinguishable BY VALUE
+rather than by whether a `SpecRetried` event happens to sit next to it in the
+feed — a consumer reading a filtered or partial stream should key on
+`attempt`, not on adjacency to `SpecRetried`. `seat` on `PhaseEntered` is
+`Option`al and legitimately absent for phase 1 (the implementer seat is not
+yet resolved that early); its absence is not a signal of anything.
+
 ### Pipelining
 
 ### Which red checks gate a merge (`[ci]`)

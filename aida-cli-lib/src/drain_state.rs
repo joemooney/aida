@@ -118,6 +118,15 @@ pub(crate) struct DrainState {
     /// RFC-3339 timestamp when the current phase was entered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) phase_started_at: Option<String>,
+    // BUG-1290: 1-based attempt count for the CURRENT `current_phase` entry.
+    // Set only by the code path that announces a phase entry (emits
+    // `PhaseEntered`) — incremented when the same (spec, phase) is
+    // re-announced (a retry re-running the phase), reset to 1 whenever
+    // `current_phase` changes. A session-only attach (see
+    // `attach_phase_session`) never touches this.
+    // trace:BUG-1290 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) phase_attempt: Option<u32>,
     /// Headless vendor/session UUID for the current phase, when the phase
     /// writes a `.aida/headless-logs/*-<session>.jsonl` stream.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -277,6 +286,7 @@ impl DrainState {
             current: Some(spec.to_string()),
             current_phase: None,
             phase_started_at: None,
+            phase_attempt: None,
             current_session_id: None,
             current_vendor: None,
             orchestrator_pid: std::process::id(),
@@ -302,6 +312,7 @@ impl DrainState {
             current: None,
             current_phase: None,
             phase_started_at: None,
+            phase_attempt: None,
             current_session_id: None,
             current_vendor: None,
             orchestrator_pid: std::process::id(),
@@ -326,6 +337,7 @@ impl DrainState {
             current: None,
             current_phase: None,
             phase_started_at: None,
+            phase_attempt: None,
             current_session_id: None,
             current_vendor: None,
             orchestrator_pid: std::process::id(),
@@ -599,6 +611,7 @@ pub(crate) fn clear_run(project_root: &Path) {
     state.zen = false;
     state.current_phase = None;
     state.phase_started_at = None;
+    state.phase_attempt = None; // trace:BUG-1290 | ai:claude
     state.current_session_id = None;
     state.current_vendor = None;
     let _ = state.write(project_root);
@@ -640,6 +653,11 @@ pub(crate) fn set_phase_with_tuning(
 /// BUG-872: record the concrete phase session id alongside the phase. Drain
 /// status and `aida tail drain` use this id to resolve the active log; retries
 /// for the same spec must never inherit an older sibling attempt's mtime.
+///
+/// BUG-1290: this compatibility wrapper predates the announce/attach split
+/// below and always behaved as an *announcement* (it is the historical sole
+/// entry point for a phase that has no separate `set_phase_with_tuning`
+/// call), so it keeps that behavior — `announce: true`.
 // trace:BUG-872 | ai:codex
 #[allow(dead_code)] // compatibility wrapper; new call sites use set_phase_session_vendor
 pub(crate) fn set_phase_session(
@@ -657,10 +675,29 @@ pub(crate) fn set_phase_session(
         phase_slug,
         session_id,
         vendor,
+        true,
     );
 }
 
-// trace:STORY-1054 | ai:codex
+/// BUG-1290: record which concrete session/vendor is serving the CURRENT
+/// phase entry. `announce` distinguishes the two shapes this call has:
+///
+/// - `announce: true` — this call IS the phase's sole entry point (only
+///   `run_implementer` uses this shape today: phase 1 has no separate
+///   `mark_drain_phase` call). Behaves exactly like [`set_phase_with_tuning`]
+///   — updates `current_phase`/`phase_started_at`, computes the attempt
+///   number, and emits `PhaseEntered`.
+/// - `announce: false` — the phase was already announced earlier in the same
+///   function (`mark_drain_phase` ran first) and this call is only attaching
+///   a session id to that already-announced entry — a second reviewer-gate
+///   session, or the review-verdict handshake's own session. This is the
+///   BUG-1290 fix: the old code re-ran the full announce path here too,
+///   which re-emitted `PhaseEntered` a few seconds after the first one, and
+///   — because this path never threads a `seat` — the duplicate was always
+///   the one missing `seat`, exactly the measured fingerprint. Routes
+///   through [`attach_phase_session`] instead, which updates session/vendor
+///   only and never emits.
+// trace:STORY-1054 trace:BUG-1290 | ai:claude
 pub(crate) fn set_phase_session_vendor(
     project_root: &Path,
     spec: &str,
@@ -668,15 +705,56 @@ pub(crate) fn set_phase_session_vendor(
     phase_slug: &str,
     session_id: &str,
     vendor: crate::session::HeadlessVendor,
+    announce: bool,
 ) {
-    set_phase_inner(
-        project_root,
-        spec,
-        phase_index,
-        phase_slug,
-        Some(session_id),
-        Some(vendor.as_str()),
-    );
+    if announce {
+        set_phase_inner(
+            project_root,
+            spec,
+            phase_index,
+            phase_slug,
+            Some(session_id),
+            Some(vendor.as_str()),
+        );
+    } else {
+        attach_phase_session(
+            project_root,
+            spec,
+            phase_index,
+            phase_slug,
+            session_id,
+            Some(vendor.as_str()),
+        );
+    }
+}
+
+/// BUG-1290: attach a session id/vendor to the phase entry ALREADY announced
+/// (via `mark_drain_phase` / `set_phase_with_tuning`) earlier in the same
+/// phase function — never re-announces and never emits `PhaseEntered`. A
+/// stale attach (the phase moved on, or was never announced, since this
+/// session was minted) is a best-effort no-op rather than resurrecting a
+/// dead entry's session fields.
+// trace:BUG-1290 | ai:claude
+fn attach_phase_session(
+    project_root: &Path,
+    spec: &str,
+    phase_index: i32,
+    phase_slug: &str,
+    session_id: &str,
+    vendor: Option<&str>,
+) {
+    let Some(mut state) = DrainState::read(project_root) else {
+        return;
+    };
+    let phase_label = format!("{phase_index} ({phase_slug})");
+    if state.current.as_deref() != Some(spec)
+        || state.current_phase.as_deref() != Some(phase_label.as_str())
+    {
+        return;
+    }
+    state.current_session_id = Some(session_id.to_string());
+    state.current_vendor = vendor.map(str::to_string);
+    let _ = state.write(project_root);
 }
 
 fn set_phase_inner(
@@ -700,6 +778,13 @@ fn set_phase_inner(
     );
 }
 
+/// BUG-1290: the ONE site that announces a phase entry and emits
+/// `PhaseEntered`. Every announcing caller (`set_phase`, `set_phase_with_tuning`,
+/// and `set_phase_session_vendor`'s `announce: true` shape) routes through
+/// here. A session-only update that must NOT re-announce goes through
+/// [`attach_phase_session`] instead — see its doc comment and
+/// [`set_phase_session_vendor`] for the call-site split that fixed the
+/// duplicate emission.
 #[allow(clippy::too_many_arguments)]
 fn set_phase_inner_with_tuning(
     project_root: &Path,
@@ -715,8 +800,23 @@ fn set_phase_inner_with_tuning(
     let Some(mut state) = DrainState::read(project_root) else {
         return;
     };
+    let phase_label = format!("{phase_index} ({phase_slug})");
+    // BUG-1290: a retry re-running this SAME phase for this spec (current
+    // spec/phase unchanged since the last announce) increments the attempt
+    // number; any other case — the very first entry, or advancing to a
+    // different phase — starts a fresh count. This is the by-value signal
+    // the spec asks for: a legitimate re-entry no longer depends on a
+    // `SpecRetried` event happening to sit next to it in the feed.
+    let same_entry = state.current.as_deref() == Some(spec)
+        && state.current_phase.as_deref() == Some(phase_label.as_str());
+    let attempt = if same_entry {
+        state.phase_attempt.unwrap_or(1).saturating_add(1)
+    } else {
+        1
+    };
+    state.phase_attempt = Some(attempt);
     state.current = Some(spec.to_string());
-    state.current_phase = Some(format!("{phase_index} ({phase_slug})"));
+    state.current_phase = Some(phase_label);
     state.phase_started_at = Some(chrono::Utc::now().to_rfc3339());
     state.current_session_id = session_id.map(str::to_string);
     state.current_vendor = vendor.map(str::to_string);
@@ -742,6 +842,7 @@ fn set_phase_inner_with_tuning(
                 seat: seat.map(str::to_string),
                 model: model.map(str::to_string),
                 effort: effort.map(str::to_string),
+                attempt,
             },
         ),
     );
@@ -847,6 +948,7 @@ pub(crate) fn set_member_outcome(
     // `current_phase` does not outlive the run that set it.
     state.current_phase = None;
     state.phase_started_at = None;
+    state.phase_attempt = None; // trace:BUG-1290 | ai:claude
     let _ = state.write(project_root);
     // STORY-712: a member that shipped with a PR is an actionable wake (merge /
     // advance). The *shelved* (completed=false) case is emitted from
@@ -1664,6 +1766,7 @@ mod tests {
             current: Some("STORY-301".to_string()),
             current_phase: None,
             phase_started_at: None,
+            phase_attempt: None,
             current_session_id: None,
             current_vendor: None,
             orchestrator_pid: std::process::id(),
@@ -1839,6 +1942,189 @@ mod tests {
         assert_eq!(member.state, "in-phase-3");
         assert!(member.started_at.is_some());
         assert!(member.is_running());
+    }
+
+    // BUG-1290: a single phase entry via `set_phase_with_tuning` (the
+    // announcer `mark_drain_phase` uses for CI/Reviewer/Merge/Pull/Build)
+    // emits exactly one PhaseEntered, stamped attempt 1.
+    #[test]
+    fn set_phase_with_tuning_emits_exactly_one_phase_entered() {
+        let dir = tempfile::tempdir().unwrap();
+        batch_state().write(dir.path()).unwrap();
+        set_phase_with_tuning(
+            dir.path(),
+            "STORY-285",
+            3,
+            "reviewer",
+            Some("claude"),
+            Some("reviewer"),
+            None,
+            None,
+        );
+        let entered: Vec<_> = crate::events::read_all(dir.path())
+            .into_iter()
+            .filter(|e| matches!(e.kind, crate::events::EventKind::PhaseEntered { .. }))
+            .collect();
+        assert_eq!(entered.len(), 1, "exactly one PhaseEntered per phase entry");
+        match &entered[0].kind {
+            crate::events::EventKind::PhaseEntered { attempt, seat, .. } => {
+                assert_eq!(*attempt, 1);
+                assert_eq!(seat.as_deref(), Some("reviewer"));
+            }
+            other => panic!("expected PhaseEntered, got {other:?}"),
+        }
+    }
+
+    // BUG-1290: the exact reviewer-phase shape that produced the measured
+    // duplicate — `mark_drain_phase` (here, `set_phase_with_tuning`) at the
+    // top of the phase, followed later by a session mint (here,
+    // `set_phase_session_vendor(.., announce=false)`) for the review-verdict
+    // handshake or an agent gate. The fix must not re-announce: only the
+    // FIRST call may emit, and the second must still attach the session id
+    // onto the live state so status/tail readers keep working.
+    #[test]
+    fn session_attach_after_announce_does_not_reannounce() {
+        let dir = tempfile::tempdir().unwrap();
+        batch_state().write(dir.path()).unwrap();
+        set_phase_with_tuning(
+            dir.path(),
+            "STORY-285",
+            3,
+            "reviewer",
+            Some("claude"),
+            Some("reviewer"),
+            None,
+            None,
+        );
+        set_phase_session_vendor(
+            dir.path(),
+            "STORY-285",
+            3,
+            "reviewer",
+            "session-abc",
+            crate::session::HeadlessVendor::Claude,
+            false,
+        );
+        let entered: Vec<_> = crate::events::read_all(dir.path())
+            .into_iter()
+            .filter(|e| matches!(e.kind, crate::events::EventKind::PhaseEntered { .. }))
+            .collect();
+        assert_eq!(
+            entered.len(),
+            1,
+            "a session attach on an already-announced entry must not emit a second PhaseEntered"
+        );
+        let read = DrainState::read(dir.path()).unwrap();
+        assert_eq!(read.current_session_id.as_deref(), Some("session-abc"));
+    }
+
+    // BUG-1290 acceptance #2/#4: a retry re-entering the SAME phase (the
+    // orchestrator's transient-retry loop re-runs the phase function, which
+    // re-announces via `mark_drain_phase`) still emits a fresh PhaseEntered —
+    // it is NOT swallowed — and its attempt number is one greater than the
+    // attempt that preceded it, so the re-entry is distinguishable by value.
+    #[test]
+    fn retry_reentry_emits_second_phase_entered_with_incremented_attempt() {
+        let dir = tempfile::tempdir().unwrap();
+        batch_state().write(dir.path()).unwrap();
+        for _ in 0..2 {
+            set_phase_with_tuning(
+                dir.path(),
+                "STORY-285",
+                3,
+                "reviewer",
+                Some("claude"),
+                Some("reviewer"),
+                None,
+                None,
+            );
+        }
+        let attempts: Vec<u32> = crate::events::read_all(dir.path())
+            .into_iter()
+            .filter_map(|e| match e.kind {
+                crate::events::EventKind::PhaseEntered { attempt, .. } => Some(attempt),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            attempts,
+            vec![1, 2],
+            "a retry re-entering the same phase must emit its own PhaseEntered, \
+             carrying an incremented attempt — never swallowed by a blanket dedup"
+        );
+    }
+
+    // BUG-1290: a genuinely NEW phase entry (a different phase, or the same
+    // phase for a spec that has since moved on) resets the attempt count —
+    // the increment only fires on an exact (spec, phase) repeat.
+    #[test]
+    fn new_phase_resets_attempt_to_one() {
+        let dir = tempfile::tempdir().unwrap();
+        batch_state().write(dir.path()).unwrap();
+        set_phase_with_tuning(
+            dir.path(),
+            "STORY-285",
+            2,
+            "ci",
+            Some("claude"),
+            Some("implementer"),
+            None,
+            None,
+        );
+        set_phase_with_tuning(
+            dir.path(),
+            "STORY-285",
+            3,
+            "reviewer",
+            Some("claude"),
+            Some("reviewer"),
+            None,
+            None,
+        );
+        let attempts: Vec<u32> = crate::events::read_all(dir.path())
+            .into_iter()
+            .filter_map(|e| match e.kind {
+                crate::events::EventKind::PhaseEntered { attempt, .. } => Some(attempt),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            attempts,
+            vec![1, 1],
+            "advancing to a new phase is not a retry"
+        );
+    }
+
+    // BUG-1290 fingerprint guard: phase 1 (implementer) has no separate
+    // `mark_drain_phase` call — `set_phase_session_vendor(.., announce=true)`
+    // is its sole entry point, and seat is legitimately unknown there. This
+    // seat-less entry must survive as the phase's one-and-only emission, not
+    // be mistaken for (or dropped as) the spurious no-seat duplicate.
+    #[test]
+    fn seatless_phase_one_entry_survives_as_the_only_emission() {
+        let dir = tempfile::tempdir().unwrap();
+        batch_state().write(dir.path()).unwrap();
+        set_phase_session_vendor(
+            dir.path(),
+            "STORY-301",
+            1,
+            "implementer",
+            "session-xyz",
+            crate::session::HeadlessVendor::Claude,
+            true,
+        );
+        let entered: Vec<_> = crate::events::read_all(dir.path())
+            .into_iter()
+            .filter(|e| matches!(e.kind, crate::events::EventKind::PhaseEntered { .. }))
+            .collect();
+        assert_eq!(entered.len(), 1);
+        match &entered[0].kind {
+            crate::events::EventKind::PhaseEntered { seat, attempt, .. } => {
+                assert_eq!(*seat, None, "phase 1's seat is legitimately unknown");
+                assert_eq!(*attempt, 1);
+            }
+            other => panic!("expected PhaseEntered, got {other:?}"),
+        }
     }
 
     // set_member_outcome marks completed/failed and records the PR.

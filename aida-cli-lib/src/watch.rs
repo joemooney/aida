@@ -486,6 +486,7 @@ mod tests {
                         seat: None,
                         model: None,
                         effort: None,
+                        attempt: 1,
                     },
                 ), // benign
                 Event::new(
@@ -720,6 +721,7 @@ mod tests {
                         seat: None,
                         model: None,
                         effort: None,
+                        attempt: 1,
                     },
                 ), // benign
                 Event::new(
@@ -762,7 +764,7 @@ mod tests {
 
         // The raw payload rides along — the fields the hint elides.
         assert!(
-            lines[0].contains(r#"{"event":"PhaseEntered","idx":2,"slug":"ci"}"#),
+            lines[0].contains(r#"{"event":"PhaseEntered","idx":2,"slug":"ci","attempt":1}"#),
             "benign payload appended: {s:?}"
         );
         assert!(
