@@ -30,13 +30,17 @@ use std::time::{Duration, Instant};
 /// The ADR-37 Layer-2 required check whose red state IS the supervised hold.
 pub(crate) const HOLD_GATE_CHECK: &str = "merge-hold-gate";
 
-/// One row of `gh pr checks <n> --json name,bucket,workflow`.
+/// One row of `gh pr checks <n> --json name,bucket,workflow,link`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CheckRow {
     pub(crate) name: String,
     pub(crate) workflow: String,
     /// `pass` | `fail` | `pending` | `skipping` | `cancel` (gh's bucket).
     pub(crate) bucket: String,
+    /// Workflow run/pipeline that owns this check. Kept on the classified row
+    /// so diagnostics cannot drift to an independently selected recent run.
+    // trace:BUG-1298 | ai:codex
+    pub(crate) run_id: Option<String>,
 }
 
 impl CheckRow {
@@ -150,7 +154,10 @@ impl CiGateConfig {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct RedRefinement {
     /// Red checks that gate the merge — any entry means CI really failed.
-    pub(crate) real: Vec<String>,
+    /// These are the resolved rows, including their owning run, rather than
+    /// copied names so the detail and recovery hint share one source.
+    // trace:BUG-1298 | ai:codex
+    pub(crate) real: Vec<CheckRow>,
     /// Red checks ignored because they are non-required AND informational.
     pub(crate) ignored_informational: Vec<String>,
     /// `merge-hold-gate` is red and a local marker or confirmed forge label
@@ -186,7 +193,14 @@ impl RedRefinement {
             ));
         }
         if self.is_real() {
-            parts.push(format!("failing: {}", self.real.join(", ")));
+            parts.push(format!(
+                "failing: {}",
+                self.real
+                    .iter()
+                    .map(|row| row.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
         }
         if self.hold_gate_label_lingering {
             parts.push(format!(
@@ -229,14 +243,14 @@ pub(crate) fn classify_red(
                 out.hold_gate_is_the_hold = true;
             } else {
                 out.hold_gate_label_lingering = true;
-                out.real.push(row.name.clone());
+                out.real.push(row.clone());
             }
             continue;
         }
         if informational {
             out.ignored_informational.push(row.name.clone());
         } else {
-            out.real.push(row.name.clone());
+            out.real.push(row.clone());
         }
     }
     out
@@ -265,9 +279,22 @@ pub(crate) fn parse_check_rows(json: &str) -> Option<Vec<CheckRow>> {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string(),
+                run_id: r
+                    .get("link")
+                    .and_then(|v| v.as_str())
+                    .and_then(run_id_from_check_link),
             })
             .collect(),
     )
+}
+
+/// GitHub check links have the form `.../actions/runs/<run>/job/<job>`.
+/// Treat any other URL as unresolved instead of guessing from branch recency.
+// trace:BUG-1298 | ai:codex
+fn run_id_from_check_link(link: &str) -> Option<String> {
+    let suffix = link.split("/actions/runs/").nth(1)?;
+    let id = suffix.split('/').next()?;
+    (!id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())).then(|| id.to_string())
 }
 
 /// STORY-1166: wait until the forge has registered CI checks for `change`
@@ -411,6 +438,7 @@ mod tests {
             name: name.into(),
             workflow: workflow.into(),
             bucket: bucket.into(),
+            run_id: None,
         }
     }
     fn req(names: &[&str]) -> Vec<String> {
@@ -502,7 +530,7 @@ mod tests {
             false,
             false,
         );
-        assert_eq!(r.real, vec!["Build (windows-latest)".to_string()]);
+        assert_eq!(r.real[0].name, "Build (windows-latest)");
     }
 
     #[test]
@@ -520,7 +548,7 @@ mod tests {
             true,
             false,
         );
-        assert_eq!(r.real, vec!["Build (ubuntu-latest)".to_string()]);
+        assert_eq!(r.real[0].name, "Build (ubuntu-latest)");
         assert!(r.hold_gate_is_the_hold);
         // No branch protection at all + no allow-list hit → still real.
         let r = classify_red(&rows[..1], &[], &CiGateConfig::default(), false, false);
@@ -733,11 +761,13 @@ mod tests {
                     name: "Build (ubuntu-latest)".into(),
                     workflow: "CI".into(),
                     bucket: "pass".into(),
+                    run_id: None,
                 },
                 CheckRow {
                     name: HOLD_GATE_CHECK.into(),
                     workflow: "merge-hold-gate".into(),
                     bucket: "fail".into(),
+                    run_id: None,
                 },
             ]),
         );
