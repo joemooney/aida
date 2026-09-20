@@ -1,0 +1,38 @@
+id: 01a0c04f-3d64-7ef1-ae75-4b6048997a86
+spec_id: BUG-1481
+agreed_id: BUG-1481
+title: aida awaiting reports ci_rollup pass and lists a PR as mergeable when a REQUIRED check never ran at all
+description: |-
+  aida awaiting listed PR #2009 under mergeable_prs with ci_rollup "pass". The only check-run on its head (065f3df8aa) is merge-hold-gate. Build (ubuntu-latest) - a REQUIRED check for main per the branch protection - never ran on that commit at all.
+
+      gh api repos/joemooney/aida/commits/065f3df8aa/check-runs
+        merge-hold-gate: completed / success
+        (no Build row)
+
+      aida awaiting --json
+        mergeable_prs: [ { number: 2009, ci_rollup: "pass", ... } ]
+
+  ROOT CAUSE, stated in the code own doc comment at aida-cli-lib/src/awaiting_you.rs around line 190: ci_rollup is Some("pass") "when every check is green". Every check that EXISTS. There is no notion of which checks are REQUIRED, so a head carrying one trivial green check and missing the build entirely is indistinguishable from a head where the full pipeline passed. classify_open_prs then surfaces it as awaiting-you.
+
+  WHY THIS IS A MERGE-SAFETY BUG AND NOT A DISPLAY BUG. awaiting is the coordination inbox - the surface that tells a seat "this PR is ready for you". It is how PR #2009 was put in front of the reviewer seat as a merge candidate. A seat that trusts it and merges is merging a PR whose build never ran. Branch protection is the backstop that would refuse, but the point of awaiting is to tell a seat what is actionable, and telling it "CI green" about a head with no build is a false green at the dispatch layer.
+
+  SAME CLASS AS BUG-1466, and the two should probably be fixed with the same idea. There the drain resolves "reviewed" by matching only on Approved and never comparing reviewed_sha, so an approval authorizes any head. Here awaiting resolves "CI green" by matching only the checks present and never asking which are required, so an incomplete pipeline reads as a complete one. Both are a gate computing a green from an incomplete set rather than from the set it is supposed to require. Neither notices absence; both only evaluate what is in front of them.
+
+  ABSENCE IS THE SHAPE TO FIX. A missing required check must not be equivalent to a passing one. It should read as NOT-green - the same way BUG-1466 acceptance requires the drain to refuse on a MISSING reviewed_sha, not merely a mismatched one.
+
+  ## Acceptance
+
+  - ci_rollup distinguishes three states at minimum: every required check green; a required check failing or pending; and a required check ABSENT from the head. Absent is not pass.
+  - A PR whose head is missing a required check does not appear in mergeable_prs, or appears with an explicit marker naming which required check is missing.
+  - The required-check set is derived from the branch protection or the workflow rather than hardcoded, so adding a required check does not silently leave awaiting reporting on a stale list.
+  - A test covers the exact PR-2009 shape: a head with one green non-required check and no build check, asserting it is NOT classified as mergeable-with-CI-green. The existing tests all construct PRs via a helper that passes Some("pass") directly, so they assert the classifier given a rollup and never exercise how the rollup is derived - the defect is upstream of every current test and no assertion added to them would reach it.
+  - Cross-check against BUG-1466 so the missing-vs-mismatched-vs-present distinction is handled the same way in both places rather than two different ad-hoc rules.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T19:33:33.668555610Z
+modified_at: 2026-09-20T19:33:33.668555610Z
+req_type: Bug
+tags:
+- awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
