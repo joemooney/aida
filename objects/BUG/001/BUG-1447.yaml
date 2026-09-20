@@ -49,9 +49,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:30:25.285712180Z
-modified_at: 2026-09-20T16:31:04.104092550Z
+modified_at: 2026-09-20T16:31:16.760093711Z
 req_type: Bug
 tags:
+- batch:night-0920
 - from:session-0919
 - merge-hold
 - orchestrator
