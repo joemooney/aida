@@ -24,12 +24,12 @@ description: |
   - The project copy contains every master guide, or names the ones deliberately excluded and why.
   - The drift cause is stated on this spec in one sentence.
   - The guard fails on a synthetic dead link and passes on the repaired pack.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:52:27.202206555Z
-modified_at: 2026-09-20T06:41:29.992134171Z
+modified_at: 2026-09-20T07:16:16.250843380Z
 req_type: Bug
 tags:
 - discipline
@@ -77,8 +77,24 @@ comments:
   created_at: 2026-09-20T01:52:09.630367766Z
   modified_at: 2026-09-20T01:52:09.630367766Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bdac-3ada-7a50-a88f-7b441b49e46e
+  author: aida-auto-bump
+  timestamp: 2026-09-20T07:16:16.218176061Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0bdac-3afa-7471-9861-da5d07fcda62
+  timestamp: 2026-09-20T07:16:16.250840727Z
+  agent: aida
+  commit_sha: ecb710411e719d9ebf34c9977bc32f1c60c73c42
+  summary: Completed via merge ecb71041
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T06:06:49.645899758Z
   implemented_by: joe
+  completed_at: 2026-09-20T07:16:16.217217148Z
+  completion_sha: ecb710411e719d9ebf34c9977bc32f1c60c73c42
