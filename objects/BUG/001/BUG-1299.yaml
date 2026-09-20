@@ -51,12 +51,12 @@ description: |
   7. THE HINT IS DERIVED FROM THE SAME TRIP VALUE AS THE DETAIL, not selected by a parallel branch. Sharpened from "selected by which trip fired, not hardcoded": two independent switches on the same enum satisfy that wording and can still drift apart later, which is the defect one level up. One resolved trip value produces both strings, so they cannot disagree. This is PRIN-4 rule 1 applied to the site that motivated it.
   8. A test asserts detail and recovery_hint agree. A Ceiling-caused shelve produces a ceiling hint, a NoProgress-caused shelve produces a no-progress hint, and neither emits the other text. The test fails if a future trip variant is added without a matching hint, rather than silently reusing whichever branch is first.
   9. The Ceiling hint advice differs IN KIND from the NoProgress hint. "Inspect the worktree for a spin" is the wrong next action for a session that ran out of clock. The ceiling hint names the ceiling, states what it was, and says the remedy is a larger budget or a smaller spec.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T23:03:57.581552445Z
-modified_at: 2026-09-20T03:03:31.795892757Z
+modified_at: 2026-09-20T03:21:31.205700213Z
 req_type: Bug
 tags:
 - diagnostic-decay
@@ -133,4 +133,22 @@ comments:
   created_at: 2026-09-20T03:03:31.795892757Z
   modified_at: 2026-09-20T03:03:31.795892757Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bcd5-4f3e-7bd1-9516-26177545f64b
+  author: aida-auto-bump
+  timestamp: 2026-09-20T03:21:31.198099288Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0bcd5-4f45-7450-a542-80a1f537dff0
+  timestamp: 2026-09-20T03:21:31.205699474Z
+  agent: aida
+  commit_sha: 53618362660b92c01f109e427ed27a22542c5644
+  summary: Completed via merge 53618362
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-20T03:21:31.197809386Z
+  completion_sha: 53618362660b92c01f109e427ed27a22542c5644
