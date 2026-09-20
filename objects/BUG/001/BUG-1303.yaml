@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:22:29.721225410Z
-modified_at: 2026-09-20T10:11:02.186639562Z
+modified_at: 2026-09-20T10:11:03.781142214Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -248,6 +248,19 @@ comments:
   created_at: 2026-09-20T10:11:00.670629269Z
   modified_at: 2026-09-20T10:11:00.670629269Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0be4c-40d9-7a82-864d-755c0c3858d2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #2008):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 37c47684e616
+    Recorded: 2026-09-20T08:23:10.968881448+00:00
+    Findings:
+    1. BUG-1303 acceptance 8: the PR reports that 200 Linux stress runs did not reproduce the flake, yet it adds speculative Interrupted retry handling without establishing whether the observed Linux failure was genuine lock blocking, EINTR, or another error. Capture the failing error/root cause before choosing the Linux remedy, or limit the change to behavior supported by evidence.
+    2. BUG-1303 acceptance 3 / reviewer CI gate: no Windows or cross-platform run exists for head 37c47684e616f2a00ca95a84616cf93ebe88c62b; only Ubuntu CI ran. Run the unchanged tick_lock_is_nonblocking_and_reusable test on Windows and attach a green post-fix result.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T10:11:03.513619263Z
+  modified_at: 2026-09-20T10:11:03.513619263Z
 execution_mode: drain
 implementation_info:
   implemented: true
