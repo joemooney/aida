@@ -6051,10 +6051,10 @@ pub enum QueueCommand {
     ///
     /// Smart status transitions (overridable with `--status`):
     ///   Approved   → no flip (just queue)
-    ///   Planned    → InProgress
+    ///   Planned    → Approved (InProgress with --work)
     ///   InProgress → no flip, refuse re-queue without --force
-    ///   Done       → InProgress (typical PR-review-found-issues case)
-    ///   Completed  → InProgress, requires --force (terminal-status guard)
+    ///   Done       → Approved (InProgress with --work)
+    ///   Completed  → Approved, requires --force (InProgress with --work)
     ///   Rejected   → Approved, requires --force
     ///
     // trace:TASK-218 | ai:claude
@@ -6062,7 +6062,8 @@ pub enum QueueCommand {
         /// Requirement ID (UUID or SPEC-ID)
         id: String,
         /// Also launch a session for the spec (chains `aida queue work`).
-        /// Without this, rework is metadata-only: status flip + queue add.
+        /// Without this, rework is metadata-only: reset to a claimable status
+        /// and queue it. With this, the launched session owns InProgress.
         #[clap(long)]
         work: bool,
         /// Override the routing role. Default: existing queue route,

@@ -6061,6 +6061,32 @@ pub(crate) fn rework_smart_target(current: &RequirementStatus) -> Option<Require
     }
 }
 
+// trace:BUG-1470 | ai:codex
+/// Metadata-only rework must leave the queued spec claimable.
+/// `InProgress` is only valid when this command immediately chains into
+/// `queue work`, which establishes the lease that backs that status.
+pub(crate) fn rework_target_for_mode(
+    current: &RequirementStatus,
+    launches_work: bool,
+) -> Option<RequirementStatus> {
+    let target = rework_smart_target(current);
+    if !launches_work {
+        match current {
+            RequirementStatus::Draft
+            | RequirementStatus::Planned
+            | RequirementStatus::InProgress
+            | RequirementStatus::NeedsAttention
+            | RequirementStatus::Done
+            | RequirementStatus::Completed => Some(RequirementStatus::Approved),
+            RequirementStatus::Approved
+            | RequirementStatus::Rejected
+            | RequirementStatus::Superseded => target,
+        }
+    } else {
+        target
+    }
+}
+
 /// TASK-232: `aida queue progress` — show what a session has shipped so
 /// far alongside what remains, bucketed into Shipped / In flight /
 /// Working now / Remaining. Resolves the spec set from a session manifest
@@ -6620,7 +6646,7 @@ pub(crate) fn handle_queue_rework(
 
     // Smart target-status resolution. `--status` always wins; otherwise
     // pick per the table in TASK-218's spec. See `rework_smart_target`.
-    let smart_target = rework_smart_target(&current_status);
+    let smart_target = rework_target_for_mode(&current_status, work);
     let target_status: Option<RequirementStatus> = match status_override {
         Some(s) => Some(parse_status(s)?),
         None => smart_target,
@@ -6645,12 +6671,22 @@ pub(crate) fn handle_queue_rework(
         );
     }
     if matches!(current_status, RequirementStatus::InProgress) && !force {
-        eprintln!(
-            "  {} {} is already In Progress — re-queueing without status \
-             flip. Pass `--force` to silence this warning.",
-            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-            display_id
-        );
+        if work {
+            eprintln!(
+                "  {} {} is already In Progress — launching the rework session. \
+                 Pass `--force` to silence this warning.",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                display_id
+            );
+        } else {
+            eprintln!(
+                "  {} {} is In Progress without this command establishing a lease — \
+                 metadata-only rework resets it to Approved so the queued worker can claim it. \
+                 Pass `--force` to silence this warning.",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                display_id
+            );
+        }
     }
 
     // Status flip (if any). update_atomically works for both SQLite and

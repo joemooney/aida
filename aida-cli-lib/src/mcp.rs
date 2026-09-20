@@ -4151,7 +4151,9 @@ impl<'a> McpServer<'a> {
         // Smart target-status resolution (`--status` wins). trace:EPIC-27
         let target_status: Option<RequirementStatus> = match status_override {
             Some(s) => Some(parse_status(s).ok_or_else(|| format!("invalid status '{}'", s))?),
-            None => crate::rework_smart_target(&current_status),
+            // MCP rework is metadata-only: keep the queued item claimable
+            // until a worker establishes a lease. trace:BUG-1470 | ai:codex
+            None => crate::rework_target_for_mode(&current_status, false),
         };
 
         // Terminal-status guard (mirrors the CLI). trace:EPIC-27

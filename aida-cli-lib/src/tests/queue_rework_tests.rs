@@ -120,6 +120,40 @@ fn smart_target_is_idempotent_on_its_own_output() {
     assert_eq!(rework_smart_target(&after_rejected), None);
 }
 
+/// BUG-1470: the metadata-only form must not create an unleased InProgress
+/// spec that the later drain refuses to claim.
+// trace:BUG-1470 | ai:codex
+#[test]
+fn metadata_only_rework_targets_claimable_approved() {
+    for status in [
+        RequirementStatus::Draft,
+        RequirementStatus::Planned,
+        RequirementStatus::NeedsAttention,
+        RequirementStatus::Done,
+        RequirementStatus::Completed,
+    ] {
+        assert_eq!(
+            rework_target_for_mode(&status, false),
+            Some(RequirementStatus::Approved)
+        );
+    }
+    assert_eq!(
+        rework_target_for_mode(&RequirementStatus::InProgress, false),
+        Some(RequirementStatus::Approved)
+    );
+    for status in [
+        RequirementStatus::Planned,
+        RequirementStatus::NeedsAttention,
+        RequirementStatus::Done,
+        RequirementStatus::Completed,
+    ] {
+        assert_eq!(
+            rework_target_for_mode(&status, true),
+            Some(RequirementStatus::InProgress)
+        );
+    }
+}
+
 /// All status variants are covered — exhaustive match in
 /// `rework_smart_target` means adding a new variant won't silently
 /// fall through. This test exists so a future variant addition (e.g.
@@ -372,7 +406,7 @@ fn rework_tail_keeps_append_semantics() {
 /// the unified pickability policy refuses NeedsAttention specs at queue head.
 // trace:BUG-1056 | ai:codex
 #[test]
-fn rework_needs_attention_spec_becomes_pickable_queue_head() {
+fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
     let _guard = crate::test_env::env_lock();
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
@@ -404,7 +438,7 @@ fn rework_needs_attention_spec_becomes_pickable_queue_head() {
 
     let updated = storage.load().unwrap();
     let req = updated.get_requirement_by_spec_id("BUG-1056").unwrap();
-    assert_eq!(req.status, RequirementStatus::InProgress);
+    assert_eq!(req.status, RequirementStatus::Approved);
     assert_eq!(
         aida_core::pickability::pickability(req, &updated),
         aida_core::pickability::Pickability::Pickable
