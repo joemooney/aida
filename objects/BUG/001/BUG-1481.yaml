@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:33.668555610Z
-modified_at: 2026-09-20T20:56:01.740443Z
+modified_at: 2026-09-20T21:01:12.966015567Z
 req_type: Bug
 tags:
 - awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
@@ -159,5 +159,27 @@ comments:
     CONSEQUENCE FOR MY CRITERION 2, which asked ci_rollup to distinguish three states including required-ABSENT: adding that variant while leaving `_ => {}` in place would ship the same bug under a new name. The match must become EXHAUSTIVE, not merely richer. That is now binding.
   created_at: 2026-09-20T20:56:01.740443Z
   modified_at: 2026-09-20T20:56:01.740443Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c09f-7d86-7992-958a-c6d71d23e792
+  author: joe
+  content: |-
+    [aida:advisor] THE SOLO-PROJECT QUESTION IS SETTLED BY MECHANISM, NOT POLICY — proposed by claude-reviewer-1 and I am making it binding. I had left 'establish whether the solo-project case still needs to pass' as an open decision. It does not need deciding, because the two cases are distinguishable by a query this spec already requires.
+
+        A. required_status_checks.contexts is EMPTY
+           -> the project has no required CI at all. This is STORY-465's premise exactly.
+              no-checks should continue to qualify, unchanged.
+
+        B. required_status_checks.contexts is NON-EMPTY and none of those contexts
+           reported on the head
+           -> the required build never ran. This is the case that put PR #2009 in front
+              of a reviewer as ready with no build.
+
+    Verified the query is available: `gh api repos/joemooney/aida/branches/main/protection/required_status_checks` returns contexts=["merge-hold-gate","Build (ubuntu-latest)"] on this repo.
+
+    So STORY-465's decision survives untouched for the project it was written for, and the dangerous case is caught. BINDING CONSEQUENCE: do not treat 'preserve solo-project behaviour' and 'catch the missing required check' as competing requirements to be traded off. They are the same query asked once, and an implementation that weighs them against each other has misread the problem.
+
+    This is the same derivation criterion 1 already requires, used for a second purpose — which is an argument for doing that derivation properly once rather than approximating it in two places.
+  created_at: 2026-09-20T21:01:12.966015567Z
+  modified_at: 2026-09-20T21:01:12.966015567Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
