@@ -1,0 +1,48 @@
+id: 01a0c001-1e2d-76b2-95a1-a46f86e24287
+spec_id: BUG-1470
+agreed_id: BUG-1470
+title: 'A reviewed spec never goes back to work: six verdicts, zero drain runs after them, the oldest parked eleven hours — and bare aida queue rework leaves a spec InProgress with no lease, which the pickup '
+description: |
+  A reviewed spec does not go back to work on its own. Six specs carry review verdicts and NOT ONE has had a drain run since its verdict was recorded — the oldest has sat eleven hours while the drain implemented new specs alongside it.
+
+  MEASURED 2026-09-20 ~18:05Z, counting `RunStarted` events after each spec's newest verdict `recorded_at`:
+
+      TASK-1289   verdict 06:10Z   runs after: 0     (11h)
+      STORY-1350  verdict 13:28Z   runs after: 0
+      TASK-1298   verdict 14:39Z   runs after: 0
+      BUG-1297    verdict 15:08Z   runs after: 0
+      BUG-1288    verdict 17:04Z   runs after: 0
+
+  (BUG-1286 is excluded from the table rather than counted as zero: its verdict file has no `recorded_at`, so the comparison cannot be made. It did run — it shelved `stale-base-conflict` at 17:04:55Z.)
+
+  Meanwhile the same drain opened PR-2024 for BUG-1432 and holds fourteen further queued members. Capacity was never the constraint. New work flows; reviewed work stops.
+
+  THE MECHANISM, in two parts.
+
+  1. A shelved spec is `needs-attention`, and the drain's own eligibility reports those as `needs-triage` and skips them. That is correct — an unattended drain should not re-drive a spec nobody has triaged. But nothing else drives them either, so "skipped pending triage" becomes "parked indefinitely" whenever the triaging seat is busy, which it has been all day.
+
+  2. `aida queue rework <ID>` WITHOUT `--work` produces a state that cannot be picked up. It flips the spec to InProgress and queues it, per its documented smart-transition table. With no session claiming it, the spec is InProgress with no lease — and a later pickup refuses with "spec is InProgress but no local lease holds it… Recovery: `--force-claim`, or reset to approved first". `aida ps` calls this shape `flag-only`.
+
+     So the metadata-only mode of the recovery verb leaves the spec in a state the recovery path rejects. I hit this directly: requeuing three specs with bare `queue rework` put all three in `flag-only`, none entered the drain's member list, and they only became pickable after `aida edit <ID> --status approved`.
+
+  WHY PART 2 IS THE MORE SERIOUS HALF. The verb's whole purpose is to encapsulate the implementer → reviewer → fixup recovery sequence. Its help offers the no-`--work` form as the metadata-only option, which reads as the safe choice for a seat that wants the drain to do the work rather than launching a session itself. That reading produces a spec nothing will touch, silently, with a success message. A seat doing the right thing by the documentation gets the worst outcome.
+
+  Acceptance:
+  - `aida queue rework <ID>` without `--work` leaves the spec in a state the drain will actually pick up, or refuses and says which flag to pass. Silently producing an unclaimable InProgress is not acceptable.
+  - A spec that is InProgress with no lease is surfaced as an anomaly rather than only discoverable via `aida ps`'s `flag-only` column — it means work is parked and nothing owns it.
+  - Some surface answers "which specs have a verdict with no subsequent run, and for how long?" Today that question took a hand-written pass over events.jsonl and the verdict files.
+  - The needs-attention → back-in-flight transition has an owner: either the drain re-drives triaged specs, or the surface that shows the rework queue makes the requeue one keystroke with the correct resulting status.
+
+  Related: the verdicts here are specific and implementable — file-and-line findings, not vague ones. This is not a brief-quality problem. The rounds simply never happened.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T18:08:13.869367085Z
+modified_at: 2026-09-20T18:08:13.869367085Z
+req_type: Bug
+tags:
+- drain-safe
+- orchestrator
+- parent:EPIC-62
+- rework-loop
