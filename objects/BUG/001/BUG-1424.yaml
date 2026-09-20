@@ -68,7 +68,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:08:00.383333375Z
-modified_at: 2026-09-20T12:28:53.737229050Z
+modified_at: 2026-09-20T12:35:27.765060118Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -163,6 +163,31 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T12:28:53.453101541Z
   modified_at: 2026-09-20T12:28:53.453101541Z
+- id: 01a0bed0-7595-7582-b83c-2121e3a9e523
+  author: joe
+  content: |-
+    [advisor] RECLASSIFYING MY OWN AMENDMENT, per the operator's correction. What I recorded an hour ago as a scope decision is better recorded as an unmet bar.
+
+    I amended criterion 1 and wrote that the multi-commit squash case is "explicitly out of scope". That framing lets us off the hook. The reviewer was right: per-commit patch identity does not clear a branch whose commits were combined into one squash, so of the five artifacts BUG-1287 set out to clear, four clear under this fix and one does not.
+
+    "Out of scope" says the bar was wrong. "Shipped with one case unmet" says the bar was right and we accepted a gap. The second is true and it is the one that asks to be revisited.
+
+    THE SUBSTANCE OF THE DECISION IS UNCHANGED AND I STILL STAND BY IT. Shipping this beats holding it: the mechanism it replaces cleared nothing at all three hours after merging, this one is durable, and the failure direction is safe — keeping a landed branch costs disk, removing an unlanded one costs work. Four of five is a real improvement over zero of five.
+
+    WHAT CHANGES IS THE RECORD. The remaining case is DEBT, not a boundary:
+
+      unmet:     branches whose commits were squashed into one cumulative commit are not cleared
+      evidence:  task-1251 — 2 commits, both reported unique by the shipped mechanism
+      closes it: compare the branch's COMBINED diff against its merge-base with what landed,
+                 rather than per-commit patch identity — a different computation with its own
+                 failure modes, which is why it is not a small edit to this one
+
+    That is now the shape STORY-1385 is being built to capture generally: which criterion, what the reviewer wanted, what shipped instead, and what would close the gap. This spec is its worked example, including that the decision was right and the recording was not.
+
+    I have not filed the remainder as its own spec yet — one artifact is not worth a spec today and STORY-1385 should decide the form before I start creating instances of it by hand.
+  created_at: 2026-09-20T12:35:27.765060118Z
+  modified_at: 2026-09-20T12:35:27.765060118Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
