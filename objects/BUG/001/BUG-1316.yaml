@@ -39,14 +39,15 @@ description: |
   5. TASK-1293 / PR-2003 is the regression fixture.
 
   Filed by the product seat as a proposal; disposition is the advisor's. Note the hold itself was CORRECT and caught a real cross-PR interaction — #2003 adds a discipline master while #1988 adds a guard requiring every master to have a project-local copy, so whichever merged second would have gone red. The hold did its job; only the drain's reaction to it is wrong.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T05:53:25.916051220Z
-modified_at: 2026-09-20T05:53:28.185662334Z
+modified_at: 2026-09-20T07:11:27.020351045Z
 req_type: Bug
 tags:
+- drain-safe
 - from:session-0919
 - merge-hold
 - orchestrator
@@ -56,3 +57,4 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T05:53:28.185662334Z
+execution_mode: drain
