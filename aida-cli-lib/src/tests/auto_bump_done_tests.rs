@@ -1987,27 +1987,92 @@ fn write_fake_gh_for_pr_states(
     root: &std::path::Path,
     states: &[(u64, &str)],
 ) -> std::path::PathBuf {
-    let mut script = String::from("#!/usr/bin/env bash\ncase \"${3:-}\" in\n");
-    for (pr, state) in states {
-        script.push_str(&format!(
-            "  {pr})\n    cat <<JSON\n\
+    #[cfg(windows)]
+    {
+        let mut script = String::from("@echo off\r\n");
+        for (pr, state) in states {
+            script.push_str(&format!(
+                "if \"%3\"==\"{pr}\" (echo {{\"state\": \"{state}\", \"title\": \"t\", \"mergedAt\": null, \"baseRefName\": \"main\", \"headRefName\": \"b\", \"headRefOid\": \"sha\", \"isCrossRepository\": false, \"headRepository\": null, \"isDraft\": false}}& exit /b 0)\r\n"
+            ));
+        }
+        script.push_str("exit /b 1\r\n");
+        let path = root.join("gh.cmd");
+        std::fs::write(&path, script).unwrap();
+        return path;
+    }
+
+    #[cfg(not(windows))]
+    {
+        let mut script = String::from("#!/usr/bin/env bash\ncase \"${3:-}\" in\n");
+        for (pr, state) in states {
+            script.push_str(&format!(
+                "  {pr})\n    cat <<JSON\n\
              {{\"state\": \"{state}\", \"title\": \"t\", \"mergedAt\": null, \
              \"baseRefName\": \"main\", \"headRefName\": \"b\", \"headRefOid\": \"sha\", \
              \"isCrossRepository\": false, \"headRepository\": null, \"isDraft\": false}}\n\
              JSON\n    exit 0\n    ;;\n"
-        ));
+            ));
+        }
+        script.push_str("  *)\n    exit 1\n    ;;\nesac\n");
+        let path = root.join("gh");
+        std::fs::write(&path, script).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&path).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&path, perms).unwrap();
+        }
+        path
     }
-    script.push_str("  *)\n    exit 1\n    ;;\nesac\n");
-    let path = root.join("gh");
-    std::fs::write(&path, script).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(&path).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&path, perms).unwrap();
-    }
-    path
+}
+
+// trace:BUG-1432 | ai:codex
+#[test]
+fn stranded_review_pr_forge_failure_is_preserved_for_reporting() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    run_git(
+        &project_root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/repo.git",
+        ],
+    );
+    seed_review_story_at(&store_path, "STORY-1432", 1432, "lookup fails", "approved");
+    let missing_gh = project_root.join("missing-gh");
+    let _env = crate::test_env::EnvVarsGuard::set(&[(
+        "AIDA_TEST_GH_BINARY",
+        missing_gh.to_str().unwrap(),
+    )]);
+
+    let storage = Storage::new(store_path);
+    let before = storage.load().unwrap();
+    let (resolutions, failures) = collect_stranded_review_pr_resolutions(
+        &before,
+        &std::collections::BTreeMap::new(),
+        &project_root,
+    );
+
+    assert!(resolutions.is_empty());
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].spec_id, "STORY-1432");
+    assert_eq!(failures[0].pr_n, 1432);
+    assert!(!failures[0].reason.is_empty());
+    let warning = stranded_review_pr_lookup_failure_message(&failures).unwrap();
+    assert!(warning.contains("skipped 1 spec"), "{warning}");
+    assert!(warning.contains("STORY-1432 (PR #1432)"), "{warning}");
+    assert!(warning.contains(&failures[0].reason), "{warning}");
+    assert!(matches!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("STORY-1432")
+            .unwrap()
+            .status,
+        RequirementStatus::Approved
+    ));
 }
 
 /// TASK-1296: a "Review PR-N" spec's own PR reaching a terminal state
