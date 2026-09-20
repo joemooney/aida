@@ -15,7 +15,7 @@ description: |
   - No "missing" cell remains for product/advisor/implementer/reviewer under Codex; "degraded" cells have a filed spec each.
   - CI fails when a hook is wired for one vendor and not the other.
   - The dogfood wave under a Codex advisor merges at least one drain-mode spec with the merge gated by that Codex advisor.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
