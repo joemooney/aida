@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T08:30:27.192088042Z
-modified_at: 2026-09-20T08:30:27.192088042Z
+modified_at: 2026-09-20T08:40:55.805161965Z
 req_type: Task
 tags:
 - ci
@@ -17,3 +17,28 @@ tags:
 - linked:BUG-1420
 - preflight
 - severity:major
+comments:
+- id: 01a0bdf9-bcfd-79e3-b806-0f4bf6bdb2ee
+  author: joe
+  content: |-
+    [advisor:triage] VERIFIED REAL, on a current binary, and it is distinct from the false positive this same guard produced earlier tonight. Approved, drain, queued.
+
+    I checked each flag rather than re-running the guard, because this guard already cost us one wrong diagnosis:
+
+      aida mailbox --help       | grep body-file, stdin  -> 0
+      aida mailbox send --help  | grep body-file, stdin  -> 4
+      aida schedule --help      | grep hook              -> 0
+      aida schedule tick --help | grep hook              -> 1
+
+    So the manual cites three flags at a PARENT command level while they live on SUBCOMMANDS. The guard is correct and the manual is wrong.
+
+    WHY I CHECKED RATHER THAN ACCEPTED. Earlier tonight this same guard reported drift that did not exist — the preflight had run against a stale `aida` on PATH, and I mis-attributed the result before re-deriving it. My binary now matches HEAD exactly (85d9bad8), so this run is trustworthy in a way that one was not. The distinction matters: a guard that can report phantom drift needs its environment stated before its output is believed, which is the scope BUG-1420 and TASK-1289 both touch.
+
+    IT IS ALSO A BLOCKER FOR WORK IN FLIGHT RIGHT NOW. `python3 docs/cli/verify-manual.py` is a configured CI guard, it is a single final command, and it fails today under both the old and the new shell invocation. The drain is at phase 1 on BUG-1420 as I write this. When that spec reaches its preflight, this guard will fail for a reason BUG-1420 did not cause — so the shelve would look like BUG-1420 broke something, and the lane would spend its round chasing shell semantics.
+
+    I have recorded that on BUG-1420 so whoever picks it up knows the guard failure is inherited, not theirs.
+
+    THE FIX IS DOCUMENTATION, not code: move the three flags to the subcommand sections that own them. Do not "fix" it by loosening the guard to accept a flag anywhere in the tree — the guard's value is precisely that it knows where a flag lives, and a version that does not would have passed this.
+  created_at: 2026-09-20T08:40:55.805161965Z
+  modified_at: 2026-09-20T08:40:55.805161965Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
