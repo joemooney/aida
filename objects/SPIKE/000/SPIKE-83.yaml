@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:39:04.185770995Z
-modified_at: 2026-09-20T06:02:41.440636537Z
+modified_at: 2026-09-20T06:03:21.614702183Z
 req_type: Spike
 tags:
 - batch:followups-0918i
@@ -78,6 +78,34 @@ comments:
   created_at: 2026-09-19T21:32:51.189212173Z
   modified_at: 2026-09-19T21:32:51.189212173Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bd69-7a8e-77b3-be56-837d5b43cee0
+  author: joe
+  content: |-
+    [rework round 2] PR #2004 — CHANGES REQUESTED, five findings. All binding, numbered as requirements. A spike's entire output is its claims, so "the numbers are not reproducible" is not a nitpick — it is the deliverable failing.
+
+    REQUIREMENT 1 — EXPLAIN THE ZEROES, do not merely cite the generic condition.
+    Part 1 must establish WHY the observed records persisted zero while drain stdout showed nonzero cumulative tokens. Naming the generic `sum_headless_log_tokens` zero condition is insufficient, because the live driver counter and the finalizer both call that same function — so that condition cannot by itself distinguish the case that failed from the case that worked. Find what differs between them. If the answer turns out to be "cannot be determined from what is on disk", that is a legitimate finding, but it must be stated as a conclusion with the evidence that closes it off, not left as an unexamined gap.
+
+    REQUIREMENT 2 — DO THE KNOWN-WINDOW COMPARISON THE ACCEPTANCE NAMES.
+    Total tokens reported by drain stdout versus total recorded in usage.jsonl, over one window where both exist. The report currently gives 167,943,259 persisted, declares stdout unreconstructable, and substitutes a different, non-comparable figure. A substitution is not the comparison. If stdout genuinely cannot be reconstructed for any window, say so explicitly and prove it, then state what the SMALLEST window is for which both sources do exist and compare that.
+
+    REQUIREMENT 3 — GIVE COST PER MERGED SPEC.
+    The criterion asks for cost. The report gives 2.9M tokens and 1.33 hours and defers dollars because token-class and model mix are unavailable — while itself identifying local per-message sources that carry that information. Either use them, or state precisely which field is missing from which file and what would have to be captured to close it. A deferred number with a named blocker is acceptable; a deferred number without one is not.
+
+    REQUIREMENT 4 — EVERY FIGURE REPRODUCIBLE FROM A LISTED COMMAND.
+    The 92/57 drain records, the ten-row window totals, and the 2,938/2,938 Claude rows have no exact jq filter, no deduplication rule, no timezone cutoff, no snapshot point. Someone re-running this in a month must get the same number or a different one they can explain. For each headline figure, give the exact command, the file, and the cutoff. This is the criterion that makes the rest of the spike worth anything: an unreproducible measurement cannot be compared against a later one, and comparison is the entire purpose.
+
+    REQUIREMENT 5 — THE PR BODY CLAIMS A VERIFICATION THAT FAILS.
+    It states `git diff --check` passed. It does not: it fails on trailing whitespace at report lines 3-4. Fix the whitespace (replace the Markdown hard-break spaces with formatting that passes), and re-run the check before re-asserting it.
+
+    Flagging this one separately because it matters more than its size. A report whose stated verification does not hold is the same defect the report is investigating, committed in the report itself. Re-run every verification you claim before claiming it.
+
+    SCOPE, unchanged: this is a SPIKE. Its deliverable is the report. Do not implement token capture, do not build a collector, do not extend any schema — the advisor's sequencing on EPIC-71 is explicit that nothing gets filed against it until this spike lands and is read.
+
+    Push fixups to the existing branch. Do not open a new PR.
+  created_at: 2026-09-20T06:03:21.614702183Z
+  modified_at: 2026-09-20T06:03:21.614702183Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
   implemented: true
