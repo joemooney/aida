@@ -22,12 +22,12 @@ description: |
   4. Documented alongside the terminality consumer rule, since both are about the same feed and the same reader.
 
   Deferred from PR #1982 review, where the feature was merged on the operator's throughput directive with this recorded rather than blocking.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:12:52.118388386Z
-modified_at: 2026-09-20T07:15:24.509871657Z
+modified_at: 2026-09-20T12:58:49.769159804Z
 req_type: Bug
 tags:
 - batch:night-0920
