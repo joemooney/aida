@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-20T17:01:38.969562360Z
+modified_at: 2026-09-20T17:11:09.646895247Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -150,6 +150,44 @@ comments:
   created_at: 2026-09-20T17:01:38.969562360Z
   modified_at: 2026-09-20T17:01:38.969562360Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bfcc-de4e-7771-bd4b-d98918af1c89
+  author: joe
+  content: |-
+    [aida:rework-brief-correction-2] TASK-1273 — my previous correction was itself wrong. Withdrawing the withdrawal. Net effect on what to do is small; the record needs to be right.
+
+    WHAT ACTUALLY HAPPENED, established by reading the objects:
+
+      d50d85c9  2026-09-19 16:53  token path = ::notice:: skip      (state when I wrote the brief)
+      17e27888  2026-09-20 09:56  token path = ::error:: + exit 1   (round 2, acting on item 1)
+
+    So item 1 of the brief — "an absent AIDA_GITLAB_TOKEN must not pass" — was CORRECT when written, and round 2 implemented it. It was not, as I claimed, already fixed and briefed from a stale verdict. There was nothing wrong with the brief.
+
+    HOW I GOT IT WRONG, because the mechanism is not the one I or my correspondent named. I did not read a stale commit. I quoted a sha captured by an EARLIER command and read content with a LATER one that re-derived it:
+
+      command A   h=$(gh pr view ...)  ->  printed "current head=d50d85c9"
+      command B   h=$(gh pr view ...)  ->  git show $h:...  ->  read 17e27888's content
+
+    Round 2 pushed between A and B. Both commands were correct in isolation. I reported the sha from A and the content from B and treated them as one observation, which produced a false conclusion that the verdict was stale and an entirely fabricated account of my own reasoning to explain it.
+
+    The lesson is not "read artifacts not reports" — I did read the artifact. It is that an artifact reference must be PINNED, not re-derived: capture the sha and its content in the same operation, and quote that sha. A head can move between two commands a minute apart, and both readings will look authoritative.
+
+    WHERE THIS LEAVES THE SPEC:
+
+    1. Item 1 as originally written is CLOSED by round 2. Not withdrawn, not wrong — done.
+    2. The replacement item I wrote — the mirror-unreachable path — STANDS and is still open at 17e27888:
+
+           elif ! curl --silent --show-error --fail --max-time 15 \
+             "https://${AIDA_GITLAB_LIVE_HOST}/-/readiness" >/dev/null; then
+             echo "::notice::Skipping GitLab forge smoke: mirror is unreachable"
+             echo "run=false" >> "$GITHUB_OUTPUT"
+
+       Round 2 did not touch it and neither round-2 finding mentions it, so a round 3 that satisfies both findings exactly still ships a workflow that goes green when the mirror is down. It remains the item to do if only one lands, and it is the more dangerous of the two: an absent token fails deterministically and loudly, while mirror unreachability fires intermittently against a correctly-provisioned credential, so the same configuration produces verified and unverified runs that are indistinguishable from outside.
+    3. Items 2-5 stand.
+
+    Do not read my previous correction's account of the brief's provenance. The brief was sound.
+  created_at: 2026-09-20T17:11:09.646895247Z
+  modified_at: 2026-09-20T17:11:09.646895247Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
