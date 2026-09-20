@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:57.872533301Z
-modified_at: 2026-09-20T13:28:19.014671003Z
+modified_at: 2026-09-20T13:29:08.594665876Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -182,6 +182,56 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T13:11:46.562034699Z
   modified_at: 2026-09-20T13:11:46.562034699Z
+- id: 01a0bf01-9af2-7b92-b0f7-1b1a34e913f6
+  author: joe
+  content: |-
+    [rework round 4] PR #1974 — same two findings for the THIRD consecutive round. That is a brief failure, not an implementer failure, and the fix is mine: I asked for an outcome without giving a mechanism, and for requirement 1 there is no obvious one. Here is the code.
+
+    WHY REQUIREMENT 1 HAS NOT LANDED. The two sites are:
+
+      aida-core/templates/skills/aida-pickup.md:389   the WRITER — a markdown template
+      aida-cli-lib/src/lib.rs:76330                   the READER — `first_line.trim_end() == "## Implementer approach"`
+
+    A markdown template cannot import a Rust constant. So "use one shared constant" is not implementable as stated, and asking for it more firmly three times changed nothing. The reviewer's own wording already offers the way out — "one shared marker source OR a coupling test that fails when either side changes alone". Take the second.
+
+    DO THIS, concretely:
+
+    1. Define the constant once in Rust, next to the reader:
+
+           pub(crate) const IMPLEMENTER_APPROACH_MARKER: &str = "## Implementer approach";
+
+       and use it at lib.rs:76330 instead of the literal.
+
+    2. Add a coupling test that reads the TEMPLATE and asserts it contains that constant:
+
+           #[test]
+           fn pickup_template_and_review_reader_share_the_approach_marker() {
+               let template = include_str!(
+                   "../../aida-core/templates/skills/aida-pickup.md"
+               );
+               assert!(
+                   template.contains(IMPLEMENTER_APPROACH_MARKER),
+                   "aida-pickup.md no longer writes the marker the review prompt reads \
+                    ({IMPLEMENTER_APPROACH_MARKER:?}) — the approach statement will be \
+                    written and never surfaced, with no other test failing"
+               );
+           }
+
+       `include_str!` is already used in this crate (cli.rs, ci_gate.rs, lib.rs), so this is an established pattern here, not an invention. Adjust the relative path to wherever you put the test.
+
+    That satisfies the requirement in its own terms: change either side alone and this test fails. It is about ten lines.
+
+    REQUIREMENT 2 IS UNCHANGED AND IS THE EASY ONE.
+    `append_implementer_approach` still emits nothing when no marked comment exists. Emit an explicit absence note — the same shape the missing-acceptance case already renders — because silence makes an ABSENT statement indistinguishable from an EMPTY one, and those have different remedies.
+
+    And the tests must go through `generate_review_prompt`, not the helper or extractor. Both directions: a spec WITH the marked comment renders the section; a spec WITHOUT renders the note. A test on the helper proves the helper works, which is what has passed for three rounds while the surface stayed broken.
+
+    IF REQUIREMENT 1 STILL WILL NOT GO IN, do requirement 2 alone and say in the PR body that 1 is outstanding and why. A PR closing one of two is progress; a fourth round closing neither is not. I would rather have half of this merged than a fifth identical verdict.
+
+    NOT IN SCOPE, restated for the third time: criteria 4 and 5 stay out by the advisor's binding decision. No advisor preview, no twenty-spec measurement.
+  created_at: 2026-09-20T13:29:08.594665876Z
+  modified_at: 2026-09-20T13:29:08.594665876Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
