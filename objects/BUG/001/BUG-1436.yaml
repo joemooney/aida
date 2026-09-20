@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:01:03.886041426Z
-modified_at: 2026-09-20T19:04:23.364620896Z
+modified_at: 2026-09-20T19:10:46.610517779Z
 req_type: Bug
 tags:
 - drain-safe
@@ -61,6 +61,9 @@ comments:
   created_at: 2026-09-20T19:03:51.894425787Z
   modified_at: 2026-09-20T19:03:51.894425787Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+deferred: true
+deferred_at: 2026-09-20T19:10:46.610517779Z
+deferred_until: a real Linux tick-lock failure is captured in CI or in local artifacts, carrying the error kind and raw os error number
 execution_mode: drain
 failure_reason:
   phase: implementer
