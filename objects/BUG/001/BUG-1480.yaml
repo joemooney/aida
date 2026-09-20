@@ -1,0 +1,55 @@
+id: 01a0c04e-e506-7173-a849-af7584b7342a
+spec_id: BUG-1480
+agreed_id: BUG-1480
+title: aida show takes 7.5 seconds on a healthy cache while list and search answer in 0.4 — the most-used per-spec read is the only one that does not use the cache
+description: |
+  `aida show <SPEC>` takes 7.5 seconds against a healthy cache, while every other read of the same store answers in under half a second. It is the most-used per-spec command in the system and it is twenty-three times slower than the surfaces beside it.
+
+  MEASURED 2026-09-20 19:32Z, repeated, on an idle machine with no drain running:
+
+      aida show BUG-1447                 7.49 s
+      aida show TASK-1300                7.71 s
+      aida show BUG-1447 --no-git        7.50 s
+      aida show BUG-1447 --format json   7.78 s
+
+      aida list --status approved --fields id    0.41 s
+      aida search "merge-hold" --fields id       0.32 s
+      aida cache status                          0.32 s
+
+  The cache is not the problem and is not stale:
+
+      Cached requirements: 4094
+      Store requirements:  4094
+      Last built:          2026-09-20T19:00:50Z
+
+  THE FLAGS RULE OUT THE OBVIOUS CAUSES. `--no-git` saves 0.3s, so the TASK-241 git-linkage section is not the cost. `--format json` is no faster, so rendering is not the cost. Four consecutive runs all land at 7.5s, so it is not a one-time warm-up or a cache rebuild. Whatever it does, it does every time, and `list`/`search`/`cache status` do not do it.
+
+  WHY THIS CONTRADICTS THE DESIGN AS DOCUMENTED. CLAUDE.md states the storage model plainly: single-spec writes are targeted — "resolve the one spec via the cache (any id form → its canonical YAML) and read/modify/write that one file — no full-store scan — so writes are sub-second even with active leases (was ~13-20s; BUG-634)" — and "Reads follow the same rule: the bare `aida status` and `aida list` never `backend.load()` the full store (STORY-707)". A 7.5s single-spec read against a 4094-row cache is the signature BUG-634 and STORY-707 were about, on a path that apparently never got the same treatment.
+
+  WHY THE COST IS LARGER THAN IT LOOKS. `aida show` is how every seat reads a spec: the skills use it, the discipline guides tell agents to use it, and any script that needs a field that `list --fields` does not expose has to call it per spec. Two concrete costs measured today:
+
+  - A batch-refresh loop over the 30 approved specs, calling `aida show` twice per spec to read `execution_mode` and the batch tag, takes over seven minutes per cycle. The same information via `aida list --status approved --tags ...` takes under a second. The loop is not doing anything exotic; it is asking for two fields the list surface does not project.
+  - An earlier per-spec loop over 16 specs in this session hit a 120-second timeout and had to be rewritten, for the same reason.
+
+  So the practical effect is that agents either wait, or invent workarounds that avoid the canonical read command. That is the same pressure BUG-1288 describes for `aida awaiting --json` at 70-77 seconds: the machine-readable path becomes unusable and callers route around it.
+
+  Acceptance:
+  - `aida show <SPEC>` on a warm, non-stale cache completes in under one second for a single spec, in line with `list`/`search`/`status`.
+  - The single-spec read resolves through the cache to one YAML file rather than loading the store, matching the documented targeted-write path.
+  - `--no-git` remains available for callers that want to skip git linkage, but is not required to get acceptable latency.
+  - A latency regression test covers the single-spec read the way one presumably covers `list` after STORY-707.
+  - Verification: `aida usage --cmd show --slower-than 1000ms events` shows no entries after the fix; the same query today should show the population.
+
+  Related: the `--fields` projection on `list`/`search` (STORY-734) is the reason the batch-refresh workaround exists. If `show` cannot be made fast, the alternative is projecting `execution_mode` through `--fields`, but that treats the symptom.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T19:33:11.046832864Z
+modified_at: 2026-09-20T19:33:11.046832864Z
+req_type: Bug
+tags:
+- agent-surface
+- drain-safe
+- papercut
+- performance
