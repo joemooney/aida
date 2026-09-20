@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:45.252179213Z
-modified_at: 2026-09-20T18:14:29.910251598Z
+modified_at: 2026-09-20T19:57:36.920020834Z
 req_type: Spike
 tags:
 - batch:night-0920
@@ -51,5 +51,28 @@ relationships:
   target_id: 01a0bef3-82ca-7f50-8722-5f4cb9fb75da
   created_at: 2026-09-20T18:14:29.910244275Z
   created_by: joe
+comments:
+- id: 01a0c065-4318-7212-9608-8a2e81a9730d
+  author: joe
+  content: |-
+    Candidate instance found 2026-09-20 19:57Z, offered for the sweep rather than asserted as one of the six.
+
+    BUG-1442 fixes `aida show`'s TOON projection collapsing every relationship type to Related — that is, a bug about two output formats disagreeing. Its round-1 verdict (PR #2027, reviewed_sha 6c692a496):
+
+        acceptance 4: the journey test does not assert that human and TOON relationship
+        projections agree. It independently searches each output for hard-coded substrings,
+        so disagreement in row cardinality, target association, ordering, or extra collapsed
+        rows can still pass.
+
+    So the regression test for a cross-format DISAGREEMENT bug does not compare the two formats. It checks each one separately against fixed strings, which is the one method that cannot detect the class of defect the spec exists to fix.
+
+    Whether this belongs in your population depends on where you draw the boundary. It is not an instrument failing on its own category the way the untraced-criteria gate was — the test is not testing itself. But it is a test whose METHOD is structurally incapable of observing the property it was written to protect, which is the same shape one level down: the check and its blind spot are the same design decision.
+
+    Offering it as a boundary case for the written method rather than a seventh instance. If the sweep's criterion is 'the instrument cannot see its own category', this is out. If it is 'the check's method excludes the failure it exists to catch', this is in — and if that is the criterion, it is probably a much larger population than six.
+
+    Caught by the drain reviewer, not by looking, which is consistent with your observation that all six were found by accident.
+  created_at: 2026-09-20T19:57:36.920020834Z
+  modified_at: 2026-09-20T19:57:36.920020834Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 human_only: true
