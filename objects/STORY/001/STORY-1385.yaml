@@ -1,0 +1,50 @@
+id: 01a0becf-5722-7db2-a49b-1e13af40f0bf
+spec_id: STORY-1385
+agreed_id: STORY-1385
+title: 'A narrowed acceptance leaves no trace: record the excluded part as a deferred remainder so idle capacity can sweep it back'
+description: |
+  When the advisor narrows a spec's acceptance to let a change land, the excluded part vanishes. The amended criterion looks identical to acceptance that was always that narrow, so nobody can later tell "we decided this is out of scope" from "nobody thought of it", and the excluded work is remembered only for as long as one session's context lasts.
+
+  OPERATOR REQUEST 2026-09-20: mark the narrowing so idle capacity can sweep back and address what the reviewer originally wanted.
+
+  THE INCIDENT THAT PROMPTED IT. BUG-1424's reviewer refused PR #2015 because criterion 1 said "identify landed work by patch-id equivalence" and per-commit patch identity cannot match a multi-commit squash. The advisor had found that same limitation independently, verified it against a live branch, and decided it was acceptable — but recorded that decision in a COMMENT. A comment does not bind a reviewer, so the reviewer applied the criterion as written and refused correctly. Three consecutive specs shelved at review that hour and nothing merged for 93 minutes; this was one of the three.
+
+  THE MECHANISM ALREADY EXISTS AND IS ALREADY BEING USED AD HOC. `aida defer <ID> --until "<condition>"` is exactly "primed work that returns on a trigger, hidden from the default view but not filed away" (STORY-584). Thirty specs are deferred today. TASK-1299 was created this way a few hours before this filing — the one finding of four on TASK-1289 that was not a correctness defect, split out and deferred with its trigger — without anyone noticing it was an instance of a pattern.
+
+  So this spec is mostly convention, not code.
+
+  THE CONVENTION. Narrowing acceptance requires three things, none of which is optional:
+
+  1. The amended criterion states WHAT is excluded and WHY, in the description rather than a comment. A comment does not bind a reviewer; that is the whole lesson.
+  2. The excluded part is filed as a DEFERRED child spec carrying its own acceptance and a `--until` revisit trigger, linked to the parent with a typed relationship. Not a tag with prose — a spec, so it is findable, has its own criteria, and can be picked up without reconstructing the reasoning.
+  3. The parent carries a tag marking it, so the population is greppable and the RATE is visible.
+
+  WHY A DEFERRED SPEC RATHER THAN A TAG ALONE. A tag says something was narrowed; it does not say what, and the content lives in prose nobody greps. A deferred spec is already excluded from the default open-work view, so it does not inflate the backlog the operator is trying to shrink, while `aida list --deferred` shows it with its trigger the moment anyone looks.
+
+  THE HONEST RISK, stated because it argues against this spec. Today narrowing feels like cheating, and that friction is part of what limits it. A blessed mechanism makes it routine and therefore cheaper, and cheap narrowing is how acceptance erodes. The mitigation is criterion 3: if every narrowing is tagged, the rate is auditable — "nine specs narrowed this week" is a number someone can react to, where nine invisible narrowings are not. That converts a discipline problem into a measurement, which is the trade this project keeps making deliberately.
+
+  A SECOND CLASS WORTH DISTINGUISHING. A narrowing that OVERRIDES a reviewer's recorded verdict is a stronger signal than one the advisor makes pre-emptively while writing the spec. The first means two readers disagreed and one overruled the other; the second is ordinary scoping. The verdict files under `.aida/review-verdicts/` already record the refusal, so the distinction is derivable and worth surfacing separately.
+
+  ACCEPTANCE
+  1. The convention above is written into the discipline pack, with the BUG-1424 sequence as its worked example — including that the decision was correct and the recording was not.
+  2. A tag identifies parents whose acceptance was narrowed, and the deferred child is linked by a typed relationship so the graph walks from parent to remainder.
+  3. `aida list --deferred` output distinguishes a narrowed-acceptance remainder from other deferred work, so the sweep population is selectable rather than mixed in with unrelated parked specs.
+  4. A query returns narrowing remainders whose revisit trigger may have fired, suitable for running when capacity is idle. No new storage: the trigger text and the relationship are already recorded.
+  5. The count of narrowings over a window is reportable, so the rate is visible rather than only individual instances.
+
+  NOT IN SCOPE, deliberately: automatically reopening a remainder, or blocking a narrowing. The advisor's judgement that a limitation is acceptable is a legitimate decision and this spec exists to make it VISIBLE and RECOVERABLE, not to prevent it.
+
+  SEQUENCING NOTE: criteria 1-3 are convention plus existing verbs and need no new code. Criterion 4's periodic prompt is a natural job for the scheduler registry in STORY-1367, which currently has no jobs registered. This should not wait on that — the query is useful run by hand.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T12:34:14.434033357Z
+modified_at: 2026-09-20T12:34:14.434033357Z
+req_type: Story
+tags:
+- acceptance
+- discipline
+- from:operator-0920
+- parent:EPIC-62
+- process
