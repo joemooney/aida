@@ -38,12 +38,12 @@ description: |
   5. The 2026-09-20 sequence above is the regression fixture: two members, one guided and one blocked, must report as ineligible rather than as an empty queue.
 
   Filed by the product seat as a proposal; disposition is the advisor's. Workaround applied tonight: removed both members from the batch so the supervising launcher's count reached zero and it could exit.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:31:24.073637202Z
-modified_at: 2026-09-20T10:26:21.762823289Z
+modified_at: 2026-09-20T10:26:42.588866288Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -134,8 +134,25 @@ comments:
   created_at: 2026-09-20T10:26:21.762823289Z
   modified_at: 2026-09-20T10:26:21.762823289Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0be5a-9518-7390-8992-a0b05520b3c3
+  author: aida-auto-bump
+  timestamp: 2026-09-20T10:26:42.584669362Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0be5a-951c-7a50-ade1-be0a57f330e3
+  timestamp: 2026-09-20T10:26:42.588860962Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1422-2026-09-20T102623Z.md
+  commit_sha: 5b9306a2691e9869da5d037962b44fd51c61ec27
+  summary: Completed via merge 5b9306a2
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T10:05:41.983199368Z
   implemented_by: joe
+  completed_at: 2026-09-20T10:26:42.583412558Z
+  completion_sha: 5b9306a2691e9869da5d037962b44fd51c61ec27
