@@ -1,0 +1,51 @@
+id: 01a0bd84-56de-7d63-8821-751769ba9574
+spec_id: BUG-1423
+agreed_id: BUG-1423
+title: 'The event feed records only drain activity: advisor and product seat actions emit nothing, including nine of ten merges tonight'
+description: |
+  The event feed records only what the drain does. Every action taken by the advisor and product coordination seats is invisible to it, including merges — which means the feed cannot answer "what happened to this project tonight" for any work not driven by a drain phase.
+
+  MEASURED 2026-09-20, window 00:00Z onward. Seats and vendors appearing in `.aida/events.jsonl`:
+
+    reviewer 12, implementer 15, integrator 5, codex 23
+
+  No advisor seat, no product seat, in a window where both were active continuously.
+
+  THE DECISIVE NUMBER IS PrMerged: 1. In that same window the advisor gate merged NINE pull requests — 1980, 1985, 1987, 1990, 1992, 1993, 1994, 2000, 2002. The feed records one, belonging to the drain's own merge phase. An advisor merge emits nothing.
+
+  WHAT ELSE IS ABSENT. There is no event kind for a review verdict reached at the advisor gate, a merge hold placed or lifted, a spec groomed or disposed, a mode changed, a finding triaged, or a spec requeued by hand. All of those happened repeatedly tonight and all of them changed what the drain did next. Every one is recoverable only by reading spec comments or the store's git log.
+
+  WHY THIS IS A DEFECT AND NOT A DESIGN CHOICE.
+
+  It makes dogfood and coordination acceptance criteria unprovable. TASK-1-151 found exactly this: a spec requiring evidence of cross-seat coordination cannot be satisfied from the feed, and its suggested recovery — re-run a wave and capture the evidence — would produce the same silence, because the instrument does not record the thing.
+
+  It makes any feed-derived throughput or outcome metric wrong in one direction. A consumer counting PrMerged undercounts merges by however many the advisor performed, which tonight was nine out of ten. Round-to-merge statistics, cycle times and drain success rates computed from this feed all inherit that.
+
+  It is being built against right now. The monitor contract shipped today declares the follow feed as a consumer surface. A dashboard reading it will show drain activity as the whole of the project's activity.
+
+  And it compounds the terminality work. BUG-1286 makes terminal events explicit so a consumer can tell a finished spec from a stuck one — but a spec the advisor merged emits no terminal event at all, so it reads as never finished regardless.
+
+  ACCEPTANCE
+  1. A merge performed outside a drain phase emits the same terminal event a drain merge does, carrying the PR and the spec. A consumer must not be able to tell from the feed whether a merge came from the orchestrator or the gate.
+  2. Coordination-seat actions that change what happens next are recorded: at minimum a review verdict reached, a merge hold placed or lifted, and a spec's disposition or mode changed. Each carries the acting seat.
+  3. `seat` is populated for these events, so the existing seat field becomes a complete account of who acted rather than a partial one.
+  4. A test asserts that a merge through the advisor path and a merge through the drain path produce equivalent terminal records.
+  5. Documented for feed consumers, alongside the terminality rule, stating that events before this change record drain activity only, so historical seat counts and merge counts are lower bounds.
+
+  NOT IN SCOPE: recording every advisor command, which would make the feed a shell history and drown the signal. The line is actions that change what the system does next, which is the same line the existing drain events draw.
+
+  Found while triaging TASK-1-151; the counts above were measured by the advisor rather than taken from the finding.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T06:32:41.950727879Z
+modified_at: 2026-09-20T06:32:41.950727879Z
+req_type: Bug
+tags:
+- diagnostic-decay
+- events
+- from:session-0919
+- observability
+- seat-parity
+- telemetry
