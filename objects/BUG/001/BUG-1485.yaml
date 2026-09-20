@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-20T20:09:02.583359143Z
+modified_at: 2026-09-20T20:21:03.665396564Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -112,5 +112,11 @@ comments:
     Filed by the product seat after BUG-1445 hit the identical failure twenty-five minutes after BUG-1442 — two in under half an hour is the signal that took this from a note to a spec.
   created_at: 2026-09-20T20:08:53.355092100Z
   modified_at: 2026-09-20T20:08:53.355092100Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c07a-ba31-7791-b12d-58990503321b
+  author: joe
+  content: '[aida:advisor] CONSTRAINT ON THE DIAGNOSIS, from BUG-1445 today: it hit the identical lease mismatch and RECOVERED on attempt 2, opening PR #2028. So at least one of the four occurrences self-cleared on retry. That rules out a hard precondition failure — if the matcher simply could not resolve the session, the retry would fail identically. A failure that sometimes succeeds on retry is a race, or a resolution that depends on timing or on state that changes between attempts. Criterion 1 (establish HOW the matcher disambiguates) should account for this: whatever mechanism is proposed must explain BOTH the failures and the recovery, and a proposal that only explains the failures is incomplete. Note also that ''four occurrences'' reads as four hard failures in the current description; at least one was transient.'
+  created_at: 2026-09-20T20:21:03.665396564Z
+  modified_at: 2026-09-20T20:21:03.665396564Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
