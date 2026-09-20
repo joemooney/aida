@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:02:54.706318011Z
-modified_at: 2026-09-20T02:00:48.326577084Z
+modified_at: 2026-09-20T03:51:35.716219284Z
 req_type: Story
 tags:
 - authority
@@ -111,6 +111,40 @@ comments:
   created_at: 2026-09-20T01:49:16.562816226Z
   modified_at: 2026-09-20T01:49:16.562816226Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bcf0-d824-7b21-af39-84624b1b4183
+  author: joe
+  content: |-
+    [advisor:rework] BUILD RED on one test, and it is not a broken test — the implementation has drawn the boundary in a place that blocks the exact workflow this spec cites as its motivating evidence. Requeued with direction.
+
+    THE FAILURE, from run 35482609062:
+
+      queue_rework_tests::rework_needs_attention_spec_becomes_pickable_queue_head ... FAILED
+      called `Result::unwrap()` on an `Err` value: rework would advance Needs Attention → In Progress,
+      which needs advisor authority; dispatch authority alone cannot dispose a spec
+
+    That is a pre-existing test asserting that reworking a shelved spec makes it pickable. It now fails because the split classifies NeedsAttention → InProgress as a disposition.
+
+    WHY THAT CLASSIFICATION IS WRONG FOR THIS CASE, and the spec's own description is the argument. It says, of the window it was written from:
+
+      "The product seat performed roughly twenty-five reviewer-finding-to-rework-brief cycles.
+       Every one of them needed the advisor prefix, and not one of them approved anything."
+
+    Those twenty-five cycles ARE this transition. A spec shelves to NeedsAttention, a reviewer's findings are read, a rework brief is written, the spec is requeued. That is the volume this story exists to unblock, and under the current implementation every one of them would still require advisor authority. The change would ship having moved the boundary without moving the case it was written for.
+
+    THE DISTINCTION I WANT DRAWN. A disposition decides WHETHER work proceeds at all: Approved, Rejected, Superseded, Deferred. That stays with the advisor and I am not asking to weaken it. Resuming work that was already approved and then shelved is not deciding whether it proceeds — that decision was made when it was approved, and the shelve did not reverse it. It is dispatch executing a disposition that already exists.
+
+    So `queue rework` moving NeedsAttention → InProgress as part of routing is DISPATCH. The test asserting it is right.
+
+    DO NOT WEAKEN OR DELETE THAT TEST to make the build green. It encodes the behaviour the spec wants. If the fix makes it pass, good; if you find yourself editing its assertions, the boundary is still in the wrong place.
+
+    WHAT I WOULD NOT RELAX. Draft → Approved, anything → Rejected, anything → Superseded, and the epic rollup guard all remain advisor-only. A dispatch seat must not be able to approve new work or terminate existing work. The narrow claim is only that resuming already-approved shelved work is routing, not disposing.
+
+    WHY THIS MATTERS BEYOND THIS PR, and it is the reason I am not merging it with a follow-up. Tonight's standing recovery arrangement is that a shelved spec gets requeued promptly rather than waiting for a brief, and BUG-1291 plus STORY-1218 both depend on something being able to move shelved work back into play without a human in the loop. If NeedsAttention → InProgress needs advisor authority, then every recovery from every shelve routes through a seat that only acts when something wakes it, and the substrate-first goal is unreachable by construction. That is a larger consequence than one red test.
+
+    Build is otherwise clean: 5093 passed, one failed. The `lib.exe` errors earlier in the log are the known report-only cross-target check and are not what failed the job — the failing step is `Run tests`.
+  created_at: 2026-09-20T03:51:35.716219284Z
+  modified_at: 2026-09-20T03:51:35.716219284Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
