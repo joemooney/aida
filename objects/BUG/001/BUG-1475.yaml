@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:25:25.984047465Z
-modified_at: 2026-09-20T18:28:30.362531171Z
+modified_at: 2026-09-20T18:28:31.480624961Z
 req_type: Bug
 tags:
 - ci windows portability nightly release-blocker from:review-session-0920
@@ -75,4 +75,41 @@ relationships:
   target_id: 01a0bef3-82ca-7f50-8722-5f4cb9fb75da
   created_at: 2026-09-20T18:28:06.370885644Z
   created_by: joe
+comments:
+- id: 01a0c013-b278-76a3-a084-21edf4e7563d
+  author: joe
+  content: |-
+    [aida:advisor] Approved HIGH, mode drain. This supersedes BUG-1443, which I filed this afternoon carrying a FALSE claim — that all three nights failed the same test. They did not, and this filing has the right answer. I have corrected and superseded mine.
+
+    VERIFIED INDEPENDENTLY from the scheduled runs, confirming all three lines of the filing:
+      35337447928  09-18  reconstitute::tests::scratch_gc_expires_old_runs_and_keeps_only_the_newest  reconstitute.rs:773
+      35438189645  09-19  git_ops::tests::failed_pull_rebase_aborts_and_restores_branch              git_ops.rs:5668
+      35506914381  09-20  auto_bump_done_tests::auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup  auto_bump_done_tests.rs:2080
+    macOS green all three nights. Last green nightly 09-17.
+
+    THE PART ABOVE THE THREE FIXES IS THE SPEC. Three Windows-only defects reached main in three days — roughly one per day — and the guard CLAUDE.md names for exactly this gap did not fire once. scripts/check-portability.sh greps for cfg(unix) gating of PRODUCTION code; it has no rule for a fake-binary fixture, none for a CRLF comparison, and none for a permission/handle assumption. It is blind to the precise class that is breaking. So the nightly carries the entire load, and the nightly is a detector wired to nobody: issue #1925 has been auto-commented into an empty room since 09-18.
+
+    That is the SPIKE-85 shape again and a clean specimen: a portability ratchet whose blind spot is portability in tests. Its charter and its miss are the same word.
+
+    THE TWO REFUSED SHORTCUTS ARE THE RIGHT ONES and I am reinforcing both:
+      - Do NOT fix the CRLF instance by marking it cfg(unix). That deletes coverage on the only
+        platform where it fails, which converts a red nightly into a silent absence of testing.
+      - Do NOT fix the shebang instance at the one call site. Enumerate every fixture that writes
+        a fake executable the same way. Four siblings already carry cfg gates
+        (bug_779_wrapper_eval_tests, task_1171_eval_channel_tests, drain_reliability_wiring_tests,
+        real_phase_driver_wiring_tests), which means the convention exists and was simply not
+        followed — an unenforced convention, not a missing one.
+
+    AND THE CLOSE CONDITION IS THE BEST THING HERE. Requiring an OBSERVED GREEN NIGHTLY ON MAIN rather than three tests passing locally is the merged artifact-over-report entry applied to its own domain. Three local passes are a report; a green scheduled run is the artifact. Keep that criterion exactly as written.
+
+    ADDITIONS:
+    1. Ratchet rules for all three classes, each demonstrated to flag its own instance BEFORE the fix lands. A rule that only passes afterwards has not been shown to detect anything.
+    2. Existing sites allowlisted via BUG-1301's growth check so the ratchet blocks new instances rather than demanding a sweep.
+    3. Wire the nightly's failure to a seat. A detector reporting into an empty room for three nights is a second defect, independent of the three fixes, and closing #1925 without addressing it guarantees the fourth night.
+    4. Say whether BUG-1233 and BUG-1283 — both Completed, both about scratch_gc and CRLF respectively — are regressions of the same sites or different ones. If the same, the earlier fixes did not hold and that changes what "fixed" has to mean here.
+
+    ON NOT DRAINING INSTANCE 1 HEADLESS — agreed. A Windows file-handle failure cannot be reproduced or verified on this machine, and a headless implementer would be guessing against a platform it cannot run. Route that one to the keyboard or to a dispatch-and-read-the-nightly loop.
+  created_at: 2026-09-20T18:28:31.480624961Z
+  modified_at: 2026-09-20T18:28:31.480624961Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
