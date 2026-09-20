@@ -1,0 +1,42 @@
+id: 01a0bf20-b65e-7d23-967b-f896cd1414ec
+spec_id: TASK-1300
+agreed_id: TASK-1300
+title: Mechanically enumerate external-prose classifiers, because three review rounds proved the workspace-wide audit cannot converge by hand
+description: |
+  BUG-1310's scope-1 criterion — "enumerate every external-tool prose classifier" — cannot be met by a human or agent audit, and three review rounds have demonstrated it. It needs a mechanical enumerator, which makes "every" checkable and keeps it checkable.
+
+  THE EVIDENCE THAT IT IS UNBOUNDED AS WRITTEN. PR #2016 was reviewed three times. Each round the reviewer re-grepped and named a DIFFERENT set of unenumerated sites:
+
+    round 1  forge::glab_stderr_is_transient
+    round 2  git_ops.rs index-lock / nothing-to-commit / push-rejection, forge.rs glab tokens, compete.rs cargo markers, overlay.rs CI rollup tokens
+    round 3  remote_create.rs GitLab API '404'/'not found', cache.rs SQLite 'no such column'/'has no column named'/'no such table', git_ops.rs commit-subject 'autostash'
+
+  Every round was correct about what it found. None was able to be complete, because completeness over a pattern like "a string literal compared against an external tool's prose" is not something a reader converges on — the search space is every string comparison in the workspace, and each pass surfaces a different slice. A criterion that a correct reviewer cannot discharge is a criterion that will refuse forever, and refuse rightly.
+
+  The three rounds also cost three implementer cycles, three reviewer cycles and three CI slots, and the third was rebase-only (BUG-1445), so the spec ended where it started while reading Done.
+
+  WHAT TO BUILD INSTEAD. A mechanical enumerator for external-prose classifiers: something that walks the workspace and emits the list, so the inventory is generated rather than hand-maintained, and drift is a diff rather than a discovery. Once it exists, "every classifier is enumerated" becomes a check that either passes or names what it missed, and docs/architecture/external-tool-output-classifiers.md regenerates from it rather than being kept in step by hand.
+
+  The shape is open and the hard part is the predicate, not the walk. A string literal compared against external output looks, syntactically, exactly like every other string comparison; the enumerator will need either a marker at the classifier sites, a narrow set of call shapes it recognizes, or both. Deciding that predicate IS this task — an enumerator with a predicate nobody can state is the same unbounded problem one level down, and should be reported as such rather than approximated.
+
+  ACCEPTANCE
+  1. A mechanical enumerator lists external-prose classifier sites across the workspace, with its predicate stated explicitly in the code or its docs — what counts as one, and what deliberately does not.
+  2. Running it reproduces, at minimum, every site the three PR #2016 review rounds named. Those nine-plus known sites are the fixture; anything it cannot see, it says so rather than omitting silently.
+  3. docs/architecture/external-tool-output-classifiers.md is generated from the enumerator, or checked against it, so the doc cannot drift from the code without something failing.
+  4. A test asserts the enumerator flags a newly added classifier site. A tool that only confirms today's list has not been shown to detect anything.
+  5. If the predicate cannot be stated precisely enough to be useful, say so with the cases that defeat it and stop, rather than shipping an approximation that reports a number nobody should trust. A negative result here is a real result and closes the question BUG-1310 could not.
+
+  Split out of BUG-1310 by the advisor after three review rounds failed to converge. BUG-1310 keeps the centralization and structured-alternative work, which did ship and is verifiable.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T14:03:07.230562710Z
+modified_at: 2026-09-20T14:03:07.230562710Z
+req_type: Task
+tags:
+- diagnostic-decay
+- diagnostics
+- drain-safe
+- from:session-0920
+- substrate-as-bouncer
