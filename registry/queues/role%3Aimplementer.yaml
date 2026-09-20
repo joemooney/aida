@@ -86,14 +86,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0bb67-f38d-7750-8851-7277d32ddb25
-  position: 97000
-  added_by: role:implementer
-  note: assert the committed blob (git show HEAD:file) rather than the working tree, removing the autocrlf variable; ADD ratchet checks for content-vs-literal-with-\n and File::open on a directory; verify by cross-platform dispatch; never cfg-away the test
-  added_at: 2026-09-19T20:42:32.982281526Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0bb6f-f968-7082-8192-40e4ea1779c8
   position: 98000
   added_by: role:implementer
@@ -246,5 +238,12 @@
   position: 117000
   added_by: role:implementer
   added_at: 2026-09-19T23:11:26.236390506Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0bb67-f38d-7750-8851-7277d32ddb25
+  position: 118000
+  added_by: role:implementer
+  added_at: 2026-09-20T00:13:10.416418375Z
   for_role: implementer
   added_by_machine: imac
