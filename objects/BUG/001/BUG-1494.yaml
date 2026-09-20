@@ -37,11 +37,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:50:46.533446065Z
-modified_at: 2026-09-20T22:53:47.391122755Z
+modified_at: 2026-09-20T22:53:48.396145262Z
 req_type: Bug
 tags:
 - agent-surface
 - authority
+- batch:night-0920
 - drain-safe
 - substrate-gate
 comments:
