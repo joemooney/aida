@@ -28,12 +28,12 @@ description: |
   5. A test covers the observed case: fire the guard twice against unchanged state and assert exactly one finding exists with a recurrence count of two.
 
   RELATED CONTEXT WORTH CARRYING. TASK-1-156's disposition established that BUG-1297's findings recurred across NON-ROUNDS — the branch has one commit from 08:02 while two later runs produced nothing in 50s and 14s. So the guard also cannot distinguish "the implementer could not do it" from "the implementer did not run", which need opposite responses (a better brief versus a different seat). That is recorded on TASK-1-156 and is a separate criterion from these; BUG-1445 shipped the patch-id comparison that would tell them apart.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:51:40.834379762Z
-modified_at: 2026-09-20T23:07:01.168229066Z
+modified_at: 2026-09-20T23:41:22.325565566Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -136,4 +136,23 @@ comments:
   created_at: 2026-09-20T23:07:01.168229066Z
   modified_at: 2026-09-20T23:07:01.168229066Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c132-1df3-7233-9a61-9bbb5faab8e9
+  author: aida-auto-bump
+  timestamp: 2026-09-20T23:41:22.291262629Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0c132-1e15-7f71-983d-d1aa94a50cc9
+  timestamp: 2026-09-20T23:41:22.325561324Z
+  agent: aida
+  commit_sha: eb1092123156c96e1390d02e318da94301d93528
+  summary: 'Approved and merging. Test-only, 23 lines, 0 behind main, both required checks green, correctly adapted to main''s blocking_rework_verdict. I verified falsifiability by MUTATION rather than accepting the claim, and additionally showed the test has discriminating power the existing suite lacks. Independent: product authored it, the finding behind it was the advisor''s; my own salvage suggestion was a different test.'
+  review_verdict: approved
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-20T23:41:22.289966250Z
+  completion_sha: eb1092123156c96e1390d02e318da94301d93528
