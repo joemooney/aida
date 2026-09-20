@@ -492,6 +492,11 @@ pub(crate) enum FailureKind {
     /// unchanged and a human can follow the interactive recovery recipe.
     // trace:BUG-1268 | ai:codex
     StaleBaseConflict,
+    /// BUG-1316: the substrate correctly refused a supervised PR because its
+    /// human/advisor merge-hold is still open. Retrying cannot change this
+    /// stable gate, so preserve it as a typed, non-transient shelve cause.
+    // trace:BUG-1316 | ai:codex
+    MergeHold,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -539,6 +544,7 @@ impl FailureKind {
                 | Self::HeadlessWait
                 | Self::StaleBaseRefused
                 | Self::StaleBaseConflict
+                | Self::MergeHold
                 | Self::Failed
         )
     }
@@ -567,6 +573,7 @@ impl FailureKind {
             Self::HeadlessWait => "headless-wait",
             Self::StaleBaseRefused => "stale-base-refused",
             Self::StaleBaseConflict => "stale-base-conflict",
+            Self::MergeHold => "merge-hold",
             Self::Failed => "tool-exit",
         }
     }
@@ -1832,6 +1839,12 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                 "The stale-base auto-rebase refused to overwrite remote commits that are not \
                  incorporated by patch-id. Follow the fetch + rebase recovery printed in the \
                  failure detail, then re-run the review: `aida queue work PR-{pr} --steal`."
+            );
+        }
+        FailureKind::MergeHold => {
+            return format!(
+                "A human/advisor merge-hold is open on PR-{pr}. Read the hold reason in the \
+                 failure detail, then clear it after review with `aida merge-hold clear {pr}`."
             );
         }
         _ => {}
@@ -6954,6 +6967,7 @@ mod tests {
             "verdict:reject",
             "ci-red",
             "lease-conflict",
+            "merge-hold",
             "environmental",
             "internal",
         ] {
@@ -6978,6 +6992,13 @@ mod tests {
         assert_eq!(FailureKind::LeaseConflict.cause_slug(), "lease-conflict");
         assert!(FailureKind::CiUnavailable.is_shelvable());
         assert_eq!(FailureKind::CiUnavailable.cause_slug(), "ci-unavailable");
+        assert!(FailureKind::MergeHold.is_shelvable());
+        assert_eq!(FailureKind::MergeHold.cause_slug(), "merge-hold");
+        assert!(!should_retry_transient_failure(
+            FailureKind::MergeHold,
+            0,
+            2
+        ));
     }
 
     #[test]
