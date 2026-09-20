@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:59.058325197Z
-modified_at: 2026-09-20T07:08:19.926794431Z
+modified_at: 2026-09-20T07:20:10.377523733Z
 req_type: Bug
 tags:
 - diagnostics
@@ -176,6 +176,25 @@ comments:
     The classification audit on this spec used PATCH-ID to establish which branches were artifacts. The implementation shipped tree comparison. The audit method was the more robust of the two and the gap between them was not noticed by the implementer, the product seat, or me. That is the more useful lesson than the bug: when the investigation and the implementation use different methods to answer the same question, the difference is worth a sentence in the review, and I did not ask for one.
   created_at: 2026-09-20T07:08:19.926794431Z
   modified_at: 2026-09-20T07:08:19.926794431Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bdaf-cd89-7dc2-8148-4ae0375ce737
+  author: joe
+  content: |-
+    [advisor] THIS SPEC READS Completed AND ITS STATED OUTCOME IS NOT DELIVERED. Recording that plainly here rather than leaving a reader to discover it, and explaining why I am not reopening it.
+
+    The title promises to clear squash-merged worktrees that ancestry can never resolve. Three hours after merge, `aida session reap --dry-run` clears none of them, and the five branches this spec was written for are back to "keep, operator decision". BUG-1424 carries the reason and the fix.
+
+    WHY NOT REOPEN. What this spec actually asked for was that the reaper's failing predicate be CLASSIFIED before anything destructive changed, and that happened — seventeen leases triaged, seven of them examined individually, and two branches with genuinely unshipped work correctly distinguished from five ancestry artifacts. That investigation was the valuable half, it was done properly, and reopening the spec would put a completed piece of work back in the queue.
+
+    The shipped mechanism is the part that fails, and it has its own spec with its own acceptance. Splitting them keeps both records honest: this one describes work that was done, BUG-1424 describes work that is not.
+
+    WHAT A READER SHOULD TAKE FROM THE PAIR. Do not read this spec's Completed status as "squash-merged worktrees are now reaped". They are not, and will not be until BUG-1424 lands. The graph relationship between the two is the only thing connecting that fact to this record, which is itself an argument for the typed-relationship habit over a prose note.
+
+    AND THE SPECIFIC MISS IS WORTH NAMING ON BOTH SPECS. The classification that justified this work established which branches were artifacts BY PATCH-ID. The implementation shipped a tree comparison. Those are different answers to the same question and the substitution was never noticed — not by the implementer, not by the product seat whose own handoff mail said "patch-id", and not by me, who verified the shipped mechanism empirically in both directions and reported it working.
+
+    My verification was not careless; it was point-in-time, against a repository that was about to change underneath it. A mechanism with a half-life cannot be caught by a check performed at a single moment, however rigorously. That is the lesson, and it is narrower and more useful than "verify more": when the investigation establishes an answer by one method and the implementation ships another, the substitution deserves a sentence in the review. Comparing two sentences would have caught this.
+  created_at: 2026-09-20T07:20:10.377523733Z
+  modified_at: 2026-09-20T07:20:10.377523733Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bd31-0cd0-78e0-8e1a-d2e120a737d9
