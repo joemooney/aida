@@ -14,12 +14,12 @@ description: |-
   Fix: at wave start-up, and again in the closing summary, the drain states both numbers — "batch <name>: 3 members; 16 other approved specs routed to role:implementer are not in this batch". Both are in hand at start-up, since resolving batch members already requires reading the role-routed queue. Emit it as an event as well as a line so a monitor can render it; a wave that drains its batch while the queue holds other ready work is the exact condition an operator wants surfaced.
 
   Acceptance: a wave launched with --batch on a batch of N, while M other approved specs are routed to that role outside the batch, prints both counts at start and at QueueDrained and emits them as an event; M == 0 renders no extra noise; the counts are correct with the role fallback in play (queue_list_with_role_fallback, per BUG-1264); unit test on the pure count derivation.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:01:47.445199182Z
-modified_at: 2026-09-20T06:41:34.060922363Z
+modified_at: 2026-09-20T07:14:19.532684380Z
 req_type: Task
 tags:
 - drain
@@ -54,8 +54,24 @@ comments:
   created_at: 2026-09-20T00:28:08.953952510Z
   modified_at: 2026-09-20T00:28:08.953952510Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bdaa-7304-7803-96b3-469bc20f34a1
+  author: aida-auto-bump
+  timestamp: 2026-09-20T07:14:19.524955030Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0bdaa-730c-7c30-9d4f-8794ec21a92c
+  timestamp: 2026-09-20T07:14:19.532683152Z
+  agent: aida
+  commit_sha: 11332b9b797041a4051230b220f58aa5dce19203
+  summary: Completed via merge 11332b9b
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T06:07:11.627450458Z
   implemented_by: joe
+  completed_at: 2026-09-20T07:14:19.524747345Z
+  completion_sha: 11332b9b797041a4051230b220f58aa5dce19203
