@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-20T14:04:21.981093192Z
+modified_at: 2026-09-20T14:35:41.142613247Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -178,6 +178,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T14:04:21.708257168Z
   modified_at: 2026-09-20T14:04:21.708257168Z
+- id: 01a0bf3e-86d6-7af2-b20a-56ad250b54df
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2016
+    agent: codex
+    ran-at: 2026-09-20 07:35 -07:00
+    mode: propose-only (drain)
+    proposed: 3
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1310-drain-01a0bf3e-299a-7073-87d9-74353abf6999.json
+    ? SEM (0.93) — External-tool prose tokens are matched case-insensitively using ASCII case folding across the centralized registry consumers.
+    ? AC (0.98) — GitLab merge retry and stale-head classification accepts only a JSON error object: retryability is recognized from numeric or numeric-string `status`/`status_code` values 405 and 409 or from the JSON `message`, while malformed JSON and equivalent `glab` wrapper prose authorize neither retry nor stale-head recovery.
+    ? SEM (0.91) — GitLab stale-head classification treats `sha does not match` and `sha mismatch` as sufficient message signals, but requires the message to contain both `sha` and `head of source branch` for the broader head-of-branch form.
+  created_at: 2026-09-20T14:35:41.142613247Z
+  modified_at: 2026-09-20T14:35:41.142613247Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
