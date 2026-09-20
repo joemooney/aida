@@ -1,0 +1,52 @@
+id: 01a0c00f-cd98-7b13-8b35-bbe94eacad4d
+spec_id: BUG-1474
+agreed_id: BUG-1474
+title: CLAUDE.md documents aida history events --id as the way to read spec-state history, but the flag does not exist on a binary built from current HEAD
+description: |
+  CLAUDE.md designates the orphan branch's git log as the source-of-truth for spec-state time series, and names `aida history events [--id <spec-id|uuid>]` as the way to read it. That flag does not exist.
+
+      $ aida history events --id BUG-1288
+      error: unexpected argument '--id' found
+      Usage: aida history events [OPTIONS]
+
+      $ aida history events --help
+      Options: --format <FORMAT>, -h/--help        <-- that is the whole surface
+
+      $ aida --version
+      aida 0.15.0 (built 2026-09-20 09:12:41 -07:00, sha 5aee18b91d+dirty)
+
+  The binary is built from today's HEAD, so this is not a stale-binary artifact. `grep` for an id/spec filter on that subcommand in `aida-cli-lib/src/cli.rs` finds none.
+
+  WHAT CLAUDE.md CLAIMS, verbatim: "`aida history events [--id <spec-id|uuid>]` walks the git log and diffs each spec's YAML commit-over-commit to emit one typed event (`status: X → Y`, `priority: …`, `tags: +a -b`, …) per change… `--id` accepts a spec_id, an agreed_id, or the raw UUID `aida show` prints (the UUID is resolved to its spec_id; BUG-588)."
+
+  BUG-588 is Completed and its title is "aida edit writes no history: array row to the spec YAML (audit trail missing; --id history empty)" — so the citation is to a spec about the `history:` array, not about an `--id` flag on `history events`. The documentation appears to have described an intended surface that was not built, or was built and later removed, and the trace citation does not support the claim it is attached to.
+
+  WHY IT MATTERS MORE THAN A DOC NIT. The paragraph exists to tell a reader where to look when they need a spec's state history, and it ends by telling reviewers building status-flow analyses to run this command rather than approximate from `modified_at`. Today I needed exactly that — to settle a disagreement about which status three specs were in before a requeue — and the documented path failed. The answer came from walking the orphan branch's git log by hand:
+
+      rel=$(find .aida-store/objects -name "<SPEC>.yaml" | head -1); rel=${rel#.aida-store/}
+      git -C .aida-store log --format='%H|%ad' --date=format:'%m-%d %H:%M:%S' -6 -- "$rel" \
+        | while IFS='|' read sha t; do
+            printf "  %s  %s\n" "$t" "$(git -C .aida-store show "$sha:$rel" | grep -m1 '^status:')"
+          done
+
+  That is four lines and it is the thing the documented command was supposed to be. Two separate findings today were settled by hand passes over data that has a command which should have produced it.
+
+  A SECOND-ORDER COST worth naming: I reported this to another seat as "the command returned nothing", because I had run it with `2>/dev/null` and never saw the error. Suppressing stderr on a command whose failure mode is a clap error turns "this flag does not exist" into "this surface is silently empty" — two very different bug reports. The doc drift cost a wrong report on top of the wrong path.
+
+  Acceptance:
+  - Either `aida history events` grows a per-spec filter matching what CLAUDE.md describes (accepting spec_id, agreed_id, or UUID), or CLAUDE.md is corrected to describe the surface that exists and to point at the git-log recipe for the per-spec case.
+  - Whichever way it goes, the BUG-588 citation is corrected or removed — that spec is about the `history:` array, not this flag.
+  - If the flag is added, `--format json` emits the same typed events so the series is machine-consumable; the stated use case is burn-down and status-flow analysis.
+  - A check that documented `aida <cmd> --flag` invocations in CLAUDE.md actually parse would have caught this; worth considering as a cheap guard given the file is the project's onboarding surface and is read by every new agent session.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T18:24:16.280507219Z
+modified_at: 2026-09-20T18:24:16.280507219Z
+req_type: Bug
+tags:
+- agent-surface
+- docs
+- drain-safe
+- drift
