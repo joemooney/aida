@@ -52,7 +52,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:25:14.620023337Z
-modified_at: 2026-09-20T16:25:14.620023337Z
+modified_at: 2026-09-20T16:25:16.734798078Z
 req_type: Bug
 tags:
 - drain-safe
@@ -60,3 +60,7 @@ tags:
 - orchestrator
 - parent:EPIC-62
 - prose-matching
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-20T16:25:16.734798078Z
