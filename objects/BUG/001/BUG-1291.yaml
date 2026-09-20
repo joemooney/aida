@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-20T05:29:45.242587316Z
+modified_at: 2026-09-20T11:51:26.943948278Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -155,6 +155,27 @@ comments:
   created_at: 2026-09-20T05:29:45.242587316Z
   modified_at: 2026-09-20T05:29:45.242587316Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bea8-29df-7451-9091-2193ff3336df
+  author: joe
+  content: |-
+    [advisor] A THIRD INSTANCE, AND IT IS THE HALF THIS SPEC DOES NOT COVER. Recorded because two of tonight's three were found by hand and would otherwise have sat until morning.
+
+    TASK-1293, found at 04:50: status Done, PR #2003 open and held at the advisor gate, and NO queue entry. Nothing was going to pick it up. I requeued it by hand.
+
+    TASK-1289 earlier tonight was the same shape in a different state: queued, statused In Progress, no live session, held PR. Also found by hand.
+
+    THE PATTERN ACROSS ALL THREE. This spec was filed for a run that dies before its reviewer phase, leaving a PR nothing claims — the ownerless PR. What tonight produced twice is the ownerless REWORK: a PR that IS claimed, by a human or advisor hold, with no work item anywhere to resolve it. The hold is visible on the PR. The absence of an owner for the fix is visible nowhere.
+
+    The distinction matters for the fix. An ownerless-PR sweep looks for PRs with no verdict and no live owner; both of tonight's had a verdict — mine — so a reviewer-claiming sweep correctly skips them. They do not need a reviewer. They need someone to do the requested change, and nothing in the substrate says that is outstanding.
+
+    WHAT WOULD DETECT IT. The conjunction is cheap and uses only things already recorded: a PR with an advisor hold, whose spec is not In Progress, with no queue entry for that spec. That is a spec whose only path forward is a change nobody has been asked to make. Both tonight's instances satisfy it, and a spec being actively worked does not.
+
+    I am NOT asking to widen this spec's scope — it has a clear acceptance and a PR in flight. Recording it so whoever closes this one knows the neighbouring case exists, and so the next person who finds a held PR sitting for hours has the diagnosis rather than the symptom.
+
+    THE OPERATIONAL NOTE, since the operator is away: I have now hand-recovered four things tonight that the substrate could have recovered itself — a stale-binary drain, a ceiling-shelved measurement, and these two strandings. All four worked because someone was awake. That is the argument for this spec and for STORY-1218's tick, stated as evidence rather than as principle.
+  created_at: 2026-09-20T11:51:26.943948278Z
+  modified_at: 2026-09-20T11:51:26.943948278Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
