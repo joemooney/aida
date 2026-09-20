@@ -1,0 +1,44 @@
+id: 01a0c104-9fa2-7470-a10d-d890debcf056
+spec_id: BUG-1495
+agreed_id: BUG-1495
+title: The rework loop-guard files a fresh major finding on every requeue against unchanged state, so the guard against a loop loops
+description: |
+  BUG-1213's rework loop-guard files a NEW finding on every requeue against unchanged state instead of recurring the existing one, so the guard against a loop produces a loop of its own.
+
+  OBSERVED 2026-09-20 on BUG-1297:
+
+      15:48  TASK-1-156  major  "Repeated unchanged review findings: BUG-1297"
+      15:50  TASK-1-157  major  "Repeated unchanged review findings: BUG-1297"
+
+  Two minutes apart, identical titles, identical bodies. Between them: no implementer run (the spec's three runs are unchanged), no new commit, PR #2006 still at head 5a857b7df4. Nothing about the situation differed. The advisor had already approved and dispositioned TASK-1-156 when TASK-1-157 arrived.
+
+  THE MECHANISM, queue_cmd.rs ~6708. Inside the requeue path, when `findings_recur_consecutively` is true and the status is NeedsAttention, the guard shells out to `aida findings add` with a title built from the spec id. There is no check for an existing open finding with that title, and no upper bound — so the count of findings tracks the number of REQUEUE ATTEMPTS, not the number of genuine recurrences.
+
+  WHY THIS IS MORE THAN NOISE. The guard's own text instructs an advisor not to requeue until they act. Each finding is filed at severity `major` and lands in `aida findings list`, which is the surface an advisor reads to decide what needs attention. So a guard whose purpose is to stop a loop consumes advisor attention once per iteration of that loop, and the second finding arrives after the advisor has already acted on the first — making the queue report outstanding work that is already dispositioned.
+
+  It is also the shape the guard exists to detect, turned on itself: repeated output carrying no new information, indistinguishable from the first instance.
+
+  THE MECHANISM TO USE ALREADY EXISTS. `aida findings recur <ID>` increments a recurrence counter, records the sighting in a `recurrence:N` tag, and appends an optional note to the audit trail — and per observation-discipline.md, recurrence >= 3 is itself the promote-it signal. A second sighting of an open finding is exactly what that verb is for. TASK-179 in today's queue shows the intended rendering: one row, `×2`.
+
+  ACCEPTANCE
+  1. A repeat firing against an open finding for the same spec RECURS it rather than filing a new one. The `×N` rendering and the recurrence tag are the visible result.
+  2. Recurrence still only counts genuine recurrences. A requeue that produced no run must not increment the counter, or the counter measures requeue attempts and the promote-at-3 signal fires on advisor impatience rather than on evidence.
+  3. The guard consults whether an advisor has already dispositioned the open finding. An approved-and-actioned finding should not be re-raised at `major` while its disposition stands.
+  4. State the upper bound. If a spec is requeued twenty times, say what the guard does on the twentieth — the current answer is twenty findings.
+  5. A test covers the observed case: fire the guard twice against unchanged state and assert exactly one finding exists with a recurrence count of two.
+
+  RELATED CONTEXT WORTH CARRYING. TASK-1-156's disposition established that BUG-1297's findings recurred across NON-ROUNDS — the branch has one commit from 08:02 while two later runs produced nothing in 50s and 14s. So the guard also cannot distinguish "the implementer could not do it" from "the implementer did not run", which need opposite responses (a better brief versus a different seat). That is recorded on TASK-1-156 and is a separate criterion from these; BUG-1445 shipped the patch-id comparison that would tell them apart.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T22:51:40.834379762Z
+modified_at: 2026-09-20T22:51:40.834379762Z
+req_type: Bug
+tags:
+- batch:night-0920
+- drain
+- drain-safe
+- from:session-0920
+- loop-guard
+- observability
