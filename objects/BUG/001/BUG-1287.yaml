@@ -38,17 +38,18 @@ description: |
 
   Reported by the aida-monitor project; counts independently reproduced in this repo before filing. The monitor's recommendation was "add opportunistic auto-reap" — corrected here, because that already shipped.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:59.058325197Z
-modified_at: 2026-09-20T01:01:46.414493672Z
+modified_at: 2026-09-20T01:02:16.440099122Z
 req_type: Bug
 tags:
 - batch:followups-0918i
 - diagnostics
 - drain-safe
 - from:aida-monitor
+- from:session-0919
 - hygiene
 - parent:EPIC-62
 - reaper
