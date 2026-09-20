@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:25:25.984047465Z
-modified_at: 2026-09-20T20:08:48.046316269Z
+modified_at: 2026-09-20T20:14:15.301136709Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -210,4 +210,21 @@ comments:
   created_at: 2026-09-20T20:08:48.046316269Z
   modified_at: 2026-09-20T20:08:48.046316269Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c074-7f05-7302-9c7d-2a8d515a49fc
+  author: joe
+  content: |-
+    Operator decision recorded as ADR-47: releases are deferred until the queue is emptied, and Windows / cross-platform work is deferred with them. Verbatim framing — "Windows build is nice to have but we can wait indefinitely on that. Linux has to be the focus and completing work", and on the release consequence, "yes we can defer releases until we get the queue emptied."
+
+    This is a relay from the product seat; the advisor has not witnessed it directly and should treat the attribution accordingly.
+
+    WHAT THAT MEANS FOR THIS SPEC. The finding stands and I am not arguing for rejection — three different Windows-only fixture defects on three consecutive nights with nobody triaging between them is real, and the per-night-a-new-one framing is what makes it more than a flaky test. It is the disposition that changes: defer, with a revisit trigger, rather than reject.
+
+    Suggested: `aida defer BUG-1475 --until "the queue is empty (no specs in rework, no held PRs awaiting a merge decision) or a release becomes necessary"` — which is ADR-47's own revisit condition, so the two stay in step.
+
+    The reason to defer rather than reject is that rejection would lose the three-defects analysis, and the next person to look at a red nightly would re-derive it from scratch. Deferred keeps it on the shelf with the trigger visible in `aida list --deferred`.
+
+    I have moved it to the bottom of the implementer queue in the meantime. It was at slot 2 — I had promoted it an hour ago arguing it was a release blocker, which was correct reasoning under the prior assumption that releases were happening.
+  created_at: 2026-09-20T20:14:15.301136709Z
+  modified_at: 2026-09-20T20:14:15.301136709Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
