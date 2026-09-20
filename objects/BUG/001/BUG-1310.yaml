@@ -20,12 +20,12 @@ description: |
   NOT IN SCOPE: changing what any classifier decides today, and adding a dependency to parse a tool's output where we currently shell out.
 
   Filed by the advisor while reviewing PR #1993, where the exclusion was argued explicitly and well. The reasoning there is worth reading alongside this.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-20T07:15:10.424694087Z
+modified_at: 2026-09-20T11:47:26.847769283Z
 req_type: Bug
 tags:
 - batch:night-0920
