@@ -1,0 +1,72 @@
+id: 01a0c010-dde0-79c1-ae3f-5f4fa1ec7113
+spec_id: BUG-1475
+agreed_id: BUG-1475
+title: 'Cross-platform nightly red 3 consecutive nights: three DIFFERENT Windows-only test-fixture defects, one per night, nobody triaging'
+description: |-
+  The cross-platform nightly has failed 09-18, 09-19 and 09-20. Last green was 09-17 (run 34963831883). Per CLAUDE.md, releases require cross-platform green within 24h of tagging, so this currently blocks any release. GitHub issue #1925 was auto-opened 09-18 and has been re-commented each night; nobody has triaged it.
+
+  IT IS NOT ONE BUG. macOS passed all three nights. Windows failed all three, with a DIFFERENT single test each night. All three are test-fixture portability defects, not product defects, and each is independently fixable.
+
+  1. 09-18, run 35337447928 (4899 passed, 1 failed)
+     reconstitute::tests::scratch_gc_expires_old_runs_and_keeps_only_the_newest
+     aida-cli-lib/src/reconstitute.rs:773
+     Os { code: 5, kind: PermissionDenied, message: "Access is denied." } on an unwrap.
+     Shape: Windows refuses to remove a file or directory while a handle is open, or one
+     carrying the read-only attribute. The scratch-GC removal needs the Windows retry/readonly-
+     clear treatment rather than a bare unwrap.
+
+  2. 09-19, run 35438189645 (940 passed, 1 failed - aida-core)
+     git_ops::tests::failed_pull_rebase_aborts_and_restores_branch
+     aida-core/src/git_ops.rs:5668
+     assertion left == right failed:  left: "value: local\r\n"   right: "value: local\n"
+     Shape: CRLF. The fixture compares captured output against a LF-terminated literal. Normalize
+     line endings before comparing, or write the fixture with a platform-agnostic terminator.
+
+  3. 09-20, run 35506914381 (5092 passed, 1 failed)
+     auto_bump_done_tests::auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup
+     aida-cli-lib/src/tests/auto_bump_done_tests.rs:2080
+     "PR closed without merging should reject the review spec, was Approved"
+     ROOT CAUSE, verified by reading the helper: write_fake_gh_for_pr_states (same file, ~1986)
+     writes a bash script to <root>/gh with a "#!/usr/bin/env bash" shebang, sets the exec bit
+     only under #[cfg(unix)], and gives it no .cmd/.bat/.exe extension. Windows cannot spawn it.
+     AIDA_TEST_GH_BINARY therefore points at an unrunnable file, the forge fallback silently
+     does nothing, STORY-1234 stays Approved instead of Rejected, and the assertion fires. The
+     helper landed 2026-09-19 with TASK-1296 (commit b75ea81f11), which matches night 3.
+
+  THE PATTERN WORTH MORE THAN THE THREE FIXES. PR CI is Linux-only by design (TASK-257). Three
+  Windows-only test defects reached main in three days and each was caught only by the nightly
+  - roughly one per day. The guards CLAUDE.md names as covering this gap did not: the required
+  Rust-test portability ratchet, scripts/check-portability.sh, has no check for fake-binary
+  fixtures (no shebang / cfg(unix)-only chmod / missing .cmd detection) and no CRLF-comparison
+  check. It greps for cfg(unix) gating of PRODUCTION code, not of TEST fixtures. So the ratchet
+  is blind to exactly the class that is actually breaking, which is why the nightly is carrying
+  the whole load alone.
+
+  And the nightly is a detector nobody is wired to. It auto-opens an issue and re-comments, but
+  no seat owns triaging it, so three nights accumulated silently while the release gate stayed
+  shut.
+
+  ## Acceptance
+
+  - All three named tests pass on windows-latest.
+  - Instance 2 is fixed by normalizing line endings in the comparison, not by marking the test
+    cfg(unix) - skipping on Windows would reduce coverage on the platform that is failing.
+  - Instance 3 is fixed so the fake-binary fixture is spawnable on Windows (a .cmd shim, or an
+    extension chosen per platform), and any OTHER test fixture writing a fake executable the
+    same way is fixed in the same change - enumerate them rather than fixing only this one.
+  - scripts/check-portability.sh grows a check for the two classes that escaped it: a test
+    fixture that writes an executable without a Windows-runnable form, and a test comparing
+    captured output against an LF-terminated literal.
+  - One named seat owns nightly triage, or the nightly failure routes into the coordination
+    inbox so a red nightly cannot sit three days unowned. Whichever is chosen, state it.
+  - A green cross-platform nightly on main is observed before this is closed - not merely the
+    three tests passing locally.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T18:25:25.984047465Z
+modified_at: 2026-09-20T18:25:25.984047465Z
+req_type: Bug
+tags:
+- ci windows portability nightly release-blocker from:review-session-0920
