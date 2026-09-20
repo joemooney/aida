@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:18.813550852Z
-modified_at: 2026-09-20T14:29:17.009306844Z
+modified_at: 2026-09-20T14:32:49.208501057Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -129,6 +129,41 @@ comments:
   created_at: 2026-09-20T14:29:12.694820036Z
   modified_at: 2026-09-20T14:29:12.694820036Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf3b-e738-7391-90a6-4582f2d98ffb
+  author: joe
+  content: |-
+    [aida:advisor-review] PR #2014 (TASK-1298) — REQUEST CHANGES, dissenting from the phase-3 APPROVE at 53a0f1a6.
+
+    independent: yes (implementer was headless codex; the advisor requeued the spec and read the diff, wrote none of it)
+    gates: Build (ubuntu-latest) pass · reviewer verdict APPROVED at current head · no drive owns PR-2014 (drain is on BUG-1310, reviewer lease is PR-2016) · merge-hold label is the advisor's own
+    verdict: hold stays. Do not merge.
+
+    THE DEFECT. Machine readiness can never pass on Windows, so `--no-human` drains are refused there unconditionally — not because the machine is unready, but because a metric that does not exist is read as a capacity failure.
+
+      #[cfg(not(unix))]
+      fn available_inodes(_path: &Path) -> std::io::Result<u64> {
+          Err(std::io::Error::new(ErrorKind::Unsupported, "inode accounting is not available on this platform"))
+      }
+
+      let inode_level = inode_result.as_ref().map_or(Level::Fail, |available| { ... });
+      let level = if decide_capacity(free, required, false) == Level::Fail || inode_level == Level::Fail { Level::Fail }
+
+    `ErrorKind::Unsupported` is constructed and never matched anywhere in the change. `map_or(Level::Fail, ..)` collapses it into the same outcome as a real error, `ready()` is `!checks.iter().any(|c| c.level == Level::Fail)`, and the launch refuses on a hard readiness failure. On Windows the first branch is the only branch.
+
+    WHY THE APPROVE WAS REASONABLE AND STILL WRONG. The phase-3 reviewer verified on Linux, where `#[cfg(unix)]` takes the `f_favail` path and every assertion passes. The defect is unreachable from the platform the review ran on. PR CI is Linux-only by design, so it cannot see this either, and the nightly would not catch it because this is runtime behavior on a path no test exercises. Nothing in our loop was positioned to find it except a reader asking what the other cfg branch does.
+
+    THIRD WINDOWS-ONLY ASSUMPTION TONIGHT, and the one the existing guard cannot catch. BUG-1443 is a bash fake-gh harness that only runs on Unix; this is a Unix-only metric treated as a universal gate. The portability ratchet is a set of regexes over source patterns, and this is not a pattern — it is a semantic question about what an error kind should mean. A rule will not find the next one of these.
+
+    REQUIRED BEFORE MERGE
+    1. `ErrorKind::Unsupported` from `available_inodes` must not produce `Level::Fail`. A metric the platform cannot report is not a capacity failure. Skip the inode gate, or warn — but readiness must be able to pass on a healthy Windows machine.
+    2. A genuine error from `available_inodes` — the path is missing, unreadable, or statvfs fails — must still fail closed. Do not weaken this by mapping every Err to a pass; distinguish the kinds.
+    3. A test covers the non-unix branch: with `available_inodes` returning `Unsupported`, readiness on an otherwise-healthy machine is ready. Assert the outcome, not the error text.
+    4. State what inode exhaustion coverage Windows then loses, in the code near the fallback. If the answer is "none, because we cannot measure it", say that where the next reader will see it.
+
+    Everything else in this change is sound and I am not asking for it to be revisited: the workload-scaled `inode_threshold(hours, lanes, specs)`, the byte-space gates, the memory warning, the resolved-binary provenance, the remedies on every emitted branch, and the docs. The single defect is the fallback's level, and it is a four-line fix.
+  created_at: 2026-09-20T14:32:49.208501057Z
+  modified_at: 2026-09-20T14:32:49.208501057Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
