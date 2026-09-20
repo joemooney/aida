@@ -1,0 +1,48 @@
+id: 01a0be5b-304a-7e03-8e70-a1679316e00c
+spec_id: BUG-1434
+agreed_id: BUG-1434
+title: A PR's checks and findings are computed against its own stale tree, and nothing says how stale — so evidence is distorted in both directions with no cue to distrust it
+description: |
+  A PR's checks and its review findings are computed against the branch's own tree, and nothing on the review surface says how far behind the default branch that tree is. So both a green build and a findings list can be wrong, in OPPOSITE directions, with nothing to distinguish them from correct ones.
+
+  TWO INCIDENTS THE SAME NIGHT, same cause, opposite distortions.
+
+  STALE BASE INVENTED A FAILURE — PR #2009 (BUG-1420). Its round-1 sweep reported `mcp::tests::queue_rework_flips_status_and_requeues` as red, reasoning that new routing sends the entry to a role queue while the test asserts a user queue. I ran it on current main before briefing the rework:
+
+    env -u AIDA_SESSION_ROLE cargo test -p aida-cli-lib queue_rework_flips_status
+    test mcp::tests::queue_rework_flips_status_and_requeues ... ok
+
+  It passes. The branch predates #1996 landing WITH its companion test adjustment, so the branch carried the new routing without the test update. Actioning that finding as written would have edited an assertion that pins BUG-1277's explicit-`--user` override — silently undoing a merged fix to satisfy a description of a bug that does not exist.
+
+  STALE BASE HID A FAILURE — PR #2003 (TASK-1293). Reports Build SUCCESS. It is 11 commits behind main and does not contain the parity guard `project_discipline_pack_matches_master`, which #1988 landed at 07:16Z — zero occurrences in the branch, one on main. The PR adds an embedded discipline master with no project-local copy, which is exactly what that guard refuses. So its CI ran against a tree where the check does not exist, and its SUCCESS says nothing about main, where it should fail.
+
+  WHAT MAKES THIS A CLASS RATHER THAN TWO BUGS. A reviewer looking at either PR sees a check result and a findings list. Nothing on that surface indicates the tree they were computed against is old, so there is no cue to distrust either. The failure is symmetric — stale bases manufacture findings AND suppress them — which means a reader cannot even apply a directional discount. "Probably fine, it is a bit behind" is wrong half the time.
+
+  It is also getting worse as throughput rises. Twenty-three merges landed on the night these two were observed; a branch cut four hours earlier is now many merges stale, and the window in which a PR's evidence stays valid is shrinking.
+
+  PROPOSED: surface the distance and let it inform the read. On `aida pr` surfaces and in the reviewer's context, state how many commits behind the default branch the PR's head is, and — where cheap — whether any of those commits touched files the PR also touches. Carry it into the review prompt so a round-1 sweep says "computed against a tree N commits behind main" rather than presenting findings as unqualified fact.
+
+  DELIBERATELY NOT PROPOSED: auto-rebasing, or blocking on staleness. Rebasing on every merge would thrash CI and invalidate reviews in flight, and the existing auto-rebase already handles the cases where it is safe. This is about making the evidence self-describing, not about forcing freshness.
+
+  ACCEPTANCE
+  1. A PR's review context states how many commits behind the default branch its head is.
+  2. Where the intervening commits touch files the PR also touches, that overlap is named — that is the case where findings are most likely to be distorted.
+  3. The round-1 reviewer prompt carries the figure, so findings are qualified at the point they are produced rather than at the point someone doubts them.
+  4. Nothing blocks, auto-rebases, or recommends on the basis of staleness alone.
+  5. A PR level with the default branch produces no extra output.
+  6. Fixtures are the two incidents above: #2009, where the finding was invented, and #2003, where the failure was hidden.
+
+  Filed by the product seat; disposition is the advisor's. The pairing is theirs — I had found only the invented-failure half.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T10:27:22.314033401Z
+modified_at: 2026-09-20T10:27:22.314033401Z
+req_type: Bug
+tags:
+- ci
+- from:session-0919
+- observability
+- parent:EPIC-62
+- review
