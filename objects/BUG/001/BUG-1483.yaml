@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:49:24.771676840Z
-modified_at: 2026-09-20T20:00:58.817225038Z
+modified_at: 2026-09-20T20:08:23.612158276Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -142,5 +142,29 @@ comments:
   content: '[aida:advisor] CORRECTION TO MY OWN COMMENT ABOVE, at the filer''s flag-back and they are right. I wrote that the latent-defect hypothesis is ''the only one I can construct that fits both the 11:06 pass and the 11:13 failure''. That overstates it and in the wrong direction. Defect 2 — the `.ok()?` that silently drops an unreadable file — is a second mechanism that fits, and fits BETTER, because it explains INTERMITTENCY directly whereas the CRLF asymmetry alone predicts a CONSTANT Windows failure. A path that resolves on one run and not the next, passing silently when it does not, produces exactly the observed flip; a line-ending mismatch does not. Do not carry the latent-defect story as established, and note that the dispatched run 35533456218 tests defect 1 only — whatever it returns says nothing about defect 2. My summary compressed two hypotheses into one and picked the weaker.'
   created_at: 2026-09-20T20:00:58.817225038Z
   modified_at: 2026-09-20T20:00:58.817225038Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c06f-213c-7660-bbb8-6333f41cb11e
+  author: joe
+  content: |-
+    [aida:advisor] DISPATCH RESULT — run 35533456218, cross-platform on main at 5ccfd951d5. The pre-registered prediction is CONFIRMED.
+
+        Build (macos-latest):  success
+        Build (windows-latest): FAILURE
+
+    Predicted: project_discipline_pack_matches_master fails, naming ~22 non-allowlisted guides, NOT naming README.md / autonomous-burndown.md / substrate-as-bouncer.md.
+
+    Observed: templates::tests::project_discipline_pack_matches_master @ aida-core\src\templates.rs:1245, naming 21 files — advisor-role, agent-agnostic-vs-claude-specific, backlog-grooming, brief-polling, docs-lane, git-sync-and-review, implementer-discipline, integrator-role, lifecycle-vocabulary, machinery-glossary, observation-discipline, reserved-paths, rework-brief-craft, robust-project-root-resolution, seat-recovery-playbooks, session-discipline, skill-cli-symmetry, skill-prompt-kinds, tag-conventions, two-seat-protocol, workflow-patterns.
+
+    All three allowlisted guides are ABSENT from that list, exactly as predicted. 21 against a predicted ~22 is within the stated shape.
+
+    SO: MAIN IS RED ON WINDOWS, and this is main's problem rather than PR #2024's. Defect 1 — the asymmetric line-ending contract — is ACTIVE, not latent: the Windows runner does check out the unpinned project copy with CRLF, which was the open question the GREEN branch of the pre-registration would have settled the other way.
+
+    WHAT THIS DOES NOT SETTLE, and the pre-registration was explicit about it: the dispatch tests defect 1 only. Defect 2 — the `.ok()?` that silently drops an unreadable file — is untouched by this result and remains the better explanation for the 11:06-pass / 11:13-fail intermittency, since defect 1 alone predicts a CONSTANT failure and we have now confirmed defect 1 is constant. Do not read this run as confirming defect 2.
+
+    SECOND WINDOWS FAILURE IN THE SAME RUN: auto_bump_done_tests::auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup @ auto_bump_done_tests.rs:2080 — BUG-1475's known shebang fixture, still unfixed. So main currently carries TWO distinct Windows-only failures, from two distinct portability classes. That is the fourth and fifth sites in BUG-1475's class, and it is the argument for the ratchet rules over point fixes made plainly: three point fixes have been shipped for this class and the count is going up, not down.
+
+    ON THE METHOD. The prediction was written down before the result, with what each alternative outcome would mean including the ones where the filer was wrong. That is why this result is evidence rather than a narration — after the fact, red, red-with-a-different-file-set, red-on-another-test and green could all have been told as consistent with the spec. It cost one message to make the difference and it should be the default for any claim a runner can settle.
+  created_at: 2026-09-20T20:08:23.612158276Z
+  modified_at: 2026-09-20T20:08:23.612158276Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
