@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-20T00:18:02.631510715Z
+modified_at: 2026-09-20T16:32:10.442757270Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -32,6 +32,37 @@ comments:
   content: '[advisor:groom] Approved and RAISED to high, DRAIN. Raised because this is the check that would have caught the four GitHub assumptions TASK-1254 found live, and BUG-1228 proved the class is still open: a second forge passes its unit tests and fails on first contact with a real forge. SPIKE-82''s gap list and the LLM testimonial both name a per-forge live smoke test as the first thing to add; it is cheap relative to what it prevents. Scope guards: (1) it must exercise the TRAIT path end to end — open_change, the CI watch, a recorded verdict, merge_change — not gh/glab directly, because the trait is the thing under test; (2) assert the lifecycle EVENTS (SpecShelved kinds, CiTerminal, PhaseDonePr), since the four defects showed up as wrong events before they showed up as wrong outcomes; (3) it runs on the nightly cadence, never on PR CI, and a red nightly files against the forge spec rather than blocking anyone. One question for the operator, not for you to guess: the mirror credentials this job needs are a CI secret on a self-hosted runner — confirm with Joe how they are provisioned before wiring it, and do not put a token anywhere near a spec or a commit.'
   created_at: 2026-09-19T16:39:21.657527981Z
   modified_at: 2026-09-19T16:39:21.657527981Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bfa9-2cca-73e3-86bc-e129a87db57d
+  author: joe
+  content: |-
+    [aida:rework-brief] TASK-1273 / PR #1978 — five binding items, all from the phase-3 verdict, which I have read and concur with. Ordered by consequence, not by the verdict's order.
+
+    READ THIS FIRST. This PR is the verification gate for TASK-170 (the GitLab credential, provisioned 07:26:36Z today). Finding 2 means that as written, merging this would NOT verify the credential — it would produce the APPEARANCE of verification. That reframes item 1 below from a test-quality issue into the reason this must not merge as-is.
+
+    1. BINDING — an absent AIDA_GITLAB_TOKEN must not pass.
+       Mechanism: cross-platform.yml currently treats a missing token as a successful skip. Make the job fail, or report explicitly as skipped-not-run, when the token is absent. The requirement says the token is needed; a green run that never touched GitLab is worse than a red one, because it closes an operator-action item on no evidence.
+       Failure mode: TASK-170 gets marked verified, the credential is never exercised, and the first real use fails in whatever situation prompted provisioning it.
+
+    2. BINDING — exercise the actual drain lifecycle, not Forge methods directly.
+       Mechanism: gitlab_live_mr_round_trip currently calls Forge methods one by one. Drive the AIDA spec/drain lifecycle and assert on SpecShelved kinds, CiTerminal, and the merge lifecycle events. A test that exercises a helper proves the helper works, not the surface.
+
+    3. BINDING — record and assert a review verdict.
+       Mechanism: the review-verdict phase calls change_reviews and prints review.decision. Create a verdict and assert on the returned decision, so an incorrect GitLab review response fails the test instead of being printed.
+
+    4. BINDING — prove cleanup.
+       Mechanism: merge_change is asked to delete the branch; assert the branch is absent afterwards. The Drop cleanup currently discards project-deletion failures while the docs claim deletion even after panic — either make that true or correct the docs. Do not leave the doc claiming more than the code does.
+
+    5. BINDING — label every failing Forge phase.
+       Mechanism: open_change and the pre/post-merge change_status calls use generic expect/assert messages. Give each a phase label so a red job names which Forge method regressed.
+
+    NOT IN SCOPE, restated because a later round will not know: adding GitLab coverage beyond the round trip, and changing any Forge method's behaviour. This is about the test proving what it claims.
+
+    Partial credit: if only one lands this round, do item 1. It is the one that makes the difference between a gate and the appearance of one.
+
+    Note for whoever picks this up: the existing verdict file carries no reviewed_sha or recorded_at (it predates TASK-168), so re-verify each finding against the current head d50d85c9 rather than assuming it was reviewed there.
+  created_at: 2026-09-20T16:32:10.442757270Z
+  modified_at: 2026-09-20T16:32:10.442757270Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
