@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a0bc55-dcbd-74c2-827f-fb765ad6d414
+  position: 42000
+  added_by: role:implementer
+  note: Requeued after the orchestrator rebuild. BUG-1445's no-op guard is now live in the running binary (wave b09197ab72), so a round that produces no new commit is detected rather than silently re-reviewed. Verdict reviewed_sha matches this branch head exactly, so the findings describe current code. No acceptance change.
+  added_at: 2026-09-20T22:49:05.589561780Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a0bb7d-e389-7e33-96a0-036917d17b9d
   position: 43000
   added_by: role:implementer
@@ -36,13 +43,6 @@
   position: 58000
   added_by: role:implementer
   added_at: 2026-09-20T18:25:23.193239283Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a0bc55-dcbd-74c2-827f-fb765ad6d414
-  position: 59000
-  added_by: role:implementer
-  note: 'Product seat requeue: verdict recorded and no drain run followed it. Findings are specific and actionable; re-driving so the round happens. No acceptance change.'
-  added_at: 2026-09-20T18:06:01.646720680Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a0bbb0-8032-72a1-8089-6a058cfeb3cf
