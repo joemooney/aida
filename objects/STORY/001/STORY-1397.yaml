@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:14:13.323242098Z
-modified_at: 2026-09-20T18:14:13.323242098Z
+modified_at: 2026-09-20T18:14:27.334114261Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -41,3 +41,4 @@ tags:
 - from:session-0920
 - merge-safety
 - substrate-as-bouncer
+execution_mode: drain
