@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:30:25.285712180Z
-modified_at: 2026-09-20T14:36:37.835149064Z
+modified_at: 2026-09-20T15:02:13.058293134Z
 req_type: Bug
 tags:
 - from:session-0919
@@ -86,4 +86,34 @@ comments:
     ONE THING I CANNOT DETERMINE and someone should, because it changes the fix. Drive-mode specs are held BY THE DRAIN so that a human merges them. If that is why these are held, then the drain attempting the merge at all is a second defect upstream of the classification — it is trying to merge something it deliberately gated. Distinguishing "the drain should not attempt this merge" from "the drain should attempt it and classify the refusal correctly" decides whether the fix belongs at phase 4's entry or at the classifier. I have not established which, and the answer is in the hold provenance rather than in the message.
   created_at: 2026-09-20T14:36:37.835149064Z
   modified_at: 2026-09-20T14:36:37.835149064Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf56-d142-7471-badc-d944cd2ce8c1
+  author: joe
+  content: |-
+    CORRECTION TO MY OWN OPEN QUESTION, and to the scope claim in my previous comment. I read the hold list rather than continuing to infer from the refusal message.
+
+    I ASKED whether these PRs are held BY THE DRAIN for drive-mode specs, which would make the drain's merge attempt a second defect upstream of the classification. The answer is no, and it was checkable in one command.
+
+    `aida merge-hold list` shows ten active holds. Only TWO are drive-mode holds placed by the drain:
+
+      #1972  TASK-1289 is marked drive — auto-merge refused   [label: synced]
+      #1984  TASK-1279 is marked drive — auto-merge refused   [label: synced]
+
+    The other eight are ADVISOR REVIEW holds, each naming a specific unresolved finding — prose-matching in #2006, a narrowed reporting surface in #1999, a missing contract version bump in #1998, an ADR claiming coverage that does not exist in #2001, and so on.
+
+    SO THE DRAIN IS NOT FIGHTING ITS OWN GATE. It is attempting to merge PRs whose reviewer has refused them with changes outstanding, and that refusal is correct. The defect is narrower than I framed it and sits in two places, neither of them phase 4's entry condition as I speculated:
+
+      1. A correct, stable refusal must not consume the transient-retry budget (BUG-1316's principle, this site).
+      2. It must not shelve as `tool-exit`, which reads as a tool failure and buries the actual next action —
+         the hold reason and `aida merge-hold clear <pr>` are both in the refusal text and discarded.
+
+    Whether the drain should reach phase 4 at all on a spec carrying an unresolved review hold is a real question, but it is a SEPARATE one and I no longer think it belongs in this spec.
+
+    AND MY SCOPE CLAIM WAS WRONG. I wrote "there is currently no open PR the drain can merge" from a snapshot showing 12 of 12 held. BUG-1426 merged as #2018 at 14:58 — drain mode, no labels, no hold — fifteen minutes later. Fresh work with no outstanding findings merges normally. What cannot merge is the backlog of PRs that each have a real finding against them, which is the system working rather than failing.
+
+    The retry-burn and the misleading shelve kind are still real and still worth fixing. The volume claim behind them was not: this fires once per held PR the drain happens to re-drive, not on every merge.
+
+    I inferred a total population from a snapshot of a queue that was mid-drain, and stated it as a standing condition. The check that would have caught it — merge something and see — happened on its own fifteen minutes later.
+  created_at: 2026-09-20T15:02:13.058293134Z
+  modified_at: 2026-09-20T15:02:13.058293134Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
