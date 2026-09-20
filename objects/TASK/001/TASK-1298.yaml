@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:18.813550852Z
-modified_at: 2026-09-20T13:02:33.370771323Z
+modified_at: 2026-09-20T14:02:09.036660622Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -104,6 +104,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T13:02:33.085749177Z
   modified_at: 2026-09-20T13:02:33.085749177Z
+- id: 01a0bf1f-d30c-7e33-8e86-4ab92b11404e
+  author: joe
+  content: 'Round 2 review fix: readiness now probes available inodes with statvfs for repo, build, and temp paths; fails when either bytes or workload-scaled inode headroom is insufficient; reports an inode-reclamation remedy; and extends the pure threshold test across scaling and pass/fail boundaries.'
+  created_at: 2026-09-20T14:02:09.036660622Z
+  modified_at: 2026-09-20T14:02:09.036660622Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
