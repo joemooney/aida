@@ -7,14 +7,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0b5fe-5f73-78d3-8529-b9a0f585470e
-  position: 79000
-  added_by: role:implementer
-  note: 'drive: (a) audit coordination-seat surfaces → neutral/Claude-only table with the deciding file; (b) fixes or explicit degradations. Answer specifically: can a Codex advisor hold the merge gate, can a Codex product launch+supervise a wave without fork-from-live. No live two-advisor exercise.'
-  added_at: 2026-09-19T16:40:12.935086210Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0ba93-547f-7223-b2ba-6296e2f2cba4
   position: 81000
   added_by: role:implementer
@@ -257,4 +249,11 @@
   note: auto-queued by `aida pr` ((no-sess); covers 1 spec
   added_at: 2026-09-20T01:11:46.683217007Z
   for_role: reviewer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b5fe-5f73-78d3-8529-b9a0f585470e
+  position: 125000
+  added_by: role:implementer
+  added_at: 2026-09-20T01:16:03.832689480Z
+  for_role: implementer
   added_by_machine: imac
