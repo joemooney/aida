@@ -1,0 +1,55 @@
+id: 01a0bf06-8160-76c0-91d8-cd34f4779b04
+spec_id: BUG-1445
+agreed_id: BUG-1445
+title: A rebase-only rework round is indistinguishable from a real failed attempt, so requeueing a shelved spec can loop forever while reporting progress
+description: |
+  A rework round that only rebases the branch is indistinguishable in the substrate from a rework round that attempted the fix and failed review, so requeueing a shelved spec can burn a full implementer + reviewer cycle and produce nothing, repeatedly, with no signal that it did.
+
+  OBSERVED 2026-09-20 on STORY-1350 (PR #1974), immediately after an advisor requeue.
+
+  Run 01a0befc, total 4m31s:
+    13:23:48  RunStarted
+    13:23:48  PhaseEntered implementer
+    13:24:03  PhaseEntered ci            (implementer phase: 15 seconds)
+    13:24:07  PhaseEntered reviewer      (ci phase: 4 seconds)
+    13:28:19  SpecShelved  verdict:request-changes — "reviewer verdict is RequestChanges — not Approved"
+
+  The PR head moved, 08f886c4 to 3bd68091, so every surface reported progress. It was a rebase. Proof by patch-id, which is what the branch actually contributed:
+
+    53489249 -> aa3d8c56dd493aca   feat(pickup): require pre-edit approach statement
+    89354a59 -> aa3d8c56dd493aca   (same commit, post-rebase)
+    08f886c4 -> 557d99b045804e18   fix(review): carry approach into reviewer checklist
+    3bd68091 -> 557d99b045804e18   (same commit, post-rebase)
+
+  Both patch-ids are identical across the rebase. The branch's own content is byte-for-byte unchanged. Meanwhile `git diff 08f886c4 3bd68091 --stat` reports 58 files and 5574 insertions, because the new head sits on newer main and sweeps in everything that merged in between. Tree-diff says the PR changed substantially; patch-id says it did not change at all.
+
+  The two round-2 findings were therefore never addressed: the pickup writer and review-prompt reader still do not share one approach-marker constant, and `append_implementer_approach` still emits nothing when no marked comment exists. The reviewer re-read the same content and issued the same verdict, correctly.
+
+  WHAT THIS COSTS. The round consumed an implementer seat, a reviewer seat, a CI slot and four and a half minutes to return exactly where it began, and the spec went back to NeedsAttention with the same recovery hint that produced it. Nothing in the event trail distinguishes this from a genuine failed attempt, so the natural response is to requeue again, which produces another identical round. This is a loop that reports progress each time around. It likely explains the 2026-09-20 stretch where four specs across five rounds all shelved `verdict:request-changes` with no merges for ninety minutes.
+
+  RELATION TO EXISTING WORK. This is the same method question as BUG-1424, where a landed-content proof decayed because it compared trees instead of patch-ids, and the adjacent shape to BUG-1422, where touched-nothing was indistinguishable from finished. The distinction here is narrower and is the whole bug: something WAS touched — the tree genuinely differs — but nothing the findings asked for changed. A tree-diff test cannot see this; a patch-id test sees it immediately.
+
+  ACCEPTANCE
+  1. A rework round whose branch contributes no new patch-id relative to the round before it is detected and reported as such, in the event trail and in what the operator reads, distinct from a round that changed content and still failed review.
+  2. Detection compares patch-ids, or an equivalent measure of the branch's own contribution. A tree-diff against the base does not satisfy this and the test must demonstrate why: a rebase-only round has to be correctly classified while the base moves under it.
+  3. The drain does not silently repeat an unproductive round. Shape is open — refuse to re-enter review, escalate, or park with a reason that names rebase-only — but requeueing the same spec must not be able to produce the identical round indefinitely with no accumulating signal.
+  4. The recovery hint on a rebase-only shelve says what actually happened. The current hint, "address the review feedback, then push fixups", is what the operator already did, so it misdirects.
+  5. A test covers the observed case: a branch rebased onto newer main with no content change, under a reviewer that refuses, asserting the round is classified rebase-only and not reported as an ordinary requested-changes failure.
+
+  Evidence gathered by the advisor after requeueing STORY-1350 and checking whether the requeue accomplished anything. The first hypothesis, that the implementer had touched nothing, was wrong — the head did move — and the patch-id comparison is what settled it.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T13:34:29.728492333Z
+modified_at: 2026-09-20T13:34:29.728492333Z
+req_type: Bug
+tags:
+- batch:night-0920
+- diagnostic-decay
+- drain
+- drain-safe
+- from:session-0920
+- observability
+- parent:EPIC-28
+- throughput
