@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:13:31.332560143Z
-modified_at: 2026-09-20T15:09:41.992811125Z
+modified_at: 2026-09-20T15:12:17.875625769Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -38,4 +38,11 @@ relationships:
   target_id: 01a0bae2-c5f6-7b50-9cf5-44e1e88e1b92
   created_at: 2026-09-20T07:13:49.068441260Z
   created_by: joe
+comments:
+- id: 01a0bf60-0bd3-7a72-bdca-41181a7fc0f6
+  author: joe
+  content: 'Implemented exhaustive cross-identity queue sweeping for rework, propagated queue listing/removal failures, and added explicit source-to-destination move diagnostics. Regression covers two stale source queues plus the destination. Verified: cargo test -p aida-cli-lib queue_rework_tests --lib (25 passed); cargo fmt --all -- --check; git diff --check.'
+  created_at: 2026-09-20T15:12:17.875625769Z
+  modified_at: 2026-09-20T15:12:17.875625769Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
