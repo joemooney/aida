@@ -34,12 +34,12 @@ description: |
   5. Tests cover: prefix resolution, ambiguous prefix erroring, --in-reply-to refusing an unknown id, and re-reading a message after it is marked read.
 
   Found by the advisor seat while replying to a product-seat message; all three failures reproduced in sequence on today's binary.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-20T18:23:23.003329240Z
+modified_at: 2026-09-20T22:48:40.422675817Z
 req_type: Bug
 tags:
 - agent-surface
