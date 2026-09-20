@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-20T16:32:16.659769757Z
+modified_at: 2026-09-20T16:44:27.452961029Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -79,6 +79,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T16:32:16.379545900Z
   modified_at: 2026-09-20T16:32:16.379545900Z
+- id: 01a0bfb4-6bbc-7341-8a6f-8c551437cf94
+  author: joe
+  content: 'Round 2: nightly now fails on a missing AIDA_GITLAB_TOKEN (only mirror unreachability skips); the live GitLab smoke uses the drain CI streaming seam and asserts CiTerminal/PrMerged with no unexpected SpecShelved event, creates and validates an Approved review verdict, verifies source-branch and project deletion, logs panic-cleanup failures, and phase-labels open/status/merge failures. Compile-verified with cargo test -p aida-cli-lib gitlab_live_mr_round_trip --no-run. Commit 8645670e66.'
+  created_at: 2026-09-20T16:44:27.452961029Z
+  modified_at: 2026-09-20T16:44:27.452961029Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
