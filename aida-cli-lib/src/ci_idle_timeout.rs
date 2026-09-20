@@ -20,9 +20,13 @@
 //! unit-tested without spawning `gh`/`git`. trace:TASK-968 | ai:claude
 
 /// Default idle window (seconds): a CI wait that observes no progress for this
-/// long is treated as genuinely stalled. Re-armed on every progress event, so
-/// an actively-moving PR never hits it.
-pub(crate) const DEFAULT_CI_IDLE_SECS: u64 = 600; // 10 min
+/// long is treated as genuinely stalled. This is deliberately above the
+/// measured 705-second p95 of the latest 97 completed GitHub `CI` runs on
+/// 2026-09-19 (`gh run list --workflow CI --limit 100`). An in-flight required
+/// check re-arms this timer on every poll, so its duration is bounded by the
+/// absolute ceiling instead.
+// trace:BUG-1275 | ai:codex
+pub(crate) const DEFAULT_CI_IDLE_SECS: u64 = 1200; // 20 min
 
 /// Default absolute ceiling (seconds): even a continuously-progressing wait
 /// stops here so a runaway monitor can't run forever.
@@ -60,6 +64,17 @@ pub(crate) fn ci_wait_verdict(
         return CiWaitVerdict::IdleTimeout;
     }
     CiWaitVerdict::Continue
+}
+
+/// Whether the current CI observation proves useful work is still running.
+///
+/// An in-flight required check is itself a liveness signal even when its
+/// rollup fingerprint has not changed. Absence is not progress and therefore
+/// leaves the idle clock running. Kept pure so the polling policy is testable
+/// without sleeping or invoking a forge CLI.
+// trace:BUG-1275 | ai:codex
+pub(crate) fn ci_observation_rearms_idle(has_in_flight_required_check: bool) -> bool {
+    has_in_flight_required_check
 }
 
 /// Pure: a stable progress fingerprint over the `gh pr list` rollup JSON (the
@@ -119,25 +134,26 @@ pub(crate) fn ci_progress_fingerprint(rollup_json: &str, base_tip: Option<&str>)
     )
 }
 
-/// Idle-window length (seconds) for the CI wait. `AIDA_WORKER_CI_IDLE`
-/// overrides; default [`DEFAULT_CI_IDLE_SECS`]. A non-numeric value falls back
-/// to the default.
-// trace:TASK-968 | ai:claude
-pub(crate) fn ci_idle_window_secs() -> u64 {
+/// Idle-window length (seconds) for the CI wait. `AIDA_WORKER_CI_IDLE` has
+/// precedence over `[drain] ci_idle`; default [`DEFAULT_CI_IDLE_SECS`].
+// trace:TASK-968 trace:BUG-1275 | ai:claude+codex
+pub(crate) fn ci_idle_window_secs(project_root: &std::path::Path) -> u64 {
     std::env::var("AIDA_WORKER_CI_IDLE")
         .ok()
         .and_then(|v| v.trim().parse::<u64>().ok())
+        .or_else(|| crate::read_drain_config(project_root).ci_idle)
         .unwrap_or(DEFAULT_CI_IDLE_SECS)
 }
 
-/// Absolute ceiling (seconds) for the CI wait. `AIDA_WORKER_CI_ABSOLUTE`
-/// overrides; default [`DEFAULT_CI_ABSOLUTE_SECS`]. A non-numeric value falls
-/// back to the default.
-// trace:TASK-968 | ai:claude
-pub(crate) fn ci_absolute_ceiling_secs() -> u64 {
+/// Absolute ceiling (seconds) for the CI wait. `AIDA_WORKER_CI_ABSOLUTE` has
+/// precedence over `[drain] ci_absolute`; default
+/// [`DEFAULT_CI_ABSOLUTE_SECS`].
+// trace:TASK-968 trace:BUG-1275 | ai:claude+codex
+pub(crate) fn ci_absolute_ceiling_secs(project_root: &std::path::Path) -> u64 {
     std::env::var("AIDA_WORKER_CI_ABSOLUTE")
         .ok()
         .and_then(|v| v.trim().parse::<u64>().ok())
+        .or_else(|| crate::read_drain_config(project_root).ci_absolute)
         .unwrap_or(DEFAULT_CI_ABSOLUTE_SECS)
 }
 
@@ -172,6 +188,27 @@ mod tests {
             ci_wait_verdict(4800, 30, 600, 5400),
             CiWaitVerdict::Continue
         );
+    }
+
+    #[test]
+    fn in_flight_check_rearms_idle_but_absence_does_not() {
+        assert!(ci_observation_rearms_idle(true));
+        assert!(!ci_observation_rearms_idle(false));
+    }
+
+    #[test]
+    fn drain_config_exposes_tracked_ci_wait_bounds() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join(".aida")).unwrap();
+        std::fs::write(
+            root.path().join(".aida/config.toml"),
+            "[drain]\nci_idle = \"25m\"\nci_absolute = \"2m\"\n",
+        )
+        .unwrap();
+
+        let config = crate::read_drain_config(root.path());
+        assert_eq!(config.ci_idle, Some(1500));
+        assert_eq!(config.ci_absolute, Some(120));
     }
 
     #[test]

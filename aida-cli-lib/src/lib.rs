@@ -34291,8 +34291,8 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
 /// wait so it can't run unbounded. Returns NoSignal on either timeout so the
 /// drain gate can shelve rather than hanging or proceeding unchecked. Ctrl+C
 /// interrupts cleanly.
-/// Windows: `AIDA_WORKER_CI_IDLE` (default 600s) / `AIDA_WORKER_CI_ABSOLUTE`
-/// (default 5400s).
+/// Windows: `AIDA_WORKER_CI_IDLE` / `[drain] ci_idle` (default 1200s) and
+/// `AIDA_WORKER_CI_ABSOLUTE` / `[drain] ci_absolute` (default 5400s).
 ///
 /// TASK-1165: `project_root` is INJECTED by the caller rather than resolved
 /// here from the process cwd — the same rule BUG-770 established for the
@@ -34307,14 +34307,15 @@ pub(crate) fn wait_for_ci_terminal(
     project_root: Option<&std::path::Path>,
     branch: &str,
 ) -> CiProbe {
-    use crate::ci_idle_timeout::{ci_progress_fingerprint, ci_wait_verdict, CiWaitVerdict};
-    const POLL_INTERVAL_SECS: u64 = 30;
-    let idle_window = crate::ci_idle_timeout::ci_idle_window_secs();
-    let absolute_ceiling = crate::ci_idle_timeout::ci_absolute_ceiling_secs();
-
     // The git probes are read-only and harmless against the cwd; only the emit
     // is root-sensitive, so only the emit is gated on `Some`.
     let git_root = project_root.unwrap_or_else(|| std::path::Path::new("."));
+    use crate::ci_idle_timeout::{
+        ci_observation_rearms_idle, ci_progress_fingerprint, ci_wait_verdict, CiWaitVerdict,
+    };
+    const POLL_INTERVAL_SECS: u64 = 30;
+    let idle_window = crate::ci_idle_timeout::ci_idle_window_secs(git_root);
+    let absolute_ceiling = crate::ci_idle_timeout::ci_absolute_ceiling_secs(git_root);
     let default_ref = detect_default_branch_ref(git_root);
 
     let started = std::time::Instant::now();
@@ -34343,7 +34344,10 @@ pub(crate) fn wait_for_ci_terminal(
             Some(prev) => *prev != fingerprint,
             None => false,
         };
-        if progressed {
+        // BUG-1275: a required check that is still queued/running proves the
+        // wait is healthy even if GitHub's rollup is byte-for-byte unchanged.
+        // Absence/NoSignal does not re-arm, preserving genuine-stall behavior.
+        if progressed || ci_observation_rearms_idle(matches!(probe, CiProbe::InProgress { .. })) {
             last_progress = std::time::Instant::now();
         }
         last_fingerprint = Some(fingerprint);
@@ -84374,6 +84378,9 @@ struct DrainConfigToml {
     /// STORY-1041: `[drain] pipeline_depth = 1..3`.
     // trace:STORY-1041 trace:ADR-27 | ai:codex
     pipeline_depth: Option<usize>,
+    /// BUG-1275: tracked CI wait bounds. Durations accept seconds, `s`, or `m`.
+    ci_idle: Option<u64>,
+    ci_absolute: Option<u64>,
 }
 
 /// Hand-rolled `[drain]`-section scanner for `.aida/config.toml`, mirroring the
@@ -84415,6 +84422,8 @@ fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
                 "retry_transient" => out.retry_transient = val.parse().ok(),
                 "retry_escalate_model" => out.retry_escalate_model = parse_boolish(val),
                 "pipeline_depth" => out.pipeline_depth = val.parse().ok(),
+                "ci_idle" => out.ci_idle = parse_duration_seconds(val),
+                "ci_absolute" => out.ci_absolute = parse_duration_seconds(val),
                 _ => {}
             }
         }

@@ -436,7 +436,19 @@ So the wait moved out of the agent entirely. After each headless session exits,
 — probes the open wave PRs and integrates them **itself, in Rust**:
 
 1. Blocks on each PR's CI using the same re-arming idle timer + absolute ceiling
-   the orchestrator uses (`AIDA_WORKER_CI_IDLE` / `AIDA_WORKER_CI_ABSOLUTE`).
+   the orchestrator uses. Configure durable bounds in `.aida/config.toml`;
+   the environment variables override them for one launch:
+
+   ```toml
+   [drain]
+   ci_idle = "20m"      # default; above the measured 705s GitHub CI p95
+   ci_absolute = "90m"  # hard backstop even while a check remains in flight
+   ```
+
+   `AIDA_WORKER_CI_IDLE` and `AIDA_WORKER_CI_ABSOLUTE` are the corresponding
+   per-process overrides. A queued or running required check re-arms the idle
+   timer on every poll; the absolute ceiling remains the bound for a hung run.
+   trace:BUG-1275 | ai:codex
 2. Squash-merges the clean ones and runs `aida pull` so the Done → Completed
    auto-bump fires. Every existing gate still applies: a `RequestChanges`
    review, red CI, or a merge conflict is never merged over, and a spec whose
