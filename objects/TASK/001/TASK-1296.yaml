@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:01:07.081451092Z
-modified_at: 2026-09-20T02:12:07.541769003Z
+modified_at: 2026-09-20T02:13:27.486566041Z
 req_type: Task
 tags:
 - drain-safe
@@ -45,6 +45,30 @@ comments:
   created_at: 2026-09-20T01:59:00.615451844Z
   modified_at: 2026-09-20T01:59:00.615451844Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bc96-ff3e-7601-82ba-0dd6829c878a
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1990 [AI:claude] feat(pull): resolve stranded Review-PR specs from the forge (TASK-1296)
+    verdict: APPROVE + merged 2026-09-20 02:12:04Z at head cafe9ba6
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — neither implemented by this advisor nor briefed by it
+    gates cleared: required Build (ubuntu-latest) SUCCESS; merge-hold-gate SUCCESS; mergeStateStatus CLEAN; no reviewer phase live at merge time (drain was on BUG-1275, CI phase)
+
+    THE DEFECT THE LANE FOUND IS THE MOST VALUABLE PART OF THIS CHANGE, and it was not in the spec. A closed-unmerged PR never produces a merge commit, so it can never appear in the PR-to-SHA map, and it produces no Done candidate either. Both collections stay empty in precisely the case this feature exists to handle, so the pre-existing early-out would have skipped detection entirely. Both early-outs are now patched.
+
+    The feature would otherwise have shipped looking correct and doing nothing, and its tests would have passed, because a test that constructs a stranded spec also constructs the conditions the early-out skips. Naming the shape for the next reader: a guard correct for every case anyone had considered and silently wrong for the one being added. Found by implementing rather than reviewing, which is the honest order — a reviewer reads that early-out and sees a function that looks right, because it was right until the requirements moved.
+
+    WHAT I CHECKED RATHER THAN ASSUMED. The forge cost is bounded: the collector reaches the network only for specs that are Approved or InProgress, carry a parseable Review-PR number, and are not already resolvable from the git log. That third filter is the one that matters and it is present, so this is not a per-pull round trip for every spec.
+
+    I also measured the cost I was worried about instead of asserting it. The store load moved ahead of the early-return, so every pull now pays a full load even on a no-op. On this repo that is about 0.6s across 3976 spec files — real but modest, and the drain calls pull after every merge. If it surfaces in the latency percentiles, the cheap fix is a cache-backed pre-check, since "are there Approved/InProgress specs whose title matches the Review-PR pattern" is answerable without parsing every YAML.
+
+    ONE EDGE RECORDED RATHER THAN BLOCKED ON. `ClosedUnmerged` writes status Rejected. That is right for an abandoned PR and wrong for one closed in favour of a replacement — a rebase into a fresh PR, or a split — where the review story should follow the successor rather than terminate. Under the distinction settled earlier today, Rejected means declined with nothing adopted, and a replaced PR is not that.
+
+    I did not hold, because the implementation makes a wrong rejection both findable and reversible: it writes an audit comment naming the PR and reason, and records a field change carrying the prior status. If this ever fires on a replaced PR, the fix is to look for a successor rather than assume abandonment.
+  created_at: 2026-09-20T02:13:27.486566041Z
+  modified_at: 2026-09-20T02:13:27.486566041Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bc95-c6ee-7de0-a5cb-ea045adf1a15
   author: aida-auto-bump
