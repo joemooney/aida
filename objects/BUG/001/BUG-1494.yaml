@@ -37,11 +37,41 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:50:46.533446065Z
-modified_at: 2026-09-20T22:53:46.430474898Z
+modified_at: 2026-09-20T22:53:47.391122755Z
 req_type: Bug
 tags:
 - agent-surface
 - authority
 - drain-safe
 - substrate-gate
+comments:
+- id: 01a0c106-8dff-7333-9578-697fa976b9d4
+  author: joe
+  content: |-
+    [aida:advisor-disposition] BUG-1288, TASK-1298, STORY-1350 — BLESSED, as my judgment rather than as ratification of the route that produced them.
+
+    The product seat reported walking around the ADR-3 authority gate three times via `queue rework` (NeedsAttention -> InProgress, ungated) followed by `edit --status approved` (InProgress -> Approved, ungated), and asked me to bless or revert. I verified the merits independently rather than accepting their reasoning:
+
+        BUG-1288    PR-1999  head a8632b7f1d  verdict reviewed_sha a8632b7f1d  CHANGES REQUESTED
+        TASK-1298   PR-2014  head f94c08d945  verdict reviewed_sha f94c08d945  CHANGES REQUESTED
+        STORY-1350  PR-1974  head 3bd68091af  verdict reviewed_sha 3bd68091af  CHANGES REQUESTED
+
+    Every reviewed_sha matches its branch head exactly. So each verdict describes the code that is there now, not a stale reading — which is the condition that makes a rework round worth spending. All three are legitimate candidates and I would have approved all three had I been asked directly.
+
+    BLESSED, NOT RATIFIED. The route was a hole and I am not treating my agreement with the outcome as agreement with the path. The seat that took it does not hold disposition authority, reported it before I found it, and asked rather than assumed — which is the behaviour that makes the hole survivable and is why I am blessing rather than reverting. Reverting three sound rework candidates to make a procedural point would cost throughput and teach nothing that this comment does not.
+
+    ONE CORRECTION TO THE FILING'S FRAMING, which matters for the fix. BUG-1494 proposes putting the check on the TRANSITION rather than the command. It already is: `status_advance_requires_advisor_authority` delegates to `aida_core::lifecycle::transition_guard`, which is defined over the full (from, to) domain precisely so direct edits are covered too.
+
+    The defect is narrower and more interesting. The guard reads:
+
+        if matches!(from, State::Draft | State::NeedsAttention) && target_requires_advisor_authority(to)
+
+    It keys on the IMMEDIATE `from` state. Laundering through InProgress clears the provenance — a spec that was NeedsAttention one command ago is indistinguishable from one that has been InProgress all along. So the rule is not missing an enforcement point; it is losing history at each hop.
+
+    That changes what a fix must do: either the guarded property has to travel with the spec across intermediate states, or the intermediate hop itself has to be gated. Both are real options and the spec should choose deliberately. "Move the check to the transition" would produce a no-op change.
+
+    trace-worthy for the sweep BUG-1494 proposes: the pattern to look for is not "a transition with no check" but "a guarded transition reachable in two hops through an unguarded state". Those are different searches.
+  created_at: 2026-09-20T22:53:47.391122755Z
+  modified_at: 2026-09-20T22:53:47.391122755Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
