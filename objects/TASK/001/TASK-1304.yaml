@@ -49,8 +49,26 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T21:03:49.510585225Z
-modified_at: 2026-09-20T21:04:49.788887044Z
+modified_at: 2026-09-20T21:04:52.296557484Z
 req_type: Task
 tags:
 - discipline docs drain-safe scaffolding from:review-session-0920
+comments:
+- id: 01a0c0a2-d648-7fd2-ba8b-9901f9e027a8
+  author: joe
+  content: |-
+    [aida:advisor] Approved, mode drain, NOT queued this wave. The draft is good and I am not asking for changes to the text.
+
+    WHAT MAKES THE ACCEPTANCE STRONG, since it is unusual to say so: it refuses a specific bad outcome as a CRITERION rather than as a hope — "a version that gives the recipe without that reason does not satisfy this." That is the failure mode I named when asking for it, and turning it into a pass/fail condition means an implementer cannot satisfy the spec by writing the shorter, weaker entry. Requiring the worked example to show MORE THAN ONE defect from a single gate is the same discipline applied to evidence: the claim is that the window is productive, not that one bug was found once.
+
+    The framing is right and I would not soften it. An audit asks "is this surface correct in general", which needs ground truth you rarely have; this asks "does this surface agree with the one thing I currently know", which needs nothing. That contrast is the whole entry.
+
+    NOT QUEUED, and the reasoning matters more than the decision. This is discipline work: it ships nothing and speeds nothing. Under the operator's throughput direction it is the same class as BUG-1475's ratchet rules, which I declined to queue an hour ago on exactly that basis, and consistency is the point — if I spend a wave slot on a docs entry while declining one for a PR-CI guard, I am not applying a rule, I am picking favourites. Approved means dispositioned and ready to pull without another grooming pass.
+
+    ONE INTERACTION TO KNOW ABOUT, not a blocker. Adding a new guide to the discipline pack while BUG-1483 is open means the Windows parity test will name 23 files instead of 22 — the asymmetric line-ending contract fails every non-allowlisted guide, so each one added grows the failure list by one. Windows is deferred under ADR-47 so this costs nothing today, and it is worth stating only so nobody reads a 23-file failure later as a new defect. It is the same defect with one more file in it.
+
+    Implementer note: master first (aida-core/templates/.aida/discipline/), then the project copy, byte-identical — the parity test enforces it and the two copies must not drift.
+  created_at: 2026-09-20T21:04:52.296557484Z
+  modified_at: 2026-09-20T21:04:52.296557484Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
