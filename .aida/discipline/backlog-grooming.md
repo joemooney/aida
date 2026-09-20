@@ -43,6 +43,16 @@ runs unattended (CLI in scripts) and supervised (skill in a session).
 
 ## How risk is graded
 
+### Spikes
+
+Split spikes by deliverable, not merely by type. A spike with a concrete evidence
+path under `docs/spikes/` and explicit acceptance is agent-able: propose `drain`
+when nothing depends on it, or `drive` when a `BlockedBy` dependent will build on
+its conclusions (name that dependent in the reason so an advisor reviews before
+merge). A decision, taste call, or work needing credentials stays `operator`.
+Bulk queue selection still excludes spikes; the advisor must groom each one
+explicitly.
+
 Every backlog item gets one of four risk chips on `aida backlog list`:
 
 | Chip | What it means | Heuristic |

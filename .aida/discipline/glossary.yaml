@@ -119,7 +119,7 @@ drain: |
       aida queue work --batch overnight --no-human --auto-complete
 
 batch: |
-  Specs sharing a 'batch:NAME' tag (via 'aida edit --tags batch:NAME').
+  Specs sharing a 'batch:NAME' tag (via 'aida edit --add-tag batch:NAME').
   Composes with two commands:
       aida queue work  --batch NAME    # drain only this batch
       aida queue progress --batch NAME # bucketed lifecycle view
@@ -316,7 +316,7 @@ cmd-aida-history: |
 kind-episodic: |
   Memory of specific events tied to time + place. AIDA's episodic
   substrate is the git history of the orphan 'aida-store' branch +
-  'aida history --events' + the punt ledger (STORY-325) + the
+  'aida history events' + the punt ledger (STORY-325) + the
   calibration substrate (STORY-347) + usage telemetry. Each transition,
   decision, or observation is a timestamped record. The substrate
   answers "what did I believe last month?" via git history.

@@ -1,7 +1,8 @@
 # Machinery glossary
 
 AIDA's docs, error messages, and agent-to-agent handoffs lean on a small set
-of machinery terms — **orchestrator, phase, drain, lease, role, session,
+of machinery terms — **orchestrator, phase, drain, lease, role, seat,
+stakeholder persona, session,
 scope, worktree, sentinel, batch, autonomy mode**. Each has a precise
 meaning; conflating them produces handoffs that almost-work and specs that
 almost-reproduce. This page is the canonical definition for each.
@@ -73,23 +74,6 @@ orchestrator per queued implementer spec until the queue is empty.
 
 A drain is a *workflow pattern*; the orchestrator is the *machine* that
 implements one iteration of it.
-
-Re-adding a shelved spec to a queue is **not** itself a relaunch. The relaunch
-path is an active drain runner that notices the queued head and invokes the
-same per-spec orchestrator again. In the built-in resilient loop, that runner is
-`scripts/drain-loop.sh:57` (`while true`) and `scripts/drain-loop.sh:82`
-(`aida queue work "next${CHUNK}" --auto-complete …`), and the `nextN` driver
-resolves the current head in `aida-cli-lib/src/lib.rs:73523`
-(`RealNextNDriver::next_head`) before calling `aida-cli-lib/src/lib.rs:73536`
-(`RealNextNDriver::run_spec`) to re-enter `run_auto_complete` for that spec.
-trace:TASK-1201 | ai:codex
-
-Operationally: `aida queue add STORY-993 --for implementer` only blesses
-STORY-993 back into the queue. If a drain loop or another wrapper is already
-running, it may pick that item up seconds later and the visible process/logs
-will look like a fresh single-spec `aida queue work STORY-993 --auto-complete`
-run. If no runner is active, nothing launches until someone runs a drain or
-`queue work` command.
 
 ### batch
 
@@ -177,15 +161,30 @@ A session has exactly one scope; a scope has at most one live lease.
 
 ### role
 
-A workflow position: **implementer**, **reviewer**, or **advisor**
-(user-facing identity: *advisor*). The role decides queue routing
-(`aida queue add <id> --for <role>`), worktree naming, and which skill
-templates a session loads.
+A persistent workflow position such as **advisor**, **implementer**,
+**reviewer**, **integrator**, or **product**. A role is stored in a role file,
+can receive routed work (`aida queue add <id> --for <role>`), and supplies the
+context and authority used by its sessions.
 
 A role is **not** a Claude Code subagent — see
 [`vs-claude-code-subagents.md`](../positioning/vs-claude-code-subagents.md) for
 the within-conversation (subagent) vs cross-conversation (AIDA role) layer
 distinction.
+
+### seat
+
+The place a [role](#role) occupies in AIDA's build loop. A seat can receive
+work and own leased sessions/worktrees; driver seats are subject to the
+one-authoritative-driver rule. “Role” names the workflow position; “seat”
+emphasizes its operational place and cardinality.
+
+### stakeholder persona
+
+A fileless, non-routable least-privilege gate activated with
+`AIDA_SESSION_ROLE=guest|requester`: `guest` is read-only and `requester` adds
+Draft-only intake. A persona is discoverable in `aida role list` but has no
+seat, history, or lease. See
+`docs/architecture/roles-seats-and-personas.md` in the AIDA repository.
 
 ### worktree
 
@@ -344,7 +343,7 @@ Why this matters for agent work:
   is silently un-auditable. `aida doctor` does not currently flag
   empty-history specs — known gap.
 
-Cross-references: `aida history --events` reads from these arrays;
+Cross-references: `aida history events` reads from these arrays;
 `aida history --id <ID>` filters to one spec's entries. The
 substrate-grounded equivalent in code: `aida-core::object_store` walks
 the YAML files directly. trace:TASK-121
