@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:01:03.886041426Z
-modified_at: 2026-09-20T19:02:58.997466856Z
+modified_at: 2026-09-20T19:03:51.894425787Z
 req_type: Bug
 tags:
 - drain-safe
@@ -54,5 +54,11 @@ comments:
   content: 'Headless pickup result, 2026-09-20: no Linux reproduction. Command shape: the freshly built aida_cli_lib test binary was invoked 1,000 times via `seq 1 1000 | xargs -P16`, each invocation running `maintenance_schedule::tests::tick_lock_is_nonblocking_and_reusable --exact`. Machine: host imac, Linux 7.0.0-30-generic x86_64, 6 CPUs. Result: 1,000 completed, 0 failures. A standalone targeted run also passed. I searched local AIDA/session artifacts and the BUG-1299 record but found no preserved panic from the original Linux sighting, so the required ErrorKind and raw_os_error remain unknown. Per acceptance 2-4, no EINTR retry, serialization, weakening, ignore, or other code change was made. Current wait state: acceptance 1 requires a future real Linux failure; headless mode cannot wait for it, so this spec must remain in-progress and queued.'
   created_at: 2026-09-20T19:00:14.498751675Z
   modified_at: 2026-09-20T19:00:14.498751675Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c034-0d56-7181-9e37-5c2b05925800
+  author: joe
+  content: 'Evidence check, 2026-09-20: fetched the authoritative failed log for GitHub Actions run 35502040911 with `gh run view 35502040911 --repo joemooney/aida --log-failed`. Its `tick_lock_is_nonblocking_and_reusable` failure is explicitly in the `Build (windows-latest)` job and reports `The process cannot access the file because another process has locked a portion of the file. (os error 33)`. This is the established Windows ERROR_LOCK_VIOLATION evidence addressed by BUG-1303, not the missing Linux sighting. No Linux panic/error kind/raw_os_error was present in that run log. A further local Linux stress pass of 1,000 process-isolated exact-test invocations at xargs parallelism 16 on host imac, kernel 7.0.0-30-generic x86_64, 6 CPUs, completed with 0 failures. This is non-reproduction only. No code change or fix was made; acceptance 1 remains unmet.'
+  created_at: 2026-09-20T19:03:51.894425787Z
+  modified_at: 2026-09-20T19:03:51.894425787Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
