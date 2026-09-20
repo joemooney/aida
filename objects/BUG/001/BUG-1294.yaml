@@ -30,12 +30,12 @@ description: |
   5. Short-flag clustering and genuine typos still produce a clear error; this must not become a parser that swallows a mistyped flag as a title.
 
   Found while filing a real bug, not while probing. Same family as BUG-1234 (no --description-from-file on edit) and BUG-1231 (no --subject on mailbox send): the filing path is the one an agent uses most and it is where the papercuts are.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:23:44.192885433Z
-modified_at: 2026-09-20T02:29:27.082310887Z
+modified_at: 2026-09-20T02:46:21.914926513Z
 req_type: Bug
 tags:
 - agent-ux
@@ -61,4 +61,22 @@ comments:
   created_at: 2026-09-20T02:29:27.082310887Z
   modified_at: 2026-09-20T02:29:27.082310887Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bcb5-1fd3-7562-a4ad-1cd9248aec41
+  author: aida-auto-bump
+  timestamp: 2026-09-20T02:46:21.907394737Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0bcb5-1fda-7f21-875f-1d5d0facef22
+  timestamp: 2026-09-20T02:46:21.914925513Z
+  agent: aida
+  commit_sha: 7e488149da5fd32351bf6e7a71bd3896fa0d4c93
+  summary: Completed via merge 7e488149
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-20T02:46:21.907235679Z
+  completion_sha: 7e488149da5fd32351bf6e7a71bd3896fa0d4c93
