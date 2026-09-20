@@ -20,16 +20,17 @@ description: |
   NOT IN SCOPE: changing what any classifier decides today, and adding a dependency to parse a tool's output where we currently shell out.
 
   Filed by the advisor while reviewing PR #1993, where the exclusion was argued explicitly and well. The reasoning there is worth reading alongside this.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-20T02:45:02.891855072Z
+modified_at: 2026-09-20T07:11:45.714696739Z
 req_type: Bug
 tags:
 - diagnostic-decay
 - diagnostics
+- drain-safe
 - from:session-0919
 - orchestrator
 relationships:
@@ -41,3 +42,4 @@ relationships:
   target_id: 01a0bbf0-ada2-71c3-a890-2ed927426bb7
   created_at: 2026-09-20T02:45:02.891850041Z
   created_by: joe
+execution_mode: drain
