@@ -43,7 +43,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:24:16.280507219Z
-modified_at: 2026-09-20T18:26:14.321244486Z
+modified_at: 2026-09-20T18:26:15.642285448Z
 req_type: Bug
 tags:
 - agent-surface
@@ -55,4 +55,37 @@ relationships:
   target_id: 019edfef-4f83-7342-a791-2d83d76a4276
   created_at: 2026-09-20T18:24:37.083166401Z
   created_by: joe
+comments:
+- id: 01a0c011-9fda-7072-8ca0-f90bf37db5c4
+  author: joe
+  content: |-
+    [aida:advisor] Approved HIGH — raised from the filing, because the blast radius is every agent session in this repo, not just one reviewer's afternoon.
+
+    VERIFIED INDEPENDENTLY:
+        $ aida history events --id BUG-1288
+        error: unexpected argument '--id' found
+        $ aida history events --help
+        Usage: aida history events [OPTIONS]
+              --format <FORMAT>
+    `--format` is the entire option surface. `--id` does not exist.
+
+    WHY HIGH RATHER THAN MEDIUM. CLAUDE.md is loaded into the context of every session that works in this repository. The paragraph does not merely mention the flag — it describes what `--id` accepts (spec_id, agreed_id, or the raw UUID, "the UUID is resolved to its spec_id"), cites BUG-588 as though that were the supporting work, and instructs a specific audience to use it: "Reviewers building burn-down charts or status-flow analyses should run `aida history events`". So every agent in this repo currently holds a confident, detailed, false belief about how to read spec-state history, and the audience most likely to act on it is the one doing exactly the analysis it fails at.
+
+    The BUG-588 citation compounds it. BUG-588 is Completed and concerns `aida edit` not populating the `history:` array — it is not about this flag. A reader checking the claim finds a real, closed spec and reasonably concludes the feature shipped. That is worse than an uncited claim.
+
+    This is the third finding today that came out of a hand pass over a file that has a command which should have produced it. Two seats independently needed spec-state transition history to settle a disagreement, and the documented path failed for both.
+
+    ON THE FILING'S OPEN QUESTION — the "documented flags actually parse" check. Include it, and it is NOT at risk of being SPIKE-85 instance seven. The self-referential trap applies to semantic classifiers: a detector keyed on a TERM misfires on documents about that term, because it must judge meaning. This check judges nothing — it extracts `aida <cmd> --flag` invocations from markdown and asks the binary whether the flag parses. Its oracle is clap's own help output, which is ground truth rather than a model of the category. A detector with no category to be blind to cannot be blind to its own.
+
+    There is one narrow self-reference risk and it is cheap to close, so make it a criterion: the checker must not exempt any file, including whatever documents the checker itself. An exclusion list is how this becomes instance seven.
+
+    ACCEPTANCE — additions to the filing:
+    1. Fix the CLAUDE.md paragraph by DECIDING which is true: build `--id`, or correct the documentation. Do not do the second silently if the first was intended — the paragraph's detail suggests someone designed this flag, and whether it was built and removed or never built is worth one line in the spec.
+    2. Remove or correct the BUG-588 citation. A citation that does not support its claim is the harder half of this bug, because it survives a casual check.
+    3. The four-line git-log recipe that DOES work goes in CLAUDE.md, whatever else changes. The paragraph's job is to tell a reader where to look; it must do that correctly today.
+    4. A check that every `aida <cmd> --flag` invocation in CLAUDE.md and the discipline pack parses against the current binary. No file exclusions, the checker's own docs included.
+    5. Sweep for other documented-but-absent flags in the same pass and report the count. One was found by accident; the population is unknown, and the same paragraph carrying three separate false specifics would change how much of that document to trust.
+  created_at: 2026-09-20T18:26:15.642285448Z
+  modified_at: 2026-09-20T18:26:15.642285448Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
