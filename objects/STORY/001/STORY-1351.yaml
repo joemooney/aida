@@ -29,12 +29,12 @@ description: |
   - A fresh session for the advisor seat, started with the memory pack DISABLED, on Claude and again on Codex, can state from its launch context alone: what it gates, what it must never do, how it writes a rework brief, and what is waiting for it — verified by reading its first reply, recorded on this spec.
   - The recurring duties appear as due seat jobs within one tick of launch rather than requiring the session to remember them.
   - No behaviour listed in channel 1 or 2 is delivered as prose in the role file (they are cross-checked: anything mechanised is deleted from the prose).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:12.562647785Z
-modified_at: 2026-09-20T17:54:16.009950662Z
+modified_at: 2026-09-20T17:54:43.457074826Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -169,16 +169,27 @@ comments:
   created_at: 2026-09-20T17:54:14.681387581Z
   modified_at: 2026-09-20T17:54:14.681387581Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0bff4-c079-7fc3-9f5e-a0fc5366e26f
+  author: aida-auto-bump
+  timestamp: 2026-09-20T17:54:43.449563176Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0bff4-c081-7093-b24c-56ac4e6de815
+  timestamp: 2026-09-20T17:54:43.457072865Z
+  agent: implementer
+  commit_sha: a0ec8fb22fc8a71dc6240d34e053ce0b6955b5f9
+  summary: 'STORY-1351 satisfied. Ran the spec''s own acceptance test with the branch binary: a cold advisor launch context on a fresh install states what it gates, what it must never do, how it writes a rework brief, and what is waiting - identically on Claude and Codex. Seat jobs are due at launch. Builds clean; role_identity_tests (17) + agent_launcher_tests (67) pass. One real gap filed as BUG-1464 (high), not blocking.'
+  punted:
+  - 'punted: phase 1 retry cannot reclaim predecessor lease 01a0bc51 on `STORY-1351` after 3 liveness re-probe(s); worktree: /home/joe/ai/aida-story-1351'
+  review_verdict: approved
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T01:11:48.741368541Z
   implemented_by: joe
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: lease-conflict
-  detail: 'phase 1 retry cannot reclaim predecessor lease 01a0bc51 on `STORY-1351` after 3 liveness re-probe(s); worktree: /home/joe/ai/aida-story-1351'
-  recovery_hint: 'Continue the implementer session: `aida queue work STORY-1351 --resume`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T01:00:46.103871581Z
+  completed_at: 2026-09-20T17:54:43.448999856Z
+  completion_sha: a0ec8fb22fc8a71dc6240d34e053ce0b6955b5f9
