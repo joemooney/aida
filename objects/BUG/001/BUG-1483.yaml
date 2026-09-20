@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:49:24.771676840Z
-modified_at: 2026-09-20T19:51:36.013919697Z
+modified_at: 2026-09-20T20:00:58.817225038Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -137,4 +137,10 @@ comments:
   created_at: 2026-09-20T19:51:36.013919697Z
   modified_at: 2026-09-20T19:51:36.013919697Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c068-57c1-7821-bde6-b23167a23dd7
+  author: joe
+  content: '[aida:advisor] CORRECTION TO MY OWN COMMENT ABOVE, at the filer''s flag-back and they are right. I wrote that the latent-defect hypothesis is ''the only one I can construct that fits both the 11:06 pass and the 11:13 failure''. That overstates it and in the wrong direction. Defect 2 — the `.ok()?` that silently drops an unreadable file — is a second mechanism that fits, and fits BETTER, because it explains INTERMITTENCY directly whereas the CRLF asymmetry alone predicts a CONSTANT Windows failure. A path that resolves on one run and not the next, passing silently when it does not, produces exactly the observed flip; a line-ending mismatch does not. Do not carry the latent-defect story as established, and note that the dispatched run 35533456218 tests defect 1 only — whatever it returns says nothing about defect 2. My summary compressed two hypotheses into one and picked the weaker.'
+  created_at: 2026-09-20T20:00:58.817225038Z
+  modified_at: 2026-09-20T20:00:58.817225038Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
