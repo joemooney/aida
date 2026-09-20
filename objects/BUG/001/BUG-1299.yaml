@@ -56,7 +56,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T23:03:57.581552445Z
-modified_at: 2026-09-20T02:32:23.984206123Z
+modified_at: 2026-09-20T03:03:15.427912795Z
 req_type: Bug
 tags:
 - diagnostic-decay
@@ -120,5 +120,11 @@ comments:
     Worth noting for whoever picks this up: this is the fourth instance in one day of the same shape — BUG-1295 (typed cause recovered by substring-matching prose), BUG-1298 (recovery hint naming the wrong CI run), this spec's original finding (retry drops the detail a shelve keeps), and now a hint that contradicts its own detail. The decision stays correct while the diagnostic explaining it degrades, disappears, or lies. That may deserve naming as a class rather than carrying four specs.
   created_at: 2026-09-19T23:47:56.063323077Z
   modified_at: 2026-09-19T23:47:56.063323077Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bcc4-96e3-7901-a8a5-4ce26ee5fefb
+  author: joe
+  content: Commit ccc876c2c0 references this requirement
+  created_at: 2026-09-20T03:03:15.427912795Z
+  modified_at: 2026-09-20T03:03:15.427912795Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
