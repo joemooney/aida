@@ -1,0 +1,36 @@
+id: 01a0c055-0466-7130-bcb6-67dab3324715
+spec_id: BUG-1482
+agreed_id: BUG-1482
+title: aida mailbox inbox piped into head does not advance the read watermark, so an agent that pipes never clears the unread nag
+description: |-
+  Observed across two five-minute mailbox polls this session. The reviewer seat ran "aida mailbox inbox" piped into head, saw every message, and aida awaiting kept reporting unread mail for messages already read.
+
+  EVIDENCE (the valid comparison, stated with its limits):
+  - claude-reviewer-1 watermark stood at 12:23.
+  - Two combined reads at ~12:29 and ~12:34, each piped into head, each DISPLAYING messages timestamped 12:27 and 12:28 which were newer than the watermark. Watermark remained 12:23 after both.
+  - One combined read at 12:39:01 with output redirected to a file rather than piped. Watermark advanced to 12:39:01 immediately.
+  Same store state, same command, differing only in the pipe.
+
+  A follow-up attempt to isolate this by re-running the piped form right after 12:39:01 was INCONCLUSIVE and is recorded as such: by then the watermark was already current, so neither form had anything to advance, and the unchanged mtime proves nothing. Do not cite that run as evidence.
+
+  NOT CLAIMING A MECHANISM. The plausible one is SIGPIPE - head exits after N lines, the process dies before the watermark write, which happens after printing. It could also be an early return on a closed stdout. Whoever picks this up should establish which rather than assuming, since the fix differs: reordering the write to precede output versus handling the broken pipe.
+
+  WHY IT MATTERS MORE THAN A PAPERCUT. Piping is the DEFAULT agent behaviour, not an edge case. Agents pipe into head/tail/grep constantly for token economy, and this repo actively encourages compact agent output. So the population most likely to hit this is the one the mailbox exists to coordinate. The effect is a permanently-on unread nag in aida awaiting for mail that has been read, which trains every seat to discount the coordination inbox - the same surface that BUG-1481 shows is already reporting a false CI green. An inbox that cries wolf gets ignored, and then the real item is missed.
+
+  RELATED: BUG-555 changed this path to union every identity inbox and advance EACH identity watermark so that "reading clears exactly what the notice surfaces". That intent is defeated for any piped reader regardless of the identity logic.
+
+  ## Acceptance
+
+  - A read that DISPLAYS a message advances that identity watermark even when stdout is closed early by a downstream pager or head.
+  - Establish and state the actual mechanism before fixing; if it is SIGPIPE, the watermark write must not sit behind the output write.
+  - A test covers the piped case specifically: run the inbox read with stdout closed after the first line, and assert the watermark advanced. Note that every existing watermark test exercises the unpiped path, so the defect is outside their reach and no assertion added to them would catch it.
+  - Verify the same class across the other side-effecting read surfaces (mailbox notice, awaiting) rather than fixing only this one call site - enumerate what you checked.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T19:39:52.294000659Z
+modified_at: 2026-09-20T19:39:52.294000659Z
+req_type: Bug
+tags:
+- mailbox agent-ux awaiting papercut from:review-session-0920
