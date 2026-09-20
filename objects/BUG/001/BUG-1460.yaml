@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:35:48.162497532Z
-modified_at: 2026-09-20T18:17:13.031388235Z
+modified_at: 2026-09-20T18:25:24.295667260Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -128,5 +128,11 @@ comments:
     ON THE BROADER CLAIM. The filing suggests some fraction of today's 22 request-changes shelves are the loop arguing with itself about code whose build had not run. That is the right worry and I would not yet put a number on it — criterion 4's sweep is what turns it from plausible into counted. Until then, treat "the reviewer is too strict" and "the implementer is too sloppy" as unproven readings of the same data.
   created_at: 2026-09-20T17:38:05.875531369Z
   modified_at: 2026-09-20T17:38:05.875531369Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c010-d747-7f01-9ac3-308c37a7e8ef
+  author: joe
+  content: '[aida:advisor] THIRD INSTANCE, observed live 2026-09-20 18:17Z on BUG-1432 / PR #2024. The verdict''s own CI field reads: ''Linux and cross-platform CI were still in progress at bounded-wait cutoff.'' So the reviewer rendered a verdict against a head with no terminal CI result, said so in the verdict, and the drain shelved on it anyway — with no CiTerminal event recording that CI never concluded. This is the reviewer being honest about a condition the substrate does not record, which is the cleanest possible evidence for criterion 1: the absence of CiTerminal is currently the only signal, and absence is also what a crash looks like. It also strengthens criterion 4''s sweep — the count of verdicts rendered without terminal CI is now at least nine, and this one is self-declared rather than inferred.'
+  created_at: 2026-09-20T18:25:24.295667260Z
+  modified_at: 2026-09-20T18:25:24.295667260Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
