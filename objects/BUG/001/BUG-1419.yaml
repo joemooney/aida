@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:11:02.010408124Z
-modified_at: 2026-09-20T06:11:02.010408124Z
+modified_at: 2026-09-20T07:10:56.839356072Z
 req_type: Bug
 tags:
 - auto-complete
@@ -50,3 +50,17 @@ tags:
 - failure-3
 - failure-kind:verdict:request-changes
 - reviewer
+comments:
+- id: 01a0bda7-5b47-7ac3-8e85-738a19934596
+  author: joe
+  content: |-
+    [advisor:groom] REJECTED as a duplicate record. This is an auto-drafted failure note naming a spec that already exists, is already tracked, and is already being worked. The failure it describes is recorded on that spec's own history, on its PR, and in the event feed.
+
+    Keeping it would add a second place to look for the same fact and a second thing to close, without carrying any information the first does not. That is backlog inflation rather than tracking, and the operator is explicitly trying to reduce the count of open specs while increasing the number completed.
+
+    Rejected rather than archived because nothing here was adopted — no work was scoped to this record and none will be. Same disposition as the earlier auto-drafted siblings, one of which was title-identical to another.
+
+    If the underlying failure recurs and turns out NOT to be covered by the named spec, that is a new finding with its own evidence, not a reason to reopen this.
+  created_at: 2026-09-20T07:10:56.839356072Z
+  modified_at: 2026-09-20T07:10:56.839356072Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
