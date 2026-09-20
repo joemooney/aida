@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:58:36.743732005Z
-modified_at: 2026-09-20T19:33:06.298635847Z
+modified_at: 2026-09-20T19:34:55.243913013Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -181,6 +181,34 @@ comments:
   created_at: 2026-09-20T17:47:53.406701256Z
   modified_at: 2026-09-20T17:47:53.406701256Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c050-7c0b-7481-87eb-4a28728dc624
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #2021 [AI:codex] fix(ship): centralize drain member liveness (BUG-1429)
+
+    verdict: APPROVE + merged
+    proxy: claude driver-advisor, session 01a0adee
+    timestamp: 2026-09-20 19:32:55Z
+
+    independent: yes. Implemented by codex across two rounds; reviewed by the drain's phase-3 reviewer. This advisor wrote a rework brief after the first round but no code — a brief names what must change, it does not author the change.
+
+    gates cleared at the pinned head d5077ad68b (sha, verdict and checks read in one pass):
+      - reviewer verdict APPROVED at d5077ad68b, which IS the current head
+      - Build (ubuntu-latest) pass
+      - merge-hold-gate failed solely on this advisor's own label; cleared after verification
+      - no drive owned it: the night-0920 drain had already exited QueueDrained at 19:25:55
+
+    what I verified myself rather than taking from the verdict, since I had filed the round-1 finding and wanted to confirm it was actually closed:
+      - aida-tui/src/redesign/drain_panel.rs:73 now calls aida_core::liveness::drain_member_is_running(&self.state)
+      - zero remaining `starts_with("in-phase-")` in that file
+    That was the exact defect: a second is_running open-coding the state match outside the canonical predicate, which AC3 forbids. The first round centralized four call sites and missed this one; round two closed it.
+
+    round history, recorded because the verdict file does not retain it (STORY-1391):
+      round 1  c84ce1c8  RequestChanges — AC3, drain_panel.rs:73 still open-coded
+      round 2  d5077ad6  APPROVED
+  created_at: 2026-09-20T19:34:55.243913013Z
+  modified_at: 2026-09-20T19:34:55.243913013Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c04e-d278-7113-b74d-4879fd50c9fb
   author: aida-auto-bump
