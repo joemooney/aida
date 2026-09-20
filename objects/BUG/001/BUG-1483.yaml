@@ -40,8 +40,46 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:49:24.771676840Z
-modified_at: 2026-09-20T19:50:23.963628179Z
+modified_at: 2026-09-20T19:50:24.977708474Z
 req_type: Bug
 tags:
 - windows portability ci gitattributes prin-5 from:review-session-0920
+comments:
+- id: 01a0c05e-abd1-7850-b92b-22014b06209c
+  author: joe
+  content: |-
+    [aida:advisor] Approved HIGH, mode drain. I verified both halves independently and both hold exactly. This is the strongest single piece of diagnosis produced today.
+
+    HALF ONE — THE ASYMMETRIC CONTRACT, confirmed by `git check-attr` rather than by reasoning:
+
+        aida-core/templates/.aida/discipline/session-discipline.md : text: set        eol: lf
+        .aida/discipline/session-discipline.md                     : text: unspecified eol: unspecified
+
+    .gitattributes line 6 is `aida-core/templates/** text eol=lf` and nothing covers the project copy. BUG-244 added that line precisely so a Windows checkout could not embed CRLF into the binary — and it protected exactly one side of a comparison whose whole purpose is to compare the two sides. On Windows the master is LF, the project copy is CRLF, and:
+
+        (local.trim_end() != *master)
+
+    `trim_end()` strips trailing whitespace from the end of the string. It does nothing about the `\r` before every internal newline. So every multi-line guide mismatches, which is the 22-file signature exactly, and no two-file documentation edit can produce it.
+
+    HALF TWO — PRIN-5 INSTANCE FOUR, one line above, same function:
+
+        let local = std::fs::read_to_string(project_dir.join(name)).ok()?;
+
+    inside a `filter_map`. An unreadable file — missing, wrong separator, permission error — yields None, is DROPPED, and counts as not-mismatching. If the project directory fails to resolve at all, every file is dropped and the check reports a clean pack.
+
+    A guard whose entire job is detecting drift reports "no drift" when it cannot see the files. That is PRIN-5 verbatim — computing a verdict over what is present, erring toward reassurance — in a fourth place, and it is four lines from the first half. Linked to PRIN-5.
+
+    ACCEPTANCE — additions:
+    1. Both halves land together. Fixing the line endings alone leaves a detector that silently passes when it cannot read; fixing the read alone leaves it failing on every Windows checkout. A test must fail if either ships alone.
+    2. The comparison is explicitly line-ending-normalized, OR both sides carry the same .gitattributes contract. Say which and why. Normalizing in the comparison is more robust — it survives a future path that .gitattributes does not cover — but pinning both sides is the smaller change; decide it deliberately rather than by whichever is quicker.
+    3. An unreadable file is a MISMATCH or an explicit error, never a silent pass. `ok()?` inside `filter_map` is the construct to remove.
+    4. A test covers the unreadable-file path: point the checker at a directory that does not resolve and assert it does NOT report a clean pack.
+    5. Sweep .gitattributes for other one-sided contracts. This one protected the embedded side of a two-sided comparison; if there is a second such pair, it has the same latent defect and nobody has looked.
+
+    ON THE FLIP THAT PROMPTED THE ESCALATION — 11:06 nightly passing and 11:13 failing under a defect that should be constant on Windows. The filing offers half two as the explanation (a path resolving on one run and not the other, passing silently when it does not) and explicitly labels it a hypothesis, requiring confirmation or refutation on a Windows runner with the result recorded. Keep that exactly as written. It is the tidiest available story, which is the reason to be careful with it rather than the reason to adopt it.
+
+    Cross-platform dispatch 35533456218 on main at 5ccfd951d5 is in flight and will say whether main is currently red on Windows.
+  created_at: 2026-09-20T19:50:24.977708474Z
+  modified_at: 2026-09-20T19:50:24.977708474Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
