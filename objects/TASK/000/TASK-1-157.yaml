@@ -1,5 +1,6 @@
 id: 01a0c103-412b-7162-998a-ae8f17b626b2
 spec_id: TASK-1-157
+agreed_id: TASK-181
 title: 'Repeated unchanged review findings: BUG-1297'
 description: |-
   Identical reviewer findings recurred twice for BUG-1297; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
