@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-20T05:05:32.050246702Z
+modified_at: 2026-09-20T05:12:19.655292797Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -117,4 +117,10 @@ comments:
   created_at: 2026-09-20T03:02:54.711877492Z
   modified_at: 2026-09-20T03:02:54.711877492Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bd3a-c1c7-7df3-924e-56dd0ba8ff25
+  author: joe
+  content: 'Implemented per advisor decision in docs/plans/2026-09-19-adr-47-orphaned-review-ownership.md (ADR-47): successful shelves hand open PRs to the reviewer queue with phase/stop context; full scheduler ticks provide a bounded clean+green+unverdicted+unheld+unowned PR sweep using TASK-1284 PID/start identity; the single-drain lock is unchanged. Regression fixture names BUG-1268 / PR 1970 / STORY-1354.'
+  created_at: 2026-09-20T05:12:19.655292797Z
+  modified_at: 2026-09-20T05:12:19.655292797Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
