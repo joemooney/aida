@@ -2,7 +2,7 @@ id: 01a0bc31-6859-7971-b588-a2814b48e2b2
 spec_id: BUG-1303
 agreed_id: BUG-1303
 title: 'Every try-lock in the workspace reports Windows contention as a hard failure: three sites compare against WouldBlock, which Windows never returns'
-description: |
+description: |-
   Every try-lock in this workspace detects contention by comparing the error kind to ErrorKind::WouldBlock. That comparison is false on Windows, so a lock held by another process is reported as a hard failure instead of as contention. Three sites, one root cause, and the fix is a helper the dependency already provides.
 
   ROOT CAUSE, verified in source rather than inferred from the red build. fs2's try_lock returns the platform's raw contention error. On Unix that maps to ErrorKind::WouldBlock. On Windows the OS returns error 33, ERROR_LOCK_VIOLATION, which Rust does not map to WouldBlock, so every guard of this shape falls through to the error arm:
@@ -54,12 +54,41 @@ description: |
   THIS SHAPE IS LINTABLE AND SHOULD JOIN THE RATCHET. A try_lock result compared against ErrorKind::WouldBlock with no raw-OS-error fallback is a greppable pattern, not a semantic judgement. It belongs in BUG-1283's rule widening once BUG-1301 makes the ratchet extensible. Fix the three sites here; add the rule there so the fourth site cannot be written.
 
   Found by the advisor at the gate while reading cross-platform run 35477353903; all three call sites and the fs2 helper read directly before filing.
+
+  SCOPE WIDENED 2026-09-19 — THIS IS PROBABLY NOT WINDOWS-ONLY, AND MY ORIGINAL FRAMING WOULD HAVE INVITED THE WRONG FIX.
+
+  A second sighting, on LINUX, reported unprompted by an implementer during a full-suite run:
+
+    maintenance_schedule::tests::tick_lock_is_nonblocking_and_reusable
+    failed once under full-suite parallelism, passed standalone, passed on a clean rerun
+
+  My original explanation was a platform-semantics difference: Windows returns raw error 33 for a contended lock, Rust does not map it to ErrorKind::WouldBlock, so the guard never matches and contention becomes a hard error. That explanation predicts the test can NEVER fail on Linux, because there fs2 contention does map to WouldBlock. It failed on Linux. So the explanation is at best incomplete.
+
+  TWO HYPOTHESES, AND THEY CONVERGE ON THE SAME DEFECT.
+
+  (a) The lock genuinely blocks where the test asserts it does not, and Windows merely makes deterministic what Linux makes a load-dependent race.
+
+  (b) Under heavy parallelism the failing call returns an error that is neither success nor WouldBlock — EINTR, or a file-descriptor exhaustion such as EMFILE/ENFILE, both plausible during a full-suite run. Those take the identical catch-all arm as Windows error 33.
+
+  Either way the defect is the same and it is broader than "Windows": THE ERROR CLASSIFICATION IS TOO NARROW, so the contract that Ok(None) means "held elsewhere, skip quietly" is not honoured for several error kinds on more than one platform.
+
+  WHY THE FRAMING CHANGE MATTERS FOR THE FIX. A Windows-semantics framing invites a cfg-guarded or platform-specific remedy, which would leave (a) and (b) unfixed on the primary platform. A too-narrow-classification framing does not. Comparing against fs2::lock_contended_error()'s raw OS error remains necessary and is no longer sufficient on its own.
+
+  AND THE LINUX SIGHTING IS THE MORE DANGEROUS OF THE TWO. A test that fails reliably on a secondary platform gets investigated. A test that flakes under parallel load on the primary one gets re-run until green and written off as flakiness, which is approximately what happened until someone reported it rather than re-running.
+
+  ADDITIONAL ACCEPTANCE
+  7. The fix is not gated behind any cfg(windows) or platform conditional. The contention contract must hold identically on every platform.
+  8. Establish which hypothesis holds before choosing the remedy. If the lock genuinely blocks, that is a defect in the lock and the test is right. If the failing call returns an unclassified error such as EINTR or descriptor exhaustion, the helper must classify retryable and contended cases distinctly from genuine failures. Say which was found; do not fix both speculatively.
+  9. Reproduce before fixing. Run that test under parallel load enough times to see it fail, since a fix that cannot be shown to close an observed failure is a guess. If it cannot be reproduced, say so and record the attempt rather than declaring it fixed.
+  10. Do NOT weaken or serialise the test to make it pass. It asserts a real property. A test that flakes is evidence about the code, not a problem with the test.
+
+  Second sighting reported by an implementer on BUG-1299's lane; first sighting was the Windows nightly recorded above. Two independent platforms is why the scope moved.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T00:22:29.721225410Z
-modified_at: 2026-09-20T00:24:13.776985592Z
+modified_at: 2026-09-20T03:10:57.618118272Z
 req_type: Bug
 tags:
 - drain-safe
