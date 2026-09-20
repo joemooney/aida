@@ -5998,6 +5998,12 @@ pub enum QueueCommand {
         // trace:TASK-232 | ai:claude
         #[clap(long)]
         verbose: bool,
+        /// Machine-readable JSON: `{queued, in_progress, done, shipped,
+        /// unresolved, shelved, total, buckets}`. Same document as
+        /// `--format json`.
+        // trace:BUG-1289 | ai:claude
+        #[clap(long)]
+        json: bool,
     },
     /// Flip a spec's status, route it to a role's queue, and (optionally)
     /// launch a session — encapsulates the recurring implementer →
@@ -6439,6 +6445,12 @@ pub enum FindingsCommand {
         /// Print just the pending-finding count (for session-start surfacing).
         #[clap(long)]
         count: bool,
+
+        /// Machine-readable JSON: `{findings: [...], punts: [...],
+        /// shelved: [...], total}`. Same document as `--format json`.
+        // trace:BUG-1289 | ai:claude
+        #[clap(long)]
+        json: bool,
     },
 
     /// Dismiss a finding — sets status Rejected and records an audit comment.
@@ -9247,7 +9259,21 @@ pub enum Command {
         /// Machine-readable JSON output. Sections that fail
         /// (gh unavailable, no session, etc.) appear as `null` so
         /// consumers can detect "section absent" without parsing prose.
+        /// Same document as `--format json`.
+        ///
+        /// With a SPEC argument the document is the per-spec liveness view:
+        /// `spec`, `status`, `status_lens`, `in_progress`, `liveness`
+        /// (`live` | `stale` | `flag-only` | `no-session` — `flag-only`
+        /// stays distinct from `live`/`stale`, never collapsed into either),
+        /// `live` (bool), `active_pid`, `worktree`, `idle_secs`,
+        /// `idle_stalled`, `session` (session_id/scope/role/worktree/branch/
+        /// started_at/elapsed_secs/pid, or `null`), `drain` (phase/round/
+        /// orchestrator_pid when a live drain owns the spec, else `null`),
+        /// and `parked` (source: `orchestrator` | `punt`, plus
+        /// phase/kind/cause/detail/hint for an orchestrator shelving or
+        /// category/detail/lean for an agent punt; `null` when not parked).
         // trace:TASK-220 | ai:claude
+        // trace:BUG-1289 | ai:claude
         #[clap(long)]
         json: bool,
         /// Focus on the queue section only — skip everything else.

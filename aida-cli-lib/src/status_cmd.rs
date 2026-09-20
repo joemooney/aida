@@ -111,6 +111,14 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
     }
 
     if json {
+        // BUG-1289: the active pid — the drain orchestrator's pid when a
+        // live drain owns this spec, else the lease's own backing pid
+        // (active_pid when process-backed, else the creator shell's pid).
+        // `None` when nothing is live (Stale / FlagOnly / NoSession).
+        let active_pid = drain
+            .as_ref()
+            .map(|d| d.pid)
+            .or_else(|| lease.and_then(|l| l.active_pid.or(l.creator_pid)));
         let lease_json = lease.map(|l| {
             serde_json::json!({
                 "session_id": l.id,
@@ -120,14 +128,50 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
                 "branch": l.branch,
                 "started_at": l.started_at.to_rfc3339(),
                 "elapsed_secs": elapsed_secs,
+                "pid": l.active_pid.or(l.creator_pid),
             })
         });
+        // trace:BUG-1289 | ai:claude
+        // BINDING GUARD (advisor): `flag-only` — status In-Progress but no
+        // live session linked — must stay a DISTINCT liveness value here,
+        // never collapsed into `live`/`stale`. This is the exact TASK-163
+        // regression class: a consumer that only branches on live-vs-stale
+        // would misread an orphaned In-Progress flag as either "working" or
+        // "abandoned", when it's neither — nothing was ever attached.
         let verdict_key = match verdict {
             SpecLiveness::Live => "live",
             SpecLiveness::Stale => "stale",
             SpecLiveness::FlagOnly => "flag-only",
             SpecLiveness::NoSession => "no-session",
         };
+        // STORY-332: a NeedsAttention spec is parked for one of two reasons —
+        // an agent-raised punt (`attention_reason`) or an orchestrator-raised
+        // phase failure (`failure_reason`, STORY-732). Surface whichever is
+        // present under one `parked` key so a consumer doesn't have to know
+        // both field names to answer "why is this parked?" trace:BUG-1289
+        let parked = req
+            .failure_reason
+            .as_ref()
+            .map(|fr| {
+                serde_json::json!({
+                    "source": "orchestrator",
+                    "phase": fr.phase,
+                    "kind": fr.kind,
+                    "cause": crate::auto_complete_telemetry::failure_cause_label(Some(&fr.kind)),
+                    "detail": fr.detail,
+                    "hint": fr.recovery_hint,
+                })
+            })
+            .or_else(|| {
+                req.attention_reason.as_ref().map(|ar| {
+                    serde_json::json!({
+                        "source": "punt",
+                        "category": ar.category.to_string(),
+                        "detail": ar.detail,
+                        "lean": ar.lean,
+                    })
+                })
+            });
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
@@ -137,14 +181,20 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
                 "in_progress": in_progress,
                 "liveness": verdict_key,
                 "live": verdict == SpecLiveness::Live,
+                "active_pid": active_pid,
+                "worktree": lease.map(|l| l.worktree_path.display().to_string()),
                 "idle_secs": idle_secs,
                 "idle_stalled": idle_stalled,
                 "drain": drain.as_ref().map(|d| serde_json::json!({
                     "phase": d.phase,
+                    "round": d.round,
                     "orchestrator_pid": d.pid,
                 })),
                 "session": lease_json,
-                // STORY-732: inline the orchestrator failure for machine consumers.
+                "parked": parked,
+                // STORY-732: kept for back-compat with existing consumers of
+                // the orchestrator-failure shape; `parked` above is the
+                // unified field new consumers should read.
                 "failure_reason": req.failure_reason.as_ref().map(|fr| serde_json::json!({
                     "phase": fr.phase,
                     "cause": crate::auto_complete_telemetry::failure_cause_label(Some(&fr.kind)),

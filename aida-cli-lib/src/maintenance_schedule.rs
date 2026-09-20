@@ -1184,6 +1184,8 @@ fn status(project_root: &Path, json: bool) -> Result<()> {
 /// with source layer, kind, and the last reporter.
 // trace:STORY-1226 | ai:claude
 fn list(project_root: &Path, seat: Option<&str>, json: bool) -> Result<()> {
+    // trace:BUG-1289 | ai:claude
+    let json = json || crate::output_format_is_json();
     let tasks: Vec<Task> = all_tasks(project_root)?
         .into_iter()
         .filter(|t| seat.is_none_or(|s| t.applies_to_seat(s)))
