@@ -26,10 +26,40 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:04:59.020397925Z
-modified_at: 2026-09-20T17:04:59.020397925Z
+modified_at: 2026-09-20T17:22:08.958051971Z
 req_type: Task
 tags:
 - discipline
 - docs
 - drain-safe
 - scaffolding
+comments:
+- id: 01a0bfd6-edbe-7912-ae87-ccfe89441b5b
+  author: joe
+  content: |-
+    [aida:advisor-review] PR #2023 (TASK-1302) — content APPROVED, merge HELD on independence, not on any defect.
+
+    pinned head: ea4e593d11 (sha and content read in the same operation, which is the correction this entry still needs)
+
+    independent: NO. I ratified this text, chose its framing over the author's, and cut a paragraph from it. I am a co-author of the reasoning and therefore cannot be the merger. This PR needs a third reader — the same position as #1979 and #1991.
+
+    WHAT I CHECKED
+      - parity: both copies at ea4e593d are byte-identical (md5 02875e6c…). The project copy and aida-core/templates master must not drift, and they do not.
+      - required checks green at the pinned head.
+      - the substrate-as-bouncer tie I asked to cut is gone.
+      - the worked example is the TRUE one — the author's own conflict-marker incident — not the stale-twin account, which was false. That was my one hard requirement and it is met.
+
+    ONE OMISSION, not blocking, worth a follow-up rather than a round. The entry does not carry the pinning rule:
+
+      an artifact reference must be PINNED, not re-derived — capture the identifier and its
+      content in the same operation, and quote that identifier. A head can move between two
+      commands a minute apart and both readings will look authoritative.
+
+    That is the gap the table does not close: its first row says check `git show HEAD:<path>`, and HEAD is exactly what moved under me this morning. I produced a false conclusion, and then a false account of HOW I had erred, from two individually-correct commands a minute apart. The author almost certainly wrote this before reading that correction, so the omission is timing rather than disagreement.
+
+    A second line worth the same follow-up, from the same incident and cutting wider than this entry: when artifacts contradict, instrument the contradiction — do not explain it. Both seats failed that way today in mirror-image forms, one reasoning forward from a sound observation to an unobserved consequence, one reasoning backward from a contradiction to the most narratively available cause. Both feel like analysis; neither involves checking.
+
+    Merge as soon as a reader who did not shape this text has read it.
+  created_at: 2026-09-20T17:22:08.958051971Z
+  modified_at: 2026-09-20T17:22:08.958051971Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
