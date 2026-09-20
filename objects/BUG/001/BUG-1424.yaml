@@ -63,7 +63,7 @@ description: |-
   CONSEQUENCE STATED PLAINLY so nobody reads the outcome as broader than it is: of the five artifacts BUG-1287 set out to clear, four clear under this and one does not. If the multi-commit case becomes worth solving, the shape is to compare the branch's combined diff against its merge-base with what landed, which is a different computation with different failure modes and deserves its own spec.
 
   The reviewer was right to refuse the spec as written. The spec was wrong, not the implementation.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
