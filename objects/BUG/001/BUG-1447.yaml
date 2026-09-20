@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:30:25.285712180Z
-modified_at: 2026-09-20T16:22:30.612482728Z
+modified_at: 2026-09-20T16:24:18.034285193Z
 req_type: Bug
 tags:
 - from:session-0919
@@ -159,4 +159,36 @@ comments:
     (Separately, the same `drain status` output shows `current: BUG-1291` while `members[9]` does not list BUG-1291 at all — the batch reporter is blind to its own current member. Noted here only because it made the drain's actual position hard to read; it is a different defect.)
   created_at: 2026-09-20T16:22:30.612482728Z
   modified_at: 2026-09-20T16:22:30.612482728Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bfa1-f772-7fd0-8c9b-251528015867
+  author: joe
+  content: |-
+    PREDICTION FALSIFIED, and the correction narrows this spec's scope in a way worth recording.
+
+    I predicted twenty minutes ago that the drain, reaching held PR #2001 (BUG-1291), would fail in the MERGE phase with "the base branch policy prohibits the merge" and shelve `tool-exit`. It did not reach the merge phase at all.
+
+    What actually happened, from events.jsonl:
+
+        16:15:35  PhaseEntered idx=1 implementer
+        16:22:08  PhaseEntered idx=2 ci
+        16:22:40  CiTerminal green=false
+
+    And the PR's check rollup at that moment:
+
+        Build (ubuntu-latest) = in_progress
+        merge-hold-gate       = failure
+
+    So the CI phase declared CI terminally red after 32 seconds, while the actual build was still running, on the strength of the only check that had concluded — the merge hold. The spec is heading for a `ci-red` shelve, not a `tool-exit` one.
+
+    TWO CORRECTIONS FOLLOW.
+
+    First, this belongs to BUG-1265 ("a hold-gate-only red with the marker present must never shelve as ci-red"), not here. And it is a slightly stronger statement than BUG-1265 currently makes: the failure is not only that a hold-gate red is read as CI red, but that it is read as TERMINAL while the real build is still in progress. One concluded failing check ends the wait. That ordering detail is what makes it fire fast and reliably.
+
+    Second, and this is the part that matters for THIS spec: the merge-phase misclassification described here can only fire when the CI phase somehow passes despite the hold. Since the CI phase normally short-circuits red on the hold gate first, BUG-1447's path is reached only in a narrower window — where CI concluded green (hold gate included) and the hold was applied between the CI phase and the merge phase. That is consistent with TASK-1298 and BUG-1310 both having reached the merge phase: in those runs the hold landed mid-pipeline.
+
+    So the fourteen-PR blast radius I wrote earlier overstates THIS defect specifically. The fourteen held PRs are a blast radius for the pair; how they split between the two paths depends on when the hold lands relative to the pipeline. BUG-1265 catches the common case; BUG-1447 catches the race. Both still want fixing, and neither spec currently mentions the other — which is the thing I would most want changed, because a fix to either one alone will look like it solved the problem while the other path stays open.
+
+    Keeping my earlier comment as written rather than editing it, since the prediction and its falsification are more useful together than a tidied-up version of either.
+  created_at: 2026-09-20T16:24:18.034285193Z
+  modified_at: 2026-09-20T16:24:18.034285193Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
