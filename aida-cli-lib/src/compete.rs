@@ -197,10 +197,10 @@ pub fn parse_gate_result(exit_ok: bool, combined_output: &str) -> (bool, bool) {
         return (true, true);
     }
     // Overall failure: did the BUILD fail, or did it build and the tests fail?
-    let lower = combined_output.to_ascii_lowercase();
-    let build_failed = lower.contains("error: could not compile")
-        || lower.contains("error[e")
-        || lower.contains("build failed");
+    let build_failed = aida_core::external_tool_output::contains_any_case_insensitive(
+        combined_output,
+        aida_core::external_tool_output::CARGO_BUILD_FAILURE,
+    );
     let built = !build_failed;
     (built, false)
 }

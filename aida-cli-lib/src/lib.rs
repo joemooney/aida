@@ -36842,34 +36842,10 @@ fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) -> PrLookup
 /// auth/parse failure never gets re-classified as a transient network
 /// blip. trace:BUG-257 | ai:claude
 fn gh_stderr_is_network_error(stderr: &str) -> bool {
-    let s = stderr.to_ascii_lowercase();
-    // The most stable signal: gh's own diagnostic suffix that fires for
-    // every dial/TLS error against api.github.com.
-    if s.contains("githubstatus.com") {
-        return true;
-    }
-    // Connectivity error families from the Go `net` and `crypto/tls`
-    // packages that gh wraps without rephrasing.
-    const NETWORK_MARKERS: &[&str] = &[
-        "error connecting to api.github.com",
-        "connecting to api.github.com",
-        "no such host",
-        "could not resolve host",
-        "name resolution",
-        "name or service not known",
-        "temporary failure in name resolution",
-        "network is unreachable",
-        "no route to host",
-        "connection refused",
-        "connection reset",
-        "connection timed out",
-        "i/o timeout",
-        "request canceled",
-        "tls handshake timeout",
-        "tls: handshake failure",
-        "dial tcp",
-    ];
-    NETWORK_MARKERS.iter().any(|m| s.contains(m))
+    aida_core::external_tool_output::contains_any_case_insensitive(
+        stderr,
+        aida_core::external_tool_output::GH_NETWORK_TRANSIENT,
+    )
 }
 
 /// BUG-266: classify a headless `claude -p` JSONL log as evidence the
@@ -36901,8 +36877,8 @@ fn claude_log_indicates_api_outage(content: &str) -> Option<String> {
         }
         let lower = trimmed.to_ascii_lowercase();
         // Anthropic's own 5xx wording — `API Error: 5\d\d` covers 500-599.
-        if let Some(idx) = lower.find("api error: 5") {
-            let tail = &lower[idx + "api error: 5".len()..];
+        if let Some(idx) = lower.find(aida_core::external_tool_output::CLAUDE_API_5XX_PREFIX) {
+            let tail = &lower[idx + aida_core::external_tool_output::CLAUDE_API_5XX_PREFIX.len()..];
             let digits_after = tail.chars().take(2).filter(|c| c.is_ascii_digit()).count();
             if digits_after == 2 {
                 return Some(reason_excerpt(trimmed, idx));
@@ -36910,26 +36886,11 @@ fn claude_log_indicates_api_outage(content: &str) -> Option<String> {
         }
         // Anthropic's explicit overload signal — emitted with 529s and the
         // capacity-shed envelope. Conservative: anchor on the full word.
-        if lower.contains("overloaded") {
-            return Some(reason_excerpt(trimmed, lower.find("overloaded").unwrap()));
-        }
-        // Proxy / load-balancer connectivity errors from the model edge.
-        if lower.contains("upstream connect error") {
-            return Some(reason_excerpt(
-                trimmed,
-                lower.find("upstream connect error").unwrap(),
-            ));
-        }
-        // SSE-stream timeout — surfaces when the model started responding
-        // and the connection dropped before completion.
-        if lower.contains("stream timeout") || lower.contains("stream disconnected") {
-            return Some(reason_excerpt(
-                trimmed,
-                lower
-                    .find("stream timeout")
-                    .or_else(|| lower.find("stream disconnected"))
-                    .unwrap(),
-            ));
+        if let Some(idx) = aida_core::external_tool_output::CLAUDE_API_OUTAGE
+            .iter()
+            .find_map(|marker| lower.find(marker))
+        {
+            return Some(reason_excerpt(trimmed, idx));
         }
     }
     None
@@ -64886,7 +64847,10 @@ fn collect_pr_facts_uncached(project_root: &std::path::Path, branch: &str) -> Pr
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         // "no pull requests found" is the common no-PR-for-this-branch
         // path; treat it as a clean "no PR" rather than a failure.
-        if stderr.contains("no pull requests found") || stderr.contains("no PRs found") {
+        if aida_core::external_tool_output::contains_any_case_insensitive(
+            &stderr,
+            aida_core::external_tool_output::GH_NO_PULL_REQUEST,
+        ) {
             return PrFacts {
                 number: 0,
                 title: String::new(),

@@ -384,12 +384,12 @@ fn pr_lines(pr: Option<&PrInfo>) -> Vec<Line<'static>> {
 /// Colour a CI rollup string by keyword — green pass / red fail / yellow
 /// in-flight. The exact rollup wording varies, so match on substrings.
 fn ci_style(rollup: &str) -> Style {
-    let r = rollup.to_ascii_lowercase();
-    if r.contains("pass") || r.contains("green") || r.contains("success") {
+    use aida_core::external_tool_output as output;
+    if output::contains_any_case_insensitive(rollup, output::CI_ROLLUP_SUCCESS) {
         Style::default().fg(Color::Green)
-    } else if r.contains("fail") || r.contains("red") || r.contains("error") {
+    } else if output::contains_any_case_insensitive(rollup, output::CI_ROLLUP_FAILURE) {
         Style::default().fg(Color::Red)
-    } else if r.contains("pend") || r.contains("run") || r.contains("progress") {
+    } else if output::contains_any_case_insensitive(rollup, output::CI_ROLLUP_PENDING) {
         Style::default().fg(Color::Yellow)
     } else {
         dim()

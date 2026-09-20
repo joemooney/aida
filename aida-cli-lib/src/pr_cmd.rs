@@ -148,7 +148,10 @@ fn preserve_pr_rebase_diagnostic(project_root: &std::path::Path, n: u64, detail:
 /// worktree — instead of the misleading "is the PR number correct?" line.
 /// trace:BUG-289 | ai:claude
 pub(crate) fn pr_fetch_failure_message(stderr: &str, n: u64, pr_local_branch: &str) -> String {
-    if stderr.contains("checked out at") || stderr.contains("refusing to fetch into branch") {
+    if aida_core::external_tool_output::contains_any_case_insensitive(
+        stderr,
+        aida_core::external_tool_output::GIT_BRANCH_CHECKED_OUT,
+    ) {
         format!(
             "a worktree already holds the `{pr_local_branch}` branch, so `git fetch` \
              into it is refused.\n  To recover: end that worktree's lease \

@@ -182,10 +182,9 @@ fn git_with_index_lock_retry(repo: &Path, args: &[&str]) -> Result<GitResult> {
 }
 
 fn looks_like_index_lock_failure(stderr: &str) -> bool {
-    stderr.contains("index.lock")
-        && (stderr.contains("File exists")
-            || stderr.contains("Unable to create")
-            || stderr.contains("Another git process seems to be running"))
+    let tokens = crate::external_tool_output::GIT_INDEX_LOCK;
+    crate::external_tool_output::contains_any_case_insensitive(stderr, &tokens[..1])
+        && crate::external_tool_output::contains_any_case_insensitive(stderr, &tokens[1..])
 }
 
 /// TASK-1122: the `-c` overrides that AUTHOR a store commit with the public
@@ -213,9 +212,13 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
     let result = git(repo, &argv)?;
     if result.success {
         Ok(true)
-    } else if result.stdout.contains("nothing to commit")
-        || result.stderr.contains("nothing to commit")
-    {
+    } else if crate::external_tool_output::contains_any_case_insensitive(
+        &result.stdout,
+        crate::external_tool_output::GIT_NOTHING_TO_COMMIT,
+    ) || crate::external_tool_output::contains_any_case_insensitive(
+        &result.stderr,
+        crate::external_tool_output::GIT_NOTHING_TO_COMMIT,
+    ) {
         Ok(false) // nothing to commit — not an error
     } else {
         anyhow::bail!("git commit failed: {}", result.stderr);
@@ -227,10 +230,10 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     let result = git(repo, &["push", remote, branch])?;
     if result.success {
         Ok(true)
-    } else if result.stderr.contains("non-fast-forward")
-        || result.stderr.contains("rejected")
-        || result.stderr.contains("fetch first")
-    {
+    } else if crate::external_tool_output::contains_any_case_insensitive(
+        &result.stderr,
+        crate::external_tool_output::GIT_PUSH_REJECTED,
+    ) {
         Ok(false) // push rejected — caller should pull and retry
     } else {
         anyhow::bail!("git push failed: {}", result.stderr);

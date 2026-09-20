@@ -445,11 +445,10 @@ fn run_terminator_command(program: &str, args: &[String], label: &str) -> Adapte
         ),
         Ok(out) => {
             let stderr = String::from_utf8_lossy(&out.stderr);
-            let hint = if stderr.contains("was not provided")
-                || stderr.contains("ServiceUnknown")
-                || stderr.contains("not found")
-                || stderr.contains("No such")
-            {
+            let hint = if aida_core::external_tool_output::contains_any_case_insensitive(
+                &stderr,
+                aida_core::external_tool_output::TERMINATOR_PLUGIN_MISSING,
+            ) {
                 "Terminator plugin not installed or not enabled; run `aida terminal install terminator`, enable it in Preferences > Plugins, then restart Terminator".to_string()
             } else {
                 format!("{label} failed: {}", stderr.trim())
