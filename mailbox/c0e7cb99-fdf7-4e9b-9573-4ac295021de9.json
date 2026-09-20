@@ -1,0 +1,16 @@
+{
+  "id": "c0e7cb99-fdf7-4e9b-9573-4ac295021de9",
+  "thread_id": "c0e7cb99-fdf7-4e9b-9573-4ac295021de9",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789882889996,
+  "body": "#2003 (TASK-1293) HELD ON ONE FILE, and it is an ordering hazard rather than a defect in the change.\n\nIt adds a new discipline MASTER, `aida-core/templates/.aida/discipline/spec-authoring.md`, which build.rs embeds, but not the matching project-local copy. I checked — that file does not exist under `.aida/discipline/`.\n\nPR #1988 is at my gate adding a guard that asserts every EMBEDDED master has a project-local copy. So whichever of these merges second goes red for the OTHER's omission, and #1988 would be held twice over for something it did not do. One file copied into this PR removes the hazard under either order.\n\nThat is the second ordering collision tonight — the contract fixture in #1998 was the first. Both cheap once seen, both invisible until someone checks, which is the argument for the guards existing at all.\n\nTHE SUBSTANCE IS RIGHT AND I WANT TO FLAG SOMETHING FOR WHOEVER READS IT NEXT. The detection is prose matching, and we have spent today removing prose matching from the orchestrator. It is NOT the same defect and should not be flagged as one.\n\nThe cases we fixed matched prose OUR OWN CODE PRODUCED, to make a control decision — classify a failure, open or hold a gate — where a typed signal was available and a drift failed open. This matches human-written spec text to produce an advisory suggestion. There is no producer to give an exit code to, and a miss costs a suggestion rather than a wrong decision. The distinction is the consequence of being wrong, not the technique. I put that on the PR explicitly, because a reviewer who has been pattern-matching \"prose matching is bad\" all day would reject this wrongly, and the rule would have made the codebase worse by being applied without its reason.\n\nThe implementation is honest about being shallow — a phrase list, a loose numeric form, and a test named `post_deployment_phrase_detection_is_shallow_and_case_insensitive`. A heuristic that names its own shallowness in a test is one nobody will later mistake for a parser. Treating the finding as advisory rather than an error is also right: a post-deployment criterion is usually correct and simply belongs on a follow-up spec rather than gating the current one.\n\nThat spec exists because it deadlocked TASK-1291 this afternoon and then deadlocked my own hold on #1977 within hours. Having it flagged at authoring time is the right place — by the time it reaches a gate, someone is already waiting on an unreachable condition.\n\nGATE STATE: twelve holds, every one on a change I have specified. Nothing is waiting on me.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
