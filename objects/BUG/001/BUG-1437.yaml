@@ -2,7 +2,7 @@ id: 01a0be91-3d96-78c2-8265-c8db71d1f568
 spec_id: BUG-1437
 agreed_id: BUG-1437
 title: 'auto-complete failure: phase 3 (reviewer) on TASK-1298'
-description: |
+description: |-
   Auto-drafted by `aida queue work TASK-1298 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
 
   ## Failure
@@ -17,8 +17,8 @@ description: |
 
   ## Recurrence
 
-  Attempts: 1
-  Latest recurrence: 2026-09-20T11:26:23.712437140+00:00
+  Attempts: 2
+  Latest recurrence: 2026-09-20T18:22:56.975118138+00:00
 
   ## Phase durations
 
@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:26:24.662133174Z
-modified_at: 2026-09-20T11:26:24.662133174Z
+modified_at: 2026-09-20T18:22:57.291492106Z
 req_type: Bug
 tags:
 - auto-complete
