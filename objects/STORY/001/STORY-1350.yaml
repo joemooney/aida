@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:57.872533301Z
-modified_at: 2026-09-20T05:04:48.664039567Z
+modified_at: 2026-09-20T05:05:26.296502324Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -140,6 +140,33 @@ comments:
     - Does “parseable acceptance” use the CLI’s existing recognized `## Acceptance` / `## Verify` convention? I will mirror that convention explicitly in the skill text.
   created_at: 2026-09-20T04:41:43.437118982Z
   modified_at: 2026-09-20T04:41:43.437118982Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bd34-7318-7680-a7c5-6615a316d75d
+  author: joe
+  content: |-
+    [rework round 3] PR #1974 — CHANGES REQUESTED. Both findings are things I raised in round 2 and framed as advice, so they read as optional. They are not. Restating them as REQUIREMENTS, with acceptance.
+
+    My round-2 brief put these under a heading reading "ONE THING TO GET RIGHT WHILE HERE". That framing is my error, not yours — it sits below the numbered findings and reads as a nice-to-have. Treat everything below as binding.
+
+    REQUIREMENT 1 — ONE SHARED CONSTANT FOR THE MARKER.
+    The string `## Implementer approach` is currently hard-coded independently in at least two places: `aida-core/templates/skills/aida-pickup.md` (the writer) and the review-prompt reader in aida-cli-lib. Those two must reference ONE definition.
+
+    Why it is binding rather than tidy: this marker is the entire coupling between the pickup that writes the statement and the review prompt that reads it. If either side is reworded, the writer keeps writing and the reader keeps finding nothing, the review prompt silently loses the approach section, and NO TEST FAILS ANYWHERE. The loop degrades to exactly the state this spec was filed to fix, with no signal. That is PRIN-4's class — a coupling mediated by a string that nothing forces to stay in step.
+
+    A template is markdown and cannot import a Rust constant, so state how you solved it: a build-time substitution, a test asserting the template contains the constant's value, or a generated fragment. Any of those is acceptable. Two independent literals is not. If you choose the test route, the test must fail when EITHER side is edited alone.
+
+    REQUIREMENT 2 — THE ABSENT CASE MUST BE EXPLICIT, AND TESTED THROUGH THE REAL PATH.
+    `append_implementer_approach` currently emits nothing when no marked approach comment exists. It must emit a short explicit note instead — the same shape the missing-acceptance case already uses, which renders a parenthetical rather than staying silent.
+
+    Why: silence makes an ABSENT statement indistinguishable from an EMPTY one. A reviewer reading a prompt with no approach section cannot tell whether the implementer skipped it, whether the spec had no parseable acceptance so 3d correctly suppressed it, or whether the marker drifted and the reader found nothing. Those have three different remedies and the prompt currently gives the same output for all three.
+
+    The reviewer also noted the added tests call the helper and extractor directly rather than the generated prompt. Test through `generate_review_prompt` itself, both directions: a spec WITH the marked comment renders the section, a spec WITHOUT it renders the explicit note. A test that exercises the helper proves the helper works, not that the prompt does.
+
+    NOT IN SCOPE, restated because it survived two rounds already: criteria 4 and 5 remain out by the advisor's binding scope decision. Do not implement advisor preview or the twenty-spec longitudinal measurement.
+
+    Push fixups to the existing branch. Do not open a new PR.
+  created_at: 2026-09-20T05:05:26.296502324Z
+  modified_at: 2026-09-20T05:05:26.296502324Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
