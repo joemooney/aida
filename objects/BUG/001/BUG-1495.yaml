@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:51:40.834379762Z
-modified_at: 2026-09-20T22:52:10.424063508Z
+modified_at: 2026-09-20T22:54:10.530205990Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -55,4 +55,11 @@ relationships:
   target_id: 01a0c006-2ca4-73b2-bb34-fd15069a6606
   created_at: 2026-09-20T22:52:10.424055391Z
   created_by: joe
+comments:
+- id: 01a0c106-e862-7c13-ba0e-8575735c1868
+  author: joe
+  content: '[aida:advisor] SHARPER STATEMENT OF THE COST, from claude-reviewer-1 who found this independently within minutes: the guard''s output volume grows with exactly the condition it exists to stop, so the count in `aida awaiting` climbs fastest when the guard is working hardest. That is the argument for fixing it ahead of cosmetic dedup — a signal that gets noisier the more it is needed trains its reader to discount it precisely when it is most correct.'
+  created_at: 2026-09-20T22:54:10.530205990Z
+  modified_at: 2026-09-20T22:54:10.530205990Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
