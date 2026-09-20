@@ -1,7 +1,7 @@
 id: 01a0bfa2-d47c-7030-915e-cda1205d9ce4
 spec_id: BUG-1455
 agreed_id: BUG-1455
-title: CI terminality is decided on a partial rollup, so the always-fails-by-design merge-hold gate ends the wait before the real build finishes and a held PR shelves ci-red
+title: CiTerminal reports green=false on a held PR and the drain then proceeds anyway, so the event stream states the opposite of the decision taken
 description: |
   Observed live 2026-09-20 16:22:40Z on BUG-1291 / PR #2001, with the fix for the adjacent case already present in the running binary.
 
@@ -48,11 +48,11 @@ description: |
   - A held PR whose code checks are green or pending is reported as awaiting review, not as a failure awaiting triage.
   - Regression test reproduces the observed rollup exactly: one concluded `failure` on the hold gate, one `in_progress` required build, rows fully readable — the shape BUG-1265's row-error guard does not cover.
 status: Draft
-priority: High
+priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:25:14.620023337Z
-modified_at: 2026-09-20T16:39:10.192630002Z
+modified_at: 2026-09-20T16:39:17.504689403Z
 req_type: Bug
 tags:
 - drain-safe
