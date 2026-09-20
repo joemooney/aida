@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-19T21:54:53.391245996Z
+modified_at: 2026-09-20T03:02:54.711877492Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -91,5 +91,30 @@ comments:
     Worth stating plainly: I merged that PR knowing the gate had not fired, because the alternative was leaving a verified fix stranded indefinitely with no mechanism to recover it. That trade was defensible once. It should not be available a second time, and the way to make sure it is not is to fix the handoff rather than to rely on me declining next time.
   created_at: 2026-09-19T21:54:53.391245996Z
   modified_at: 2026-09-19T21:54:53.391245996Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bcc4-45f7-7452-bab3-b4be396417c1
+  author: joe
+  content: |-
+    [advisor] SECOND LIVE INSTANCE TONIGHT, and it is a different shape from the orphaned-PR one this spec was filed for. Recording it because it widens the acceptance rather than confirming it.
+
+    TASK-1289 sat for about five hours in this state:
+
+      status:    In Progress
+      liveness:  flag-only — no live session linked to the spec
+      lease:     none
+      queue:     present, routed to implementer
+      PR:        #1972 open, reviewer verdict RequestChanges
+
+    Queued, statused as in-flight, and unowned, all at once. The queue entry existed, so it looked dispatched. The status said In Progress, so the ready-set skipped it. Nothing held a lease, so no liveness check failed. Every individual surface reported something true and the combination was a spec nobody was working and nobody could see was stuck. I assumed for hours it was queued behind a deep batch.
+
+    WHY THIS IS NOT THE SAME BUG AS THE ORPHANED PR. That one is a run dying before its reviewer phase, leaving a PR nothing claims. This one is a spec whose status outlived the session that set it, leaving a queue entry nothing will pick up. Different cause, same consequence: work that is filed, visible in a listing, and not moving, with no surface reporting the stall.
+
+    THE ACCEPTANCE THIS SUGGESTS. Whatever mechanism claims orphaned work should key on the CONJUNCTION rather than on either half. A spec that is queued AND statused in-flight AND has no live session backing that status is stranded by definition, and that predicate is cheap — `aida ps` already computes the orphaned-In-Progress half and `aida status <spec>` already prints the flag-only warning for exactly this case. Both surfaces know. Neither is wired to anything that acts, and no periodic sweep asks the question.
+
+    So the ingredients exist and the wiring does not, which is the same finding as the shelve-path handoff needing a backstop.
+
+    I unstuck it by hand: flipped it to Approved so the ready-set can see it, with the reasoning recorded on that spec. That is the third time tonight I have hand-recovered something the substrate could have recovered itself, after the stale-binary drain and the ceiling-shelved measurement task. The hand recoveries all worked because someone was awake.
+  created_at: 2026-09-20T03:02:54.711877492Z
+  modified_at: 2026-09-20T03:02:54.711877492Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
