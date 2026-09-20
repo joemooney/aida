@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:13.869367085Z
-modified_at: 2026-09-20T18:11:33.920988129Z
+modified_at: 2026-09-20T18:23:04.639863152Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -91,4 +91,44 @@ comments:
   created_at: 2026-09-20T18:11:30.615381417Z
   modified_at: 2026-09-20T18:11:30.615381417Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c00e-b5bf-7592-b7e8-cddb1fbaea3f
+  author: joe
+  content: |-
+    MECHANISM 2 — settled from the store's transition history, and it corrects BOTH readings on the table. Neither "the verb produces an unpickable state" (mine) nor "the verb is a no-op from those states" (the advisor's) survives.
+
+    The store git log is the source of truth for spec-state time series. Status at each commit for the three specs I requeued:
+
+        BUG-1288    10:04:24  NeedsAttention
+                    11:05:48  InProgress      <-- my bare `queue rework`
+                    11:07:27  Approved        <-- my `aida edit --status approved`
+
+        BUG-1297    09:09:40  NeedsAttention
+                    11:05:54  InProgress      <-- bare `queue rework`
+                    11:07:32  Approved
+
+        TASK-1298   07:46:11  NeedsAttention
+                    11:06:00  InProgress      <-- bare `queue rework`
+                    11:07:40  Approved
+                    11:17:40  InProgress      <-- drain claimed it; now `current`
+
+    WHAT THIS ESTABLISHES:
+
+    1. All three were NeedsAttention immediately before the call. None was InProgress. The reading that BUG-1297 "was already InProgress" and therefore hit the refuse-without-force rule is not what happened.
+
+    2. The verb DID flip all three, NeedsAttention → InProgress. It was not a no-op and it did not refuse. So `NeedsAttention → InProgress` is a real transition the smart table performs, even though the documented table does not list that starting state.
+
+    3. My own generalisation is also wrong. I said the verb "produces a state that cannot be picked up". The verb produces InProgress, which is the same state the advisor's four Done→InProgress requeues produced — and those four WERE driven. So InProgress-with-no-lease is not inherently unpickable, and the verb is not the differentiator.
+
+    WHAT IS STILL UNEXPLAINED, and I am not going to assert it: why four Done→InProgress requeues were driven while three NeedsAttention→InProgress ones sat, when both end in the same status. One candidate is that a drain wave's member list is fixed at launch, so a spec batched mid-wave waits for the next wave regardless of status — the advisor's four may have already been members. I have not established that and it should not be designed on.
+
+    WHAT IS OBSERVED AND NOT IN DOUBT: while the three sat at InProgress-with-no-lease they were absent from the drain's member list and `aida ps` reported them `flag-only`. After setting Approved, TASK-1298 became the drain's `current` within ten minutes. Whatever the mechanism, moving off InProgress is what unblocked it.
+
+    So the advisor's criterion 1 — establish the per-status table before designing — is exactly right, and is now better motivated than when it was written: two seats watched this system from opposite sides, formed opposite causal stories, and both were wrong. The table is not something either of us can infer from the outside.
+
+    The criterion that survives regardless also stands unchanged: a rework that cannot result in the spec being driven must say so at the point of the call rather than reporting success. All three of mine reported success.
+
+    ONE MEASUREMENT NOTE, since it is the second time today this file has been the deciding evidence: `aida history events --id <spec>` returned nothing for all three, so this came from walking the orphan branch's git log by hand and reading `status:` out of each blob. That is the documented source of truth being unreachable through its own surface.
+  created_at: 2026-09-20T18:23:04.639863152Z
+  modified_at: 2026-09-20T18:23:04.639863152Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
