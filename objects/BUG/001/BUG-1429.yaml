@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:58:36.743732005Z
-modified_at: 2026-09-20T16:02:03.081340268Z
+modified_at: 2026-09-20T16:04:32.890778960Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -55,6 +55,89 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T16:02:02.803763634Z
   modified_at: 2026-09-20T16:02:02.803763634Z
+- id: 01a0bf8f-e1fa-71d1-a68a-ed4e6c5bc763
+  author: joe
+  content: |-
+    Rework brief — round 2 (PR #2021)
+
+    ONE binding item. AC3 survived round 1, so this brief does not restate it:
+    the first job is to establish that it can be done as written. It cannot.
+
+    ## Why the literal persisted
+
+    `DrainMember::is_running` (the canonical predicate AC3 names) is
+    `aida-cli-lib/src/drain_state.rs:85` and is a PRIVATE `fn` on a
+    `pub(crate)` struct. `aida-tui` does not depend on `aida-cli-lib` at all
+    (see aida-tui/Cargo.toml — the dependency is `aida-core`). So
+    `DrainPanelMember` (aida-tui/src/redesign/drain_panel.rs) is not a type
+    that forgot to call the canonical predicate: it is a SECOND, independent
+    deserialization of the same `.aida/drain-state.json`, carrying its own
+    copy of the state constants (drain_panel.rs:16-18) and its own copy of
+    the predicate (drain_panel.rs:73).
+
+    AC3 as written ("no member-state comparison against `in-phase-` outside
+    the canonical `DrainMember::is_running`") is therefore unsatisfiable from
+    the TUI crate without a structural change. Round 1 could not have passed
+    it. That is a defect in the brief, not in the implementer.
+
+    ## The mechanism (this is what round 2 should build)
+
+    The coupling is the STRING `in-phase-`, and it has five sites across two
+    crates that cannot see each other:
+
+      aida-cli-lib/src/drain_state.rs:893   format!("in-phase-{phase_index}")  (writer)
+      aida-cli-lib/src/drain_state.rs:86    starts_with("in-phase-")           (canonical reader)
+      aida-cli-lib/src/drain_state.rs:245   strip_prefix("in-phase-")          (phase extractor)
+      aida-tui/src/redesign/drain_panel.rs:66  strip_prefix("in-phase-")        (TUI label)
+      aida-tui/src/redesign/drain_panel.rs:73  starts_with("in-phase-")         (TUI predicate)
+      (plus aida-cli-lib/src/pr_ship.rs:365, a doc comment asserting the same contract)
+
+    Move the member-state VOCABULARY — not the whole `DrainMember` struct —
+    into `aida-core`, the one crate both sides already depend on:
+
+      - a `DrainMemberState` enum (`Queued | InPhase(u32) | Completed | Failed`)
+        with `parse(&str) -> DrainMemberState` and `Display` producing the wire
+        strings, OR at minimum the three `STATE_*` consts plus
+        `IN_PHASE_PREFIX`, a `fn format_in_phase(u32) -> String`, and a
+        `fn parse_phase(&str) -> Option<u32>`.
+      - `drain_state.rs` writer + both readers call it.
+      - `drain_panel.rs` deletes its private consts and both literals and
+        calls it.
+
+    Then AC3 becomes literally true and greppable: `rg '"in-phase-'
+    --type rust` returns exactly one crate — the `aida-core` module that owns
+    the vocabulary.
+
+    ## Why the enum is worth the extra step over bare consts
+
+    The class this spec belongs to is "a gate that fails OPEN on a format
+    drift" (BUG-1429's own origin: #2012 prose-matched a hold). Shared consts
+    fix the drift but keep `state: String`, so a typo'd state still
+    deserializes and still reads as not-running. `DrainMemberState` makes the
+    wire format's parse failure VISIBLE at the boundary. Take the consts-only
+    path only if the enum forces a `serde` migration you judge too wide for
+    this spec — and if so, say so in the PR body so the next round does not
+    re-litigate it.
+
+    ## Scope fence
+
+    Do NOT move `DrainMember` itself, `DrainState`, or the drain-state file IO
+    into `aida-core`. Only the state vocabulary crosses. The TUI keeps its own
+    `DrainMemberFile`/`DrainPanelMember` deserialization — the seam rule
+    (reads in the TUI, writes via CLI subprocess) is unaffected.
+
+    ## Verification
+
+      cargo test -p aida-core -p aida-cli-lib -p aida-tui
+      rg '"in-phase-' --type rust      # must match only the aida-core vocabulary module
+      rg 'STATE_(QUEUED|COMPLETED|FAILED): &str' --type rust   # must match only aida-core
+
+    Add one test in `aida-core` asserting the round trip
+    (`parse(format_in_phase(3)) == InPhase(3)`) so the writer and the readers
+    are pinned to each other by a test rather than by a convention.
+  created_at: 2026-09-20T16:04:32.890778960Z
+  modified_at: 2026-09-20T16:04:32.890778960Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
