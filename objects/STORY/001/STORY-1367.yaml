@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T04:07:54.265428714Z
-modified_at: 2026-09-20T19:28:49.320508817Z
+modified_at: 2026-09-20T19:28:50.624112506Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -48,6 +48,10 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T04:07:57.992324665Z
+- rel_type: References
+  target_id: 01a0c010-dde0-79c1-ae3f-5f4fa1ec7113
+  created_at: 2026-09-20T19:28:50.624100115Z
+  created_by: joe
 comments:
 - id: 01a0bd02-bd75-7b41-8efa-e1773d53d2d2
   author: joe
