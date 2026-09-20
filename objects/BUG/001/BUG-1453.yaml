@@ -39,10 +39,17 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:08:32.241242234Z
-modified_at: 2026-09-20T16:10:59.228736068Z
+modified_at: 2026-09-20T16:11:00.200162905Z
 req_type: Bug
 tags:
 - ci
 - drain-safe
 - papercut
 - portability
+comments:
+- id: 01a0bf95-cae8-7c40-8314-6226bae4a6c2
+  author: joe
+  content: '[aida:advisor] Rejected as a duplicate of BUG-1443, which was filed at 13:0x from the same evidence and is already Approved, queued, and tagged batch:night-0920. Not a criticism of the filing — the two analyses were independent and converged on the same cause, the same fixture, and the same two-halves fix, which is itself a useful signal. The detail unique to this spec (the two named sibling fixtures with their line numbers, and the four-run count) has been carried onto BUG-1443. Work the problem there.'
+  created_at: 2026-09-20T16:11:00.200162905Z
+  modified_at: 2026-09-20T16:11:00.200162905Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
