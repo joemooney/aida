@@ -6,9 +6,37 @@
 use super::*;
 // The pure auto-select binary picker moved to `dev_cmd` (SPIKE-78).
 use crate::dev_cmd::{
-    activate_reexec_target, auto_select_dev_profile, BinarySelectionReason, DevBuildCandidate,
-    DevProfile,
+    activate_reexec_target, auto_select_dev_profile, classify_dev_activation,
+    BinarySelectionReason, DevActivationState, DevBuildCandidate, DevProfile,
 };
+
+// ---- BUG-1305: activation is a fact about the pinned binary, not the env ----
+
+#[test]
+fn dev_activation_state_distinguishes_present_missing_and_path_fallthrough() {
+    let temp = tempfile::tempdir().unwrap();
+    let pinned = temp.path().join("aida");
+    let fallback = temp.path().join("fallback-aida");
+
+    assert_eq!(
+        classify_dev_activation(true, Some(&pinned), Some(&fallback)),
+        DevActivationState::Missing
+    );
+
+    std::fs::write(&pinned, b"binary").unwrap();
+    assert_eq!(
+        classify_dev_activation(true, Some(&pinned), Some(&pinned)),
+        DevActivationState::Active
+    );
+    assert_eq!(
+        classify_dev_activation(true, Some(&pinned), Some(&fallback)),
+        DevActivationState::PathMismatch
+    );
+    assert_eq!(
+        classify_dev_activation(false, Some(&pinned), Some(&pinned)),
+        DevActivationState::Inactive
+    );
+}
 
 #[test]
 fn parse_embedded_sha_short_form() {

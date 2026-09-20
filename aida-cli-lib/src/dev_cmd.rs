@@ -579,6 +579,18 @@ fn handle_dev_ps1() -> Result<()> {
         Err(_) => return Ok(()),
     };
     let active_profile = std::env::var("AIDA_DEV_PROFILE").unwrap_or_default();
+    let pinned_binary = std::env::var("AIDA_DEV_BIN")
+        .ok()
+        .map(|dir| std::path::PathBuf::from(dir).join("aida"));
+    if classify_dev_activation(
+        true,
+        pinned_binary.as_deref(),
+        resolve_aida_on_path().as_deref(),
+    ) == DevActivationState::Missing
+    {
+        print!("!");
+        return Ok(());
+    }
     let other_profile = match active_profile.as_str() {
         "debug" => Some("release"),
         "release" => Some("debug"),
@@ -897,6 +909,12 @@ fn handle_dev_deactivate() -> Result<()> {
 
 fn handle_dev_status() -> Result<()> {
     let active = std::env::var("AIDA_DEV_ACTIVE").is_ok();
+    let pinned_binary = std::env::var("AIDA_DEV_BIN")
+        .ok()
+        .map(|dir| std::path::PathBuf::from(dir).join("aida"));
+    let resolved_binary = resolve_aida_on_path();
+    let activation =
+        classify_dev_activation(active, pinned_binary.as_deref(), resolved_binary.as_deref());
     // trace:TASK-1285 | ai:codex
     if let Ok(root) = crate::find_main_worktree_root() {
         if let Some(lock) = crate::drain_lock::read_pid_live_lock(&root) {
@@ -910,18 +928,26 @@ fn handle_dev_status() -> Result<()> {
     }
     println!(
         "Activation:   {}",
-        if active {
-            "ACTIVE".green().to_string()
-        } else {
-            // trace:TASK-667 — wrapper-correct activate form.
-            format!(
-                "(not active — `{}` to enable)",
-                eval_subcommand_hint("dev activate")
-            )
-            .yellow()
-            .to_string()
+        match activation {
+            DevActivationState::Active => "ACTIVE".green().to_string(),
+            DevActivationState::Missing => "ACTIVATED BUT MISSING".red().bold().to_string(),
+            DevActivationState::PathMismatch => {
+                "ACTIVATED BUT NOT IN USE".yellow().bold().to_string()
+            }
+            DevActivationState::Inactive => {
+                // trace:TASK-667 — wrapper-correct activate form.
+                format!(
+                    "(not active — `{}` to enable)",
+                    eval_subcommand_hint("dev activate")
+                )
+                .yellow()
+                .to_string()
+            }
         }
     );
+    if activation == DevActivationState::Missing {
+        println!("Recommended:  rebuild the pinned dev binary with `make build-fast`");
+    }
     if active {
         if let Ok(p) = std::env::var("AIDA_DEV_REPO") {
             println!("Repo:         {}", p);
@@ -1077,21 +1103,75 @@ fn handle_dev_status() -> Result<()> {
         }
     }
     println!(
-        "PS1 marker:   {} current, {} activate matching other build, {} rebuild",
+        "PS1 marker:   {} current, {} missing, {} activate matching other build, {} rebuild",
         "empty".dimmed(),
+        "!".red().bold(),
         "⇄".cyan(),
         "↻".yellow()
     );
     print_shell_wrapper_status();
 
-    // Also report which `aida` actually wins on PATH right now.
-    if let Ok(out) = std::process::Command::new("which").arg("aida").output() {
-        let resolved = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if !resolved.is_empty() {
-            println!("`which aida`: {}", resolved);
+    // trace:BUG-1305 | ai:codex — report the executable that actually won
+    // PATH resolution, not merely the directory activation intended to use.
+    if let Some(resolved) = resolved_binary {
+        println!("Resolved aida: {}", resolved.display());
+        if let Ok(out) = std::process::Command::new(&resolved)
+            .arg("--version")
+            .output()
+        {
+            let banner = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !banner.is_empty() {
+                println!("Resolved version: {}", banner);
+                println!(
+                    "Resolved SHA: {}",
+                    parse_embedded_sha(&banner).unwrap_or_else(|| "unknown".into())
+                );
+            }
         }
     }
     Ok(())
+}
+
+/// Truthful state of a requested dev activation. The environment records the
+/// request; the binary file and PATH winner establish whether it is real.
+// trace:BUG-1305 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DevActivationState {
+    Inactive,
+    Active,
+    Missing,
+    PathMismatch,
+}
+
+pub(crate) fn classify_dev_activation(
+    requested: bool,
+    pinned_binary: Option<&std::path::Path>,
+    resolved_binary: Option<&std::path::Path>,
+) -> DevActivationState {
+    if !requested {
+        return DevActivationState::Inactive;
+    }
+    let Some(pinned) = pinned_binary else {
+        return DevActivationState::Missing;
+    };
+    if !pinned.is_file() {
+        return DevActivationState::Missing;
+    }
+    if resolved_binary != Some(pinned) {
+        return DevActivationState::PathMismatch;
+    }
+    DevActivationState::Active
+}
+
+fn resolve_aida_on_path() -> Option<std::path::PathBuf> {
+    let out = std::process::Command::new("which")
+        .arg("aida")
+        .output()
+        .ok()?;
+    out.status
+        .success()
+        .then(|| std::path::PathBuf::from(String::from_utf8_lossy(&out.stdout).trim()))
+        .filter(|p| !p.as_os_str().is_empty())
 }
 
 fn wave_label(lock: &crate::drain_lock::DrainLock) -> String {
