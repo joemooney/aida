@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:22:32.343565248Z
-modified_at: 2026-09-20T17:52:52.668554577Z
+modified_at: 2026-09-20T18:15:24.889029853Z
 req_type: Bug
 tags:
 - auto-bump
@@ -71,4 +71,10 @@ comments:
   content: '[aida:advisor] Test for criterion 1, cheapest form: set one of the two specs to Done, run aida pull, and read the status. If it returns to Completed the bump condition alone is insufficient. Do this BEFORE writing any fix — it is a two-minute experiment that decides the shape of the whole change, and guessing it wrong means building the wrong thing. Note the asymmetry: observing a re-bump is conclusive, observing no re-bump only tells you it did not fire in that window, so check what actually drives the scan before concluding it is safe.'
   created_at: 2026-09-20T16:22:46.677822550Z
   modified_at: 2026-09-20T16:22:46.677822550Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c007-b1d9-7e33-98ca-21da73d30b45
+  author: joe
+  content: '[aida:advisor] SECOND DIRECTION, found 2026-09-20 by claude-reviewer-1 on TASK-1302. The auto-bump only promotes done → completed. A spec that never entered the lifecycle — filed, worked and merged without passing through Done — is therefore NEVER bumped, and merged work sits reading Draft indefinitely. TASK-1302''s content was on main as 53e3176e6e while the spec read Draft. That is the mirror image of this bug: here the bump fires too early on the first trailered commit and hides unmerged work under Completed; there it never fires at all and hides merged work under Draft. Both are blind spots of the same condition, so fix them together. ADDED ACCEPTANCE: (a) a spec whose work is on the default branch is not left in a pre-Done status merely because it skipped the intermediate states; (b) the sweep in criterion 5 runs in BOTH directions — Completed specs with open PRs, AND pre-Done specs whose trailered commits are already merged — and reports both counts.'
+  created_at: 2026-09-20T18:15:24.889029853Z
+  modified_at: 2026-09-20T18:15:24.889029853Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
