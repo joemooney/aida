@@ -1,0 +1,38 @@
+id: 01a0bc55-dcbd-74c2-827f-fb765ad6d414
+spec_id: TASK-1298
+agreed_id: TASK-1298
+title: The pre-unattended readiness check covers the substrate but not the machine, and passed forty minutes before the disk hit 100 percent
+description: |
+  The pre-unattended readiness check has no disk line, and on 2026-09-19 it passed forty minutes before the root filesystem hit 100% with about 6 MB free. A readiness check that clears a 20-hour unattended run on a disk that is about to fill is not a readiness check.
+
+  WHAT IT CHECKED AND WHAT IT MISSED. The pass covered the launcher, the live drain, the store and the queue depth — all the substrate-level things, all healthy, all true. It checked nothing about the machine the substrate runs on. Disk, inodes and memory were absent, and the two failures that actually cost time that night were both machine-level: an out-of-memory sweep killed the drain's launcher, and a full disk caused a subagent to delete the shared build directory, which removed the development binary and silently regressed the orchestrator by eight days.
+
+  WHY THIS CLASS IS THE ONE THAT HURTS UNATTENDED. A substrate failure announces itself: a spec shelves, an event is written, a queue stops moving, and the recovery paths we have built all engage. A machine failure does not. Cargo cannot write, so a build fails, so a spec shelves with a build error that reads exactly like a code defect. Everything downstream triages the wrong thing, and the triage looks reasonable at every step. Nobody investigates the disk because nothing points at it.
+
+  THE CHEAPEST USEFUL VERSION is a handful of thresholds, not a monitoring system. This should be a few lines in the existing readiness surface rather than a new subsystem.
+
+  ACCEPTANCE
+  1. The readiness check reports free space on the filesystem holding the repo, the build directory and the temp directory, and FAILS below a threshold sized for the work ahead rather than a fixed small number. A 20-hour multi-lane run needs more headroom than a single supervised build.
+  2. It reports available memory and warns when an out-of-memory killer would plausibly engage under a full build. The earlyoom configuration on this machine already avoids cargo and prefers browsers, which is worth reading rather than duplicating.
+  3. It checks that the binary the caller will actually run EXISTS and reports its build sha and mtime. On 2026-09-19 the development binary was deleted while the path entry that pointed at it remained, so every call silently fell through to an eight-day-old release with no error at any layer. See the companion defect where development status reports ACTIVE for a binary that is not there.
+  4. Each failure names the remedy, not just the number. "Disk at 97%" is a fact; "disk at 97%, the workspace build directory is 121 GB, reclaim with cargo clean" is an action.
+  5. A test covers the threshold decision as a pure function of the inputs, so the thresholds are adjustable without re-running a disk-full.
+  6. The check is runnable on demand and is named in whatever procedure precedes an unattended window, so it is a step rather than a habit.
+
+  NOT IN SCOPE: continuous monitoring, alerting, or reclaiming anything automatically. This reports and refuses. The reclamation defect is BUG-1287, which is why the disk filled in the first place.
+
+  Filed by the advisor after the 2026-09-19 incident chain; the readiness pass that missed it was run by the product seat and reported in good faith, which is the point — the check was followed correctly and did not cover the thing that failed.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T01:02:18.813550852Z
+modified_at: 2026-09-20T01:02:18.813550852Z
+req_type: Task
+tags:
+- drain-safe
+- from:session-0919
+- operations
+- parent:EPIC-62
+- readiness
+- unattended
