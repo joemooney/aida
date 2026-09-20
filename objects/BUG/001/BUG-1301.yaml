@@ -1,0 +1,50 @@
+id: 01a0bc29-3fc5-7333-8ef8-6af40da562f2
+spec_id: BUG-1301
+agreed_id: BUG-1301
+title: 'The portability ratchet blocks its own extension: adding a rule surfaces old instances, allowlisting them is required, and the growth check refuses any new entry'
+description: |
+  The portability ratchet cannot be extended. Adding a new rule surfaces pre-existing instances of the shape it catches, those instances have to be allowlisted, and the allowlist growth check rejects any new entry — so the guard blocks its own improvement.
+
+  THE MECHANISM, at scripts/check-portability.sh:53-60:
+
+    git show "$BASE_REF:scripts/portability-allowlist.txt" > tmp_base
+    ... sort -u both sides ...
+    if comm -13 tmp_base_sorted tmp_new | grep -q .; then
+      echo "error: scripts/portability-allowlist.txt grew relative to $BASE_REF"
+      exit 1
+
+  comm -13 emits every line present in the new allowlist and absent from the base. Any addition, for any reason, fails. The check has no notion of WHY an entry appeared.
+
+  That is exactly right for the case it was built for: a developer writing new non-portable test code and excusing it by allowlisting. It is wrong for the case nobody anticipated: a developer widening the RULES, where new entries are not new debt but newly-visible old debt.
+
+  OBSERVED 2026-09-19 on PR #1977 (BUG-1283). Two new patterns were added, they matched 22 pre-existing instances across the tree, those were recorded as baseline, and the required Build failed on the growth check. The PR was self-blocking by construction. The author reasonably inferred from the file's ~169 existing entries that baselining was the established pattern; those predate the check or arrived at bootstrap and could not be added under it today.
+
+  WHY THIS MATTERS MORE THAN ONE BLOCKED PR. The three ways past it are all bad. Fixing every pre-existing instance in the same change makes the scope of adding a rule unbounded and proportional to how much old code the rule finds, which means the most valuable rules — the ones that catch the most — are the most expensive to add and will not be added. Trimming the allowlist to fit means shipping a rule that fires on nothing. Relaxing the check means the guard is weakened by the first change that found it inconvenient. So the practical effect is that the rule set is frozen, and it is frozen hardest against the rules that would catch the most.
+
+  WHAT IT NEEDS. The check must distinguish an entry added because the rules changed from an entry added to excuse new code. The distinction is available: the base ref's rule set is readable the same way the base ref's allowlist is. If the PATTERNS and scanners are unchanged, no new entries are allowed and the current behaviour holds exactly. If the rule set changed, entries attributable to the new rules are allowed and everything else is still refused.
+
+  ACCEPTANCE
+  1. A change that adds no new rule cannot add an allowlist entry. Current behaviour, and a test asserts it still fails.
+  2. A change that adds a rule may add entries that the new rule produces, and may NOT add entries the pre-existing rules produce. A test covers both halves in one change: one entry from the new rule accepted, one from an old rule refused.
+  3. Each allowlist entry records which rule produced it, so attribution is read rather than inferred. Existing entries may be backfilled as unattributed and treated as pre-existing.
+  4. Removing a rule does not strand its entries as unexplained refusals; the check tolerates entries whose rule is gone, or the removal prunes them.
+  5. The error message tells the author which of the two cases they are in, and what to do. The current message states the fact and leaves the reader to work out that their rule addition is the cause.
+  6. A test asserts the bypass is not reachable by editing the base comparison: the check must not be satisfiable by a change that only touches how it compares.
+
+  NOT IN SCOPE: fixing the 22 instances, and changing which shapes the rules catch. This spec is about the ratchet being extensible. BUG-1283's rules land on top of it.
+
+  Found while reviewing PR #1977 at the advisor gate; the growth check read directly at scripts/check-portability.sh:56 before filing.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T00:13:35.045002259Z
+modified_at: 2026-09-20T00:13:35.045002259Z
+req_type: Bug
+tags:
+- ci
+- drain-safe
+- from:session-0919
+- parent:EPIC-62
+- portability
+- tooling
