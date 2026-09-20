@@ -131,9 +131,14 @@ fn force_push_refusal_is_typed_and_not_retryable() {
 
     let tmp = tempfile::tempdir().unwrap();
     let fake_aida = tmp.path().join("aida");
+    // BUG-1295: exit code, not the echoed prose, is what the driver
+    // classifies on now — `18` = `pr_rebase::REBASE_EXIT_CODE_REFUSED`.
+    // The message is still asserted below (it's still what a human/the
+    // recovery hint sees), but it no longer drives classification, so it
+    // is free to be reworded independently of this test.
     std::fs::write(
         &fake_aida,
-        "#!/bin/sh\necho 'Refusing to force-push: remote commit not incorporated by patch-id. Force-pushing would DROP it. Recover by git fetch origin topic && git rebase origin/topic' >&2\nexit 1\n",
+        "#!/bin/sh\necho 'Refusing to force-push: remote commit not incorporated by patch-id. Force-pushing would DROP it. Recover by git fetch origin topic && git rebase origin/topic' >&2\nexit 18\n",
     )
     .unwrap();
     let mut perms = std::fs::metadata(&fake_aida).unwrap().permissions();
@@ -160,9 +165,11 @@ fn conflicting_rebase_is_typed_and_keeps_the_manual_recipe() {
 
     let tmp = tempfile::tempdir().unwrap();
     let fake_aida = tmp.path().join("aida");
+    // BUG-1295: `17` = `pr_rebase::REBASE_EXIT_CODE_CONFLICT` — the exit
+    // code drives classification now, not the echoed prose below.
     std::fs::write(
         &fake_aida,
-        "#!/bin/sh\necho 'rebase hit 1 conflict(s) — aborted, worktree cleaned' >&2\necho 'Error: rebase aborted due to conflicts' >&2\nexit 1\n",
+        "#!/bin/sh\necho 'rebase hit 1 conflict(s) — aborted, worktree cleaned' >&2\necho 'Error: rebase aborted due to conflicts' >&2\nexit 17\n",
     )
     .unwrap();
     let mut perms = std::fs::metadata(&fake_aida).unwrap().permissions();

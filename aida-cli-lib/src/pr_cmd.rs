@@ -462,7 +462,11 @@ pub(crate) fn pr_rebase_handler(
             eprintln!();
             eprintln!("{}", manual_recipe(n, &base_ref));
             cleanup_worktree();
-            anyhow::bail!("rebase aborted due to conflicts");
+            // trace:BUG-1295 | ai:claude — typed exit code, not prose, is
+            // what `attempt_phase3_auto_rebase` classifies on.
+            return Err(pr_rebase::rebase_conflict_error(
+                "rebase aborted due to conflicts",
+            ));
         }
     }
 
@@ -589,7 +593,10 @@ pub(crate) fn pr_rebase_handler(
             // pr-N branch. The full guard recipe above is the durable diagnostic.
             preserve_pr_rebase_diagnostic(&project_root, n, &detail);
             cleanup_worktree();
-            anyhow::bail!("force-push refused: remote has un-incorporated commits");
+            // trace:BUG-1295 | ai:claude — typed exit code, not prose.
+            return Err(pr_rebase::rebase_refused_error(
+                "force-push refused: remote has un-incorporated commits",
+            ));
         }
         pr_rebase::ForcePushGuard::Inconclusive { reason } => {
             eprintln!(
@@ -598,7 +605,10 @@ pub(crate) fn pr_rebase_handler(
                 pr_rebase::force_push_inconclusive_message(&info.head_ref, &reason)
             );
             cleanup_worktree();
-            anyhow::bail!("force-push refused: could not verify remote (fail-closed)");
+            // trace:BUG-1295 | ai:claude — typed exit code, not prose.
+            return Err(pr_rebase::rebase_refused_error(
+                "force-push refused: could not verify remote (fail-closed)",
+            ));
         }
     }
 
