@@ -1,0 +1,50 @@
+id: 01a0be92-0d6d-7be0-a445-7e6cd3d8361b
+spec_id: STORY-1382
+agreed_id: STORY-1382
+title: Five specs this week were filed for classifying on another component's prose, and at least three of their fixes did the same thing — the ratchet that could catch it became extensible tonight
+description: |
+  Five separate specs this week were filed because code classified a decision by matching another component's prose. At least three of their FIXES were themselves implemented with prose matching, and one of those is on main now. The class is not being caught by review, and the reason is that it is individually reasonable code every time.
+
+  THE RECORD, in one night:
+
+    BUG-1295   orchestrator recovered typed rebase causes by substring-matching `aida pr rebase` output   — FIXED with exit codes, merged
+    BUG-1310   classifiers reading EXTERNAL tool prose (gh, SQLite, OS strings)                            — approved, queued
+    BUG-1297   `resolve_mailbox_thread` split ambiguous from not-found by matching the error's own text    — held, in rework
+    BUG-1316   a supervised merge-hold refusal was classified as a generic `tool-exit`                     — merged as #2012
+    BUG-1435   #2012's own fix classifies the hold via `detail.contains(&hold_prefix)`                     — approved, high
+
+  BUG-1435 is the one that makes this a class rather than a run of bad luck. BUG-1316 existed to stop a supervised hold being mistaken for a tool failure. Its fix, live on main at lib.rs:847, decides whether a refusal is a hold by matching the producer's own sentence — our own producer, at forge.rs:1527. Reword that refusal and the match misses, the hold degrades to a generic failure, and it burns both retries again. Silently, with no test failing, because every test constructs the current wording.
+
+  The advisor wrote on the spec BEFORE the work started that they would refuse exactly this, refused it in review, and it merged anyway.
+
+  WHY REVIEW DOES NOT CATCH IT. `if error.to_string().contains("ambiguous")` is readable, obvious, and correct on the day it is written. It fails only when someone edits an unrelated string months later, and at that moment nothing fails visibly — the classification just silently takes the other branch. There is no test to break, because the test was written against today's wording. It is the shape a careful reviewer approves.
+
+  THE INFRASTRUCTURE TO CATCH IT MECHANICALLY LANDED TONIGHT. BUG-1301 (#2011) made the portability ratchet extensible — rules now live in `scripts/portability-rules.json` as id/label/regex triples, with a growth check that permits allowlisting existing instances while refusing NEW ones. That is exactly the mechanism this needs, and it is exactly the mechanism BUG-1301's own description said should be used for shapes that generalise rather than for one-off patterns.
+
+  PROPOSED: add a rule for control-flow classification on message text — `.contains("...")` or equivalent used as the condition of an `if`, a `match` guard, or a boolean feeding one, where the receiver is an error, stdout, stderr or a subprocess output. Baseline the existing instances; refuse new ones.
+
+  A MEASUREMENT BEFORE ANYONE DESIGNS THIS. A naive grep for `.contains("` in control-flow position across aida-cli-lib and aida-core returns roughly 296 sites. That is far too many to be all defects, so the rule cannot be the naive form — most are legitimate string tests on our own data, not classification of another component's output. The spec's first job is to narrow the pattern until its hit rate is defensible, and to say what it deliberately does not catch.
+
+  I would rather this were scoped tightly and caught eight real cases than scoped broadly and allowlisted into irrelevance — which is precisely the failure BUG-1301 was filed about.
+
+  ACCEPTANCE
+  1. A rule exists in the extensible ratchet that flags classification-by-message-text at a defensible hit rate; the rule's precision is stated with the count it matches.
+  2. Existing instances are baselined; new ones are refused, per the growth check's existing behaviour.
+  3. What the rule deliberately does NOT catch is documented — at minimum, string tests on our own data rather than another component's output.
+  4. The five specs above are the positive fixtures: each one's pre-fix code must match the rule.
+  5. Legitimate `.contains` uses from the same files are the negative fixtures; a rule that flags those is too broad and must be narrowed rather than allowlisted.
+
+  Filed by the product seat; disposition is the advisor's. Note this does not replace fixing the instances — BUG-1435 and BUG-1297 still need their typed outcomes. It stops the sixth.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-20T11:27:17.869346098Z
+modified_at: 2026-09-20T11:27:17.869346098Z
+req_type: Story
+tags:
+- ci
+- from:session-0919
+- parent:EPIC-62
+- ratchet
+- substrate-as-bouncer
