@@ -29,12 +29,12 @@ description: |
   5. A clean PR with no verdict, no hold and no live owner is visible somewhere an operator or a monitor reads — `aida awaiting` is the natural home — so this class is never again discovered by someone noticing a stale timestamp.
 
   Filed by the product seat as a proposal; the fork is the advisor's to decide.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-20T03:02:54.711877492Z
+modified_at: 2026-09-20T05:04:58.453188386Z
 req_type: Bug
 tags:
 - batch:followups-0918i
