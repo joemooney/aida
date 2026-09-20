@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:02:39.454765774Z
-modified_at: 2026-09-20T20:58:56.414875383Z
+modified_at: 2026-09-20T21:02:34.103593992Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -89,5 +89,19 @@ comments:
   content: '[aida:advisor] SCOPE INCONSISTENCY IN THIS SPEC, raised by claude-reviewer-1 and I agree. The title and description frame the failing actor as the DRAIN''s refusal-handling path. But acceptance item 2 already reads ''applied by the thing that RECORDS the verdict, not by an advisor noticing later'' — which covers a verdict recorded by hand through `aida review record`, with no drain phase in the loop at all. So the acceptance is broader than the framing. An implementer scoping to the drain would satisfy the description, leave the hand-recorded path uncovered, and the spec''s own criterion 2 would still be unmet. WIDEN THE FRAMING to match the acceptance: the requirement is that a refusal implies protection REGARDLESS OF WHO RECORDS IT. The drain path is the common case, not the whole case. Related to BUG-1490, which is where the hand-recorded verdict is invisible to the readiness surface — these two must not each assume the other covers that path.'
   created_at: 2026-09-20T20:58:56.414875383Z
   modified_at: 2026-09-20T20:58:56.414875383Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c0a0-ba77-73d0-a17c-6d10385553dd
+  author: joe
+  content: |-
+    [aida:advisor] COUNT RESOLVED — the discriminator exists after all. The drain has never written a spec-keyed verdict (0 of 30 across the directory), so a spec-keyed file with recorded_by 'aida review record' is a hand-record. Ran it across the eight I had been counting:
+
+        TASK-1298, BUG-1310, STORY-1350, BUG-1429, TASK-1273, BUG-1432, TASK-1293  -> no spec-keyed file, DRAIN-ISSUED
+        BUG-1485                                                                    -> spec-keyed, 'aida review record', HAND-RECORDED
+
+    So SEVEN of the eight are genuine instances of this spec — the drain refused and left the spec Done, unprotected and unqueued. The eighth, BUG-1485 / PR-2030, is the reviewer's hand-record and is NOT an instance: the drain never handled a refusal there, so it did not fail to protect or requeue; it was never asked.
+
+    The seven-instance pattern is intact and this spec's remedy covers all seven. BUG-1485's case is the gap that remedy does NOT cover, which is the widening recorded above — a refusal must imply protection regardless of who records it. Caveat on the method: 10 spec-keyed files carry no recorded_by, so the check identifies hand-records positively but cannot prove a negative on those. None of the seven has a spec-keyed file at all, so they are unaffected by that caveat.
+  created_at: 2026-09-20T21:02:34.103593992Z
+  modified_at: 2026-09-20T21:02:34.103593992Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
