@@ -49,12 +49,12 @@ description: |
   A tree comparison in a steadily-merging repository is a mechanism with a half-life, and the situation it decays fastest in is precisely the situation it exists for: worktrees accumulate BECAUSE nobody reaps promptly, which means merges are landing the whole time it waits. Any future check in this area should be asked the same question before it is accepted — does this answer expire, and if so what is the durable form.
 
   WHY THIS SPEC SHOULD JUMP THE QUEUE, recorded so the priority is not mistaken for enthusiasm: a fix that is inert is worse than an open bug, because the spec that carries it reads Completed. The failure direction is safe — it keeps rather than deletes, so no work is at risk while this waits — but BUG-1287 currently claims an outcome it does not deliver, and every reader of that spec will believe the problem is solved.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:08:00.383333375Z
-modified_at: 2026-09-20T07:19:42.205800268Z
+modified_at: 2026-09-20T11:26:31.383374032Z
 req_type: Bug
 tags:
 - batch:night-0920
