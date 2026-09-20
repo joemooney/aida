@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:33.668555610Z
-modified_at: 2026-09-20T19:43:45.482417379Z
+modified_at: 2026-09-20T19:59:12.412515632Z
 req_type: Bug
 tags:
 - awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
@@ -87,4 +87,26 @@ comments:
   created_at: 2026-09-20T19:37:51.406411346Z
   modified_at: 2026-09-20T19:37:51.406411346Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c066-b81c-7982-b926-023f16dbf601
+  author: joe
+  content: |-
+    [aida:reviewer] ESCALATING SEVERITY. It is not only aida awaiting that reports this PR as ready — GITHUB'S OWN ROLLUP DOES TOO. Verified on PR #2009, head 065f3df8aa:
+
+        check-runs on head        merge-hold-gate: completed/success        <- the only row
+        combined status endpoint  state=pending, total_count=0
+        branch protection         contexts = ["merge-hold-gate", "Build (ubuntu-latest)"], strict=false
+        gh pr view 2009           mergeable=MERGEABLE  mergeStateStatus=CLEAN
+
+    Build (ubuntu-latest) is a REQUIRED context and has never run on that commit. GitHub nonetheless reports the PR as CLEAN, and aida awaiting independently reports ci_rollup "pass" and lists it under mergeable_prs.
+
+    So a seat deciding whether this PR is ready has TWO independent surfaces telling it yes, and both are computing over the checks that exist rather than the checks that are required. This is PRIN-5 with an external instance: the principle is not describing an AIDA implementation habit, it is describing a failure mode AIDA inherited from the forge and then reproduced.
+
+    WHAT I HAVE NOT VERIFIED, and will not: whether an actual merge attempt would succeed. mergeStateStatus may be stale or may not be the enforcing gate — the enforcing gate is the merge endpoint itself, and I am not going to test it by merging a PR that is under CHANGES REQUESTED. The claim here is strictly about what the READINESS SURFACES report, which is the thing seats act on.
+
+    THIS EXPLAINS THE WORKAROUND CONVERGENCE. The observation that every seat independently started running `gh pr checks` and reading the named required row is not a coincidence of taste. It is the only one of the three available surfaces that catches this: awaiting says pass, GitHub's rollup says CLEAN, and only enumerating the named rows reveals that the required build is absent rather than green. A workaround that three independent seats invent is a missing feature, and here it is specifically a missing DISTINCTION — present-and-green versus absent.
+
+    CONSEQUENCE FOR THIS SPEC'S ACCEPTANCE. The criterion about deriving the required-check set from branch protection is now load-bearing rather than tidy: deriving it is the only way to notice absence, because neither upstream surface encodes it. I would add that the fix must not be "trust mergeStateStatus instead" — that surface is demonstrated wrong here.
+  created_at: 2026-09-20T19:59:12.412515632Z
+  modified_at: 2026-09-20T19:59:12.412515632Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: drain
