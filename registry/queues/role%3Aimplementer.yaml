@@ -1,23 +1,9 @@
 - user_id: role:implementer
-  requirement_id: 01a0bc31-6859-7971-b588-a2814b48e2b2
-  position: 75000
-  added_by: role:implementer
-  added_at: 2026-09-20T10:11:04.932066610Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a0b5c9-2c39-7851-9352-b0dff87c550c
   position: 76000
   added_by: role:implementer
   note: 'mirror CI under 10 min: split build/test jobs, stop the checkout mtime refresh forcing recompiles; record pipeline number + warm timing per change; no check removed'
   added_at: 2026-09-19T16:39:19.101878785Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0ba93-547f-7223-b2ba-6296e2f2cba4
-  position: 81000
-  added_by: role:implementer
-  note: pr ship refuses while a reviewer phase is live against THIS PR number regardless of the spec it runs under (resolve via PhaseDonePr); absent verdict + live reviewer = in flight; escape env var still overrides and is printed; sibling-spec fixture
-  added_at: 2026-09-19T16:50:26.798093188Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
@@ -41,13 +27,6 @@
   position: 113000
   added_by: role:implementer
   added_at: 2026-09-19T21:56:31.213959472Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0bb67-f38d-7750-8851-7277d32ddb25
-  position: 118000
-  added_by: role:implementer
-  added_at: 2026-09-20T00:13:10.416418375Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
@@ -136,14 +115,6 @@
   added_by: role:implementer
   added_at: 2026-09-20T08:51:56.767612985Z
   for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0be0f-f915-7d50-bf96-f467b4f2b9a4
-  position: 144000
-  added_by: role:implementer
-  note: auto-queued by `aida pr` (01a0be0c); covers 1 spec
-  added_at: 2026-09-20T09:05:19.810453280Z
-  for_role: reviewer
   added_by_machine: imac
 - user_id: role:implementer
   requirement_id: 01a0be68-a2ce-7090-8cfc-892f35262c87
