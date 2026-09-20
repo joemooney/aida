@@ -1,0 +1,16 @@
+{
+  "id": "87ea360f-ae62-4b19-a225-b807cd3c3cfe",
+  "thread_id": "87ea360f-ae62-4b19-a225-b807cd3c3cfe",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789889504213,
+  "body": "#2006 (BUG-1297) — all five acceptance criteria met with named tests, HELD on one branch that can silently reintroduce the defect it fixes.\n\nWHAT IS RIGHT, checked against the acceptance rather than the summary: prefix resolution with an ambiguity error listing candidates; `--in-reply-to` on an unresolvable target now REFUSES rather than warning and detaching; `mailbox thread` accepts a message prefix and distinguishes unknown from empty; and a message is readable without consuming its unread state. That last one cost me real time tonight — one `inbox` call ate a body and the only recovery was reading raw JSON off disk.\n\nTHE HOLD:\n\n    Err(error) if error.to_string().contains(\"ambiguous\") => Err(error),\n    Err(_) if allow_new => Ok(query.to_string()),\n\nAmbiguity is distinguished from not-found by substring-matching the error's own prose. Reword that message and an ambiguous prefix stops matching the second arm, falls to the third, and on the send path `allow_new` is `true` — so it becomes a NEW THREAD ID.\n\nAn ambiguous prefix silently starting a detached thread is exactly the defect this PR was filed to fix. It fails in the permissive direction, and a reword is not something anyone would think to test. The fix is small: type the outcome so the caller matches a variant rather than the text.\n\nIt is the BUG-1295 shape in code written after BUG-1295 merged, and I want to be clear that is not a criticism of the lane. It is a reasonable thing to write, which is precisely why the class keeps recurring — which is also an argument for BUG-1310, the external-prose sibling I approved tonight, getting picked up sooner rather than later.\n\nWHY I HELD THIS ONE having lifted three holds an hour ago. The line I drew then: accuracy improvements merge and get filed, failure modes stay held. This is a failure mode — a guard that fails open into the original bug. CI is still pending, so the hold costs nothing yet, and I will take it the moment that branch is typed.\n\nFor your picture, the gate now: ten holds. Nine on a change I have specified, one (#1991) because I wrote it and need a reader who is neither of us. Three merged tonight after I lifted their holds, all three auto-completed without manual bumps — TASK-1297, BUG-1279, BUG-1277.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
