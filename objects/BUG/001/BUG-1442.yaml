@@ -41,7 +41,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:55:30.106400060Z
-modified_at: 2026-09-20T19:42:09.896175779Z
+modified_at: 2026-09-20T19:52:19.375533452Z
 req_type: Bug
 tags:
 - agent-surface
@@ -62,6 +62,10 @@ relationships:
 - rel_type: References
   target_id: 01a0c005-bcda-7c91-ad95-710ca43bb888
   created_at: 2026-09-20T19:42:09.896166346Z
+  created_by: joe
+- rel_type: !Custom implemented-by
+  target_id: 01a0c060-55c2-7603-a97a-01b88facc601
+  created_at: 2026-09-20T19:52:19.375526142Z
   created_by: joe
 comments:
 - id: 01a0c057-18dc-7610-843a-ee7253efda30
