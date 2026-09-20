@@ -23,10 +23,18 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T19:41:23.949746312Z
-modified_at: 2026-09-20T19:41:23.949746312Z
+modified_at: 2026-09-20T19:51:34.756434709Z
 req_type: Task
 tags:
 - from-advisor:BUG-1442
 - kind:observation
 - linked:BUG-1442
+- recurrence:2
 - severity:minor
+comments:
+- id: 01a0c05f-bc64-77c0-8c5a-0fb2f2ac191e
+  author: joe
+  content: 'Recurrence #2 by joe 2026-09-20: Second sighting, and it sharpens the finding. The product seat has adopted the reading — stale leases are the normal resting state, so the defect is in whatever fails in their presence, not in the leases. They add a point I missed: the error text prints seven lease ids ''for diagnosis only (NOT --resume arguments — these are lease ids, not claude session ids)''. If stale leases are normal, that list is noise in EVERY instance of this error, and the parenthetical exists because the list invites exactly the misuse it then forbids. A diagnostic that must warn you not to use what it just showed you is showing you the wrong thing.'
+  created_at: 2026-09-20T19:51:34.756434709Z
+  modified_at: 2026-09-20T19:51:34.756434709Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
