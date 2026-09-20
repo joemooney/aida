@@ -39,10 +39,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-19T22:01:52.337419927Z
+modified_at: 2026-09-20T07:05:09.983484112Z
 req_type: Bug
 tags:
 - agent-surface
+- batch:night-0920
 - drain-safe
 - from:session-0919
 - mailbox
