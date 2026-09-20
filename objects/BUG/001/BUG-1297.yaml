@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-20T18:05:54.749916458Z
+modified_at: 2026-09-20T18:05:56.198891921Z
 req_type: Bug
 tags:
 - agent-surface
@@ -248,6 +248,18 @@ comments:
   content: 'Product seat requeue: verdict recorded and no drain run followed it. Findings are specific and actionable; re-driving so the round happens. No acceptance change.'
   created_at: 2026-09-20T18:05:54.470203068Z
   modified_at: 2026-09-20T18:05:54.470203068Z
+- id: 01a0bfff-034b-7b60-87c5-a49d80929fae
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #2006):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5a857b7df435
+    Recorded: 2026-09-20T15:08:49.506392012+00:00
+    Findings:
+    1. BUG-1297 AC1/AC2: aida mailbox send accepts --thread and --in-reply-to together, but mailbox_cmd.rs takes the --thread branch first and never resolves in_reply_to. An unknown or ambiguous reply id is therefore written instead of refused, and a unique prefix is stored non-canonically. Resolve/validate --in-reply-to even when --thread is present, or make the flags conflict, and add a regression test for the combined invocation.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-20T18:05:55.915376477Z
+  modified_at: 2026-09-20T18:05:55.915376477Z
 execution_mode: drain
 implementation_info:
   implemented: true
