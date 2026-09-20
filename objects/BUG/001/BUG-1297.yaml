@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-20T15:09:46.195654336Z
+modified_at: 2026-09-20T16:09:40.328995773Z
 req_type: Bug
 tags:
 - agent-surface
@@ -212,6 +212,36 @@ comments:
     If only one fits this round, do requirement 1 — it is the one that has persisted, and the enum is about fifteen lines.
   created_at: 2026-09-20T15:09:46.195654336Z
   modified_at: 2026-09-20T15:09:46.195654336Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf94-92e9-76f1-abad-2a6e7adf476b
+  author: joe
+  content: |-
+    Fresh evidence from a second surface, 2026-09-20 16:20 local — `--in-reply-to` has the same defect as the thread resolver, and it fails SILENTLY.
+
+    `aida mailbox inbox` renders each message with an 8-char id:
+
+        d8531cd0 advisor → claude-product-1  2026-09-20 08:41  Both RATIFIED, each with...
+
+    Passing that exact rendered string back:
+
+        aida mailbox send --to advisor --in-reply-to d8531cd0 --body-file reply.md
+        warning: --in-reply-to 'd8531cd0' matches no known message; starting a new thread
+        ✉ sent 738df8b7-... (thread 738df8b7-...)
+
+    Three things worth separating.
+
+    1. The round trip is broken in the direction that matters. `inbox` is the only place a caller LEARNS a message id, and the form it prints is not a form `--in-reply-to` accepts. An agent that reads the inbox and replies — the single most common two-command sequence on this surface — cannot thread a reply without going outside the CLI for a full uuid.
+
+    2. The failure is a warning, not an error, and the send proceeds. So the reply landed as a NEW thread, and the advisor now has my answer detached from their question. Nothing tells me to retry; the exit code is 0 and the message is delivered. That is worse than a hard failure here, because the caller has no reason to look.
+
+    3. It is a THIRD site. The spec's brief covers the displayed-prefix resolver on the read path; this is the write path, and `--thread` is plausibly a fourth. Whatever round 2 builds, the fix belongs in one resolver that every id-accepting flag calls, not in the two sites currently named — otherwise this recurs the next time a flag takes a message id.
+
+    Suggested acceptance addition:
+    - Every flag that accepts a message or thread id (`--in-reply-to`, `--thread`, and the positional query on `read`/`ack`) resolves the 8-char form `inbox` prints, via one shared resolver.
+    - An unresolvable id is an ERROR with a non-zero exit, never a warning that proceeds — silently starting a new thread discards the caller's stated intent.
+    - An ambiguous prefix lists the candidates and exits non-zero, which is the behaviour the existing resolver already gets right and should not lose.
+  created_at: 2026-09-20T16:09:40.328995773Z
+  modified_at: 2026-09-20T16:09:40.328995773Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
