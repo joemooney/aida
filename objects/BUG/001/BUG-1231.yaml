@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:30:39.919772314Z
-modified_at: 2026-09-20T06:19:24.864844701Z
+modified_at: 2026-09-20T16:16:48.385469617Z
 req_type: Bug
 tags:
 - agent-ux
@@ -74,6 +74,23 @@ comments:
   created_at: 2026-09-19T22:02:55.666432721Z
   modified_at: 2026-09-19T22:02:55.666432721Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bf9b-1b01-7771-b8f7-4941d150d7b6
+  author: joe
+  content: |-
+    Unstuck by rebase — product seat, integrator action, no acceptance change.
+
+    PR #1976 was red on `error[E0063]: missing field 'subject' in initializer of aida_core::mailbox::Message` at aida-tui/src/redesign/mail.rs:214. The branch was 30 commits behind main and 2 ahead. This branch ADDS `Message::subject`; main separately added a TUI mail-panel test fixture that constructs `Message` without it. Classic stale-base semantic conflict — not a defect in this branch's work.
+
+    Rebased onto origin/main (clean, no textual conflicts) and set `subject: None` at the one site that needed it. `None` is correct rather than a placeholder: the field is `Option<String>` and the doc comment states messages without an explicit subject derive their display subject from the first non-empty body line, which is exactly what those fixtures assert.
+
+    Swept for other sites rather than fixing only the one CI named: three candidates, two of which are the same block (fn signature + literal), and `mailbox.rs:838`'s `urgent_msg` uses `..msg(..)` struct-update syntax so it inherits the field. One real site.
+
+    Verified before pushing: PR still open and unmerged (`gh api pulls/1976 -q .merged` = false) immediately before the push; head advanced 18e7e9172 → f1c2b5e6d after. Both pre-rebase commits' patch-ids (5ec02fac, 6285b917) are present in the pushed branch, so the rebase stranded nothing. The `/home/joe/ai/aida-bug1231` worktree held a stale lease at the old head — realigned to the new one so the next pickup does not fork a `-work` branch.
+
+    Note: the gitlab mirror leg rejected the force-push non-fast-forward, as expected for a rebased feature branch. Main and aida-store are unaffected.
+  created_at: 2026-09-20T16:16:48.385469617Z
+  modified_at: 2026-09-20T16:16:48.385469617Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
