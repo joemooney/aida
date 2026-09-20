@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:57.872533301Z
-modified_at: 2026-09-19T21:16:40.616030664Z
+modified_at: 2026-09-20T04:41:43.437118982Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -119,6 +119,28 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T21:16:40.341644831Z
   modified_at: 2026-09-19T21:16:40.341644831Z
+- id: 01a0bd1e-bd0d-7413-a0a7-09818fe0e617
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit:** a review-prompt regression test proves a stable-marked `## Implementer approach` comment is included with the requirement checklist.
+    - **Template/unit:** embedded pickup-template assertions prove Step 3d explicitly guards on a parseable acceptance section and posts the approach only when that guard succeeds.
+    - **Template/unit:** a complementary assertion proves the no-acceptance branch posts no approach comment.
+    - **Existing targeted suites:** review-prompt and template tests remain green.
+
+    ### Expected files
+    - `aida-cli-lib/src/lib.rs`
+    - `aida-core/templates/skills/aida-pickup.md`
+    - `aida-core/src/templates.rs`
+
+    ### Ambiguities / conflicts as questions
+    - Does “stable-marked” mean the exact `## Implementer approach` heading introduced in round 1? I will treat that exact heading as the durable marker and select the most recent matching top-level comment.
+    - Does “parseable acceptance” use the CLI’s existing recognized `## Acceptance` / `## Verify` convention? I will mirror that convention explicitly in the skill text.
+  created_at: 2026-09-20T04:41:43.437118982Z
+  modified_at: 2026-09-20T04:41:43.437118982Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
