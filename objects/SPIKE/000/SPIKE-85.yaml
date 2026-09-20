@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:45.252179213Z
-modified_at: 2026-09-20T19:57:36.920020834Z
+modified_at: 2026-09-20T22:52:12.358797525Z
 req_type: Spike
 tags:
 - batch:night-0920
@@ -74,5 +74,11 @@ comments:
   created_at: 2026-09-20T19:57:36.920020834Z
   modified_at: 2026-09-20T19:57:36.920020834Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c105-1ac6-7e62-9760-44106d6a637a
+  author: joe
+  content: '[aida:advisor] SEVENTH INSTANCE, 2026-09-20: BUG-1495. The rework LOOP-GUARD files a fresh major finding on every requeue against unchanged state — two identical findings on BUG-1297 two minutes apart, no run between them, no commit, same head. A guard whose purpose is detecting repeated output that carries no new information produces repeated output that carries no new information. Its charter and its defect are the same sentence, which is this spike''s cleanest test: point the instrument at itself. Also worth noting for the sweep''s method — this one was found by the guard firing at an advisor twice in three minutes, not by inspection. Six of the seven instances in this spike were found by accident; that ratio is itself the argument for the deliberate sweep.'
+  created_at: 2026-09-20T22:52:12.358797525Z
+  modified_at: 2026-09-20T22:52:12.358797525Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 human_only: true
