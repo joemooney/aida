@@ -37,10 +37,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T20:54:30.012636986Z
-modified_at: 2026-09-20T20:55:46.584253870Z
+modified_at: 2026-09-20T20:55:47.717070062Z
 req_type: Bug
 tags:
 - awaiting review verdicts merge-safety prin-5 from:review-pr-2030
+- batch:night-0920
 comments:
 - id: 01a0c09a-8298-7290-9e8e-9a3fb7638c6f
   author: joe
