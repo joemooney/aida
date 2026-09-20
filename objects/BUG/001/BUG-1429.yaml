@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:58:36.743732005Z
-modified_at: 2026-09-20T16:11:08.870928390Z
+modified_at: 2026-09-20T16:11:09.845984374Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -159,6 +159,12 @@ comments:
   created_at: 2026-09-20T16:07:05.679309794Z
   modified_at: 2026-09-20T16:07:05.679309794Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bf95-f095-7162-aab4-f8f935051c02
+  author: joe
+  content: '[aida:advisor] Status corrected Approved → In Progress. The product seat reset this to Approved after aida ps showed an orphaned In-Progress flag with no live lease, which was reasonable cleanup of a stale flag but describes the wrong state: PR #2021 exists with one commit (c84ce1c8) and a RequestChanges verdict at that head. Approved reads as ''ready to start fresh'', and an implementer picking it up could reasonably begin again rather than fix the one remaining call site. The work is: aida-tui/src/redesign/drain_panel.rs:73 has a second is_running doing self.state.starts_with("in-phase-") outside the canonical DrainMember::is_running, which is what AC3 forbids. The PR centralizes the other four sites and misses that one. Verified against the branch at c84ce1c8, not relayed from the verdict. PR is held pending that fix.'
+  created_at: 2026-09-20T16:11:09.845984374Z
+  modified_at: 2026-09-20T16:11:09.845984374Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
