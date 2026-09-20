@@ -62896,6 +62896,43 @@ struct StrandedReviewPrResolution {
     outcome: StrandedReviewPrOutcome,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct StrandedReviewPrLookupFailure {
+    spec_id: String,
+    pr_n: u64,
+    reason: String,
+}
+
+fn stranded_review_pr_lookup_failure_message(
+    failures: &[StrandedReviewPrLookupFailure],
+) -> Option<String> {
+    if failures.is_empty() {
+        return None;
+    }
+    let details = failures
+        .iter()
+        .map(|failure| {
+            format!(
+                "{} (PR #{}): {}",
+                failure.spec_id, failure.pr_n, failure.reason
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    Some(format!(
+        "stranded-spec resolution skipped {} spec{} because forge lookup failed: {}",
+        failures.len(),
+        if failures.len() == 1 { "" } else { "s" },
+        details
+    ))
+}
+
+fn report_stranded_review_pr_lookup_failures(failures: &[StrandedReviewPrLookupFailure]) {
+    if let Some(message) = stranded_review_pr_lookup_failure_message(failures) {
+        eprintln!("  {} {}", "Warning:".yellow().bold(), message);
+    }
+}
+
 /// TASK-1296: a "Review PR-N" spec left `Approved`/`InProgress` while its own
 /// PR already reached a terminal state on the forge, undetected by the
 /// git-log scan (`pr_to_sha`) because that scan only sees a *merge* commit
@@ -62911,14 +62948,20 @@ struct StrandedReviewPrResolution {
 /// after the local scan reach the forge, so this rides `aida pull`'s
 /// existing cadence rather than adding one. `metadata` lookup failures
 /// (offline, no `gh`/`glab`, auth) fail open — "cannot confirm" leaves the
-/// spec untouched, same as every other forge read in this file.
+/// spec untouched — but are returned separately so `aida pull` cannot mistake
+/// an unavailable forge for an open PR.
 // trace:TASK-1296 | ai:claude
+// trace:BUG-1432 | ai:codex
 fn collect_stranded_review_pr_resolutions(
     store: &aida_core::RequirementsStore,
     pr_to_sha: &std::collections::BTreeMap<u64, String>,
     project_root: &std::path::Path,
-) -> Vec<StrandedReviewPrResolution> {
+) -> (
+    Vec<StrandedReviewPrResolution>,
+    Vec<StrandedReviewPrLookupFailure>,
+) {
     let mut out = Vec::new();
+    let mut failures = Vec::new();
     let mut sink = network_retry::NoopSink;
     for req in &store.requirements {
         if !matches!(
@@ -62938,9 +62981,17 @@ fn collect_stranded_review_pr_resolutions(
         let Some(spec_id) = req.spec_id.as_deref() else {
             continue;
         };
-        let Ok(metadata) = crate::forge::forge_for(project_root).change_metadata(pr_n, &mut sink)
-        else {
-            continue;
+        let metadata = match crate::forge::forge_for(project_root).change_metadata(pr_n, &mut sink)
+        {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                failures.push(StrandedReviewPrLookupFailure {
+                    spec_id: spec_id.to_string(),
+                    pr_n,
+                    reason: error.to_string(),
+                });
+                continue;
+            }
         };
         let outcome = match metadata.state {
             crate::forge::ChangeState::Merged => StrandedReviewPrOutcome::Merged,
@@ -62954,7 +63005,7 @@ fn collect_stranded_review_pr_resolutions(
             outcome,
         });
     }
-    out
+    (out, failures)
 }
 
 /// Applies one [`StrandedReviewPrResolution`]. Re-checks the live status —
@@ -63175,8 +63226,9 @@ fn auto_bump_done_to_completed(
     // Approved/InProgress that the local scan didn't already resolve.
     // trace:TASK-1296 | ai:claude
     let store = storage.load()?;
-    let stranded_review_pr =
+    let (stranded_review_pr, stranded_review_pr_failures) =
         collect_stranded_review_pr_resolutions(&store, &pr_to_sha, project_root);
+    report_stranded_review_pr_lookup_failures(&stranded_review_pr_failures);
 
     if candidates.is_empty() && pr_to_sha.is_empty() && stranded_review_pr.is_empty() {
         return Ok(Vec::new());
