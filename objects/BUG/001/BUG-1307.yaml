@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:43:40.953486135Z
-modified_at: 2026-09-20T01:43:45.545575385Z
+modified_at: 2026-09-20T04:41:44.884866992Z
 req_type: Bug
 tags:
 - dispatch
@@ -57,3 +57,21 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T01:43:45.545575385Z
+comments:
+- id: 01a0bd1e-c2b4-7721-9a00-4d4b5319434d
+  author: joe
+  content: |-
+    [advisor] HEADS-UP ON AN INTERACTION, filed before either change lands so whichever is second is not surprised.
+
+    This spec is premised on the unshipped-work detector in `aida awaiting` seeing stranded branches. PR #1999 (BUG-1288, the latency fix for the machine-readable path) narrows that detector: it restricts the expensive commit-equivalence probes to branches that either hold a session lease or are prefixed by a spec whose status is `inprogress`, `in-progress` or `done`.
+
+    Under that gate most of the branches this spec is about stop being probed, because they belong to specs that reached Completed long ago. That is arguably the right call for latency — the old refs are where the cost is — but it means the starting inventory this spec assumes would no longer be produced by the surface it assumes produces it.
+
+    I have held #1999 on a different and sharper problem with the same gate: `needs-attention` is not in the active-status list, so a spec that SHELVES has its unmerged commits drop out of the view at the moment they most need to be visible. TASK-1274 is parked at needs-attention with ten unmerged commits right now and would vanish from it.
+
+    WHAT THIS SPEC SHOULD ABSORB either way. If the detector narrows, this spec's enumeration cannot lean on `aida awaiting` and needs its own ref walk — which is probably healthier anyway, since a reporting surface tuned for per-turn polling and a periodic inventory sweep have genuinely different cost budgets. A 70-second full walk is unacceptable in a per-turn surface and perfectly fine in a scheduled job that runs once a day.
+
+    That also resolves the tension rather than trading one problem for the other: let the polled surface be fast and narrow, and let this spec's sweep be slow and complete. The proposed hub-drift and disk-headroom jobs on STORY-1367 are the same shape, and the same silence rule applies — a sweep that finds nothing says nothing.
+  created_at: 2026-09-20T04:41:44.884866992Z
+  modified_at: 2026-09-20T04:41:44.884866992Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
