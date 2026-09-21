@@ -1,0 +1,26 @@
+id: 01a0c5e9-2c7d-7203-9ccb-67d14e099397
+spec_id: STORY-1432
+agreed_id: STORY-1432
+title: 'Review PR-2063: [AI:codex] fix(mailbox): preserve subject and reply distinctions (BUG-1465)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0c5e0`) for branch `bug-1465-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2063>
+  - Branch: `bug-1465-work` → `main`
+
+  ## Covers
+
+  - BUG-1465
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2063` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T21:39:47.965306728Z
+modified_at: 2026-09-21T21:39:47.965306728Z
+req_type: Story
