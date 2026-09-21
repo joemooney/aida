@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:38:32.393127411Z
-modified_at: 2026-09-21T16:38:32.393127411Z
+modified_at: 2026-09-21T16:40:50.910327411Z
 req_type: Spike
 tags:
 - architecture
@@ -58,4 +58,34 @@ tags:
 - ecosystem-watch
 - positioning
 - vision
+comments:
+- id: 01a0c4d7-79de-7f52-8fe2-3fcf602204c2
+  author: joe
+  content: |-
+    NORTH STAR SUPPLIED BY THE OPERATOR (2026-09-21), which reframes this spike and corrects its premise:
+
+    "my objective with aida was to be able to bring an engineering discipline to vibe coding, I wanted reliable requirements capture, that would allow me the best chance of reproducing a system from scratch and be able to throw away the code, so everything we discussed has that as our north star."
+
+    THIS SUPERSEDES THIS SPIKE'S CENTRE OF GRAVITY. The spike proposed settling identity from where the engineering goes (36 of 49 recent specs in the control plane). That reasoning is now refuted by the operator's own counterargument, which is counterweight (a) in the original text: bug density is not identity. Under the north star, the STORE's sufficiency is the product and the control plane is the integrity layer that keeps the store true while work happens. Reconstitution is the end; orchestration is the means.
+
+    THE FINDING THAT REPLACES IT. The north star is IMPLEMENTED BUT NOT DECLARED:
+    - EPIC-70 "AIDA as a compiler: make the store sufficient to reconstitute the system" - Completed 2026-09-17. ADR-44 accepted. `aida reconstitute` shipped, plus criteria IDs, trace:SPEC.ACn test tracing, and `aida criteria gap`.
+    - VIS-1 is the ONLY vision in the store and says "your project's missing index - of intent, not just code" - a headline CR-6 and STORY-551 already decided to retire.
+    - All 7 principles are control-plane or storage concerns (PRIN-4/5/6/7 diagnostics and verdicts, PRIN-1 graph canonical, PRIN-2 config, PRIN-3 skills). NONE states the reconstitution objective.
+
+    So the founding objective is executed as work but has no governing artifact. That is a better explanation for the five-thesis drift than "positioning is weak": with no declared north star, nothing tests a candidate thesis, so each one survives on its own terms. It also explains the attention pattern - EPIC-70 shipped on 2026-09-17 and the next four days of filings went almost entirely to verdict plumbing and lease correlation.
+
+    REVISED DELIVERABLES (replacing 1-5 where they conflict):
+    1. Draft a successor VISION stating the reconstitution north star, for operator wording and approval. VIS-1 then moves to superseded with --superseded-by, not rejected: it governed, and is being replaced.
+    2. Draft a PRINCIPLE encoding corpus sufficiency - the store must be sufficient to reconstitute the system - so new work can be tested against it the way PRIN-6 and PRIN-7 test surfaces.
+    3. Re-run the five-thesis reconciliation WITH the north star as the governing test rather than as a sixth candidate. Each of the five is then judged by whether it serves reconstitution.
+    4. Keep the VIS-1 status anomaly as the immediate substrate fix regardless of how the rest lands.
+    5. Reframe the control plane (TERM-5) as the CORPUS INTEGRITY layer. Every defect catalogued in this spike is a case of the substrate asserting something untrue - false-green, stale-reading-as-current, seat state unknowable. A store that lies cannot reconstitute anything, so PRIN-4/5/6/7 are already reconstitution principles wearing diagnostic clothing. This reconciles the two readings instead of choosing between them.
+
+    THE GAP THAT REMAINS OPEN IN THE NORTH STAR'S OWN TERMS. `aida reconstitute` is scoped PER SPEC - "probe whether A SPEC could be rebuilt from the store alone" - and regenerates TESTS, not the system. The north star is whole-system: delete the code, rebuild it. There is no measure that answers "if the code were deleted today, how much of AIDA comes back?" By the argument in STORY-1424 - that an objective needs a check rather than a judgement - the north star currently has no executable success criterion. Establishing one is the highest-value follow-on, and it is a separate filing.
+
+    SECOND OPEN QUESTION - WORK ITEMS VERSUS ASSERTIONS. Most specs are DELTAS ("fix X", "aida ps cannot distinguish a working seat from a blocked one"), not INVARIANTS ("the system does Y"). A completed BUG records that a fix happened, not what the system now does, and a corpus of deltas reconstitutes a changelog rather than a system. EPIC-70's criteria-to-test tracing is the right answer for specs that CARRY criteria; the leading indicator is therefore what fraction do, which `aida criteria gap` can already measure. Report that fraction as part of this spike.
+  created_at: 2026-09-21T16:40:50.910327411Z
+  modified_at: 2026-09-21T16:40:50.910327411Z
+  session_id: 01a0b204-9df4-7622-8b91-f12fd291d8df
 human_only: true
