@@ -20,41 +20,62 @@ description: |
   Every instance below involves at least one seat with a correct envelope identity. Fixing
   BUG-1533 would not have prevented any of the three.
 
-  THE THREE INSTANCES, enumerated rather than named as a class:
+  THE THREE INSTANCES, with provenance ESTABLISHED FROM THE STORE rather than asserted.
+  The original filing of this spec named the driver advisor as the likely cause of
+  instances 1 and 2. THAT WAS WRONG, and it was itself a misattribution — this spec
+  misattributed two of its own instances, to the seat writing it. Corrected 22:41 after
+  the reviewer owned them and the store confirmed it.
 
-    1  Brief items 1c and 5 on the BUG-1470 rework brief were credited to the product
-       seat. They were the driver advisor's. Flagged by product, corrected by the
-       reviewer.
-    2  BUG-1522 criterion 9 and BUG-1531 criterion 7 were credited to the product seat.
-       They were the driver advisor's, derived from a reviewer measurement. Flagged by
-       product, corrected by the advisor.
-    3  A mailbox tally — 902 messages, the 562/340 split, the advisor's 216/124/94 in-body
-       tag breakdown, a 197/39 figure — was credited to the driver advisor, which did not
-       produce it. Flagged by the advisor. THE NUMBERS ARE CORRECT: the advisor reproduced
-       all of them independently before replying, so the spec correction built on them
-       stands. Only the authorship is wrong.
+    1  "BOTH YOUR ADDITIONS ACCEPTED" — brief items 1c and 5 credited to the product seat.
+       They were the driver advisor's.
+    2  "YOUR c9 AND c7 ARE RIGHT" — BUG-1522 c9 / BUG-1531 c7 credited to the product
+       seat. They were the driver advisor's.
 
-  Instances 2 and 3 have the same seat on opposite sides, which is evidence this is not
-  one seat's habit.
+       AUTHOR OF BOTH: claude-reviewer-1. Six mailbox records carry those two sentences and
+       every one is from=claude-reviewer-1, each sent to BOTH joe and claude-product-1,
+       the pairs within the same second (ts 1789965956649/984 and 1789967948011/344).
+       One body, two recipients, second person. Product read "your additions" and "your c9"
+       as theirs, correctly, given what arrived.
 
-  THE MECHANISM. A seat relays another seat's reasoning in prose — "your point about X",
-  "as you measured" — and the second-person pronoun binds to whoever is reading rather
-  than to whoever wrote it. When the relaying seat has sent similar bodies to two
-  recipients, or when a thread has three participants, the referent is ambiguous and
-  nothing in the substrate disambiguates it. The driver advisor has sent one body to two
-  seats several times tonight and is the most likely cause of instances 1 and 2.
+    3  A 902-message mailbox tally credited to the driver advisor, which did not produce
+       it. THE TALLY IS claude-reviewer-1's, produced 22:29 and sent to the product seat.
+       Product then sent "YOUR TALLY IS RIGHT" to claude-reviewer-1 (ts 1789968757820) and
+       to advisor (ts 1789968758156) — the same body, 336 milliseconds apart. Correct for
+       one recipient, wrong for the other.
 
-  WHY IT IS MORE THAN ETIQUETTE. The independence rule — review only what you did not
-  implement — is enforced by seats knowing who wrote what. Instance 3 shows the failure
-  reaching a SPEC: a description was corrected on the strength of a measurement attributed
-  to a seat that had not made it. That correction happens to be right. Nothing in the
-  process established that it was right; the advisor checked afterwards, voluntarily.
+       THE NUMBERS ARE CORRECT. The advisor reproduced all of them independently from
+       .aida-store/mailbox/*.json before replying, so the BUG-1533 correction built on them
+       stands. Only the authorship was wrong. (The reviewer measured 898 and product 902
+       minutes later; four messages arrived between the runs, which is consistent.)
 
-  THIS IS THE THIRD MEMBER OF TONIGHT'S ATTRIBUTION FAMILY:
-      BUG-1485   work attributed to the wrong lease
-      BUG-1527   a spec closed on another spec's PR
-      BUG-1533   a message whose author cannot be recovered from the envelope
-      this one   reasoning attributed to the wrong seat inside a body
+  SO ALL THREE ARE ONE MECHANISM, PERFORMED BY TWO DIFFERENT SEATS: a body addressed in
+  the second person and sent to more than one recipient. The pronoun binds to whoever is
+  reading. Instances 1 and 2 are claude-reviewer-1's sending practice; instance 3 is the
+  product seat's. NONE of the three is the driver advisor's, and the advisor's original
+  self-naming was an inference from its own habit of multicasting bodies rather than from
+  any evidence.
+
+  THAT SELF-NAMING IS WORTH KEEPING IN THE RECORD rather than deleting, because it is a
+  fourth instance of the same family in a different direction: a seat attributing a defect
+  to ITSELF without checking, on the strength of knowing it had the means. Plausible
+  authorship is not authorship, whether the guess is generous or self-critical.
+
+  BOTH DIRECTIONS OF THE FAILURE ARE NOW EVIDENCED, which is the spec's argument:
+    - a correction ACCEPTED by a seat who believed they had authored the thing corrected
+      (instances 1 and 2)
+    - a spec description CORRECTED on a measurement attributed to a seat that had not made
+      it (instance 3)
+  In neither direction did the substrate object.
+
+  THE REVIEWER STOPPED MULTICASTING AT 22:28 and the advisor did likewise. That is a
+  practice change, not a fix, and it is the reason criterion 2 exists.
+
+  A CAVEAT ON THE EVIDENCE, recorded because the reviewer flagged it against their own
+  search: some mailbox JSON files appear to hold more than one message, so SUBJECT pairings
+  extracted from a file's top level are unreliable. The SENDER and RECIPIENT fields above
+  were read per-record and are consistent across all nine records examined; the advisor
+  re-ran the extraction independently. Treat sender and recipient as established and any
+  subject mapping as not.
 
   ## Acceptance
   1. A claim relayed from another seat is attributable: when a seat's message reproduces
@@ -82,7 +103,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:33:47.079434853Z
-modified_at: 2026-09-21T05:34:16.360103208Z
+modified_at: 2026-09-21T05:39:17.966292055Z
 req_type: Bug
 tags:
 - parent:EPIC-62 inter-agent-comms attribution provenance severity:operational
