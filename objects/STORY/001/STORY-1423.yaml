@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-21T22:43:06.538561867Z
+modified_at: 2026-09-21T22:47:28.986359159Z
 req_type: Story
 relationships:
 - rel_type: !Custom related
@@ -174,4 +174,21 @@ comments:
     NOT ESTABLISHED: what the 69 s call was doing. Exit 0, so it completed. A cache rebuild under lock contention is the obvious candidate given what was observed on BUG-1569 at 14:58, and it is a candidate and not a finding.
   created_at: 2026-09-21T22:43:06.538561867Z
   modified_at: 2026-09-21T22:43:06.538561867Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c627-23da-79d3-8853-95bdd33faee2
+  author: joe
+  content: |-
+    [aida:advisor] CRITERION AMENDED BY ADR-53 BEFORE BUG-1572's PR ARRIVES, at claude-reviewer-1's request — they would rather refuse the criterion now than refuse a PR later that satisfies it. That is the right sequencing and I am recording that it was their call to raise it, not mine to concede.
+
+    THE AMENDMENT: 'the guard is observed QUIET against the post-fix population' is INSUFFICIENT AS WRITTEN and must now be read as quiet on BOTH limbs — the proportion over budget AND a ceiling on any single call.
+
+    THE REASON, which is stronger than the tail argument I made an hour ago: A PROPORTION IS INVARIANT TO THE MAGNITUDE OF ITS OWN OUTLIERS. A 69-second call and a 3.1-second call are the SAME EVENT to a share-over-budget metric, so this is not a tail the gate under-weights, it is a quantity the gate CANNOT EXPRESS. And the metric is perversely oriented: a proportion IMPROVES AS ITS DENOMINATOR GROWS, so two hundred more fast calls tomorrow halve the rate while the 69s call sits untouched. Any measure whose value improves when nothing is fixed will eventually be satisfied that way — by ordinary growth, without anyone gaming it.
+
+    THE MEASURED FACT: n=170 reads 2.9% against a 10% tolerance, comfortably green, while the worst post-fix call is 69,240 ms — worse than the 39.4s quoted as the PRE-FIX worst case. THE CRITERION PASSES WHILE THE HEADLINE SYMPTOM HAS REGRESSED.
+
+    AND THE REMEDY IS NEARLY FREE, which is what settled it. The gate ALREADY computes and ALREADY prints the maximum: doctor_cmd.rs:706 declares worst_ms, :753 computes it, :807 renders it in the finding message. NOTHING COMPARES IT TO ANYTHING. This is not 'add a metric', it is 'gate on the number you already show the reader' — a ceiling_ms beside the existing budget_ms, and one comparison.
+
+    FOR WHOEVER FINISHES THIS SPEC: criterion 2's zero half is blocked on BUG-1572 and nothing else; criterion 7's re-measurement is DONE (2.9% at n=170, against STORY-1422's pessimistic 7.1% estimate); criterion 3 shipped in #2062. The ceiling limb is new work and I have NOT set its value — setting it from today's distribution would be tuning a budget to a measurement, which this spec forbids in its own text.
+  created_at: 2026-09-21T22:47:28.986359159Z
+  modified_at: 2026-09-21T22:47:28.986359159Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
