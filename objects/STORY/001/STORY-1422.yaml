@@ -47,7 +47,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:49:25.512029219Z
-modified_at: 2026-09-21T12:50:09.067317602Z
+modified_at: 2026-09-21T12:52:40.608790249Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -58,3 +58,35 @@ relationships:
   target_id: 01a0c058-3d0c-7eb1-993d-3976581722cb
   created_at: 2026-09-21T12:50:09.067312289Z
   created_by: joe
+comments:
+- id: 01a0c406-9420-7fd3-954f-73a0060bd3c4
+  author: joe
+  content: |-
+    THE REVIEWER'S CONDITION RESTATED IN THREE PARTS BY THEM, AFTER THEY FOUND THEIR OWN ORIGINAL WORDING UNDER-SPECIFIED. This supersedes "name the trigger" as the ordering, and the exit-code contract comes FIRST:
+
+      1. THE GATE CAN EXIT NON-ZERO. Demonstrated, not designed.
+      2. It exits non-zero on THIS population - the real store with the regression present - and ZERO after the fix. Needs both states of the code, so it cannot be done by a reviewer alone.
+      3. THEN the trigger: what invokes it, cadence, destination, actor.
+
+    Their own account of why: "I named the destination and the cadence and assumed the tripping. My condition as stated could have been satisfied by a cron line wrapping an instrument that never trips" - which would have been a fourth un-fired instrument accepted on a reviewer's condition, the exact case they argued against when setting the bar.
+
+    A THIRD COLLAPSED STATE, FOUND BY THE REVIEWER AND RE-VERIFIED BY THE ADVISOR - and it is the one that matters most for a scheduled gate:
+
+        --cmd show --slower-than 1000ms    (ten slow calls present)  exit 0
+        --cmd show --slower-than 99999ms   (zero matches)            exit 0
+        --cmd nosuchcmd --slower-than 1ms  (command does not exist)  exit 0
+
+    A TYPO IN THE COMMAND NAME IS INDISTINGUISHABLE FROM A HEALTHY SYSTEM. Three states - defect present, defect absent, pointed at nothing - one exit code. Scheduled as-is it would run for months looking exactly like a system in good health while measuring a command that does not exist. ACCEPTANCE ADDITION: the gate must exit non-zero, or report distinctly, when its target command shape has NO records at all. "Nothing to measure" is not "nothing wrong".
+
+    EXPERIENCED HARM, NOT LATENT REGRESSION - a property of this gate that must be WRITTEN DOWN rather than discovered. The usage log is per-machine and records only calls ACTUALLY MADE (~/.aida/usage.jsonl here: 49 MB, 326,509 records). So a seat that never runs `aida show` accumulates no slow calls and reports healthy - truthfully, since nobody on that machine was slowed. A regression that has landed but that nobody has hit yet is INVISIBLE to this gate until someone hits it.
+
+    That is arguably the right semantics for a performance guard and it is not being changed. It is recorded because "the perf gate is green" will otherwise be read as "no regression exists" rather than "no one has been hurt yet", and those diverge for exactly as long as it takes someone to run the command. Corollary worth knowing: the gate is WEAKEST on a fresh clone and STRONGEST on a machine in heavy use - the opposite of where a CI-shaped instinct expects coverage.
+
+    DEDUPLICATION IS A CONDITION, NOT A NICETY. The failure mode of this gate is NOT disablement - it is REPETITION. `aida show` is ~9.9 s on the current tree, so from the moment this ships it would trip on every run by every seat while the condition persists. Finding-fatigue reaches the same end state as a disabled gate, by a different route and with LESS visibility: nobody turned it off, everyone stopped reading it. ACCEPTANCE: one finding per distinct condition, UPDATED rather than re-filed while it persists. Prior art in this repo is the `.aida/session-notices/` sentinel used by FR-284 for the merged-spec FYI - verified present, do not invent a second pattern.
+
+    RECORD THE BUDGET IN FORCE AT THE TIME OF THE TRIP, in the `schedule/<job>.yaml` ledger entry. A CONFIGURED budget is a number someone can quietly raise when it trips - the failure mode of every latency gate. Without the budget-at-trip recorded, a later reader cannot distinguish A FIXED REGRESSION from A RAISED CEILING. Cheap now, impossible to reconstruct later.
+
+    WHY THIS INSTRUMENT IS THE FIRST OF TONIGHT'S FOUR CAUGHT AT DESIGN TIME. A detector that could not fire, a mutation that never changed behaviour, a timing test that could not fail, and now an instrument that cannot signal. Four ways of being inert; the first three were found after being built and relied upon, this one before anything was built on it. See TASK-1418.
+  created_at: 2026-09-21T12:52:40.608790249Z
+  modified_at: 2026-09-21T12:52:40.608790249Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
