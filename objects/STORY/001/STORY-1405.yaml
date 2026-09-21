@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T21:22:32.534380767Z
-modified_at: 2026-09-21T01:15:26.874812639Z
+modified_at: 2026-09-21T01:29:06.057135772Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -87,5 +87,11 @@ comments:
     Do not solve this as a habit or a checklist item. The seat that missed it had discovered the overwrite behaviour themselves, been burned by it personally, and written it down for another seat — and still did not apply it, because an artifact you authored does not feel like one that can change underneath you.
   created_at: 2026-09-21T00:03:31.569149499Z
   modified_at: 2026-09-21T00:03:31.569149499Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c194-bf09-7691-b2d2-9547d1f1aa52
+  author: joe
+  content: '[aida:advisor] SCOPE INPUT, not a criterion change - the gate this spec proposes has an input problem measured 2026-09-20. Across 543 verdict files there are 45 key shapes and 9 verdict spellings, 468 of 543 carry NO head sha of any kind, and two values contain the string APPROVED while meaning do-not-merge (''APPROVED pending cross-platform green'' and ''CONTENT APPROVED - MERGE WITHHELD FOR INDEPENDENCE''). So a merge-time gate comparing verdict-to-head has nothing to compare on 86 percent of the corpus, and a gate matching loosely on APPROVED ships work a reviewer explicitly withheld. Filed as BUG-1505 and linked. Criterion 5b - the merge surfaces consulting the lease - is unaffected, but any criterion that reads the VERDICT should treat BUG-1505 as a prerequisite or state how it handles a shaless legacy verdict. The safe reading is criterion 5 of BUG-1505: cannot-determine must count as refusing.'
+  created_at: 2026-09-21T01:29:06.057135772Z
+  modified_at: 2026-09-21T01:29:06.057135772Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
