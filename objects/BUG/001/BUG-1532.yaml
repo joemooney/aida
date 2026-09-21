@@ -234,7 +234,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:18:31.246345754Z
-modified_at: 2026-09-21T13:42:59.774954752Z
+modified_at: 2026-09-21T13:45:49.664506799Z
 req_type: Bug
 tags:
 - parent:EPIC-62 merge-hold pr-ship safety-gate severity:major
@@ -332,3 +332,24 @@ comments:
   created_at: 2026-09-21T13:42:59.774954752Z
   modified_at: 2026-09-21T13:42:59.774954752Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c437-3d60-7dd2-9b33-f9fed2af9d42
+  author: joe
+  content: |-
+    REVIEWER measurement, 2026-09-21 06:50 local — the server-side gate half IS evaluated; #2033 is NOT a second instance of this bug.
+
+    The advisor asked me to check, when a rework lands on #2033, whether the aida:merge-hold label actually produces a gate FAILURE, on the belief that both gate runs predated the label by ~9 hours. No rework is needed to answer it: the label-triggered run already exists, and the ordering is the reverse of what was stated.
+
+      label applied   2026-09-20T21:59:16Z  (issues/2033/timeline, event=labeled, actor joemooney; no unlabeled event since)
+      run 35540275150 created 21:59:17Z  event=pull_request  head 74ff448f32d6  -> FAILURE at 21:59:23Z
+      run 35539450215 created 21:40:54Z  event=pull_request  head 74ff448f32d6  -> SUCCESS
+
+    One second separates the label from the run that failed, at an unmoved head. merge-hold-gate.yml triggers on [opened, reopened, synchronize, labeled, unlabeled], so that run IS the label's own evaluation. The only pre-label run SUCCEEDED, which is exactly what the gate should do before a label exists. There is no stale failure from an earlier refusal cycle: the 21:59 FAILURE is the hold firing.
+
+    It binds: branches/main/protection requires contexts [merge-hold-gate, Build (ubuntu-latest)] with enforce_admins=true, and #2033 reads mergeStateStatus BLOCKED.
+
+    SCOPE — this confirms ADR-37 Layer 2 (server-side, un-bypassable) only. It says nothing about this bug's actual claim, which is about the CLIENT layer: that a .aida/merge-holds/PR-N marker does not bind aida pr ship unless a drive is live and its reason text names a running spec. That half remains untested here and I am not contradicting it. The two layers fail independently, which is the point of having both.
+
+    CONSEQUENCE for the #2033 ordering: the substrate half is real and has fired. The ordering does not rest on three humans and one incidental failure.
+  created_at: 2026-09-21T13:45:49.664506799Z
+  modified_at: 2026-09-21T13:45:49.664506799Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
