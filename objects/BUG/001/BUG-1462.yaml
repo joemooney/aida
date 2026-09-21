@@ -19,12 +19,12 @@ description: |-
   - The TUI mail row title prefers Message.subject when it is present and non-blank, falling back to the body first line otherwise.
   - Preferred fix: make the core projection pub (or add a pub helper) and have the TUI call it, deleting the local mail_subject copy, so the two cannot drift again. If the copy is kept, a test must pin the two implementations to the same behavior.
   - A test covers a Message with a subject rendering that subject as the row title.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:44:06.450584423Z
-modified_at: 2026-09-21T20:46:33.618213072Z
+modified_at: 2026-09-21T20:50:40.620093656Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -60,8 +60,26 @@ comments:
   created_at: 2026-09-21T20:46:33.618213072Z
   modified_at: 2026-09-21T20:46:33.618213072Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0c5bc-3369-71a0-9dcd-0c2d94cbd011
+  author: aida-auto-bump
+  timestamp: 2026-09-21T20:50:40.617230242Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0c5bc-336c-77e3-bdd0-6f5f1568577b
+  timestamp: 2026-09-21T20:50:40.620090866Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1462-2026-09-21T204639Z.md
+  commit_sha: c29022deb87b4995def9b6d605171337739e9f0a
+  summary: 'Re-record of the approve originally made at 13:28. The spec-keyed record (BUG-1462.json) was written; the PR-keyed handshake (PR-2059.json) was NOT, despite the command reporting both as written. Head unmoved at 62dfb3ebd80e, so this replaces nothing. VERDICT UNCHANGED: clean de-duplication that removes the cause rather than syncing the symptom. The TUI carried its own mail_subject projection whose doc comment admitted the duplication and named its reason - "kept independent since that one isn''t pub" - so a visibility choice made copying easier than sharing, and the copy failed to learn about explicit subjects when BUG-1231 added them. This makes the canonical subject_line pub, teaches it to prefer a non-blank explicit subject, and DELETES the duplicate. Third surface in the same drift family: CLI --subject (BUG-1231), MCP mirrored (#2057/BUG-1461), TUI here - and only this one was a genuine duplicate rather than a missing mirror. Verified: subject_line still returns "[withdrawn]" first and falls back to the first non-empty body line, so both pre-existing behaviours survive; the test covers BOTH directions (explicit wins, blank falls back), where a one-directional test would pass for an implementation that always used the subject. I also checked a concern that did NOT hold: the "(empty message)" placeholder moved from the deleted function to the call site, which is how relocated behaviour loses its test - mail.rs:266 pins it. Portability check clean.'
+  review_verdict: approve
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-21T20:27:29.512442385Z
   implemented_by: joe
+  completed_at: 2026-09-21T20:50:40.617015229Z
+  completion_sha: c29022deb87b4995def9b6d605171337739e9f0a
