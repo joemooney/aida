@@ -1,0 +1,50 @@
+id: 01a0c1cb-97e3-7962-a7e6-e941c86467b8
+spec_id: TASK-1-165
+title: 'A Done spec with a red-CI, unrouted, unheld PR is invisible to every surface: the orphan sweep excludes red by design and awaiting never shows it (PR #2035 / BUG-1470)'
+description: |-
+  A Done spec whose PR has RED CI, no reviewer, no hold and no queue entry is invisible to every surface: the orphan sweep skips it by design and `aida awaiting` never mentions it
+
+  FOUND by sweeping all 25 open PRs for the class my own stranded-refusal sweep is blind to. That sweep flags PRs that HAVE a refusal and lack a hold; it cannot see a PR with NO verdict at all, which is the more dangerous state and was exactly PR #2042's earlier tonight.
+
+  THE INSTANCE, open 3.8 hours at time of writing:
+
+      PR #2035   [AI:codex] fix(queue): keep metadata rework claimable (BUG-1470)
+      created    2026-09-20T22:41:18Z
+      state      OPEN, not draft, MERGEABLE/BLOCKED
+      checks     Build (ubuntu-latest) FAIL | merge-hold-gate pass
+      verdict    none
+      hold       none, neither label nor marker
+      queue      not routed to any reviewer
+      BUG-1470   status DONE
+
+  WHY NOTHING WILL EVER SURFACE IT. Each surface excludes it for a locally defensible reason, and the reasons compose into total invisibility:
+
+    - the BUG-1291 orphan sweep requires `green`, computed as ci_rollup in (None | Some("pass")).
+      This PR's Build fails, so the sweep skips it CORRECTLY - claiming a red PR for review would
+      waste a reviewer on a branch that cannot merge. The sweep is right and the PR is still lost.
+    - `aida awaiting` does not mention BUG-1470 or 2035 anywhere in its output. Not in prs, not in
+      briefs, not in escalations, not in unshipped_work.
+    - no reviewer queue entry exists, so no reviewer will pick it up.
+    - no hold exists, so no gate is armed - nothing is stopping it, there is simply nothing
+      driving it.
+    - the spec reads DONE, so it is absent from every open-work lens by the ordinary rules.
+
+  So the spec says finished, the PR says failing, and no surface reconciles the two. This is not a gate failing open; it is work falling between gates that are each behaving correctly.
+
+  WHY THIS IS A DIFFERENT SHAPE FROM BUG-1291. That bug is about a PR that is clean and unowned - ready work nobody claims. This is a PR that is BROKEN and unowned. The orphan sweep deliberately excludes it, which means the red-CI case is not merely uncovered, it is covered by an exclusion. A recovery mechanism whose predicate requires green can never recover the things that are red, and red-with-nobody-assigned is the state most likely to sit indefinitely, because there is no green moment at which anything starts watching.
+
+  THE SPEC-STATUS PART MAKES IT WORSE. BUG-1470 is Done. Done means work finished on a branch, which is literally true and operationally false here: the branch does not build. Done is also enough to drop it from the open-work view. So the one field that could have kept it visible is set to the value that hides it, and set correctly by the rules as written.
+
+  SUGGESTED SHAPE, advisory: the complement of the orphan sweep. Where that sweep claims clean-and-unowned PRs for review, something needs to surface RED-and-unowned PRs for repair - or `aida awaiting` needs a line for "your spec is Done and its PR is failing", which is a two-way check between spec status and PR state that nothing currently performs. The cheapest version is a predicate that is the exact negation of the sweep's green test, so the two together cover every open PR rather than leaving the red ones in the gap between them.
+
+  NOTE ON PROVENANCE: I did not review #2035 and am not proposing to. Its CI is red; a review now would produce findings against a tree that cannot merge. This is filed as a routing and visibility defect, not a code finding.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T02:29:00.515328965Z
+modified_at: 2026-09-21T02:29:00.515328965Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
