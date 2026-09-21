@@ -112,61 +112,12 @@ description: |
   CREDIT: mechanism, escalation and criteria 1-3 are the reviewer's, from their 22:11 and
   22:12 reports. The four-leg verification and the merge-hold-keying check are the driver
   advisor's.
-  "
-  relationships[1]{rel,id,title}:
-    Related,BUG-1530,"aida awaiting is not scoped to the seat reading it: a reviewer is shown nineteen advisor- and implementer-owned items and is NOT shown the reviewer work routed to them
-
-  7. THE SAME CORPUS LIMIT APPLIES TO CRITERION 3, AND ABSENCE MUST NOT MEAN PERMISSION.
-     Measured 2026-09-20 22:16: of 556 verdict files, 127 (22%) carry a sha under any of
-     the three key names and 429 (77%) carry none. Criterion 3 forbids a ship hint for a
-     head carrying an unresolved request-changes verdict — but for most of the corpus the
-     verdict cannot be tied to a head at all.
-
-     A hint suppressor that emits the hint whenever it cannot find a matching sha is worse
-     than no suppressor, because it reads as a safety feature. Where provenance is absent,
-     the surface must fall back to criterion 2 — no ship hint for a head that already has
-     an open PR — which needs no verdict data and covers this case regardless.
-
-     This is why criterion 2 is independent of 3 rather than a weaker version of it: 2 is
-     the floor that holds while 77% of verdicts cannot support 3.
-  "
-  relationships[2]{rel,id,title}:
-    Related,BUG-1530,"aida awaiting is not scoped to the seat reading it: a reviewer is shown nineteen advisor- and implementer-owned items and is NOT shown the reviewer work routed to them"
-    Related,BUG-1466,"aida review record --pr writes a PR handshake with no provenance: reviewed_sha, reviewed_branch, recorded_at and recorded_by are all dropped (452 of 481 files affected)
-
-  CORRECTION TO THE DENOMINATOR ABOVE — THE 77% IS THE WRONG NUMBER FOR SIZING THIS
-  CRITERION, and reading it as the blast radius leads to the opposite conclusion from the
-  one the evidence supports. Reviewer's correction 2026-09-20 22:19, re-measured by the
-  driver advisor and identical:
-
-      WHOLE CORPUS            127/556  have a sha   23%   <- BUG-1466's coverage question
-      SPEC-KEYED               43/53   have a sha   81%   <- what THIS guard reads
-      PR-KEYED, OPEN PRs       16/21   have a sha   76%   <- what BUG-1531's hint reads
-
-  A live guard never reads the whole corpus. It reads the verdict for the spec or PR in
-  front of it. The 429 missing are overwhelmingly closed, legacy, PR-keyed files no live
-  guard will consult. 77% is the right figure for "can retention reach the corpus"; it is
-  the wrong figure for "how often will this guard hit unknown".
-
-  THE OPERATIONAL RATE IS ROUGHLY ONE IN FOUR AND IT IS NAMEABLE. Five open PRs carry a
-  verdict with no sha, so these are the cases where this criterion refuses TODAY:
-
-      PR-1984   PR-1998   PR-2009   PR-2039   PR-2040
-
-  Verified by the driver advisor 22:21 against the open-PR list.
-
-  WHY THIS ARGUES FOR KEEPING THE CRITERION HARD RATHER THAN SOFTENING IT. Sized against
-  77%, "refuse or escalate on unknown" reads as "the guard refuses most of the time",
-  which invites softening — and softening is precisely what reintroduces the silence this
-  spec exists to remove. Sized against five named PRs it is survivable and specific, and
-  an implementer can check the behaviour against each one. Do not soften this criterion on
-  the strength of the corpus-wide figure.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:06:55.400149929Z
-modified_at: 2026-09-21T05:31:01.517188095Z
+modified_at: 2026-09-21T05:46:59.468993947Z
 req_type: Bug
 tags:
 - parent:EPIC-62 awaiting unshipped-work alert-fatigue severity:operational
