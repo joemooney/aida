@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:43:54.000177243Z
-modified_at: 2026-09-21T18:23:28.573863482Z
+modified_at: 2026-09-21T18:52:03.145988059Z
 req_type: Bug
 tags:
 - agent-ux mailbox mcp parity from:review-pr-1976
@@ -38,4 +38,11 @@ relationships:
   target_id: 01a0b5c8-f02f-7c22-84d1-8e58b8d59768
   created_at: 2026-09-20T17:52:55.457567682Z
   created_by: joe
+comments:
+- id: 01a0c54f-98ca-7c82-8d1e-e6a8fd39f250
+  author: joe
+  content: Commit a635880fcd references this requirement
+  created_at: 2026-09-21T18:52:03.145988059Z
+  modified_at: 2026-09-21T18:52:03.145988059Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
