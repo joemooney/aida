@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:22:32.343565248Z
-modified_at: 2026-09-21T01:33:45.525241535Z
+modified_at: 2026-09-21T01:37:32.329342315Z
 req_type: Bug
 tags:
 - auto-bump
@@ -91,6 +91,30 @@ comments:
   created_at: 2026-09-21T01:08:46.739569132Z
   modified_at: 2026-09-21T01:08:46.739569132Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c19c-78a9-78f3-8db4-fcf989f72caf
+  author: joe
+  content: |-
+    [aida:advisor] RECOVERED VERDICT - the codex drain reviewer's request-changes on PR #2040, recorded 2026-09-20 ~18:26 local against a3049c50bf29bbfdfb7e2b9ab903db2b212a713c on branch bug-1454-work, and overwritten at 18:31:53 by a second reviewer's verdict. Reported as unrecoverable; recovered in full from the headless reviewer session log .aida/headless-logs/pr-2040-01a0c18e-f7eb-71e3-813b-f6fbaf1d4af4.jsonl. Preserved here because a spec comment is git-backed and cannot be silently replaced, which the verdict file can.
+
+    VERDICT: request-changes
+    SUMMARY: Four acceptance gaps remain: pre-Done mirror case, bidirectional sweep, exact regression shape, and non-GitHub ambiguity.
+
+    FINDING 1. The advisor-added acceptance requires a spec whose trailered work is on the default branch not remain pre-Done merely because it skipped intermediate states. The patch leaves lifecycle::git_merge_completes unchanged and explicitly excludes Draft, so the observed TASK-1302 mirror case remains unfixed. Implement the pre-Done merged-work path and add regression coverage.
+      ADVISOR DISPOSITION: split to BUG-1506, and scoped OUT of this spec by criterion 7. Not blocking here.
+
+    FINDING 2. The advisor-added sweep criterion requires both counts: Completed specs with open PRs, and pre-Done specs with already-merged trailered commits. The spec comment reports only 9 Completed/open-PR candidates and no reverse-direction count. Run and report the required bidirectional sweep.
+      ADVISOR DISPOSITION: the reverse direction is BUG-1506 criterion 3. Criterion 5 here delivers one direction only. Not blocking.
+
+    FINDING 3. Acceptance 6 requires a regression with two commits carrying the same spec trailer, one merged and one on an open PR. open_pr_for_same_spec_defers_auto_bump creates only ONE local commit; its fake gh returns PR #1979 for every invocation without validating the searched spec or modelling a second trailered commit. Add a faithful two-deliverable fixture and assert the lookup is for the same spec.
+      ADVISOR DISPOSITION: STANDS. This is a test-fidelity finding against acceptance criterion 6 as written, independent of the scope change. A fake that answers every query identically cannot demonstrate the lookup is spec-specific.
+
+    FINDING 4. specs_with_open_prs returns an empty map for every non-GitHub forge, which is interpreted as definitively no open change and permits completion. AIDA supports GitLab, and acceptance 3 says ambiguity must preserve Done; unsupported or unqueried forge state is ambiguous. Query the configured forge, or return inconclusive, so GitLab or unknown cannot silently auto-complete.
+      ADVISOR DISPOSITION: STANDS, and it is the most consequential of the four. It is a direct violation of criterion 3 of this spec - prefer Done where the bump is ambiguous - and this project has a live GitLab mirror, so the empty-map path is reachable here and not hypothetical. Promoted to acceptance criterion 8.
+
+    Findings 3 and 4 were raised by nobody else. They were destroyed three minutes after being written and would have been lost silently had a sweep not happened to name the PR.
+  created_at: 2026-09-21T01:37:32.329342315Z
+  modified_at: 2026-09-21T01:37:32.329342315Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
