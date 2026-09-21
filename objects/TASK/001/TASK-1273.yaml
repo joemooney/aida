@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-21T07:40:41.338248881Z
+modified_at: 2026-09-21T07:43:38.121809870Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -264,6 +264,12 @@ comments:
     should travel to a spec which does NOT require the live smoke to pass.
   created_at: 2026-09-21T07:40:39.950928066Z
   modified_at: 2026-09-21T07:40:39.950928066Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c2eb-a489-7073-ad42-3e81e0bf1378
+  author: joe
+  content: 'Current-head confirmation: workflow_dispatch run 35574028945 at 3776fc15f1 completed the GitLab live forge smoke job with failure at phase=project-create. Job 106251708318 returned the Cloudflare Access sign-in page from /api/v4; this confirms the previously recorded infrastructure punt applies to the final pushed head.'
+  created_at: 2026-09-21T07:43:38.121809870Z
+  modified_at: 2026-09-21T07:43:38.121809870Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
