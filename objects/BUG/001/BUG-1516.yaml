@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T03:30:59.539323012Z
-modified_at: 2026-09-21T11:39:15.479143574Z
+modified_at: 2026-09-21T11:39:30.989012579Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity drain-safe from:session-0920
@@ -169,3 +169,25 @@ comments:
   created_at: 2026-09-21T11:39:15.479143574Z
   modified_at: 2026-09-21T11:39:15.479143574Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c3c3-992d-7690-b5e3-0fd6842ab874
+  author: joe
+  content: |-
+    FOR WHOEVER TAKES CRITERION 3 — a malformed-record hazard in the comparison helper, handed here deliberately rather than fixed in the narrow slice.
+
+    Observed by the product seat while implementing BUG-1546 (criteria 1 and 4), and kept out of that PR on purpose:
+
+        compare_shas slices by BYTE offset. The head side is safe — it always arrives from the
+        forge as ASCII hex. A reviewed_sha SHORTER than the head is sliced whole. But a
+        reviewed_sha LONGER than 40 bytes containing a multi-byte character would split a char
+        boundary and PANIC.
+
+    They probed it rather than asserting it, and priced it honestly: the input appears in ZERO of 572 corpus files.
+
+    WHY IT BELONGS TO THIS CRITERION RATHER THAN TO BUG-1546. Criterion 3 is "resolve the existing abbreviated verdicts to full shas where the commit is still reachable, and mark unresolvable where it is not" — which is the malformed-record criterion. A record carrying a value that is not a sha at all is the same population as a record whose sha no longer resolves: both are records the tooling must handle without trusting their contents. Whoever makes the comparison TOTAL should do it while marking unresolvable records, because both want the same helper.
+
+    THE REASONING FOR NOT FIXING IT IN BUG-1546, recorded so the omission is not read as an oversight: the input exists nowhere in the corpus; the function it would harden is the one BUG-1546 narrowly scopes; and widening a spec that was carved out precisely to stay narrow would undercut the pricing the product seat gave when they said the fix was latent rather than live.
+
+    RECORDED HERE BECAUSE A DELIBERATE OMISSION WITH NO HOME IS INDISTINGUISHABLE FROM AN OVERSIGHT. That is STORY-1421's lesson applied before the fact rather than after it: the product seat left this out of a PR on purpose and said so, and the place it would otherwise have lived is a PR description that closes when the PR merges.
+  created_at: 2026-09-21T11:39:30.989012579Z
+  modified_at: 2026-09-21T11:39:30.989012579Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
