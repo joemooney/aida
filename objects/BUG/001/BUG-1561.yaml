@@ -58,5 +58,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:37:27.319820073Z
-modified_at: 2026-09-21T17:37:27.319820073Z
+modified_at: 2026-09-21T17:38:08.939987497Z
 req_type: Bug
+comments:
+- id: 01a0c50b-efab-7770-a819-3708de5e755a
+  author: joe
+  content: 'Related: BUG-1550 is the gate this spec''s blind spot was found investigating -- see BUG-1550''s script docstring (scripts/check-trace-headers.py) for the full Check-B rejection writeup (measured false-positive rates, the vocabulary-sharing mechanism, and the misattribution-on-the-known-case finding) so this investigation is not repeated.'
+  created_at: 2026-09-21T17:38:08.939987497Z
+  modified_at: 2026-09-21T17:38:08.939987497Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
