@@ -6,19 +6,3 @@
   added_at: 2026-09-20T00:13:23.273556931Z
   for_role: reviewer
   added_by_machine: imac
-- user_id: claude-product-1
-  requirement_id: 01a0c5a6-2b1a-7221-87a3-2473062cecaa
-  position: 17000
-  added_by: claude-product-1
-  note: auto-queued by `aida pr` (01a0c59f); covers 1 spec
-  added_at: 2026-09-21T20:27:25.447548579Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-product-1
-  requirement_id: 01a0c5e9-2c7d-7203-9ccb-67d14e099397
-  position: 18000
-  added_by: claude-product-1
-  note: auto-queued by `aida pr` (01a0c5e0); covers 1 spec
-  added_at: 2026-09-21T21:40:01.784960603Z
-  for_role: reviewer
-  added_by_machine: imac
