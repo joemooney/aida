@@ -100,12 +100,26 @@ description: |-
       THIS IS NOT AN ARGUMENT AGAINST THE DECISION. It is the reason clause A is load-bearing rather than a safety net, and it is what the first week's observation must actually measure: not whether the split unblocks work - the three instances already show it does - but the rate at which findings land in the unclassifiable bucket and what happens to them. If that rate stays near a third, the mode's real behaviour is 'block by default with an escape hatch for obvious acceptance gaps', which is a defensible thing to have built and a different thing from what this ADR describes.
 
       Recorded at the reviewer's initiative, against the position it had argued for.
+
+  H. THE THING ACTUALLY CATCHING MISCLASSIFICATION DEGRADES UNDER EXACTLY THE LOAD THIS DECISION AUTHORISES. Raised by the reviewer seat 2026-09-20 21:06 against its own position, and it is the strongest argument for clause A.
+
+      Clause A requires an unclassified finding to BLOCK, because the split routes on a judgement the reviewer makes at verdict time. The question nobody had asked is what catches a misclassification when it happens anyway.
+
+      TONIGHT THE ANSWER WAS A SECOND SEAT CHECKING CLOSELY - and that checking happened because the reviewer queue held zero actionable items and there was nothing else to do. It is unbilled, it produces no artifact of its own, and its value is invisible whenever it finds nothing. Under a full queue it is the first thing to go.
+
+      SO THE MODE MOST LIKELY TO PRODUCE MISCLASSIFIED FINDINGS IS THE MODE LEAST LIKELY TO HAVE ANYONE CHECKING THEM. A mass-change period is by definition the period with no slack, and cross-checking is the activity that only exists in slack. That is not a reason to reject this decision - the measurements still say the split is right - but it means clause A's default cannot be treated as a backstop with review behind it. During the mode, clause A may be the only thing standing.
+
+      CONSEQUENCE FOR THE FIRST WEEK'S OBSERVATION, which clause G already scopes: measure the unclassifiable RATE, and also measure whether anything is checking the classifications at all. If the rate is near a third and nobody is cross-checking, the mode's real behaviour is block-by-default with an unreviewed escape hatch, which is a third thing and worse than either of the two clause G names.
+
+      EVIDENCE QUALITY, stated because it is thin: one evening, two seats, an empty queue. The degradation is predicted, not observed - no mass-change period has yet run under this decision. Recorded rather than filed as a finding for that reason, and recorded here rather than only in correspondence because it bears on the exit condition the operator has not yet answered.
+
+      AND A RELATED FACT THAT IS NOT AN ARGUMENT, RECORDED SO IT IS NOT MISTAKEN FOR ONE: the second-reader arrangement exists because the operator created the reviewer seat and gave it merge authority over work neither other seat authored. It was a resource decision made before any of tonight's evidence existed. Nothing in the substrate would have produced it and no amount of care by the other two seats substitutes for it. What is purchased can be unpurchased, which is the same exposure by a different route.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:59:55.527300499Z
-modified_at: 2026-09-21T03:05:07.174823400Z
+modified_at: 2026-09-21T04:05:42.453297427Z
 req_type: Decision
 tags:
 - operator-decision
