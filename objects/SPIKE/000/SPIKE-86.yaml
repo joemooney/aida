@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:38:32.393127411Z
-modified_at: 2026-09-21T16:40:50.910327411Z
+modified_at: 2026-09-21T16:46:36.691986566Z
 req_type: Spike
 tags:
 - architecture
@@ -87,5 +87,24 @@ comments:
     SECOND OPEN QUESTION - WORK ITEMS VERSUS ASSERTIONS. Most specs are DELTAS ("fix X", "aida ps cannot distinguish a working seat from a blocked one"), not INVARIANTS ("the system does Y"). A completed BUG records that a fix happened, not what the system now does, and a corpus of deltas reconstitutes a changelog rather than a system. EPIC-70's criteria-to-test tracing is the right answer for specs that CARRY criteria; the leading indicator is therefore what fraction do, which `aida criteria gap` can already measure. Report that fraction as part of this spike.
   created_at: 2026-09-21T16:40:50.910327411Z
   modified_at: 2026-09-21T16:40:50.910327411Z
+  session_id: 01a0b204-9df4-7622-8b91-f12fd291d8df
+- id: 01a0c4dc-c094-72b1-8b14-71db195d894f
+  author: joe
+  content: |-
+    NORTH STAR REFINED BY THE OPERATOR (2026-09-21), correcting the absolute framing in the previous comment:
+
+    "I acknowledge that aida itself does not meet that objective, first I want any system built using aida to be much better positioned to be able to be reconstituted by the metadata that aida captured [than] if they did not use aida. The dogfooding is good, much has passed that has not been captured."
+
+    THREE CORRECTIONS THAT CHANGE THE VISION WORDING (deliverable 1):
+
+    1. THE CRITERION IS COMPARATIVE, NOT ABSOLUTE. The claim is not "the store reconstitutes the system" but "a project that used AIDA is materially better positioned to reconstitute than the same project without it." The baseline is what a non-AIDA project has after the code is gone: git log subjects, a README, maybe an issue tracker. AIDA's claim is the DELTA over that - specs with acceptance criteria, typed relationships, ADRs, code-to-spec traces, and lifecycle history. This is both more honest and more defensible: "reproduce from scratch" is a claim no reader believes, while "better positioned than if you hadn't" is modest and falsifiable.
+
+    2. USER PROJECTS COME FIRST; AIDA'S OWN CORPUS IS EXPLICITLY SECOND. The objective is about systems BUILT WITH AIDA. AIDA's own store is a weak test case by the operator's own account - much of the system predates the capture discipline and was never captured. That is a dogfooding artifact, not a design failure, but it means AIDA should NOT be the instrument's validation subject. A project that used AIDA from its first commit is the real test; ~/ai/aida-hub is the existing fresh-project probe and the natural candidate.
+
+    3. CAPTURE COVERAGE IS A FIRST-CLASS USER-FACING QUESTION, not internal hygiene. If the promise is "you will be better positioned," a user needs to see how well-positioned they currently are - trace density, share of commits carrying a SPEC-ID trailer, share of specs carrying acceptance criteria, share of criteria carrying traced tests. `aida criteria gap` already computes part of this. Under the refined objective these become PRODUCT metrics, not a maintainer's dashboard.
+
+    IMPLICATION FOR THE VISION TEXT: it should state a comparative advantage for the user's project, not an absolute capability of the store, and it should not promise whole-system regeneration. Suggested shape for operator wording, not final: AIDA captures the intent behind a system so that, if the code were lost or rewritten, what the system was FOR survives in a form an agent can rebuild from - far better than commit messages and a README alone.
+  created_at: 2026-09-21T16:46:36.691986566Z
+  modified_at: 2026-09-21T16:46:36.691986566Z
   session_id: 01a0b204-9df4-7622-8b91-f12fd291d8df
 human_only: true
