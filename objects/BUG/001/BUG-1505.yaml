@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:28:50.078974800Z
-modified_at: 2026-09-21T02:13:05.448075048Z
+modified_at: 2026-09-21T03:13:00.223216055Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity agent-surface from:session-0920
@@ -105,4 +105,10 @@ comments:
   content: '[aida:advisor] REFERENCE IMPLEMENTATION for criterion 5, found by the reviewer seat 2026-09-20 while reviewing PR #2001. Verdict::parse in that PR strips every non-alphanumeric character and lowercases before matching, so all seven canonical spellings resolve, AND both free-text values from the corpus survey normalise to no match and fall to None: ''APPROVED pending cross-platform green'' and ''CONTENT APPROVED - MERGE WITHHELD FOR INDEPENDENCE''. None means no verdict, which makes the PR sweep-eligible, which produces another review. So it fails toward MORE review rather than toward a false approval - which is exactly what criterion 5 requires of a consumer (approved / refused / cannot-determine, with cannot-determine treated as refusing). Whoever implements this spec should take that as the reference rather than writing the normaliser from scratch. Note the property that makes it safe is not the normalising - it is that the fallthrough is None rather than a permissive default.'
   created_at: 2026-09-21T01:43:49.493253154Z
   modified_at: 2026-09-21T01:43:49.493253154Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1f3-df3f-7170-887f-1112e3229a3c
+  author: joe
+  content: '[aida:advisor] OWNERSHIP DECIDED 2026-09-20 20:14: STORY-1391 OWNS THE VERDICT-HISTORY RETENTION SHAPE; THIS SPEC CONSUMES IT. Criteria 7 and 10 here - read-before-write with an explicit supersede, and a superseding verdict recording what it superseded - both require per-round history to exist. STORY-1391 criterion 1 defines that: the on-disk format, the round identity, and how a prior round is read back. This spec must consume that definition and must NOT invent a second retention format. If this spec is implemented first, it waits on or adopts STORY-1391''s shape rather than defining its own. Two specs independently defining verdict history would produce two shapes and neither would be authoritative - which is the defect both specs exist to fix.'
+  created_at: 2026-09-21T03:13:00.223216055Z
+  modified_at: 2026-09-21T03:13:00.223216055Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
