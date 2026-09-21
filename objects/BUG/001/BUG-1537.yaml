@@ -1,0 +1,36 @@
+id: 01a0c309-48ac-7b13-8fbd-282636d02b27
+spec_id: BUG-1537
+agreed_id: BUG-1537
+title: aida pr ship prints 'shipped' and the IMPLEMENTER COMPLETE banner for a PR someone else already merged, so the output cannot distinguish an act it performed from one it found done
+description: |-
+  OBSERVED, 2026-09-21 01:11-01:12 local, on PR #2046.
+
+  The reviewer seat merged #2046 at 08:10:22Z. Roughly a minute later, unaware of that (our mails crossed), this advisor ran `aida pr ship 2046`. The command ran its post-merge steps - store pull, `aida pull`, the auto-bump, the lease/cleanup next-step line - and finished by printing:
+
+      ✓ aida pr ship — PR-2046 shipped
+
+      ════════════════════════════════════════════════════════════════
+      ▶ IMPLEMENTER COMPLETE — EXIT NOW
+      ════════════════════════════════════════════════════════════════
+        PR-2046 is merged. The post-ship phases (CI watch, merge, pull /
+        auto-bump, lease release) either ran in steps 2-5 above or are
+        listed there as their own next-step lines.
+
+  Nothing in that output distinguishes "I merged this PR" from "this PR was already merged when I got here." I read it as the former and reported to two other seats that I had executed the merge. The reviewer corrected me from the GitHub record: mergedAt 08:10:22Z, merge commit 1460a0168a787edcc632aa830f7a9f9b56c6805d, merged by their own `gh pr merge`. I then had to amend the proxy-approval ledger on BUG-1526, which had recorded the wrong actor for the merge act.
+
+  WHY THIS IS A DEFECT AND NOT A USER ERROR. AIDA's own PRIN-5 says a coordination surface must distinguish absent evidence from good evidence, because computing a verdict over what is present always errs toward reassurance. Here the surface does something adjacent and worse: it reports an ACT IT DID NOT PERFORM, in the first person, with a success glyph. The no-op case and the did-the-work case are rendered identically. A caller cannot tell them apart from the output, and the output is the only thing an agent has.
+
+  THE BLAST RADIUS IS THE LEDGER, not the merge. The merge was correct and every gate held. What broke is attribution, and attribution is exactly what a proxy-approval ledger exists to preserve - the independence rule is enforced by knowing who did which act. An entry naming the wrong merger survives indefinitely, because nothing downstream contradicts it. It took a human-readable mail from the other seat to catch it; no substrate check would have.
+
+  WHAT IT SHOULD DO INSTEAD. `aida pr ship <N>` should detect that the PR is already merged before the merge step and say so explicitly and differently - something in the shape of "PR-2046 was ALREADY MERGED at 08:10:22Z by <actor> as 1460a0168a; ran post-merge steps only (pull, auto-bump, cleanup)" - and it should not print the IMPLEMENTER COMPLETE banner claiming the post-ship phases "ran in steps 2-5" when the merge step was skipped. The distinction wanted is per-step: which steps executed, which were already satisfied, which were skipped.
+
+  RELATED SHAPE, worth checking in the same pass: any other AIDA verb that is idempotent-by-design and reports success identically whether it acted or found the work already done. The merge path is the one where attribution is load-bearing, but it is unlikely to be the only site.
+
+  Filed by the driver-advisor seat, from a real incident rather than a hypothetical. Autonomous-safe: the fix is output/attribution only, with no change to merge semantics.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T08:16:00.684456364Z
+modified_at: 2026-09-21T08:16:00.684456364Z
+req_type: Bug
