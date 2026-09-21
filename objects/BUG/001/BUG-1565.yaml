@@ -35,9 +35,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:06:26.618364993Z
-modified_at: 2026-09-21T19:06:26.618364993Z
+modified_at: 2026-09-21T19:06:30.403578372Z
 req_type: Bug
 tags:
 - aida:tests
 - parent:EPIC-62
 - portability
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-21T19:06:30.403578372Z
