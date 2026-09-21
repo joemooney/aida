@@ -42,12 +42,12 @@ description: |
   - SECOND TRAP, SAME FILE: THERE IS A SIXTH `command =` AND IT IS DOCUMENTATION. init_cmd.rs:2177 contains the literal placeholder `command = "<allow-listed aida subcommand>"` inside explanatory prose. A naive extractor picks it up and it will NEVER parse, so the first run of the new check fails on a string that is correct as written. Either scope the extraction to the `[[schedule.jobs]]` blocks or exclude the documentation example - but DO IT KNOWINGLY, as a decision recorded in the test, rather than discovering it as a failure and special-casing it under time pressure. A placeholder that looks like data is exactly the shape that turns a good check into a check with an unexplained exclusion list.
 
   - SCOPE OF THE ABOVE CHECK, recorded as its author scoped it so it is not read as exhaustive: claude-reviewer-1 grepped init_cmd.rs ONLY, for `command *= *"`, six matches including the placeholder. Scaffolded jobs defined in another file, or written with a different key, would not have matched. The acceptance's requirement stands on the scaffolded template as a whole, not only on that grep.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:02:25.399177125Z
-modified_at: 2026-09-21T16:08:10.180904881Z
+modified_at: 2026-09-21T16:59:51.432216098Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
