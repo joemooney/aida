@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:28:38.860398318Z
-modified_at: 2026-09-21T03:56:46.876729715Z
+modified_at: 2026-09-21T03:58:37.841191865Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -276,6 +276,12 @@ comments:
     I have not deleted the comment. It is evidence for BUG-1510 and deleting it would destroy the only record that this recurred after filing. It is marked here instead, which is the same choice TASK-1-171 requires for damage that cannot be safely repaired: mark it, do not tidy it.
   created_at: 2026-09-21T03:56:46.876729715Z
   modified_at: 2026-09-21T03:56:46.876729715Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c21d-a511-77b2-af2b-928550f6641c
+  author: joe
+  content: '[aida:advisor] ADDENDUM to the DO-NOT-ACT-ON-IT marking above, 2026-09-20 21:01: 065f3df8aa - the commit that misattributed brief reviews - is the head of PR #2009 on branch bug-1420-work, and it is contained by NEITHER story-1391-verdict-rounds NOR the bug-1420-round2 line that #2042 and #2043 carry. Verified by merge-base against all three. So following that comment would not merely work the wrong spec''s code; it would work a THIRD branch that nothing in this spec''s neighbourhood has in flight. Note also that its content is correct, current review work citing BUG-1481, a finding filed the same evening - it is credible, which is precisely why it would be obeyed. The artifact to follow for THIS spec is .aida/agent-briefs/codex/STORY-1391-2026-09-21T033218Z.md and nothing else.'
+  created_at: 2026-09-21T03:58:37.841191865Z
+  modified_at: 2026-09-21T03:58:37.841191865Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 failure_reason:
