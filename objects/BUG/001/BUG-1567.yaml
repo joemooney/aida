@@ -1,0 +1,43 @@
+id: 01a0c58a-75aa-7983-a3a4-ba7827ef2521
+spec_id: BUG-1567
+agreed_id: BUG-1567
+title: awaiting_notice_tracks_real_lease_through_session_end is load-correlated flaky on main, and it is what failed the GitLab pipeline that TASK-1274 is being judged by
+description: |-
+  aida-cli/tests/task_1283_protocol_cli.rs, awaiting_notice_tracks_real_lease_through_session_end, fails intermittently ON MAIN. It is the job that failed GitLab pipeline 308, which PR 2019's review treats as evidence that TASK-1274's pipeline is unhealthy.
+
+  WHAT THE FAILURE LOOKS LIKE. The assertion at line 277 requires the notice to contain "protocol: bug [META-". On a failing run the captured output is only the timing line:
+
+      Current date/time: <...>. Timing: first prompt of this session.
+
+  so the protocol notice was not emitted at all.
+
+  MEASURED, WITH THE DERIVATION STATED. Each trial is one full cargo test invocation of that single test; pass/fail is the process exit status.
+
+      main (at 4d1e8ffd80)            11 pass / 1 fail  out of 12
+      PR-2019 branch, first window     6 pass / 6 fail  out of 12
+      PR-2019 branch, second window   10 pass / 2 fail  out of 12
+
+  THE SECOND WINDOW IS WHY THIS IS FILED AGAINST MAIN AND NOT AGAINST THE PR. The branch rate moved from 6/12 to 10/12 between two windows with no code change, so the first window's rate is not a property of the diff. The failures also arrive in CONTIGUOUS BLOCKS (PPPPFFFFFFPP, PPPFFPPPPPPP) rather than independently, which is the signature of a load- or time-correlated cause and means none of these fractions is a clean per-run probability. Do not quote 6/12 as a rate.
+
+  WHAT IS ESTABLISHED: the test fails on main, so a red run of it is not evidence about any particular branch's pipeline. WHAT IS NOT ESTABLISHED: whether the PR makes it worse. The data is consistent with that and does not demonstrate it.
+
+  PR 2019 ALREADY TRIED TO FIX THIS AND IT DID NOT WORK. That PR appends active_pid = <test pid> to the lease file, on the theory that a Docker executor cannot resolve the creator PID back through the runner process tree. Two observations against that theory being sufficient: the branch still fails at the rates above, and instrumenting the lease shows creator_pid ALREADY equals the test harness PID locally, so the append is a no-op in the environment where the flake still reproduces. The append is also well-formed - the lease TOML is flat with no table headers, and active_pid appears exactly once after the append - so the corruption hypothesis is ruled out.
+
+  Acceptance:
+  - The cause is identified rather than the timing widened. A sleep or a longer wait is not acceptable here: the failures cluster under load, so a fixed wait only moves the load threshold at which it lies.
+  - The notice path is made deterministic for the test, OR the test waits on an OBSERVABLE CONDITION (the lease being visible to the notice reader) rather than on the completion of a spawned process.
+  - A trial run of at least 20 invocations on a LOADED machine passes. Given the contiguity above, a short green streak on an idle machine is not evidence.
+
+  Related: BUG-1556 catalogues cross-platform arrivals; this is a different class - the same test failing on one platform for reasons of timing rather than portability, on a channel (the GitLab mirror) where a single red job is being read as a verdict on an unrelated change.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T19:56:20.778714126Z
+modified_at: 2026-09-21T19:56:20.778714126Z
+req_type: Bug
+tags:
+- aida:tests
+- ci
+- flaky
+- parent:EPIC-62
