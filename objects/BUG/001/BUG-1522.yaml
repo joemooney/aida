@@ -97,12 +97,35 @@ description: |
      one of the five this spec does not guard. Fixing this spec's criterion 1 removes
      BUG-1524's SILENCE but not BUG-1524's cause; the two remain separate repairs.
      Reviewer's finding, 2026-09-20; re-verified by the driver advisor.
+
+  9. THE VERDICT CORPUS CANNOT ANSWER CRITERION 6 FOR MOST OF ITS ENTRIES, AND THE GUARD
+     MUST SAY SO RATHER THAN PASS. Measured by the driver advisor 2026-09-20 22:16,
+     independently reproducing the reviewer's figures:
+
+       total verdict files                              556
+       carrying a sha under ANY of the three key names  127  (22%)
+       carrying no sha at all                           429  (77%)
+       recorded in the last 24h                          67, of which 11 have no sha
+
+     Criterion 6 tells an implementer to read reviewed_sha. For 429 of 556 files that key
+     is absent, so the comparison "did this branch move past the sha I refused" cannot be
+     evaluated. A guard that treats an unreadable verdict as "no refusal to compare
+     against" passes silently — which is the exact failure this whole spec exists to stop,
+     reintroduced one layer down.
+
+     So: a verdict with no recorded sha is UNKNOWN, not clear. The guard must refuse or
+     escalate on unknown, never advance. Absent evidence is not good evidence (PRIN-5).
+
+     The recent slice is the workable one — 84% of the last 24h carry a sha — so the
+     predicate is viable for live work. It is the legacy majority that must not read as
+     permission. BUG-1466 is the spec that makes provenance reach the corpus; until it
+     lands, criterion 9 is what keeps this guard honest without it.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-21T05:08:25.205939996Z
+modified_at: 2026-09-21T05:16:06.699335864Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
