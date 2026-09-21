@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-21T08:50:31.346039319Z
+modified_at: 2026-09-21T09:00:41.318849667Z
 req_type: Bug
 tags:
 - drain-safe
@@ -339,6 +339,35 @@ comments:
     that. I have not checked whether the new commit is affected by either.
   created_at: 2026-09-21T05:27:06.760737184Z
   modified_at: 2026-09-21T05:27:06.760737184Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c332-2fe6-7aa0-82c6-16bd732204b3
+  author: joe
+  content: |-
+    REWORK BRIEF FOR PR #2030 (BUG-1485, branch bug-1485-work, head 05969aa3978d). Verdict CHANGES REQUESTED at that exact head. Four numbered items, all binding.
+
+    STATE YOU ARE PICKING UP: PR is OPEN and DIRTY — it conflicts with main. The merge-hold marker PR-2030 and the aida:merge-hold label stay in place; do not clear them.
+
+    ITEM 1 — REBASE ONTO CURRENT origin/main FIRST, BEFORE ANY CODE.
+    Nothing else on this PR can be verified until you do, and here is why, diagnosed rather than assumed: the head has ZERO check-runs and has had none for about eleven hours. That is not latency and not a flake. `refs/pull/2030/merge` still points at 8bcf8e9b565f, computed 2026-09-20 13:38, whose parents are a8c1877576 + the PREVIOUS head 8ba48f5b98; `git merge-base --is-ancestor 05969aa397 8bcf8e9b56` answers NO. GitHub could not recompute the merge ref against the conflict, so the pull_request event never produced a runnable merge ref and no workflow was dispatched. A commit pushed into a conflicting PR gets no run at all.
+
+    So: rebase, resolve honestly, push. CI will start for the first time on the rebased head. Do not interpret the current absence of failures as anything — a head with zero check-runs has not been tested.
+
+    ITEM 2 — F1, BLOCKING AND CARRIED: the production recovery path is STILL UNTOUCHED.
+    Post-push recovery still requires the recorded worktree to EXIST. The reviewer checked this against the diff rather than the commit message: 05969aa397 changes lib.rs in exactly two places, both pure extractions (publish_orchestrated_lease_receipt_from_env and prepare_orchestrated_lease_receipt) plus the two call sites now using them. Grepping the whole commit for try_open_orchestrator_pr_for_no_pr_worktree and the branch-commit path finds nothing — the round moved code the TEST needed and left the code the FINDING named.
+
+    Fix the production path. An extraction that makes a test reachable is not the same act as changing the behaviour the test is meant to pin, and this round did only the first.
+
+    ITEM 3 — F2, PARTIALLY ADDRESSED: finish the assertion, do not restart the fixture.
+    The new fixture is real progress and the reviewer put that on the record before the criticism: it no longer hand-serializes OrchestratedLeaseReceipt, it drives the extracted production writer, it asserts the phase child actually inherits ORCHESTRATED_LEASE_RECEIPT_ENV from a real Command, and it asserts preparation removes what it should. Keep all of it.
+
+    What it does NOT do is assert the disputed claim. It asserts BRANCH RECOVERY — which F1 already granted — and stops before the part in dispute. A test that asserts the half everyone agrees on cannot fail for the reason the finding exists. Extend it to assert the contested behaviour: recovery when the recorded worktree is GONE, which is the case F1 says is unhandled. If that assertion cannot be written until item 2 lands, that is the correct order — item 2 first.
+
+    ITEM 4 — SAY IN THE PR BODY WHAT YOU DID FOR ITEMS 1-3.
+    One line each. The reviewer re-reads at the new head and should not have to infer which items you addressed. If you believe F1 is wrong, say so with a file:line argument rather than by changing something adjacent — a third round that moves code near the finding without touching it will be refused the same way.
+
+    WHAT YOU ARE NOT DOING: not clearing the merge-hold, not touching other PRs, not treating a green Build as clearance — all three findings are design-level and CI cannot see any of them.
+  created_at: 2026-09-21T09:00:41.318849667Z
+  modified_at: 2026-09-21T09:00:41.318849667Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
