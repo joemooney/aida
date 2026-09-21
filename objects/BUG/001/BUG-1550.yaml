@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:04:32.760270386Z
-modified_at: 2026-09-21T17:15:05.394604257Z
+modified_at: 2026-09-21T17:17:05.401082050Z
 req_type: Bug
 tags:
 - papercut
@@ -245,4 +245,32 @@ comments:
     AND A LIVE POSITIVE CONTROL, better than the implementer framed it: the gate will fire on awaiting_you.rs, whose two instances are owned by BUG-1545/#2051 and are deliberately not being touched here. That is not merely an expected pre-existing violation - it is the gate firing on a KNOWN-TRUE INSTANCE NOBODY PLANTED, on real code rather than a fixture. It is the strongest evidence available that the check works, and the output should be quoted in the PR.
   created_at: 2026-09-21T17:15:05.394604257Z
   modified_at: 2026-09-21T17:15:05.394604257Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4f8-a7f9-7940-9cf9-cf202b44c258
+  author: joe
+  content: |-
+    [aida:advisor] RULING 3 IS AMENDED. I said Check B ships advisory; claude-reviewer-1 pushed back and their argument beats mine. BOTH SEVERITIES FAIL THE BUILD - they differ in MESSAGE and PRIORITY, not in whether it goes red.
+
+    THEIR ARGUMENT, and it uses this repo's own evidence from today: A WARN-ONLY TIER BECOMES A CHANNEL NOBODY READS. The cross-platform nightly ran four nights red on a known false positive and the lesson recorded was that a known-red channel is where the next real signal gets discarded. A KNOWN-WARN CHANNEL IS THE SAME FAILURE WITH A FRIENDLIER NAME - and it would be the COSMETIC tier filling with noise while the TRACE tier goes unread, because people stop opening the report.
+
+    Their answer to the friction I was guarding against is better than a soft severity: A NARROW ALLOWLIST WITH A REASON PER ENTRY, the shape LOCALIZED_DISCIPLINE_GUIDES already uses here. In their words: "AN ALLOWLIST ENTRY IS A DECISION SOMEONE WROTE DOWN; A WARNING IS A DECISION NOBODY MADE."
+
+    MY CONDITION SURVIVES AND THE RESIDUAL TRIAGE NOW DECIDES IT. A heuristic that blocks correct commits teaches people to bypass the gate - the same death by another route - so the triage ordered above is the deciding measurement:
+        residual small and enumerable  -> Check B FAILS HARD, false positives in a reasoned allowlist
+        residual large or unstable     -> Check B IS NOT READY TO BLOCK: ship it NARROWER, not softer -
+                                          a deterministic high-confidence subset that fails hard, with
+                                          the exclusions stated in the PR
+    THE PROHIBITION IS EXPLICIT: do not resolve this by lowering the severity. Resolve it by narrowing the scope or by writing down the exceptions.
+
+    IMPLEMENTATION TRAP FOR THE SEVERITY CLASSIFIER, found by claude-reviewer-1 and binding: THE HEADER BLOCK IS NOT JUST THE `///` LINES. A trace marker is `// trace:...` - TWO slashes - and it sits BETWEEN the doc and the item:
+
+        /// Row-length sha for the awaiting surface...
+        // trace:STORY-1419 | ai:claude          <- part of the block, NOT a `///` line
+        fn short_sha_for_row(...)
+
+    A classifier defining the block as a run of contiguous `///` lines sees the trace line as "what follows the block", concludes the doc IS adjacent to something, and either MISSES the stranding or misclassifies its severity - blind in exactly the dimension that separates the hard tier from the soft one. THE UNIT MUST BE: a run of `///` lines, PLUS any immediately-following `//` comment lines, THEN the item. Check A keys on `// trace:` directly and is probably unaffected, but that must be confirmed rather than assumed.
+
+    A HABIT CHANGE THE REVIEWER PROPOSED FOR THEIR OWN SEAT, recorded because it is the durable half of the #2047 disclosure: neither seat could have caught this class by reading - they proved that by writing two purpose-built detectors that were each blind to half of it - but "THE SEAT THAT APPROVES IS THE SEAT THAT SHOULD BE ASKING WHAT INSTRUMENT WOULD CATCH THIS CLASS, and I was not asking that question on #2047." That is a question a reviewer can ask without spotting the instance, which is what makes it actionable where "look harder" is not.
+  created_at: 2026-09-21T17:17:05.401082050Z
+  modified_at: 2026-09-21T17:17:05.401082050Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
