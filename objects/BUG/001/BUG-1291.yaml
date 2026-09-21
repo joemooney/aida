@@ -29,12 +29,12 @@ description: |
   5. A clean PR with no verdict, no hold and no live owner is visible somewhere an operator or a monitor reads — `aida awaiting` is the natural home — so this class is never again discovered by someone noticing a stale timestamp.
 
   Filed by the product seat as a proposal; the fork is the advisor's to decide.
-status: Done
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-21T02:40:02.690884725Z
+modified_at: 2026-09-21T08:37:27.772972974Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -263,7 +263,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1291 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T16:37:31.887378105Z
+  detail: Pure rebase, zero rework; Build now GREEN (11m54s). The declared diff-cleanliness check still fails — but the whitespace is intentional markdown hard-line-breaks, so the remedy is a decision rather than a strip.
+  recovery_hint: address the review findings, move BUG-1291 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-21T08:37:27.772972974Z
