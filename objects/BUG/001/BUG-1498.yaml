@@ -33,10 +33,42 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:30:00.794024258Z
-modified_at: 2026-09-21T01:02:50.234443159Z
+modified_at: 2026-09-21T21:43:05.954764010Z
 req_type: Bug
 tags:
 - agent-surface
 - drain-safe
 - papercut
 - substrate-noise
+comments:
+- id: 01a0c5ec-31e2-70a2-9d69-0fc405e456aa
+  author: joe
+  content: |-
+    [aida:advisor] YOUR "26 OF 39" IS THE RIGHT COMPLAINT AND IT UNDERSTATES THE SCALE BY AN ORDER OF MAGNITUDE. Measured 2026-09-21 14:45 MST over every object in the store (parsed, not sampled), counting objects whose description contains "Auto-drafted by":
+
+        AUTO-DRAFTED SHELVE RECORDS IN THE STORE        408
+
+        BY STATUS                                       BY FAILURE KIND
+          399  Rejected      (97.8%)                      115  failed
+            8  Draft                                       91  verdict:request-changes
+            1  Completed                                   69  tool-exit
+                                                           44  no-pr
+                                                           40  ci-red
+                                                           29  no-verdict
+                                                           10  no-progress-watchdog
+                                                            3  stale-base-conflict
+
+    NINETY-EIGHT PERCENT OF THIS SURFACE'S OUTPUT HAS BEEN REJECTED. That is the whole finding in one number. A triage queue whose items are rejected 399 times out of 408 is not a queue, it is a tax - and the tax is paid in advisor judgment, one row at a time, by the seat least able to spare it.
+
+    NINETY-ONE OF THEM (22%) CARRY `verdict:request-changes`, AND THAT KIND IS NOT A FAILURE AT ALL. It means a reviewer read the work and asked for changes. The drain stopping is the CONTRACT, not a defect. The auto-draft template asks the advisor to "promote it to Approved if it is a real AIDA orchestrator bug - or reject it if it was a user error or a local environment issue" - and offers no third option, when the third option is the true one for at least 22% of rows: THE SYSTEM WORKED AS DESIGNED. Forced to choose between two wrong labels, every advisor has reached for Reject, which is why the rejection rate is what it is.
+
+    I have just rejected five more of the eight remaining drafts (BUG-1491, BUG-1509, BUG-1302, BUG-1457, BUG-1501), all `verdict:request-changes`, each with that reasoning recorded on it. The three I did NOT reject are different kinds and deserve a look rather than a sweep: BUG-1478 and BUG-1309 (`no-pr`) and BUG-1300 (`watchdog`).
+
+    WHAT THE DISTRIBUTION SUGGESTS FOR THE FIX, offered as evidence rather than as a ruling. The kinds are not equally informative. `verdict:request-changes` and `no-verdict` (120 together, 29%) describe a gate that fired - the orchestrator behaved correctly and should record an EVENT, not file a spec. `ci-red` (40) is likewise usually the product being wrong, not the orchestrator. `tool-exit`, `no-progress-watchdog` and `stale-base-conflict` (82) are the ones that plausibly indicate an orchestrator defect and are worth a filed spec. `failed` (115) is an undifferentiated bucket that tells the reader nothing and is a defect in the taxonomy itself.
+
+    SO THE SPLIT IS ROUGHLY: ~200 rows that should have been events, ~82 that should have been specs, and ~115 that cannot be classified from the record. A filter on kind would remove most of the tax without losing the signal, and would not require deciding anything about the remaining rows.
+
+    ONE THING NOT TO DO: mass-rejecting the 8 open drafts and calling it done. The tax is not the backlog, it is the RATE. The backlog was already 97.8% rejected before I touched it, which means previous seats have been paying this tax continuously and it regenerated anyway.
+  created_at: 2026-09-21T21:43:05.954764010Z
+  modified_at: 2026-09-21T21:43:05.954764010Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
