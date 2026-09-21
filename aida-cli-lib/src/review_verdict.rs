@@ -263,6 +263,118 @@ pub fn read_recorded_verdict_any(project_root: &Path, ids: &[&str]) -> Option<Re
 
 /// Write (or update) the verdict record for `spec`, preserving any fields the
 /// reviewer skill already wrote that this call does not set. Returns the path.
+/// STORY-1391: move the round currently at the top level into the append-only
+/// `rounds` array, before `record_verdict` overwrites it.
+///
+/// A round is worth keeping only if it actually recorded a verdict; a partial
+/// artifact with no `verdict` field is not a round.
+///
+/// A round is identified by the head it REVIEWED, not by when it was recorded.
+/// `record_verdict` stamps `recorded_at` to now on every call, so keying on the
+/// timestamp would make every re-record look like a new round — a reviewer
+/// correcting its own summary before the head moves would manufacture one, and
+/// `findings_surviving_round` would then report its own findings as surviving.
+/// A verdict with no `reviewed_sha` cannot be deduplicated and is archived, on
+/// the grounds that an unattributable round is better kept than silently
+/// merged into another.
+// trace:STORY-1391 | ai:claude
+fn archive_current_round(
+    obj: &mut serde_json::Map<String, serde_json::Value>,
+    incoming_sha: Option<&str>,
+) {
+    let Some(verdict) = obj.get("verdict").and_then(|v| v.as_str()) else {
+        return;
+    };
+    if verdict.trim().is_empty() {
+        return;
+    }
+    let sha_of = |m: &serde_json::Map<String, serde_json::Value>| {
+        m.get("reviewed_sha")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    let existing_sha = sha_of(obj);
+    let incoming = incoming_sha
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    // Same head => the same round being re-recorded (a reviewer correcting its
+    // own summary before anything was pushed). Archiving it would make the
+    // round its own predecessor and `findings_surviving_round` would report
+    // every finding as surviving on the very first re-record.
+    if existing_sha.is_some() && existing_sha == incoming {
+        return;
+    }
+    let mut snapshot = obj.clone();
+    snapshot.remove("rounds");
+    let mut rounds = obj
+        .get("rounds")
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default();
+    if let Some(sha) = existing_sha {
+        if rounds
+            .iter()
+            .filter_map(|r| r.as_object())
+            .any(|r| sha_of(r).as_deref() == Some(sha.as_str()))
+        {
+            return;
+        }
+    }
+    rounds.push(serde_json::Value::Object(snapshot));
+    obj.insert("rounds".to_string(), serde_json::Value::Array(rounds));
+}
+
+/// STORY-1391: findings in `current` that also appeared in the most recent
+/// archived round.
+///
+/// Deliberately compares the PREVIOUS round only, not every round: a finding
+/// that appeared in round 1, was fixed in round 2 and regressed in round 3 is a
+/// regression, not a surviving finding, and the two want different responses.
+///
+/// Matching is exact after trimming. A reviewer that rewords a finding defeats
+/// this, which is a known limit and preferable to fuzzy matching that would
+/// report unrelated findings as survivors — a false survivor sends someone to
+/// rewrite a brief that was fine.
+// trace:STORY-1391 | ai:claude
+pub fn findings_surviving_round(body: &str) -> Vec<String> {
+    let Ok(serde_json::Value::Object(obj)) = serde_json::from_str(body) else {
+        return Vec::new();
+    };
+    let current: Vec<String> = obj
+        .get("findings")
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+    if current.is_empty() {
+        return Vec::new();
+    }
+    let previous: Vec<String> = obj
+        .get("rounds")
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.last())
+        .and_then(|r| r.get("findings"))
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    current
+        .into_iter()
+        .filter(|f| previous.iter().any(|p| p == f))
+        .collect()
+}
+
 pub fn record_verdict(
     project_root: &Path,
     spec: &str,
@@ -282,6 +394,13 @@ pub fn record_verdict(
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned())
         .unwrap_or_default();
+    // STORY-1391: a finding that survives a round is evidence about the BRIEF,
+    // and nothing could detect it because this function overwrote the prior
+    // round in place. Snapshot the round being replaced into `rounds` first, so
+    // the comparison is possible at all. Append-only; the current round stays
+    // at the top level so every existing reader is untouched.
+    // trace:STORY-1391 | ai:claude
+    archive_current_round(&mut obj, reviewed_sha);
     let mut set = |k: &str, v: Option<&str>| {
         if let Some(v) = v.map(str::trim).filter(|s| !s.is_empty()) {
             obj.insert(k.to_string(), serde_json::Value::String(v.to_string()));

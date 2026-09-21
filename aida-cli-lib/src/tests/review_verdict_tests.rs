@@ -327,3 +327,193 @@ fn notice_flags_a_verdict_without_a_reviewed_sha() {
     assert!(line.contains("UNVERIFIABLE"), "{line}");
     assert!(line.contains("missing reviewed_sha"), "{line}");
 }
+
+// STORY-1391: a finding that survives a round is evidence about the BRIEF, and
+// nothing could detect it because record_verdict overwrote the prior round in
+// place. These cover retention, the survivor comparison, and the two ways the
+// comparison could lie.
+// trace:STORY-1391 | ai:claude
+#[test]
+fn recording_a_second_round_archives_the_first_instead_of_destroying_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    record_verdict(
+        tmp.path(),
+        "PR-1",
+        Some("RequestChanges"),
+        Some("aaa1111"),
+        Some("b"),
+        Some("round one"),
+        &["share the marker constant".to_string()],
+        "reviewer",
+    )
+    .unwrap();
+    record_verdict(
+        tmp.path(),
+        "PR-1",
+        Some("RequestChanges"),
+        Some("bbb2222"),
+        Some("b"),
+        Some("round two"),
+        &["share the marker constant".to_string()],
+        "reviewer",
+    )
+    .unwrap();
+
+    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-1")).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    // current round stays at the top level — existing readers untouched
+    assert_eq!(v["reviewed_sha"], "bbb2222");
+    // the first round survives rather than being overwritten
+    let rounds = v["rounds"].as_array().expect("rounds array");
+    assert_eq!(rounds.len(), 1, "exactly the round that was replaced");
+    assert_eq!(rounds[0]["reviewed_sha"], "aaa1111");
+    assert_eq!(rounds[0]["summary"], "round one");
+}
+
+// trace:STORY-1391 | ai:claude
+#[test]
+fn a_finding_repeated_across_rounds_is_reported_as_surviving() {
+    let tmp = tempfile::tempdir().unwrap();
+    for (sha, findings) in [
+        ("aaa1111", vec!["share the marker constant", "add a test"]),
+        ("bbb2222", vec!["share the marker constant"]),
+    ] {
+        record_verdict(
+            tmp.path(),
+            "PR-2",
+            Some("RequestChanges"),
+            Some(sha),
+            Some("b"),
+            None,
+            &findings.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            "reviewer",
+        )
+        .unwrap();
+    }
+    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-2")).unwrap();
+    let survivors = findings_surviving_round(&body);
+    assert_eq!(survivors, vec!["share the marker constant".to_string()]);
+}
+
+// A NEW finding must not be reported as surviving — a false survivor sends
+// someone to rewrite a brief that was fine.
+// trace:STORY-1391 | ai:claude
+#[test]
+fn a_finding_raised_for_the_first_time_is_not_reported_as_surviving() {
+    let tmp = tempfile::tempdir().unwrap();
+    for (sha, findings) in [
+        ("aaa1111", vec!["share the marker constant"]),
+        ("bbb2222", vec!["something else entirely"]),
+    ] {
+        record_verdict(
+            tmp.path(),
+            "PR-3",
+            Some("RequestChanges"),
+            Some(sha),
+            Some("b"),
+            None,
+            &findings.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            "reviewer",
+        )
+        .unwrap();
+    }
+    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-3")).unwrap();
+    assert!(findings_surviving_round(&body).is_empty());
+}
+
+// Re-recording the SAME round — a reviewer correcting its own summary before
+// the head moves — must not manufacture a round, or every finding would read
+// as surviving on the next real round.
+// trace:STORY-1391 | ai:claude
+#[test]
+fn re_recording_the_same_round_does_not_manufacture_a_survivor() {
+    let tmp = tempfile::tempdir().unwrap();
+    let f = vec!["share the marker constant".to_string()];
+    record_verdict(
+        tmp.path(),
+        "PR-4",
+        Some("RequestChanges"),
+        Some("aaa1111"),
+        Some("b"),
+        Some("first wording"),
+        &f,
+        "reviewer",
+    )
+    .unwrap();
+    let first = std::fs::read_to_string(verdict_path(tmp.path(), "PR-4")).unwrap();
+    let recorded_at = serde_json::from_str::<serde_json::Value>(&first).unwrap()["recorded_at"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // same sha, same recorded_at => same round
+    let path = verdict_path(tmp.path(), "PR-4");
+    let mut obj: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&first).unwrap();
+    obj.insert("summary".into(), "reworded".into());
+    obj.insert("recorded_at".into(), recorded_at.clone().into());
+    std::fs::write(&path, serde_json::to_string_pretty(&obj).unwrap()).unwrap();
+
+    record_verdict(
+        tmp.path(),
+        "PR-4",
+        Some("RequestChanges"),
+        Some("aaa1111"),
+        Some("b"),
+        Some("reworded again"),
+        &f,
+        "reviewer",
+    )
+    .unwrap();
+
+    let body = std::fs::read_to_string(&path).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let rounds = v["rounds"].as_array().map(|a| a.len()).unwrap_or(0);
+    assert!(
+        rounds <= 1,
+        "re-recording one round must not append a second: got {rounds}"
+    );
+    assert!(
+        findings_surviving_round(&body).is_empty(),
+        "one round cannot produce a survivor"
+    );
+}
+
+// A finding raised in round 1, FIXED in round 2, and reappearing in round 3 is
+// a REGRESSION, not a surviving finding — and the two want opposite responses.
+// A survivor means "the brief may be unimplementable, supply a mechanism"; a
+// regression means "this was done and came undone". Comparing against the
+// previous round distinguishes them; comparing against all rounds cannot.
+// trace:STORY-1391 | ai:claude
+#[test]
+fn a_finding_fixed_then_regressed_is_not_reported_as_surviving() {
+    let tmp = tempfile::tempdir().unwrap();
+    for (sha, findings) in [
+        ("aaa1111", vec!["share the marker constant"]),
+        ("bbb2222", vec!["unrelated second-round point"]),
+        ("ccc3333", vec!["share the marker constant"]),
+    ] {
+        record_verdict(
+            tmp.path(),
+            "PR-5",
+            Some("RequestChanges"),
+            Some(sha),
+            Some("b"),
+            None,
+            &findings.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            "reviewer",
+        )
+        .unwrap();
+    }
+    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-5")).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        v["rounds"].as_array().map(|a| a.len()),
+        Some(2),
+        "two prior rounds retained"
+    );
+    assert!(
+        findings_surviving_round(&body).is_empty(),
+        "round 3 repeats round 1, not round 2 — that is a regression, not a survivor"
+    );
+}
