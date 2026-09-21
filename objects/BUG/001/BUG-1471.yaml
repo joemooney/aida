@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-21T22:37:41.505058025Z
+modified_at: 2026-09-21T22:39:08.497767723Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -127,6 +127,44 @@ comments:
   created_at: 2026-09-21T22:27:24.777729723Z
   modified_at: 2026-09-21T22:27:24.777729723Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c61f-80d1-7e72-97e3-aee3d23915ff
+  author: joe
+  content: |-
+    [aida:advisor] PREMISE CORRECTION AGAINST THIS SPEC'S OWN ANALYSIS, AND A CONFIRMED COUNT FOR THE BLOCKING FINDING ON #2065. Raised by claude-reviewer-1, who explicitly asked to be checked because the correction runs against the advisor analysis on this spec; both points verified independently here.
+
+    1. CRITERION 4 NAMES A SURFACE THAT DOES NOT EXHIBIT THE DEFECT. The 2026-09-20 analysis on this spec states that `aida show` renders a References edge as "Related" and that traversable and inert edges display identically. THAT IS NOT WHAT IT DOES. Verified on the current binary:
+
+        aida show BUG-1467
+          references,TASK-168,...
+          references,BUG-1471,...
+          implemented-by,STORY-1408,...
+          references,BUG-1466,...
+
+    `aida show` prints the ACTUAL relationship type in both TOON and human modes. It does not collapse References to "Related" and it never did - the reviewer checked the PRE-FIX binary, so this is not something the PR changed.
+
+    THE DEFECT IS REAL AND IT IS ON THE CARD, not on `aida show`. `card_rel_label` is the surface that teaches the word, and it is what the PR correctly targeted. So the implementer aimed right while the criterion pointed elsewhere. RECORDING THIS BECAUSE A LATER READER WHO TESTS `aida show` WILL CONCLUDE THE BUG WAS NEVER REAL - the evidence and the criterion must agree, and today they do not.
+
+    2. THE BLOCKING FINDING, CONFIRMED IN THE TREE, AND THE COUNT IS LARGER THAN REPORTED. `card_rel_label` now returns "Custom" for Custom edges (lib.rs:72622), but `render_spec_card` consumes rels through one closure filtered by EXACT label, called exactly twice:
+
+        lib.rs:72854   join_rels("Parent")
+        lib.rs:72863   join_rels("Related")
+
+    "Custom" matches neither, so those edges RENDER NOWHERE. Before the change they were visible under a wrong label; after it they are invisible.
+
+    I counted the affected edges directly in the store rather than taking the estimate:
+
+        648  !Custom implements          17  !Custom related-to
+        648  !Custom implemented-by      15  !Custom sprint_assignment
+        140  !Custom related             13  !Custom sprint_contains
+
+    OVER 1480 EDGES, not the ~1382 estimated. And the instance that makes it concrete: BUG-1471 itself carries `implemented-by STORY-1435` as a Custom edge, so THIS SPEC'S OWN CARD WOULD STOP SHOWING THE STORY THAT IMPLEMENTS IT.
+
+    THE FIX TRADED A WRONG LABEL FOR NO LABEL - which is this spec's own defect class, reintroduced by its fix: an edge that exists, is not visible on the surface the caller reads, and fails silently. THE RELABEL IS CORRECT AND MUST NOT BE REVERTED TO "Related"; the missing third bucket is the defect.
+
+    3. TWO CRITERIA ARE UNMET FOR THE SAME REASON - SILENCE. Criterion 2 asked that the rejection of options (b) and (c) be recorded; the commit body is empty but for its trailer, the code comment explains the implementation shape rather than the rejection, and the spec comments predate the decision. Criterion 3 permits leaving the 103 remaining inert edges as-is but NOT silently - nothing states that they stay inert, or that migration is deferred, or where it is tracked. Either disposition satisfies it; silence does not. If migration happens, the 13 twins already identified matter: a blind conversion produces 13 duplicates rather than 13 repairs.
+  created_at: 2026-09-21T22:39:08.497767723Z
+  modified_at: 2026-09-21T22:39:08.497767723Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
