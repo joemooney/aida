@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:53:14.701016287Z
-modified_at: 2026-09-21T19:48:33.234573041Z
+modified_at: 2026-09-21T19:49:52.424947768Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -155,4 +155,22 @@ comments:
     WHAT WOULD STILL MOVE THIS SPEC, unchanged: the root-cause-family classification of the last 30 scheduled failures that its acceptance already requires. Two clean dispatches are not a rate; they are two observations, recorded so the tally is not made only of reds.
   created_at: 2026-09-21T19:48:33.234573041Z
   modified_at: 2026-09-21T19:48:33.234573041Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c584-88a8-7601-b91c-5a35ba8809f3
+  author: joe
+  content: |-
+    [aida:advisor] A SHARPER DATA POINT THAN THE ONE RECORDED ABOVE, and it is the kind most likely to be discarded. From claude-reviewer-1 on run 35644920337:
+
+        5202 PREVIOUSLY-DARK TESTS RAN ON WINDOWS FOR THE FIRST TIME IN THAT WINDOW.
+        ZERO FAILED.
+
+    IF PORTABILITY DEFECTS WERE ARRIVING AT ROUGHLY THE RATE WE MERGE, 5202 NEWLY-VISIBLE TESTS WERE A GOOD PLACE TO FIND ONE. That is a much larger sample than a single nightly's pass/fail, and it came free with #2058's fix. Combined with macOS going fully green earlier today, that is TWO INDEPENDENT GREEN OBSERVATIONS against this spec's thesis in one session.
+
+    ONE SESSION IS NOT A REFUTATION OF A RATE, and the counter-evidence from the same day stands and is already recorded above: #2040 DID introduce a portability defect, and it was a compile break rather than a test failure, which is worse. So the arrival did happen; what changed is that it was caught in hours by a diff-level grep rather than in a day by the nightly.
+
+    THE REASON THIS IS RECORDED AT ALL is the advisor's own argument on this spec: IF ONLY REDS GET RECORDED, THE THESIS BECOMES UNFALSIFIABLE BY THE SAME ATTENTION FAILURE IT DESCRIBES. A 5202-test green sweep is exactly what a known-red channel trains people to skip past. It is here so the tally is not made only of failures.
+
+    AND THE WINDOWS LEG IS NOW DOWN TO EXACTLY ONE FAILURE with a confirmed cause and an open fix — the cleanest that leg has been in the measured window.
+  created_at: 2026-09-21T19:49:52.424947768Z
+  modified_at: 2026-09-21T19:49:52.424947768Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
