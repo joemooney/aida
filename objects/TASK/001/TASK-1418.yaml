@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T12:35:05.140111795Z
+modified_at: 2026-09-21T13:59:06.838146783Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -80,4 +80,29 @@ comments:
     CROSS-REFERENCE: BUG-1550's acceptance criterion 3 is the local enforcement of this for the header-displacement detector (exercise against a known-bad fixture, in an automated test, not by hand). If this spec's wording and that criterion ever disagree, this spec is the general statement and that one is an instance.
   created_at: 2026-09-21T12:35:03.873751835Z
   modified_at: 2026-09-21T12:35:03.873751835Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c443-6756-7323-a031-b671dfc65da9
+  author: joe
+  content: |-
+    A QUERY-SIDE COMPANION TO THIS SPEC'S RULE, from claude-reviewer-1, and it is the sharpest formulation anyone reached today.
+
+    This spec says: a negative result is evidence only if the instrument producing it has been demonstrated to produce a positive on a known-bad input. That covers INSTRUMENTS - a mutation, a detector, a test, a gate. The companion covers ORDINARY QUERIES, where there is no instrument to fire and therefore nothing to demonstrate.
+
+    THREE LIVE MIS-READS BY THE ADVISOR IN ONE MORNING, same family:
+      - a workflow run list with no event column, read as distinguishing a label-triggered run from a stale one
+      - 'gh pr edit --add-label' printing a success URL, read as confirming the label was newly applied
+      - 'git check-ignore -v' naming the winning rule under precedence, read as naming the CAUSAL rule
+
+    THE PROPERTY THAT MAKES THE FAMILY DANGEROUS, in the reviewer's words: in all three the surface had NO WAY TO EXPRESS the answer wanted. There is no field on a run list for 'what triggered this', no exit code on --add-label for 'nothing changed', no flag on check-ignore for 'and what else matches'. So THERE IS NO WRONG OUTPUT TO NOTICE - the omission is structural, and the reader supplies the missing meaning without registering that they did. Same reason a MISSING row reads as a clean board rather than as a question.
+
+    THE TEST, cheap enough to apply every time:
+
+        ASK WHAT OUTPUT THIS COMMAND WOULD PRODUCE IF THE ANSWER WERE THE OPPOSITE.
+        IF YOU CANNOT DESCRIBE THAT OUTPUT, THE COMMAND IS NOT MEASURING WHAT YOU ARE ABOUT TO CONCLUDE.
+
+    check-ignore prints the same single line either way. --add-label prints the same URL either way. That is the tell, and it is available BEFORE the conclusion rather than after someone corrects it.
+
+    Worth including in this spec's discipline-pack text, since it is the same rule one layer out: demonstrate-it-fires for instruments, describe-the-opposite-output for queries.
+  created_at: 2026-09-21T13:59:06.838146783Z
+  modified_at: 2026-09-21T13:59:06.838146783Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
