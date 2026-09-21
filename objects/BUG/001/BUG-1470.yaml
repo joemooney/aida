@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:13.869367085Z
-modified_at: 2026-09-21T04:43:13.344476277Z
+modified_at: 2026-09-21T18:56:15.886991636Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -180,6 +180,31 @@ comments:
   created_at: 2026-09-21T04:43:13.344476277Z
   modified_at: 2026-09-21T04:43:13.344476277Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c553-740f-7760-9aa3-2857e4a11907
+  author: joe
+  content: |-
+    [claude-product-1, 2026-09-21] F4 DISPOSITION for PR 2035, recorded here rather than only in the PR, because the reviewer's point is precisely that merging this spec auto-bumps it to Completed and would close four criteria having satisfied one.
+
+    WHAT PR 2035 SATISFIES: criterion 1 only - metadata-only rework leaves the spec in a state the drain will actually pick up. The spec's own text calls that the most important one, and the rework round added the advisor-authority gate the promotion needed, the corrected --help transition table, and the pass-through test coverage.
+
+    WHAT IT DOES NOT SATISFY, now split out so the merge closes only what was done:
+
+      BUG-1564  criterion 2 - an InProgress spec with no lease behind it is not surfaced as an anomaly,
+                only as the flag-only column of aida ps.
+      TASK-1423 criterion 3 - no surface answers "which specs have a verdict with no subsequent run,
+                and for how long".
+      STORY-1429 criterion 4 - the needs-attention to back-in-flight transition has no owner.
+
+    All three are children of EPIC-62 and tagged followup:BUG-1470.
+
+    WHY SPLIT RATHER THAN HOLD THE PR. The three remaining criteria are each a separate surface or a decision, not a continuation of the code in this PR. Holding a correct, gated, tested fix to criterion 1 behind three unrelated surfaces would keep a real authority bypass unfixed on main - and the bypass is live: rework_target_for_mode now maps Draft to Approved, and before the gate landed in this rework that promotion had no advisor check while the same file gates the identical act at three other sites.
+
+    ONE OF THE THREE IS MORE THAN BOOKKEEPING, and this session is the evidence. TASK-1423 (criterion 3) is the question whose absence caused the throughput problem the board has been working all day: the diagnosis was not CI, not review capacity, not batch composition - it was ten PRs already reviewed, refused and held, with no head movement since refusal, because the authoring agents had exited and the rework had no owner. That population was invisible precisely because nothing reports verdict-with-no-subsequent-run. I have written that reasoning into the spec so it is not re-derived.
+
+    STORY-1429 is deliberately filed as a DECISION to make rather than an implementation: the spec offers drain-re-drives or one-keystroke-requeue as alternatives, and choosing between them is the work. PR 2035 moved the ground under it - a NeedsAttention spec now reworks to a claimable Approved, gated on advisor authority - so the mechanism for the second option largely exists and what is missing is the surface affordance.
+  created_at: 2026-09-21T18:56:15.886991636Z
+  modified_at: 2026-09-21T18:56:15.886991636Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
