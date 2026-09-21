@@ -92,7 +92,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:50:44.478379805Z
-modified_at: 2026-09-21T08:11:55.435306719Z
+modified_at: 2026-09-21T08:12:31.447152997Z
 req_type: Bug
 tags:
 - agent-surface
@@ -354,6 +354,34 @@ comments:
     would be kinder. Worth a line if anyone touches that message again; not worth a round.
   created_at: 2026-09-21T08:05:07.061288796Z
   modified_at: 2026-09-21T08:05:07.061288796Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c306-1757-7cd0-ae9c-299a4d67ea0c
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2046 [AI:claude] fix(ci): make the classifier inventory identity-stable and move it behind the tests (BUG-1526)
+    merged as: 1460a0168a on origin/main
+    verdict: APPROVE + merged (proxy for the operator)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes - the product seat authored every commit on bug-1526-inventory-identity (7ff8055a3d, be6a8eecb5, f56e089371); the reviewer seat recorded the verdict; this advisor wrote none of the diff and executed only the merge. No seat signed its own work.
+    gates cleared:
+      - required check Build (ubuntu-latest): pass, 12m40s, run 35575383274
+      - required check merge-hold-gate: pass, 3s
+      - informational matrix (windows-latest, macos-latest) still pending at merge time; not gates under main's protection since 2026-09-17
+      - verdict record .aida/review-verdicts/PR-2046.json: APPROVED, recorded_by claude-reviewer-1, reviewed_sha f56e08937101a, recorded_at 2026-09-21T08:10:10Z - matches the merged head f56e0893710131cdd2646c8888b09e528551d101 exactly, so the approval is at current head and not at a superseded one
+      - no merge-hold marker under .aida/merge-holds/ and no aida:merge-hold label on the PR
+      - aida drain status: none - no live orchestrator owned this PR
+      - no in-flight reviewer lease on the branch
+    reviewer's recorded basis: all four criteria verified against the diff rather than the report; six-test suite re-run from a clean extraction at the merged head with five mutations, every one red; Build 32 success / 1 skipped with the reordered inventory step passing AFTER the suite, so the PR validated its own fix in its own CI run.
+    timestamp: 2026-09-21 01:12 -07:00 (2026-09-21T08:12Z)
+
+    NOTE ON WHY THIS ONE WAS THE PRIORITY. The defect was not one red check. The inventory step ran at step 12 of 25 under `bash -e`, so a line-shifting edit anywhere in the repo failed a required check AND skipped the thirteen steps of test suite behind it. Nine of fourteen open PRs would have died there. On #1998 it had been actively MASKING a real defect: every Build died at step 12 in 1m42s and never reached step 25, and once the step moved behind the tests the suite ran 11m36s and surfaced a genuine monitor-contract violation that had been invisible all night. Moving the step behind the tests is the half of the fix that stops a green-looking gate from hiding failures.
+
+    WHAT THIS UNBLOCKS, measured rather than asserted. The product seat merge-treed each blocked branch against main and against the fix branch and ran the inventory --check from both trees: #1972 #2001 #2006 #2009 #2014 #2040 #2042 #2043 all FAIL vs main and PASS vs fix. #1989 still FAILs, conflicting in the inventory doc itself, because of the manual regeneration this advisor ordered earlier tonight - the non-convergence argument recorded on this spec at 00:16, produced by accident against the very PR that removes the need for it. Standing ruling unchanged: no further manual regenerations, and #1989 rebases onto the new main taking theirs, since after this fix the doc carries no line numbers and the conflict dissolves rather than being resolved.
+
+    Expected outcome of the eight is that they become DIAGNOSABLE, not that they merge. Removing a mask produces findings.
+  created_at: 2026-09-21T08:12:31.447152997Z
+  modified_at: 2026-09-21T08:12:31.447152997Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c305-8aa3-7911-82aa-90a89e18ad73
