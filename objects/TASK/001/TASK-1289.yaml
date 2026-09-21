@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T02:19:52.514725772Z
+modified_at: 2026-09-21T02:25:58.036648434Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1126,6 +1126,12 @@ comments:
   content: '[aida:advisor] LINEAGE ITEM a2 UPGRADED 2026-09-20 19:22: MANDATORY, not preferred. The earlier note offered two forms for replacing the three-field conjunction - assert!(conflicting.is_empty()) as the cheap option, or a destructuring bind as the stronger one - and marked the second preferred. The reviewer established the mechanism and it removes the choice. The universal assertion was not rejected in favour of the enumeration; it was DROPPED IN A COPY-ADAPT, because the conflicting case was written by adapting the plain-express case and a copy-adapt carries forward the lines with case-specific content to edit and drops the line with nothing to adapt. An assertion dropped because it has no case-specific content cannot be protected by a convention or a review note - its forgettability is a property of its shape. Additionally the is_empty() in the plain case is VACUOUS: from_tags([EXPRESS_TIER_TAG]) sets only skip.express, so that assertion passes even if the entire force-off block is deleted. So the cheap option is not demonstrated to work anywhere in this file. a2 is therefore the destructuring bind over every field, so that adding a sixth field breaks COMPILATION. a1 alone buys one field and loses the next one the same way.'
   created_at: 2026-09-21T02:19:52.514725772Z
   modified_at: 2026-09-21T02:19:52.514725772Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1c8-cf14-7563-a359-7e6b733a0502
+  author: joe
+  content: '[aida:advisor] LINEAGE ITEM a2 WIDENED 2026-09-20 19:27 TO THREE LEGS. A destructuring bind in the test does not reach the other two sites that enumerate the same phase set independently. THREE sites enumerate it: (1) the express force-off block, which clears no_ci_wait / no_review / no_build and not no_preflight; (2) the test''s three-field conjunction; (3) banner_summary()''s hardcoded string ''express tier - full gate (CI + reviewer + build)''. Fixing (2) alone leaves (1) and (3) able to narrow independently the next time a field is added. SO a2 IS: a2i force-off derived from the field set rather than a hand-written list of three assignments; a2ii the test''s conjunction replaced by a destructuring bind over every field so a new field breaks compilation; a2iii banner_summary() DERIVED from the skip set, or its express branch falling through to the parts-building path so a residual skip is still named. a2iii is the one that cannot be deferred: the banner is USER-FACING and currently tells the operator ''full gate'' for a spec whose preflight is skipped, while active_tokens() on the same struct emits ''no-preflight'' - the two surfaces contradict each other, and the truthful branch at the parts-building path is unreachable for any express spec. A hardcoded summary string is also the only one of the three that no compiler or test can catch, because there is no field whose omission is detectable. Raised by the reviewer seat while verifying the fourth surface.'
+  created_at: 2026-09-21T02:25:58.036648434Z
+  modified_at: 2026-09-21T02:25:58.036648434Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
