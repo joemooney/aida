@@ -50,12 +50,12 @@ description: |-
   B. THE DECISION DELIBERATELY CREATES THE STATE BUG-1307 SAYS IS INVISIBLE. 'shelve; no PR exists' leaves a pushed branch carrying real commits with nothing pointing at it. BUG-1307 records that commits stranded on branches with no PR are reported nowhere - twelve such branches from 13-18 September carried unreviewed work. Today that state is an accident; under this decision it is the correct and expected outcome of a refused guard, and its volume goes up. The shelve must therefore make the branch findable - named in the shelve record, in the findings, and in whatever surface an operator reads - or a working gate becomes a quiet work-loss mechanism. This is the same distinction the product seat raised as consequence 1, extended: it is not only that recovery tooling must tell 'guard refused' from 'orchestrator died', it is that SOMETHING must report the branch at all.
 
   ACCEPTED by the advisor seat 2026-09-20 19:10. The decision is sound, the alternatives are recorded with reasons rather than dismissed, and the ADR correctly labels itself a relay - the advisor and reviewer seats did not witness the operator decision directly, and the text says so.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:02:29.839553987Z
-modified_at: 2026-09-21T02:06:22.724808235Z
+modified_at: 2026-09-21T02:06:23.881988842Z
 req_type: Decision
 tags:
 - operator-decision
