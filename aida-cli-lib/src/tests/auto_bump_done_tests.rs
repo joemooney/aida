@@ -261,6 +261,9 @@ fn open_pr_for_same_spec_defers_auto_bump() {
 
     let (_tmp, project_root, store_path) = init_test_project();
     seed_spec_at(&store_path, "BUG-1454", "Done");
+    // The CONTROL: same status, same trailer treatment, no open PR. Without it
+    // a test that defers everything passes just as well as a correct one.
+    seed_spec_at(&store_path, "BUG-1455", "Done");
     run_git(
         &project_root,
         &[
@@ -271,8 +274,33 @@ fn open_pr_for_same_spec_defers_auto_bump() {
         ],
     );
 
+    // F2: the previous fake echoed a fixed row for EVERY invocation, so it
+    // answered a query it never read. It could not fail: a lookup that searched
+    // the wrong term, or no term, produced exactly the same test result. This
+    // one parses `--search`, answers only for BUG-1454, and records every argv
+    // so the test can assert what was actually asked.
+    // trace:BUG-1454 | ai:claude
+    let gh_log = project_root.join("fake-gh.log");
     let fake_gh = project_root.join("fake-gh");
-    std::fs::write(&fake_gh, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'gh version test'; else echo '[{\"number\":1979}]'; fi\n").unwrap();
+    std::fs::write(
+        &fake_gh,
+        format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = \"--version\" ]; then echo 'gh version test'; exit 0; fi\n\
+             echo \"$@\" >> '{log}'\n\
+             search=''\n\
+             while [ $# -gt 0 ]; do\n\
+             \tif [ \"$1\" = '--search' ]; then search=\"$2\"; fi\n\
+             \tshift\n\
+             done\n\
+             case \"$search\" in\n\
+             \tBUG-1454) echo '[{{\"number\":1979}}]' ;;\n\
+             \t*) echo '[]' ;;\n\
+             esac\n",
+            log = gh_log.display()
+        ),
+    )
+    .unwrap();
     let mut permissions = std::fs::metadata(&fake_gh).unwrap().permissions();
     permissions.set_mode(0o755);
     std::fs::set_permissions(&fake_gh, permissions).unwrap();
@@ -288,11 +316,41 @@ fn open_pr_for_same_spec_defers_auto_bump() {
         &project_root,
         &["commit", "-m", "fix: first deliverable (BUG-1454)"],
     );
+    // the control's deliverable lands the same way
+    std::fs::write(project_root.join("control.txt"), "control deliverable\n").unwrap();
+    run_git(&project_root, &["add", "control.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", "fix: control deliverable (BUG-1455)"],
+    );
 
     let storage = Storage::new(&store_path);
     let flips =
         auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
-    assert!(flips.is_empty(), "open remainder must suppress completion");
+    // BUG-1454 is held back; BUG-1455 is NOT. A guard that defers everything
+    // would satisfy the first assertion and fail this one.
+    let flipped: Vec<String> = flips.iter().map(|f| f.spec_id.clone()).collect();
+    assert!(
+        !flipped.contains(&"BUG-1454".to_string()),
+        "the spec with an open PR must not complete; flipped: {flipped:?}"
+    );
+    assert!(
+        flipped.contains(&"BUG-1455".to_string()),
+        "the spec with NO open PR must still complete, or the guard is just \
+         deferring everything; flipped: {flipped:?}"
+    );
+
+    // What was actually asked of the forge — proves the lookup is keyed on the
+    // spec id rather than returning a constant.
+    let log = std::fs::read_to_string(&gh_log).unwrap_or_default();
+    assert!(
+        log.contains("--search BUG-1454"),
+        "the lookup must search for the spec id; gh argv log was:\n{log}"
+    );
+    assert!(
+        log.contains("--search BUG-1455"),
+        "every candidate must be looked up, not just the first; log:\n{log}"
+    );
     let req = storage
         .load()
         .unwrap()
@@ -311,6 +369,58 @@ fn open_pr_for_same_spec_defers_auto_bump() {
         .unwrap()
         .clone();
     assert_eq!(req.status, RequirementStatus::Done);
+}
+
+/// BUG-1454 F1: on a NON-GitHub forge the open-PR lookup cannot be performed.
+/// That is the unknown case, and the unknown case must preserve — the function
+/// previously returned `Some(empty)`, which asserts "the lookup ran and nothing
+/// is open" and auto-bumped every candidate on GitLab and pure-git projects.
+///
+/// This repo's CI runs against GitHub only, so no green build reaches this
+/// path; the regression is only visible from a test that sets the remote.
+// trace:BUG-1454 | ai:claude
+#[test]
+fn non_github_forge_defers_rather_than_completing() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-1456", "Done");
+    run_git(
+        &project_root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://gitlab.example.com/example/aida.git",
+        ],
+    );
+
+    let pre_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+    std::fs::write(project_root.join("shipped.txt"), "shipped\n").unwrap();
+    run_git(&project_root, &["add", "shipped.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", "fix: shipped deliverable (BUG-1456)"],
+    );
+
+    let storage = Storage::new(&store_path);
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    let flipped: Vec<String> = flips.iter().map(|f| f.spec_id.clone()).collect();
+    assert!(
+        !flipped.contains(&"BUG-1456".to_string()),
+        "a forge whose open-PR state cannot be read must preserve, not complete; \
+         flipped: {flipped:?}"
+    );
+    let req = storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id("BUG-1456")
+        .unwrap()
+        .clone();
+    assert_eq!(
+        req.status,
+        RequirementStatus::Done,
+        "hiding unfinished work is worse than leaving shipped work visible"
+    );
 }
 
 /// Insert a Story spec at the given status with the given spec_id into

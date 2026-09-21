@@ -62552,8 +62552,28 @@ fn specs_with_open_prs(
     project_root: &std::path::Path,
     spec_ids: impl IntoIterator<Item = String>,
 ) -> Option<std::collections::BTreeMap<String, u64>> {
-    if forge::resolve_forge_kind(project_root) != forge::ForgeKind::GitHub {
-        return Some(std::collections::BTreeMap::new());
+    // "Not GitHub" is TWO different situations and they need opposite answers.
+    //
+    //   ForgeKind::GitLab — merge requests exist, and `gh` cannot read them.
+    //     The state is genuinely UNKNOWN, which is the `None` this function's
+    //     own contract describes above. Returning `Some(empty)` here asserted
+    //     "the lookup ran and nothing is open" and auto-bumped every candidate
+    //     to Completed even with an MR still open against it. That is the
+    //     defect: unknown must never read as clear.
+    //
+    //   ForgeKind::None — a pure-git project has no change-request concept at
+    //     all, so "no open PR references this spec" is a MEASURED TRUTH, not a
+    //     failed lookup. Returning `None` here would defer every auto-bump on
+    //     every remoteless repository forever, which is why collapsing both
+    //     cases into `None` turns 20 existing tests red: they are pure-git.
+    //
+    // trace:BUG-1454 | ai:claude
+    match forge::resolve_forge_kind(project_root) {
+        forge::ForgeKind::GitHub => {}
+        // no forge, therefore no pull requests, therefore none are open
+        forge::ForgeKind::None => return Some(std::collections::BTreeMap::new()),
+        // a forge we cannot query — unknown, so preserve
+        _ => return None,
     }
     let gh = resolve_gh_binary()?;
     let mut open = std::collections::BTreeMap::new();
@@ -66761,6 +66781,24 @@ fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenPrSnapshot {
     // dependent surface (status-cleanup detectors + the burndown-status open-PR
     // section) renders nothing rather than leaking that error.
     // trace:TASK-833 | ai:claude
+    // BUG-1454 F3, DECIDED AND KEPT: this empty-on-unknown is the same SHAPE as
+    // the `specs_with_open_prs` defect, but not the same consequence, so it is
+    // deliberately left alone rather than widened into an Option.
+    //
+    // The distinction that matters is what a consumer DOES with emptiness, not
+    // whether emptiness is ambiguous. Every consumer here degrades toward
+    // silence in a surface that only informs: `active_reviewer_unmerged_pr`
+    // (STORY-127) withholds a WARNING, the release check at the STORY-127
+    // detector withholds a WARNING, and the `aida status` open-PR section
+    // renders no rows. None of them change a spec's state. The defect in
+    // `specs_with_open_prs` was that emptiness AUTHORISED an irreversible
+    // Done -> Completed bump, hiding unfinished work.
+    //
+    // Note also that this default is already returned on four paths (non-GitHub
+    // forge, gh missing, gh failure, unparseable output), so the forge guard
+    // joins an existing conflation rather than creating one; typing "unknown"
+    // here would mean typing all four and every consumer.
+    // trace:BUG-1454 | ai:claude
     if forge::resolve_forge_kind(project_root) != forge::ForgeKind::GitHub {
         return OpenPrSnapshot::default();
     }
@@ -67097,6 +67135,17 @@ struct PrHeadStateSnapshot {
 }
 
 // trace:BUG-1187 | ai:codex
+// BUG-1454 F3, DECIDED AND KEPT: an empty snapshot here degrades toward
+// OVER-reporting, which is the safe direction for this consumer.
+//
+// `collect_unshipped_work_items` skips a branch only when its recorded state
+// matches `Some("open" | "merged")`. An empty map yields `None`, the skip does
+// not fire, and the branch REMAINS an unshipped-work candidate. So the failure
+// mode is surfacing a branch that did not need surfacing — never hiding one
+// that did. The sole caller also already selects the default explicitly via its
+// own `no_forge` flag, so the no-forge case is a decision made at the call
+// site, not an accident of this guard.
+// trace:BUG-1454 | ai:claude
 fn collect_pr_head_states(project_root: &std::path::Path) -> PrHeadStateSnapshot {
     if forge::resolve_forge_kind(project_root) != forge::ForgeKind::GitHub {
         return PrHeadStateSnapshot::default();
