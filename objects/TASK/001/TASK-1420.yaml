@@ -28,11 +28,27 @@ description: |-
 
   A STRAIGHT COPY keeps `type:` nested under `metadata:` and drops the `propagation:` marker, so the file lands in the directory and NEVER JOINS THE PACK. It would look done and ship nothing - the absent-vs-good-evidence shape (PRIN-5) arriving in the delivery path rather than in a gate.
 
-  ACCEPTANCE:
+  THE PACK IS COMPILE-TIME EMBEDDED, SO THE VERIFICATION STEPS ARE ORDERED AND THE ORDER IS THE POINT. Verified: `aida-core/build.rs:83` does `embed_directory(&mut code, "templates/memories", "memories")`, and `aida memories check --help` says it compares the local pack against "THIS BINARY'S EMBEDDED MASTER". So copying files into the source tree changes NOTHING about the `aida` on PATH until a rebuild, and both checks below run through that binary. Found by claude-reviewer-1 before pickup.
+
+      ON A STALE BINARY, criterion 4 PASSES SPURIOUSLY - a binary predating the copy has no knowledge of
+      the two files, so there is no drift to report and it prints clean. Clean means "the binary does not
+      know about them", which is indistinguishable from "they propagated correctly". CRITERION 4 AS
+      WRITTEN WOULD BE SATISFIED BY DOING NOTHING AT ALL.
+
+      ON A STALE BINARY, criterion 2 FAILS SPURIOUSLY - the files are in the tree but absent from the
+      embedded pack, so the scaffolder correctly omits them, and an implementer goes hunting for a
+      frontmatter bug that is not there. The likeliest "fix" is to start editing the marker they already
+      got right.
+
+  That is PRIN-5 inside this spec's own verification - absent evidence computing as good evidence - on the spec whose whole subject is a surface returning something true that is not the thing asked.
+
+  ACCEPTANCE, IN ORDER:
   1. Both memories exist under `aida-core/templates/memories/` with MASTER frontmatter: snake_case `name:` matching the filename, quoted `description:`, TOP-LEVEL `type: feedback`, and `propagation: scaffolding-pack`.
-  2. THE VERIFICATION IS THAT THEY APPEAR IN A SCAFFOLDED PACK, NOT THAT THEY EXIST IN THE DIRECTORY. Run the scaffolder into a throwaway target and show both files present in the output. Listing the templates directory does NOT satisfy this - that is exactly the failure the gotcha above describes.
-  3. The bracketing memory ships with its caveat paragraph intact, including the name-the-brackets clause. The caveat is load-bearing, not a closing line: without it the technique manufactures provenance.
-  4. `aida memories check` is clean afterwards.
+  2. The bracketing memory ships with its caveat paragraph intact, including the name-the-brackets clause. The caveat is load-bearing, not a closing line: without it the technique manufactures provenance.
+  3. REBUILD FIRST - `make build-fast` - so the embedded pack contains the two files. This is an ORDERED STEP, not a note. Every check below is meaningless before it.
+  4. CONFIRM THE BINARY POSTDATES THE COPY before running any check - `aida dev status` (SHA vs HEAD) or equivalent. A shell on a stale dev pin is the common way this goes wrong and it is SILENT.
+  5. THE PROPAGATION PROOF: scaffold into a throwaway target and show BOTH FILES PRESENT IN THE OUTPUT. Listing the templates directory does NOT satisfy this. This is the criterion that actually discriminates - positive evidence from the delivery path.
+  6. `aida memories check` is clean afterwards. THIS IS A REGRESSION GUARD, NOT A PROPAGATION PROOF, and nobody may treat a clean result as the demonstration - see the stale-binary note above. Criterion 5 is the demonstration.
 
   OUT OF SCOPE: any other memory in the local pack. This is two files, chosen because they are pure method with no project content.
 status: Approved
@@ -40,7 +56,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T13:58:37.426328724Z
-modified_at: 2026-09-21T13:59:04.857628950Z
+modified_at: 2026-09-21T14:01:01.732295172Z
 req_type: Task
 relationships:
 - rel_type: References
