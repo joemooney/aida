@@ -56,12 +56,23 @@ description: |
   NOT IN SCOPE: changing any of tonight's specs. TASK-1313 already carries the three-
   aperture table that motivated this; this task is about making the rule reusable, not
   about re-litigating the instances.
+
+  7. THE RULE'S TEXT MUST SAY WHEN IT IS APPLIED: while WRITING the check, by reading the
+     PREDICATE — before the check has ever been run and with no results in hand.
+
+     Reviewer's addition, and it is the reason the test is cheap rather than a nicety. A
+     rule that needs results to apply is a rule nobody applies at the only moment it would
+     help. Every one of tonight's four under-counting checks was written, run, and reported
+     before anyone asked what its trigger required; asking at write time costs one sentence
+     and needs no population.
+
+     So the rule is phrased for the author of a predicate, not for the reader of a count.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:12:14.796135922Z
-modified_at: 2026-09-21T06:12:14.796135922Z
+modified_at: 2026-09-21T06:16:22.109989610Z
 req_type: Task
 tags:
 - parent:EPIC-62 discipline-pack observation severity:operational propagation-candidate
