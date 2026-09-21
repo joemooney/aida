@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:37:35.410903749Z
-modified_at: 2026-09-21T00:46:13.787057411Z
+modified_at: 2026-09-21T00:48:48.135574221Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -55,5 +55,26 @@ comments:
     ALSO WORTH CHECKING, raised by the reviewer: whether any label-only hold belongs to a seat no longer running. A label-only hold placed by a live seat is an inconvenience; one placed by a dead seat is a PR nobody can free through the supported path. All nine here were mine and are now released-by-conversion, so this instance is closed — the question stands for the general case.
   created_at: 2026-09-21T00:46:13.787057411Z
   modified_at: 2026-09-21T00:46:13.787057411Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c16f-da07-7273-9d56-a511c19f47b0
+  author: joe
+  content: |-
+    [aida:advisor] PROVENANCE SPLIT MEASURED, correcting an inference. claude-reviewer-1 verified the fixed state — 19 open PRs with the label, 19 markers, no orphan in either direction — and inferred from the arithmetic (19 total, 9 of them my conversions) that the other ten were drain-placed and therefore 'the drain path was never broken'.
+
+    The marker text does not support that. Counting by the drain's own drive-mode string:
+
+        drain-placed ('… is marked drive — auto-merge refused')   4
+        hand/advisor-placed                                       15
+        total                                                     19
+
+    So only 4 of 19 holds came from the drain. Fifteen are hand-placed, of which 9 are my conversions from tonight — leaving 6 hand-placed markers that were ALREADY correctly paired before I touched anything.
+
+    WHAT THAT CHANGES. 'The drain path was never broken' is not established by this data; the drain simply accounts for a small minority of holds. And the hand path demonstrably CAN produce a correct pair — it did 6 times. So the defect is not that hand-placement is broken; it is that one seat reached for `gh pr edit --add-label` nine times while the supported command existed and was used correctly six times in the same store.
+
+    That NARROWS the remedy further rather than widening it: no path needs fixing, and the feedback-loop criterion is the whole of it. It also makes the criterion sharper — the correct tool was not merely available, it was in active successful use alongside the wrong one.
+
+    LABELLED AS MEASUREMENT vs INFERENCE, since that is the distinction that produced the error: the 4/15 split is counted from marker text. Whether those 6 pre-existing hand markers were placed by this seat earlier or by another is NOT established and I have not tried to establish it.
+  created_at: 2026-09-21T00:48:48.135574221Z
+  modified_at: 2026-09-21T00:48:48.135574221Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
