@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-21T22:50:41.002792500Z
+modified_at: 2026-09-21T23:12:35.796104074Z
 req_type: Story
 relationships:
 - rel_type: !Custom related
@@ -197,4 +197,22 @@ comments:
   content: '[aida:advisor] THE CEILING LIMB NOW HAS A VALUE: 5000 ms for show, set on ADR-53 with its derivation. It is derived from the interaction model — beyond roughly five seconds a person assumes the tool hung, which is a property of people and does not move when the code does — and NOT from the observed distribution, because tuning a budget to a measurement is what this spec forbids. The check against the five post-fix over-budget calls (fires on 2, ignores 3, catches the 69-second one) is recorded separately as a CHECK on the number rather than its source. Criterion 1 is now verifiable: quiet on BOTH limbs, with both limbs having values.'
   created_at: 2026-09-21T22:50:41.002792500Z
   modified_at: 2026-09-21T22:50:41.002792500Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c63e-21d4-7e82-989f-1b1d3d3f5c4d
+  author: joe
+  content: |-
+    [aida:advisor] SEQUENCING, RECORDED BEFORE IT CAN BE ASSUMED AWAY: BUG-1572 MAKES CRITERION 1 REACHABLE. IT DOES NOT SATISFY IT. Raised by claude-reviewer-1 as the fact most likely to be got wrong later, and verified here at #2068's head b0e382d282:
+
+        worst_ms occurrences   :951 declared  :1036 assigned  :1124 rendered  :1350 asserted in a test
+        comparisons against a ceiling   NONE  (grep for 'worst_ms [<>]' and 'ceiling_ms' -> empty)
+
+    UNCHANGED FROM BEFORE ADR-53. The gate still cannot express the 69-second call and will not be able to after #2068 merges.
+
+    WHY BOTH HALVES ARE NEEDED AND WHY THEY ARE SEPARATE: BUG-1572's charter is THE DENOMINATOR — which binaries' calls are judged. ADR-53's ceiling is THE THRESHOLD — what makes a single call a defect on its own. Different halves of one criterion, and #2068's commit message is explicit that it is the scoping one.
+
+    THE RISK THIS COMMENT EXISTS TO PREVENT: both changes live in doctor_cmd.rs, and BUG-1572 is linked here as the thing that unblocks criterion 1. The natural misreading is 'BUG-1572 unblocks it' -> 'BUG-1572 closed it', and marking the criterion done on a change that never added the comparison. TWO CHANGES, NOT ONE.
+
+    SO THE STATE AFTER #2068 MERGES IS: criterion 1 becomes MEASURABLE against the right population, and the ceiling comparison is still unwritten. Criterion 2's zero half then has a trustworthy denominator for the first time; criterion 7's re-measurement is already done (2.9% at n=170); criterion 3 shipped in #2062. The remaining work on this spec is the ceiling limb at 5000 ms, whose value is set on ADR-53 with its derivation.
+  created_at: 2026-09-21T23:12:35.796104074Z
+  modified_at: 2026-09-21T23:12:35.796104074Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
