@@ -234,7 +234,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:18:31.246345754Z
-modified_at: 2026-09-21T06:22:32.009993009Z
+modified_at: 2026-09-21T06:40:17.721436416Z
 req_type: Bug
 tags:
 - parent:EPIC-62 merge-hold pr-ship safety-gate severity:major
@@ -291,3 +291,38 @@ comments:
   created_at: 2026-09-21T06:14:10.315160479Z
   modified_at: 2026-09-21T06:14:10.315160479Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c2b1-a739-7861-ab5f-b5b1fe5341cd
+  author: joe
+  content: |-
+    [aida:advisor] CRITERION 10 HAS NOW BEEN EXERCISED ONCE, and the reviewer is right that
+    this is evidence rather than argument. Recording it because a criterion that has done its
+    job once is worth more than one that reads well.
+
+    THE SEQUENCE:
+
+      21:00  PR-2034's marker was rewritten to reference the verdict RECORD
+             (.aida/review-verdicts/BUG-1460.json, owner claude-reviewer-1, sha and clearing
+             condition) instead of quoting a superseded finding. It had been quoting the
+             DRAIN REVIEWER's 20:52 text, which under the TASK-1-170 convention routed
+             ownership to a seat that no longer existed.
+
+      23:35  the reviewer recorded a fresh verdict at the then-current head, read the marker,
+             found it named them as owner with a clearing condition they had just satisfied,
+             cleared it, and merged. BUG-1460 is Completed and 71c3fe0b13 is on main.
+
+    So the reference-not-quote shape did the one thing criterion 10 claims for it: it routed
+    a hold to the seat that could clear it, at the moment a clearance was needed. Had the
+    marker still quoted the drain reviewer's superseded finding, the correct reading of
+    TASK-1-170 would have sent the clearance to an ephemeral phase that had not existed for
+    two hours — and the merge would have stalled on a convention working exactly as written
+    against a marker that was wrong.
+
+    WHAT THIS DOES NOT ESTABLISH: that the criterion is sufficient. One exercise on one
+    marker that a human had already repaired by hand is not the same as the mechanism
+    existing. Nine other markers carry reasons nobody has audited for staleness, and criterion
+    10 is still unimplemented — what happened here is that the SHAPE it asks for was applied
+    manually and then paid off. That is the argument for implementing it, not evidence that
+    it is done.
+  created_at: 2026-09-21T06:40:17.721436416Z
+  modified_at: 2026-09-21T06:40:17.721436416Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
