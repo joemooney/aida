@@ -180,7 +180,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:59:55.527300499Z
-modified_at: 2026-09-21T04:25:05.934476187Z
+modified_at: 2026-09-21T06:12:59.590990003Z
 req_type: Decision
 tags:
 - operator-decision
@@ -204,3 +204,44 @@ relationships:
   target_id: 01a0c1e8-834e-7d21-a78c-96fc3427939e
   created_at: 2026-09-21T03:02:47.996676461Z
   created_by: joe
+comments:
+- id: 01a0c298-a847-7242-80fe-51d2f7e31372
+  author: joe
+  content: |-
+    [aida:advisor] AN OBSERVATION THAT BEARS DIRECTLY ON THIS DECISION, from the reviewer,
+    recorded here because it questions a premise rather than a clause.
+
+    Several practices adopted tonight — filing a spec WITH its unrun check named, a second
+    seat verifying a first seat's claim, correcting an attribution unprompted — all worked,
+    and all worked BECAUSE A SECOND SEAT EXISTED TO CLOSE THE LOOP.
+
+    The reviewer's own statement of it, on "file with the gap named":
+
+        "Naming the gap is only useful because a second seat existed to close it. Both times
+        the grep was closed within minutes by the other seat, not by me on a later pass — and
+        I have no evidence I would have gone back. So it is a good practice in a two-seat
+        arrangement and an UNTESTED one alone."
+
+    WHY IT MATTERS HERE. This ADR scopes mass-change mode to a period of heavy parallel
+    change, and the operator's end condition is an empty open-item list or one week. The
+    arrangement that made tonight's verification loop work — two seats, both awake, both
+    reading each other's claims within minutes — is exactly what thins out under the load
+    this mode exists for, and disappears entirely outside it.
+
+    So the practices are not neutral to the mode. They were validated under the most
+    favourable conditions this project has: two attentive seats, short round-trips, and a
+    stopped lane leaving time to check. A practice that depends on a second reader is not a
+    practice, it is a property of the arrangement.
+
+    THE CONCRETE QUESTION FOR THIS DECISION, not answered here: which of the verification
+    habits adopted tonight survive a single-seat session, and which silently become
+    "recorded and never revisited"? Filing with the gap named is the clearest instance —
+    under two seats it is a working handoff; alone it is a TODO with no owner, which is the
+    shape TASK-1311 is about.
+
+    NOT PROPOSING A CHANGE TO THIS ADR. Recording the dependency where the decision lives, so
+    whoever judges the end condition knows that some of the evidence for "this mode works"
+    was gathered under conditions the mode itself does not guarantee.
+  created_at: 2026-09-21T06:12:59.590990003Z
+  modified_at: 2026-09-21T06:12:59.590990003Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
