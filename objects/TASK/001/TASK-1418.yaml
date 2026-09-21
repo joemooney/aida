@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T15:55:49.617816993Z
+modified_at: 2026-09-21T15:59:00.568254859Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -141,4 +141,23 @@ comments:
     Related: BUG-1556 is the channel-level form - a correctly-firing guard whose reports go somewhere nobody reads.
   created_at: 2026-09-21T15:55:49.617816993Z
   modified_at: 2026-09-21T15:55:49.617816993Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4b1-2bd8-7143-848c-1ab3ee21cf25
+  author: joe
+  content: |-
+    [aida:advisor] A THIRD FORM FOR THE CATALOGUE, found by claude-reviewer-1 in BUG-1555, and per their assessment the hardest of the three to notice:
+
+        AN INSTRUMENT THAT FIRES CORRECTLY ON ONE FAILURE MODE AND IS SILENT ON ANOTHER.
+
+    The first two forms both produce a CONSTANT and are therefore detectable by looking at variance alone: the INERT instrument is constant-green and fools its author; the ALWAYS-FIRING one is constant-red and trains everyone else to stop reading the channel. Neither survives the question "does this output vary across its inputs?".
+
+    THE THIRD FORM PASSES THAT TEST. It varies. It fires, correctly, with real signal, on the cases it covers - so every observation of it working is true, and none of them tell you about the case it cannot see. IT LOOKS ALIVE, BECAUSE IT IS. Just not for the thing you are relying on it for.
+
+    THE WORKED INSTANCE. `discipline_content_mismatches` (aida-core/src/templates.rs:1159-1172) is the BUG-1279 pack-parity guard. It reads each project copy with `std::fs::read_to_string(...).ok()?` inside a `filter_map`, so a master with NO project copy yields None and is SILENTLY SKIPPED rather than reported. A DELETED GUIDE MAKES THE PACK READ CLEAN - and deletion is one of the drifts the guard exists to catch. It detects edits faithfully and is structurally blind to removal.
+
+    THE DETAIL THAT MAKES IT A GOOD CATALOGUE ENTRY, because it is how these hide: the defect is CURRENTLY MASKED at the only call site. The enclosing test runs a separate `missing` assertion over `project_dir.join(name).is_file()` first, so a deletion IS caught today. The blindness lives in the reusable FUNCTION, not in the test - and the next caller that uses the function without independently reimplementing that assertion inherits a guard that cannot see deletion, with no failing test to warn them. A masked defect in a shared unit is a defect scheduled for a future caller.
+
+    THE CHECK THIS SUGGESTS, as a companion to the saturation ratio recorded above: FOR EACH FAILURE MODE THE INSTRUMENT IS RELIED ON FOR, NAME THE OBSERVATION THAT WOULD SHOW IT DETECTING THAT MODE SPECIFICALLY. Not "the guard works" - the guard demonstrably works. Enumerate the modes (edited, added, deleted, reordered, renamed, encoding-changed) and demonstrate one per mode. The saturation ratio catches an instrument that stopped measuring; this catches one that never measured a particular thing, and only the enumeration finds it.
+  created_at: 2026-09-21T15:59:00.568254859Z
+  modified_at: 2026-09-21T15:59:00.568254859Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
