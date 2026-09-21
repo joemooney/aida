@@ -1,0 +1,56 @@
+id: 01a0c658-238c-7040-be58-bc0ef2176043
+spec_id: BUG-1584
+agreed_id: BUG-1584
+title: The spec card collapses BlockedBy, Blocks, Duplicate and Verifies into one Related heading, so it cannot say a spec is blocked by something — the edge names it already carries are discarded
+description: |-
+  THE SPEC CARD CANNOT SAY A SPEC IS BLOCKED BY SOMETHING. `BlockedBy`, `Blocks`, `Duplicate`, `Verifies`, `VerifiedBy`, `SupersededBy` and `Supersedes` all collapse into one "Related" heading and render as bare ids, so the card shows THAT two specs are connected and never HOW.
+
+  Flagged by the implementer lane on #2065 and deliberately left unfixed as an out-of-scope behaviour change for standard edges. It is the same defect shape BUG-1471 was filed about, one step in: BUG-1471 was an edge rendering under a label that misdescribed it; this is an edge rendering under a label that describes NOTHING.
+
+  THE MECHANISM, at aida-cli-lib/src/lib.rs:72650 on current main:
+
+      const CARD_REL_BUCKETS: &[&str] = &["Parent", "Related", "Custom"];
+
+      fn card_rel_label(rt: &RelationshipType) -> &'static str {
+          RelationshipType::Child     => "Parent",
+          RelationshipType::Custom(_) => "Custom",
+          _                           => "Related",    // <- everything else
+      }
+
+  The wildcard arm is the whole finding. #2065 correctly gave Custom edges their own bucket AND made `CardRel` carry the edge's real name so a Custom edge prints `[implemented-by] STORY-1435` inline. THE SAME MACHINERY IS ALREADY PRESENT AND IS NOT APPLIED TO STANDARD TYPES — a `BlockedBy` edge has a name too, and the card discards it.
+
+  THE AFFECTED POPULATION, counted across the store:
+
+      References        371        Duplicate        11
+      BlockedBy          57        Verifies/VerifiedBy, SupersededBy/Supersedes  (small)
+      Blocks             28
+
+  So roughly 470 standard non-parent edges render today with their type erased, and the BLOCKING ones are the costly half: a card that cannot distinguish "blocked by X" from "references X" is misleading about the one relationship that governs whether work can start. `pickability::blocked_by_incomplete` gates dispatch on BlockedBy — the card is silent about precisely the edge that decides pickup.
+
+  WHY THIS IS NOT JUST COSMETIC. A reader consulting a card to decide whether a spec is ready sees a list of ids under "Related" and must open the graph to learn that one of them is a blocker. The information exists, is correct, and is dropped at the last step — which is ADR-53's ENFORCEMENT/ADDRESSABILITY family again: data that reaches a rendering function and stops there.
+
+  Acceptance:
+  - The card distinguishes blocking edges from references. Whether that is new buckets
+    (`Blocked by`, `Blocks`) or the inline-name treatment #2065 already built for Custom is a
+    design choice, NOT PRESCRIBED HERE — `CardRel::edge` is the seam either way and already
+    carries what is needed.
+  - `CARD_REL_BUCKETS`'s stated contract holds: every label `card_rel_label` returns must be
+    listed, and no edge may land in no bucket. #2065 wrote that invariant down and tested it;
+    do not break it while widening.
+  - A test asserting a BlockedBy edge is distinguishable from a References edge on the same card.
+    A fixture with only Parent/Related/Custom cannot see this defect, which is why the current
+    tests pass.
+  - NOT IN SCOPE: changing what any edge MEANS, or the graph traversal. This is rendering only.
+
+  Filed by the driver-advisor seat, from a finding the #2065 lane raised against its own change and
+  declined to fix rather than letting it pass silently. Related: BUG-1471 (the Custom half, merged
+  at e0a211ec81), TASK-1426 (the inert-edge migration).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T23:41:00.172675010Z
+modified_at: 2026-09-21T23:41:00.172675010Z
+req_type: Bug
+tags:
+- card rendering papercut
