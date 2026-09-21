@@ -458,12 +458,14 @@ fn rework_tail_keeps_append_semantics() {
 // trace:BUG-1056 | ai:codex
 #[test]
 fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
-    // BUG-1470: lifting a punted NeedsAttention spec into Approved is an
-    // advisor act, so this test must hold that authority to exercise the
-    // pickability behaviour it is actually about. EnvVarGuard takes the same
-    // ENV_LOCK `env_lock()` did, so it replaces rather than nests — nesting
-    // the two deadlocks. trace:BUG-1470 | ai:claude
-    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    // BUG-1470 / STORY-1353: lifting a punted NeedsAttention spec into
+    // Approved is a DISPOSITION, so dispatch authority alone must not do it.
+    // This test pins both directions of that gate: refused without advisor
+    // authority, and successful (BUG-1056's original pickability behaviour)
+    // with it. NOTE: no outer `env_lock()` here — `EnvVarGuard` holds
+    // ENV_LOCK for its own lifetime and the lock is NOT reentrant, so
+    // acquiring it above a guard deadlocks. Each phase below scopes its own
+    // guard instead. trace:BUG-1470 trace:STORY-1353 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
@@ -475,22 +477,51 @@ fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
     store.requirements.push(rework_req);
     backend.save(&store).unwrap();
 
-    handle_queue_rework(
-        &storage,
-        "BUG-1056",
-        false,
-        Some("implementer"),
-        false,
-        None,
-        Some("review findings are the triage resolution"),
-        false,
-        false,
-        false,
-        None,
-        true,
-        Some("codex"),
-    )
-    .unwrap();
+    let rework = |storage: &Storage| {
+        handle_queue_rework(
+            storage,
+            "BUG-1056",
+            false,
+            Some("implementer"),
+            false,
+            None,
+            Some("review findings are the triage resolution"),
+            false,
+            false,
+            false,
+            None,
+            true,
+            Some("codex"),
+        )
+    };
+
+    // STORY-1353 half: Needs Attention -> In Progress is a DISPOSITION, so
+    // dispatch authority alone must not perform it. This is the hole BUG-1494
+    // recorded -- queue rework was the way to move a shelved spec without the
+    // advisor ever ruling on it.
+    {
+        let _role = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
+        let refused = rework(&storage).expect_err("dispatch authority alone must not dispose");
+        assert!(
+            refused.to_string().contains("needs advisor authority"),
+            "refusal must name the missing authority: {refused}"
+        );
+        let parked = storage.load().unwrap();
+        assert_eq!(
+            parked
+                .get_requirement_by_spec_id("BUG-1056")
+                .unwrap()
+                .status,
+            RequirementStatus::NeedsAttention,
+            "a refused rework must leave the spec parked, not half-moved"
+        );
+    }
+
+    // BUG-1056 half, preserved: WITH advisor authority the punted spec resumes
+    // and becomes the pickable queue head. STORY-1353 gates this transition; it
+    // does not remove it.
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    rework(&storage).unwrap();
 
     let updated = storage.load().unwrap();
     let req = updated.get_requirement_by_spec_id("BUG-1056").unwrap();

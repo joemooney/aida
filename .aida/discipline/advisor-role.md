@@ -47,6 +47,12 @@ the advisor, settable to `operator` to surface it on `aida human` instead. The
 rest are seat-bound (reviews/decisions/merge/keystone-build are the operator's;
 distill/bless are the advisor's). `aida config show` prints the effective seats.
 
+The advisor holds both dispatch and disposition authority. Product and
+integrator seats may also dispatch, but they cannot approve, reject, change
+execution mode, or cross the other disposition gates. Merge and merge-hold
+integrity floors remain human-only. See `authority-boundaries.md`.
+<!-- trace:STORY-1353 | ai:codex -->
+
 ## The periodic garden pass
 
 Between conversations — and on every fork-from-live tick of `aida advisor
