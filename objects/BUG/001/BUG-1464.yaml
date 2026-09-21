@@ -32,9 +32,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:50:48.740973629Z
-modified_at: 2026-09-21T21:53:54.352286622Z
+modified_at: 2026-09-21T22:01:09.610357424Z
 req_type: Bug
 tags:
 - batch:night-0920
 - roles scaffolding refresh cold-session multivendor from:review-pr-1986 parent:EPIC-62
+comments:
+- id: 01a0c5fc-baea-7373-bcfd-49c9050b10ac
+  author: joe
+  content: Implemented additive starter-role refresh in aida-cli-lib/src/scaffold_refresh.rs. Installed product/advisor roles missing system_prompt receive shipped guidance while all existing TOML bytes remain unchanged; existing prompts, symlinks, invalid files, and missing roles are preserved. Added regression coverage for legacy backfill, custom purpose/comment preservation, custom prompt survival, and silent second refresh. Scaffold refresh tests (11), cargo fmt/check, and cargo check -p aida-cli-lib pass.
+  created_at: 2026-09-21T22:01:09.610357424Z
+  modified_at: 2026-09-21T22:01:09.610357424Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
