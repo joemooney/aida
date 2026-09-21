@@ -20,12 +20,12 @@ description: |
   Corroborated independently by the reviewer seat, which confirmed the edit verb's flag list and the same-line finding.
 
   Worth deciding rather than assuming. If heft is meant to be advisor-maintained, the flag is missing. If it is deliberately filing-time, the decision should be written down along with an answer for the case where splitting is impossible.
-status: Approved
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:05:31.157400040Z
-modified_at: 2026-09-21T23:11:18.621637904Z
+modified_at: 2026-09-21T23:11:20.929287639Z
 req_type: Task
 tags:
 - from-advisor:general
