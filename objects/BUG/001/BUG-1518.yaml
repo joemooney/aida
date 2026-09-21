@@ -1,0 +1,39 @@
+id: 01a0c234-014b-7790-8cc8-2d8346974bb8
+spec_id: BUG-1518
+agreed_id: BUG-1518
+title: A tree-diff against a behind-branch shows deletions the merge will never make, so a reviewer refuses a PR for a revert that cannot happen
+description: |
+  A reviewer reading a pull request by tree-diff sees deletions the merge will never make. The instrument answers "how do these two trees differ" when the question asked is "what will this merge change", and when the branch is behind, those are different questions with the same output shape.
+
+  THE WORKED INSTANCE, 2026-09-20. PR #2029, two commits behind main:
+
+      git diff origin/main <branch-head>
+        review_verdict.rs          -238
+        review_verdict_tests.rs    -423
+
+  That is the entire STORY-1391 verdict-retention feature, merged twelve minutes earlier, appearing as a deletion. A reviewer would reasonably refuse the PR for reverting a feature.
+
+  IT REVERTS NOTHING. The merged commit touches ONE FILE - task_1265_rework_no_op_tests.rs - verified by a name-only listing. review_verdict.rs is not in the commit at all, so the merge keeps main's version, and after merging it still holds the retention work. The 661 apparent deletions are a property of the branch's BASE, not of its content.
+
+  WHY THE FALSE ALARM IS THE DANGEROUS DIRECTION. A tree-diff against a behind-branch under-reports nothing and over-reports everything main gained since the branch forked. So it never hides a real change - it manufactures alarming ones. That means it wastes review rather than passing defects, which sounds benign until you notice what a reviewer does with it: refuse the PR, write a finding about a revert that cannot happen, and send an implementer to fix something that is not there. The cost lands on the rework cycle, not on main.
+
+  THE SAME SHAPE IN A SECOND INSTRUMENT, same evening. A cumulative patch on PR #2045 showed one line BOTH added AND removed, which is uninterpretable as a statement about the final state. The reviewer resolved it by reading the file at the head commit instead. Two instruments, same root: each answered a question adjacent to the one being asked, and each answer was alarming rather than wrong.
+
+  Acceptance:
+  1. State the correct instrument for "what will this merge change" and make it the documented default for review: the commit range or the merge-base three-dot form, not a two-dot tree diff against main. A name-only listing of the commits' own files answers "what does this PR touch" with no ambiguity at all.
+  2. Where a review surface renders a diff for a human or an agent, it uses that form, or it states which form it used. A diff whose base is unstated cannot be interpreted by its reader.
+  3. A PR whose branch is behind main is labelled with how far behind, wherever a diff is presented. The distance is what determines how much of the apparent change is an artifact.
+  4. A test or check that reads a diff to decide something asserts against the commit contents, never against a tree comparison with a moving base.
+
+  NOT IN SCOPE: whether branches should be kept current. They will not always be, and the instrument must be correct when they are not.
+
+  PROVENANCE: found by the reviewer seat while merging #2029, which reports nearly writing the revert finding before checking which files the commit contains. The advisor verified the merge independently - one file touched, retention work intact on main afterwards - before this was filed.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:23:03.243517526Z
+modified_at: 2026-09-21T04:23:03.243517526Z
+req_type: Bug
+tags:
+- batch:night-0920 review-method agent-surface drain-safe from:session-0920
