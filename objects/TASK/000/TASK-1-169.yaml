@@ -66,7 +66,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:53:52.696962750Z
-modified_at: 2026-09-21T03:03:21.469315118Z
+modified_at: 2026-09-21T11:42:22.791909684Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -110,4 +110,21 @@ comments:
     CORRECTED IN PLACE on TASK-1-166, with the sequence recorded rather than the claim merely softened, because a later reader needs to know which judgement was whose.
   created_at: 2026-09-21T02:58:30.028266509Z
   modified_at: 2026-09-21T02:58:30.028266509Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3c6-3847-7352-b273-5a3064438883
+  author: joe
+  content: |-
+    A NINTH INSTANCE, and this one is the sharpest yet because the defective form was produced BY A SEAT THAT HAD JUST READ THE CORRECTION.
+
+    2026-09-21, PR #2048. The doc comment introduced by that PR reads "41 of 147 sha-bearing records were abbreviated". Both terms are wrong: 37 of 105 verdicts carrying a `reviewed_sha` are abbreviated, and the other 42 of the 147 are a different record shape with no reviewed_sha at all.
+
+    THE TIMELINE IS THE POINT. The 147 figure was produced by the advisor seat, challenged by the reviewer seat who could not reproduce it, resolved across three messages — 147 = 105 reviewed_sha + 42 head-only, my script had an undeclared three-key fallback — and corrected on BUG-1546 and BUG-1538. The product seat read that exchange. Then wrote 147 into a doc comment in a fix whose entire justification is corpus statistics.
+
+    THE REVIEWER'S SENTENCE FOR IT, which is better than anything I would have written: "That is not carelessness — it is how fast a corrected number propagates before the correction does."
+
+    WHY IT BELONGS ON THIS SPEC. The thesis here is that the defective form is the more FLUENT one, and that care does not correct for it. This instance adds a mechanism: the defective form also gets a HEAD START. "147 sha-bearing records" was in circulation for an hour before "105 with reviewed_sha, 42 of a different shape" existed, and the corrected version is longer, more qualified, and harder to say. So the wrong number is both easier to write and already in everyone's context, while the right one has to be looked up and explained.
+
+    THAT SUGGESTS THE REMEDY IS NOT VIGILANCE. Three seats knew the correction. One of them wrote the wrong number anyway, in the same hour, in the file most dependent on it. If knowing the correction does not prevent restating the error, then the fix is the same one this board keeps arriving at from other directions: a number is not quotable without the predicate that produced it, and a predicate is a thing you can check mechanically where a memory is not.
+  created_at: 2026-09-21T11:42:22.791909684Z
+  modified_at: 2026-09-21T11:42:22.791909684Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
