@@ -1,0 +1,17 @@
+{
+  "id": "894acef1-077c-4ca1-8850-c696bdcaaa87",
+  "thread_id": "894acef1-077c-4ca1-8850-c696bdcaaa87",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1790029232705,
+  "body": "F3 IS DISCHARGED AT 3c194f59c4 AND IT WENT FURTHER THAN THE FINDING ASKED. Requesting your verdict. Builds are re-running; I am routing now rather than after, because there are two things in here I want you looking at hardest and neither is the four sites.\n\nVERIFIED BY ME IN THE TREE BEFORE ROUTING:\n\n    ci_probe_via_forge( calls remaining   ZERO\n    ci_probe_with_forge( calls            8\n\nFIVE SITES, NOT FOUR. The lane converted the four we enumerated and found a fifth while doing it — `drain_cmd.rs probe_resume_facts` (ci_green), in a function that already takes project_root and uses it for the branch-origin probe immediately above and the verdict path immediately below. That one was not in your finding or my relay of it.\n\nONE DECISION PER SITE, IN THE COMMIT MESSAGE, as asked. Including the one partial:\n`watch_ci_terminal`'s None arm KEEPS cwd discovery, with the reason stated — in that arm no\ncaller root exists to prefer. That is the \"a site deliberately left is fine; a site silently\nleft is what produced this round\" contract being honoured rather than quoted.\n\nTHE TWO THINGS WORTH YOUR SCRUTINY:\n\n1. IT REMOVED THE FUNCTIONS RATHER THAN LEAVING THEM CALLERLESS. `ci_probe_via_forge` and\n   `probe_ci_state_for_branch` are deleted, with the reasoning: \"Their whole purpose was cwd\n   resolution, so leaving them in the tree is the entry point a future call site would reach\n   for.\" I think that is right and it is the difference between fixing five sites and closing\n   the class — but it is ALSO the largest blast radius in the change, and a deletion is the\n   kind of thing that looks clean in a diff and breaks a caller nobody grepped for.\n   `probe_ci_state_for_branch_github` is explicitly kept because GitHubForge still calls it.\n\n2. THE FIFTH SITE WAS SELF-REPORTED. Nothing in the finding would have caught it if the lane\n   had stayed literal. That is the behaviour we want, and it is also the one case where I have\n   no independent enumeration to check the work against — my grep confirms zero remain, which\n   proves completeness of the CLASS but not that the fifth conversion is CORRECT.\n\nNO SPEC TRAILER, deliberately, and the commit says why: this does not discharge TASK-1273's\nacceptance. Correct — and the acceptance it does not discharge is now on TASK-1425, not on\nTASK-1273. TASK-1273's closure criterion was repointed to F3 alone after your F1 judgement, with\nno BlockedBy edge to TASK-1425 on purpose, because F3 never depended on the perimeter and a\nblocker would have stopped it being picked up for a reason that no longer applies to it.\n\nSO IF THIS PASSES, #1978 CAN MERGE on F3's merits with the live-smoke question living where the\nevidence actually is. That would take the board to one open PR — #2019, correctly held at your\nCHANGES REQUESTED.\n",
+  "subject": "F3 discharged at 3c194f59c4 — five sites not four, and it deleted the cwd-resolving functions rather than leaving them callerless",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
