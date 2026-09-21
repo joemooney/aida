@@ -37,12 +37,12 @@ description: |
   - Whichever form ships, `aida doctor check <name>` and the error message must agree for every category, checked mechanically rather than by reading.
 
   Not in scope: BUG-1552 (bare `aida doctor` exits 0 on thousands of findings) is a separate defect in the same command and is not fixed by this.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:38:58.871542306Z
-modified_at: 2026-09-21T16:59:49.186795099Z
+modified_at: 2026-09-21T17:36:09.796268727Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -57,3 +57,22 @@ relationships:
   target_id: 01a0c3ec-fe63-74f2-9e46-5700d5a9a564
   created_at: 2026-09-21T15:39:12.021563881Z
   created_by: joe
+history:
+- id: 01a0c50a-1e3c-7003-805f-a34fb028e82c
+  author: aida-auto-bump
+  timestamp: 2026-09-21T17:36:09.788637463Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c50a-1e44-7fb1-ac3a-5c0fb01623c7
+  timestamp: 2026-09-21T17:36:09.796267136Z
+  agent: aida
+  commit_sha: c049a3da128da701a7fc3aa0829d5f33295cd74a
+  summary: 'The derivation fix is correct and I verified the property that matters: THE REFACTOR LOSES NOTHING. Replacing a match with a table risks silently dropping an alias or a canonical, which would make a dispatched category unreachable through normalize_doctor_category. I checked by SET IDENTITY over both sides with one extractor rather than by counting: 113 distinct quoted names in the old function, 113 in the new table, and NOTHING present in old and absent from new. Name-preserving. OVERLAP WITH #2053 CHECKED AS ASKED: zero file overlap (2052 touches doctor_cmd.rs + lib.rs, 2053 touches init_cmd.rs + maintenance_schedule.rs), so no textual conflict, and neither PR claims the other''s fix - #2053''s comment cites BUG-1554''s shape as precedent without implementing it. Both do implement the same remedy shape, which is the right shape: one table, with the user-facing list derived from it rather than hand-typed beside it. A METHOD NOTE ON WHAT I COULD NOT CONFIRM: the PR reports 29 canonical outputs; I measured 28 unique canonicals, but across four attempts my extractors returned 28, 6, 5 and 42 because rustfmt splits long entries across lines and every regex I wrote was structurally blind to one of the two layouts. I do not trust any of those counts and am not reporting one. The set-identity check above is what I stand behind, and it is the stronger property anyway - an exact count would not have told me whether anything was lost. The implementer self-flagged their own 29/27 measurement differing from the spec''s 28/26 and showed the delta was identical, which is the right handling.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T17:36:09.788477280Z
+  completion_sha: c049a3da128da701a7fc3aa0829d5f33295cd74a
