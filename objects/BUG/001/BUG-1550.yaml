@@ -136,7 +136,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:04:32.760270386Z
-modified_at: 2026-09-21T17:45:22.795990807Z
+modified_at: 2026-09-21T17:54:25.072671458Z
 req_type: Bug
 tags:
 - papercut
@@ -375,4 +375,26 @@ comments:
   content: Filed BUG-1561 as the follow-up for the doc-only (no trace marker) stranding class this gate cannot structurally detect -- three verified instances enumerated there (doctor_cmd.rs:577, lib.rs:31199, doc_cmd.rs:9 cross-file), plus the Check-B rejection numbers (177/347/127) and the vocabulary-sharing mechanism.
   created_at: 2026-09-21T17:38:07.831384598Z
   modified_at: 2026-09-21T17:38:07.831384598Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c51a-d4b0-7583-9b06-b0108bf26b63
+  author: joe
+  content: |-
+    [aida:advisor] TWO SCOPE CORRECTIONS FROM REVIEW, BOTH BINDING BEFORE THIS SPEC CLOSES.
+
+    1. THE SUMMARY OVERSTATES WHAT THE GATE COVERS. The PR body says "This PR gates the class, not just the cited sites." IT GATES THE TRACE-CARRYING SUBSET. A reader taking that sentence at face value believes doc-header stranding is guarded, and it is not - `find_strandings` begins `if len(tp) < 2: continue`, so a header that is a `///` doc with NO trace lines is skipped entirely.
+
+    That is precisely the BUG-1559 failure mode: a description that tells the next reader not to look. Correct it in the PR body, in the script's docstring, and here - the honest sentence is that this gate covers stranding THAT CARRIES A TRACE MARKER, which is the half that inverts `aida why`, and that the doc-only half is BUG-1561.
+
+    2. BUG-1545's BLOCKING EDGE HAS BEEN REPOINTED AWAY FROM THIS SPEC. It was pointed here because BUG-1545 shipped fix-only ON CONDITION that this gate lands. claude-reviewer-1 MEASURED that the gate does not catch BUG-1545's two instances:
+
+        the gate, mcp.rs at the PARENT commit      -> 1 violation (fires)
+        the gate, awaiting_you.rs at ad85e8ed32    -> "no violations"
+
+    ad85e8ed32 is the exact tree containing both. Neither had a trace marker - which was the deciding fact for accepting fix-only there - so the property that justified fix-only is the property that puts that class outside this gate. Had the edge stood, CLOSING THIS SPEC WOULD HAVE DISCHARGED IT AND LEFT BUG-1545's CLASS UNGUARDED WHILE THE LEDGER SAID IT WAS COVERED. The edge now points at BUG-1561.
+
+    NOTHING HERE ASKS THE GATE TO WIDEN. Widening it back into doc-only territory would re-open the heuristic this spec already measured and rejected - 177/347/127 hits, vocabulary sharing structural to this codebase, misattribution on the known case. The scope is right; only the DESCRIPTION of the scope was wrong, and the dependency graph had been drawn against the description rather than the gate.
+
+    THE GENERAL LESSON, recorded because it caught a real one: the reviewer checked the gate by RUNNING IT AGAINST A TREE KNOWN TO CONTAIN THE DEFECT AND OBSERVING "no violations" - A POSITIVE CONTROL AIMED AT THE CASE THE GATE WAS NOT BUILT FOR, not at the case it was. Aiming the control at the built-for case tells you the gate works; aiming it at the adjacent case tells you where it stops. Only the second finds an overstated scope.
+  created_at: 2026-09-21T17:54:25.072671458Z
+  modified_at: 2026-09-21T17:54:25.072671458Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
