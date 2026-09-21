@@ -92,12 +92,53 @@ description: |
      Keep this shorter than the criterion-1 rule — one paragraph plus the two examples.
      It belongs in the same file because it is the same class: how a measurement earns
      being reported.
+
+  9. VOCABULARY AND SHAPE ARE THE SAME QUESTION, and guarding one does not guard the other.
+     Worked example from 2026-09-20 23:45, added because the rule's own author walked into
+     the second half ninety minutes after filing the first.
+
+     THE TASK: count recompiles in a GitLab job log, to test the criterion "the job log
+     shows no recompiles of unchanged crates".
+
+     THE GUARD THAT WORKED: counting four spellings — Compiling, Checking, Fresh, Building
+     — rather than only Compiling, on the explicit reasoning that clippy emits Checking and
+     a single-spelling count would key on a property of the instance. That reasoning was
+     right.
+
+     THE GUARD THAT WAS MISSING: every one of the four patterns carried a TRAILING SPACE.
+     In that log the cargo verb is followed immediately by an ANSI reset escape, not a
+     space — `...[92m    Compiling[0m aida-core` — so all four matched nothing, and
+     reported zero IN AGREEMENT. The agreement read as corroboration.
+
+         with trailing space    Compiling 0   Checking 1 ("Checking out")   Finished 0
+         without                Compiling 5   Checking 4                    Finished 2
+         escape-stripped        5 compiled, 3 checked, aida-core TWICE
+
+     Conclusion reported: criterion met, fully cached build. Actual: eight unit lines on a
+     commit that changed one test file. Retracted within ten minutes by a second seat.
+
+     THE TELL WAS INSIDE THE SAME MESSAGE. "Finished" was reported as TWO lines from one
+     grep and ZERO from another in the same report, because only one of the two omitted the
+     trailing space. A pattern returning 0 for something the same message counted as 2 is
+     not measuring what it claims — and the author did not see it, because four zeros
+     agreeing with each other looked like evidence.
+
+     SO THE TEST IN CRITERION 1 HAS TWO HALVES AND BOTH MUST BE ASKED:
+         VOCABULARY  does the pattern cover every word the producer emits?
+         SHAPE       does it cover every FORM the line takes — leading whitespace,
+                     timestamps, colour codes, anchors, trailing separators?
+     Both are the same question — what must be true of a line, beyond containing the thing,
+     for this pattern to see it — and answering one is not answering the other.
+
+     CHEAP DISCRIMINATOR, from this instance: if a set of related patterns all return zero,
+     check one of them against a line you can SEE in the file. A null result that agrees
+     with other null results is the least falsifiable output a grep can produce.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:12:14.796135922Z
-modified_at: 2026-09-21T06:17:46.271931548Z
+modified_at: 2026-09-21T06:48:00.237441024Z
 req_type: Task
 tags:
 - parent:EPIC-62 discipline-pack observation severity:operational propagation-candidate
