@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:44.578137790Z
-modified_at: 2026-09-21T11:36:50.335371281Z
+modified_at: 2026-09-21T12:26:41.768185319Z
 req_type: Bug
 comments:
 - id: 01a0c312-bb00-72a3-95b8-3088f0b66089
@@ -121,4 +121,35 @@ comments:
     THE RULE THIS PRODUCED, from the reviewer seat: a count is not quotable without the predicate that produced it. "147 sha-bearing" hid a three-key fallback; "105 with reviewed_sha" hides nothing. Two seats scanning the same directory disagreed by 40% and the cause was the FIELD, not the population — which neither had stated when quoting.
   created_at: 2026-09-21T11:36:50.335371281Z
   modified_at: 2026-09-21T11:36:50.335371281Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3ee-cae8-7d33-ba0c-efcafec7cc20
+  author: joe
+  content: |-
+    CORRECTION TO AN AMENDMENT I MADE ON THIS SPEC. Raised by claude-reviewer-1 correcting their own earlier report, and re-measured independently by me before accepting it.
+
+    WHAT I WROTE HERE EARLIER: that the 147 sha-bearing figure decomposed into 105 reviewed_sha records plus 42 head-only records "of a different schema", and I characterised the 42 as a distinct legacy shape with keys [findings, head, mode, pr, summary, verdict].
+
+    TWO THINGS WRONG WITH THAT.
+
+    1. THE 42 ARE NOT A SEPARATE POPULATION - THEY ARE 9% OF BUG-1466's. My measurement at 2026-09-21 05:26 MST over all 576 files:
+
+           WITH reviewed_sha              109
+           lacking reviewed_sha           467   <- BUG-1466's population
+             ... carrying `head` instead   43
+             ... carrying no sha at all   424
+
+       BUG-1466 already owns the whole 467 and has the real denominator. Framing the 43 as their own legacy shape made a 9% slice look like the phenomenon. The phenomenon is that 467 files carry no reviewed_sha at all.
+
+    2. "ALL 42 SHARE ONE KEY SHAPE" WAS FALSE. It is 39 of 43 on my count. The other four are one-offs, each a distinct shape carrying `head`:
+           ['head','mode','reviewer','round','summary','supersedes','verdict']
+           ['head','independent','mode','reviewer','round','summary','verdict']
+           ['checks','head','independent','mode','nit','reviewer','round','summary','verdict']
+           ['findings','head','mode','pr','specs','summary','verdict']
+       The reviewer sampled three files, saw one shape, and reported it as the shape of all of them; I wrote that into two specs without re-measuring. Their error to make, mine to have propagated - I had the corpus and did not check a claim I was about to make durable.
+
+    NUMERIC DRIFT, NAMED RATHER THAN SMOOTHED. The reviewer reported 42 head-only and 425 no-sha; I measure 43 and 424 on the same 576-file total. One file moved between the two runs - verdicts were being written while we both counted. The substance is identical and neither figure is wrong for when it was taken; I am recording the drift because a corpus that changes under measurement is exactly the condition in which two correct counts disagree and someone later calls one of them an error.
+
+    WHERE THIS POINTS NOW: BUG-1466, not an independent description here. Its writer path is fixed (BUG-1467 / #2037, merged 066c4ceacb - the 25 most recent verdict files all carry reviewed_sha), so what remains there is a MIGRATION decision over 467 existing files.
+  created_at: 2026-09-21T12:26:41.768185319Z
+  modified_at: 2026-09-21T12:26:41.768185319Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
