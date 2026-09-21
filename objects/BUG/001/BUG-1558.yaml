@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:11:41.368773223Z
-modified_at: 2026-09-21T17:02:40.170649496Z
+modified_at: 2026-09-21T17:34:49.538119648Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -76,4 +76,10 @@ comments:
     This is the second instance in one hour and the third in one day, across three seats, of reading a null from a surface that could not have produced a positive. The other two were `git check-ignore` naming the precedence winner rather than the cause, and a hand-written field list that omitted the key it was being used to look for. Catalogued on TASK-1418; recorded here because `aida show` is the one of the three that this project ships to its users.
   created_at: 2026-09-21T16:21:34.730211286Z
   modified_at: 2026-09-21T16:21:34.730211286Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c508-e4c2-7791-b2b2-c057896e682b
+  author: joe
+  content: Commit 8f861b826b references this requirement
+  created_at: 2026-09-21T17:34:49.538119648Z
+  modified_at: 2026-09-21T17:34:49.538119648Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
