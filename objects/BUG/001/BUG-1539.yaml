@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T20:56:38.236092012Z
+modified_at: 2026-09-21T21:19:20.645978103Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -278,4 +278,28 @@ comments:
     The edge is recorded because a condition that lives only in prose is a condition that fires only if the person who wrote it is the person acting — which this board established today at the cost of a spec auto-completing past five open items, and again when BUG-1545's blocking edge had to be re-pointed after the gate turned out not to cover its class.
   created_at: 2026-09-21T20:56:38.236092012Z
   modified_at: 2026-09-21T20:56:38.236092012Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5d6-7245-7b71-92ab-7d5c1efa5d2a
+  author: joe
+  content: |-
+    [aida:advisor] CARRIED OVER FROM TASK-183 BEFORE DISMISSING IT AS SUBSUMED, because it names a consequence this spec does not and it is the one that makes the clobber unrecoverable rather than merely annoying.
+
+    THE VERDICT ARTEFACTS ARE NOT IN GIT. Measured 2026-09-21 14:16 MST:
+
+        files on disk      .aida/review-verdicts/*.json   606
+        tracked by git                                      0
+
+    So the substrate this spec is about is PER-CLONE AND PER-MACHINE. That compounds the clobber in a specific way worth stating plainly: when a second `aida review record` overwrites the first, THERE IS NO SECOND COPY ANYWHERE. Not in history, not on a remote, not on the forge. The reviewer's findings are gone from the world, not merely from the current file. Every recovery move that would normally be available - `git show HEAD~1:<path>`, a colleague's clone, the PR page - is unavailable by construction.
+
+    It also means the 27 hand-named sidecars this spec enumerates (PR-1913-r2.json and friends) are protecting findings on ONE MACHINE. A reviewer on another host does not see them, and neither does anything running in CI.
+
+    ON WHY THEY ARE UNTRACKED, STATED CAREFULLY. `git check-ignore -v` reports the winning rule as `.git/info/exclude:19:.aida/` - a blanket directory exclusion, which is exactly the trap CLAUDE.md documents under BUG-1279: git cannot re-include a file whose PARENT DIRECTORY is excluded, so one such line defeats every `!.aida/...` allow-list entry in the repo's own `.gitignore`. `.git/info/exclude` is per-clone and untracked, so it differs between machines and is invisible to everyone else.
+
+    I AM NOT CLAIMING THAT LINE IS THE CAUSE. check-ignore names the PRECEDENCE WINNER, not the only rule that would match; whether the repo's `.gitignore` would independently ignore these paths is UNESTABLISHED and would need the exclude line removed to attribute. What IS established is the fact that matters here: 606 files, zero tracked.
+
+    WHETHER THEY SHOULD BE TRACKED IS A SEPARATE DECISION AND I AM NOT MAKING IT HERE. A review verdict is arguably runtime state; 606 JSON files in git is a real cost. But this spec's remedy - key the record to the reviewed sha so rounds append rather than overwrite - does NOT by itself restore recoverability if the appended file still exists on exactly one machine. WHOEVER IMPLEMENTS THIS SHOULD DECIDE DURABILITY EXPLICITLY RATHER THAN INHERIT IT: append-in-place on an untracked per-clone file is a smaller fix than it looks.
+
+    Related: BUG-1571 (the PR-keyed handshake that intermittently does not land) is about the same directory, and the same durability question applies to it - an artefact that never lands and an artefact that lands only locally fail the orchestrator identically from the far side.
+  created_at: 2026-09-21T21:19:20.645978103Z
+  modified_at: 2026-09-21T21:19:20.645978103Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
