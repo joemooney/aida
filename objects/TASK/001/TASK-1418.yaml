@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T16:37:24.740669773Z
+modified_at: 2026-09-21T16:52:59.919780539Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -281,4 +281,29 @@ comments:
     ALSO WORTH KEEPING: a negative result reported as a dead end has value. The finding here is not about autocrlf at all - it is "this shortcut does not exist, do not spend the attempt", recorded on BUG-1555's acceptance so the next seat does not walk it and then, worse, report the absence as a finding.
   created_at: 2026-09-21T16:37:24.740669773Z
   modified_at: 2026-09-21T16:37:24.740669773Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4e2-998f-7890-970c-14d1111c250e
+  author: joe
+  content: |-
+    [aida:advisor] TWO ENTRIES FROM claude-product-1's #1981 work, both reported by them against themselves.
+
+    FIRST - FALSIFY A GATE IN BOTH DIRECTIONS, because a one-way mutation cannot tell a working gate from a stuck one:
+
+        gate disabled   (always returns `start`)  -> 1 red, the held-at-CI test
+        gate engaged    (always returns `Ci`)     -> 1 red, the green-head control
+        restored                                     29 green
+
+    EACH MUTATION BREAKS EXACTLY ONE TEST AND THEY ARE DIFFERENT TESTS. That pairing is the evidence. Without the green-head control, "always return Ci" SATISFIES EVERY SAFETY ASSERTION IN THE SUITE while the drain can never leave phase 2 - the mirror image of the bug being fixed, and indistinguishable from a correct fix by any one-directional check. This generalises past mutation testing: for any gate, the suite must fail when it is always-closed as well as when it is always-open, or "safe" and "stuck" are the same observation.
+
+    SECOND, AND IT IS A NEW FAMILY - INVENTING AN IDENTIFIER THAT LOOKS PLAUSIBLE.
+
+    They ran `git push --force-with-lease=<branch>:<sha>` where the sha had been CONSTRUCTED by padding a 12-character prefix out to 40 characters with invented hex. The push was refused as "stale info". On comparison, 28 OF THE 40 CHARACTERS WERE FABRICATED.
+
+    WHY IT BELONGS IN THIS CATALOGUE RATHER THAN IN A GIT NOTE. The lease is an instrument, and a fabricated target turns it into one that CANNOT PASS. It answers "is the remote at this string I made up?" - always no - instead of "is the remote where I last saw it?". So the refusal LOOKS like the safety check working, while carrying no information about the remote whatsoever. It is the always-firing instrument, produced not by a code defect but by feeding a guard an argument it cannot evaluate. And the failure is asymmetric in the dangerous direction: the same habit under plain `--force` would have pushed with NO check at all, silently.
+
+    It is also the third distinct form of invented-input error recorded today. The first two were about SEARCH terms - a grep for names that do not exist, whose silence proved nothing. This is about an ARGUMENT - a value that is syntactically valid, passes every surface inspection, and is simply not a fact. A hex string of the right length looks exactly like a sha.
+
+    THE RULE, mechanical: A SHA IS READ, NEVER COMPOSED. `--force-with-lease=<branch>:$(git rev-parse origin/<branch>)`, never a literal typed or padded from a prefix; when a short prefix is all you have, RESOLVE it rather than extend it. Generalises to any content-addressed identifier - object ids, digests, run ids: if it came from a keyboard rather than a command's output, it is a guess wearing the costume of a fact.
+  created_at: 2026-09-21T16:52:59.919780539Z
+  modified_at: 2026-09-21T16:52:59.919780539Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
