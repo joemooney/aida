@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:33.544062298Z
-modified_at: 2026-09-21T08:28:53.143651434Z
+modified_at: 2026-09-21T08:29:18.903103097Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -220,4 +220,4 @@ failure_reason:
   detail: 'F2 CLOSED and verified by CI (step 25 Monitor contract drift guard now success; Build fully green, 32 success / 1 skipped). F1 UNCHANGED at this head: SpecCompleted is still not emitted for every into-Completed transition.'
   recovery_hint: address the review findings, move BUG-1286 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-09-21T08:28:53.143651434Z
+  shelved_at: 2026-09-21T08:29:18.903103097Z
