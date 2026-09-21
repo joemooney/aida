@@ -1,0 +1,16 @@
+{
+  "id": "c8edcf98-f732-4949-a9f0-72b076da0c0d",
+  "thread_id": "c8edcf98-f732-4949-a9f0-72b076da0c0d",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789955660684,
+  "body": "THE VERDICT LANDED AND IT PROVES THE BUG BETTER THAN MY ALERT DID. Also: my alert did not stop the merge and I am not claiming it did.\n\nTIMING FIRST, so nobody credits the wrong thing. PR-2043's verdict was recorded at 01:53:37 by `aida drain reviewer` — the drain's own automated reviewer, not the human-launched seat — essentially simultaneously with my message. It stopped for reasons of its own: five genuine findings in the code. The gate held on merit, not on my warning.\n\nNOW THE PART THAT MATTERS. Read what the verdict is ABOUT:\n\n    summary: \"BUG-1420's strict Bash parity is verified, but TASK-1289 still does not\n              enforce the pre-publication boundary and can open after incomplete guards;\n              two required acceptance paths also lack the mandated tests.\"\n\n    finding 1: \"TASK-1289 publication boundary is advisory rather than enforced...\"\n    finding 2: \"TASK-1289 fails open when a configured guard cannot complete...\"\n    finding 3: \"TASK-1289's clean-worktree latency criterion is violated and untested...\"\n    finding 4: \"TASK-1289.acc6c6a1 lacks the required portability-ratchet publication test...\"\n    finding 5: \"TASK-1289.ac0032b7 is only partially tested...\"\n\nEvery finding is about TASK-1289 and BUG-1420. The reviewer read the code correctly and judged it on its actual subject.\n\nAND THE SHELVE LANDED ON STORY-1391.\n\n    01:53:44  STORY-1391  SpecShelved  verdict:request-changes\n\nSo STORY-1391 now carries a RequestChanges verdict, with five findings, about code it has nothing to do with. The reviewer was right about the content and the bookkeeping attached its judgment to the wrong spec.\n\nTHAT IS WORSE THAN WHAT I REPORTED TWENTY MINUTES AGO, in a specific way: anyone who requeues STORY-1391 from here will brief an implementer with TASK-1289's findings. The rework brief would be internally coherent, cite real file:line evidence, and be aimed at the wrong spec entirely. That is the failure mode hardest to catch downstream, because nothing about the brief looks wrong.\n\nIt also means TASK-1289's five findings are now recorded ONLY against STORY-1391. TASK-1289 itself has no record that these were found.\n\nFACTUAL SUMMARY, all read off artifacts:\n\n    branches   story-1391-work == bug-1420-round2, byte-identical, five commits\n    commits    all trailered BUG-1420 or TASK-1289; none STORY-1391\n    PRs        #2042 (bug-1420-round2) and #2043 (story-1391-work), same head 35de6d3ab\n    drain      drove STORY-1391 through phases 1-3 on PR-2043\n    reviewer   judged the content as TASK-1289 + BUG-1420, five findings\n    shelve     recorded against STORY-1391\n    states     STORY-1391 done -> needs-attention; BUG-1420 in-progress; TASK-1289 ?\n\nDisposition is yours. I am not resetting STORY-1391, not closing either PR, and not moving the findings — three of those are disposition and the fourth (moving a verdict between specs) I do not know how to do safely.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

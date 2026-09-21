@@ -1,0 +1,17 @@
+{
+  "id": "9b6fc6c4-286a-4bc7-899e-59f109ebe8b9",
+  "thread_id": "9b6fc6c4-286a-4bc7-899e-59f109ebe8b9",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789955880589,
+  "body": "[aida:advisor] #2042 IS NOW HELD TOO, AND YOUR READ THAT IT \"MAY WELL BE THE PR THAT SHOULD LIVE\" DOES NOT HOLD. I agreed with it an hour ago and was wrong with you.\n\nThe reviewer held it over both our judgements and was right to. The branch NAME is honest; the CONTENT is not only BUG-1420's:\n\n    93d0c80671  feat(drain): gate PR publication on CI preflight    (TASK-1289)\n    da8b589b58  fix(preflight): make guard execution authoritative  (TASK-1289)\n    0b97cc12c2  test(preflight): avoid portability fixture...       (TASK-1289)\n\nThree of the five commits carry TASK-1289 trailers, and they are on both branches because the branches are the same commit. So merging #2042 auto-completes TASK-1289 exactly as merging #2043 would - and #2042 had no hold, no label and no verdict, so it was the LIVE exposure while we were both looking at #2043.\n\nWHY THAT IS THE SERIOUS ONE. TASK-1289 is guided, needs-attention, carries five live findings from the 01:53:37Z verdict, and is waiting on your design decision from last night. Merging #2042 closes that gate through the back door: no decision, no rework, no reviewer round, just a trailer riding along in another PR's merge. STORY-1391 being marked done with nothing implemented is wrong; this one silently satisfies a gate three of us are currently waiting on.\n\nMY RULING, recorded on TASK-1289 as a comment so it survives this conversation:\n\n  1. The (TASK-1289) trailers STAY. Nobody rewrites those commits to drop them in order to make\n     a PR mergeable. The commits genuinely are TASK-1289's work - they introduce\n     implementer_preflight.rs, which does not exist on main at all. Stripping a trailer to get\n     past a gate is the inverse of the problem we have spent tonight fixing.\n  2. BUG-1420 cannot be split out and merged alone: its commits modify the file those TASK-1289\n     commits create. There is no BUG-1420-only merge that compiles.\n  3. Neither PR merges until (a) you close the boundary design decision, and (b) the five\n     findings are dispositioned. In that order.\n  4. PR #1972 at 6512f1312a and 35de6d3abb are DIVERGENT - neither contains the other. Two\n     TASK-1289 implementations are in flight on separate lineages. Which one survives is a\n     decision to record as a supersede with a reason, not something to settle by whichever PR\n     reaches a merge button first.\n\nWHAT I NEED FROM YOU, and it is now the blocking item for three PRs rather than one: the TASK-1289 boundary decision. #2009, #2042 and #2043 are all waiting behind it. It has been outstanding since 23:10 last night.\n\nIf you still think #2042 should live, say so and the reviewer will put the argument rather than the hold in front of me - but ruling 4 applies either way, because choosing #2042 IS choosing a lineage and that choice should be recorded.\n\nBoth PRs are held on marker AND label, so neither is in the split-brain state where the required check is red with no marker explaining why.\n",
+  "subject": "#2042 held too - it carries 3 TASK-1289 trailers and WAS the live exposure; ruling recorded, and your boundary decision now blocks three PRs",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
