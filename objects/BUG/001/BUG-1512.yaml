@@ -1,0 +1,39 @@
+id: 01a0c1bc-50ee-71a1-9c89-d22645aa40de
+spec_id: BUG-1512
+agreed_id: BUG-1512
+title: A routed review entry keys its liveness off the review story's status, so a PR that merges unreviewed leaves an entry queue gc can never collect
+description: |
+  `aida queue gc` prunes a routed queue entry when its TARGET SPEC is archived, Completed or Rejected. For a reviewer entry the target spec is the review STORY, and that story's status has nothing to do with whether the review is still needed. When a PR merges without its routed review being closed, the review story stays Draft forever and the entry is permanently un-collectable by the verb whose job is collecting it.
+
+  VERIFIED INSTANCE, 2026-09-20:
+
+      STORY-1362   "Review PR-1986: feat(roles): ship cold-session seat handoff pack (STORY-1351)"
+      status       draft
+      PR #1986     MERGED at 2026-09-20T17:54:33Z
+      queue        still routed to reviewer
+
+  The PR merged nearly ninety minutes ago. The review story is Draft because no reviewer closed it - the PR merged anyway. `queue gc` looks at STORY-1362's status, sees Draft, and correctly concludes by its own rule that the entry is live. The rule is what is wrong, not its application.
+
+  THIS IS A DIFFERENT MECHANISM FROM `queue prune --orphaned`, which targets entries whose spec was DELETED. Here the spec exists and is healthy; it is the entry's REASON that expired.
+
+  WHY IT ACCUMULATES RATHER THAN SETTLING. Every PR that merges without its routed review being closed leaves exactly one of these, permanently. There is no path by which it later becomes collectable: the review story will never move to Completed, because completing it would assert a review happened. So the reviewer queue grows monotonically with the number of PRs merged without review, and that number is not small - the reviewer seat is not the only thing that merges.
+
+  IT ALSO CORRUPTS THE ONE NUMBER PEOPLE READ. Queue depth is used to decide where capacity is short. An entry for a PR that merged ninety minutes ago is indistinguishable in that count from a PR awaiting first review. This is the same class as a routed entry not knowing whether a verdict already exists at the current head, and the two compound: the depth figure overstates outstanding review work by both mechanisms at once.
+
+  Acceptance:
+  1. A routed review entry's liveness is derived from the state of the thing it points AT - the PR - not from the status of the review story wrapping it. A merged or closed PR makes its routed review entry collectable regardless of the story's status.
+  2. `aida queue gc` collects those entries, and says how many and why. The existing target-spec rule stays for the cases it does cover; this is an additional condition, not a replacement.
+  3. State what happens to the review STORY when its PR merged unreviewed. It should not be silently Completed - that asserts a review that did not happen. Draft-and-unrouted, or an explicit closed-unreviewed state, are both defensible; pick one and say why.
+  4. Count the existing instances before fixing, so the fix's effect is measurable. STORY-1362 is one; the number across the store is unknown.
+  5. A test merges a PR whose routed review entry is still open and asserts the entry becomes collectable.
+
+  NOT IN SCOPE: whether a PR should be mergeable without its routed review closing. That is a policy question and this spec is about the entry left behind either way.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T02:12:19.310798509Z
+modified_at: 2026-09-21T02:12:19.310798509Z
+req_type: Bug
+tags:
+- batch:night-0920 queue drain-safe from:review-triage-0920
