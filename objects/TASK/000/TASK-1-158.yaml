@@ -1,5 +1,6 @@
 id: 01a0c141-c494-7333-8219-ca70dcb97c45
 spec_id: TASK-1-158
+agreed_id: TASK-182
 title: 'Free-text finding content containing flag-like strings is re-parsed as arguments: recording a verdict whose text contained --pr N printed a clap parse error'
 description: |-
   Recording a verdict whose finding text contains the string "--pr N" printed a clap parse error alongside the success line:
