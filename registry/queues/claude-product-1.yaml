@@ -10,7 +10,7 @@
   requirement_id: 01a0c62b-a429-7313-b791-b27f1afd3e38
   position: 19000
   added_by: claude-product-1
-  note: auto-queued by `session end` (01a0c61f); covers 1 spec
-  added_at: 2026-09-21T22:52:38.807570155Z
+  note: 'BUG-1291 recovery: PR #2066 handed off after shelving in phase 3 (reviewer): reviewer verdict is RequestChanges — not Approved'
+  added_at: 2026-09-21T22:58:17.619283128Z
   for_role: reviewer
   added_by_machine: imac
