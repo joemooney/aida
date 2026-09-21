@@ -3501,7 +3501,41 @@ mod tests {
             "project create failed: {}",
             String::from_utf8_lossy(&created.stderr)
         );
-        let proj: serde_json::Value = serde_json::from_slice(&created.stdout).unwrap();
+        // Some glab/API combinations can return a successful POST before its
+        // JSON body is available. Resolve the uniquely named project, allowing
+        // a short window for asynchronous project creation on the live mirror.
+        let proj: serde_json::Value = match serde_json::from_slice(&created.stdout) {
+            Ok(project) => project,
+            Err(create_parse_err) => {
+                let mut found = None;
+                for _ in 0..10 {
+                    let lookup = glab_api(&["api", &format!("projects?search={name}&owned=true")]);
+                    if lookup.status.success() {
+                        if let Ok(projects) =
+                            serde_json::from_slice::<serde_json::Value>(&lookup.stdout)
+                        {
+                            found = projects.as_array().and_then(|projects| {
+                                projects
+                                    .iter()
+                                    .find(|project| project["name"] == name)
+                                    .cloned()
+                            });
+                            if found.is_some() {
+                                break;
+                            }
+                        }
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+                found.unwrap_or_else(|| {
+                    panic!(
+                        "phase=project-create: create response was not JSON ({create_parse_err}; stdout={:?}; stderr={:?}) and project {name} was not found",
+                        String::from_utf8_lossy(&created.stdout),
+                        String::from_utf8_lossy(&created.stderr)
+                    )
+                })
+            }
+        };
         let pid = proj["id"].as_u64().expect("project id");
         let http = proj["http_url_to_repo"]
             .as_str()
