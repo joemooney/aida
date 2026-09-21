@@ -182,12 +182,48 @@ description: |
 
        So: A when you have more than one number, B always, and B is the one that survives a
        report that is internally consistent and wrong.
+
+  10. CONFIRM THE STATE, NOT THE REPORT OF THE STATE CHANGE — a distinct shape from
+      everything else in this file, and the reason it needs its own entry is that
+      re-reading the report can never catch it.
+
+      Every other rule here addresses an instrument answering a question ADJACENT to the
+      one asked. This one addresses a report that was TRUE WHEN WRITTEN and false
+      afterwards, because another process undid the write.
+
+      THE INSTANCE, 2026-09-21 00:04-00:08. A merge's `aida pull` printed:
+
+          auto-bumped 1 spec -> Completed: STORY-1410 (Approved -> Completed)
+          Warning: auto-bump failed: store rebase in progress ... (specs stay at Done)
+
+      Both lines were accurate. AIDA DID perform the STORY-1410 write at 07:04:33Z. A
+      concurrent store rebase then stashed that write into its autostash and finished
+      without restoring it, so the store kept the pre-merge 00:42:28Z value. The pull
+      WARNED LOUDLY about the bump it refused and said nothing about the one it had
+      completed and lost.
+
+      So "the command said it happened" and "it happened" came apart with no error
+      anywhere. The refusal was loud; the revert was silent.
+
+      THE CHECK: after an operation reports a state change, confirm the STATE — read the
+      spec, the file, the forge — rather than re-reading the operation's own output.
+      Re-reading the output would never have caught this, because the output was right.
+
+      WHY IT IS NOT PARANOIA: the consequence here was a review story for a MERGED PR
+      reading Approved permanently, because the merge-driven bump had already fired and
+      does not fire twice. A silently reverted write is not self-correcting — the thing
+      that would have retried it has already run.
+
+      CHEAP FORM OF THE SAME CHECK, and it is one field join: ANY SPEC AT Done WHOSE PR IS
+      MERGED IS STRANDED BY DEFINITION. That catches this class without knowing anything
+      about rebases, autostashes or which write was lost. Run across the six specs at Done
+      on the night this was written: clean, so no backlog.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:12:14.796135922Z
-modified_at: 2026-09-21T06:50:43.595315124Z
+modified_at: 2026-09-21T07:15:56.190255128Z
 req_type: Task
 tags:
 - parent:EPIC-62 discipline-pack observation severity:operational propagation-candidate
