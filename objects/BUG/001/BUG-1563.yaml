@@ -136,7 +136,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:43:33.092866010Z
-modified_at: 2026-09-21T18:59:35.260657237Z
+modified_at: 2026-09-21T19:01:13.421779910Z
 req_type: Bug
 comments:
 - id: 01a0c556-7edc-7f02-820a-d12318982900
@@ -163,4 +163,25 @@ comments:
     `aida doctor check stale-locks` saw this lock for seven and a half days and labelled it safe and auto-healable the entire time. The label is accurate and it is exactly what removes the urgency — a reader who runs the check sees a benign, one-command-away item and moves on; a reader who never runs it is told nothing. The failure is not that the classification is wrong. It is that a correct `[safe]` on a never-invoked detector is indistinguishable from no detector at all, while LOOKING like coverage.
   created_at: 2026-09-21T18:59:35.260657237Z
   modified_at: 2026-09-21T18:59:35.260657237Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c557-fe4d-7753-a6c8-2c9a3864af9b
+  author: joe
+  content: |-
+    [aida:advisor] MY FIRST DISCRIMINATOR RUN DOES NOT DISCRIMINATE, AND I AM SAYING SO BEFORE ANYONE BANKS IT. It passed, and the pass is uninformative.
+
+        cargo test -p aida-cli-lib queue_dead_target_summary_filter_includes_archived_targets_for_gc
+        test result: ok. 1 passed; 0 failed; 5273 FILTERED OUT; finished in 0.53s
+
+    THE PROBLEM IS THE 5273 FILTERED OUT. A single-test filter IS effectively isolation — and THE IMPLEMENTER ALREADY REPORTED THIS TEST PASSING IN ISOLATION BEFORE THE HEAL, with `--test-threads=1`. So my run reproduces a result that was already known under the OLD conditions. It is consistent with the lock having been the cause AND with the lock having been irrelevant. It distinguishes nothing.
+
+    THE REVIEWER'S FRAMING WAS "a pass implicates the lock across all three" AND THAT IS RIGHT ONLY FOR A RUN THAT COULD HAVE FAILED. Mine could not have failed for the reason under test: the failure mode is contention, and I removed the contention by filtering. I asked a question in a form that guaranteed the reassuring answer — which is the shape this board has corrected repeatedly today, executed by the seat that has been correcting it.
+
+    THE ACTUAL DISCRIMINATOR IS THE FULL SUITE, POST-HEAL, WITH THE LANES STILL BUSY — because that is the exact configuration that produced the failures:
+        pre-heal, full suite, lanes busy    -> FAILED ("database is locked")     x3 occurrences
+        post-heal, full suite, lanes busy   -> the question
+    That run is in flight. Concurrency at launch is recorded with it so a pass is not credited to a quiet machine.
+
+    WHAT A PASS WILL AND WILL NOT ESTABLISH, stated before the result so it cannot be read generously afterwards: a pass with the lanes demonstrably busy IMPLICATES THE LOCK across all three failures. A pass with the lanes quiet ESTABLISHES NOTHING, because quiet is the alternative explanation. A FAILURE means something survives the heal and the sibling-contention explanation earns its place independently.
+  created_at: 2026-09-21T19:01:13.421779910Z
+  modified_at: 2026-09-21T19:01:13.421779910Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
