@@ -56,7 +56,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T12:50:29.707485940Z
+modified_at: 2026-09-21T12:51:01.259141548Z
 req_type: Bug
 tags:
 - agent-surface
@@ -291,6 +291,31 @@ comments:
   created_at: 2026-09-21T12:45:33.063391229Z
   modified_at: 2026-09-21T12:45:33.063391229Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c405-100b-71d2-98e8-7e7c009242e5
+  author: joe
+  content: |-
+    WHY BOTH GUARDS ARE REQUIRED — THEY CATCH DIFFERENT REGRESSIONS, NOT JUST DIFFERENT QUESTIONS. Recorded 2026-09-21 by the product seat at the reviewer's request.
+
+    The earlier framing was that the structural guard proves the CALL cannot happen while the usage instrument proves the COST is not happening. True, but it undersells the case, because it implies the two are redundant whenever code is behaving.
+
+    THE INSTANCE THAT SETTLES IT IS IN THIS SPEC'S OWN HISTORY. This bug was filed at 7.5 seconds. Measured tonight, the same command on the same code path takes 9.9 seconds — roughly 30 percent worse. NOTHING CALLED load() DIFFERENTLY. No code changed at all. The store grew.
+
+    A structural guard is provably blind to that regression, because there is no call-site change for the compiler to reject. The cost moved while the structure stayed exactly as it was. Conversely a cost instrument cannot tell you that a NEW call site was introduced until the store is large enough for the cost to show, which on a young project may be months.
+
+    So the two guards do not merely answer different questions about the same defect. They catch regressions with different CAUSES: one where the code changes and the store does not, one where the store changes and the code does not. Neither is a subset of the other, and this spec contains a worked example of the second.
+
+    THE INSTRUMENT AS IT STANDS CANNOT BE A GATE — THREE STATES, ONE EXIT CODE. Measured by the product seat and independently reproduced by the reviewer, who added the third and worst case:
+
+        aida usage --cmd show      --slower-than 1000ms    ten slow calls present    exit 0
+        aida usage --cmd show      --slower-than 99999ms   zero matches              exit 0
+        aida usage --cmd nosuchcmd --slower-than 1ms       command does not exist    exit 0
+
+    Defect present, defect absent, and pointed at nothing are indistinguishable. Scheduled as-is, this would run for months looking exactly like a healthy system while measuring a command that does not exist. An exit-code contract is therefore a PREREQUISITE for the trigger, not a detail of it: until something can trip, naming a trigger is decoration.
+
+    ONE THING THE LEDGER MUST RECORD, from the reviewer and worth having in the acceptance rather than in a mail: a CONFIGURED budget is a number someone can quietly raise the moment it trips, which is the documented failure mode of latency gates generally. The ledger entry for a trip must record the budget IN FORCE AT THE TIME OF THE TRIP, so a later reader can distinguish a regression that was fixed from a ceiling that was raised. Cheap to capture now, impossible to reconstruct afterwards.
+  created_at: 2026-09-21T12:51:01.259141548Z
+  modified_at: 2026-09-21T12:51:01.259141548Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
