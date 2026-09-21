@@ -22,10 +22,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:10:45.776575877Z
-modified_at: 2026-09-19T21:10:50.011453071Z
+modified_at: 2026-09-21T16:13:42.695967619Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0ba82-9fb0-7763-a986-b54029980a2c
   created_at: 2026-09-19T21:10:50.011448254Z
   created_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Both binding round-3 requirements SATISFIED - marker constant + bidirectional coupling test, and the absence note tested through the real generate_review_prompt. One new finding introduced by this commit: the absence message at lib.rs:77032 hard-codes the marker literal 32 lines below the constant that exists to prevent it, and the coupling test does not cover it - rename the constant and the system parses X while instructing humans to write Y. Fix is a format! with the constant. Not mergeable: Build pending, merge-hold armed.'
+  recovery_hint: address the review findings, move STORY-1357 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-21T16:13:42.695967619Z
