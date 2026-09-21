@@ -41,7 +41,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:36:15.070702470Z
-modified_at: 2026-09-21T20:52:38.882260534Z
+modified_at: 2026-09-21T21:24:56.054540988Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -86,7 +86,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'THE FIX IS RIGHT AND NARROWLY SCOPED, AND TWO THINGS NEED CORRECTING BEFORE IT LANDS. What it does is correct: a pipelined child that exits with an unrecognised code AND leaves no result sidecar previously collapsed to OrchestrationResult::failed(Phase::Ci), so the batch summary named an innocent spec and told the reader to fix it - which is why a dead drain went unnoticed for 17.5 hours. It is now FailureKind::Internal with a reason that names the child, actively denies the attribution ("NOT a phase failure"), and enumerates the three indistinguishable causes. The assertions on the message text are the right ones: they pin the DENIAL, not just the presence of words. THE CLASSIFICATION IS GATED ON "NO RESULT SIDECAR", which I checked, and that is narrow - a genuine CI failure writes a sidecar and is unaffected. So the code risk is smaller than the missing test implies; see the findings.'
+  detail: 'RE-RECORDED AT 0842f7a182. BOTH FINDINGS REMAIN UNADDRESSED - the head moved because main advanced beneath the branch (#2060 and #2059 landed), not because the PR responded. I checked rather than assuming: comparing the two commits'' own added/removed lines, the ONLY difference is TWO BLANK LINES. Effectively a rebase. F1 IS STILL OPEN: the only test remains a_child_that_reported_nothing_is_not_blamed_on_the_spec, asserting the new behaviour in one direction. Nothing pins that a GENUINE phase-2 failure of a real spec still names that spec and stays shelvable - and FailureKind::Internal is un-shelvable (auto_complete.rs:695), so an over-broad classification converts EPIC-28''s shelve-and-continue into a full stop. A mutation classifying every child failure as Internal still passes the suite as written. The defect being fixed blames one innocent spec; over-correcting halts the drain. F2 IS STILL OPEN: the subject still reads "(BUG-1568)" and all FOUR trace markers still say trace:BUG-1568, while BUG-1570 - whose title is verbatim this PR''s subject matter - is approved and open. Merging as-is completes a spec that #2060 already completed, leaves BUG-1570 open despite being implemented, and points every future `aida why` on those lines at the wrong spec. AND THE TRAILER MECHANICS ARE NOW KNOWN PRECISELY, which changes what a strip has to target: I verified this branch''s commit count and GitHub''s default squash subject for a multi-commit branch is the PR TITLE, not the head commit''s subject. Retargeting the four trace markers fixes the code provenance; it does NOT fix the merge trailer unless the PR title or an explicit --subject is also handled.'
   recovery_hint: address the review findings, move BUG-1570 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-09-21T20:48:17.727975677Z
+  shelved_at: 2026-09-21T21:24:56.054540988Z
