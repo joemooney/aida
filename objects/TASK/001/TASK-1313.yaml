@@ -110,7 +110,41 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T05:42:35.153440398Z
+modified_at: 2026-09-21T05:48:14.469822654Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
+comments:
+- id: 01a0c281-ff05-7891-b9b5-812a98fe28b2
+  author: joe
+  content: |-
+    INDEPENDENT SCAN 2026-09-20 22:47, product seat. I ran my own detector before commenting rather than confirming the reported number, and it differs slightly in a way that matters for the acceptance criteria.
+
+    MY RESULT: 4197 store files scanned. Six carry genuine corruption, 25 occurrences total. A seventh file contains the lead byte but is NOT corrupt.
+
+      BUG-1106       2 occurrences
+      BUG-1111       2
+      BUG-1310       2
+      BUG-1450       5
+      BUG-1452       8
+      STORY-1405     6
+      TASK-1313      lead byte present, no escape pair -> PROSE, not corruption
+
+    THE CORRUPTION FORM, stated exactly because the detector shape depends on it: the literal text is the lead byte U+00E2 followed by TWO YAML hex escapes as ORDINARY TEXT -- an em-dash whose continuation bytes were escaped rather than stored. Not a byte-level mis-encoding in the file; the file is valid UTF-8 and the damage is inside a quoted scalar.
+
+    TWO DETECTOR TRAPS I HIT, both worth writing into the acceptance:
+
+    1. REQUIRING THE SUPPLEMENT CHARACTER TO FOLLOW DIRECTLY FINDS NOTHING. My first pass allowed at most one escape between lead and supplement and returned ZERO of the six. Two escapes appear, and the supplement character never appears literally at all. A check written against the obvious adjacency finds none of the live instances.
+
+    2. THIS SPEC MATCHES ITS OWN SUBJECT. TASK-1313 discusses mojibake and therefore contains the lead byte in prose. A naive detector reports the spec about the defect as an instance of the defect. Any check must distinguish a lead byte in prose from a lead-byte-plus-escape-pair, or it will flag itself on the first run and train the reader to dismiss it.
+
+    A THIRD TRAP, mine, recorded because it nearly became a number: one of my probe patterns matched all 4197 files. It was a malformed character class, not a finding. I nearly reported it as a second corruption signature. A detector that flags EVERYTHING is as useless as one that flags nothing, and it looks far more alarming.
+
+    SUGGESTED ACCEPTANCE ADDITIONS
+    1. The check matches the lead byte followed by ONE OR MORE escape sequences, not a single adjacent supplement character; a test fixture uses the two-escape form actually present in the store.
+    2. The check does not flag a lead byte appearing in ordinary prose; TASK-1313 itself is the regression fixture for this and must come back CLEAN.
+    3. The check reports occurrence COUNTS per file, not just file names -- BUG-1452 has eight and BUG-1106 has two, and a repair needs to know it is not one-per-file.
+    4. Run the check against the whole store and record the number found, so a later run has a baseline to compare against rather than a bare clean or dirty verdict.
+  created_at: 2026-09-21T05:48:14.469822654Z
+  modified_at: 2026-09-21T05:48:14.469822654Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
