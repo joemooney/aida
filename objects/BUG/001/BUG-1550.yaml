@@ -1,0 +1,48 @@
+id: 01a0c3da-8378-71f0-be3a-f20d91cf8eee
+spec_id: BUG-1550
+agreed_id: BUG-1550
+title: Three doc/trace headers were orphaned by insertion in one night and all compiled clean - gate the class, because a displaced trace comment silently inverts aida why
+description: |-
+  THREE INSTANCES IN ONE NIGHT, BY TWO DIFFERENT SEATS, ALL COMPILING CLEAN. A new item is inserted immediately AFTER an existing doc/trace header instead of before it. The header then documents the wrong item, and the item it was written for is left bare. Rust accepts both placements, so nothing in fmt, clippy or the test suite fires.
+
+  THE THREE:
+
+  1. aida-cli-lib/src/awaiting_you.rs:809-817 on main, shipped in PR #2047. short_sha_for_row was inserted under pluralize's doc line, so a sha truncator is documented as a count formatter and pluralize is undocumented. Filed as BUG-1545. Severity: prose. Graded non-blocking at review; it shipped and needed a follow-up spec.
+
+  2. Same PR #2047, a test helper took a regression test's rationale comment. Severity: prose.
+
+  3. aida-cli-lib/src/drain_state.rs:1429-1430 on branch bug-1441-work at 9c38af7d83, PR #2026. display_members was inserted between render_human_with_context's header and its function:
+
+         :1429  /// Render the human summary with project-local pacing context.
+         :1430  // trace:STORY-948 | ai:codex
+         :1450  // trace:BUG-1441 | ai:claude
+         :1451  fn display_members(...)
+         :1469  pub(crate) fn render_human_with_context(...)   <- no doc, no trace
+
+     Severity: TRACE. Blocking. Caught at review by claude-reviewer-1 before merge.
+
+  WHY SEVERITY 3 IS A DIFFERENT KIND. A displaced prose line misinforms a reader. A displaced trace line misinforms aida why, which resolves the nearest PRECEDING trace comment. Verified empirically on main rather than from CLAUDE.md: aida why aida-cli-lib/src/drain_state.rs:1419 returns STORY-948. After instance 3, aida why on display_members would resolve STORY-948 (wrong, it is BUG-1441) and aida why on render_human_with_context would resolve BUG-1441 (wrong, it is STORY-948). Both inverted. The code-to-decision link is this project's northstar; a silent inversion in it is worse than an undocumented function.
+
+  WHY THIS IS A GATE AND NOT A RULE. Three occurrences in one night, the second by a seat that had already been told about the first, is a habit rather than an accident. A written convention does not catch it because the failure mode is invisible at the point of writing: the author sees a blank line and an insertion point, not an orphaned header. This wants a programmatic check.
+
+  SHAPE OF THE REMEDY, not a prescription:
+  - The detectable signal is a doc comment block or a trace comment that is NOT immediately followed by an item, or is separated from the next item by another item.
+  - The natural home is the existing lint surface rather than a new binary: aida skill lint already raw-glyph-checks bodies, and aida plan verify already lints refs. A trace-header check belongs alongside them.
+  - It must run where the other guards run, or it inherits the BUG-1420 shape - a guard that passes locally under a more permissive shell than CI uses.
+  - It must be able to see ITSELF. Every instrument defect found this night was a guard whose charter defined its blind spot; run this check over its own source as part of its test.
+
+  ACCEPTANCE:
+  1. A check exists that flags a doc comment block or trace comment separated from the item it precedes, and it exits non-zero on a violation.
+  2. Running it over the current tree reports instance 1 (BUG-1545's site on main) as a violation. If BUG-1545 has landed by then, the check is validated against the pre-fix blob instead.
+  3. Running it over the check's own source file is part of its test suite.
+  4. It runs in the same place and under the same shell as the other pre-push guards, not only by hand.
+  5. A test pins the DISTINCTION: a trace comment displaced across an item is flagged, and a trace comment legitimately attached to a module or a block (not an item) is not.
+
+  RELATED: BUG-1545 stays as the specific fix for instance 1 and is NOT superseded by this - one is a two-line edit to main, this is the gate that stops the fourth instance.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T12:04:32.760270386Z
+modified_at: 2026-09-21T12:04:32.760270386Z
+req_type: Bug
