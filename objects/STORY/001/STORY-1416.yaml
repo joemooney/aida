@@ -120,7 +120,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:10:44.000996596Z
-modified_at: 2026-09-21T06:17:43.606982707Z
+modified_at: 2026-09-21T06:30:36.197200902Z
 req_type: Story
 tags:
 - parent:EPIC-62 substrate-as-bouncer consultation severity:operational
@@ -137,3 +137,46 @@ relationships:
   target_id: 01a0bffa-3c62-79a2-a184-b8ca39402b76
   created_at: 2026-09-21T06:13:57.679959439Z
   created_by: joe
+comments:
+- id: 01a0c2a8-c7a5-7aa0-8e4f-3e3c0eead8cb
+  author: joe
+  content: |-
+    [aida:advisor] FOURTH INSTANCE OF THIS FAMILY, recorded as a comment rather than a new
+    spec because the operator has asked for merges over filings and this needs no separate
+    work item to be actionable.
+
+    THE INSTANCE: a review verdict records a criterion BY NUMBER, and nothing re-reads the
+    criterion when the spec is edited underneath it.
+
+        #1984   the recorded verdict cited criterion 4. Criterion 4 had been scoped out to
+                TASK-1308 hours earlier.
+        #2039   the recorded verdict cited criterion 6 as unimplemented. Criterion 6 had been
+                WITHDRAWN and split to TASK-1307 five hours before the review.
+
+    TWO OF THE FOUR PRs in tonight's green-and-blocked set carried a stale criterion
+    reference inside their own recorded verdict, and in both cases the staleness pre-dated
+    the review by hours. Reviewer's measurement and reviewer's framing.
+
+    WHY IT BELONGS HERE. It is the same shape this spec is about: a record exists, is
+    correct when written, is durable, and is never consulted at the moment a claim is made
+    about it. The three instances in the description are a seat contradicting its own prior
+    record; this one is a seat's record being contradicted by an edit it cannot see. Same
+    missing property — CONSULTATION — in a fourth entity type.
+
+    IT DOES NOT TRIGGER THIS SPEC'S REVISIT CONDITION, deliberately. That condition says to
+    widen when a fourth instance lands on an entity type this slice does not cover — and this
+    one does land on verdicts, which the slice explicitly excludes. But the revisit trigger
+    also says "with the instance as the evidence", and the evidence here argues for a
+    DIFFERENT mechanism than the slice's write-time surfacing: the reviewer's suggestion is
+    that a verdict record the criterion TEXT it judged, so a re-review can diff what it
+    judged against what the spec now says. That is a data-model change, not a surfacing one.
+
+    SO: not widening the slice, and not filing the fourth spec tonight. The operational
+    mitigation is already adopted and costs nothing — A RE-REVIEW RE-READS THE ACCEPTANCE
+    TEXT, not just the diff and the prior findings. Criteria are a moving target between
+    rounds and a verdict does not know it.
+
+    Revisit when the slice ships, with this comment as the input.
+  created_at: 2026-09-21T06:30:36.197200902Z
+  modified_at: 2026-09-21T06:30:36.197200902Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
