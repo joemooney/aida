@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T13:51:18.943444697Z
+modified_at: 2026-09-21T13:54:20.585397064Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -146,4 +146,33 @@ comments:
     ACCEPTANCE ADDITION PROPOSED: whatever preserves prior rounds on the verdict path must also apply to `.aida/merge-holds/<PR>` - read before write, preserve the prior reason with its timestamp, or emit a merge-hold event so the reason survives outside the clobbered file. A test should pin that re-arming a hold over an existing marker does not lose the first reason.
   created_at: 2026-09-21T13:50:42.422600047Z
   modified_at: 2026-09-21T13:50:42.422600047Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c43f-0929-7fe2-af95-d19fa52310d9
+  author: joe
+  content: |-
+    CORRECTION TO MY OWN REFINEMENT ABOVE - "MACHINE-LOCAL, NOT DESIGNED" IS WRONG, AND THE TRUTH IS WORSE. Caught by claude-reviewer-1, who tested it by removing the variable rather than reasoning about it. I reproduced their test independently before accepting it.
+
+    Scratch repo, `git init`, EMPTY .git/info/exclude, containing only this repo's tracked `.aida/` gitignore block:
+
+        .aida/merge-holds/PR-2033     IGNORED     .gitignore:3:.aida/*
+        .aida/discipline/README.md    trackable   .gitignore:6:!.aida/discipline/**
+        .aida/config.toml             trackable   .gitignore:4:!.aida/config.toml
+
+    So the repo's own deny-by-default `.aida/*` ignores merge-holds on ANY clone. There is no `!.aida/merge-holds/` re-include, and per CLAUDE.md's own convention the default for anything new under `.aida/` is per-clone runtime state. THE ANSWER IS DESIGNED AND PORTABLE. A clean clone reproduces it exactly.
+
+    THIS CUTS AGAINST THE DEFECT, NOT FOR IT. Machine-local would have been the MILDER finding - an artifact of one clone, invisible elsewhere, arguably not worth fixing. Designed-and-portable means EVERY AIDA PROJECT stores merge-hold reasons in a file that is ignored by default and clobbered without a read. The scope of this spec's second artifact is every downstream project, not this machine.
+
+    WHY check-ignore MISLED ME, and this is the part worth carrying:
+
+        git check-ignore -v <path>  reports the WINNING rule under git's precedence order,
+                                    in which .git/info/exclude OUTRANKS .gitignore.
+                                    It names the FIRST match - not the only one, and not the causal one.
+
+    With two rules covering a path it will always point at info/exclude, which READS as attribution and is not. Attributing causation requires REMOVING the candidate rule and re-testing, which is what the scratch repo did. I read a precedence report as a causal one.
+
+    BUG-1279 IS STILL WORTH THE LINK, WITH ITS SCOPE CORRECTED. The blanket `.aida/` in .git/info/exclude is real in this clone, but it is currently INERT for the allow-listed set, because those files are already TRACKED and ignore rules do not apply to tracked paths. It is armed for the NEXT new file added under .aida/, not for this one. So it is a live hazard on a different timeline, not the cause here.
+
+    AND THE SELF-ARGUING NOTE ABOVE NEEDS SHARPENING, from the reviewer: the bracket that made this reconstruction work exists BECAUSE the hold was armed inside a review cycle - which is the COMMON case, and therefore the case that will keep hiding this defect. Every future reconstruction that succeeds will look like evidence the defect is mild. The failure mode is a hold armed by a human BETWEEN cycles: nothing to bracket, no artifact to consult, and that hold is also the one whose reason is least guessable from context.
+  created_at: 2026-09-21T13:54:20.585397064Z
+  modified_at: 2026-09-21T13:54:20.585397064Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
