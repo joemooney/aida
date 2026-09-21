@@ -27,10 +27,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:46:51.339793043Z
-modified_at: 2026-09-21T00:46:51.339793043Z
+modified_at: 2026-09-21T00:47:13.995046264Z
 req_type: Task
 tags:
 - drain-safe
 - from:session-0920
 - hygiene
 - public-repo
+execution_mode: drain
