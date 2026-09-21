@@ -34677,19 +34677,19 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
 /// `CiProbe::NoSignal` for any failure path so callers don't have to
 /// distinguish between "no PR" and "gh broken" — both degrade to "proceed
 /// silently." trace:TASK-111 | ai:claude
-/// STORY-516: forge-routed CI probe — the ci-op entry point the call sites use
-/// instead of `probe_ci_state_for_branch` directly, so a GitLab / pure-git repo
-/// goes through its own provider. GitHubForge delegates back to
-/// `probe_ci_state_for_branch` (which runs `gh` in CWD), so behaviour on GitHub
-/// is unchanged — `project_root` is used only to SELECT the provider, so it is
-/// resolved internally here and the call sites stay a pure name-swap. Converts
-/// the forge-neutral `CiProbeResult` back to `CiProbe` so the existing match
-/// sites are unchanged; a provider Err collapses to `NoSignal`.
-/// trace:STORY-516 | ai:claude
+/// STORY-516: forge-routed CI probe, so a GitLab / pure-git repo goes through
+/// its own provider. `project_root` SELECTS the provider. TASK-1273: it is now
+/// always supplied by the caller via `ci_probe_with_forge` — the old
+/// `ci_probe_via_forge` wrapper resolved it from the process cwd, which routed
+/// a GitLab branch through GitHub whenever the driven worktree was not the
+/// agent's cwd. Converts the forge-neutral `CiProbeResult` back to `CiProbe` so
+/// the existing match sites are unchanged; a provider Err collapses to
+/// `NoSignal`.
 /// STORY-516: reverse of `ci_probe_result_from_ci_probe` — convert a forge
 /// `CiProbeResult` (incl. a provider `Err`) back to the orchestrator's
 /// `CiProbe`, so the `*_via_forge` CI helpers stay a pure name-swap at their
 /// call sites. trace:STORY-516 | ai:claude
+// trace:TASK-1273 | ai:claude
 fn ci_probe_from_ci_probe_result(r: Result<crate::forge::CiProbeResult>) -> CiProbe {
     match r {
         Ok(crate::forge::CiProbeResult::NoSignal(why)) => CiProbe::NoSignal(why),
@@ -34711,10 +34711,6 @@ fn ci_probe_from_ci_probe_result(r: Result<crate::forge::CiProbeResult>) -> CiPr
         Ok(_) => CiProbe::NoSignal("forge returned no open PR".to_string()),
         Err(e) => CiProbe::NoSignal(format!("{e:#}")),
     }
-}
-
-pub(crate) fn ci_probe_via_forge(branch: &str) -> CiProbe {
-    probe_ci_state_for_branch(branch)
 }
 
 // trace:BUG-1037 | ai:codex
@@ -34760,13 +34756,12 @@ pub(crate) fn watch_ci_for_context_with_forge(
     )
 }
 
-pub(crate) fn probe_ci_state_for_branch(branch: &str) -> CiProbe {
-    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let forge_kind = crate::forge::resolve_forge_kind(&project_root);
-    ci_probe_from_ci_probe_result(
-        crate::forge::forge_for_kind(&project_root, forge_kind).ci_probe_for_branch(branch),
-    )
-}
+// TASK-1273: `probe_ci_state_for_branch` (and the `ci_probe_via_forge` wrapper
+// above it) used to live here and resolved the project root from the process
+// cwd. Every caller now passes the driven root to `ci_probe_with_forge`, so
+// both are removed rather than left as a cwd-resolving entry point the next
+// call site could reach for. `probe_ci_state_for_branch_github` below is a
+// different function — GitHubForge still calls it. trace:TASK-1273 | ai:claude
 
 // STORY-1163: raw GitHub CI probe used by GitHubForge after the public helper
 // became forge-dispatched. The argv and parser stay byte-for-byte compatible
@@ -35215,7 +35210,16 @@ fn watch_ci_terminal(project_root: Option<&std::path::Path>, branch: &str) -> Ci
         .args(["run", "watch", &run_id])
         .status();
     // Re-probe to classify Green/Red for the end-session decision tree.
-    ci_probe_via_forge(branch) // STORY-516: forge-routed
+    // Keep the re-probe on the caller-injected root. Re-deriving from the
+    // process cwd can silently route a GitLab branch through GitHub when the
+    // driven worktree is not the agent's cwd. Only the `None` arm — where the
+    // caller supplied no root — keeps the historical cwd discovery.
+    // trace:TASK-1273 | ai:claude
+    let probe_root = project_root
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| find_project_root().unwrap_or_else(|_| std::path::PathBuf::from(".")));
+    let forge_kind = crate::forge::resolve_forge_kind(&probe_root);
+    ci_probe_with_forge(&probe_root, forge_kind, branch) // STORY-516: forge-routed
 }
 
 /// trace:STORY-73 | ai:claude
@@ -36128,9 +36132,13 @@ fn session_end(
             "Note:".dimmed()
         );
     } else if !skip_ci && !force {
-        let probe = ci_probe_via_forge(&target.branch); // STORY-516: forge-routed
-                                                        // TASK-233: --watch-ci blocks like --wait-ci, so it produces the
-                                                        // same `CiAction::Wait`; the difference is the live display.
+        // STORY-516: forge-routed. Probe on the session's resolved
+        // `project_root` rather than the process cwd, so the forge that answers
+        // is the driven repository's. trace:TASK-1273 | ai:claude
+        let forge_kind = crate::forge::resolve_forge_kind(&project_root);
+        let probe = ci_probe_with_forge(&project_root, forge_kind, &target.branch);
+        // TASK-233: --watch-ci blocks like --wait-ci, so it produces the
+        // same `CiAction::Wait`; the difference is the live display.
         match decide_ci_action(&probe, wait_ci || watch_ci, yes) {
             CiAction::Proceed => {}
             CiAction::Wait => {
@@ -46495,7 +46503,15 @@ fn render_in_flight_grouped(
                 let local_state = detect_local_review_state(project_root, all_reqs, pr.number);
                 let ci =
                     if approved.is_none() && matches!(local_state, LocalReviewState::NotStarted) {
-                        ci_probe_via_forge(branch) // STORY-516: forge-routed
+                        // STORY-516: forge-routed. `project_root` is already in
+                        // scope and feeds both review probes above; route the CI
+                        // probe through the same root so all three signals come
+                        // from one repository. trace:TASK-1273 | ai:claude
+                        ci_probe_with_forge(
+                            project_root,
+                            crate::forge::resolve_forge_kind(project_root),
+                            branch,
+                        )
                     } else {
                         CiProbe::NoSignal(String::new())
                     };
@@ -79217,9 +79233,19 @@ fn handle_from_pr(
         facts.pr_merged = pr_is_merged_with_sink(&project_root, n, &mut sink).unwrap_or(false);
         facts.branch_exists = true;
         if !facts.ci_green {
+            // Every other fact on this path is probed against `project_root`;
+            // resolving CI from the process cwd instead could green-light a
+            // resume from a different repository's forge.
+            // trace:TASK-1273 | ai:claude
+            let forge_kind = crate::forge::resolve_forge_kind(&project_root);
             facts.ci_green = branch
                 .as_deref()
-                .map(|b| matches!(ci_probe_via_forge(b), CiProbe::Green { .. }))
+                .map(|b| {
+                    matches!(
+                        ci_probe_with_forge(&project_root, forge_kind, b),
+                        CiProbe::Green { .. }
+                    )
+                })
                 .unwrap_or(false);
         }
     }
