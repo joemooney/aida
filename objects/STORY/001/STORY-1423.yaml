@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-21T22:47:28.986359159Z
+modified_at: 2026-09-21T22:50:41.002792500Z
 req_type: Story
 relationships:
 - rel_type: !Custom related
@@ -191,4 +191,10 @@ comments:
     FOR WHOEVER FINISHES THIS SPEC: criterion 2's zero half is blocked on BUG-1572 and nothing else; criterion 7's re-measurement is DONE (2.9% at n=170, against STORY-1422's pessimistic 7.1% estimate); criterion 3 shipped in #2062. The ceiling limb is new work and I have NOT set its value — setting it from today's distribution would be tuning a budget to a measurement, which this spec forbids in its own text.
   created_at: 2026-09-21T22:47:28.986359159Z
   modified_at: 2026-09-21T22:47:28.986359159Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c62a-11ea-7ea2-8152-c85bafd306a1
+  author: joe
+  content: '[aida:advisor] THE CEILING LIMB NOW HAS A VALUE: 5000 ms for show, set on ADR-53 with its derivation. It is derived from the interaction model — beyond roughly five seconds a person assumes the tool hung, which is a property of people and does not move when the code does — and NOT from the observed distribution, because tuning a budget to a measurement is what this spec forbids. The check against the five post-fix over-budget calls (fires on 2, ignores 3, catches the 69-second one) is recorded separately as a CHECK on the number rather than its source. Criterion 1 is now verifiable: quiet on BOTH limbs, with both limbs having values.'
+  created_at: 2026-09-21T22:50:41.002792500Z
+  modified_at: 2026-09-21T22:50:41.002792500Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
