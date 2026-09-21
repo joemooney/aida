@@ -1,0 +1,39 @@
+id: 01a0c3a6-708e-7b83-9240-b43f26d8e069
+spec_id: STORY-1420
+agreed_id: STORY-1420
+title: Seven of fifteen open blocking verdicts are recorded by an exited drain reviewer, so every seat-scoped coordination surface routes those rows to nobody
+description: |-
+  MEASURED ON THE POPULATION THE FEATURE ACTUALLY RUNS ON, 2026-09-21, by the reviewer seat and verified independently by the driver-advisor with a separate script.
+
+  Open PRs carrying a BLOCKING verdict (RequestChanges / Rejected), n=15:
+
+      routes to a live seat (8)   PR-1978, PR-1989, PR-2001, PR-2019, PR-2030,
+                                  PR-2035, PR-2040, PR-2047
+      SUPPRESSED (7)              PR-1974, PR-1981, PR-1999, PR-2026, PR-2027,
+                                  PR-2033, PR-2042
+                                  all seven recorded_by "aida drain reviewer"
+
+  SEVEN OF FIFTEEN — nearly half the open blocking set — carry a refusal recorded by an EPHEMERAL HEADLESS ACTOR that has exited. Any surface that routes to the seat holding the refusal routes those rows to nobody.
+
+  AND SIX OF THE SEVEN ARE SITTING IN THE REVIEWER'S QUEUE RIGHT NOW: STORY-1357/PR-1974, STORY-1395/PR-1981, STORY-1368/PR-1999, STORY-1399/PR-2026, STORY-1400/PR-2027, STORY-1406/PR-2033. Each is queued to the reviewer seat for pickup and each carries a refusal whose recorder no longer exists. When rework lands on any of the six, the notification goes nowhere — which is the exact gap STORY-1419 was filed to close, still open for six of the eleven items in that queue.
+
+  THE DENOMINATOR IS WHAT MAKES THIS A SPEC RATHER THAN A FOOTNOTE, and the driver-advisor got it wrong first. The advisor sized it as "27 of 572 verdict files name the drain reviewer" — 4.5%, reads as an edge case — and concluded "nothing is stranded in practice" from #2042, where the operator holds the gate. #2042 is the ONE exception among the seven, generalised from. On the population that matters it is 47% and reads as the common case. Same actor, same predicate, opposite conclusion. The corpus is mostly CLOSED PRs that never enter the open-PR collector, so it cannot size a feature that only reads the open set.
+
+  THE DEFECT: a blocking verdict recorded by an actor that has since exited has a gate-holder who cannot receive anything. Every seat-scoped coordination surface — the STORY-1419 rework-ready row, `aida awaiting`, any future routing of findings or escalations — silently drops those rows. The refusal still gates the merge correctly (the marker and the required check do their job); what is lost is the NOTIFICATION that the refusal is ready to be revisited.
+
+  WHAT TO BUILD, and the fork is the spec's work rather than a precondition:
+
+    A. INHERIT. An exited recorder's gates fall to a standing seat — most plausibly the advisor as the standing disposition gate, or the reviewer seat generally since a drain reviewer's judgement is a reviewer judgement. Cheap, and it makes the rows visible immediately.
+    B. DETECT AND SURFACE. A row that cannot be routed is reported as UNROUTABLE with its recorder named, rather than dropped. Weaker, but it never silently loses a gate and it makes the population visible, which is how this was found at all.
+    C. DO NOT LET DRAINS RECORD UNROUTABLE VERDICTS. A headless drain reviewer records under a seat identity that outlives it. Strongest and the most invasive; it also fixes the 27 historical files only going forward.
+
+  EXPLICITLY NOT THE FIX: widening a seat-scoping predicate to read `transferred_by` or "whoever last touched the file". Ruled on STORY-1419 — a transfer copies the RECORD, not the GATE, and delivering to the last toucher looks like routing while being worse than silence.
+
+  Filed by the driver-advisor from the reviewer seat's measurement, after the advisor's own sizing of the same gap was wrong by an order of magnitude in the reassuring direction. Autonomous-safe: routing and surfacing only, no change to what a verdict means or to any merge gate.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T11:07:40.046649414Z
+modified_at: 2026-09-21T11:07:40.046649414Z
+req_type: Story
