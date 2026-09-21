@@ -36,8 +36,44 @@ struct ListTableOptions {
 /// Keeping this helper free of `backend.load()` and live repository scans is
 /// the load-bearing part of the single-spec read latency contract.
 // trace:TASK-1268 trace:BUG-1480 | ai:codex
+/// The cache-backed reads `aida show`'s canonical path is allowed to make.
+///
+/// COMPILER-ENFORCED, NOT TEXT-MATCHED. The regression this guards was a
+/// `backend.load()` on the single-spec show path — a full-store scan costing
+/// ~10s against a 4200-object store where the cache answers in under half a
+/// second. The previous guard was a test that `include_str!`d this file, split
+/// it on two literal markers, and asserted the substring `backend.load()` was
+/// absent. That check breaks on any reformat, proves nothing about a DIFFERENT
+/// expensive call, and is itself a text match standing in for a contract.
+///
+/// This trait exposes only the two reads the path actually needs, so `load()`
+/// is not merely discouraged there — it does not exist to be called, and
+/// reintroducing it is a compile error rather than a test failure.
+///
+/// Scoped deliberately: this is the canonical-path context helper, which is
+/// where the regression was. The COST dimension is guarded separately and on
+/// the real store by `aida doctor check performance`, because a structural
+/// guard cannot see a slowdown that arrives without any call site changing —
+/// this bug grew from 7.5s to 9.9s with no code change at all.
+// trace:BUG-1480 | ai:claude
+pub(crate) trait CacheOnlyReads {
+    fn list_summaries(
+        &self,
+        filter: &aida_core::ListFilter,
+    ) -> anyhow::Result<Vec<aida_core::RequirementSummary>>;
+}
+
+impl CacheOnlyReads for aida_core::CachedGitBackend {
+    fn list_summaries(
+        &self,
+        filter: &aida_core::ListFilter,
+    ) -> anyhow::Result<Vec<aida_core::RequirementSummary>> {
+        aida_core::CachedGitBackend::list_summaries(self, filter)
+    }
+}
+
 fn show_cached_context(
-    backend: &aida_core::CachedGitBackend,
+    backend: &impl CacheOnlyReads,
     req: &Requirement,
 ) -> (Option<String>, Option<String>) {
     let mut effective_status = None;
@@ -616,25 +652,36 @@ mod proxy_approval_tests {
 
 #[cfg(test)]
 mod show_latency_regression_tests {
+    use super::*;
+
+    /// THE GUARANTEE IS THE TYPE. `show_cached_context` takes
+    /// `&impl CacheOnlyReads`, which exposes `list_summaries` and nothing
+    /// else, so a whole-store read on that path is a COMPILE ERROR:
+    ///
+    ///     error[E0599]: no method named `load` found for reference
+    ///                   `&impl CacheOnlyReads` in the current scope
+    ///
+    /// verified by injecting `backend.load()` into `show_cached_context` and
+    /// observing the build fail, then restoring to a clean build.
+    ///
+    /// THIS TEST DELIBERATELY ASSERTS ALMOST NOTHING. An earlier revision
+    /// parsed this file to count the trait's methods, so that widening the
+    /// trait would be caught. Mutation proved that check INERT: it extracted
+    /// the body with `split_once('}')`, which stops at the first brace, and a
+    /// default method body supplies one INSIDE the trait — so adding a bodied
+    /// method truncated the extraction and the count still read 1. It could
+    /// not fire on the exact change it existed to catch.
+    ///
+    /// Rather than repair a source-text parser to guard a property the
+    /// compiler already enforces, it is gone. Widening the trait is a visible
+    /// deliberate act in a diff; a whole-store read through it is not
+    /// expressible at all. What remains is a witness that the restricted view
+    /// is what the path is typed against.
+    // trace:BUG-1480 | ai:claude
     #[test]
-    fn canonical_spec_show_path_never_loads_the_full_store() {
-        // A timing assertion is noisy on shared CI. This structural contract
-        // directly guards the operation responsible for BUG-1480's 7.5s
-        // regression: after PR aliases are resolved, canonical SPEC-ID show
-        // must remain cache-backed and use targeted YAML reads only.
-        // trace:BUG-1480 | ai:codex
-        let source = include_str!("git_backend_cmd.rs");
-        let canonical_path = source
-            .split_once("let id = &resolved_id;")
-            .expect("show canonical-path marker")
-            .1
-            .split_once("Command::Approvals {")
-            .expect("command following show")
-            .0;
-        assert!(
-            !canonical_path.contains("backend.load()"),
-            "aida show must not scan the full requirement store"
-        );
+    fn the_show_path_is_typed_against_the_cache_only_view() {
+        fn requires_cache_only_view<T: CacheOnlyReads>() {}
+        requires_cache_only_view::<aida_core::CachedGitBackend>();
     }
 }
 
