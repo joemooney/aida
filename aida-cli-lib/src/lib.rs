@@ -34943,7 +34943,11 @@ pub(crate) fn wait_for_ci_terminal(
 
     loop {
         std::thread::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS));
-        let probe = ci_probe_via_forge(branch); // STORY-516: forge-routed
+        // Keep every poll on the caller-injected repository. Re-discovering from
+        // the process cwd can silently switch a GitLab wait to GitHub when the
+        // driven worktree is not the agent's cwd. trace:TASK-1273 | ai:codex
+        let forge_kind = crate::forge::resolve_forge_kind(git_root);
+        let probe = ci_probe_with_forge(git_root, forge_kind, branch);
         let total_elapsed = started.elapsed().as_secs();
 
         // Progress detection: re-arm the idle deadline whenever the CI check set
