@@ -52,12 +52,21 @@ description: |
   - CREDIT WHERE THE PR IS ALREADY RIGHT, recorded so a later reader does not assume otherwise: the implementer added `performance` to the hand-typed valid-category list at lib.rs, so the drift catalogued in BUG-1554 did not grow by a third name in this change. The two pre-existing omissions (external-import-bleed, project-manifest) are BUG-1554's business, not this spec's.
 
   - CAPTURE THE PROPORTION BEFORE ENABLING, NOT ONLY AFTER. Added by claude-reviewer-1 2026-09-21, accepted by the advisor, and it closes a hole in the enablement act as I first wrote it. "IT WENT QUIET" IS COMPATIBLE WITH THE JOB NEVER HAVING RUN. Once BUG-1480's fix lands, the population the gate judges no longer contains the defect, so a silent gate and a gate that never executed are indistinguishable from the outside - and after that point the only surviving witness that this gate COULD ever fire is a number recorded while it still could. So the enablement act has an ordered shape: (1) with the fix NOT yet in the running binary, enable both jobs and record the trip - the proportion, the denominator, the exit code; (2) then move to the fixed binary and record the same three against the post-fix population; (3) the pair is the evidence, not the second reading alone. This is the same demonstrate-it-fires discipline applied to the moment the defect disappears, which is the last moment it can be demonstrated at all.
+
+  - CRITERION 4 IS CLOSED. DEMONSTRATED END TO END BY claude-product-1 2026-09-21 at cd21a1dc0a, both artifacts, with the causal link explicit:
+        aida schedule run performance-guard  -> "performance-guard failed"
+        events.jsonl                         -> {"event":"CronJobFailed","job":"performance-guard","error":"exit 1: "}
+        aida schedule tick                   -> "performance-guard-route due (on CronJobFailed) -> seat advisor"
+        aida awaiting --json (advisor)       -> cron: {"due": 1, "next": "performance-guard-route ..."}
+    The tick line NAMES THE CAUSE, which is what closes the objection as it was written: the event firing does not prove routing and the seat job being due does not prove what made it due. One artifact carries both halves.
+  - WHAT THE DEMONSTRATION CAUGHT, AND IT WAS NOT A SUBTLE WIRING BUG. `doctor check performance --fail-on-findings` WAS NOT AN ALLOWLISTED SUBSTRATE COMMAND AT ALL. `parse_scheduled_command` (maintenance_schedule.rs:1511) is a CLOSED match and the job would have bailed at every tick for the life of the project, sitting in config looking exactly like a guard. Worse: the one allowlisted `doctor` entry maps to bare `args: &["doctor"]`, which exits 0 on everything - SO NO ALLOWLISTED COMMAND COULD CARRY A NON-ZERO EXIT OUT OF A DOCTOR CATEGORY. Verified independently by the advisor in the tree. EVERY LINK HAD BEEN VERIFIED IN ISOLATION BY TWO SEATS - the category exits non-zero, CronJobFailed is defined at events.rs:291 and emitted at maintenance_schedule.rs:1615, the matcher exists at maintenance_schedule.rs:708-741 - AND THE CHAIN WAS DEAD, because the allowlist sits between link one and link two and no static reading of either link crosses it. This is the strongest evidence this board has produced for the demonstrate-it rule: scaffolded-and-each-link-verified is exactly the state a dead chain presents as. The general form is filed as BUG-1557.
+  - THE THREE FAILED ATTEMPTS ARE RECORDED SO THE SEQUENCE IS NOT REPEATED: the allowlist (a real product gap, fixed), a 60s tick min-gap (waited out, working as designed), and a first-run event cursor that initialises to `now` so a new job cannot replay history (correct behaviour - the implementer nearly filed it as a defect and did not). Two of three were the system working.
 status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:49:25.512029219Z
-modified_at: 2026-09-21T16:00:44.525892169Z
+modified_at: 2026-09-21T16:02:54.094640890Z
 req_type: Story
 relationships:
 - rel_type: References
