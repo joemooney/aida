@@ -70,7 +70,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:51:52.124497966Z
-modified_at: 2026-09-21T06:51:52.124497966Z
+modified_at: 2026-09-21T06:52:21.430683580Z
 req_type: Bug
 tags:
 - parent:EPIC-62 test-isolation forge-safety severity:major
+relationships:
+- rel_type: References
+  target_id: 01a0c266-c94e-76b3-9112-420e020bbd89
+  created_at: 2026-09-21T06:52:21.430678540Z
+  created_by: joe
