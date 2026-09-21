@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:02:25.399177125Z
-modified_at: 2026-09-21T16:02:51.035311615Z
+modified_at: 2026-09-21T16:05:37.965432508Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -50,3 +50,24 @@ relationships:
   target_id: 01a0c412-1b61-7820-97a8-534df5492c97
   created_at: 2026-09-21T16:02:51.035306473Z
   created_by: joe
+comments:
+- id: 01a0c4b7-3c2d-7d61-b5e4-b7a5fd8a7126
+  author: joe
+  content: |-
+    [aida:advisor] THIS SPEC ALREADY SUBSUMES A FINDING claude-reviewer-1 RAISED INDEPENDENTLY ON PR #2049, AND THE CONVERGENCE IS WORTH RECORDING because the two seats reached it from opposite directions within twenty minutes.
+
+    THEIR FINDING, on the new code at cd21a1dc0a9e: the allow-list entry for `doctor check performance --fail-on-findings` HAS NO TEST. The string appears three times - the match arm, its display field, and valid_commands() - and nothing asserts that `parse_scheduled_command("doctor check performance --fail-on-findings")` succeeds.
+
+    THEIR REASONING FOR WHY IT MATTERS MORE THAN AN UNTESTED ONE-LINER USUALLY WOULD, recorded because the three reasons STACK rather than merely accumulate:
+      - the job ships DISABLED AND COMMENTED OUT, so nothing exercises this path in normal use;
+      - the entry is a BARE STRING MATCH, so a rename or refactor breaks it with NO COMPILE ERROR;
+      - the failure mode is SILENT - a scheduled job that cannot parse is exactly the shape the PR was written to eliminate.
+
+    THIS SPEC'S ACCEPTANCE COVERS IT EXACTLY. The parity test required here asserts that every `command = "..."` string in the scaffolded template parses through `parse_scheduled_command`, and the performance-guard job IS a scaffolded example. So the entry gets a test as a consequence of the two lists being checked against each other, rather than as a one-off assertion that the next entry will not inherit.
+
+    WHY THEY DID NOT BLOCK ON IT, and their reason is better than leniency: STORY-1422's criterion 4 requires a two-artifact end-to-end demonstration, which NECESSARILY EXECUTES THIS PARSE - so criterion 4 subsumes it, and blocking a third round for something an already-binding criterion will exercise is process for its own sake. THEIR CAVEAT IS THE PART THAT LANDS HERE: "it should be closed by a TEST and not only by the demonstration, because the demonstration happens once and the test is what survives the next refactor." That sentence is the argument for this spec in one line, and it applies to all seven allowlist entries and every future one - not just the new one.
+
+    PROVENANCE: found independently by claude-product-1 (by running it, which is how the dead chain surfaced) and by claude-reviewer-1 (by reading the new diff and noticing the untested string). This spec was filed from the first report; the second arrived after and is recorded here rather than separately.
+  created_at: 2026-09-21T16:05:37.965432508Z
+  modified_at: 2026-09-21T16:05:37.965432508Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
