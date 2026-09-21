@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T17:34:03.567116367Z
+modified_at: 2026-09-21T18:38:04.636882891Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -351,4 +351,34 @@ comments:
       Then they answered the question that actually mattered by a different method: replacing a match with a table risks SILENTLY DROPPING AN ALIAS, which would make a dispatched category unreachable. They checked by SET IDENTITY with ONE extractor applied to BOTH sides - 113 distinct names old, 113 new, nothing in old missing from new. The absolute count was never the claim; PRESERVATION was. A comparison run through one instrument is sound even when that instrument cannot produce a trustworthy absolute, and choosing the comparison over the count is the move worth copying.
   created_at: 2026-09-21T17:34:03.567116367Z
   modified_at: 2026-09-21T17:34:03.567116367Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c542-cd5c-7120-bedd-8c463531d7d8
+  author: joe
+  content: |-
+    [aida:advisor] TWO ENTRIES FROM PR #2040's ROUND, and the first inverts a rule this catalogue keeps asserting.
+
+    1. A REWORK THAT TURNS TESTS RED CAN MEAN THE REVIEWER'S REMEDY WAS TOO BROAD, AND THE FAILING SET IS THE SHAPE OF WHAT THE REMEDY MISSED.
+
+    The reviewer's F1 said `Some(empty)` on a non-GitHub forge is a definitive answer and must not be — which implies `None` for every non-GitHub case. The implementer showed the literal fix is WRONG:
+
+        ForgeKind::GitLab   MRs exist and gh cannot read them -> genuinely UNKNOWN
+                            -> None -> preserve.  THIS is the defect the finding named.
+        ForgeKind::None     pure git, no change-request concept AT ALL, so "no open PR
+                            references this spec" is a MEASURED TRUTH -> Some(empty) is CORRECT.
+
+    Collapsing both into `None` turns TWENTY existing tests red — every one a remoteless fixture — and auto-bump would never complete a spec again on any repo without a GitHub remote.
+
+    THEY TREATED THE TWENTY REDS AS EVIDENCE FOR A DISTINCTION RATHER THAN AS AN OBSTACLE TO THE FIX. That is the move worth recording, because the default reading of "my change turned 20 tests red" is "my change is wrong", and the catalogue's own red-first discipline trains that reading. Sometimes the reds are the suite defending a distinction the finding did not make. The reviewer's assessment of their own finding: right about the defect, wrong about its scope — and the implementer separated those two and said so rather than either complying or arguing.
+
+    THE CHECK: when a prescribed remedy turns a body of existing tests red, READ THE FAILING SET AS A DESCRIPTION before treating it as damage. If the failures share a property the finding never mentioned — here, remoteless — that property is probably the missing distinction.
+
+    2. A NULL FROM A FAILED MEASUREMENT, REPORTED AS A MEASUREMENT — this time CAUGHT, by a guard written the same morning.
+
+    The reviewer's own sweep for PRs whose head moved past a blocking verdict RETURNED EMPTY. `gh pr list` had failed transiently. The script printed "SWEEP FAILED" rather than "0 open PRs"; they retried and found 7 open with #2040 moved. HAD THE EMPTY RESULT BEEN REPORTED AS A CLEAN BOARD, this rework would have sat unreviewed until something else surfaced it.
+
+    This is the sixth instance today of the same family and THE FIRST PREVENTED BY A MECHANISM RATHER THAN BY SOMEONE NOTICING. The others — `aida show` grepped for BlockedBy, a field list missing `findings`, invented grep terms, `gh run view` on an in-flight run, `aida add --help` for relationship verbs — were each caught after a wrong conclusion had been drawn. Here a fail-loud-on-empty rule, written into the script that morning, turned an indistinguishable silence into a reported failure.
+
+    THE GENERALISATION: ANY QUERY WHOSE EMPTY RESULT IS ACTIONABLE MUST DISTINGUISH "MEASURED ZERO" FROM "MEASUREMENT FAILED". A sweep, a grep, a count, a status probe — if a human or a loop will act on the empty case, the failure case must not be able to impersonate it. That is cheap to write and, on today's evidence, the only one of these six that a rule actually stopped.
+  created_at: 2026-09-21T18:38:04.636882891Z
+  modified_at: 2026-09-21T18:38:04.636882891Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
