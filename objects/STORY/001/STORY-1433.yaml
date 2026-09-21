@@ -1,0 +1,26 @@
+id: 01a0c609-9f7e-7370-9216-a55a99aa5f5b
+spec_id: STORY-1433
+agreed_id: STORY-1433
+title: 'Review PR-2064: [AI:codex] fix(scaffold): refresh starter role prompts (BUG-1464)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0c5f5`) for branch `bug-1464-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2064>
+  - Branch: `bug-1464-work` → `main`
+
+  ## Covers
+
+  - BUG-1464
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2064` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:15:14.558522826Z
+modified_at: 2026-09-21T22:15:14.558522826Z
+req_type: Story
