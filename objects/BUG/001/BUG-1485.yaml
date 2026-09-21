@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-21T05:08:43.069505240Z
+modified_at: 2026-09-21T05:27:06.760737184Z
 req_type: Bug
 tags:
 - drain-safe
@@ -284,6 +284,61 @@ comments:
     the tripwire is checkable rather than a matter of judgement.
   created_at: 2026-09-21T05:08:43.069505240Z
   modified_at: 2026-09-21T05:08:43.069505240Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c26e-a708-76d3-8283-2efcb651fa57
+  author: joe
+  content: |-
+    [aida:advisor] PR #2030 DISPOSITION, 2026-09-20 22:27. Rebase attempted and ABORTED on a
+    conflict; routing as rework, not as re-review.
+
+    STATE, all verified:
+
+        PR #2030        OPEN, DIRTY, head 05969aa3978d, branch bug-1485-work
+        verdict         request-changes at 8ba48f5b98, recorded_by "aida review record"
+        new commit      05969aa397 [AI:codex] test(orchestrator): reproduce lease handoff
+                        lifecycle (BUG-1485) — one real commit since the refusal
+        merge-hold      .aida/merge-holds/PR-2030 present
+        live session    NONE. `aida ps` reports BUG-1485 flag-only — the spec is flagged
+                        In Progress with no live session behind it, which is BUG-1523's
+                        anomaly appearing on the spec that is about lease matching.
+
+    REBASE ATTEMPTED AND CLEANLY ABORTED:
+
+        aida pr rebase 2030
+        -> rebase hit 1 conflict — aborted, worktree cleaned
+           aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs
+
+    The branch is unchanged at 05969aa3978d; nothing was force-pushed. Resolving that
+    conflict is a judgement about which side of a test file survives, which is implementer
+    work, so it is routed rather than resolved here.
+
+    RULING ON WHOSE REFUSAL THIS IS, since it was raised and it generalises. A
+    drain-reviewer refusal TRANSFERS. The verdict's recorded_by is "aida review record" — a
+    role artifact produced by an ephemeral drain phase, not a person. If a refusal could be
+    answered only by the exact process that recorded it, every drain-phase refusal becomes
+    permanently unanswerable the moment the drain ends, which is the state this PR has been
+    in since 20:52. The TASK-1-170 hold convention — the seat that placed it clears it —
+    presumes the placer still exists, and here it does not.
+
+    So any independent reviewer may take it. The reviewer seat did not author the branch, so
+    independence holds for them.
+
+    ORDER: rebase + conflict resolution FIRST, then re-review. Reviewing a conflicted diff
+    spends a round on something that cannot survive contact with main.
+
+    A NOTE THE RE-REVIEW WILL NEED, and it is this spec's own subject twice over. Whoever
+    re-reviews must compare against 8ba48f5b98, the refused sha — NOT against "the head
+    moved". Once this branch is rebased, every sha changes, and a head-moved test reads the
+    rebase as rework. That is BUG-1522 criterion 10, filed today, and this PR is its first
+    live instance. The pre-rebase head is recorded here as 05969aa3978d so the comparison
+    survives the rebase.
+
+    AND THE CONTEXT OVERLAP: this branch carries two open defects about its own identity —
+    this spec (five occurrences of the lease mismatch) and BUG-1527 (the drain credited a
+    BUG-1442-dispatched phase to this PR). A re-review that reads only the code will miss
+    that. I have not checked whether the new commit is affected by either.
+  created_at: 2026-09-21T05:27:06.760737184Z
+  modified_at: 2026-09-21T05:27:06.760737184Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
