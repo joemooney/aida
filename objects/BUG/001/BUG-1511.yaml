@@ -31,10 +31,33 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:04:29.972266635Z
-modified_at: 2026-09-21T22:59:41.619272703Z
+modified_at: 2026-09-21T23:01:15.376707412Z
 req_type: Bug
 tags:
 - batch:night-0920 public-repo hygiene drain-safe from:session-0920
+comments:
+- id: 01a0c633-bff0-7b03-94ef-aa01c11b10f6
+  author: joe
+  content: |-
+    [aida:advisor] THE .codex/hooks/ QUESTION IS SETTLED BY SET COMPARISON, NOT BY ANALOGY — INDEPENDENTLY REPRODUCED. I told the reviewer there was a real argument on both sides and that it was theirs to weigh. There is not. Their set comparison is exact and I re-derived it here rather than accepting it:
+
+        .claude/hooks/ tracked in git              10 files
+        scripts referenced by .codex/hooks.json    10 files
+        present only in .claude/hooks/             NONE
+        referenced only by codex                   NONE
+
+    Same ten scripts, name for name: advisor-code-guard, capture-prompt, git-guardrails, mail-notice, role-context, session-context, subagent-start, subagent-stop, track-commits, validate-commit. NOT 'analogous to' .claude/hooks/ — LITERALLY THE SAME SET. And every .claude/hooks/ entry is a symlink into aida-core/templates/hooks/, i.e. scaffolded project content, which is exactly why it is tracked rather than per-clone state.
+
+    SO .codex/hooks/ SHOULD BE TRACKED, by the same mechanism and on the same grounds. The machine-local half is the absolute-path wiring inside hooks.json, which this change already ignores correctly — and which carries a username and a home path, so it belongs nowhere near a public repo.
+
+    WHAT THE CHANGE MUST DO IS DECIDE, NOT NECESSARILY TRACK. Ignoring .codex/hooks/ explicitly, with a stated reason why the Codex copy is machine-local when the Claude copy of byte-identical scaffolding is not, would also satisfy this. THE CURRENT STATE — untracked and unignored — is the one thing that does not, and the change's own added CLAUDE.md paragraph is what condemns it: 'Untracked-and-unignored is the one state that is neither, and it is the state git add -A publishes from.'
+
+    WHY IT WAS MISSED, and it is the day's recurring shape rather than carelessness: THE RULE COVERS THE INSTANCE THE AUTHOR SAW, NOT THE CATEGORY. hooks.json was in the dirty tree so it got a rule; the ten scripts it references were not, because .codex/hooks/ is empty on this machine. Nothing is publishable today. The exposure arrives the moment one script is scaffolded or syncs from another machine.
+
+    A NOTE ON THE COUNT ITSELF, because it nearly went in wrong. The reviewer first reported EIGHT scripts, from a command ending in 'head -8'. It is ten. The discrepancy surfaced only because this seat independently read the same file and quoted a script absent from their list. A truncated read produced a count that would otherwise have gone into the record unchallenged — the same mechanism already recorded on TASK-190 and in this session's mail handling.
+  created_at: 2026-09-21T23:01:15.376707412Z
+  modified_at: 2026-09-21T23:01:15.376707412Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 failure_reason:
   phase: reviewer
   phase_index: 3
