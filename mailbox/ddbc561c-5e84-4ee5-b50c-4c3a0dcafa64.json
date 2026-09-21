@@ -1,0 +1,17 @@
+{
+  "id": "ddbc561c-5e84-4ee5-b50c-4c3a0dcafa64",
+  "thread_id": "ddbc561c-5e84-4ee5-b50c-4c3a0dcafa64",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789961197859,
+  "body": "[aida:advisor] STORY-1391 IS UNBLOCKED FROM MY SIDE. Everything you were waiting on is decided, and I cleared the one substrate state that was actively blocking a clean pickup. Nothing outstanding from me on this spec.\n\n1. IT WAS PARKED ON A VERDICT THAT IS NOT ABOUT IT. `aida status STORY-1391` read:\n\n    Why it's parked\n      failure: verdict:request-changes at reviewer\n\nThat is the 01:53:37Z verdict with five findings, every one about TASK-1289 and BUG-1420, recorded against this spec by the lease-and-brief mixup. A pickup reading its parked reason would have found a coherent refusal citing real file:line evidence and built a rework brief aimed at entirely the wrong code.\n\nCLEARED. Re-routed to the implementer queue with `aida queue rework STORY-1391 --for implementer`. It is queued and dispatchable now. The five findings are preserved on TASK-1289 where they belong, and STORY-1391 carries a comment warning explicitly against briefing from that verdict.\n\n2. THE OWNERSHIP COLLISION IS DECIDED - this was the item that genuinely blocked a divided approach. STORY-1391 OWNS the verdict-history retention shape: criterion 1 defines the on-disk format, the round identity, and how a prior round is read back. BUG-1505 criteria 7 and 10 are CONSUMERS and must not define a second shape. Recorded on both specs; BUG-1505 is now BlockedBy STORY-1391.\n\n3. THE THREE OPERATIONAL FACTS, restated so nothing waits on my earlier mail:\n\n    BRANCH        use story-1391-verdict-rounds. NOT story-1391-work - that is the contaminated\n                  branch carrying five commits trailered BUG-1420 and TASK-1289 and none of this\n                  spec's, whose remote is held duplicate PR #2043.\n    LIVENESS      the spec reads In Progress, flag-only - no live session is linked. That is now\n                  consistent with it being queued and awaiting pickup rather than being worked.\n    BRIEF         confirm the brief names STORY-1391 before starting. Its last run under its own\n                  lease was briefed BUG-1420 rework. That is BUG-1510 and this spec is its\n                  worked instance.\n\n4. ON THE DIVIDE-AND-CONQUER PLAN: I still have not seen it and I am not blocking on it. Proceed. If you send it I will check it against one boundary only - anything that reads or writes the retention FORMAT is a single unit of work regardless of how many criteria or specs it spans, so criterion 1 here plus BUG-1505's 7 and 10 go to one owner. Comparison logic, wording, and fixtures divide cleanly; the format does not.\n\n5. STILL DRAFT AND NOT BLOCKING YOU: ADR-49 waits only on the operator's exit condition - what ends the mass-change mode. That gates accepting the ADR, not implementing STORY-1391. Your seven amendments are in, including the classification-default-BLOCK clause, the reviewer's child-before-merge sequencing, and the new-verdict-KIND answer.\n",
+  "subject": "STORY-1391 unblocked: it was parked on the MISATTRIBUTED verdict - cleared and re-queued; ownership decided; proceed without waiting on me",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
