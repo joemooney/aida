@@ -49,12 +49,31 @@ description: |-
   11. SCOPE CORRECTION 2026-09-20 18:40 - THE SHALESS WRITES ARE NOT A LIVE SOURCE DEFECT. The 86-percent no-sha measurement describes the corpus accurately and must NOT be read as a claim about the current emitter. The handshake writer was fixed at 2026-09-20 17:00:35 by commit 066c4ceacb (BUG-1467, PR #2037), which added reviewed_sha, reviewed_branch, recorded_at and recorded_by to the --pr branch at aida-cli-lib/src/lib.rs:76312. Verdicts written shaless AFTER that time - PR-2038 at 17:35, PR-2039 at 18:11, PR-2040 at 18:31 - came from processes running a binary built at 15:02:31 (sha b09197ab72), including the live drain, whose lock records that sha and a 17:03 start, three minutes after the fix merged. So this spec is a MIGRATION plus a rebuild discipline, not a writer fix. Do not write acceptance against a source defect that no longer exists, and do not treat post-17:00 shaless files as evidence the fix failed.
 
   12. A CORPUS MEASUREMENT CANNOT DISTINGUISH A WRONG WRITER FROM A RIGHT WRITER THAT IS NOT RUNNING. The two have opposite remedies - change the code, versus rebuild and relaunch - and the artifacts are byte-identical. Establishing which required checking the running binary's sha against the commit that touched the writer; it was not derivable from the files. Any audit this spec produces must record the emitting binary's sha alongside the corpus counts, or its conclusion is unfalsifiable in exactly this way.
+
+  13. THE CORPUS IS BIMODAL, NOT UNIFORMLY DRIFTED - MEASURED BY WRITER 2026-09-20 19:02. The 45-shapes / 9-spellings / 86-percent-shaless figures at the top of this spec describe the corpus as a whole and are misleading about the present. Split by recorded_by:
+
+        writer                        files  shapes  no-sha  verdict spellings
+        NONE (legacy, many producers)   473      35     427  6 spellings, INCLUDING both free-text values
+        aida review record               38       3       0  approved / request-changes
+        aida drain reviewer              32       4       0  CHANGES REQUESTED, RequestChanges, APPROVED, Approved
+        advisor (proxy for operator)      2       1       0  CHANGES REQUESTED
+        codex / codex review              2       2       0  Approved / approved
+
+      EVERY file from a named writer carries a sha - 0 of 72 missing. All 427 shaless files are in the unattributed legacy bucket, which spans 35 key shapes and therefore many producers rather than one. BOTH dangerous free-text values - 'APPROVED pending cross-platform green' and 'CONTENT APPROVED - MERGE WITHHELD FOR INDEPENDENCE' - appear ONLY in that legacy bucket. So the loose-APPROVED hazard is a MIGRATION problem, not a live emission problem: nothing currently writing produces a value that would fool a loose matcher. (Correction to the reviewer's figure: 427 of the 473 legacy files lack a sha, not all 473 - 46 carry one.)
+
+  14. THE ONE LIVE EMISSION DEFECT, AND IT IS THE HIGHEST-VOLUME AUTOMATED PRODUCER. `aida drain reviewer` emits FOUR spellings of TWO values across 32 files: CHANGES REQUESTED (10), RequestChanges (8), APPROVED (8), Approved (6). One writer, one code path, four spellings - it persists whatever the reviewer phase produced instead of canonicalising at write time. So a fix that addresses only the schema and the migration leaves the largest automated producer adding new spellings tomorrow.
+
+      AND THE NAMED WRITERS DISAGREE WITH EACH OTHER, which is the half the per-writer view exposes. For the same two values, the current writers emit: approved / Approved / APPROVED, and request-changes / RequestChanges / CHANGES REQUESTED. Five spellings of two values across four live writers. Canonicalising inside the drain reviewer alone would leave `aida review record` at lowercase and the advisor proxy at uppercase-spaced.
+
+      REQUIRED: every writer canonicalises to the closed set BEFORE persisting, and the canonical form is produced by one shared function rather than by each writer agreeing to be careful. Enumerate the writers in the fix - `aida drain reviewer`, `aida review record`, the advisor proxy path, and the codex paths - because naming the class without listing the instances ships a half-fix, and this spec has four known instances.
+
+  15. CORRECTION TO CRITERION 11: the stale-binary diagnosis applies to the `aida review record --pr` HANDSHAKE writer specifically, which was sparse until 066c4ceacb at 17:00:35. It does NOT describe the corpus as a whole and the drain reviewer was never affected - its 32 files all carry a sha, written by the same stale binary. Two writers, different provenance behaviour, and criterion 11 should not be read as a claim about every shaless file.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:28:50.078974800Z
-modified_at: 2026-09-21T01:43:49.493253154Z
+modified_at: 2026-09-21T01:59:37.469726996Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity agent-surface from:session-0920
