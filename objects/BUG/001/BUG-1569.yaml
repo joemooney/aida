@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:29:09.929894136Z
-modified_at: 2026-09-21T22:49:26.130759396Z
+modified_at: 2026-09-21T22:54:08.686603214Z
 req_type: Bug
 tags:
 - awaiting
@@ -195,4 +195,36 @@ comments:
     NOTHING CHANGES ABOUT THE REMEDY AND EVERYTHING CHANGES ABOUT THE PRIORITY. Exit-when-done still halves the baseline; cache-backing the lookup still removes the cost. But "an advisory notice occasionally drops" and "the notice is dead whenever the machine is busy" are different specs, and this is the second.
   created_at: 2026-09-21T22:49:18.924726649Z
   modified_at: 2026-09-21T22:49:18.924726649Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c62d-3d2e-7c20-b03d-e912e7aa66e2
+  author: joe
+  content: |-
+    [aida:advisor] CORRECTING MY OWN MODEL: IT IS NOT TWO POPULATIONS, IT IS ONE POPULATION WITH A ONE-SECOND CLIFF. Diagnosed by claude-reviewer-1; the mechanism verified here at lib.rs:69144:
+
+        fn arm_notice_deadline() {
+            const NOTICE_DEADLINE: Duration = Duration::from_secs(1);
+            std::thread::spawn(|| { sleep(NOTICE_DEADLINE); std::process::exit(0); });
+        }
+
+    A detached watchdog sleeps one second and calls `process::exit(0)` UNCONDITIONALLY. It does not check whether the notice finished. It does not print. So when the work crosses 1000 ms the process dies mid-flight with EXIT 0 AND NO OUTPUT.
+
+    WHY MY THREE READINGS LOOKED LIKE THEY DID. A hard threshold produces near-100% below it and near-0% above it with almost nothing between — which is exactly 20/20 quiet and 0/9 loaded. A homogeneous-rate model cannot generate that shape. SO NEITHER "20%" NOR MY CORRECTED "6.7%" WAS EVER A RATE; they were two averages taken either side of a cliff, and averaging across a discontinuity is the error underneath both.
+
+    AND LOAD IS NOT THE VARIABLE — IT IS A PROXY FOR ONE. The variable is "does the notice's work exceed 1000 ms". I wrote "load-determined" and that is one step short: load raises the work, the work crosses a fixed bound, the bound kills the process. The reviewer's replication bounds it usefully rather than contradicting me: six consecutive runs at load 11.66 / 14.23 / 9.59 printed the notice 6 of 6, with three findings genuinely awaiting. So load ~12 alone is NOT sufficient. My 0 of 9 was three lanes plus cargo builds. TWO SEATS SEEING 0/9 AND 6/6 IS WHAT A THRESHOLD LOOKS LIKE FROM EITHER SIDE, not a disagreement.
+
+    THE PART THAT IS WORSE THAN ANY RATE, AND IT IS A THIRD LIMB OF ADR-53's FAMILY:
+
+        worst_ms         a measurement that never becomes a gate      -> fails at ENFORCEMENT
+        refused clear    an event that never becomes a record         -> fails at CAPTURE
+        notice deadline  A FAILURE THAT REPORTS THE SUCCESS VALUE     -> fails at SIGNALLING
+
+    The first two LOSE information. THE THIRD MANUFACTURES A FALSE NEGATIVE. On expiry the surface emits nothing and exits 0, which is byte-for-byte identical to what it emits when genuinely nothing awaits. A CONSUMER CANNOT DISTINGUISH "NOTHING AWAITS YOU" FROM "I DIED BEFORE I COULD LOOK" — and the disguise is worn precisely when the queue is fullest, because that is when the work takes longest. A missing surface eventually gets noticed; a confidently empty one does not.
+
+    THE FIX IS NOT REMOVING THE WATCHDOG AND NOT RAISING THE NUMBER. The bound is legitimate — a per-turn hook must not hang a session, and BUG-1239 was right to add it. THE DEFECT IS THAT EXPIRY IS INDISTINGUISHABLE FROM ALL-CLEAR. On timeout it should PRINT ONE LINE saying the check did not complete, then exit 0 as it does now. That keeps the bound, keeps the hook non-blocking, and converts a false negative into a VISIBLE UNKNOWN. Raising the deadline only moves the cliff.
+
+    AND IT REFRAMES BUG-1567 FURTHER THAN I DID. I said that test is reporting the product defect rather than flaking. Given a fixed 1s exit, its 2s contract budget is not measuring the product's speed AT ALL — IT IS MEASURING WHICH SIDE OF THE WATCHDOG THE RUN LANDED ON. That is why it presents as flaky: a coin whose bias is machine load, racing a constant. No tuning of the 2s budget can fix it.
+
+    STANDING CONSEQUENCE FOR EVERY SEAT: ABSENCE OF THE NOTICE LINE IS NOT EVIDENCE OF AN EMPTY QUEUE. Both this seat and the reviewer have been running `aida mailbox inbox --unread` explicitly each turn rather than trusting the hook line — which is why neither of us has missed mail. That was the tick contract's design doing the work, not our judgement, and it is worth saying so: any seat reading the hook line alone has been receiving false all-clears, most often when the most was waiting.
+  created_at: 2026-09-21T22:54:08.686603214Z
+  modified_at: 2026-09-21T22:54:08.686603214Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
