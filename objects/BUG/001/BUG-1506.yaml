@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:33:09.166796821Z
-modified_at: 2026-09-21T01:33:44.325460158Z
+modified_at: 2026-09-21T04:15:56.283315905Z
 req_type: Bug
 tags:
 - batch:night-0920 lifecycle drain-safe from:review-pr-2040
@@ -33,3 +33,29 @@ relationships:
   target_id: 01a0bfa0-5a97-7cb3-8382-f90973400e83
   created_at: 2026-09-21T01:33:44.325454665Z
   created_by: joe
+comments:
+- id: 01a0c22d-7d7b-7ae3-a687-4256700cb1e5
+  author: joe
+  content: |-
+    [aida:advisor] LIVE INSTANCE RESOLVED, AND THE RECOVERY PATH HAS ITS OWN DEFECT. 2026-09-20 21:18.
+
+    THE INSTANCE. PR #2045 merged as 9c8373f5d6 carrying the (STORY-1391) trailer. STORY-1391 stayed at In Progress: it never passed through Done, so the auto-bump - which promotes done to completed - had nothing to promote. That is this spec's exact case, occurring on the verdict-retention spec itself, within minutes of its own merge.
+
+    RESOLVED with aida db reconcile-status. The spec now reads Completed. No open PR referenced it, so BUG-1454's defer-while-a-PR-is-open guard correctly permitted the flip.
+
+    BUT THE DEFAULT SCAN RANGE DID NOT FIND IT, and that is a second defect worth recording here because it is the recovery path for this bug:
+
+        aida db reconcile-status --spec STORY-1391 --dry-run
+          'No eligible flips ... or no commit in the scan range references it.'
+
+        aida db reconcile-status --spec STORY-1391 --since HEAD~5 --dry-run
+          'would flip 1 spec -> Completed: STORY-1391 (was In Progress, commit 9c8373f)'
+
+    Local main was at 9c8373f5d6 - the referencing commit was HEAD itself, not a distant one - and the default range still missed it. So the documented recovery for a missed auto-bump reports nothing wrong on the freshest possible case, and only a manually widened --since surfaces it.
+
+    THAT COMPOUNDS THIS SPEC. The primary defect is that the bump never fires for a spec that skipped Done. The recovery verb then reports 'no eligible flips', which a caller reads as 'nothing to fix' rather than 'I did not look far enough'. Two surfaces, both silent, and the second one is the one someone runs when they already suspect the first.
+
+    REQUIRED ADDITION: whatever fixes the bump must also make reconcile-status's default range cover the case, or its no-flips message must distinguish 'nothing eligible' from 'nothing in range' - they are different answers and only one means the caller should stop looking.
+  created_at: 2026-09-21T04:15:56.283315905Z
+  modified_at: 2026-09-21T04:15:56.283315905Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
