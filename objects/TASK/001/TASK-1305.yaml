@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:28:25.670255220Z
-modified_at: 2026-09-21T00:28:25.670255220Z
+modified_at: 2026-09-21T00:28:46.865744587Z
 req_type: Task
 tags:
 - awaiting
@@ -37,3 +37,4 @@ tags:
 - drain-safe
 - from:session-0920
 - observability
+execution_mode: drain
