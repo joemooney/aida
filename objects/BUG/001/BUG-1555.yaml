@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T18:29:59.736304169Z
+modified_at: 2026-09-21T18:34:24.324219538Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -537,6 +537,60 @@ comments:
     ALSO WORTH RECORDING AS A DATA POINT RATHER THAN NOTICED AND DROPPED: macOS went FULLY GREEN on this run. That is the first macOS-green cross-platform leg observed today, and it is evidence AGAINST BUG-1556's arrival-rate thesis for this run. One run does not refute a rate. It is exactly the kind of result that gets discarded when a channel is known-red, which is BUG-1556's own subject, so it goes on the record.
   created_at: 2026-09-21T18:29:59.736304169Z
   modified_at: 2026-09-21T18:29:59.736304169Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c53f-70c4-7822-b65c-3db0a0459fd5
+  author: joe
+  content: |-
+    [aida:advisor] **MECHANISM 1 IS CONFIRMED END TO END. THE CAUSE IS NO LONGER IDENTIFIED-BUT-UNCONFIRMED.** Read from the Windows leg of dispatched run 35637049540, job 106456920451, by the advisor.
+
+        BUG-1555 line-ending probe on Windows
+        core.autocrlf = true
+        core.eol      = (unset)
+        --- the two sides the drift test compares ---
+          project copy: CRLF  (.aida/discipline/README.md)
+          master      : LF    (aida-core/templates/.aida/discipline/README.md)
+        --- every tracked project-copy guide ---
+          README.md: CRLF
+          advisor-role.md: CRLF
+          agent-agnostic-vs-claude-specific.md: CRLF
+          autonomous-burndown.md: CRLF
+          ... (the enumeration continues, all CRLF)
+
+    THE PREDICTION WAS REGISTERED BEFORE THE READING AND IT HELD. claude-reviewer-1 wrote, in advance: "if Windows reports CRLF on the project copy against LF on the master, mechanism 1 is confirmed end to end - precondition, activation, and both arms" and "if Windows reports LF on BOTH sides, mechanism 1 is FALSIFIED and BUG-1555 goes back to no surviving cause". The first outcome is what the runner reported. That advance registration is what makes this a confirmation rather than a story that fits.
+
+    ALL THREE PARTS ARE NOW OBSERVED RATHER THAN INFERRED:
+      PRECONDITION   `.gitattributes` pins `aida-core/templates/**` to `text eol=lf` and has no
+                     rule for `.aida/discipline/**`. Confirmed in the repo, and confirmed LIVE ON
+                     THE RUNNER: the master reads LF, the project copy reads CRLF, on the same
+                     checkout, at the same moment.
+      THE TRIGGER    `core.autocrlf = true` on the Windows runner. This was the last inference in
+                     the spec and the reason the cause was not recorded as closed. It is now a
+                     reading, not a deduction. It is also the value `actions/checkout` never prints,
+                     which is why the log-grep shortcut was correctly ruled out.
+      ACTIVATION     e9e2bc4328 added the content comparison on 2026-09-20T14:58:29Z, AFTER that
+                     day's nightly. The guard has therefore never had a green Windows baseline.
+      CONTROL ARM    macOS: autocrlf unset, both sides LF, discipline-pack test PASSES. The
+                     mechanism predicts the control as well as the case, and the control held.
+
+    THE LEDGER'S VERDICT IS UNCHANGED AND SHOULD STAY VISIBLE: mechanisms 2-6 stay dead, and mechanism 1 was killed earlier ONLY because the control used to kill it was void - the same test NAME across two dates with a different body. The lesson survives its own correction: an explanation that fits is not one that survived, and the way you find out is by checking the case where it predicts a failure that did not occur.
+
+    WHAT REMAINS OPEN ON THIS SPEC - the cause being confirmed closes one item, not the spec:
+      1. THE FIX: two-sided line-ending normalization AND two-sided trim in
+         `discipline_content_mismatches` (the trim is currently applied to the LOCAL side only,
+         which is the same one-sided shape as the bug), plus pinning `.aida/discipline/**` in
+         `.gitattributes` to match the master rule. GLOB THE DIRECTORY, NOT THE EXTENSION - now
+         backed by the empirical confirmation that the probe enumerated 26 `.md` files and
+         glossary.yaml was absent.
+      2. DEMONSTRATE-IT-STILL-FIRES: the case must include BOTH a CRLF-only change the normalizer
+         SHOULD erase AND a real content edit it MUST NOT, or the fix cannot be told from silencing.
+      3. The deletion blindness in `discipline_content_mismatches` (`.ok()?` silently skips a
+         missing project copy, so a DELETED guide reads clean) - fix the FUNCTION, not the call site.
+      4. The two probe findings from #2050's review: the headline pair mislabels README.md as one
+         of the compared sides when it is one of the three LOCALIZED_DISCIPLINE_GUIDES exclusions,
+         and the loop's `*.md` glob misses glossary.yaml.
+      5. The tree-wide sweep for other raw content comparisons with the same shape.
+  created_at: 2026-09-21T18:34:24.324219538Z
+  modified_at: 2026-09-21T18:34:24.324219538Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c528-482c-7ed0-85a1-8d70052bfedf
