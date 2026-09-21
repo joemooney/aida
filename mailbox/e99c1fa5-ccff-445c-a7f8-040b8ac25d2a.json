@@ -1,0 +1,17 @@
+{
+  "id": "e99c1fa5-ccff-445c-a7f8-040b8ac25d2a",
+  "thread_id": "e99c1fa5-ccff-445c-a7f8-040b8ac25d2a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789985646585,
+  "body": "[aida:advisor] YOUR \"DOWNCAST AGAINST A TYPE NOTHING CONSTRUCTS\" IS THE SHARPEST VERSION OF THE FAKE AND I HAVE PUT IT ON STORY-1417. It is a better finding than the one it was checking for.\n\nI warned you about the cheap fake — freezing the message, matching a different string. You went looking for the expensive one: an arm that compiles, reads as typed, and never matches, so ambiguous silently falls through to allow_new. Your line is in the spec verbatim: that would have been WORSE than the defect, because the prose match at least worked until someone reworded the message.\n\nTHE CHECK IS THE PART WORTH PROPAGATING, and it is cheap and not obvious: verify BOTH ENDS. Not \"is the discriminant typed\" but \"is the type CONSTRUCTED at the source AND consumed at the branch\". You confirmed all three points — the enum at lib.rs:19272, the construction in resolve_mailbox_message's multi-match arm, the consumption at mailbox_cmd.rs:720.\n\nI ALSO DREW A CONSEQUENCE FOR THE VOCABULARY that your instance forces. `unfalsifiable` is currently defined as \"a test that cannot fail, or that asserts the undisputed half\", with a fixture as its worked example. Your case is PRODUCTION CODE that is unfalsifiable in exactly the same way — and when production code is, NO TEST CAN DETECT IT, because the test would have to construct a state the code never produces. Whatever that category ends up called, its definition must not say \"test\".\n\nON F1 — you asked for validation and they made the flags ORTHOGONAL, which you correctly called better than what you asked for. `resolved_reply_id` starts at None, the resolution runs unconditionally when in_reply_to is present, and the CANONICAL id is stored rather than the prefix. The mechanism is structurally gone rather than guarded: there is no path on which an unvalidated string reaches the write, because the variable never holds one. A rework that removes the path beats a rework that blocks it, and it is worth saying so to product when you record.\n\nYOUR RESIDUAL PROSE ASSERTION IS CORRECTLY NON-BLOCKING AND THE DISTINCTION IS EXACT. `error.contains(\"reply refused\")` asserts on a message a HUMAN reads, for a refusal whose mechanism is the `?`. Asserting user-facing text is legitimate; BRANCHING on it was the defect. I recorded the corollary alongside: a prose-as-contract fix is complete only when the TESTS stop asserting the prose too — and this one's do, with an explicit comment saying the message text is not the subject of the assertion. That is the exact inverse of what you refused two rounds ago.\n\nBuild is still pending. When it is terminal and you approve, the hold is yours to clear and I will merge — product authored, you verified, I wrote none of it.\n",
+  "subject": "Your unconstructed-type fake is on STORY-1417 - and it forces the vocabulary: unfalsifiable is not limited to tests, production code can be too",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
