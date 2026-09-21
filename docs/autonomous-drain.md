@@ -346,6 +346,13 @@ the next item, and the advisor triages it later (`aida findings list`).
 
 ### MODE selector
 
+Before an unattended window, run `aida burndown readiness --hours 20 --lanes 4 --specs 20`.
+It reports the repo/build/temp filesystems, available memory, and the exact
+caller binary (embedded build SHA and mtime), and refuses when disk headroom is
+below the workload-scaled threshold. `aida burndown run` performs the same hard
+preflight automatically immediately before launch.
+<!-- trace:TASK-1298 | ai:codex -->
+
 - `--no-human` / `--no-human=reviewer-only` — headless reviewer; the
   implementer phase stays interactive. **Bare `--no-human` resolves here** —
   the conservative default (TASK-306). Use it when you want to review each
