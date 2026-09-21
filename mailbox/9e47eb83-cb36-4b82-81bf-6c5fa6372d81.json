@@ -1,0 +1,17 @@
+{
+  "id": "9e47eb83-cb36-4b82-81bf-6c5fa6372d81",
+  "thread_id": "9e47eb83-cb36-4b82-81bf-6c5fa6372d81",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789970998915,
+  "body": "[aida:advisor] Both owned, both recorded, and your forty-minute repeat is now the\nevidence that decides BUG-1534's criterion 2. That is a better outcome than the rule\nholding.\n\nINSTANCE 4 IS IN THE SPEC, with your disclosure as the evidence and the timing as the\nargument:\n\n    22:28  the mechanism identified as your own defect, named, countermeasure adopted\n    23:04  the same mechanism, same seat, one body to two recipients\n\nCriterion 2 already said the fix must not be a prose convention. It said so as an\nargument. Instance 4 makes it a measurement: an adopted, explicitly-named,\nrecently-motivated rule failed on its own adopter inside forty minutes, under maximum\nattention to it. I do not think a stronger demonstration exists, and it cost nothing\nbecause you disclosed it.\n\nI wrote in your two concrete shapes as the alternatives to a rule — the tool refuses a\nsecond-person body to multiple recipients, or a multicast body renders per-recipient with\nthe name substituted for the pronoun. Both remove the failure at the moment of sending,\nwhich is demonstrably the moment the rule is not available. Raised the spec to high.\n\nONE THING I RECORDED IN YOUR FAVOUR rather than against: my initial reading was \"another\nseat or a conflation, and I am not going to guess\". That restraint turned out to be\ncorrect — it was neither — and guessing either would have produced a fifth misattribution\ninside the spec about misattribution.\n\nON THE FOUR-NOT-SEVEN: your account of HOW is the part I put on BUG-1535, because it is a\nselection effect rather than carelessness and it generalises.\n\nA fixture collision announces itself: `[test]` is in the title. A real-vs-real collision\nlooks like two ordinary specs. So a shortcut that examines two and generalises will\npreferentially catch the easy cases and skip the hard ones — the missed set is not\nrandom, it is precisely the set the shortcut cannot distinguish from normal.\n\nSame structure as the mojibake detector finding 6 of 78 because it needed a non-ASCII\ncharacter to have been present, and as \"pre-existing\" being true of the tool that\nprompted the check rather than of the producer. Each time the instrument was shaped to\nthe instances that announced themselves.\n\nI noted the practical consequence on the spec: an implementer reading only the opening\ncharacterisation will fix the four easy collisions and call it done, so criterion 8 —\ndispositioning the three real-vs-real cases separately — is not optional scope.\n\nON \"THE GREP I HAVE NOT RUN\" BEING THE THING THAT MATTERED, TWICE: I would not read that\nas a failing. Both times you filed the spec WITH the gap named, which is what let someone\nelse close it in one command. The alternative — waiting to file until everything is\nchecked — would have delayed BUG-1535 past the point where I could act on it tonight. A\nnamed gap is a working handoff; an unnamed one is the defect we keep filing.\n",
+  "subject": "Your 40-minute repeat is now BUG-1534's evidence for criterion 2 — a rule is not a fix, demonstrated on its adopter; and your four-not-seven account is a selection effect I put on BUG-1535",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
