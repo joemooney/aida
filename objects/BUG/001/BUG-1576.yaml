@@ -54,7 +54,66 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:06:54.901043014Z
-modified_at: 2026-09-21T22:06:54.901043014Z
+modified_at: 2026-09-21T22:34:26.747359305Z
 req_type: Bug
 tags:
 - agent-surface papercut orchestrator
+comments:
+- id: 01a0c61b-343b-7340-b80d-c4c75382b66f
+  author: joe
+  content: |-
+    [aida:advisor] THE RECOVERY HINT IS NOT MERELY STALE ON ONE ROW - IT WOULD ACTIVELY REGRESS A PR. Found by claude-reviewer-1 by comparing commit subjects across branches; every claim below re-verified by the advisor in this checkout.
+
+    ALL FOUR -rework BRANCHES ARE LOCAL-ONLY - no ref on origin:
+
+        task-1274-rework  local dbf44b0987  origin NONE
+        task-1289-rework  local 84a7ea68a0  origin NONE
+        bug-1288-rework   local 25d037e0a9  origin NONE
+        bug-1480-rework2  local 8e2589c0b4  origin NONE
+
+    THE DANGEROUS ROW. `TASK-1274, task-1274-rework, 10 ahead, recovery: aida pr ship task-1274-rework`. The relationship is THE INVERSE of what the row implies:
+
+        subjects in task-1274-rework absent from the PR branch    0
+        subjects on the PR branch absent from task-1274-rework    2
+
+    and the two it lacks are exactly the fixes the PR exists for:
+
+        ci(gitlab): fix the notice-watchdog race that was actually failing the mirror's test job
+        ci(gitlab): inject the notice deadline instead of raising it globally
+
+    RUNNING THE DISPLAYED COMMAND WOULD PUSH A BRANCH MISSING THE NOTICE-DEADLINE FIX, over a PR currently held at CHANGES REQUESTED. The row does not merely mislead; it hands the reader a command that undoes the work.
+
+    WHY THE ROW CANNOT TELL, AND IT IS NOT A BUG IN THE SORT. The "ahead" number is AHEAD-OF-MAIN. A stale rebased duplicate of already-pushed work scores exactly as high as genuinely new work, BECAUSE BOTH ARE EQUALLY FAR FROM MAIN. Ahead-of-main cannot distinguish "10 commits you have not shipped" from "10 commits you shipped already, under different shas, on a differently-named branch". The comparison that separates them is BRANCH VERSUS ITS OWN SPEC'S OPEN PR HEAD, and nothing computes it.
+
+    THE OTHER THREE ARE DIFFERENT SHAPES, WHICH IS THE POINT - ONE RULE WILL NOT COVER THEM:
+
+        BUG-1288   bug-1288-rework strictly supersedes bug-1288-work (13 unique / 0)  -> hint CORRECT
+        BUG-1480   bug-1480-rework2 supersedes rework supersedes work                 -> hint CORRECT
+        TASK-1289  NEITHER supersedes: rework has 20 unique subjects, work has 1      -> SILENTLY LOSSY
+
+    TASK-1289's orphan commit is `fix(lifecycle): keep express preflight enabled (TASK-1289)`, on task-1289-work and absent from task-1289-rework. Ship rework and that fix is dropped; ship work and twenty commits are. The row offers `aida pr ship task-1289-rework` with no indication anything is left behind.
+
+    SO: RIGHT ABOUT 2 OF 4, ACTIVELY WRONG ABOUT 1, SILENTLY LOSSY ON 1. That is a WORSE profile than being wrong about all four, because the two correct rows train the reader to trust the third. A surface that is reliably wrong gets checked; a surface that is usually right does not.
+
+    THE DETERMINATION, since the reviewer explicitly left it here: THIS IS BOTH, AND THE ROW-LEVEL FIX IS NOT OPTIONAL. The row-level fix is correct and should ship - compare the branch against ITS SPEC'S OPEN PR HEAD, not against main. But the governing property is the one STORY-1434 also instances: A SURFACE CONFIDENTLY RENDERING A STATE IT CANNOT DISTINGUISH.
+
+    THE SHARPER RULE THIS YIELDS, and it is the part worth carrying beyond this spec: A LISTING MAY BE WRONG AT LOW COST; AN IMPERATIVE MAY NOT. `aida awaiting` could list all four branches with no harm done - a reader would look. The damage is entirely in the `recovery:` column, which tells the reader what to RUN. AN EMITTED COMMAND MUST BE SAFE UNDER EVERY STATE THE SURFACE CANNOT DISTINGUISH, or it must not be emitted. Where the surface cannot tell a stale duplicate from unshipped work, the correct output is the row with NO hint and a note saying why - not a plausible command.
+
+    ADDED ACCEPTANCE:
+    - No `recovery:` command is emitted for a branch the surface cannot prove is ahead of its
+      spec's own open PR head. Absence of a hint is the safe state; a wrong hint is not.
+    - Where a branch and its PR head have diverged in BOTH directions (the TASK-1289 shape), say so
+      explicitly and name what each side would lose. Do not pick one.
+    - A local-only branch is labelled as local-only. Four of four here have no origin ref and the
+      surface does not say so.
+    - DEMONSTRATE against these four real branches, by name, since they are one instance of each of
+      the three shapes and were produced by ordinary use rather than constructed.
+
+    NOT ESTABLISHED, AND THE REVIEWER WAS RIGHT NOT TO ASSERT IT: why the duplicates exist at all -
+    whether a drain created -rework after -work was already pushed, or a rebase branched rather than
+    forced. The reflog shows task-1274-rework created 12:18:56 and rebased twice, ending 13:41:34,
+    but reflog is per-clone and cannot attribute across seats. That is a question for whoever ran
+    those lanes, not an inference.
+  created_at: 2026-09-21T22:34:26.747359305Z
+  modified_at: 2026-09-21T22:34:26.747359305Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
