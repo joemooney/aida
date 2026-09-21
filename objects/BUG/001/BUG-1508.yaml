@@ -2,7 +2,7 @@ id: 01a0c1a8-f8f0-72d3-bb2c-a68a4e55125d
 spec_id: BUG-1508
 agreed_id: BUG-1508
 title: A routed review entry does not say whether a verdict already exists at the current head, so the queue read five-deep when one review was outstanding
-description: |
+description: |-
   A reviewer-routed queue entry does not carry whether a verdict already exists at the PR's current head, so the queue cannot distinguish review-to-do from review-already-done. Measured tonight, it overstated the reviewer's real workload by five to one.
 
   MEASURED 2026-09-20 18:49 by the reviewer seat, comparing each PR's head sha against its recorded verdict's reviewed_sha:
@@ -29,12 +29,30 @@ description: |
   5. Measured before and after on a real queue, with the counts recorded. Tonight's five-to-one is the baseline.
 
   NOT IN SCOPE: the blind-full-replace behaviour of verdict recording, which is BUG-1505, and the stale-verdict-versus-stale-head comparison itself, which BUG-1505 criterion 2 must make reliable first - 86 percent of existing verdicts carry no sha, so criterion 1 here depends on that landing.
+
+
+  BASELINE CORRECTED 2026-09-20 19:14 - THE ORIGINAL FIVE-TO-ONE FIGURE WAS MEASURED ON A SAMPLE NOBODY KNEW WAS A SAMPLE. `aida awaiting` reports 5 reviewer rows; `aida queue list --for reviewer` reports 22 (23 at re-measure). The five triaged were the awaiting rows, not the queue, so the denominator was wrong by more than four times. Full triage of all 22, by verdict reviewed_sha against current head:
+
+      15  provably refused at the current head   1972 1974 1978 1981 1999 2001 2003 2006
+                                                 2014 2026 2027 2030 2033 2034 2043
+       6  permanently indeterminate              1984 1986 1998 2009 2039 2040
+       1  unreviewed, and conflicting/dirty      2029
+
+      ACTIONABLE: ZERO of 22. The single unreviewed entry is blocked on a rebase, not on a reviewer. The corrected baseline is 0-of-22, not 1-of-5, and it makes the case for this spec stronger rather than weaker.
+
+  7. THE TWO SURFACES DISAGREE IN OPPOSITE DIRECTIONS, and criterion 4 must cover both. `aida awaiting` - which leads `aida status` and feeds the per-turn notice - shows 5 while the queue holds 22. The 5 are not a filtered subset: all five fall in the provably-refused set, so it is showing some first-N rather than selecting by verdict. One surface understates depth fourfold, the other overstates actionable work by the whole queue, and neither reports the number that decides anything. A capped surface must print "5 of 22" rather than "5" - a cap that hides its own denominator is indistinguishable from a complete answer.
+
+  8. SOME VERDICTS CAN NEVER BE PLACED, AND CRITERION 1 IS UNACHIEVABLE FOR THEM. Criterion 1 requires knowing whether a verdict describes the CURRENT head. For six of the 22 that is undecidable from disk: the verdict carries no reviewed_sha AND no recorded_at, so neither a sha comparison nor a date comparison is possible. Corpus-wide the figure is larger - 409 of 543 verdict files carry NEITHER field. A migration can normalise a spelling and impose a schema; it cannot invent a sha that was never written for a head that has since moved. So this is not merely blocked on BUG-1505, it is permanently unachievable for that population.
+
+      REQUIRED: say what happens to a verdict that can never be placed. Treating it as ABSENT is the PRIN-5 answer and costs a re-review. Treating it as CURRENT is the reassuring answer and is precisely how work merges behind a stale verdict. Pick the first, or justify the second in writing. Three of the six were recorded tonight by the reviewer seat on a stale binary, so this population is still growing until the rebuild lands.
+
+  9. A MERGED PR LEAVES A QUEUE ENTRY GC CANNOT COLLECT - split to BUG-1512, filed and queued. Verified instance: STORY-1362 routed to reviewer, status draft, for PR #1986 merged at 17:54:33Z. `queue gc` keys off the review STORY's status, which never moves, so the entry is permanently un-collectable. It compounds with this spec: depth is overstated by stale-verdict entries AND by merged-PR entries at the same time.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:51:11.600098076Z
-modified_at: 2026-09-21T02:09:51.664183805Z
+modified_at: 2026-09-21T02:12:48.908778583Z
 req_type: Bug
 tags:
 - batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
