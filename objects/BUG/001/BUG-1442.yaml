@@ -36,12 +36,12 @@ description: |
   5. Check whether other TOON projections share the fallback. If `list` or `graph` collapse types the same way, say so; if this is the only site, say that, because a shared helper would mean fixing one place and a local mapping would mean auditing several.
 
   Found while recording a BlockedBy edge on BUG-1420: the confirmation said BlockedBy, the piped `show` said Related, and the store said BlockedBy. The disagreement is the projection.
-status: Done
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:55:30.106400060Z
-modified_at: 2026-09-20T20:24:47.364918428Z
+modified_at: 2026-09-21T04:46:34.779224351Z
 req_type: Bug
 tags:
 - agent-surface
