@@ -3,63 +3,121 @@ spec_id: BUG-1531
 agreed_id: BUG-1531
 title: The unshipped-work detector counts local PR-checkout branches, and the same PR under two naming conventions twice, so the awaiting banner is permanently non-zero from artifacts
 description: |
-  Measured by the driver advisor 2026-09-20 22:03 local, on main at 0b474a66d1, while
-  verifying the reviewer's alert-fatigue report on aida awaiting (BUG-1530).
+  ESCALATED AND REWRITTEN 2026-09-20 22:14 by the driver advisor. The original filing had
+  the MECHANISM WRONG and the SEVERITY wrong. Both corrections are the reviewer's; the
+  verification below is mine.
 
-  This is a SECOND, independent mechanism making that banner constant. BUG-1530 is that
-  the banner names the wrong seat's channels. This is that part of its population is an
-  artifact of local branch accumulation.
+  WHAT I ORIGINALLY CLAIMED, AND WHY IT WAS WRONG. I wrote that "two code paths create a
+  local checkout branch for one PR under two naming conventions". There is ONE code path.
+  Every hyphen-form creation site uses format!("pr-{}", n) - lib.rs:30221, lib.rs:76605,
+  pr_cmd.rs:253, plan_cmd.rs:394 - and there is no no-hyphen creation site in Rust,
+  scripts, skills or templates. The four no-hyphen branches were HAND-TYPED fetches by
+  seats investigating PRs, readable in the reflogs:
 
-  THE SAME PR APPEARS TWICE UNDER TWO SPELLINGS. From aida awaiting, unshipped_work:
+      pr1972          fetch origin refs/pull/1972/head:pr1972 --quiet
+      pr2009          fetch origin refs/pull/2009/head:pr2009 --quiet
+      pr2042/pr2043   fetch origin refs/pull/2042/head:pr2042 refs/pull/2043/head:pr2043
+      pr2035-review   fetch -q origin pull/2035/head:pr2035-review
 
-      BUG-1420,pr-2009,5,20h    and    BUG-1420,pr2009,5,20h
-      BUG-1420,pr-2043,3h       and    BUG-1420,pr2043,3h
-      TASK-1289,pr-1972,4,22h   and    TASK-1289,pr1972,4,22h
+  At least three are the reviewer's own investigation branches - pr2042/pr2043 fetched in
+  one command while comparing the branch-crossing behind their 18:52 and 18:53 holds, and
+  pr2035-review created at 21:18 to read PR #2035's diff. So I filed a defect about
+  pollution that an investigating seat had introduced, and attributed it to the system.
+  Recording that because it is the second instance tonight of an observer changing the
+  thing observed and the next reader taking the change as the system's own behaviour.
 
-  They are not two branches with similar names. They are the same commits:
+  Also corrected: there are THREE duplicate pairs, not two. I missed
+  pr-2043 = pr2043 = 35de6d3abb.
 
-      pr-2009 = 065f3df8aa    pr2009 = 065f3df8aa     identical
-      pr-1972 = 6512f1312a    pr1972 = 6512f1312a     identical
+  THE ACTUAL DEFECT IS MORE GENERAL AND MUCH WORSE.
 
-  Both spellings exist as LOCAL branches and NEITHER exists on origin - so two code paths
-  are creating a local checkout branch for one PR under two naming conventions, and the
-  detector counts each as separate unshipped work.
+  THE DETECTOR TREATS ANY LOCAL pr* BRANCH AS UNSHIPPED WORK, and attaches a RECOVERY
+  HINT telling the reader to ship it. A branch fetched from refs/pull/N/head is by
+  definition already published - it cannot be unshipped. Deduplicating the spellings
+  would fix three rows and leave the mechanism; pr2035-review has no pair at all.
 
-  THE POPULATION IS LARGER THAN THE SYMPTOM. There are 510 local branches matching pr*.
-  These are PR-checkout branches, not work anybody authored on this machine, and they
-  accumulate without bound.
+  THE HINT IS A MERGE-GATE BYPASS. Observed verbatim in aida awaiting:
 
-  WHAT I DID NOT ESTABLISH, stated so the fixer does not inherit an assumption. I verified
-  two duplicate PAIRS are byte-identical and that 510 pr* local branches exist. I did NOT
-  audit all 40 unshipped entries, and I do NOT claim all 40 are artifacts - several name
-  real spec branches (story-418-2, bug-478-479-resume-lease) with ages over 100 days,
-  which are a different question. The claim here is that the count includes duplicates and
-  PR-checkout branches, not that the whole count is noise.
+      BUG-1470,pr2035-review,2,"50m (first seen 2026-09-21T05:00:14Z)",
+        aida pr ship pr2035-review
 
-  WHY IT MATTERS. unshipped: 40 is a component of the standing "awaiting you" banner. A
-  banner that cannot reach zero trains its readers to stop looking - which is exactly what
-  the reviewer reported happening on their seat tonight, and why a genuinely mergeable
-  unheld PR reached them through their own poll instead of through this surface.
+  VERIFIED STATE, all four legs checked by the driver advisor at 22:13:
+
+      pr2035-review head          7a4c4f52eceeffd9df698ed4d72fe1bb3205bab0
+      PR #2035 head               7a4c4f52eceeffd9df698ed4d72fe1bb3205bab0   IDENTICAL
+      .aida/review-verdicts/BUG-1470.json
+                                  verdict request-changes
+                                  reviewed_sha 7a4c4f52eceeffd9df698ed4d72fe1bb3205bab0
+                                  reviewed_branch bug-1470-work
+      pr2035-review on origin     NO - local only
+      merge-hold markers          keyed PER PR NUMBER (PR-1972, PR-1974, PR-1978, ...)
+
+  So the recommended command targets a snapshot of the exact commit a reviewer refused.
+
+  THE CHAIN. aida pr ship --help: "With no <N>, the command targets the current branch's
+  open PR - CREATING ONE via gh pr create (deriving title/body from the latest commit) IF
+  NONE EXISTS", and it is documented as "for human-pre-approved work where NO ORCHESTRATOR
+  REVIEW PHASE IS NEEDED".
+
+    1. gh pr create opens a NEW PR from the refused head
+    2. the new PR has no aida:merge-hold label and no .aida/merge-holds/PR-<new> marker,
+       because BOTH ARE KEYED PER PR NUMBER - merge-hold-gate passes GREEN
+    3. squash-merge to main
+    4. the commit carries the (BUG-1470) trailer, so aida pull auto-bumps BUG-1470 to
+       Completed
+
+  Net: a RequestChanges verdict, a merge hold, and the advisor's three-child scope
+  disposition on BUG-1470 are all bypassed, and the spec closes as done - recommended by
+  the coordination surface, in a field labelled "recovery".
+
+  NOT VERIFIED, DELIBERATELY. Nobody ran the command. Whether gh pr create's push leg
+  succeeds non-interactively from a local-only branch is unconfirmed, and that single leg
+  is the difference between a severe bypass and a severe near-miss. It is not worth
+  executing to find out. Steps 2, 3 and 4 are verified from the code and the workflow
+  regardless of step 1.
+
+  THE EXPOSURE IS NOT LIMITED TO HAND-MADE BRANCHES. The same hint is attached to the
+  code-created hyphen-form snapshots - pr-2009 and pr-1972 both render
+  "aida pr ship pr-<n>" in the same table. Three of the affected rows are snapshots of
+  PRs carrying live reviewer holds (#2035, and #2042/#2043 from the 18:52/18:53
+  branch-crossing holds), so the surface currently offers a hold-free path around three
+  separate refusals.
 
   ## Acceptance
-  1. The detector does not report the same underlying commit twice because two local
-     branches point at it. Deduplicate by commit, not by branch name.
-  2. Local PR-checkout branches are distinguished from authored work. A branch that
-     merely checks out someone else's PR is not this machine's unshipped work.
-  3. The two naming conventions are reconciled - one convention, or the second is
-     recognised as an alias of the first. Identify both producers; a fix that changes one
-     writer leaves the other creating duplicates.
-  4. Entries that ARE real - a genuine authored branch never pushed - keep being reported.
-     A fix that suppresses the whole channel is not acceptable: the 100-day-old spec
-     branches are a real signal.
-  5. A test with two local branches at the same commit asserts one entry, and a test with
-     two genuinely different unshipped branches asserts two.
+  1. A branch fetched from refs/pull/N/head is a published snapshot and is NEVER reported
+     as unshipped work. This removes every affected row including the ones with no
+     duplicate pair, and does not depend on recognising a naming convention.
+  2. NO surface emits a "ship" hint for a branch whose head equals an open PR's head.
+     This is the safety floor and it is INDEPENDENT of criterion 1: even where the
+     classification is correct, the recommended ACTION must never be one that opens a
+     second PR for a commit that already has one.
+  3. A ship hint is NEVER emitted for a head carrying an unresolved RequestChanges
+     verdict, on ANY branch. The verdict names a sha - 7a4c4f52ecee here - and anything
+     pointing at that sha is refused work regardless of which ref reaches it. THIS IS THE
+     CRITERION NOT TO TRIM: 1 and 2 fix this shape, 3 makes a refusal bind to a COMMIT
+     rather than to a PR NUMBER, which is the general form of the hole. It is the same
+     predicate BUG-1522 criterion 6 requires - read the verdict, not the PR.
+  4. Genuine unshipped work still reports. Several entries are real authored spec branches
+     over 100 days old (story-418-2, bug-478-479-resume-lease); a fix that suppresses the
+     whole channel is not acceptable.
+  5. A test asserts a refs/pull-derived branch produces no unshipped row and no ship hint,
+     and a test asserts a genuinely unpushed authored branch still produces both.
+  6. A test asserts no ship hint is produced for a sha carrying an unresolved
+     request-changes verdict, driven from a verdict fixture rather than from a PR number.
+
+  SPLIT OUT: the 500 accumulated pr-N branches are a separate concern, filed separately.
+  They are the bulk but they are a cleanup problem; this spec is the classification and
+  the hint.
+
+  CREDIT: mechanism, escalation and criteria 1-3 are the reviewer's, from their 22:11 and
+  22:12 reports. The four-leg verification and the merge-hold-keying check are the driver
+  advisor's.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:06:55.400149929Z
-modified_at: 2026-09-21T05:07:11.368798114Z
+modified_at: 2026-09-21T05:13:44.263284683Z
 req_type: Bug
 tags:
 - parent:EPIC-62 awaiting unshipped-work alert-fatigue severity:operational
