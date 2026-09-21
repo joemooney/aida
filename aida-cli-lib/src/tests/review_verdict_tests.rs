@@ -19,6 +19,7 @@ fn rc(kind_raw: &str, sha: Option<&str>) -> RecordedVerdict {
         review_comment: None,
         findings: Vec::new(),
         surviving_findings: Vec::new(),
+        recorded_by: None,
     }
 }
 

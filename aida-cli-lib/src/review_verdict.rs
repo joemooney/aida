@@ -122,6 +122,11 @@ pub struct RecordedVerdict {
     /// that already reads a verdict gets the signal without a new argument.
     // trace:STORY-1391 | ai:claude
     pub surviving_findings: Vec<String>,
+    /// STORY-1419: the seat that recorded this verdict. Already written by
+    /// `record_verdict`; it was simply never parsed back, so a consumer wanting
+    /// to route a row to the reviewer WHO REFUSED had no way to ask.
+    // trace:STORY-1419 | ai:claude
+    pub recorded_by: Option<String>,
 }
 
 /// Path of the per-spec verdict file. Spec ids are upper-cased so
@@ -164,6 +169,7 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         raw,
         reviewed_sha: str_field("reviewed_sha"),
         reviewed_branch: str_field("reviewed_branch"),
+        recorded_by: str_field("recorded_by"),
         recorded_at: str_field("recorded_at"),
         summary: str_field("summary"),
         comment_url: str_field("comment_url"),

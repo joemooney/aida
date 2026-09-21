@@ -38,6 +38,7 @@ fn pr_item(number: u64, branch: &str) -> status_cleanup::OpenPrItem {
         ci_rollup: Some("pass".to_string()),
         mergeable: Some("MERGEABLE".to_string()),
         review_decision: None,
+        head_sha: None,
     }
 }
 

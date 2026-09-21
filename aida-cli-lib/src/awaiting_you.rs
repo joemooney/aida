@@ -84,6 +84,131 @@ pub(crate) struct AwaitingReport {
     /// per-turn notice path skips the network-backed workflow probe.
     // trace:STORY-1043 | ai:codex
     pub nightly_red: Option<NightlyRedItem>,
+    /// STORY-1419: PRs whose rework has landed on a refusal this seat recorded
+    /// — `head != reviewed_sha` on a blocking verdict. Three times in one night
+    /// a reviewer found this by sweeping heads by hand or was told by another
+    /// agent; the signal existed and no surface reported it. Full report only:
+    /// it needs the PR snapshot, which the per-turn notice path skips.
+    // trace:STORY-1419 | ai:claude
+    pub rework_ready: Vec<ReworkReadyItem>,
+}
+
+/// STORY-1419: one PR whose rework has landed on a refusal you recorded.
+///
+/// The signal is exactly `head != reviewed_sha` on a PR carrying a blocking
+/// verdict. Both shas are reported and NOTHING is classified: whether the move
+/// was a rebase or a real rework is the reviewer's call, and inferring it is
+/// precisely the judgement that proved unreliable when attempted elsewhere.
+// trace:STORY-1419 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReworkReadyItem {
+    pub pr: u64,
+    pub spec: Option<String>,
+    /// The sha the refusal was recorded against.
+    pub reviewed_sha: String,
+    /// Where the PR is now.
+    pub head_sha: String,
+}
+
+/// One PR's inputs to the rework-ready test, assembled by the caller so the
+/// decision itself stays pure and testable without a forge or a store.
+// trace:STORY-1419 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct ReworkCandidate {
+    pub pr: u64,
+    pub head_sha: String,
+    pub spec: Option<String>,
+    /// True when the recorded verdict BLOCKS (RequestChanges / Rejected).
+    pub verdict_blocks: bool,
+    /// The verdict's `reviewed_sha`, absent when the writer recorded none.
+    pub reviewed_sha: Option<String>,
+    /// The seat that recorded the verdict, absent when the writer recorded none.
+    pub recorded_by: Option<String>,
+}
+
+/// Build one candidate from the parts the caller has, deriving the spec id from
+/// the head branch.
+///
+/// STORY-1419 review: `spec` was hardcoded `None` at the single production call
+/// site, so the advertised row could never show a spec — and the test that
+/// asserted the spec renders HAND-BUILT the item and bypassed this mapping
+/// entirely. The mapping is a function now precisely so a test can reach it;
+/// inline construction at the call site is what made it untestable.
+// trace:STORY-1419 | ai:claude
+pub(crate) fn rework_candidate_from_parts(
+    pr: u64,
+    head_sha: &str,
+    head_branch: &str,
+    verdict_blocks: bool,
+    reviewed_sha: Option<&str>,
+    recorded_by: Option<&str>,
+) -> ReworkCandidate {
+    ReworkCandidate {
+        pr,
+        head_sha: head_sha.to_string(),
+        // the branch is the only place the spec reliably appears; the verdict
+        // is PR-keyed and carries no spec id of its own
+        spec: crate::pr_ship::extract_spec_ids_from_text(head_branch)
+            .into_iter()
+            .next(),
+        verdict_blocks,
+        reviewed_sha: reviewed_sha.map(str::to_string),
+        recorded_by: recorded_by.map(str::to_string),
+    }
+}
+
+/// Which PRs have moved past the refusal recorded against them.
+///
+/// Scoped to `seat` when it is known, so the row reaches the reviewer who
+/// refused rather than everyone. When the seat is unknown every row is
+/// returned — the same choice `pending_briefs` makes for an unidentifiable
+/// agent, because a missed handoff costs more than a surplus line.
+///
+/// DEGRADES TO SILENCE, NEVER TO A WRONG ROW. A verdict carrying no
+/// `reviewed_sha` yields nothing: there is no sha to compare, so the honest
+/// output is the same silence as before rather than a guess. That is BUG-1538's
+/// blast radius showing through here, and it is why this cannot claim full
+/// coverage until provenance is always written.
+// trace:STORY-1419 | ai:claude
+pub(crate) fn rework_ready_rows(
+    candidates: &[ReworkCandidate],
+    seat: Option<&str>,
+) -> Vec<ReworkReadyItem> {
+    candidates
+        .iter()
+        .filter(|c| c.verdict_blocks)
+        .filter(|c| match (seat, c.recorded_by.as_deref()) {
+            (Some(me), Some(who)) => who.contains(me),
+            // unknown on either side: surface it rather than hide it
+            _ => true,
+        })
+        .filter_map(|c| {
+            let reviewed = c
+                .reviewed_sha
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())?;
+            let head = c.head_sha.trim();
+            if head.is_empty() || shas_match(head, reviewed) {
+                return None;
+            }
+            Some(ReworkReadyItem {
+                pr: c.pr,
+                spec: c.spec.clone(),
+                reviewed_sha: reviewed.to_string(),
+                head_sha: head.to_string(),
+            })
+        })
+        .collect()
+}
+
+/// Sha equality that tolerates truncation on either side — verdict writers
+/// record full or short shas depending on the path, and a short-vs-long
+/// mismatch is NOT a moved head.
+// trace:STORY-1419 | ai:claude
+fn shas_match(a: &str, b: &str) -> bool {
+    let n = a.len().min(b.len()).min(40);
+    n >= 7 && a[..n].eq_ignore_ascii_case(&b[..n])
 }
 
 /// Pending-worker-directives summary for the awaiting-you report: how many
@@ -251,6 +376,7 @@ impl AwaitingReport {
             // trace:STORY-1226 | ai:claude — due seat jobs are one row.
             + (if self.cron.due > 0 { 1 } else { 0 })
             + self.unshipped_work.len()
+            + self.rework_ready.len()
             + (if self.nightly_red.is_some() { 1 } else { 0 })
             + self.reviewer_queue_items.len()
             + (if self.shelved_total > 0 { 1 } else { 0 })
@@ -287,6 +413,33 @@ impl AwaitingReport {
         // pointer rather than a per-finding list), then the mail line,
         // then the worker-directives line (another collapsed breadcrumb),
         // then reviewer-queue items, then escalations.
+        // STORY-1419: rework-ready first — a reviewer who refused is the gate,
+        // and the round cannot move until they look. Deliberately reports BOTH
+        // shas and does not say whether the move was a rebase or a rework; that
+        // judgement is the reviewer's and inferring it is unreliable.
+        // trace:STORY-1419 | ai:claude
+        for item in &self.rework_ready {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            let spec = item
+                .spec
+                .as_deref()
+                .map(|s| format!(" ({s})"))
+                .unwrap_or_default();
+            writeln!(
+                w,
+                "  {} PR-{}{} moved past your refusal — reviewed {}, now {}",
+                "🔄".cyan(),
+                item.pr.to_string().bold(),
+                spec,
+                short_sha_for_row(&item.reviewed_sha).dimmed(),
+                short_sha_for_row(&item.head_sha).bold(),
+            )?;
+            budget -= 1;
+        }
+
         for pr in &self.mergeable_prs {
             if budget == 0 {
                 overflow += 1;
@@ -654,6 +807,13 @@ impl AwaitingReport {
 }
 
 /// `"{n} {singular|plural}"` — the tiny count formatter the compact line uses.
+/// Row-length sha for the awaiting surface. Purely cosmetic — the comparison
+/// that decides a row is done on the full values.
+// trace:STORY-1419 | ai:claude
+fn short_sha_for_row(sha: &str) -> String {
+    sha.chars().take(10).collect()
+}
+
 fn pluralize(n: usize, singular: &str, plural: &str) -> String {
     format!("{} {}", n, if n == 1 { singular } else { plural })
 }
@@ -718,6 +878,7 @@ mod tests {
             ci_rollup: ci.map(String::from),
             mergeable: mergeable.map(String::from),
             review_decision: verdict.map(String::from),
+            head_sha: None,
         }
     }
 
@@ -755,6 +916,118 @@ mod tests {
     /// backlog in the shared role inbox. Deleting the operator's three drives
     /// the operator-gated count to 0 — it must NEVER shift to the role
     /// backlog's size (the observed 3 → 18 jump).
+    fn candidate(pr: u64, head: &str, reviewed: Option<&str>, by: Option<&str>) -> ReworkCandidate {
+        ReworkCandidate {
+            pr,
+            head_sha: head.to_string(),
+            spec: Some(format!("BUG-{pr}")),
+            verdict_blocks: true,
+            reviewed_sha: reviewed.map(str::to_string),
+            recorded_by: by.map(str::to_string),
+        }
+    }
+
+    // STORY-1419: the signal is head != reviewed_sha on a blocking verdict.
+    // trace:STORY-1419 | ai:claude
+    #[test]
+    fn a_moved_head_on_a_blocking_verdict_is_rework_ready() {
+        let rows = rework_ready_rows(
+            &[candidate(
+                2014,
+                "f95b30853e",
+                Some("3310400503"),
+                Some("claude-reviewer-1"),
+            )],
+            None,
+        );
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].pr, 2014);
+        assert_eq!(rows[0].reviewed_sha, "3310400503");
+        assert_eq!(rows[0].head_sha, "f95b30853e");
+    }
+
+    // The unmoved head is the common case and must stay silent, or the row
+    // fires on every held PR and stops meaning anything.
+    // trace:STORY-1419 | ai:claude
+    #[test]
+    fn an_unmoved_head_is_not_rework_ready() {
+        assert!(rework_ready_rows(
+            &[candidate(2001, "ffac563445", Some("ffac563445"), None)],
+            None
+        )
+        .is_empty());
+    }
+
+    // Verdict writers record full or short shas depending on the path; a
+    // short-vs-long pair is the SAME commit, not a moved head.
+    // trace:STORY-1419 | ai:claude
+    #[test]
+    fn a_truncated_sha_is_not_a_moved_head() {
+        assert!(rework_ready_rows(
+            &[candidate(
+                2030,
+                "293da2d0cc9404f5226ad4deef89c0bc37e97c81",
+                Some("293da2d0cc"),
+                None
+            )],
+            None
+        )
+        .is_empty());
+    }
+
+    // BUG-1538's blast radius: no reviewed_sha means nothing to compare, so the
+    // honest output is silence. Asserted explicitly so a later change that
+    // starts GUESSING here fails loudly.
+    // trace:STORY-1419 | ai:claude
+    #[test]
+    fn a_verdict_without_provenance_degrades_to_silence_not_a_guess() {
+        assert!(rework_ready_rows(&[candidate(2009, "065f3df8aa", None, None)], None).is_empty());
+        assert!(
+            rework_ready_rows(&[candidate(2009, "065f3df8aa", Some("   "), None)], None).is_empty(),
+            "a blank reviewed_sha is absent provenance, not a sha"
+        );
+    }
+
+    // A non-blocking verdict is not a refusal, so its head moving is ordinary
+    // progress rather than something the reviewer gates.
+    // trace:STORY-1419 | ai:claude
+    #[test]
+    fn a_non_blocking_verdict_never_produces_a_row() {
+        let mut approved = candidate(2046, "f56e089371", Some("be6a8eecb5"), None);
+        approved.verdict_blocks = false;
+        assert!(rework_ready_rows(&[approved], None).is_empty());
+    }
+
+    // Scoped to the seat that refused — and UNKNOWN on either side surfaces
+    // rather than hides, because a missed handoff costs more than a spare line.
+    // trace:STORY-1419 | ai:claude
+    #[test]
+    fn rows_are_scoped_to_the_refusing_seat_but_unknown_surfaces() {
+        let mine = candidate(
+            2014,
+            "aaa1111",
+            Some("bbb2222"),
+            Some("claude-reviewer-1 (claude reviewer seat)"),
+        );
+        let theirs = candidate(
+            2030,
+            "ccc3333",
+            Some("ddd4444"),
+            Some("aida drain reviewer"),
+        );
+        let anon = candidate(2040, "eee5555", Some("fff6666"), None);
+
+        let scoped = rework_ready_rows(
+            &[mine.clone(), theirs.clone(), anon.clone()],
+            Some("claude-reviewer-1"),
+        );
+        let prs: Vec<u64> = scoped.iter().map(|r| r.pr).collect();
+        assert_eq!(prs, vec![2014, 2040], "mine plus the unattributable one");
+
+        let unscoped = rework_ready_rows(&[mine, theirs, anon], None);
+        assert_eq!(unscoped.len(), 3, "with no seat known, surface everything");
+    }
+
     #[test]
     fn operator_mail_count_goes_to_zero_when_own_inbox_is_emptied() {
         let wm = std::collections::HashMap::new();
@@ -866,6 +1139,105 @@ mod tests {
         let json = r.to_json();
         assert_eq!(json["unshipped_work"][0]["spec_id"], "STORY-1043");
         assert_eq!(json["unshipped_work"][0]["commits_ahead"], 2);
+    }
+
+    // STORY-1419 review: the row advertises a spec id and the production call
+    // site hardcoded `spec: None`, so it could never appear. My plumbing test
+    // hand-built the item and bypassed the mapping — the same "a unit test
+    // cannot see its own seam" failure, committed inside the test written to
+    // prevent it.
+    //
+    // This goes through the PRODUCTION mapping: branch -> spec -> row -> render.
+    // Nothing is hand-built except the inputs the forge would supply.
+    // trace:STORY-1419 | ai:claude
+    #[test]
+    fn the_spec_reaches_the_row_through_the_production_mapping() {
+        let candidate = rework_candidate_from_parts(
+            2014,
+            "f95b30853e",
+            "task-1298-work",
+            true,
+            Some("3310400503"),
+            None,
+        );
+        assert_eq!(
+            candidate.spec.as_deref(),
+            Some("TASK-1298"),
+            "the spec must be derived from the branch, not left None"
+        );
+
+        let rows = rework_ready_rows(&[candidate], None);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].spec.as_deref(), Some("TASK-1298"));
+
+        let r = AwaitingReport {
+            rework_ready: rows,
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(
+            out.contains("TASK-1298"),
+            "the spec must survive all the way to the rendered row: {out}"
+        );
+    }
+
+    // A branch carrying no spec id must still produce a row — the PR number is
+    // the actionable part. Without this, "derive the spec" could be implemented
+    // as "drop rows with no spec" and the suite would not notice.
+    // trace:STORY-1419 | ai:claude
+    #[test]
+    fn a_branch_without_a_spec_id_still_produces_a_row() {
+        let candidate = rework_candidate_from_parts(
+            2047,
+            "58fffe27b9",
+            "some-unlabelled-branch",
+            true,
+            Some("aaaa1111"),
+            None,
+        );
+        assert_eq!(candidate.spec, None);
+        assert_eq!(rework_ready_rows(&[candidate], None).len(), 1);
+    }
+
+    // STORY-1419: the CLASSIFIER tests above do not pin the PLUMBING. Dropping
+    // `rework_ready` from `total()` left all of them green — the row existed and
+    // the report did not count it. This asserts the wiring: the row reaches the
+    // header count AND the rendered output, and names both shas so the reviewer
+    // can see what moved.
+    // trace:STORY-1419 | ai:claude
+    #[test]
+    fn a_rework_ready_row_reaches_the_header_count_and_the_render() {
+        let r = AwaitingReport {
+            rework_ready: vec![ReworkReadyItem {
+                pr: 2014,
+                spec: Some("TASK-1298".into()),
+                reviewed_sha: "3310400503".into(),
+                head_sha: "f95b30853e".into(),
+            }],
+            ..Default::default()
+        };
+        assert_eq!(r.total(), 1, "the row must be counted in the header total");
+        assert!(!r.is_empty());
+
+        let mut buf = Vec::new();
+        assert!(r.render(false, &mut buf).unwrap());
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("PR-2014"), "{out}");
+        assert!(out.contains("TASK-1298"), "{out}");
+        assert!(
+            out.contains("3310400503"),
+            "the refused sha must be shown: {out}"
+        );
+        assert!(
+            out.contains("f95b30853e"),
+            "the current head must be shown: {out}"
+        );
+        assert!(
+            !out.to_lowercase().contains("rebase"),
+            "must NOT classify the move as rebase-vs-rework: {out}"
+        );
     }
 
     #[test]

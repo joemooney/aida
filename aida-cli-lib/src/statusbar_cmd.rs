@@ -401,6 +401,7 @@ mod tests {
                 next: None,
             },
             cron: CronChannel { due: 1, next: None },
+            rework_ready: Vec::new(),
             unshipped_work: vec![UnshippedWorkItem {
                 spec_id: "".into(),
                 branch: "".into(),
