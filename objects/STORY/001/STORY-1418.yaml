@@ -1,0 +1,40 @@
+id: 01a0c337-188b-72d3-aaac-d67f0b0a0e1c
+spec_id: STORY-1418
+agreed_id: STORY-1418
+title: There is no shared persistence seam for an into-Completed transition, so every new path that reaches Completed must remember to emit and nothing detects one that forgets
+description: |-
+  SPLIT OUT OF BUG-1286's F1 so #1998 can land on the shape that is actually available, and so the class-closure work is not smuggled in as a rework item it cannot carry.
+
+  WHAT BUG-1286 CLOSED. `emit_spec_completed` had two call sites while five paths reached Completed. 5393454ef6 wired the three silent ones — `aida done`, the queue close path, and `aida edit --status completed` — each guarded by the EXISTING `is_into_completed_transition` predicate rather than a fresh test, so the rule for what counts as a transition lives in exactly one place even though the call does not.
+
+  WHAT IT DID NOT CLOSE, AND WHY THAT IS NOT A DEFECT IN THAT PR. The reviewer's original F1 asked for emission to be centralized "at the successful into-Completed transition boundary rather than wiring call sites one at a time", and the driver-advisor made that binding. BOTH OF US WERE WRONG, and the reviewer went and checked before criticising the absence:
+
+      handle_done_command      set_status_from_str("completed") on an in-memory
+                               Requirement, then persists by its own path
+      advance_dispatch         its own storage path
+      git_backend_cmd edit     a targeted YAML write, explicitly NOT update_atomically
+
+  THERE IS NO SHARED PERSISTENCE BOUNDARY. The three paths genuinely differ in HOW they write. The one thing they do share, `Requirement::set_status_from_str` (aida-core/src/models.rs:4445), is a PURE IN-MEMORY SETTER with 62 occurrences across the workspace — verified independently. Emitting from there would fire on loads, dry-runs and tests, which is strictly worse than the defect it would close. So "centralize at the transition boundary" was advice to use a seam that does not exist.
+
+  THE REMAINING DEFECT, STATED PRECISELY: a fourth into-Completed path added later will not emit, and NOTHING WILL DETECT THAT. The event stream will under-report terminality again and the first symptom will be a consumer silently missing ship records — the same failure BUG-1286 was filed for, re-arriving by a new route.
+
+  WHAT TO BUILD — the fork is real and is part of the work, not a precondition to it:
+
+    A. CREATE THE SEAM. A single persistence boundary that every status write passes through, with emission attached to it. Correct end state; a refactor touching three unrelated write paths and a core/CLI layering decision (emit_spec_completed is pub(crate) in aida-cli-lib and aida-core does not emit CLI events today).
+
+    B. DETECT INSTEAD OF PREVENT. A test or lint that enumerates the paths reaching Completed and asserts each emits, so a fourth becomes visible the moment it is added. Note that the naive form of this — enumerate `update_requirement` call sites — DOES NOT WORK, because the three paths do not share that call either. Whatever enumerates has to key on something all of them do share, and finding that is part of this spec's work rather than an assumption it may start from.
+
+    C. ACCEPT PER-SITE EMISSION as the permanent shape, and say so explicitly, with the shared predicate as the guarantee that the RULE cannot drift even though the CALL must be repeated.
+
+  Do not start by assuming A. The reason this spec exists is that a seam was assumed to exist once already.
+
+  EVIDENCE THIS NEEDS THAT #1998 CANNOT PRODUCE: which of the three write paths could be unified without changing their persistence semantics, and whether a core-level emission hook is acceptable given the layering. Both are architecture questions, which is why this is a split rather than another round.
+
+  PROVENANCE. The no-seam finding is the reviewer seat's, produced by checking their own remedy before judging the implementer's departure from it. The 62-caller count and the in-memory nature of set_status_from_str were verified independently by the driver-advisor. The split disposition follows TASK-1279/TASK-1308 and BUG-1452/TASK-1307: the remaining work is a different shape needing evidence the current PR cannot produce.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T09:06:03.019291152Z
+modified_at: 2026-09-21T09:06:03.019291152Z
+req_type: Story
