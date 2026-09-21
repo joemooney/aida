@@ -30,12 +30,12 @@ description: |-
   - The minimal rustc two-target probe above is recorded in the fix so the next reader can re-run it without rebuilding the workspace.
 
   WHY THIS MATTERS BEYOND THE ONE LINE, and it belongs on BUG-1556's evidence rather than being argued here: this is a portability defect arriving on main tonight, caught only because a cross-platform run on an unrelated PR head was being read for another reason. PR CI is Linux-only by design, the portability ratchet greps Rust TEST code for path and shell assumptions but does not catch a cfg-less std::os::unix import, and the report-only Windows target check cannot run to completion on this workspace. All three guards were present and none of them could see it.
-status: Draft
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:06:26.618364993Z
-modified_at: 2026-09-21T19:06:30.403578372Z
+modified_at: 2026-09-21T19:27:53.214335648Z
 req_type: Bug
 tags:
 - aida:tests
