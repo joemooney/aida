@@ -17,6 +17,11 @@ jobs:
   build:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # Keep this explicit: implementer_preflight.rs validates this contract
+        # before executing CI-derived guards. trace:BUG-1420 | ai:codex
+        shell: bash --noprofile --norc -e -o pipefail {0}
     # BUG-611: a flaky hang in the test step used to run to GitHub's 6h default,
     # blocking the single runner (and every PR queued behind it) for hours. Fail
     # fast instead — a normal run is ~7 min. trace:BUG-611 | ai:claude
