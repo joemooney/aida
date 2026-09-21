@@ -6061,6 +6061,32 @@ pub(crate) fn rework_smart_target(current: &RequirementStatus) -> Option<Require
     }
 }
 
+// trace:BUG-1470 | ai:codex
+/// Metadata-only rework must leave the queued spec claimable.
+/// `InProgress` is only valid when this command immediately chains into
+/// `queue work`, which establishes the lease that backs that status.
+pub(crate) fn rework_target_for_mode(
+    current: &RequirementStatus,
+    launches_work: bool,
+) -> Option<RequirementStatus> {
+    let target = rework_smart_target(current);
+    if !launches_work {
+        match current {
+            RequirementStatus::Draft
+            | RequirementStatus::Planned
+            | RequirementStatus::InProgress
+            | RequirementStatus::NeedsAttention
+            | RequirementStatus::Done
+            | RequirementStatus::Completed => Some(RequirementStatus::Approved),
+            RequirementStatus::Approved
+            | RequirementStatus::Rejected
+            | RequirementStatus::Superseded => target,
+        }
+    } else {
+        target
+    }
+}
+
 /// TASK-232: `aida queue progress` — show what a session has shipped so
 /// far alongside what remains, bucketed into Shipped / In flight /
 /// Working now / Remaining. Resolves the spec set from a session manifest
@@ -6620,7 +6646,7 @@ pub(crate) fn handle_queue_rework(
 
     // Smart target-status resolution. `--status` always wins; otherwise
     // pick per the table in TASK-218's spec. See `rework_smart_target`.
-    let smart_target = rework_smart_target(&current_status);
+    let smart_target = rework_target_for_mode(&current_status, work);
     let target_status: Option<RequirementStatus> = match status_override {
         Some(s) => Some(parse_status(s)?),
         None => smart_target,
@@ -6645,12 +6671,61 @@ pub(crate) fn handle_queue_rework(
         );
     }
     if matches!(current_status, RequirementStatus::InProgress) && !force {
-        eprintln!(
-            "  {} {} is already In Progress — re-queueing without status \
-             flip. Pass `--force` to silence this warning.",
-            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-            display_id
-        );
+        if work {
+            eprintln!(
+                "  {} {} is already In Progress — launching the rework session. \
+                 Pass `--force` to silence this warning.",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                display_id
+            );
+        } else {
+            eprintln!(
+                "  {} {} is In Progress without this command establishing a lease — \
+                 metadata-only rework resets it to Approved so the queued worker can claim it. \
+                 Pass `--force` to silence this warning.",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                display_id
+            );
+        }
+    }
+
+    // BUG-1470 F1: the SAME advisor-authority gate the three sibling sites in
+    // this file apply (`queue advance --approve`, and the two `queue add`
+    // paths), plus `aida edit`. Lifting an un-triaged Draft or a punted
+    // NeedsAttention spec into a protected target is an advisor act wherever
+    // it happens, and `queue rework` reached that act through a different door.
+    //
+    // Before this PR the bypass was unreachable: `rework_smart_target(Draft)`
+    // returned None, so there was no flip to gate. Mapping Draft -> Approved
+    // for metadata-only rework opened the door, which is why the gate has to
+    // arrive in the same change.
+    //
+    // Placed at the FLIP rather than at target selection, so it also covers an
+    // explicit `--status` override — that path reaches the identical write and
+    // would otherwise remain a side door once this one closed.
+    //
+    // Refuses BEFORE any side effect (no status write, no comment, no queue
+    // entry): a partially-applied rework is harder to reason about than one
+    // that did not run.
+    // trace:BUG-1470 | ai:claude
+    if let Some(ref new_status) = target_status {
+        if new_status != &current_status
+            && status_advance_requires_advisor_authority(&current_status, new_status)
+            && !has_advisor_authority()
+        {
+            println!(
+                "  {} reworking {} from {} to {} needs the advisor role (or an \
+                 interactive terminal). Re-run as advisor: \
+                 `AIDA_SESSION_ROLE=advisor aida queue rework {}`.{}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                display_id.bold(),
+                current_status,
+                new_status,
+                display_id,
+                roleless_recovery_sentence()
+            );
+            return Ok(());
+        }
     }
 
     // Status flip (if any). update_atomically works for both SQLite and

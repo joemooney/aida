@@ -6049,20 +6049,43 @@ pub enum QueueCommand {
     ///   aida queue add SPEC --for ROLE
     ///   aida queue work SPEC
     ///
-    /// Smart status transitions (overridable with `--status`):
-    ///   Approved   → no flip (just queue)
-    ///   Planned    → InProgress
-    ///   InProgress → no flip, refuse re-queue without --force
-    ///   Done       → InProgress (typical PR-review-found-issues case)
-    ///   Completed  → InProgress, requires --force (terminal-status guard)
-    ///   Rejected   → Approved, requires --force
+    /// Smart status transitions (overridable with `--status`). Metadata-only
+    /// rework leaves the spec CLAIMABLE, so it never targets InProgress —
+    /// that status is only valid when `--work` establishes the lease behind it.
     ///
+    ///   current          metadata-only        with --work
+    ///   ───────────────  ───────────────────  ───────────────────
+    ///   Draft            Approved (advisor)   no flip
+    ///   Approved         no flip              no flip
+    ///   Planned          Approved             InProgress
+    ///   InProgress       Approved             no flip
+    ///   NeedsAttention   Approved (advisor)   InProgress (advisor)
+    ///   Done             Approved             InProgress
+    ///   Completed        Approved             InProgress
+    ///   Rejected         Approved             Approved
+    ///   Superseded       no flip              no flip
+    ///
+    ///   (advisor) — promoting an un-triaged Draft or a punted
+    ///     NeedsAttention spec is an advisor act; run as advisor or from an
+    ///     interactive terminal, exactly as with `aida edit` and `queue add`.
+    ///   Completed and Rejected additionally require `--force`, since
+    ///     re-opening closed work is usually a mistake.
+    ///   Reworking an already-InProgress spec WARNS and proceeds; `--force`
+    ///     silences the warning. It is not refused.
+    ///
+    // The doc block above is a TABLE plus a literal three-command sequence;
+    // clap reflows doc comments by default, which ran the rows together into
+    // unreadable prose. It was already doing that to the three-step block
+    // before this change. verbatim_doc_comment keeps the line breaks.
+    // trace:BUG-1470 | ai:claude
+    #[clap(verbatim_doc_comment)]
     // trace:TASK-218 | ai:claude
     Rework {
         /// Requirement ID (UUID or SPEC-ID)
         id: String,
         /// Also launch a session for the spec (chains `aida queue work`).
-        /// Without this, rework is metadata-only: status flip + queue add.
+        /// Without this, rework is metadata-only: reset to a claimable status
+        /// and queue it. With this, the launched session owns InProgress.
         #[clap(long)]
         work: bool,
         /// Override the routing role. Default: existing queue route,

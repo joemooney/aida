@@ -4151,7 +4151,9 @@ impl<'a> McpServer<'a> {
         // Smart target-status resolution (`--status` wins). trace:EPIC-27
         let target_status: Option<RequirementStatus> = match status_override {
             Some(s) => Some(parse_status(s).ok_or_else(|| format!("invalid status '{}'", s))?),
-            None => crate::rework_smart_target(&current_status),
+            // MCP rework is metadata-only: keep the queued item claimable
+            // until a worker establishes a lease. trace:BUG-1470 | ai:codex
+            None => crate::rework_target_for_mode(&current_status, false),
         };
 
         // Terminal-status guard (mirrors the CLI). trace:EPIC-27
@@ -12272,12 +12274,15 @@ mod tests {
         let resp = server
             .tool_queue_rework_inner(&json!({ "id": &spec, "for": "implementer", "reason": "PR review found issues", "user": u }))
             .unwrap();
-        assert!(resp.contains("Done → In Progress"), "resp: {resp}");
+        // BUG-1470: metadata-only rework must leave the spec CLAIMABLE. In
+        // Progress is a claim, and nothing here establishes the lease that
+        // would back it, so the MCP path targets Approved instead.
+        assert!(resp.contains("Done → Approved"), "resp: {resp}");
         assert!(resp.contains("Queued"), "resp: {resp}");
 
         let store = server.storage.load().unwrap();
         let req = store.get_requirement_by_spec_id(&spec).unwrap();
-        assert_eq!(req.status, RequirementStatus::InProgress);
+        assert_eq!(req.status, RequirementStatus::Approved);
         // Reason captured as a comment.
         assert!(req.comments.iter().any(|c| c.content.contains("PR review")));
 
