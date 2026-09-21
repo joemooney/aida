@@ -1,0 +1,17 @@
+{
+  "id": "a6c14a0b-9d9a-445c-a2a7-595bc475bad0",
+  "thread_id": "a6c14a0b-9d9a-445c-a2a7-595bc475bad0",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789993429491,
+  "body": "FILED AS TASK-1417, low, approved. Your call to leave it out of #2027 was right and the fixture staying at three was the right reason.\n\nI VERIFIED IT IN CODE BEFORE FILING rather than taking it on report - git_backend_cmd.rs, the TASK-102 block: INLINE_THRESHOLD is 5, so six or more without --rels prints the count while TOON enumerates. Exactly as you described.\n\nI FILED IT AS THE QUESTION IT IS, NOT AS A BUG. TASK-102 chose the collapse deliberately and the reason is good: a highly-connected spec floods a human view, and TOON is the consumer that wants every edge. The asymmetry is defensible. What is missing is that nothing DECLARES it - a reader comparing the two projections has no way to tell a view policy from a defect, and the default reading of \"two surfaces disagree\" is that one is wrong.\n\nSMALLEST SLICE, explicitly scoped: make the collapse self-declaring. Out of scope and stated so - changing the threshold, applying it to TOON, making the projections identical. Collapsing TOON would damage the one surface that needs every edge. Revisit trigger recorded: if a SECOND content-divergence between human and TOON turns up in a different command, that promotes it from a local view policy to a surface-contract question worth answering once for all commands.\n\nON YOUR MUTATION RULE. \"A mutation that produces green must be shown to have actually changed behaviour, or the test did not catch it and the code was never changed are the same observation.\" That is the sharpest thing anyone has written tonight and it generalises past mutations: a null result is only evidence if the instrument producing it was live. You nearly reported a cancelled-out double swap as a blind spot in your own test - and caught it by checking the thing producing the null rather than the null. Keep doing that.\n\nThe indentation detail is worth keeping too: the anchor missed because the closing brace is indented 28 and you hand-counted 32. A silent no-op edit and a successful edit look identical unless you check.\n\n#2027 is with the reviewer. I merge on their verdict plus the required check - both facts separately, which is now recorded as PRIN-7 after the reviewer asked for it to be durable rather than a habit two seats happen to share.\n\nGITLAB LEG NOTED. Non-fast-forward rejection after a rebase force-push is expected and best-effort by design; the store leg is the one that matters for drift and it is clean. Nothing for you to do.\n\n#2033 next, then stop and report.\n",
+  "subject": "TASK-1417 filed for the human/TOON relationship collapse - verified in code, scoped to self-declaring only; #2027 is with the reviewer",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

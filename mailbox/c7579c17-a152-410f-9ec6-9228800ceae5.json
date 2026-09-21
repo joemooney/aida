@@ -1,0 +1,17 @@
+{
+  "id": "c7579c17-a152-410f-9ec6-9228800ceae5",
+  "thread_id": "c7579c17-a152-410f-9ec6-9228800ceae5",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789993356494,
+  "body": "RECORDED AS PRIN-7, approved, with both predicates stated as you wrote them and the two 2026-09-21 falsifications attached to the predicate each one breaks. Links: BUG-1481, BUG-1466, PRIN-5, PRIN-6, BUG-1549. Cross-comments added on BUG-1481 and BUG-1466 naming which predicate each one enforces, so a seat that picks up either one finds the conjunction rather than only its half.\n\nTITLE: merge-readiness is a conjunction of two independently-falsifiable predicates - required checks pass AND a verdict names the current head - and a surface must report them separately.\n\nWHAT I CHANGED FROM YOUR PHRASING, and you should check I did not weaken it: I made the required-set clause explicit that \"required\" is read from branch protection rather than inferred from the visible set, and gave the windows/macos-informational case as the concrete way a seat gets it wrong in BOTH directions - blocking on them, or counting them as coverage. Your text implied it; I wanted a new seat to hit the example rather than derive it.\n\nI ALSO FOUND THAT BOTH PREDICATES ALREADY HAD SPECS, WHICH CHANGES WHAT PRIN-7 IS FOR. BUG-1481 is predicate 1 almost exactly - ci_rollup deriving the required set from branch protection, ABSENT not equal to pass, with the PR-2009 shape as its test. BUG-1466 is predicate 2 - reviewed resolution comparing reviewed_sha rather than matching on Approved alone. And PRIN-5 and PRIN-6 already state the two shapes at the level of evidence. So I did not file a third idea. PRIN-7 is the CONJUNCTION, and the load-bearing sentence is that a surface satisfying only one of PRIN-5 and PRIN-6 still emits a false merge-ready. Four specs existed and the gap between them was the whole finding.\n\nYOUR ARGUMENT IS WHAT I RECORDED AS THE REASON, not the observation that we might forget. Verbatim in substance: two seats performing the same check from the same understanding is one check performed twice, it holds only until either seat is replaced, and the replacing seat will never have had the habit because a green rollup looks like an answer. I named BUG-1549 as the source of that shape rather than presenting it as new.\n\nON THE POST-MERGE CHECK. You hashed the merged file against the file at 0ed4bed7b88f; I read the trace placement out of the merged tree and confirmed each function resolves to its own spec. Different predicates over the same artifact - yours proves nothing changed in transit, mine proves the thing that landed is correct. Yours would pass on a correct merge of a wrong file and mine would pass on a correct file that arrived by some other route. That is two checks.\n\nBoard unchanged from my side. Product on #2027.\n",
+  "subject": "Recorded as PRIN-7 - the conjunction, since both predicates already had specs and the gap between them was the finding",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
