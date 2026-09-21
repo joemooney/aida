@@ -1,0 +1,40 @@
+id: 01a0c1a8-f8f0-72d3-bb2c-a68a4e55125d
+spec_id: BUG-1508
+agreed_id: BUG-1508
+title: A routed review entry does not say whether a verdict already exists at the current head, so the queue read five-deep when one review was outstanding
+description: |
+  A reviewer-routed queue entry does not carry whether a verdict already exists at the PR's current head, so the queue cannot distinguish review-to-do from review-already-done. Measured tonight, it overstated the reviewer's real workload by five to one.
+
+  MEASURED 2026-09-20 18:49 by the reviewer seat, comparing each PR's head sha against its recorded verdict's reviewed_sha:
+
+      #1972  head 6512f1312a   CHANGES REQUESTED at the SAME sha, 19h40m earlier
+      #1974  head 0c09fe8e2c   CHANGES REQUESTED at the SAME sha, 5 minutes after the commit
+      #1978  head 17e27888ce   CHANGES REQUESTED at the SAME sha, 4 minutes after the commit
+      #2001  head ffac563445   CHANGES REQUESTED at the SAME sha
+      #1984  head 2096f9c17e   no verdict - genuinely unreviewed
+
+  Four of five were refused within minutes of their head commit and have not moved since. Five routed entries read as five reviews outstanding; the real number was one.
+
+  THE COST IS NOT ONLY MISCOUNTING. Because recording a verdict is a blind full replace, a reviewer who works a stale entry as routed destroys between one and four existing findings in order to restate them. So the queue actively invites the data loss recorded separately against the verdict store. The reviewer avoided it only by checking for an existing verdict before writing, which is a habit adopted this evening and not something the surface asks for.
+
+  AND IT MISDIRECTS CAPACITY AT THE WRONG STAGE. A queue reading five-deep on review, when four of those are awaiting REWORK, points tuning effort at the reviewer. Pipeline depth was raised to 2 an hour before this measurement on the assumption that review throughput was the constraint. On this sample it is not; rework is.
+
+  This is the same absent-versus-present confusion as the rest of the class, applied to the queue itself: the entry records that work was routed, and routing is read as evidence that work remains.
+
+  Acceptance:
+  1. A reviewer-routed queue entry surfaces whether a verdict exists for the target PR at its CURRENT head. The form is open - a column, a section, or suppression from the default view - but the reviewer must not have to check by hand to avoid re-reviewing byte-identical code.
+  2. An entry whose PR has a verdict at the current head is distinguished from one that has none. It should not simply vanish: it is still true that the spec needs attention, but the attention it needs is rework, not review.
+  3. State what happens when the head MOVES after a verdict. That entry becomes genuinely actionable again and must reappear, which is the case that makes suppression-by-deletion wrong.
+  4. The queue depth figure used for capacity decisions counts actionable entries, not routed ones. If the two differ, both are shown, because the gap between them is itself the signal.
+  5. Measured before and after on a real queue, with the counts recorded. Tonight's five-to-one is the baseline.
+
+  NOT IN SCOPE: the blind-full-replace behaviour of verdict recording, which is BUG-1505, and the stale-verdict-versus-stale-head comparison itself, which BUG-1505 criterion 2 must make reliable first - 86 percent of existing verdicts carry no sha, so criterion 1 here depends on that landing.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T01:51:11.600098076Z
+modified_at: 2026-09-21T01:51:11.600098076Z
+req_type: Bug
+tags:
+- batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
