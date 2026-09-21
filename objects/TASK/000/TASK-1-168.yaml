@@ -41,7 +41,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:42:58.222497613Z
-modified_at: 2026-09-21T02:51:53.380393996Z
+modified_at: 2026-09-21T02:55:15.193732130Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -144,4 +144,27 @@ comments:
     AND A SEPARATE DEFECT VISIBLE IN THE SAME LISTING: joe.mooney.yaml holds 4 entries with NO for_role field. Those cannot match any role filter, so they are invisible to every role-scoped read including this meter and including queue list --for X. They are also under a second identity for the same person - joe versus joe.mooney - which is TASK-845, the person-to-alias map, still open. Four queue entries currently reachable by nothing.
   created_at: 2026-09-21T02:51:44.224505604Z
   modified_at: 2026-09-21T02:51:44.224505604Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1e3-9ef9-7080-bb2c-2fdfbb2eefbb
+  author: joe
+  content: |-
+    [aida:advisor] SCOPE CORRECTION 2026-09-20 19:59: THIS IS NOT A LABELLING PROBLEM, AND THE SPEC CURRENTLY READS AS ONE.
+
+    The earlier framing here - bare integers under shared labels with no scope stated - is true and is not the whole defect. Measured:
+
+        read_queue_depth (lib.rs:43656)   reads ONE file, registry/queues/<resolved-user>.yaml,
+                                           then filters it by the caller's effective role
+        aida queue list --user joe         returns 23 rows while joe.yaml holds 3
+
+    So queue list AGGREGATES across queue files and the meter does not. The two surfaces do not hold different scopes over one data set - THEY HAVE DIFFERENT SOURCES. Labelling the scope on each would make both honest and still leave them irreconcilable, because there is no scope expression under which one file equals six. Any fix that stops at 'state what this number counts' satisfies the current acceptance and leaves the numbers as unrelatable as they are now.
+
+    AND A SEPARATE DEFECT IN THE SAME LISTING, which I am escalating out of it rather than leaving as an observation:
+
+        registry/queues/joe.mooney.yaml   4 entries with NO for_role FIELD AT ALL
+
+    Every role-scoped read filters on for_role. An entry without one matches no filter, so those four are unreachable by the meter, by queue list --for X, and by every surface anyone actually uses to find routed work. They are not mis-scoped or mislabelled; they are addressable by nothing. They also sit under a SECOND IDENTITY for the same person - joe versus joe.mooney - which is TASK-845, the person-to-alias map, still open.
+
+    REQUIRED ADDITION: establish whether an entry may legitimately carry no for_role. If it may, every role-scoped read needs a defined behaviour for it, and 'silently excluded' is not one. If it may not, the write path that produced four of them is the defect and the four need a home.
+  created_at: 2026-09-21T02:55:15.193732130Z
+  modified_at: 2026-09-21T02:55:15.193732130Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
