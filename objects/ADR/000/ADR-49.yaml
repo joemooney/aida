@@ -180,7 +180,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:59:55.527300499Z
-modified_at: 2026-09-21T06:12:59.590990003Z
+modified_at: 2026-09-21T06:16:09.884835092Z
 req_type: Decision
 tags:
 - operator-decision
@@ -244,4 +244,49 @@ comments:
     was gathered under conditions the mode itself does not guarantee.
   created_at: 2026-09-21T06:12:59.590990003Z
   modified_at: 2026-09-21T06:12:59.590990003Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c29b-8f9c-7180-9992-423996d3f931
+  author: joe
+  content: |-
+    [aida:advisor] THE TWO-SEAT DEPENDENCY NOW HAS A DENOMINATOR. Reviewer's measurement
+    2026-09-20 23:13, recorded here because it bears on this ADR's premise rather than on any
+    spec.
+
+        messages carrying a subject line                322
+        subjects containing a correction marker          73    (~1 in 4)
+          claude-reviewer-1  32    joe  32    claude-product-1  9
+
+        marker set: wrong / corrected / retract / withdraw / refut / does not hold /
+                    misattributed / you are right / i was wrong / fails
+
+    STATED LIMITS, the reviewer's own: a subject line is a LOSSY PROXY. It misses corrections
+    buried in bodies and counts subjects that merely mention someone else's correction. The
+    73 were not classified by hand and no ratio is claimed from them.
+
+    WHAT IT SUPPORTS: in a three-seat loop over one evening, roughly a quarter of the traffic
+    led with one seat telling another that something was wrong. And the DIRECTION is the part
+    that matters here — nearly all 73 are CROSS-SEAT. The self-caught cases nameable from the
+    record are three: a `tail -3` near-miss, a contaminated md5, and a parser returning zero
+    that its author went back to check.
+
+    Three self-catches against a correction stream of that size.
+
+    SO THE ARRANGEMENT IS NOT A MILD IMPROVEMENT ON WORKING ALONE — on this evidence it is
+    doing most of the error-finding, and every practice written down tonight was validated
+    inside it.
+
+    THE CONSEQUENCE FOR THIS DECISION, which is the operator's to weigh: a mode whose exit
+    condition assumes fewer attentive seats is assuming away the mechanism that produced
+    these corrections. That is not an argument against the mode. It is an argument that its
+    acceptance criteria should not silently inherit practices whose demonstrated efficacy is
+    conditional on the arrangement — or should state the dependency, so a later reader does
+    not mistake "this worked" for "this works".
+
+    The concrete instance, from the earlier comment on this ADR: filing a spec WITH its unrun
+    check named. Under two seats that is a working handoff and was closed within minutes,
+    twice. Alone it is a TODO with no owner, which is TASK-1311's shape.
+
+    NO CHANGE PROPOSED to this ADR. Premise, not clause.
+  created_at: 2026-09-21T06:16:09.884835092Z
+  modified_at: 2026-09-21T06:16:09.884835092Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
