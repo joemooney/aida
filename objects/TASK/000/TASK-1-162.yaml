@@ -34,12 +34,12 @@ description: |-
     - read-before-write: if a verdict exists at a different sha or from a different recorder, print it and require --supersede (or append rather than replace)
     - keep prior verdicts rather than replacing: a verdicts[] array, or a dated sibling file
     - if the store stays gitignored, it needs its own retention, because the usual safety net does not apply to it
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:34:22.219128104Z
-modified_at: 2026-09-21T01:45:24.420870907Z
+modified_at: 2026-09-21T21:19:31.536804430Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -66,3 +66,9 @@ comments:
   created_at: 2026-09-21T01:45:24.420870907Z
   modified_at: 2026-09-21T01:45:24.420870907Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c5d6-9cd0-7430-be97-e55fa05a2f93
+  author: joe
+  content: 'Dismissed by joe 2026-09-21: SUBSUMED BY BUG-1539 (approved, high), which covers the same defect at its root cause — a verdict keyed to a PR NUMBER when what was reviewed is a COMMIT — and additionally covers the second face this finding does not mention: the same tree under a different PR number has no verdict at all. Dismissed as a duplicate, NOT as wrong: every claim in it verified true. Its two facts that BUG-1539 did not state — the records are gitignored and there is no forge copy — are MEASURED (606 files on disk, 0 tracked by git) and carried onto BUG-1539 as a comment before this dismissal, because they are what makes the clobber unrecoverable rather than merely annoying. Nothing is lost by closing this one.'
+  created_at: 2026-09-21T21:19:31.536804430Z
+  modified_at: 2026-09-21T21:19:31.536804430Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
