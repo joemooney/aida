@@ -1,0 +1,73 @@
+id: 01a0c25b-ae64-73f0-962b-0ec5b8d85670
+spec_id: BUG-1530
+agreed_id: BUG-1530
+title: 'aida awaiting is not scoped to the seat reading it: a reviewer is shown nineteen advisor- and implementer-owned items and is NOT shown the reviewer work routed to them'
+description: |
+  Split out of TASK-1-167 by the driver advisor on 2026-09-20 at the reviewer's request.
+  TASK-1-167 is that the per-turn NOTICE and the full REPORT name different channel sets.
+  This is a second, separable axis: for a given seat, BOTH of them disagree with the
+  stated contract.
+
+  They are separable, and this is the test that proves it: align the notice and the
+  report perfectly and a reviewer still sees nineteen items that are not theirs; scope
+  both by role and the notice and report still would not agree with each other.
+
+  THE CONTRACT. CLAUDE.md, on aida awaiting: "Unified coordination inbox — every channel
+  where YOU are the gate in ONE place."
+
+  WHAT THE REVIEWER SEAT ACTUALLY GETS, measured on that seat 2026-09-20 22:01 local:
+
+      HEADLINE            Awaiting you: 11 findings - 8 in rework
+
+      findings: 11        advisor-owned. Triage is promote/dismiss: advisor authority.
+      8 in rework         implementer-owned. The hints themselves say queue rework --work.
+      unshipped: 40       not seat-scoped at all
+      prs[0]              the reviewer's gate. empty
+      briefs[0]           the reviewer's gate. empty
+      escalations[0]      the reviewer's gate. empty
+      reviewer[5]         the reviewer's ROUTED WORK - absent from the headline entirely
+
+  Nineteen items named in the headline, none of which that seat can act on, and the one
+  section that IS theirs is not named. Both directions of the contract broken in one line.
+
+  THE COST IS ALERT FATIGUE ON THE SURFACE BUILT TO PREVENT IT, and it has a measured
+  instance rather than a predicted one. The banner was constant for hours because nothing
+  that seat could do would move it, so the seat stopped opening it. Tonight's one genuine
+  arrival for that seat - PR #2035, which was CLEAN and unlabelled and one command from
+  merging - reached them through their own hand-rolled PR poll, not through this surface.
+
+  A coordination surface whose users route around it has failed even while every number
+  in it is correct. Nothing here is a wrong count; every figure is accurate for somebody.
+
+  ## Acceptance
+  1. The headline names only channels the reading seat can act on. A reviewer's headline
+     does not lead with advisor-owned findings or implementer-owned rework.
+  2. Work routed TO the reading seat appears in the headline. The reviewer[] section is
+     the reviewer's; if it is non-empty it is named.
+  3. Seat scoping is derived from the session role the surface already knows
+     (AIDA_SESSION_ROLE / the role file), not from a new flag the reader must remember.
+  4. Channels that are genuinely not seat-scoped - unshipped work is the current example -
+     are either scoped, or labelled as project-wide rather than as "awaiting you".
+  5. A test asserts the headline for a reviewer seat and for an advisor seat differ, and
+     that each names its own routed section. A test that only checks the advisor seat
+     passes vacuously, because the advisor is the seat the current behaviour happens to
+     suit.
+
+  NOT A FINDING, recorded so nobody re-spends the time: "Findings awaiting triage (19)"
+  versus "11 findings" is NOT a count discrepancy. 19 = 11 findings + 8 failures, and the
+  findings list headers the combined total under the word "Findings". The counts agree;
+  only the label is loose.
+
+  ALSO CHECKED AND CLEAN: every failure hint recommends "aida queue rework <ID> --work",
+  the form that chains into queue work and establishes the lease - not the bare
+  metadata-only form that BUG-1470 is about. So whatever BUG-1470 does to the bare form,
+  these hints need no change.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T05:06:23.460943032Z
+modified_at: 2026-09-21T05:06:23.460943032Z
+req_type: Bug
+tags:
+- parent:EPIC-62 awaiting coordination-surface alert-fatigue severity:operational
