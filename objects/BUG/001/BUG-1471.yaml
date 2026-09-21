@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-21T22:46:32.137230549Z
+modified_at: 2026-09-21T22:47:47.382252172Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -210,6 +210,49 @@ comments:
   created_at: 2026-09-21T22:46:09.975978849Z
   modified_at: 2026-09-21T22:46:09.975978849Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c627-6bb6-7632-995f-252adeb911b6
+  author: joe
+  content: |
+    [aida:implementer] THE DECISION RECORD FOR CRITERIA 2 AND 3, WRITTEN AGAINST THE SHIPPED DIFF.
+
+    ONE CORRECTION TO THE RECORD FIRST, because it changes what was actually missing. The 15:39 review states that the spec comments predate the decision. The 15:27 comment on this spec does not — it is two minutes BEFORE the 15:29 commit and already names option (a), the rejection of (b) and (c), and the leave-as-is disposition. So criterion 2 was not wholly unrecorded; it was recorded in a comment the diff itself does not point at, which is a weaker failure than silence but still a failure — a reader arriving at the commit has nothing that leads them here. This comment consolidates it, and the PR body now carries it too, so the record no longer depends on finding one timestamped comment.
+
+    CRITERION 2 — WHY (b) AND (c) WERE REJECTED.
+
+    CHOSEN, (a) alias: normalize the CLI spelling "related" to the existing standard References type, at the CLI boundary only. cli_relationship_type does the normalizing; RelationshipType::from_str stays lossless, so every !Custom related already in the store still deserializes to exactly what it always meant. The natural word now produces a traversable edge and nothing stored changes meaning.
+
+    REJECTED, (b) promote "related" to a standard non-directional type. Two reasons, and the second is the deciding one.
+
+      1. It buys no semantics that References does not already carry. References IS the general relatedness edge — 212 of them in the store at the time of the 09-20 analysis, and it is what aida show already prints for this shape of link. A second type meaning the same thing is a synonym, and a taxonomy with synonyms teaches callers to guess between them.
+
+      2. It is NOT a small change, despite looking like one. Every existing type is directional and carries a reciprocal (Parent/Child, Blocks/BlockedBy, Supersedes/SupersededBy). A genuinely non-directional edge has no reciprocal, so it is a new SHAPE in the model, not a new value in an enum: serialization, the inverse-write rule in rel_should_write_inverse, and every traversal that assumes it can walk an edge one way and find its mirror would each need an answer. The spec's own text says (b) "needs a real answer about whether a non-directional edge earns a place in the taxonomy". The answer, for now, is no — nothing in the observed usage asked for non-directionality. It asked for the word "related" to work. (a) makes the word work without answering the harder question, and leaves (b) available if a real non-directional need ever shows up.
+
+    REJECTED, (c) refuse the word and name the alternative. It is the safest for the taxonomy and the most hostile to callers. "related" has exactly one plausible meaning in this vocabulary, and a command that can determine what you meant and refuses anyway is friction with no safety payoff — this is not an ambiguous input being disambiguated, it is an unambiguous input being declined. It also breaks every script and agent that passes "related" and gets an exit 0 today; that population is not hypothetical, this spec exists because twelve such calls were made in one session. Refusing is the right move for a genuinely ambiguous type name. It is the wrong move for a synonym.
+
+    CRITERION 3 — THE REMAINING INERT EDGES ARE LEFT AS-IS, DEFERRED, AND TRACKED AT TASK-1426.
+
+    Explicitly: they are NOT migrated by this PR, and that is a decision, not an oversight. Re-measured today by YAML-parsing every object under the store rather than grepping:
+
+        648 implements        647 implemented-by     139 related        17 related-to
+         13 sprint_assignment  13 sprint_contains      1 depends-on       1 relates-to    1 duplicate-of
+        = 1480 Custom edges store-wide
+
+    The 139 exact !Custom related edges span 86 specs and split into two populations wanting OPPOSITE actions:
+
+        orphan (125) — no typed edge to the same target; converting to References is the actual repair
+        twin   (14)  — a References edge to the SAME target already exists; converting makes a duplicate,
+                       so the Custom edge must be DELETED, not converted
+
+    The 14 twins sit on BUG-1443, BUG-1445, BUG-1450, BUG-1452, BUG-1453, BUG-1454, BUG-1461, BUG-1462, BUG-1465, STORY-1133 and TASK-1293. The 09-20 analysis found 13 across 10 specs; the store has moved since, so a migration must re-measure rather than trust either figure.
+
+    WHY DEFERRED: migrating rewrites 86 spec objects on the shared canonical store branch. That is a different risk class from a bounded parse-and-render fix, it collides with any in-flight lease holding one of those specs, and a blind conversion is actively WRONG for 14 of the 139. TASK-1426 carries the full split, the required post-migration assertion (no source holding two edges of the same kind to one target), and the still-unverified "rel remove --type related" question — which, if it holds, means the hand-repair path is broken the same way the creation path was, and is how the twins were manufactured in the first place.
+
+    CRITERION 1 is met by cli_relationship_type. CRITERION 5 is met by a test that builds a store, adds the edge, runs walk_union and asserts the target is reached by TRAVERSAL, not by message.
+
+    CRITERION 4 is the card, per the 15:39 correction — and the first cut of that fix made it worse. card_rel_label started returning "Custom" while render_spec_card still filtered on the two exact labels "Parent" and "Related", so all 1480 Custom edges rendered NOWHERE: this spec's own card would have stopped showing the story that implements it. That is now fixed by the missing third bucket rather than by reverting the relabel. Custom edges render under their own "Custom" heading with the edge's real name inline, e.g. "[implemented-by] STORY-1435 — ...". Every heading is now driven from one CARD_REL_BUCKETS list through one card_rel_sections function, and a test asserts the completeness invariant — every relationship type renders in exactly one bucket — so a future label added without its heading fails the suite instead of silently dropping edges off the surface the reader actually reads.
+  created_at: 2026-09-21T22:47:47.382252172Z
+  modified_at: 2026-09-21T22:47:47.382252172Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
