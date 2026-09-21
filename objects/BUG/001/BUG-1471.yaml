@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-21T22:21:40.743370687Z
+modified_at: 2026-09-21T22:27:24.777729723Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -116,5 +116,11 @@ comments:
     My own seven edges are now References; the store-wide inert count went 110 → 103.
   created_at: 2026-09-20T18:18:14.838295282Z
   modified_at: 2026-09-20T18:18:14.838295282Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c614-c3e9-7eb0-b2e1-287c37013a0d
+  author: joe
+  content: 'Decision (option a): normalize the CLI spelling ''related'' to the existing standard References relationship. Rejected (b) because a new non-directional core type would expand serialization, inverse, and traversal taxonomy without a distinct semantic need; rejected (c) because this natural spelling has one unambiguous safe meaning and refusal would break callers unnecessarily. Store audit on 2026-09-21 found 139 exact !Custom related edges across 86 spec YAML objects. They are deliberately left as-is (not silently migrated): the core parser remains lossless and explicit custom traversal remains available, while new ''rel add --type related'' writes References. Rewriting shared git-canonical history is outside this bounded CLI fix and could alter deliberately custom data.'
+  created_at: 2026-09-21T22:27:24.777729723Z
+  modified_at: 2026-09-21T22:27:24.777729723Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
