@@ -29,7 +29,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:22:23.969332952Z
-modified_at: 2026-09-21T17:18:22.093663143Z
+modified_at: 2026-09-21T17:22:16.658406106Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -48,6 +48,32 @@ comments:
   content: Commit 11a06bfc1d references this requirement
   created_at: 2026-09-21T17:05:20.148538734Z
   modified_at: 2026-09-21T17:05:20.148538734Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4fd-67d2-7521-b880-9138a188ee5d
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2051 fix(awaiting): restore displaced doc comments on short_sha_for_row and pluralize (BUG-1545)
+    merged: a8b4e3fedefc
+    verdict: APPROVE (claude-reviewer-1) at reviewed_sha 11a06bfc1d1e == the merged head
+    proxy: claude driver-advisor, session 01a0adee, on the operator's standing merge mandate
+    independent: YES — implemented by a worktree-isolated fan-out agent, reviewed by claude-reviewer-1, merged by this seat. No seat merged its own code.
+
+    gates cleared, verified from this seat:
+      1. Build (ubuntu-latest) = success, read PER-SHA from check-runs at 11a06bfc1d1e, not from the PR rollup.
+      2. verdict APPROVED with reviewed_sha == the merged head; head unmoved between the check turning green and the merge.
+      3. no merge-hold marker on this PR; merge-hold-gate green on its own.
+      4. combined-main build run after this cluster of four merges (#2049, #1974, #1981, #2051) rather than trusting four passing PR runs — per-PR green is not union green.
+
+    WHY FIX-ONLY WAS RIGHT, AND IT IS NOT THE SPEC'S FRAMING. The spec asserts this is doc-comments-only; an assertion is not evidence. The deciding fact came from the review: NEITHER STRANDING STOLE A `trace:` MARKER. short_sha_for_row carries its own trace and keeps it; pluralize and the candidate() test helper have none. So `aida why <file:line>` is NOT inverted in either case and the blast radius is doc-only. Had a trace been stolen, this needed a test rather than a fix.
+
+    THE SECOND INSTANCE WAS FOUND BY ENUMERATION, NOT BY TAKING A COUNT. The reviewer confirmed the candidate() helper is the same class rather than a coincidence of wording — same commit, the doc is context immediately followed by the added `fn candidate(`, and the doc describes operator_mail_count_goes_to_zero_when_own_inbox_is_emptied which now sits ~145 lines below — then enumerated the whole commit and established there were EXACTLY TWO, no third.
+
+    PROVENANCE OF THE DEFECT, and it is a fact about this board rather than this file: both strandings were created by ad85e8ed32, the squash of PR #2047 (STORY-1419), which inserted short_sha_for_row directly between pluralize's pre-existing doc comment and `fn pluralize`. That PR was APPROVED by claude-reviewer-1 and MERGED by this seat. Neither seat could have caught it by reading — the reviewer demonstrated that an hour later by writing two purpose-built detectors that were each blind to half the class. The durable correction is theirs and is about a question rather than an effort: THE SEAT THAT APPROVES IS THE SEAT THAT SHOULD BE ASKING "WHAT INSTRUMENT WOULD CATCH THIS CLASS", which is answerable without spotting the instance.
+
+    THE CLASS IS NOT GUARDED BY THIS MERGE. BUG-1550 carries the gate and is in flight. The reviewer's condition is recorded there: fix-only here is right ONLY IF that gate lands, because one commit produced two instances in a single pass, so the rate is not low. This spec is Completed; the class obligation lives on BUG-1550, not here.
+  created_at: 2026-09-21T17:22:16.658406106Z
+  modified_at: 2026-09-21T17:22:16.658406106Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c4f9-d2f3-74b0-a635-d0e9e0ded8a6
