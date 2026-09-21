@@ -73,10 +73,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:02:30.985302118Z
-modified_at: 2026-09-21T05:02:30.985302118Z
+modified_at: 2026-09-21T05:02:37.197330680Z
 req_type: Bug
 tags:
 - parent:EPIC-62
 - review-verdicts
 - reviewer-surface
 - substrate-integrity
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-21T05:02:37.197330680Z
