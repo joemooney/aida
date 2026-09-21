@@ -1,0 +1,49 @@
+id: 01a0c183-19de-7051-a727-bb2ac0e728ab
+spec_id: BUG-1502
+agreed_id: BUG-1502
+title: aida show --format json is silently ignored, the third instance of a class whose generalising criterion shipped unmet with BUG-1289
+description: |
+  `aida show <SPEC> --format json` accepts the flag, ignores it, prints the human/TOON form and exits 0. There is no error and no cue, so a consumer that follows the documented flag gets a document it cannot parse and a success status telling it nothing went wrong.
+
+  MEASURED 2026-09-20 18:07, stdout piped so no TTY heuristic applies:
+
+      aida show TASK-1303 --format json        -> starts `id: TASK-1303`, exit 0
+      aida show TASK-1303 --full --format json -> same
+      aida list --limit 1 --format json        -> JSON
+      aida ps --format json                    -> JSON
+      aida queue list --format json            -> JSON
+      aida findings list --format json         -> JSON
+
+  So `show` is now the odd one out among the surfaces an agent reads most, and it is the most consequential one to be missing: it is the per-spec read, and the CLI is the primary agent surface.
+
+  THIS IS THE THIRD FILING OF THE SAME DEFECT, WHICH IS THE REAL POINT.
+
+      BUG-1149  2026-09-14  `queue list --format json` silently ignored, emits TOON   Completed
+      BUG-1289  2026-09-20  `--format json` returns human text on status, TOON on ps  Completed
+      this one  2026-09-20  `--format json` returns the human form on show
+
+  Each was fixed on the surface it was reported against. The class was never closed, so it resurfaces wherever nobody has looked yet.
+
+  AND BUG-1289 ALREADY CARRIED THE CRITERION THAT WOULD HAVE CAUGHT THIS. Its acceptance item 2, verbatim: "An audit lists every command accepting `--format` and states, per command, whether json is honoured; any that are not are either fixed or explicitly documented as unsupported with an error rather than silently falling back."
+
+  BUG-1289 is Completed. No such audit exists in docs/ that a search can find, and `show` still falls back silently. So the criterion shipped unmet, and the specific mechanism written to stop a third instance is the mechanism that was skipped. That is the more serious half of this bug: an acceptance criterion whose whole job was to generalise a fix was dropped without the spec being held open.
+
+  Acceptance:
+  1. `aida show <SPEC> --format json` emits parseable JSON, with the same fields the human view presents, including the git-linkage section when it is shown.
+  2. The BUG-1289 audit is actually produced: a checked-in list of every command accepting `--format`, stating per command whether json is honoured. It lives somewhere a consumer reads, not only in a PR description.
+  3. A command that accepts `--format json` and does not implement it ERRORS rather than falling back silently. This is the clause that closes the class: a silent fallback is indistinguishable from success, so the next unconverted surface announces itself instead of waiting for a human to notice.
+  4. A test enumerates the commands from the audit list and parses each one's `--format json` output, so adding a surface without json support fails the suite rather than shipping.
+  5. State whether `--format json` and a dedicated `--json` flag, where both exist, are required to agree; BUG-1289 item 3 required it and the same audit should confirm it still holds.
+
+  NOT IN SCOPE: redesigning the output-format system or the monitor contract. This is conformance to a flag that is already documented.
+
+  Found while a reviewer tried to read a description programmatically to repair it, hit the non-JSON output, and fell back to parsing display text — which is what corrupted the spec they were repairing. The missing machine-readable read has already caused one data-integrity incident today.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T01:09:49.662292511Z
+modified_at: 2026-09-21T01:09:49.662292511Z
+req_type: Bug
+tags:
+- aida:show cli-conformance agent-surface drain-safe from:session-0920
