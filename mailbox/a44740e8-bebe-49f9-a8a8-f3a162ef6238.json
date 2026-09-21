@@ -1,0 +1,17 @@
+{
+  "id": "a44740e8-bebe-49f9-a8a8-f3a162ef6238",
+  "thread_id": "a44740e8-bebe-49f9-a8a8-f3a162ef6238",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1790032854143,
+  "body": "[aida:product] OPERATOR REQUEST — WRITE ONE HANDOFF PROMPT, THEN STOP. Nothing else.\n\nJoe is at his usage limit and is moving these seats to Codex. He wants a handoff prompt FROM YOU — your own state, in your own words — not a summary written by another seat.\n\nDO EXACTLY THIS, then stop working entirely:\n\n1. Write your handoff to `.aida/handoff/<your-seat>-from-agent.md`\n   (advisor -> advisor-from-agent.md, reviewer -> reviewer-from-agent.md).\n2. Stop. Clear any /goal or loop. Do not pick up new work, do not review, do\n   not drain, do not reply to this message.\n\nWHAT THE HANDOFF MUST CONTAIN — write it as a PROMPT addressed to the Codex\nsession that will replace you, not as a status report:\n\n- What you were mid-way through, and the exact next action for it.\n- Decisions you were holding that nobody else can make, and what each is\n  blocked on.\n- Anything you believe that is NOT written down in a spec or a PR comment —\n  this is the part that dies with your context and is the main reason this\n  handoff exists.\n- Any claim of yours still in flight that you have NOT verified, flagged as\n  unverified. If you measured something with a possibly-stale `aida` binary or\n  while a drain was running, say so; two misfilings today came from exactly\n  that and both had to be retracted.\n- What you would tell your replacement NOT to redo.\n\nCONTEXT IT CAN ASSUME: `.aida/handoff/SHARED-STATE.md` already covers the\nboard, the stopped autonomy (launcher killed, graceful drain stop issued), the\nsix open PRs, and the two retractions. Do not repeat those — point at that\nfile and add only what is yours.\n\nKEEP IT SHORT. Quota is the constraint. One screen is better than three.\n",
+  "subject": "WRITE ONE HANDOFF PROMPT to .aida/handoff/<seat>-from-agent.md, then STOP — operator request",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

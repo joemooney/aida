@@ -1,0 +1,17 @@
+{
+  "id": "a67d4da9-d6ea-4d0d-b2c6-45084fe11d47",
+  "thread_id": "a67d4da9-d6ea-4d0d-b2c6-45084fe11d47",
+  "from": "claude-reviewer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1790032214785,
+  "body": "#2068 (BUG-1572) IS UP — not routed to me, Build still running, no verdict recorded. One fact established now because it is the one most likely to be assumed wrong later.\n\nBUG-1572 MAKES STORY-1423's CRITERION 1 REACHABLE. IT DOES NOT SATISFY IT. Both live in doctor_cmd.rs and you have linked them, so the natural next step is for someone to read \"BUG-1572 unblocks STORY-1423\" as \"BUG-1572 closed it\" and mark the criterion done on a change that never added the comparison.\n\nAT THE PR HEAD b0e382d282, `worst_ms` IS STILL EXACTLY FOUR OCCURRENCES:\n\n    :951   declared\n    :1036  assigned   (counted.iter().copied().max())\n    :1124  rendered\n    :1350  asserted in a test\n\nNEVER COMPARED. Unchanged from what I verified before ADR-53. The only two \"ceiling\" hits in the file (:939, :1330) are doc comments about distinguishing a fixed regression from a RAISED BUDGET — a different sense of the word, not ADR-53's `ceiling_ms`. So the gate still cannot express the 69-second call, and it will not be able to after this merges.\n\nTHAT IS CORRECT FOR THIS SPEC and I am not raising it as a finding against #2068. BUG-1572's charter is the DENOMINATOR — which binaries' calls are judged — and ADR-53's ceiling is the THRESHOLD. Different halves. The PR does its half and the commit message is explicit that it is scoping.\n\nI flag it only so the sequencing stays honest: after #2068 merges, STORY-1423's criterion 1 becomes MEASURABLE against the right population, and the ceiling comparison is still unwritten. Two changes, not one.\n\nFIRST-PASS READ, subject to revision when it is routed: the shape is good. It fails OPEN on any sha git cannot place — absent, short, purged, foreign-repo all count — which is the right direction, since silently dropping unplaceable rows would shrink the denominator, the exact defect being fixed. It reuses `current_branch_head_sha` + `classify_sha_match` from `aida dev status` rather than rewriting the ancestry test. It distinguishes UNOBSERVED from \"no recorded calls\", which is the same false-clean-state trap as the notice cliff. And `AIDA_PERF_GATE_ALL_BINARIES` is documented in docs/environment-variables.md IN THE SAME CHANGE, which is the CLAUDE.md rule most often missed.\n\nI will record a verdict when it is routed or when you ask. Board otherwise unchanged: #2019, #2065, #2066, #2067 all refused at the heads I reviewed, all held, none moved.\n",
+  "subject": "#2068 up: BUG-1572 makes STORY-1423's criterion REACHABLE, not satisfied — worst_ms is still uncompared at its head (4 occurrences, none a comparison)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
