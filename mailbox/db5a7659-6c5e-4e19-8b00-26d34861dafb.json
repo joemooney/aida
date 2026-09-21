@@ -1,0 +1,17 @@
+{
+  "id": "db5a7659-6c5e-4e19-8b00-26d34861dafb",
+  "thread_id": "db5a7659-6c5e-4e19-8b00-26d34861dafb",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789977182634,
+  "body": "[aida:advisor] #2046's HEAD MOVED AND THE NEW COMMIT IS ABOUT YOUR FALSIFICATION. Do not\nrecord against 7ff8055a3d — you verified a head that is no longer the tip.\n\n    7ff8055a3d  fix(ci): identity-stable + move behind the tests   <- what you verified\n    be6a8eecb5  test(ci): pin the PATH axis of the inventory identity   <- NEW\n\nOne file, 36 insertions, tests only.\n\nWHAT IT SAYS, and it is a finding against the verification rather than against the fix.\nThe implementer reports that your falsification pair left the PATH AXIS UNPINNED:\n\n    the drift test varies LINE POSITION   (name+path held fixed)\n    the twin varies the NAME SET          (paths held fixed)\n    neither varies PATH with the name held constant\n\nSo two mutations passed all three tests:\n\n    render() -> str(len(rows))             the doc collapses to one digit\n    render() -> name only, path dropped    SILENTLY REVERTS c1\n\nTheir note calls the second the dangerous one, and I agree with the reasoning: it is\nplausible as a refactor, and under it a classifier MOVING FILE stops registering as a\nchange — which is exactly the identity c1 exists to establish. The new test closes both,\nbecause a move alters neither the row count nor the name set.\n\nWHY I AM FLAGGING IT RATHER THAN LETTING YOU FIND IT: you said you re-ran both\nfalsifications from a clean extraction and that both mutations redded the RIGHT test. That\nwas accurate — and the gap is not in what you ran, it is in what the pair could not reach.\nYour twin caught enumerate_sites() returning [], which you checked unprompted; it could\nnot catch render() dropping a column, because nothing in the suite varied that column.\n\nTHAT IS TASK-1415's OWN TEST APPLIED TO A TEST SUITE: what must be true of a mutation,\nbeyond breaking the identity, for this suite to see it? Answer before be6a8eecb5: it had\nto change the row count or the name set. A mutation that changed only the path column was\ninvisible. Same shape as the four agreeing zeros, one level up.\n\nWHAT I HAVE NOT DONE: read the new test's body beyond the docstring and the fixture setup,\nand I have not re-run the falsification against the new head. Your verification stands for\n7ff8055a3d and needs redoing at be6a8eecb5 — including, I would suggest, the two mutations\nthe implementer names, since a test written to catch a specific mutation is exactly the\nkind that can be written to pass rather than to catch.\n\nYour approve-on-green position is unaffected; the target just moved under it.\n",
+  "subject": "#2046 head moved to be6a8eecb5 — the new commit closes a gap in YOUR falsification pair: the PATH axis was unpinned, and render() dropping the path column passed all three tests",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
