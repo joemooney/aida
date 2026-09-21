@@ -264,7 +264,7 @@ stateDiagram-v2
 
     Draft --> Rejected: aida edit --status rejected
     Approved --> Rejected: aida edit --status rejected
-    Done --> InProgress: reviewer RequestChanges
+    Done --> NeedsAttention: reviewer RequestChanges
     Approved --> Superseded: aida edit --status superseded --superseded-by
 
     Released --> [*]
@@ -296,7 +296,7 @@ stateDiagram-v2
     direction LR
     InProgress --> Done: /aida-pr (push + open PR + queue reviewer)
     Done --> UnderReview: aida queue work PR-N (reviewer picks it up)
-    UnderReview --> InProgress: RequestChanges verdict
+    UnderReview --> NeedsAttention: RequestChanges verdict
     UnderReview --> Merged: Approve verdict + gh pr merge --squash
     Merged --> Completed: aida pull (auto-bump done → completed)
 

@@ -357,7 +357,8 @@ pub struct FailureReason {
 /// when it is allowed. Only the two edges that *touch* `NeedsAttention` are
 /// constrained — every other transition returns `None`, so AIDA's otherwise
 /// free-form status edits are not regressed:
-///   - **into** `NeedsAttention`: only from `InProgress` (via `aida punt`);
+///   - **into** `NeedsAttention`: from `InProgress` (via `aida punt`) or from
+///     `Done` (a reviewer refuses the implemented change);
 ///   - **out of** `NeedsAttention`: only to `Approved` / `InProgress` /
 ///     `Rejected` (triage outcomes).
 ///     trace:STORY-332 | ai:claude
@@ -385,12 +386,12 @@ pub fn forbidden_attention_transition(
     if is_declared(State::from_status(from), State::from_status(to)) {
         return None;
     }
-    // Not a declared Needs Attention edge → the precise guidance (unchanged).
+    // Not a declared Needs Attention edge → precise recovery guidance.
     if matches!(to, NeedsAttention) {
         Some(
             "a spec can only enter Needs Attention from In Progress \
-             (an autonomous agent hits a design-fork mid-work) — \
-             use `aida punt` to do this"
+             (an autonomous agent punts mid-work) or Done \
+             (a reviewer requests changes)"
                 .to_string(),
         )
     } else {
@@ -8071,12 +8072,14 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
 
     /// STORY-332: a punt can enter NeedsAttention only from In Progress.
     #[test]
-    fn forbidden_attention_transition_into_only_from_in_progress() {
+    fn forbidden_attention_transition_into_from_active_work_or_review_refusal() {
         use RequirementStatus::*;
-        // The one allowed entry.
+        // The two allowed entries.
         assert!(forbidden_attention_transition(&InProgress, &NeedsAttention).is_none());
+        // trace:BUG-1452 | ai:codex
+        assert!(forbidden_attention_transition(&Done, &NeedsAttention).is_none());
         // Every other source is forbidden.
-        for from in [Draft, Approved, Planned, Done, Completed, Rejected] {
+        for from in [Draft, Approved, Planned, Completed, Rejected] {
             assert!(
                 forbidden_attention_transition(&from, &NeedsAttention).is_some(),
                 "{from} → NeedsAttention should be forbidden"
@@ -8123,22 +8126,19 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
         }
     }
 
-    /// TASK-738: exhaustive parity — the model-backed
-    /// `forbidden_attention_transition` (Phase 2a) must return byte-identical
-    /// results to the pre-migration hand-coded oracle over every (from, to)
-    /// status pair. This is the migrate-behind-the-model contract: source
-    /// unified, behaviour unchanged. trace:TASK-738 | ai:claude
+    /// Exhaustive parity between the transition guard and the declared
+    /// lifecycle contract over every pair that touches NeedsAttention.
     #[test]
-    fn forbidden_attention_transition_parity_with_pre_migration_oracle() {
+    fn forbidden_attention_transition_parity_with_lifecycle_contract() {
         use RequirementStatus::*;
-        // The exact pre-TASK-738 hand-coded logic, kept here as the oracle.
+        // A small independent oracle for the declared NeedsAttention edges.
         fn oracle(from: &RequirementStatus, to: &RequirementStatus) -> Option<String> {
             match (from, to) {
                 (NeedsAttention, NeedsAttention) => None,
-                (_, NeedsAttention) if !matches!(from, InProgress) => Some(
+                (_, NeedsAttention) if !matches!(from, InProgress | Done) => Some(
                     "a spec can only enter Needs Attention from In Progress \
-                     (an autonomous agent hits a design-fork mid-work) — \
-                     use `aida punt` to do this"
+                     (an autonomous agent punts mid-work) or Done \
+                     (a reviewer requests changes)"
                         .to_string(),
                 ),
                 (NeedsAttention, to) if !matches!(to, Approved | InProgress | Rejected) => Some(

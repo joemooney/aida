@@ -76317,6 +76317,43 @@ fn handle_review_record(
         );
     }
     let recorded_by = review_recorded_by();
+
+    // A refusal is a protection event, not merely metadata. Arm the local
+    // merge chokepoint before publishing the verdict; mirroring the label also
+    // protects raw forge/UI merges when branch policy consumes it. The hold is
+    // intentionally not cleared by a later approval: `merge-hold clear` is the
+    // explicit human/advisor release action.
+    // trace:BUG-1452 | ai:codex
+    if kind.blocks_done() {
+        let n = pr.ok_or_else(|| {
+            anyhow::anyhow!(
+                "a refusing verdict must name `--pr <N>` so AIDA can protect the pull request"
+            )
+        })?;
+        let reason = format!(
+            "{} for {} at {}",
+            kind.label(),
+            spec.to_ascii_uppercase(),
+            resolved_sha
+                .as_deref()
+                .map(review_verdict::short_sha)
+                .unwrap_or("unknown")
+        );
+        // The reviewer may run in a disposable review worktree. The merge
+        // process reads holds at the orchestrator-visible project root.
+        let protection_root = std::env::var_os("AIDA_PROJECT_ROOT")
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.is_dir())
+            .unwrap_or_else(|| project_root.clone());
+        merge_hold::write_hold(&protection_root, n, &reason)
+            .with_context(|| format!("could not protect PR-{n} with a merge hold"))?;
+        if let Err(err) = merge_hold::sync_label(&protection_root, n, true) {
+            eprintln!(
+                "  {} merge-hold label not applied on PR-{n}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            );
+        }
+    }
     let path = review_verdict::record_verdict(
         &project_root,
         spec,
@@ -76339,6 +76376,36 @@ fn handle_review_record(
             .unwrap_or_default()
     );
     if kind.blocks_done() {
+        let detail = summary
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| kind.label());
+        let recovery = format!(
+            "address the review findings, move {} back to In Progress, and clear the PR hold only after approval",
+            spec.to_ascii_uppercase()
+        );
+        match shelve_spec_on_failure(
+            &project_root,
+            spec,
+            "reviewer",
+            3,
+            match kind {
+                review_verdict::VerdictKind::RequestChanges => "verdict:request-changes",
+                review_verdict::VerdictKind::Rejected => "verdict:rejected",
+                _ => unreachable!("blocks_done only covers refusing verdicts"),
+            },
+            detail,
+            &recovery,
+        )? {
+            Some(_) => println!(
+                "  {} {} parked in Needs Attention and surfaced by `aida awaiting`.",
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+                spec.to_ascii_uppercase()
+            ),
+            None => anyhow::bail!(
+                "recorded the refusal and merge hold, but could not park {} in Needs Attention",
+                spec.to_ascii_uppercase()
+            ),
+        }
         println!(
             "  {} `aida queue done {}` will refuse until the branch moves past that commit.",
             crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
@@ -76425,6 +76492,117 @@ mod bug_1467_reviewer_record_tests {
         let guidance = default_role_guidance("reviewer");
         assert!(guidance.contains("aida review record <SPEC> --pr <N>"));
         assert!(guidance.contains("never hand-write verdict JSON"));
+    }
+}
+
+#[cfg(test)]
+mod bug_1452_refusal_aftermath_tests {
+    use super::*;
+    use aida_core::db::DatabaseBackend;
+
+    /// Criterion 5 asks for the aftermath OF A VERDICT, so the test drives
+    /// `handle_review_record` and asserts what the RECORDING PATH did. The
+    /// earlier version called `write_hold` and `shelve_spec_on_failure` itself
+    /// and then asserted they had run — which proved only that two primitives
+    /// work, and would have kept passing if the recording path stopped calling
+    /// either one.
+    ///
+    /// `sha` and `branch` are passed explicitly so the call does not reach the
+    /// forge for a head or the checkout for a branch: the forge lookup is
+    /// skipped when `sha` is present, and `current_branch_at` only runs when
+    /// `branch` is None.
+    // trace:BUG-1452 | ai:claude
+    #[test]
+    fn refusal_aftermath_is_parked_held_and_awaiting_visible() {
+        let root = tempfile::tempdir().unwrap();
+        let store = root.path().join(".aida-store");
+        std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+        std::fs::create_dir_all(&store).unwrap();
+        std::fs::write(
+            root.path().join(".aida/config.toml"),
+            "mode = \"distributed\"\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+
+        let backend = aida_core::CachedGitBackend::open(
+            &store,
+            &aida_core::CachedGitBackend::default_cache_path(&store),
+        )
+        .unwrap();
+        let mut req = aida_core::Requirement::new("Refused work".into(), "desc".into());
+        req.spec_id = Some("BUG-14520".into());
+        req.status = aida_core::RequirementStatus::Done;
+        backend.add_requirement(req).unwrap();
+        drop(backend);
+
+        // BOTH roots must point at the tempdir, and this is not belt-and-braces.
+        // The hold is written to `protection_root`, which prefers
+        // AIDA_PROJECT_ROOT and only falls back to the resolved project root.
+        // A seat shell has AIDA_PROJECT_ROOT set to the REAL repository, so
+        // setting AIDA_DRIVE_ROOT alone sends the hold, the verdict and a
+        // `gh` label call into the live repo and a live PR. Verified the hard
+        // way: an earlier version of this test wrote .aida/merge-holds/PR-1452
+        // and labelled the real merged PR #1452.
+        //
+        // Pointing AIDA_PROJECT_ROOT at the tempdir also disarms the forge
+        // call for free — `sync_label` resolves the forge from that root, finds
+        // none in a bare temp directory, and returns Ok without shelling out.
+        //
+        // EnvVarsGuard, not two EnvVarGuards: each holds the process-global
+        // ENV_LOCK for its lifetime and the lock is not reentrant, so a second
+        // one deadlocks. The multi-key guard takes the lock once.
+        let root_str = root.path().to_str().expect("tempdir path is utf-8");
+        let _roots = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_DRIVE_ROOT", root_str),
+            ("AIDA_PROJECT_ROOT", root_str),
+        ]);
+
+        handle_review_record(
+            "BUG-14520",
+            "request-changes",
+            Some("abc123"),
+            Some("bug-14520-work"),
+            Some("the regression is still open"),
+            &["fix the regression".to_string()],
+            Some(1452),
+        )
+        .expect("recording a refusing verdict must succeed");
+
+        // 1. the PR is HELD — written by the recording path, not by this test
+        assert!(
+            merge_hold::read_hold(root.path(), 1452).is_some(),
+            "a refusing verdict must leave a merge-hold on the PR"
+        );
+
+        // 2. the verdict is recorded and blocks done
+        let recorded = review_verdict::read_recorded_verdict(root.path(), "PR-1452")
+            .or_else(|| review_verdict::read_recorded_verdict(root.path(), "BUG-14520"))
+            .expect("the verdict must be readable after recording");
+        assert!(
+            recorded.kind.blocks_done(),
+            "a request-changes verdict must block done"
+        );
+
+        // 3. the spec is PARKED, not Done, and visible to `aida awaiting`
+        let backend = aida_core::CachedGitBackend::open(
+            &store,
+            &aida_core::CachedGitBackend::default_cache_path(&store),
+        )
+        .unwrap();
+        let parked = backend
+            .get_requirement_by_spec_id("BUG-14520")
+            .unwrap()
+            .unwrap();
+        assert_ne!(
+            parked.status,
+            aida_core::RequirementStatus::Done,
+            "a refused spec must not remain Done — that is the defect this spec is about"
+        );
+        assert_eq!(parked.status, aida_core::RequirementStatus::NeedsAttention);
+        assert!(
+            parked.failure_reason.is_some(),
+            "failure_reason-backed NeedsAttention is what `aida awaiting` counts as shelved work"
+        );
     }
 }
 

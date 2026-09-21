@@ -95,8 +95,8 @@ fn rank(to: State) -> u8 {
 /// spec `id`, or `None` when the edge is not a user-driven *forward suggestion*:
 ///   * `Done -> Completed` is the merge auto-bump — suggested as `aida pull`,
 ///     not spec-targeted (the merge of the PR is what completes it).
-///   * `Done -> InProgress` is reviewer-driven (RequestChanges), not something a
-///     human should be nudged to do by hand.
+///   * `Done -> NeedsAttention` is reviewer-driven (RequestChanges), not
+///     something a human should be nudged to do by hand.
 ///   * `Completed -> Released` is a repo-level release act, not a per-spec verb.
 fn transition_command(from: State, to: State, id: &str) -> Option<String> {
     use State::*;
@@ -105,7 +105,7 @@ fn transition_command(from: State, to: State, id: &str) -> Option<String> {
         (_, Planned) => format!("aida edit {id} --status planned"),
         (Approved, InProgress) | (Planned, InProgress) => format!("aida queue work {id}"),
         (NeedsAttention, InProgress) => format!("aida edit {id} --status in-progress"),
-        (Done, InProgress) => return None, // reviewer RequestChanges, not a nudge
+        (Done, NeedsAttention) => return None, // reviewer RequestChanges, not a nudge
         (InProgress, Done) => format!("aida queue done {id}"),
         (Done, Completed) => "aida pull".to_string(), // merge auto-bump
         (Completed, Released) => return None,         // repo-level release act

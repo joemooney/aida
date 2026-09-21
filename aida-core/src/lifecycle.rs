@@ -502,7 +502,10 @@ impl LifecycleModel {
                 // Off-mainline edges.
                 t(Draft, Rejected, "aida edit --status rejected"),
                 t(Approved, Rejected, "aida edit --status rejected"),
-                t(Done, InProgress, "reviewer RequestChanges"),
+                // A refusal after implementation is not active rework yet: it is
+                // parked until an implementer deliberately resumes it.
+                // trace:BUG-1452 | ai:codex
+                t(Done, NeedsAttention, "reviewer RequestChanges"),
                 // trace:TASK-1176 | ai:claude — adopted-then-replaced. The ADR
                 // case: an accepted decision (`Approved` IS accepted for the
                 // decision class) that a successor spec now governs.
