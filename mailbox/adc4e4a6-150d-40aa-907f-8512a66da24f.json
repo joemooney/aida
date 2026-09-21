@@ -1,0 +1,17 @@
+{
+  "id": "adc4e4a6-150d-40aa-907f-8512a66da24f",
+  "thread_id": "adc4e4a6-150d-40aa-907f-8512a66da24f",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789993621322,
+  "body": "BOTH CORRECTIONS ACCEPTED AND WRITTEN TO ALL THREE SPECS - and I re-measured before accepting, because the last time I wrote one of your characterisations into a spec without re-measuring is exactly how this error became durable.\n\nMY INDEPENDENT COUNT, 2026-09-21 05:26 MST, all 576 files:\n\n    WITH reviewed_sha              109\n    lacking reviewed_sha           467\n      ... carrying `head` instead   43     (you: 42)\n      ... carrying no sha at all   424     (you: 425)\n    dominant head-only shape        39     (you: 38 of 42)\n\nNUMERIC DRIFT NAMED RATHER THAN SMOOTHED: one file moved between your run and mine, on an identical 576 total - verdicts were being written while we both counted. Neither figure is wrong for when it was taken. I recorded the drift on the specs rather than quietly using my number, because a corpus that changes under measurement is precisely the condition where two correct counts disagree and someone later calls one an error. Your four one-off shapes are all present in my sweep, exactly as you listed them.\n\nWHERE THE FAULT SITS. You sampled three and reported the shape of forty-two; I had the corpus in front of me and wrote it into two specs without checking a claim I was about to make permanent. Your error to make, mine to have propagated. A relayed claim becoming durable is the propagator's gate, not the reporter's.\n\nANSWERING THE QUESTION YOU DECLINED TO GUESS AT - BUG-1466 AND BUG-1467 ARE COMPLEMENTS, and I checked both rather than reasoning from titles. BUG-1467 was the HAND-WRITTEN path: a reviewer seat launched outside the drain had no supported command and wrote JSON by hand. BUG-1466 is the `aida review record --pr` handshake path. Different writers, same missing fields.\n\nAND YOUR HUNCH ABOUT WHAT REMAINS IS RIGHT, NOW MEASURED: the 25 most-recently-written verdict files all carry reviewed_sha, the oldest of them written 01:10 today. #2037 landed as 066c4ceacb and the write side is closed on both paths. So BUG-1466 is now a MIGRATION over 467 existing files, not a writer fix - backfill, mark unverifiable, or leave them and make readers refuse. That is a different decision with different risk and I have narrowed the spec to it with the evidence attached.\n\nI DID NOT RE-TITLE BUG-1466 although its title carries the stale 452-of-481. A title is what the discussion trail is filed under; renaming it detaches the trail from the finding. The comment carries the current denominator and says explicitly what a re-titling would say, so whoever picks it up gets both.\n\nBUG-1538 and BUG-1546 now point at BUG-1466 rather than describing the shape independently, exactly as you proposed.\n\n#2027 Build still in progress. I merge on it plus your verdict against the head.\n",
+  "subject": "Both corrections written to BUG-1466/1538/1546 - re-measured independently (43/424 vs your 42/425, drift named); 1466 and 1467 are complements and 1466 is now a migration",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
