@@ -122,10 +122,36 @@ description: |
      such spec exists in the store today, so this is a cheap guard against a shape someone
      will eventually write rather than a fix for an observed miss.
 
-     THE TRADE-OFF, stated rather than hidden: if a swallowed block ever arrives indented,
-     column-0 misses it. That has not occurred in any of the six real instances — the
-     renderer emits the header at column 0 — but it is the failure mode this choice buys,
-     and whoever implements it should know which way the strictness cuts.
+     THE TRADE-OFF IS CONCATENATION, NOT INDENTATION. An earlier draft of this criterion
+     named an indented swallowed block as the risk the anchor buys. That is the wrong
+     failure mode. Checked against what actually precedes the header in all six real
+     instances:
+
+         BUG-1106    ...role-queue refusal.\n"\n        BUG-1450   ...pending review.\n"\n
+         BUG-1111    ...the same run's retry.\n"\n      BUG-1452   ...than an accident.\n
+         BUG-1310    ...reading alongside this.\n"\n    STORY-1405 ...independence rule.\n
+
+     Six of six at a line start, every one preceded by a newline, four of them by a closing
+     quote on its own line. Nothing is indented or close to it. Meanwhile all four false
+     positives are mid-line, which is what makes the separation exact.
+
+     The realistic miss is a MID-LINE APPEND: if a capture path strips the trailing newline
+     before the header, or the description's own last line lacks one, the header lands mid
+     line. Then the unanchored form catches it and BOTH anchored forms — column-0 and
+     indent-allowing alike — miss it identically. So anchoring does not trade false
+     positives against indented blocks; it trades them against concatenation. An
+     implementer told to watch for indentation will not think about a missing newline.
+
+     THE LIMIT OF THE EVIDENCE, stated because it bounds the claim: all six instances came
+     from ONE producer (the greedy-DOTALL capture path), so they share its newline
+     behaviour by construction. Six of six establishes that the CURRENT producer emits
+     line-anchored headers. It does not establish that the next one will.
+
+     That argues for the mid-line case being a required FIXTURE rather than for weakening
+     the anchor — see 7f. If that test proves awkward to satisfy, the honest resolution is
+     to report the anchored form as primary and keep the unanchored form as a second,
+     noisier pass a human can eyeball: four known false positives is a readable list, not
+     the flood that makes a check ignorable.
 
      THIS SPEC IS ITSELF THE WORKED EXAMPLE. Its own description contains the sentence
      defining the predicate, so the unanchored form flags the document that defines the
@@ -160,7 +186,12 @@ description: |
      7c. a raw-form mis-decode produces one finding;
      7d. an escaped-form mis-decode produces one finding;
      7e. a swallowed TOON block with NO non-ASCII character produces one finding. This is
-         the case the original spec would have missed entirely.
+         the case the original spec would have missed entirely;
+     7f. a swallowed header appended MID-LINE (no newline before it) is still found.
+         Both anchored forms miss this shape, so satisfying 7f requires either a
+         second unanchored pass or a smarter predicate. It is required because the
+         six observed instances all come from ONE producer and prove only that THAT
+         producer emits line-anchored headers.
 
   ## Open question
 
@@ -175,7 +206,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T05:52:13.240179246Z
+modified_at: 2026-09-21T05:55:22.995393608Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
