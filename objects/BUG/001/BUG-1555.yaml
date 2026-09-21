@@ -158,12 +158,108 @@ description: |
   - THE .gitattributes ASYMMETRY IS CONFIRMED REAL UNDER THE RESOLVER, WHICH IS NOT THE SAME AS BEING THE CAUSE. Verified independently by claude-reviewer-1 with `git check-attr` rather than by reading the file - master side resolves `text: set, eol: lf`, project side resolves `text: unspecified, eol: unspecified`. The method matters and is recorded: reading .gitattributes tells you a rule exists; check-attr tells you what a path actually GETS, the same distinction that made `git check-ignore` mislead both seats on BUG-1279. So the asymmetry is real and pinning `.aida/discipline/**` is correct on its own merits - AND the 2026-09-20 Windows pass documented above still rules it out as this failure's cause. A confirmed mechanism that cannot explain the control is not the explanation.
   - THE COUNT INFERENCE IS THE LOAD-BEARING STEP AND IT GENERALISES. Endorsed by claude-reviewer-1 as the part worth keeping if everything else were rewritten: 23 of 23 failing simultaneously is not drift, because no plausible edit history produces it. Their generalisation, recorded for TASK-1418's catalogue: A CONTENT GUARD THAT FAILS ON 100% OF ITS COMPARISON SET IS REPORTING ABOUT ITSELF. That separates "the guard found something" from "the guard is broken" BEFORE any mechanism is known - which is exactly the step that should have stopped this spec's first diagnosis from being filed with a named cause at high priority.
   - THE SIBLING SWEEP IS STILL OPEN AND ITS SCOPE IS RECORDED SO NOBODY CREDITS IT AS DONE. claude-reviewer-1 grepped ONLY templates.rs and ONLY for that exact comparison shape; within that file it is the single occurrence. A raw content compare written differently, or living in another module, would not have matched the pattern. They scoped their own sweep unprompted rather than letting it read as exhaustive - the acceptance bullet asking for a tree-wide sweep for the same shape remains OPEN.
+
+  ===============================================================================
+  FALSIFICATION LEDGER - FIVE MECHANISMS ELIMINATED, EACH BY A NAMED OBSERVATION.
+  DO NOT RE-PROPOSE ANY OF THESE WITHOUT FIRST ANSWERING THE OBSERVATION BESIDE IT.
+  Built 2026-09-21 by the advisor and claude-reviewer-1 working the same window.
+  ===============================================================================
+
+    1. LINE ENDINGS (LF master vs CRLF project checkout)
+       KILLED BY: the same test PASSED on Windows on 09-20 and FAILED on 09-21.
+       A platform property does not switch on by date. Reinforced: `.gitattributes`
+       has not changed since 2026-05-19 (commit 5220c4d3ad, BUG-244), so the pin
+       that creates the asymmetry was in force on BOTH nights.
+       THE MECHANISM IS NEVERTHELESS REAL - see the standing note below.
+
+    2. CONTENT DRIFT BETWEEN THE TWO SIDES
+       KILLED BY: both commits in the window touched BOTH sides symmetrically -
+       433c63bb4d (TASK-1293) README + spec-authoring, 53e3176e6e (TASK-1302)
+       session-discipline - same files, same line counts, master and project copy
+       together. Verified by claude-reviewer-1.
+       REINFORCED BY DIRECT MEASUREMENT on Linux at origin/main by the advisor:
+           26 files compared byte-for-byte (cmp), 3 differ
+           the 3 are EXACTLY the LOCALIZED_DISCIPLINE_GUIDES entries
+           (README.md, autonomous-burndown.md, substrate-as-bouncer.md)
+       So all 23 compared files are byte-identical. There is no drift to find.
+
+    3. STALE EMBEDDED MASTERS (a cached CI target dir + a directory-level
+       `cargo:rerun-if-changed=templates/` in aida-core/build.rs:13, with
+       Swatinem/rust-cache@v2 in the workflow - the ingredients are all present)
+       KILLED BY: four masters landed in the window (rework-brief-craft.md,
+       seat-recovery-playbooks.md, spec-authoring.md, two-seat-protocol.md) and
+       ALL FOUR APPEAR IN THE 09-21 FAILURE LIST. The failure list is derived from
+       EMBEDDED_TEMPLATES keys, so the embed contained the new files. The embed
+       was fresh.
+
+    4. SYMLINKED PROJECT COPIES (a Windows checkout without developer mode
+       materialises a symlink as a text file containing its target path, which
+       would mismatch every file at once - the right shape for 23 of 23)
+       KILLED BY: `git ls-files -s .aida/discipline/` returns 27 entries, ALL mode
+       100644. No symlinks, and none in the window.
+
+    5. STRAY CR BYTES COMMITTED INTO THE PROJECT COPY
+       KILLED BY: `grep -rlc $'\r' .aida/discipline/` matches nothing at
+       origin/main. No carriage returns are stored on either side.
+
+  THE ONE THING EVERY SURVIVING EXPLANATION MUST ACCOUNT FOR. Only three files were
+  edited in the window (README.md, spec-authoring.md, session-discipline.md) and
+  twenty-three were reported stale. SO FILES WHOSE CONTENT WAS UNTOUCHED ON BOTH
+  SIDES FAILED ON 09-21 HAVING PASSED ON 09-20. Whatever fired changed the BEHAVIOUR
+  OF THE COMPARISON without changing what was compared. Any proposed mechanism that
+  turns on file content is answering the wrong question.
+
+    A METHOD CAVEAT ON THE EXACT COUNT, recorded so it is not over-read: the
+    reviewer's "19 of the 23 also passed on 09-20" is arithmetic over master counts
+    at each HEAD (22 -> 26 masters, 3 localized, so 19 -> 23 compared), NOT a
+    reading of the 09-20 log, which printed only `ok` and enumerated nothing. The
+    exact 19 is an inference. THE ARGUMENT DOES NOT DEPEND ON IT: three files were
+    edited, twenty-three failed, so at least twenty untouched files flipped
+    regardless of how the compared set is counted.
+
+  STANDING NOTE - THE .gitattributes PIN IS NOT A NON-ISSUE, and the drop to medium
+  must not be read as demoting it. At claude-reviewer-1's request, recorded plainly:
+  the asymmetry is CONFIRMED LIVE under the resolver (`git check-attr` gives master
+  `text: set, eol: lf` and the project copy `text: unspecified, eol: unspecified`).
+  It did not fire in CI on 09-21, but it is a latent trap for THE FIRST WINDOWS
+  DEVELOPER WHO CHECKS THE PROJECT COPY OUT LOCALLY - a different population from
+  CI, and one with no nightly to catch it. Pin `.aida/discipline/**` regardless of
+  what this bug turns out to be.
+
+  A SEPARATE, STRUCTURAL DEFECT IN THE SAME FUNCTION - DELETION IS INVISIBLE.
+  Found by claude-reviewer-1 while checking the above. `discipline_content_mismatches`
+  reads the project copy with `std::fs::read_to_string(...).ok()?` inside a
+  `filter_map`, so A MASTER WITH NO PROJECT COPY YIELDS None AND IS SILENTLY SKIPPED
+  rather than reported. A DELETED PROJECT GUIDE MAKES THE PACK READ CLEAN. Not firing
+  today - every master has a copy at origin/main - but this is the BUG-1279 guard and
+  deletion is one of the drifts it exists to catch.
+
+    NOTE THE PARTIAL MITIGATION AND WHY IT IS NOT A FIX: the test's earlier `missing`
+    assertion does check `project_dir.join(name).is_file()` for every master, so a
+    deletion IS caught by that assertion today. The blindness is in
+    `discipline_content_mismatches` ITSELF, which is the reusable unit - any future
+    caller that uses it without the separate missing-check inherits a guard that
+    cannot see deletion. Fix the function, not only the call site.
+
+    TAXONOMY - THIS IS A THIRD FORM FOR TASK-1418, and per the reviewer the hardest
+    to notice: not an inert instrument and not an always-firing one, but an instrument
+    that FIRES CORRECTLY ON ONE FAILURE MODE AND IS SILENT ON ANOTHER. It looks alive,
+    because it is - just not for the case you are relying on.
+
+  ADDED ACCEPTANCE:
+  - Make `discipline_content_mismatches` report a missing project copy as a mismatch
+    rather than skipping it, and cover it with a test that deletes a project guide and
+    asserts the function alone (not the test's separate missing-assertion) reports it.
+  - Every mechanism in the ledger above that ships as a hygiene fix - the
+    .gitattributes pin, two-sided normalization, two-sided trim, deletion reporting -
+    ships with the note that it is NOT credited as this bug's cause unless the cause
+    is demonstrated to be it.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T15:55:33.961716270Z
+modified_at: 2026-09-21T15:58:41.254821733Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
