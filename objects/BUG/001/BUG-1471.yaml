@@ -26,12 +26,12 @@ description: |
   5. A test asserts the chosen behaviour by traversal — after `rel add --type related`, either `aida graph` reaches the target or the command failed. Asserting on the message is not sufficient; the message is what already exists.
 
   trace-worthy note for whoever takes it: TASK-887 is Completed and its warning works. This is not a regression of it — it is the next question, which is whether a warning was the right remedy.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-21T22:30:37.878222622Z
+modified_at: 2026-09-21T22:37:37.701130316Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -132,3 +132,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-21T22:30:30.175593099Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-2065: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed: Build (ubuntu-latest) (run 35663002466; `gh run view 35663002466`). Push fixups to the same branch: `aida queue work BUG-1471 --branch bug-1471-work --steal`'
+  shelved_by: advisor
+  shelved_at: 2026-09-21T22:37:37.701130316Z
