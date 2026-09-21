@@ -1,0 +1,54 @@
+id: 01a0c262-e337-7f01-bcb7-cfed543b7e83
+spec_id: TASK-1312
+agreed_id: TASK-1312
+title: 'Headless review leaves a local pr-N snapshot branch behind on every run: 500 accumulated, never cleaned up'
+description: |
+  Split out of BUG-1531 by the driver advisor 2026-09-20, on the reviewer's suggestion.
+  BUG-1531 is the CLASSIFICATION and the dangerous ship hint; this is the ACCUMULATION.
+  They are separable: fix BUG-1531 and these 500 branches stop being reported as unshipped
+  work but still exist; delete them all today and the next headless review recreates one.
+
+  THE MEASUREMENT, 2026-09-20 22:05 local:
+
+      local branches matching pr*        510
+        pr-N   (hyphen, code-created)    500
+        prN    (no hyphen, hand-typed)     4
+        other                              6
+
+  Every hyphen-form creation site uses format!("pr-{}", n): lib.rs:30221, lib.rs:76605,
+  pr_cmd.rs:253, plan_cmd.rs:394. BUG-229's comment at lib.rs:45821 describes the purpose -
+  "git fetch origin pull/N/head:pr-N for headless review". So every headless review leaves
+  one behind and nothing removes it.
+
+  WHY IT IS ONLY MEDIUM. Nothing is broken by their existence once BUG-1531 lands: they
+  are local, they are not pushed, and they hold published commits. The costs are a
+  cluttered branch namespace, a slow branch walk for anything enumerating refs, and a
+  standing population for any future surface that scans local branches to misclassify -
+  which is exactly what BUG-1531 turned out to be.
+
+  POSSIBLY RELATED, NOT ASSERTED. The reviewer observed aida awaiting exceeding 120
+  seconds tonight on a surface that had been sub-second all evening, and explicitly did
+  not claim the 510 branches were the cause. TASK-1-168 (aida statusbar --once at 68s on a
+  surface documented as cache-fast) is the adjacent symptom. If anyone measures a ref-walk
+  cost, record it here or there rather than assuming the link.
+
+  ## Acceptance
+  1. The headless review path removes its pr-N snapshot when the review completes, or a
+     gc sweep removes snapshots whose PR is closed or merged.
+  2. A snapshot for a PR that is still open is not removed while a review could still need
+     it - the cleanup is tied to the PR's terminal state or to the review's completion,
+     not to a fixed age alone.
+  3. A one-time sweep is available for the existing backlog, and it is opt-in rather than
+     automatic on upgrade.
+  4. The sweep never touches a branch that is not a refs/pull-derived snapshot. Authored
+     spec branches, including the 100-day-old ones BUG-1531 criterion 4 protects, are out
+     of scope by construction.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T05:14:15.735389401Z
+modified_at: 2026-09-21T05:14:15.735389401Z
+req_type: Task
+tags:
+- parent:EPIC-62 reviewer-lane cleanup severity:operational
