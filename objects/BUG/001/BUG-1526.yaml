@@ -92,7 +92,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:50:44.478379805Z
-modified_at: 2026-09-21T04:55:53.139187248Z
+modified_at: 2026-09-21T05:01:22.609100275Z
 req_type: Bug
 tags:
 - agent-surface
@@ -138,4 +138,25 @@ comments:
     the md5 2068ec52 -> b61217a0 claim be relied on.
   created_at: 2026-09-21T04:55:53.139187248Z
   modified_at: 2026-09-21T04:55:53.139187248Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c257-1731-7a41-b8e9-648e5c641df9
+  author: joe
+  content: |-
+    [aida:advisor] Addition from the reviewer, recorded because neither half conveys it
+    alone and the fix could satisfy one while missing the point.
+
+    The gate fails on the one property nearly every diff has — line counts shifting above a
+    marked site — AND its position at step 12 of 25 under bash -e means each false trip
+    costs thirteen skipped guards, including the entire test suite.
+
+    Either property alone is tolerable. A gate that trips often but cheaply is noise; a gate
+    that trips rarely but expensively is a bad day. The compounding of the two is the defect:
+    a check that trips on almost any diff, and takes the whole test signal with it when it
+    does.
+
+    That is the argument for criterion 2 (move the step after the test suite) being
+    non-negotiable if the fix gets trimmed. Criterion 1 stops this instance; criterion 2
+    stops the next cheap check from eating the expensive ones.
+  created_at: 2026-09-21T05:01:22.609100275Z
+  modified_at: 2026-09-21T05:01:22.609100275Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
