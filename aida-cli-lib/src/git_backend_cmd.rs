@@ -3592,6 +3592,21 @@ pub(crate) fn handle_git_backend_command(
                     // including the centrality fields, then returns early.
                     // trace:STORY-632 | ai:claude
                     if *json {
+                        // BUG-1558: the machine JSON projection used to omit
+                        // relationships entirely — an agent reading `aida show
+                        // --json` had no way to see the typed graph at all,
+                        // which is a stronger form of the same collapse the
+                        // human/TOON surfaces had (a missing field instead of
+                        // a mislabeled one). Emit the same stored `rel_type`
+                        // label the TOON table uses (`rel_type_label`) so all
+                        // three surfaces agree on vocabulary.
+                        // trace:BUG-1558 | ai:claude
+                        #[derive(serde::Serialize)]
+                        struct RelJson {
+                            rel_type: String,
+                            id: String,
+                            title: String,
+                        }
                         #[derive(serde::Serialize)]
                         struct ShowJson<'a> {
                             id: String,
@@ -3611,7 +3626,24 @@ pub(crate) fn handle_git_backend_command(
                             in_degree: u32,
                             out_degree: u32,
                             heft: u32,
+                            // trace:BUG-1558 | ai:claude
+                            relationships: Vec<RelJson>,
                         }
+                        let relationships: Vec<RelJson> = req
+                            .relationships
+                            .iter()
+                            .map(|rel| {
+                                let (id, title) = match backend.get_requirement(&rel.target_id) {
+                                    Ok(Some(t)) => (t.display_id(), t.title.clone()),
+                                    _ => ("(unknown)".to_string(), String::new()),
+                                };
+                                RelJson {
+                                    rel_type: rel_type_label(&rel.rel_type),
+                                    id,
+                                    title,
+                                }
+                            })
+                            .collect();
                         let out = ShowJson {
                             id: req.id.to_string(),
                             spec_id: req.spec_id.as_deref(),
@@ -3630,6 +3662,7 @@ pub(crate) fn handle_git_backend_command(
                             in_degree: degrees.in_degree,
                             out_degree: degrees.out_degree,
                             heft: degrees.heft,
+                            relationships,
                         };
                         println!("{}", serde_json::to_string_pretty(&out)?);
                         return Ok(());
@@ -4032,8 +4065,15 @@ pub(crate) fn handle_git_backend_command(
                                 );
                             }
                         } else {
+                            // TASK-1417: the count alone doesn't tell a reader
+                            // whether rows exist and were withheld by policy,
+                            // or the spec genuinely has nothing more — say so
+                            // explicitly so the two cases can't be confused.
+                            // TOON is unchanged by this (it always enumerates,
+                            // above); this line is the human-only view limit.
+                            // trace:TASK-1417 | ai:claude
                             println!(
-                                "{}: {} relationship(s)  (use {} to enumerate, or `aida rel list {}`)",
+                                "{}: {} relationship(s) — withheld by the view limit, not enumerated below (use {} to show every edge, or `aida rel list {}`)",
                                 "Relations".bold(),
                                 total,
                                 "--rels".cyan(),

@@ -682,3 +682,254 @@ fn coordination_journey_awaiting_unifies_mail_briefs_findings() {
         );
     }
 }
+
+/// BUG-1558: `aida show` must render each relationship with its STORED type
+/// on every surface — human, TOON, and the machine `--json` projection — not
+/// collapse everything but Parent into "Related". The fixture mirrors
+/// TASK-1247's real shape (BlockedBy + Child + Blocks alongside Parent):
+/// three distinct non-Parent types on one spec.
+///
+/// DEMONSTRATE-IT-FIRES: written against the code as found, `--json` carried
+/// NO relationships field at all (a stronger form of the same collapse — a
+/// missing field instead of a mislabeled one), so the `--json` assertion
+/// below is genuinely RED before the fix and green after. The human/TOON
+/// assertions were already correct on this branch (BUG-1442/TASK-102 fixed
+/// those renderers earlier) and are included here to lock that in as a
+/// regression guard for all three surfaces together.
+// trace:BUG-1558 | ai:claude
+#[test]
+fn bug_1558_show_carries_stored_relationship_type_on_every_surface() {
+    let (_base, repo, home) = init_repo();
+
+    let add_spec = |title: &str| -> String {
+        let out = aida(&repo, &home)
+            .env("AIDA_AGENT_OUTPUT", "toon")
+            .env("AIDA_SESSION_ROLE", "advisor")
+            .args([
+                "add", "--type", "task", "--status", "approved", "--title", title,
+            ])
+            .output()
+            .expect("run aida add");
+        assert!(
+            out.status.success(),
+            "aida add failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        parse_spec_id(&String::from_utf8_lossy(&out.stdout))
+    };
+
+    let main_spec = add_spec("BUG-1558 fixture: main spec");
+    let blocker = add_spec("BUG-1558 fixture: blocker target");
+    let child = add_spec("BUG-1558 fixture: child target");
+    let blocked = add_spec("BUG-1558 fixture: blocks target");
+
+    for (target, rel_type) in [
+        (&blocker, "blocked-by"),
+        (&child, "child"),
+        (&blocked, "blocks"),
+    ] {
+        let rel = aida(&repo, &home)
+            .env("AIDA_AGENT_OUTPUT", "toon")
+            .args(["rel", "add", &main_spec, target, "--type", rel_type])
+            .output()
+            .expect("run aida rel add");
+        assert!(
+            rel.status.success(),
+            "rel add {rel_type} failed: {}",
+            String::from_utf8_lossy(&rel.stderr)
+        );
+    }
+
+    // ---- Human surface: already fixed (TASK-102 `relationship_phrase`). ----
+    let human = aida(&repo, &home)
+        .env("AIDA_AGENT_OUTPUT", "0")
+        .args(["show", &main_spec])
+        .output()
+        .expect("run aida show (human)");
+    let human_out = String::from_utf8_lossy(&human.stdout);
+    assert!(
+        human_out.contains("is blocked by")
+            && human_out.contains("is child of")
+            && human_out.contains("blocks"),
+        "human `aida show` must name each stored relationship type, not \
+         collapse them to a single undifferentiated bucket:\n{human_out}"
+    );
+    assert!(
+        !human_out.contains("Related"),
+        "none of these three typed edges should ever render as the generic \
+         \"Related\" bucket:\n{human_out}"
+    );
+
+    // ---- TOON surface: already fixed (BUG-1442 `rel_type_label`). ----
+    let toon = aida(&repo, &home)
+        .env("AIDA_AGENT_OUTPUT", "toon")
+        .args(["show", &main_spec])
+        .output()
+        .expect("run aida show (toon)");
+    let toon_out = String::from_utf8_lossy(&toon.stdout);
+    for t in ["blocked-by", "child", "blocks"] {
+        assert!(
+            toon_out.contains(t),
+            "TOON `aida show` must carry the stored relationship type \
+             `{t}`, not collapse it:\n{toon_out}"
+        );
+    }
+    assert!(
+        !toon_out.contains(",Related,") && !toon_out.starts_with("Related,"),
+        "TOON must not render any of these edges as the generic \"Related\" \
+         label:\n{toon_out}"
+    );
+
+    // ---- Machine JSON surface: THIS is the one still broken as found — the
+    //      `ShowJson` projection carried no `relationships` field at all. ----
+    let json = aida(&repo, &home)
+        .env("AIDA_AGENT_OUTPUT", "0")
+        .args(["show", &main_spec, "--json"])
+        .output()
+        .expect("run aida show --json");
+    assert!(
+        json.status.success(),
+        "aida show --json failed: {}",
+        String::from_utf8_lossy(&json.stderr)
+    );
+    let json_out = String::from_utf8_lossy(&json.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&json_out)
+        .unwrap_or_else(|e| panic!("aida show --json did not emit valid JSON: {e}\n{json_out}"));
+    let rels = parsed
+        .get("relationships")
+        .unwrap_or_else(|| {
+            panic!(
+                "aida show --json must carry a `relationships` field \
+                 (BUG-1558: it was missing entirely):\n{json_out}"
+            )
+        })
+        .as_array()
+        .unwrap_or_else(|| panic!("`relationships` must be a JSON array:\n{json_out}"));
+    assert_eq!(
+        rels.len(),
+        3,
+        "expected exactly the 3 fixture edges in the `relationships` array:\n{json_out}"
+    );
+    let json_types: Vec<String> = rels
+        .iter()
+        .map(|r| {
+            r.get("rel_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("(missing rel_type)")
+                .to_string()
+        })
+        .collect();
+    for t in ["blocked-by", "child", "blocks"] {
+        assert!(
+            json_types.iter().any(|jt| jt == t),
+            "`aida show --json`'s relationships array must name the stored \
+             type `{t}` (got {json_types:?}):\n{json_out}"
+        );
+    }
+}
+
+/// TASK-1417: above the inline threshold (five), the human view must not
+/// silently withhold rows — it must say so, distinguishably from a bare
+/// count. Pins the exact boundary: five relationships enumerate; six collapse
+/// WITH the declaration present. TOON is unaffected (it always enumerates).
+///
+/// DEMONSTRATE-IT-FIRES: as found, the six-relationship collapse line read
+/// "6 relationship(s)  (use --rels to enumerate, or `aida rel list <spec>`)"
+/// with no assertion-stable declaration that rows were withheld by a view
+/// limit — the checks below for "withheld" / "view limit" are RED against
+/// that wording and green after the fix.
+// trace:TASK-1417 | ai:claude
+#[test]
+fn task_1417_relationship_collapse_declares_view_limit_at_threshold() {
+    let (_base, repo, home) = init_repo();
+
+    let add_spec = |title: &str| -> String {
+        let out = aida(&repo, &home)
+            .env("AIDA_AGENT_OUTPUT", "toon")
+            .env("AIDA_SESSION_ROLE", "advisor")
+            .args([
+                "add", "--type", "task", "--status", "approved", "--title", title,
+            ])
+            .output()
+            .expect("run aida add");
+        assert!(
+            out.status.success(),
+            "aida add failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        parse_spec_id(&String::from_utf8_lossy(&out.stdout))
+    };
+
+    let add_n_references = |spec: &str, n: usize| {
+        for i in 0..n {
+            let target = add_spec(&format!("TASK-1417 fixture: rel target {i}"));
+            let rel = aida(&repo, &home)
+                .env("AIDA_AGENT_OUTPUT", "toon")
+                .args(["rel", "add", spec, &target, "--type", "references"])
+                .output()
+                .expect("run aida rel add");
+            assert!(
+                rel.status.success(),
+                "rel add failed: {}",
+                String::from_utf8_lossy(&rel.stderr)
+            );
+        }
+    };
+
+    // ---- Exactly five: still enumerated inline, no collapse. ----
+    let five_spec = add_spec("TASK-1417 fixture: five relations");
+    add_n_references(&five_spec, 5);
+    let five_show = aida(&repo, &home)
+        .env("AIDA_AGENT_OUTPUT", "0")
+        .args(["show", &five_spec])
+        .output()
+        .expect("run aida show (five)");
+    let five_out = String::from_utf8_lossy(&five_show.stdout);
+    assert!(
+        five_out.contains("Relations:"),
+        "five relationships must still enumerate under the `Relations:` \
+         header, not collapse:\n{five_out}"
+    );
+    assert!(
+        !five_out.contains("withheld") && !five_out.contains("view limit"),
+        "five relationships is AT the inline threshold and must not trigger \
+         the collapse declaration:\n{five_out}"
+    );
+
+    // ---- Six: collapses, and the collapse DECLARES itself. ----
+    let six_spec = add_spec("TASK-1417 fixture: six relations");
+    add_n_references(&six_spec, 6);
+    let six_show = aida(&repo, &home)
+        .env("AIDA_AGENT_OUTPUT", "0")
+        .args(["show", &six_spec])
+        .output()
+        .expect("run aida show (six)");
+    let six_out = String::from_utf8_lossy(&six_show.stdout);
+    assert!(
+        six_out.contains("6 relationship"),
+        "the collapsed line must still state the true count:\n{six_out}"
+    );
+    assert!(
+        six_out.contains("withheld") && six_out.contains("view limit"),
+        "above the threshold, the human view must explicitly declare that \
+         rows were withheld by a view limit — distinguishable from a spec \
+         that genuinely has only a count:\n{six_out}"
+    );
+    assert!(
+        six_out.contains("--rels"),
+        "the collapse line must still point at the escape hatch:\n{six_out}"
+    );
+
+    // ---- TOON is unaffected: it always enumerates every edge. ----
+    let six_toon = aida(&repo, &home)
+        .env("AIDA_AGENT_OUTPUT", "toon")
+        .args(["show", &six_spec])
+        .output()
+        .expect("run aida show (six, toon)");
+    let six_toon_out = String::from_utf8_lossy(&six_toon.stdout);
+    assert!(
+        six_toon_out.contains("relationships[6]"),
+        "TOON must still enumerate all 6 edges regardless of the human \
+         threshold:\n{six_toon_out}"
+    );
+}
