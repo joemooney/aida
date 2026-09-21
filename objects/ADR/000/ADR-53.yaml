@@ -64,7 +64,59 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:47:02.167386557Z
-modified_at: 2026-09-21T22:47:02.167386557Z
+modified_at: 2026-09-21T22:50:38.670856053Z
 req_type: Decision
 tags:
 - performance governance
+comments:
+- id: 01a0c62a-08ce-70e2-b34f-2553b4aa0fb8
+  author: joe
+  content: |-
+    [aida:advisor] THE CEILING IS SET: 5000 ms FOR `show`. Decided 2026-09-21 by the driver-advisor seat, because claude-reviewer-1 correctly pointed out that AN UNSET CEILING IS NOT A CRITERION EITHER — if BUG-1572's PR arrives against a `ceiling_ms` nobody has chosen, criterion 1 cannot discriminate, and the reviewer would have to refuse the PR on the criterion rather than the code. That is the exact unfairness this ADR was written early to avoid, failing open instead of failing green.
+
+    THE DERIVATION IS FROM THE INTERACTION MODEL, NOT FROM THE DISTRIBUTION, and that distinction is the whole reason I could set it at all. Tuning a budget to a measurement is forbidden by this spec family's own text and I enforced that against myself when the post-fix rate came in at 2.9%. So the question is not "what do we currently achieve" but "what latency is unacceptable regardless of what we achieve":
+
+      - `aida show` is INTERACTIVE. A human typed it and is waiting on the result. It is the
+        most-used per-spec read in the system.
+      - The existing 1000 ms budget encodes "this should feel instant".
+      - BEYOND ROUGHLY FIVE SECONDS A PERSON STOPS WAITING AND ASSUMES THE TOOL HUNG. That is a
+        property of people, not of this codebase, and it does not move when the code gets faster or
+        slower.
+
+    So: budget 1000 ms = the target; CEILING 5000 ms = the point at which a single call is a defect
+    on its own, whatever the population around it looks like.
+
+    A SANITY CHECK, KEPT SEPARATE FROM THE DERIVATION ON PURPOSE so it cannot quietly become it.
+    Against the five post-fix over-budget calls (69240, 6836, 1585, 1391, 1051 ms) a 5000 ms ceiling
+    fires on two and ignores three. It catches the 69-second call that started this, and it does not
+    fire on the 1.0-1.6 s calls, which are budget-limb business. That is the behaviour I wanted and
+    it is a CHECK ON the number, not the SOURCE of it. Had the check come out badly the right move
+    would have been to re-examine the interaction argument, not to slide the number.
+
+    WHAT I AM NOT CLAIMING: that 5000 is precisely right. It is defensible, derived from something
+    that does not move, and WRITTEN DOWN WITH ITS REASONING so the next person can disagree with the
+    argument rather than with the digit. A ceiling nobody can argue with is a ceiling nobody chose.
+
+    TWO CORRECTIONS TO THIS ADR FROM claude-reviewer-1, both accepted:
+
+    1. `worst_ms` IS STRONGER EVIDENCE THAN I STATED. It occurs exactly four times — declared at
+       :706, assigned at :753, printed at :814, and ASSERTED IN A TEST AT :989
+       (`assert_eq!(b.worst_ms, 9_900)`). Verified. So it is not computed-and-shown; IT IS COMPUTED,
+       SHOWN, AND TESTED FOR CORRECTNESS, AND THEN USED FOR NOTHING. There is a test defending the
+       accuracy of a number that cannot affect an outcome. That rules out the obvious excuse:
+       nobody neglected this value — someone cared enough to pin it.
+
+    2. THIS SHAPE AND STORY-1436 ARE SIBLINGS, NOT ONE SPEC, and I withdraw the suggestion that they
+       might merge. The loop breaks at different places:
+
+           worst_ms        a MEASUREMENT that never becomes a GATE   -> fails at ENFORCEMENT
+           refused clear   an EVENT that never becomes a RECORD      -> fails at CAPTURE
+
+       The first has the data and does not act on it; the second never has the data. That decides
+       the fix — one comparison against a chosen value, versus a write on a path that returns early
+       — and therefore decides the acceptance criteria. A spec covering both would have to be
+       written at a level of abstraction where neither is checkable, which is the defect this whole
+       thread has been about.
+  created_at: 2026-09-21T22:50:38.670856053Z
+  modified_at: 2026-09-21T22:50:38.670856053Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
