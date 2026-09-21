@@ -66481,7 +66481,7 @@ fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenPrSnapshot {
             "--limit",
             "50",
             "--json",
-            "number,title,headRefName,statusCheckRollup,mergeable,reviewDecision",
+            "number,title,headRefName,headRefOid,statusCheckRollup,mergeable,reviewDecision",
         ])
         .output();
     let Ok(out) = out else {
@@ -66520,6 +66520,11 @@ fn parse_open_pr_snapshot(json: &str) -> OpenPrSnapshot {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
+        let head_sha = pr
+            .get("headRefOid")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
         let mergeable = pr
             .get("mergeable")
             .and_then(|v| v.as_str())
@@ -66542,6 +66547,7 @@ fn parse_open_pr_snapshot(json: &str) -> OpenPrSnapshot {
                 ci_rollup,
                 mergeable,
                 review_decision,
+                head_sha,
             },
         );
     }
@@ -68350,8 +68356,43 @@ fn collect_awaiting_report_inner(
         nightly_red_status(project_root)
     };
 
+    // STORY-1419: PRs whose rework has landed on a refusal this seat recorded.
+    // Needs the PR snapshot for current heads, so it is skipped on the
+    // notice-fast path and when CI/forge lookups are off — the same contract as
+    // mergeable_prs. Reuses the MEMOIZED snapshot, so this adds no request.
+    // trace:STORY-1419 | ai:claude
+    let rework_ready = if notice_fast || no_ci {
+        Vec::new()
+    } else {
+        let snapshot = collect_open_prs(project_root);
+        let seat = std::env::var("AIDA_USER")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
+        let candidates: Vec<awaiting_you::ReworkCandidate> = snapshot
+            .by_branch
+            .values()
+            .filter_map(|pr| {
+                let head_sha = pr.head_sha.clone()?;
+                let verdict = review_verdict::read_recorded_verdict(
+                    project_root,
+                    &format!("PR-{}", pr.number),
+                )?;
+                Some(awaiting_you::ReworkCandidate {
+                    pr: pr.number,
+                    head_sha,
+                    spec: None,
+                    verdict_blocks: verdict.kind.blocks_done(),
+                    reviewed_sha: verdict.reviewed_sha.clone(),
+                    recorded_by: verdict.recorded_by.clone(),
+                })
+            })
+            .collect();
+        awaiting_you::rework_ready_rows(&candidates, seat.as_deref())
+    };
+
     awaiting_you::AwaitingReport {
         mergeable_prs,
+        rework_ready,
         pending_briefs,
         findings_total,
         reviewer_queue_items,

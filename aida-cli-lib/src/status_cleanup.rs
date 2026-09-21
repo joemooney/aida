@@ -132,6 +132,11 @@ pub(crate) struct OpenPrItem {
     /// The "Awaiting you" classifier excludes `CHANGES_REQUESTED` PRs.
     /// trace:STORY-465 | ai:claude
     pub review_decision: Option<String>,
+    /// STORY-1419: the PR's current head commit, so a caller can tell whether
+    /// the PR has moved past the sha a refusal was recorded against. Comes from
+    /// the SAME `gh pr list` call as the other fields — no extra request.
+    // trace:STORY-1419 | ai:claude
+    pub head_sha: Option<String>,
 }
 
 /// A dormant lease (worktree present, no live process, <24h old).
@@ -1147,6 +1152,7 @@ mod tests {
             ci_rollup: Some("pass".into()),
             mergeable: Some("clean".into()),
             review_decision: None,
+            head_sha: None,
         });
         report.dormant_leases.push(DormantLeaseItem {
             lease_id: "abc".into(),
@@ -1191,6 +1197,7 @@ mod tests {
             ci_rollup: Some("pass".into()),
             mergeable: Some("clean".into()),
             review_decision: None,
+            head_sha: None,
         });
 
         report.forge_kind = Some(crate::forge::ForgeKind::GitLab);
@@ -1652,6 +1659,7 @@ mod tests {
                 ci_rollup: None,
                 mergeable: None,
                 review_decision: None,
+                head_sha: None,
             }],
             missed_auto_bump: vec![MissedAutoBumpItem {
                 spec_id: "TASK-2".to_string(),
