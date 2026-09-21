@@ -1,0 +1,29 @@
+id: 01a0c54c-5e99-7ea0-a1da-1a61adc39150
+spec_id: BUG-1564
+agreed_id: BUG-1564
+title: An InProgress spec with no lease behind it is not surfaced as an anomaly - it is only visible as the flag-only column of aida ps
+description: |-
+  Split out of BUG-1470 acceptance criterion 2, which PR 2035 did not address. Filed so merging that PR does not close the criterion silently.
+
+  THE STATE: a spec reads InProgress while no session, lease or process backs it. It means work is parked and nothing owns it. Today the only way to see it is to read the flag-only column of aida ps and know what that column means.
+
+  WHY IT MATTERS MORE THAN IT LOOKS: InProgress is the status every pickability check treats as taken. An orphaned InProgress is therefore invisible to the drain (it is someone else's work) AND invisible to a human scanning aida list (it looks live). It is the one status where being wrong is silent in both directions.
+
+  Acceptance:
+  - Some default surface reports the anomaly without the operator having to ask for it or interpret a column: a spec is InProgress and no live session, lease or process corresponds to it.
+  - The report distinguishes NOT-YET-STARTED from ABANDONED where it can, or states plainly that it cannot. An anomaly report that cannot say how long it has been in this state is hard to act on.
+  - Deciding NOT to add a new surface is an acceptable outcome IF an existing one is made to carry it - aida awaiting, aida status and aida doctor are all candidates, and BUG-1556 notes that adding surfaces nobody reads is its own failure mode.
+
+  NOT IN SCOPE: automatically recovering the spec. Surfacing first; an owner for the transition is the sibling spec split from criterion 4.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T18:48:31.641418092Z
+modified_at: 2026-09-21T18:48:31.641418092Z
+req_type: Bug
+tags:
+- aida:status
+- followup:BUG-1470
+- orchestrator
+- parent:EPIC-62
