@@ -5285,15 +5285,16 @@ pub(crate) fn handle_queue_command(
                     drain_resolution.max,
                 );
             }
-            // STORY-647/STORY-1353: starting an autonomous drain is dispatch,
-            // (`--auto-complete`) is an advisor-gated op by default (tunable via
-            // `[team.permissions] drain_start`). A live-orchestrator re-entry
-            // (`--resume-drain`, and the phase children the orchestrator spawns)
-            // holds advisor authority via `has_advisor_authority()`'s
-            // orchestrator carve-out, so the gate bypasses those and only the
-            // FRESH launch is checked. Advisor authority (TTY / advisor role)
-            // bypasses; there is no `--force` on this path, so a non-advisor
-            // seats the role. trace:STORY-647 | ai:claude
+            // STORY-1353: starting an autonomous drain (`--auto-complete`) is
+            // DISPATCH, not disposition, so it is gated on
+            // `has_dispatch_authority()` (product, advisor, integrator role,
+            // or a live orchestrator) rather than the old advisor-only
+            // `[team.permissions]` map. A live-orchestrator re-entry
+            // (`--resume-drain`, and the phase children the orchestrator
+            // spawns) holds dispatch authority via the orchestrator carve-out,
+            // so the gate bypasses those and only the FRESH launch is
+            // checked; there is no `--force` bypass on this path, unlike the
+            // `aida burndown run` sibling gate. trace:STORY-647 trace:STORY-1353 | ai:claude
             if auto_complete.is_some() && !*resume_drain {
                 // trace:STORY-1133 | ai:codex
                 if current_role_instance_is_companion() {
@@ -6681,18 +6682,13 @@ pub(crate) fn handle_queue_rework(
         Some(s) => Some(parse_status(s)?),
         None => smart_target,
     };
-    if let Some(ref new_status) = target_status {
-        if status_advance_requires_advisor_authority(&current_status, new_status)
-            && !has_advisor_authority()
-        {
-            anyhow::bail!(
-                "rework would advance {} → {}, which needs advisor authority; dispatch \
-                 authority alone cannot dispose a spec",
-                current_status,
-                new_status
-            );
-        }
-    }
+    // NOTE: the advisor-authority check for this same (current_status,
+    // target_status) pair is NOT done here. It used to be (STORY-1353's
+    // original hard `anyhow::bail!`), but that duplicated the BUG-1470 F1
+    // gate below verbatim -- same predicate, same pair -- and being first,
+    // silently upgraded BUG-1470's designed no-op-with-hint refusal into a
+    // hard error, breaking `metadata_rework_of_a_draft_is_refused_without_advisor_authority`'s
+    // pinned Ok(()) contract. One gate, at the flip, below. trace:STORY-1353 | ai:claude
 
     // Guards. Terminal status (Completed/Rejected) + already-InProgress
     // both require --force. We surface the spec id in the error so the

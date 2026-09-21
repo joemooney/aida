@@ -49779,7 +49779,7 @@ fn handle_burndown_run(
     verbose: bool,
     // TASK-1159: explicit negation for a configured verbose default.
     quiet: bool,
-    // STORY-647: bypass the team RBAC drain-start guardrail.
+    // STORY-647/STORY-1353: bypass the dispatch-authority drain-start guardrail.
     force: bool,
     // TASK-1116: per-invocation `--vendor`/`--agent`. burndown's implementer
     // fan-out is the Claude harness's native subagent primitive (Claude-only),

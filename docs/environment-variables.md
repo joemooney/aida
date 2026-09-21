@@ -553,7 +553,12 @@ in git history. `aida config show` renders the resolved `[team]` policy.
 | `[team.permissions] status_transition` | Minimum role to promote a spec into the approved pipeline. | `advisor` |
 | `[team.permissions] merge_gate` | Minimum role to run `aida db merge-gate`. | `advisor` |
 | `[team.permissions] integrate` | Minimum role to run `aida queue integrate`. | `advisor` |
-| `[team.permissions] drain_start` | Minimum role to start an autonomous drain (`aida burndown run` / `aida queue work --auto-complete`). | `advisor` |
+
+Starting an autonomous drain (`aida burndown run` / `aida queue work
+--auto-complete`) is **not** in the `[team.permissions]` map above — it is
+DISPATCH authority (product, advisor, integrator role, or a live
+orchestrator), not a team-config-tunable disposition gate. See
+`.aida/discipline/substrate-as-bouncer.md`'s "Authority boundaries" section.
 
 Interactive (TTY) sessions and live-orchestrator re-entry hold authority
 regardless of role (so a human at a terminal and a drain's own phase children

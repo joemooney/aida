@@ -2188,10 +2188,11 @@ pub enum BurndownCommand {
         // trace:TASK-1159 | ai:codex
         #[clap(long)]
         quiet: bool,
-        // trace:STORY-647 | ai:claude
-        /// Bypass the team RBAC guardrail (`[team.permissions] drain_start`).
-        /// Starting an autonomous drain is an advisor-gated op by default; the
-        /// gate is a guardrail, not security — the bypass is recorded in history.
+        // trace:STORY-647 trace:STORY-1353 | ai:claude
+        /// Bypass the dispatch-authority guardrail on starting an autonomous
+        /// drain (product, advisor, integrator role, or a live orchestrator
+        /// normally required). A guardrail, not security — the bypass is
+        /// recorded in history.
         #[clap(long)]
         force: bool,
         /// Which vendor CLI backs this drain: `claude`, `codex`, or `agy`

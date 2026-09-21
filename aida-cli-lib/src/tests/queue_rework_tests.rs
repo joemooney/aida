@@ -495,17 +495,20 @@ fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
         )
     };
 
-    // STORY-1353 half: Needs Attention -> In Progress is a DISPOSITION, so
+    // STORY-1353 half: Needs Attention -> Approved is a DISPOSITION, so
     // dispatch authority alone must not perform it. This is the hole BUG-1494
     // recorded -- queue rework was the way to move a shelved spec without the
-    // advisor ever ruling on it.
+    // advisor ever ruling on it. The BUG-1470 F1 gate (queue_cmd.rs, at the
+    // status flip) refuses this the SAME way it refuses an un-triaged Draft
+    // (see `metadata_rework_of_a_draft_is_refused_without_advisor_authority`):
+    // Ok(()), a printed hint, no status write, no queue entry -- NOT an Err.
+    // An earlier version of this test asserted an Err here (STORY-1353's own
+    // gate, since removed as a duplicate of this one -- see the NOTE at the
+    // removed call site in handle_queue_rework); that duplicate silently
+    // upgraded the pinned no-op contract to a hard failure.
     {
         let _role = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
-        let refused = rework(&storage).expect_err("dispatch authority alone must not dispose");
-        assert!(
-            refused.to_string().contains("needs advisor authority"),
-            "refusal must name the missing authority: {refused}"
-        );
+        rework(&storage).expect("a refused rework is a no-op, not an error");
         let parked = storage.load().unwrap();
         assert_eq!(
             parked
@@ -514,6 +517,13 @@ fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
                 .status,
             RequirementStatus::NeedsAttention,
             "a refused rework must leave the spec parked, not half-moved"
+        );
+        assert!(
+            storage
+                .queue_list("codex", true)
+                .unwrap_or_default()
+                .is_empty(),
+            "a refused rework must not leave a queue entry behind"
         );
     }
 
