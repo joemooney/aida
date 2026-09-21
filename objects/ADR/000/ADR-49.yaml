@@ -161,12 +161,26 @@ description: |-
       CONSEQUENCE FOR THE EXIT CONDITION: the operator's 'list of open items is empty' is well-defined and is the right number. Clause H's first worry - that nobody had chosen a lens - is resolved: the default lens is the lens, it counts only work, and it is what `aida list` prints with no arguments.
 
       CLAUSE H's SECOND WORRY STANDS AND IS NOW SHARPER. Every child spec this mode files under clause 1 is a bug, task or story - exactly the types the 143 counts. So each use of the permissive path increments the number the early exit waits on. The exclusion clause H asks for is therefore specific and implementable: exclude specs created by the mode's own deferral path from the exit count, or the early exit recedes by one for every acceptance gap the mode defers.
+
+      CLAUSE J's SECOND WORRY IS NO LONGER PREDICTED - IT WAS OBSERVED WITHIN MINUTES OF BEING WRITTEN, WITH A TIMESTAMP.
+
+          21:22  advisor measures the open lens: 143, of which 73 bug
+          21:23:03  advisor files BUG-1518
+          21:23  reviewer measures the open lens: 144, of which 74 bug
+
+      Two seats, one-minute apart, one-count difference, and the difference is a spec the first measurer filed in the gap. Both measurements were correct for their moment; the corpus changed between them. The human and JSON projections of `aida list` were briefly suspected of disagreeing and do not - both now report 144.
+
+      So the exit condition's counter moved by one because someone did ordinary advisory work - filing a finding - while discussing whether the mode would move it. That is clause J's mechanism, demonstrated by the person describing it, in the window between describing it and reporting the number.
+
+      IT ALSO SETS A FLOOR ON HOW STABLE THE EARLY EXIT CAN EVER BE. The count is not merely incremented by the mode's own deferrals; it is incremented by any seat filing any work item, which is what these seats do continuously. An exit condition on a monotonically-fed counter is reachable only during a lull in the very activity the mode exists to accelerate.
+
+      WHICH STRENGTHENS THE WEEK RATHER THAN WEAKENING THE DECISION. The calendar clause does not depend on the counter at all. Anyone relying on the empty-queue clause should expect it to fire rarely, and should read clause J's exclusion requirement as the difference between an early exit that can happen and one that is decorative.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:59:55.527300499Z
-modified_at: 2026-09-21T04:20:25.534409684Z
+modified_at: 2026-09-21T04:25:05.934476187Z
 req_type: Decision
 tags:
 - operator-decision
