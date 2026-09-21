@@ -1,7 +1,7 @@
 id: 01a0c4a6-f142-7fc1-8ec1-d073af6f4c15
 spec_id: BUG-1555
 agreed_id: BUG-1555
-title: 'The cross-platform nightly has been red four nights on a false positive: the discipline-pack guard compares an LF master against a CRLF checkout, so all 23 guides mismatch on Windows and real drift ca'
+title: The 2026-09-21 Windows nightly fails the discipline-pack parity test on all 23 compared guides - and the same test PASSED on Windows the night before, which falsifies the line-ending explanation
 description: |
   THE CROSS-PLATFORM NIGHTLY HAS BEEN RED FOR FOUR NIGHTS ON A FALSE POSITIVE. Windows fails one test; macOS is green; Linux PR CI is green on the same commits. The test is not detecting drift - it is comparing LF against CRLF.
 
@@ -59,12 +59,106 @@ description: |
   - Check whether any OTHER content comparison in the tree has the same raw-compare shape. This one was found because it was red; a sibling that is quietly green on Linux and wrong on Windows would not announce itself.
 
   Not in scope, but noticed in the same log and worth its own look if it recurs: the Windows run logs "error: The following untracked working tree files would be overwritten by merge:" twice during the suite, and a rustup-init cache guard message referencing BUG-103. Neither failed the run.
+
+  ===============================================================================
+  CORRECTION BY THE ADVISOR, SAME DAY, BEFORE ANYONE PICKED THIS UP. MY CENTRAL
+  MECHANISM ABOVE IS FALSIFIED. READ THIS SECTION BEFORE THE ONE ABOVE.
+  ===============================================================================
+
+  THE ONE OBSERVATION THAT KILLS THE LF-vs-CRLF EXPLANATION:
+
+      2026-09-20 nightly, Build (windows-latest), aida-core lib:
+          test templates::tests::project_discipline_pack_matches_master ... ok
+          test result: ok. 952 passed; 0 failed
+      2026-09-21 nightly, Build (windows-latest), aida-core lib:
+          test templates::tests::project_discipline_pack_matches_master ... FAILED
+          test result: FAILED. 954 passed; 1 failed
+
+  The test was on main for BOTH runs - `ecb710411e` (the BUG-1279 commit that added it)
+  committed 2026-09-20T07:16Z, verified an ancestor of `26c7f5107e`, which was main's HEAD
+  when the 09-20 nightly triggered at 11:06:35Z. SO IT PASSED ON WINDOWS ONE NIGHT AND
+  FAILED ON WINDOWS THE NEXT. A checkout-level line-ending mismatch is a property of the
+  platform, not of the day: it would have failed both nights identically. IT DID NOT.
+
+  WHAT I DID WRONG, precisely. The 23-of-23 count IS strong evidence of a SYSTEMATIC
+  difference rather than per-file drift, and that part stands. I then jumped from
+  "systematic" to "line endings" because the `.gitattributes` asymmetry was sitting there
+  and explained it beautifully. I never looked for a case where the mechanism predicted
+  failure and failure did not occur - and the immediately preceding run was exactly that
+  case, one API call away. AN EXPLANATION THAT FITS THE EVIDENCE IN FRONT OF YOU IS NOT
+  THE SAME AS ONE THAT SURVIVED AN ATTEMPT TO KILL IT, and I filed this at priority high
+  with an acceptance criterion built on the unfalsified version.
+
+  WHAT IS STILL VERIFIED AND SHOULD NOT BE RE-DERIVED:
+  - The failing test, run, platform and message are as quoted above.
+  - 26 masters, 3 LOCALIZED_DISCIPLINE_GUIDES, 23 compared, 23 of 23 reported stale. The
+    count still says SYSTEMATIC, not per-file drift.
+  - `discipline_content_mismatches` (aida-core/src/templates.rs:1159-1172) really is
+    `local.trim_end() != *master` - no interior normalization, and trim_end is applied to
+    the LOCAL side only, so a trailing-newline difference is masked on one side and not
+    the other. That asymmetry is real and worth fixing regardless of whether it is THIS
+    failure's cause.
+  - `.gitattributes` really does pin only `aida-core/templates/**`. Also real, also worth
+    fixing on its own merits, and NOT established as the cause.
+  - macOS was green on both nights.
+
+  THE WINDOW THE REAL CAUSE LIVES IN. Between the two nightly triggers, exactly four
+  commits touched either side of the discipline pack (all local times -07:00, all AFTER
+  the 09-20 nightly which fired at 04:06 local):
+
+      d65ae3c54b  10:51  docs(discipline): why purpose-holding reviewers miss failures (TASK-1295)
+      a0ec8fb22f  10:54  feat(roles): ship cold-session seat handoff pack (STORY-1351)
+      53e3176e6e  11:09  docs(discipline): verify against the artifact, not the step's own report (TASK-1302)
+      433c63bb4d  23:43  feat(criteria): flag post-deployment acceptance (TASK-1293)
+
+  Each appears to touch both sides. START HERE: bisect these four against the Windows leg,
+  or reproduce the comparison on a Windows checkout of each. A systematic 23-of-23 failure
+  introduced by a commit that touched 2-4 files is itself informative - it points at
+  something global (an embedding/build step, a path or separator assumption, a BOM, a
+  whole-file rewrite) rather than at the edited content.
+
+  REVISED ACCEPTANCE - the earlier list is superseded where it conflicts:
+  - IDENTIFY THE ACTUAL CAUSE AND STATE THE OBSERVATION THAT DISTINGUISHES IT FROM THE
+    LINE-ENDING HYPOTHESIS. A fix that merely makes the test green satisfies nothing here;
+    the 09-20 pass is the control and any accepted explanation must account for it.
+  - Normalize line endings in the comparison AND apply trim consistently to both sides,
+    AND pin `.aida/discipline/**` in `.gitattributes`. These are correct independently of
+    the cause and should ship either way - but they are NOT to be recorded as fixing this
+    bug unless the cause is shown to be line endings.
+  - DEMONSTRATE-IT-STILL-FIRES stands unchanged: after the fix, show the test FAILING on a
+    deliberately edited project-copy guide. Replacing always-red with always-green is not a fix.
+  - THE SCOPE CLAIM IN THE TITLE IS WRONG AND IS CORRECTED BELOW. This bug is ONE NIGHT'S
+    failure, not the four-night streak.
+
+  THE FOUR-NIGHT FRAMING WAS ALSO WRONG, AND THE REAL PATTERN IS BIGGER THAN THIS BUG.
+  Corrected after claude-reviewer-1 sent the denominator instead of the streak. Over the
+  last 30 SCHEDULED runs: 27 failure, 3 success. The green is the anomaly, not the red -
+  the red runs go back to at least 2026-08-23. And the four recent nights fail on FOUR
+  DIFFERENT TESTS, none recurring:
+
+      09-18  windows  reconstitute::tests::scratch_gc_expires_old_runs_and_keeps_only_the_newest   4899 passed, 1 failed
+      09-19  windows  git_ops::tests::failed_pull_rebase_aborts_and_restores_branch                 940 passed, 1 failed
+      09-20  windows  auto_bump_done_tests::auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup  5092 passed, 1 failed
+      09-21  windows  templates::tests::project_discipline_pack_matches_master                       954 passed, 1 failed
+
+  None repeats, and the passing count grows each night - so each is being fixed within a
+  day and a NEW portability defect arrives to replace it. Earlier runs also failed on
+  macOS (09-14: fs_atomic::tests::read_atomic_returns_notfound_when_missing) and on both
+  platforms (09-09), so it is not even one platform across the population.
+
+  THAT IS THE FINDING THAT MATTERS AND IT IS NOT THIS BUG. It is an ARRIVAL RATE: Linux-only
+  PR CI lets a portability defect land roughly nightly, the nightly catches it a day later,
+  someone fixes it, and the next one lands. CLAUDE.md documents three PR-time guards
+  intended to catch exactly this - a report-only Linux-hosted target check, the
+  `scripts/check-portability.sh` ratchet, and a path-filtered informational Windows/macOS
+  matrix. They are evidently not catching these. Filed separately as the real spec; this
+  bug is narrowed to the single 09-21 failure.
 status: Approved
-priority: High
+priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T15:48:15.696556906Z
+modified_at: 2026-09-21T15:52:33.752366977Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
