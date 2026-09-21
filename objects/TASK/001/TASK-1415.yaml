@@ -133,12 +133,38 @@ description: |
      CHEAP DISCRIMINATOR, from this instance: if a set of related patterns all return zero,
      check one of them against a line you can SEE in the file. A null result that agrees
      with other null results is the least falsifiable output a grep can produce.
+
+     CAUSE PINNED BY TESTING BOTH HYPOTHESES, 2026-09-20 23:48. The first diagnosis offered
+     was ANCHORING; the actual fault was the TRAILING SPACE. Both were present in the
+     diagnosing seat's own pattern, so they attributed the zero to the one they noticed:
+
+         grep -c "Compiling "      unanchored + trailing space   0
+         grep -c "Compiling"       unanchored, no space          5
+         grep -c "^ *Compiling "   anchored + trailing space     0
+         bytes after the verb:     Compiling<ESC>[0m aid
+
+     The anchor would also have killed it, but it was never load-bearing for the patterns
+     that actually ran, which were unanchored. A two-variable failure reported as one
+     variable — and an implementer told the anchor is the hazard would write unanchored
+     patterns with trailing spaces and get zeros again.
+
+     THE DURABLE FACT: IN A CI LOG, THE CHARACTER AFTER A CARGO VERB IS NOT A SPACE. It is
+     an ANSI reset. Any pattern with a trailing space returns zero, and it returns zero for
+     EVERY verb, because they share one formatting convention. Consistency across spellings
+     is exactly what a shared formatting bug produces — so agreement between sibling
+     patterns is evidence of a common fault at least as much as of a common truth.
+
+     THE CHEAPEST CHECK, and better than the one first written here: not "is my pattern
+     right" but "DO MY OWN NUMBERS AGREE WITH EACH OTHER". The tell in this instance was
+     Finished=2 from one grep and Compiling=0 from another in the same report. That fires
+     without suspecting the pattern, without knowing the format, and without knowing which
+     of two faults caused it.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:12:14.796135922Z
-modified_at: 2026-09-21T06:48:00.237441024Z
+modified_at: 2026-09-21T06:49:13.362317854Z
 req_type: Task
 tags:
 - parent:EPIC-62 discipline-pack observation severity:operational propagation-candidate
