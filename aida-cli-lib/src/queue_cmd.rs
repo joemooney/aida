@@ -10157,6 +10157,13 @@ pub(crate) fn handle_queue_work(
         }
     }
 
+    // BUG-1485: publish the parent/child correlation while the lease is
+    // definitely present. This receipt deliberately lives outside the lease
+    // directory, so a fast `queue done` or `pr ship` cannot erase the only
+    // mapping before the orchestrator resumes after waitpid.
+    // trace:BUG-1485 | ai:codex
+    publish_orchestrated_lease_receipt_from_env(claude_session_id.as_deref(), &lease)?;
+
     if no_launch {
         eprintln!();
         eprintln!(
