@@ -45,12 +45,6 @@
   added_at: 2026-09-20T20:53:50.681744322Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a0be03-7550-7a71-98d8-c33dc6b75825
-  position: 58000
-  added_by: role:implementer
-  added_at: 2026-09-20T18:25:23.193239283Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a0bbb0-8032-72a1-8089-6a058cfeb3cf
   position: 60000
   added_by: role:implementer
@@ -185,14 +179,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0bff7-60ef-7e32-a657-72c255053626
-  position: 167000
-  added_by: role:implementer
-  note: auto-queued by `aida pr` (01a0bff3); covers 1 spec
-  added_at: 2026-09-20T17:57:41.296176038Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0bffa-3c62-79a2-a184-b8ca39402b76
   position: 168000
   added_by: role:implementer
@@ -292,14 +278,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0c09d-e251-7091-b4f7-827643363e72
-  position: 190000
-  added_by: role:implementer
-  note: auto-queued by `aida pr` (01a0c098); covers 1 spec
-  added_at: 2026-09-20T20:59:48.028215592Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0c0b3-03d6-7190-a8f5-8bc1a15a751e
   position: 191000
   added_by: role:implementer
@@ -315,26 +293,11 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0c104-9fa2-7470-a10d-d890debcf056
-  position: 193000
-  added_by: role:implementer
-  added_at: 2026-09-20T22:52:07.814371002Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0c103-cb85-71d1-88b0-60aab87c746c
   position: 194000
   added_by: role:implementer
   added_at: 2026-09-20T22:53:49.380104475Z
   for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0c130-889c-7982-bb79-74fb8d8a3a22
-  position: 195000
-  added_by: role:implementer
-  note: auto-queued by `session end` (01a0c128); covers 1 spec
-  added_at: 2026-09-20T23:39:52.367969390Z
-  for_role: reviewer
   added_by_machine: imac
 - user_id: role:implementer
   requirement_id: 01a0c15d-32c6-7ea3-9d5f-e5f7c545e2b3
