@@ -26,12 +26,12 @@ description: |
   5. Verification: create a non-empty `.bashrc`, run `git add -A`, and assert it is not staged.
 
   NOT IN SCOPE: auditing the contents of the current files. They were checked for credential-shaped strings and none was found; this spec is about the path being open, not about what is on it today.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:04:29.972266635Z
-modified_at: 2026-09-21T23:12:00.247949919Z
+modified_at: 2026-09-21T23:32:52.988149161Z
 req_type: Bug
 tags:
 - batch:night-0920 public-repo hygiene drain-safe from:session-0920
@@ -87,31 +87,24 @@ comments:
   created_at: 2026-09-21T23:12:00.247949919Z
   modified_at: 2026-09-21T23:12:00.247949919Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    CHANGES REQUESTED AT 60973a5ac0 — one finding, and the evidence settles the decision the PR leaves open rather than merely naming it.
-
-    WHAT IS RIGHT, AND IT IS MOST OF THE CHANGE. On the confidentiality question this is clean: the tracked `.codex/config.toml` is three lines registering the aida MCP server — no paths, no hosts, no credentials — and it is the correct Codex twin of the tracked `.mcp.json`. Ignoring `.codex/hooks.json` is correct and its stated justification holds: the file embeds absolute paths carrying a username, which has no business on a public repo. Listing the root dotfiles by name rather than by glob is the right shape for the reason the diff gives — a named rule states what it protects against, and a genuinely new project dotfile still has to be decided on.
-
-    THE FINDING: `.codex/hooks/` IS LEFT IN THE ONE STATE THIS PR'S OWN TEXT CONDEMNS. The change ignores `/.codex/hooks.json` and says nothing about the `hooks/` directory that hooks.json exists to wire. The directory is empty today, so nothing is publishable at this moment and git ignores it only by accident of having no contents. The PR's own added CLAUDE.md paragraph states the rule it is violating: "Untracked-and-unignored is the one state that is neither, and it is the state `git add -A` publishes from." The change states the principle and leaves the hole at the exact path its other half is about.
-
-    AND THE DECISION IS NOT A JUDGEMENT CALL — THE ANALOGY IS EXACT, WHICH I ESTABLISHED BY SET COMPARISON RATHER THAN BY REASONING FROM RESEMBLANCE:
-
-        .claude/hooks/ tracked in git          10 files
-        scripts referenced by .codex/hooks.json 10 files
-        only in .claude/hooks/                  NONE
-        only referenced by codex                NONE
-
-    The two sets are IDENTICAL: aida-advisor-code-guard, aida-capture-prompt, aida-git-guardrails, aida-mail-notice, aida-role-context, aida-session-context, aida-subagent-start, aida-subagent-stop, aida-track-commits, aida-validate-commit. Not analogous — the same ten scripts. And every `.claude/hooks/` entry is a symlink into `aida-core/templates/hooks/`, i.e. scaffolded project content, which is why it is tracked rather than per-clone state.
-
-    SO `.codex/hooks/` SHOULD BE TRACKED, on the same grounds and by the same mechanism as `.claude/hooks/`. The machine-local half is the absolute-path wiring inside hooks.json, which this PR already ignores correctly. That split is coherent and it is the one the repo has been running under for Claude since May: portable scripts tracked, machine-specific manifest not.
-
-    REQUIRED: decide it in this change rather than leaving it. Track `.codex/hooks/` as `.claude/hooks/` is tracked, or — if the intent really is that both halves are machine-local — add `/.codex/hooks/` to `.gitignore` and say why the Codex copy differs from the Claude copy when the scripts are byte-identical scaffolding. Either is defensible and testable. What is not defensible is the current state, which the PR's own paragraph identifies as the failure mode and which will stop being harmless the moment scaffolding writes the first script.
-
-    NOTE ON SCOPE, NOT A SECOND FINDING: `.codex/skills/` is named in the diff's comment as "left trackable for the same reason" as `.claude/skills/`. That is a decision, stated, and I am not asking for more. It is the contrast that makes `hooks/` stand out — two of the three `.codex/` members were decided in this change and the third was not.
-  recovery_hint: address the review findings, move BUG-1511 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-09-21T22:59:41.619272703Z
+history:
+- id: 01a0c650-b44a-79a1-9420-b06a0ee9e19a
+  author: aida-auto-bump
+  timestamp: 2026-09-21T23:32:52.938356195Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0c650-b47c-7763-8121-d4192e65ad31
+  timestamp: 2026-09-21T23:32:52.988145220Z
+  agent: aida
+  commit_sha: 979cb524bf0338347230c20d5a9af12d1c318786
+  summary: 'APPROVED AT 8af4a8e2ea. The finding is discharged, and the lane reached a BETTER answer than the one I argued for — it decided AGAINST tracking, on a fact I had in front of me and drew the opposite conclusion from. MY REASONING WAS WRONG AND I WANT THAT ON THE RECORD, because the set comparison I supplied was the decisive input and it pointed the wrong way. I observed that every `.claude/hooks/` entry is a symlink into `aida-core/templates/hooks/` and concluded "scaffolded project content, therefore track the Codex copy too". THE CORRECT INFERENCE FROM THE SAME FACT IS THE OPPOSITE. I verified the lane''s argument rather than accepting it: git ls-files -s .claude/hooks/ -> 10 entries, ALL mode 120000 (symlinks) scaffold_codex_hooks -> codex_hooks.rs:90, std::fs::write — REAL COPIES module header, codex_hooks.rs:10 -> "ONE SET OF SCRIPTS, TWO WIRINGS. The handlers are NOT forked per vendor." `.claude/hooks/` costs git ten symlinks; the bodies live once at their master. `.codex/hooks/` would cost git ten REAL COPIES of those same bodies — a second tracked copy of already-tracked content, which is precisely the per-vendor forking the module says the design exists to prevent. OUR SET COMPARISON WAS RIGHT ABOUT THE NAMES AND SILENT ABOUT THE STORAGE FORM, and the storage form is what decides it. Identical names, different kinds of object. THE FINDING REQUIRED A DECISION, NOT A PARTICULAR ONE, and "ignore, with the reason stated" satisfies it exactly. The added block does not merely ignore the path — it states why the Codex side differs from the Claude side, which is the non-obvious half, and it adds the one argument I had not considered: tracking would not even spare a fresh clone the scaffold pass, because the only file wiring those handlers is `.codex/hooks.json`, ignored just above, so the scaffolder must run regardless and writes handlers and wiring together in one pass. I TESTED THE RULE RATHER THAN READING THE PATTERN — a scratch repo carrying ONLY this PR''s `.gitignore`, so no `.git/info/exclude` entry could stand in for it (the BUG-1279 trap): .codex/hooks/aida-validate-commit.sh IGNORED <- the gap, closed .codex/hooks.json IGNORED .codex/config.toml trackable <- and tracked in this PR .codex/skills/x.md trackable <- decided, stated in the comment .bashrc / .netrc IGNORED EVERY `.codex/` MEMBER IS NOW DECIDED. Nothing is left untracked-and-unignored, which was the whole finding: the PR''s own CLAUDE.md paragraph names that state as the one `git add -A` publishes from, and the change no longer leaves a hole at the path its other half is about. THE CLAUDE.md EDIT GENERALISES CORRECTLY rather than just recording this instance — "the decision covers the DIRECTORY a manifest points into, not only the manifest" is the reusable form, and it names why the obvious analogy misleads. That is the sentence that stops the next agent pack repeating this. CONFIDENTIALITY UNCHANGED FROM MY FIRST PASS: no named dotfile is tracked or present at root; `.codex/config.toml` is three lines registering the MCP server with no paths, hosts or credentials. OPERATOR NOTE: the `aida:merge-hold` on this PR is mine and I cannot clear it — `aida merge-hold clear` requires a human at an interactive terminal and refuses a non-TTY seat. Clearing it needs `aida merge-hold clear 2067` from a terminal. I am not routing around that via `pr ship`.'
+  punted:
+  - 'punted: CHANGES REQUESTED AT 60973a5ac0 — one finding, and the evidence settles the decision the PR leaves open rather than merely naming it. WHAT IS RIGHT, AND IT IS MOST OF THE CHANGE. On the confidentiality question this is clean: the tracked `.codex/config.toml` is three lines registering the aida MCP server — no paths, no hosts, no credentials — and it is the correct Codex twin of the tracked `.mcp.json`. Ignoring `.codex/hooks.json` is correct and its stated justification holds: the file embeds absolute paths carrying a username, which has no business on a public repo. Listing the root dotfiles by name rather than by glob is the right shape for the reason the diff gives — a named rule states what it protects against, and a genuinely new project dotfile still has to be decided on. THE FINDING: `.codex/hooks/` IS LEFT IN THE ONE STATE THIS PR''S OWN TEXT CONDEMNS. The change ignores `/.codex/hooks.json` and says nothing about the `hooks/` directory that hooks.json exists to wire. The directory is empty today, so nothing is publishable at this moment and git ignores it only by accident of having no contents. The PR''s own added CLAUDE.md paragraph states the rule it is violating: "Untracked-and-unignored is the one state that is neither, and it is the state `git add -A` publishes from." The change states the principle and leaves the hole at the exact path its other half is about. AND THE DECISION IS NOT A JUDGEMENT CALL — THE ANALOGY IS EXACT, WHICH I ESTABLISHED BY SET COMPARISON RATHER THAN BY REASONING FROM RESEMBLANCE: .claude/hooks/ tracked in git 10 files scripts referenced by .codex/hooks.json 10 files only in .claude/hooks/ NONE only referenced by codex NONE The two sets are IDENTICAL: aida-advisor-code-guard, aida-capture-prompt, aida-git-guardrails, aida-mail-notice, aida-role-context, aida-session-context, aida-subagent-start, aida-subagent-stop, aida-track-commits, aida-validate-commit. Not analogous — the same ten scripts. And every `.claude/hooks/` entry is a symlink into `aida-core/templates/hooks/`, i.e. scaffolded project content, which is why it is tracked rather than per-clone state. SO `.codex/hooks/` SHOULD BE TRACKED, on the same grounds and by the same mechanism as `.claude/hooks/`. The machine-local half is the absolute-path wiring inside hooks.json, which this PR already ignores correctly. That split is coherent and it is the one the repo has been running under for Claude since May: portable scripts tracked, machine-specific manifest not. REQUIRED: decide it in this change rather than leaving it. Track `.codex/hooks/` as `.claude/hooks/` is tracked, or — if the intent really is that both halves are machine-local — add `/.codex/hooks/` to `.gitignore` and say why the Codex copy differs from the Claude copy when the scripts are byte-identical scaffolding. Either is defensible and testable. What is not defensible is the current state, which the PR''s own paragraph identifies as the failure mode and which will stop being harmless the moment scaffolding writes the first script. NOTE ON SCOPE, NOT A SECOND FINDING: `.codex/skills/` is named in the diff''s comment as "left trackable for the same reason" as `.claude/skills/`. That is a decision, stated, and I am not asking for more. It is the contrast that makes `hooks/` stand out — two of the three `.codex/` members were decided in this change and the third was not.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T23:32:52.937073827Z
+  completion_sha: 979cb524bf0338347230c20d5a9af12d1c318786
