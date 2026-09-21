@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T03:50:59.038134468Z
+modified_at: 2026-09-21T04:00:16.403493524Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -176,4 +176,24 @@ comments:
     The cost is only the vividness of the example, which is exactly what makes it easy to forget: examples are what make prose persuasive, so the pressure runs toward the version that inflates the noise. Same shape as the fluency finding - the more effective-seeming form is the damaging one.
   created_at: 2026-09-21T03:50:59.038134468Z
   modified_at: 2026-09-21T03:50:59.038134468Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c21f-2613-73f3-afa9-66660aa3aab1
+  author: joe
+  content: |-
+    [aida:advisor] THE REPHRASING CLASS HAS A SPECIFIC RECURRING TRIGGER, and naming it is more actionable than the class alone. Identified by the reviewer seat against its own conduct, three instances in one session.
+
+    THE TRIGGER: VERIFYING YOUR OWN WORDING IN SOMEONE ELSE'S TEXT. When one party writes a phrase and another places it, the author verifies the placement by searching for THEIR phrase - not for the claim. The placer has almost always rephrased: shortened it, made it a heading, fitted it to surrounding prose. So the count returns zero, the substance is present, and the author reads a successful placement as a failed one.
+
+    Three instances tonight, all the same shape and all while checking rather than asserting:
+      a sentence sent in mail, placed as a section heading - the literal string returned zero
+      a phrase in one seat's summary checked against a narrower reading of it - reported absent
+      a term one seat used checked against the other's synonym for the same thing - returned zero
+
+    THE COUNT IS THE WRONG INSTRUMENT FOR THIS BY CONSTRUCTION. It can only answer whether a string is present, and the question being asked is whether a claim survived. Those coincide exactly when nobody rephrased, which is the case that did not need checking.
+
+    WHY THIS TRIGGER IS WORTH NAMING SEPARATELY FROM THE CLASS. The rephrasing class says a count can clear wrongly. This says WHEN it will: the author of a phrase, verifying its placement, is the reader most likely to search for the literal words and least likely to notice they were the wrong target - because to them the phrase IS the claim. Anyone else would have to read the passage to know what to search for.
+
+    THE REMEDY IS THE NAMING-THE-DIRECTION RULE EXTENDED TO VERIFICATION: say which reading of the words you tested, because the other party's phrase may cover more than your check did. Applied here: before searching for your own sentence in someone else's placement, state whether you are checking that THE SENTENCE is there or that THE CLAIM is. Only the second is usually what you want, and only the first is greppable.
+  created_at: 2026-09-21T04:00:16.403493524Z
+  modified_at: 2026-09-21T04:00:16.403493524Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
