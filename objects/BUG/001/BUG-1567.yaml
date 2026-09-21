@@ -29,12 +29,12 @@ description: |-
   - A trial run of at least 20 invocations on a LOADED machine passes. Given the contiguity above, a short green streak on an idle machine is not evidence.
 
   Related: BUG-1556 catalogues cross-platform arrivals; this is a different class - the same test failing on one platform for reasons of timing rather than portability, on a channel (the GitLab mirror) where a single red job is being read as a verdict on an unrelated change.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:56:20.778714126Z
-modified_at: 2026-09-21T21:33:09.460075212Z
+modified_at: 2026-09-21T21:33:15.577679406Z
 req_type: Bug
 tags:
 - aida:tests
