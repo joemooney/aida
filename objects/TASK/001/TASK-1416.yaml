@@ -40,7 +40,37 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:40:43.370422318Z
-modified_at: 2026-09-21T08:40:43.370422318Z
+modified_at: 2026-09-21T08:42:25.351333424Z
 req_type: Task
 tags:
 - tooling rebase stacked-pr papercut severity:cosmetic
+comments:
+- id: 01a0c321-76c7-7bc0-b085-b4bdc092df39
+  author: joe
+  content: |-
+    DISPOSITION FROM THE DRIVER-ADVISOR SEAT — APPROVED, but re-centred, because I checked whether AIDA already solves this and it does. That changes what the spec is about.
+
+    `aida pr rebase <N>` EXISTS AND DOES THE RIGHT THING ALREADY. Its own help: "Rebase a PR onto its base in a temporary worktree, then force-push-with-lease the rebased branch. Collapses the standard 6-command 'rebase a PR before review' recipe into one call." And it resolves the base from the forge rather than assuming — aida-cli-lib/src/pr_rebase.rs:137-138 reads baseRefName out of `gh pr view` and treats a missing value as a HARD ERROR, then builds `git rebase origin/{base_ref}` (:302). The separate `aida rebase` verb rebases onto the branch's configured UPSTREAM, also never a hardcoded main.
+
+    So the acceptance criterion this spec proposes — "resolve baseRefName from the forge rather than hardcoding a default" — is already implemented in the product, and was implemented before tonight. An ad-hoc helper was written alongside it and reinvented it worse.
+
+    THE REAL DEFECT IS THEREFORE NOT THE SCRIPT. It is that a capable agent seat, doing exactly the task `aida pr rebase` was built for, wrote its own loop instead — and that AIDA's own tooling failing to be reached is a product signal, not a user error. Six PRs needed rebasing, one command exists that does precisely that per PR with the base resolved correctly, and it was not used. Nobody was careless; the surface did not arrive at the moment of need.
+
+    RE-CENTRED ACCEPTANCE CRITERIA, replacing the four proposed:
+      1. Establish WHY `aida pr rebase` was not reached for this task. Not a guess — check whether it appears in the advisor/product-facing guidance for a multi-PR rebase, whether `aida awaiting` or the rebase-needed surfaces name it as the remedy, and whether its --help is discoverable from the place a seat starts ("these PRs need rebasing onto new main"). The answer determines the fix; assume nothing.
+      2. Where a surface tells a seat that PRs need rebasing, it should name the command that does it. A remedy printed at the moment of need is worth more than documentation.
+      3. The stacked-PR case deserves a first-class answer, because it is the one `aida pr rebase` also does not currently solve: when two PRs in a batch stand in a base/head relationship, rebasing them independently replays shared commits separately and produces different shas for identical content. A batch rebase must either order them or REFUSE. This is the one genuinely new requirement in the original filing and it should survive the re-centring.
+      4. NOT WANTED: hardening the ad-hoc script. It should be deleted in favour of the native verb once criterion 1 explains the gap.
+
+    WHAT I AM KEEPING FROM THE ORIGINAL FILING, unchanged and credited: the failure-mode framing, which is the best part of it. Three signals, two reassuring, and the reassuring pair were the ones chosen to measure:
+
+        gh pr view 2009                      mergeable=CONFLICTING
+        merge-tree against origin/main       clean
+        merge-base --is-ancestor main head   YES
+
+    The sentence "the API is stale" had already been composed before baseRefName was checked. A wrong conclusion that BLAMES THE TOOL terminates investigation, where one that says "I do not understand this" continues it. That is why this instance earned a spec when a dozen equally-wrong measurements tonight did not, and it is the half worth propagating.
+
+    SEVERITY TAG CORRECTED: severity:cosmetic is wrong. This silently broke a pull request and produced a confident wrong conclusion about a third-party service. It is not cosmetic. Priority stays low because the blast radius was one PR out of roughly twenty and stacked PRs are rare here — rarity is the reason a helper written against the common case passes review and then bites once, which the original filing states well.
+  created_at: 2026-09-21T08:42:25.351333424Z
+  modified_at: 2026-09-21T08:42:25.351333424Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
