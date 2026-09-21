@@ -1,0 +1,62 @@
+id: 01a0c607-feab-7863-8791-5eb2647c06bf
+spec_id: ADR-51
+agreed_id: ADR-51
+title: Pre-flight guard boundary is retract-after, not prevent-before
+description: |-
+  THE PRE-FLIGHT GUARD BOUNDARY IS RETRACT-AFTER, NOT PREVENT-BEFORE. Decided by the driver-advisor seat 2026-09-21, disposing of TASK-1289's standing "the boundary needs a design decision, not another round".
+
+  CONTEXT. TASK-1289 observed that the guards CI runs were executing AFTER the implementer opened the PR, so a refusal was advisory: the rejected work sat published and mergeable by anyone who did not read a log line, and the only thing between it and main was prose in a skill file. The spec's own title says the boundary needs a decision rather than another implementation round.
+
+  WHAT IS ACTUALLY SHIPPED, read in the tree at aida-cli-lib/src/lib.rs:89235-89300 rather than inferred from the spec text: the orchestrator runs `implementer_preflight::run(&worktree_path)` after the implementer phase, and on `PreflightDecision::Refuse` it RETRACTS the PR the implementer may already have opened -- "so 'the guards refused' and 'nothing is published' are the same state". The retraction is best-effort by design; a failed retraction is reported loudly and the phase still fails.
+
+  THE FORK.
+
+    (A) RETRACT-AFTER (shipped). The implementer opens the PR via /aida-pr inside its own phase;
+        the orchestrator regains control, runs the guards, and closes the PR if they refuse.
+    (B) PREVENT-BEFORE. Move publication out of the implementer phase so the orchestrator owns
+        it and nothing is ever published before the guards pass.
+
+  DECISION: (A) STANDS AS THE BOUNDARY. (B) is the correct end state and is NOT scheduled here.
+
+  REASONING, and the part that decides it is a cost comparison rather than a preference:
+    - (A) is already correct for the failure TASK-1289 was filed against. The five documented
+      round-costs were guard failures reaching CI minutes after PR open; under (A) those PRs are
+      closed within the same phase, so the reviewer round and the CI cycle are both avoided.
+    - (B) requires the orchestrator to own PR creation, which /aida-pr currently performs inside
+      the implementer session. TASK-1421 records that there is NO FORGE INJECTION SEAM, so
+      publication-boundary behaviour cannot be tested end-to-end today. (B) WITHOUT THAT SEAM
+      WOULD BE AN UNTESTABLE REWRITE OF THE PUBLICATION PATH, which is a worse trade than the
+      residual window it removes.
+
+  THE RESIDUAL RISK IS A WINDOW, AND IT IS NAMED RATHER THAN WAVED. Between the implementer
+  opening the PR and the orchestrator retracting it, a PR with failing guards is publicly open.
+  It is seconds-to-minutes, not a CI cycle, because the orchestrator regains control immediately
+  after the phase. But three things can act inside it: a webhook, a watching seat, and an
+  auto-merge rule. AND THE RETRACTION IS BEST-EFFORT -- if it fails, the window does not close
+  at all.
+
+  CONSEQUENCES, which are amendments to TASK-1289's acceptance rather than new work:
+    - THE RETRACTION MUST BE VERIFIED, NOT ATTEMPTED. After a refusal the phase must CONFIRM the
+      PR is closed and fail distinctly if it is not. "Reported loudly" is not the same as
+      "observed closed", and a best-effort action whose outcome is never read is the
+      capability-not-a-guard shape this board has filed three times today.
+    - A FAILED RETRACTION MUST LEAVE A DURABLE MARKER, not only a log line. The seat that later
+      finds an open PR with failing guards needs to learn why from the substrate, not from
+      scrollback that no longer exists.
+    - The existing acceptance bullets stand unchanged; this adds to them.
+
+  REVERSIBILITY: (B) remains open and becomes cheap once TASK-1421's injection seam exists. This
+  decision closes a standing question, not the door.
+
+  SCOPE NOTE: TASK-1289 carries execution_mode `guided`. This ADR rules the DESIGN only. The
+  implementation stays keyboard-only and is explicitly NOT queued for an unattended headless
+  drain.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:13:27.851842535Z
+modified_at: 2026-09-21T22:13:27.851842535Z
+req_type: Decision
+tags:
+- orchestrator preflight ci
