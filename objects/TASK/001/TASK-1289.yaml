@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T01:55:01.246432592Z
+modified_at: 2026-09-21T01:56:16.895992757Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -814,6 +814,49 @@ comments:
   created_at: 2026-09-21T01:55:01.246432592Z
   modified_at: 2026-09-21T01:55:01.246432592Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1ad-a180-7ea2-a804-d151d096a26a
+  author: joe
+  content: |-
+    [reviewer] FIVE REVIEW FINDINGS ABOUT THIS SPEC ARE RECORDED ONLY AGAINST ANOTHER SPEC. Preserving them here verbatim, because the only copy sits in a handshake file that a later write replaces without warning.
+
+    WHAT HAPPENED. The drain drove STORY-1391 through phases 1-3 on PR #2043. That PR's branch, story-1391-work, is byte-identical to bug-1420-round2 (both head 35de6d3abb) and carries no STORY-1391 code -- all five commits ahead of main are trailered BUG-1420 or TASK-1289. The drain's reviewer read the code correctly and judged it on its actual subject, which is largely THIS spec. The shelve was then recorded against STORY-1391.
+
+    So TASK-1289 has, until now, no record that any of this was found, and STORY-1391 carries a RequestChanges about code it has nothing to do with. Anyone requeuing STORY-1391 would brief an implementer with these findings -- internally coherent, real file:line evidence, aimed at the wrong spec.
+
+    I am copying rather than moving. I have not altered PR-2043.json, STORY-1391, or either PR beyond the merge-holds. Moving a verdict between specs is disposition and is the advisor's call.
+
+    PROVENANCE OF THE VERDICT BEING COPIED:
+        recorded_at     2026-09-21T01:53:37.059507462+00:00
+        recorded_by     aida drain reviewer
+        reviewed_branch story-1391-work
+        reviewed_sha    35de6d3abb540c6cd98537c037815b33c49ed589
+        verdict         RequestChanges
+
+        summary: BUG-1420's strict Bash parity is verified, but TASK-1289 still does not enforce the pre-publication boundary and can open after incomplete guards; two required acceptance paths also lack the mandated tests.
+
+    FINDINGS, verbatim from .aida/review-verdicts/PR-2043.json (copied programmatically, not retyped):
+
+    --- FINDING 1 ---
+    TASK-1289 publication boundary is advisory rather than enforced: aida-cli-lib/src/lib.rs:87798-87801 explicitly runs preflight before accepting an agent-opened PR, which means that PR is already published; the only prevention is prose in aida-core/templates/skills/aida-pr/SKILL.md:369-378. Add a technical gate so orchestrated implementers cannot create the PR (or close/reject any premature PR before guard execution), and add an end-to-end test proving a failing guard leaves no open PR.
+
+    --- FINDING 2 ---
+    TASK-1289 fails open when a configured guard cannot complete: aida-cli-lib/src/implementer_preflight.rs:344-352 maps timeouts and spawn errors to Skipped, while decide() treats every skipped result as Open; the test at lines 455-469 explicitly locks in publication after timeout. Unknown/missing configured guards may skip per acceptance, but an identified guard that times out or cannot start has not passed and must refuse publication or produce an explicit non-publication outcome.
+
+    --- FINDING 3 ---
+    TASK-1289's clean-worktree latency criterion is violated and untested: execute() unconditionally runs cargo metadata and cargo build -p aida-cli --bin aida at aida-cli-lib/src/implementer_preflight.rs:300-305 before every configured guard, even when no selected guard uses aida. This adds a build outside the configured CI guard runtimes. Build lazily only for guards that need the worktree binary (or make it a named guard), and add a test proving no extra command runs for a clean guard set.
+
+    --- FINDING 4 ---
+    TASK-1289.acc6c6a1 lacks the required portability-ratchet publication test. failing_ci_command_preserves_offending_line_and_fix at aida-cli-lib/src/implementer_preflight.rs:402-427 uses a synthetic echo/exit guard and calls run()/decide() only; it does not create an actual portability-ratchet violation, exercise the real CI command, or prove the PR-open path is blocked while preserving the real guard/offending-line/fix output. Add the required end-to-end test.
+
+    --- FINDING 5 ---
+    TASK-1289.ac0032b7 is only partially tested. missing_config_uses_ci_step_name_defaults_and_unknown_steps_skip at aida-cli-lib/src/implementer_preflight.rs:388-400 checks the hard-coded default count and resolves an unknown name against an entirely missing workflow; it never proves [preflight].guards is read, that defaults match the CI guard set, or that an unknown guard in a valid workflow is skipped with a surfaced note. Add coverage for all three branches of the criterion.
+
+    NOTE ON THE LINE NUMBERS. These cite 35de6d3abb, a DIVERGENT lineage from PR #1972's head 6512f1312a -- merge-base --is-ancestor confirms neither contains the other. So the offsets here will not match #1972's tree, and both lineages need the fixes independently.
+
+    FINDING 2 IS BUG-1507, FOUND INDEPENDENTLY. It is the same fail-open defect I analysed on the other lineage: guard results that are Skipped rather than Failed, with decide() treating every skipped result as Open, and a test that locks the behaviour in. Two reviewers reached it from different branches without contact, which is the strongest evidence yet that it is a real class rather than one author's slip. Its remaining half -- that guards_from_ci maps EVERY guard to Skipped when ci.yml is missing or unparseable, so the gate is inert rather than merely degraded -- is instance 1 of BUG-1507.
+  created_at: 2026-09-21T01:56:16.895992757Z
+  modified_at: 2026-09-21T01:56:16.895992757Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: guided
 implementation_info:
   implemented: true
