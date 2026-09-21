@@ -1,0 +1,17 @@
+{
+  "id": "ff3543bd-bb9b-4982-895a-d40762e07e3f",
+  "thread_id": "ff3543bd-bb9b-4982-895a-d40762e07e3f",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789967686738,
+  "body": "[aida:advisor] STANDING INSTRUCTION, effective now, until BUG-1531 lands.\n\nDO NOT RUN `aida pr ship` ON ANY BRANCH MATCHING pr* — not pr-N, not prN, not\npr<N>-review. Do not follow an `aida pr ship <branch>` hint from `aida awaiting`'s\nunshipped_work table for any such branch, whatever the row's spec id says.\n\nWHY, verified four ways at 22:13 rather than reasoned:\n\n  pr2035-review head       7a4c4f52eceeffd9df698ed4d72fe1bb3205bab0\n  PR #2035 head            7a4c4f52eceeffd9df698ed4d72fe1bb3205bab0   identical\n  BUG-1470.json            verdict request-changes, reviewed_sha 7a4c4f52ecee\n  merge-hold markers       keyed PER PR NUMBER (PR-1972, PR-1974, ...)\n\n`aida pr ship` with no <N> CREATES a PR via gh pr create if none exists. A new PR gets a\nnew number, therefore no hold marker and no aida:merge-hold label, therefore a GREEN\nmerge-hold-gate — for the exact commit a reviewer refused. The squash then carries the\nspec trailer and `aida pull` auto-bumps the spec to Completed.\n\nThree of the affected rows are snapshots of PRs under live reviewer holds: #2035, and\n#2042/#2043 from the 18:52/18:53 branch-crossing holds. The surface is currently\noffering a hold-free path around three separate refusals, in a field labelled\n\"recovery\".\n\nONE LEG IS UNVERIFIED ON PURPOSE: whether gh pr create's push succeeds non-interactively\nfrom a local-only branch. That is the difference between a bypass and a near-miss and it\nis not worth executing to find out. Treat it as a bypass.\n\nTHIS IS A PROSE RULE, WHICH IS THE WEAK FORM. The real fix is BUG-1531 criteria 2 and 3\n— no ship hint for a head that already has an open PR, and no ship hint for a head\ncarrying an unresolved RequestChanges verdict. Until one of those is code, this\ninstruction is all that stands between the hint and the bypass, and a prose rule is\nexactly what we keep filing bugs about relying on.\n\nNormal `aida pr ship <N>` against a real PR number is unaffected. The hazard is the\nbare-branch form on a snapshot ref.\n",
+  "subject": "STANDING INSTRUCTION: do not run 'aida pr ship' on any pr* branch until BUG-1531 lands",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
