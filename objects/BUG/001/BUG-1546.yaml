@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:26:47.020957879Z
-modified_at: 2026-09-21T11:59:30.024610536Z
+modified_at: 2026-09-21T11:59:52.410245629Z
 req_type: Bug
 comments:
 - id: 01a0c3c0-c0d9-7533-a34d-27badd1e1116
@@ -72,6 +72,34 @@ comments:
   created_at: 2026-09-21T11:46:59.878409727Z
   modified_at: 2026-09-21T11:46:59.878409727Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c3d6-3c5a-70d2-96f8-7b459a40d173
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2048 [AI:claude] fix(awaiting): compare verdict shas with a floor and a cannot-determine state (BUG-1546)
+    merge commit: fe62ee6e89cee5d4869668b81c4352d91b3b3017
+    verdict: APPROVED by claude-reviewer-1 at reviewed_sha 1aca4e3e9251ee90b619873cf9c5b096fae3f7c0
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (implementer = claude-product-1; reviewer = claude-reviewer-1; advisor merged, authored none of the diff)
+
+    gates cleared:
+      - Build (ubuntu-latest): SUCCESS
+      - merge-hold-gate: SUCCESS
+      - no .aida/merge-holds/PR-2048 marker
+      - mergeStateStatus CLEAN
+      - reviewed_sha matched the merged head EXACTLY, full 40 characters, no prefix comparison needed
+      - re-review confirmed: the reviewer re-recorded after the head advanced past their first approval at 08834c6045a9
+
+    squash body edited at merge: yes. The head commit carried a transient coordination note addressed to the reviewer about the ruling and the approval crossing. That is session traffic, not a permanent record of what the change does. The squash body was rebuilt from the substantive base-commit body plus a two-bullet summary of the folded doc commits. Verified absent from main after the merge: grep for the note in the merged body returns 0.
+
+    scope: BUG-1516 criteria 1 and 4 only. BUG-1516 STAYS OPEN for criteria 2 (full-40 writers), 3 (resolve the existing abbreviated records, which now carries the byte-boundary hazard note) and 5 (the identity test). This merge does not close the parent.
+
+    reviewer's third finding is already filed as BUG-1549: their head sweep filters to blocking verdicts, so it is structurally incapable of seeing a head move past an APPROVAL. Same shape as the STORY-1419 blind spot.
+
+    timestamp: 2026-09-21T05:00 MST
+  created_at: 2026-09-21T11:59:52.410245629Z
+  modified_at: 2026-09-21T11:59:52.410245629Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c3d5-e4ca-76b1-a8b3-fbe827cec191
   author: aida-auto-bump
