@@ -2,7 +2,7 @@ id: 01a0c242-58c6-7b01-8deb-4ab148eacf95
 spec_id: BUG-1522
 agreed_id: BUG-1522
 title: The rework no-op guard is checked on only one of four implementer-advance paths, and a rework on an already-open PR never takes that path
-description: |-
+description: |
   The rework no-op guard is consulted on exactly ONE of the four code paths that advance the implementer phase, and a rework round on an ALREADY-OPEN PR does not take that path.
 
   In aida-cli-lib/src/auto_complete.rs, the implementer phase arms the guard once (begin_rework_guard, line 3616) and then advances via four branches. Only one checks it:
@@ -40,12 +40,36 @@ description: |-
   2. A rework round against an already-open PR whose head is unchanged produces a ReworkNoOp failure and a SpecShelved event, for each ImplementerOutcome variant that can advance.
   3. A test per advancing variant asserts the guard fires; a test asserts a genuine new commit still passes, so the fix cannot be a blanket refusal.
   4. Confirm and record which variant the already-open-PR rework path actually returns.
+
+  5. THE GUARD'S PREDICATE IS "DID THIS BRANCH MOVE PAST THE SHA I REFUSED", NOT "DID A
+     HEAD MOVE". Added by the driver advisor 2026-09-20 after BUG-1527, which this
+     guard in its current form would NOT catch: a drain dispatched for BUG-1442 bound its
+     phase to BUG-1485's PR #2030, whose head genuinely moved (8ba48f5b98 -> 05969aa397)
+     with a genuine commit. Any predicate of the form "a PR opened" or "a head moved"
+     passes that case clean while the dispatched spec's own branch sat untouched.
+     The guard must compare against the DISPATCHED spec's branch, and the comparison
+     point is the sha the refusal was recorded against.
+  6. The inputs for criterion 5 already exist and should be read rather than recomputed:
+     the review verdict records carry reviewed_sha and reviewed_branch. Consulting the
+     verdict rather than the PR also makes the guard correct when a spec has several PRs
+     or a PR is re-pointed. Reviewer's observation, 2026-09-20.
+  7. A test drives an advance in which SOME head moved but the dispatched spec's branch
+     did not, and asserts the guard fires. Criterion 3's "genuine new commit passes" test
+     must use a commit on the DISPATCHED spec's branch, or it will pass vacuously against
+     criterion 5.
+
+  NOTE ON THE CORPUS THIS PREDICATE READS (driver advisor, 2026-09-20). Two of 53
+  spec-keyed verdict files are Completed specs whose LATEST verdict is still a refusal -
+  reworked, merged, and never re-recorded as approved. So "does this spec carry an
+  outstanding refusal?" currently answers yes for work that shipped weeks ago. A guard
+  built on criterion 6 inherits that. It is small (2 of 53) and is being filed separately;
+  this note exists so the fixer does not discover it as a surprise mid-implementation.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-21T04:59:28.448388256Z
+modified_at: 2026-09-21T05:00:50.201756744Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
