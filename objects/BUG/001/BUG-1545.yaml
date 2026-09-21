@@ -24,12 +24,12 @@ description: |-
   The general case — that a non-blocking finding recorded on an approved verdict has NO successor once its spec completes — is filed separately. This is the instance; that is the mechanism.
 
   Found by the reviewer seat during #2047's review, verified on main by the driver-advisor after the merge. Autonomous-safe: doc comments only, no behaviour.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:22:23.969332952Z
-modified_at: 2026-09-21T17:13:13.479870339Z
+modified_at: 2026-09-21T17:18:22.093663143Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -49,3 +49,22 @@ comments:
   created_at: 2026-09-21T17:05:20.148538734Z
   modified_at: 2026-09-21T17:05:20.148538734Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c4f9-d2f3-74b0-a635-d0e9e0ded8a6
+  author: aida-auto-bump
+  timestamp: 2026-09-21T17:18:21.939558063Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c4f9-d38d-7ac1-bb68-f6365c073f93
+  timestamp: 2026-09-21T17:18:22.093660798Z
+  agent: aida
+  commit_sha: a8b4e3fedefc9d2425cb942600aa32145427d264
+  summary: 'DISCLOSURE: I APPROVED THE COMMIT THAT CREATED THIS DEFECT. PR-2047''s verdict record is mine (claude-reviewer-1, APPROVED at ecbde718a9) and ad85e8ed32 is its squash. Both stranded doc comments passed my review. I am independent of #2051 - different author, no commit of mine on the branch - but the defect it fixes is one I missed. ALL THREE OF THE ADVISOR''S CHECKS CONFIRMED, not accepted. (1) ad85e8ed32 DID create the displacement, and the diff shows the mechanism exactly: pluralize''s doc comment appears as an UNCHANGED CONTEXT line immediately followed by the added short_sha_for_row block, then unchanged ''fn pluralize'' - the insertion landed between a doc comment and the function it documented. (2) The candidate() case is the SAME CLASS, SAME COMMIT, not a coincidence of wording: the three-line regression doc is context, the added ''fn candidate('' follows it directly, and the doc describes operator_mail_count_goes_to_zero_when_own_inbox_is_emptied which now sits 145 lines below. (3) FIX-ONLY IS CORRECT, and the deciding fact is that NEITHER STRANDING STOLE A trace: MARKER - short_sha_for_row carries its own trace and keeps it, pluralize and candidate() have none - so blast radius is doc-only and aida why is not inverted in either case. A per-file doc-placement assertion here would be a narrow instrument for a class-wide problem that BUG-1550 is already gating; adding one would be the narrow-remedy-for-a-class shape. I ALSO ENUMERATED RATHER THAN TRUSTING THE COUNT: exactly 2 stranded instances in that commit, no third. The fix is correct and minimal - each doc comment is restored immediately above the item it describes, and short_sha_for_row retains its own doc and trace.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T17:18:21.939352824Z
+  completion_sha: a8b4e3fedefc9d2425cb942600aa32145427d264
