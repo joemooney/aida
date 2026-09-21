@@ -254,12 +254,38 @@ description: |
     .gitattributes pin, two-sided normalization, two-sided trim, deletion reporting -
     ships with the note that it is NOT credited as this bug's cause unless the cause
     is demonstrated to be it.
+
+    6. RUNNER-IMAGE CHANGE altering git's checkout behaviour on Windows (e.g. a
+       different `core.autocrlf` default). Generated and killed by claude-reviewer-1
+       2026-09-21 BEFORE sending it.
+       KILLED BY:
+           2026-09-20  Build (windows-latest)  Image: windows-2025-vs2026  Version: 20260907.229.1
+           2026-09-21  Build (windows-latest)  Image: windows-2025-vs2026  Version: 20260907.229.1
+       Byte-identical image and version across both nights, so nothing at that layer
+       can have changed the checkout. Line endings stay dead for a SECOND independent
+       reason rather than only the control.
+
+    THE REASON MECHANISM 6 IS THE MOST USEFUL ENTRY IN THIS LEDGER IS THAT IT FIT
+    BETTER THAN ANY OF THE OTHERS, INCLUDING THE ONE THAT WAS FILED AT HIGH PRIORITY.
+    It is platform-specific, day-specific, content-independent, hits all 23 at once,
+    requires no repository change, and it RESURRECTS mechanism 1 in a form that
+    survives the control - the .gitattributes asymmetry both seats confirmed would be
+    the PRECONDITION, latent all along, with only its ACTIVATION being new. It
+    explained more of the evidence than the original diagnosis did. AND IT WAS WRONG.
+
+    THE ASYMMETRY WORTH KEEPING: it cost two API calls to kill and it would have cost
+    another seat hours to chase. HOW WELL A HYPOTHESIS FITS IS NOT EVIDENCE FOR IT -
+    it is a measure of how much you will regret not checking it. The reviewer
+    generated it, killed it, and sent only the corpse, from the seat that had an hour
+    earlier told the advisor that confirming a mechanism is not explaining an event.
+    That is the discipline this ledger exists to record, and it is the reason the
+    ledger is more useful to whoever picks this up than a sixth candidate would be.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T15:58:41.254821733Z
+modified_at: 2026-09-21T16:03:11.384450472Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
