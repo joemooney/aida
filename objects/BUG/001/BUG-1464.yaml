@@ -27,12 +27,12 @@ description: |-
   - A role file the USER edited, or one carrying a system_prompt already, is never overwritten - same edit-preserving contract as the memory/skill packs.
   - A test covers: existing starter role file with no system_prompt, run the refresh, assert the guidance is present; then assert a user-edited system_prompt survives a second refresh unchanged.
   - Re-running the refresh on a machine that is already current is a silent no-op.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:50:48.740973629Z
-modified_at: 2026-09-21T22:15:21.926977119Z
+modified_at: 2026-09-21T22:19:28.028864123Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -76,8 +76,25 @@ comments:
   created_at: 2026-09-21T22:07:47.040536968Z
   modified_at: 2026-09-21T22:07:47.040536968Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c60d-7d7c-7772-947d-4c38bf49738a
+  author: aida-auto-bump
+  timestamp: 2026-09-21T22:19:27.996613486Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0c60d-7d9c-73b3-8c51-bb5214e51e0d
+  timestamp: 2026-09-21T22:19:28.028860342Z
+  agent: aida
+  commit_sha: b54065148a067ed3e394b151b7db37297a3a0889
+  summary: 'THE CORE CLAIM IS ASSERTED IN ITS STRONGEST FORM. "Preserve existing role TOML byte-for-byte" is not checked by comparing fields or by round-tripping the parse - the test asserts `refreshed.starts_with(legacy)`, which proves the existing bytes are untouched AND that the prompt is APPENDED rather than the file rewritten. A field-level or parse-level assertion would have passed a re-serialisation that reordered keys or normalised whitespace; this one cannot. That is the right assertion for the claim being made. THE CLAUDE.md UPDATE IS SUBSTANTIVE AND EXPLAINS THE ASYMMETRY RATHER THAN JUST RECORDING IT: "Starter roles predate those markers, so refresh only appends a shipped system_prompt when that field is absent, preserving every existing byte and never replacing a user prompt." That answers the question a reader would otherwise ask - why roles are handled differently from every other pack - and the answer (they predate the checksum markers) is the kind of reason that stops someone "fixing" the inconsistency later. I APPLIED THE REFERENT RULE TO THE PROSE THIS PR EDITS, since that rule was recorded an hour ago and this is a config/doc change that names paths: the edited CLAUDE.md paragraph cites aida-core/src/scaffolding/refresh.rs and aida-cli-lib/src/scaffold_refresh.rs, and I verified BOTH EXIST at this head. Referents check out.'
+  review_verdict: approve
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-21T22:01:50.276748752Z
   implemented_by: joe
+  completed_at: 2026-09-21T22:19:27.995753329Z
+  completion_sha: b54065148a067ed3e394b151b7db37297a3a0889
