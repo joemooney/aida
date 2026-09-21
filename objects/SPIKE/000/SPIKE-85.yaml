@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:45.252179213Z
-modified_at: 2026-09-21T22:58:15.447460778Z
+modified_at: 2026-09-21T23:02:45.267608179Z
 req_type: Spike
 tags:
 - batch:night-0920
@@ -99,8 +99,58 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework SPIKE-85 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-21T22:58:15.447460778Z
+  detail: |-
+    CHANGES REQUESTED AT ac772eaca9. THIS SUPERSEDES MY OWN APPROVE ON THE SAME SHA, RECORDED AT 22:55:46Z. I was wrong and a second reviewer was substantially right.
+
+    WHY I AM REWRITING THIS FILE KNOWINGLY. The drain reviewer's RequestChanges overwrote my approve in this PR-keyed handshake at 22:58:08Z; recording again overwrites theirs. I am doing it because the operative verdict must be correct and current, and I am CARRYING THEIR FINDINGS FORWARD RATHER THAN DISCARDING THEM — F1 and F2 below are theirs, assessed by me, with attribution. Their contribution is the reason this verdict changed. Nothing here rests on my having looked again unprompted; I did not.
+
+    MY REVIEW MISS, STATED FIRST. I verified criterion 4 rigorously — resolved all thirteen referenced paths, re-derived the 21-site marker count — and I checked criteria 1 and 2 for FORM rather than COVERAGE: predicate stated, rows present, "not applicable" reasoned. I never asked whether the inventory was COMPLETE. The check that would have caught it was one I had already run for another purpose: I printed ci.yml's named-step list while verifying BUG-1578 and never crossed it against the inventory table. The evidence was on my screen and I did not turn it on the artifact.
+
+    F1 — SPLIT VERDICT, AND HALF OF IT I REFUTE.
+
+      TUI SEAM GATE: NOT A FINDING. It is not omitted. Line 91 covers it in the combined row
+      ("Build/test/fmt/clippy, bwrap live test, TUI seam, ...") with the disposition "Not applicable
+      as a self-category test" and stated reasoning, which criterion 2 explicitly permits. I also
+      checked whether that disposition is DEFENSIBLE rather than merely present: scripts/check-tui-seam.sh
+      runs `cargo check -p aida-tui --all-targets` and then inspects `cargo metadata` for an
+      aida-tui -> aida-cli-lib dependency edge. It compiles and tests a structural property. It does
+      not classify prose and does not summarize operational state, and its own source cannot
+      meaningfully be supplied as input. The report classified it correctly.
+
+      PRE-COMMIT PROVENANCE GATE: VALID, ABSENT. `tests/test_precommit_provenance_move.sh` and its CI
+      step appear nowhere in the report — the only occurrence of "provenance" is line 67, in an
+      unrelated sentence about string comparisons. It is a named CI step that changes a commit
+      decision, which is exactly what the report's own method step 1 prescribes enumerating.
+
+    F2 — VALID, AND IT IS THE STRONGER OF THE TWO. `aida burndown status` is absent from the report
+    entirely; "burndown" does not appear in the document. It belongs in the aggregate-status inventory
+    on the report's own predicate, and I confirmed the shape rather than taking the claim:
+    `render_burndown_status_human` takes `lock: &drain_lock::LockStatus` AND `in_flight: &[InFlightLease]`
+    — an aggregate rendered alongside the member list it summarizes. That is precisely the
+    aggregate/detail contradiction shape of BUG-1441, which the report already inventories for
+    `aida drain status` and marks "Pass after BUG-1441". The sibling surface of the one worked example
+    is missing.
+
+    SO CRITERIA 1 AND 2 ARE NOT MET. Two decision-bearing surfaces are absent, and neither absence is
+    covered by the report's stated boundary — that boundary is about UNMARKED SEMANTIC CLASSIFIERS
+    ("the external prose inventory explicitly depends on reviewers adding a marker"), not about named
+    CI steps or aggregate status renderers, both of which the method claims to enumerate mechanically.
+
+    CRITERIA 3, 4 AND 5 REMAIN MET and I do not want them re-litigated: BUG-1578 is filed as its own
+    spec and exists in the store; the method is written and re-runnable with all thirteen paths
+    resolving; machine-detectability is answered as a decision ("not safely automatable as a general
+    lint") with no lint added.
+
+    WHAT THIS COSTS THE REPORT IS SMALL AND WHAT IT PROVES IS NOT. Two rows and their results. But the
+    subject of this document is instruments that are blind to their own category, and it shipped an
+    incomplete self-inventory — which is the seventh instance of its own first paragraph, found by a
+    reviewer rather than by the sweep. That is worth one sentence in the report, because it is the
+    strongest evidence in it that the pattern is real and that a one-time sweep does not close it.
+
+    The BUG-1578 self-demonstration I recorded in the approve still stands and is unaffected: this PR
+    is docs-only, ci.yml's full_ci filter excludes docs/** and **/*.md, and four doc gates require
+    full_ci == 'true', so the doc gates did not run on the artifact reporting that they do not run.
+  recovery_hint: address the review findings, move SPIKE-85 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-21T23:02:45.267608179Z
 human_only: true
