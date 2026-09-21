@@ -88,3 +88,43 @@ allowed_hosts = [
 # ("Cross-platform", exact) does not match it, so spell the glob here.
 [ci]
 informational_workflows = ["Cross-platform*"]
+
+# STORY-1423 criterion 3: THE TRIGGER. The performance-guard pair ships in the
+# init scaffold COMMENTED OUT — correct for a fresh project, which has nothing
+# to guard until it declares a budget — but a commented example is a trigger for
+# nobody. THIS repo is the population the budget was measured against and the
+# dogfood surface for the mechanism, so here the pair is registered and ENABLED.
+# Entries are the scaffold's verbatim (see `schedule_section()` in
+# aida-cli-lib/src/init_cmd.rs), with `enabled` flipped to true.
+#
+# The budget is the measured 1000ms for `show`; the tolerance stays the
+# PROVISIONAL 10%/24h default and is NOT restated here, because a number written
+# in two places is a number that can be tuned in one of them. It changes only
+# alongside a re-measurement.
+#
+# --fail-on-findings is what makes this a GATE rather than a report: the
+# non-zero exit emits CronJobFailed, which the routing seat job turns into a due
+# item in `aida awaiting`. The substrate run is ledgered at
+# schedule/performance-guard.yaml independently, so a trip is BOTH durable and
+# noticed.
+#
+# KNOWN LIMITATION (BUG-1572): the denominator is binary-blind. `~/.aida/usage.jsonl`
+# is machine-global and this repo runs 20-60 worktrees, so one lane's stale build
+# can hold this gate red for a regression that is not on main. Read a red gate
+# against BUG-1572 before concluding main regressed.
+# trace:STORY-1423 | ai:claude
+[performance.budgets]
+show = 1000
+
+[[schedule.jobs]]
+name = "performance-guard"
+command = "doctor check performance --fail-on-findings"
+every = "6h"
+enabled = true
+
+[[schedule.jobs]]
+name = "performance-guard-route"
+seats = ["advisor"]
+on = ["CronJobFailed"]
+prompt = "A performance budget was breached. Read the ledger entry at schedule/performance-guard.yaml, confirm the budget in force at the time of the trip, and decide: real regression, or a budget that needs changing deliberately."
+enabled = true
