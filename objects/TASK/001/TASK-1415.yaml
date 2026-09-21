@@ -159,12 +159,35 @@ description: |
      Finished=2 from one grep and Compiling=0 from another in the same report. That fires
      without suspecting the pattern, without knowing the format, and without knowing which
      of two faults caused it.
+
+     TWO DISCRIMINATORS, AND THE FILE KEEPS BOTH — corrected 2026-09-20 23:51. An earlier
+     revision REPLACED the first with the second. That was an over-correction: they fire on
+     different inputs and neither subsumes the other.
+
+       A. DO MY OWN NUMBERS AGREE WITH EACH OTHER?
+          Fires without suspecting the pattern, without knowing the log format, and without
+          knowing which of two faults caused it. Tonight: Finished=2 from one grep and
+          Compiling=0 from another, in the same report.
+          REQUIRES: two numbers that can disagree.
+
+       B. CHECK ONE PATTERN AGAINST A LINE YOU CAN SEE IN THE FILE.
+          Fires on a SINGLE set of results, including a set of zeros that agree.
+          REQUIRES: nothing but the file.
+
+       WHY BOTH. Tonight A fired only because Finished had been reported separately, by
+       accident. Had the report contained only the four agreeing zeros — which was the
+       likelier shape — A would not have fired at all and B would have. And B is the weaker
+       habit precisely when there IS a contradiction, because it asks you to go looking
+       rather than handing you the signal.
+
+       So: A when you have more than one number, B always, and B is the one that survives a
+       report that is internally consistent and wrong.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:12:14.796135922Z
-modified_at: 2026-09-21T06:49:13.362317854Z
+modified_at: 2026-09-21T06:50:43.595315124Z
 req_type: Task
 tags:
 - parent:EPIC-62 discipline-pack observation severity:operational propagation-candidate
