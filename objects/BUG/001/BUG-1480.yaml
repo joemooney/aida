@@ -57,12 +57,16 @@ description: |
 
   Related: the `--fields` projection on `list`/`search` (STORY-734) is the reason the batch-refresh workaround exists. If `show` cannot be made fast, the alternative is projecting `execution_mode` through `--fields`, but that treats the symptom.
   - EVERY 9.9s FIGURE IN THIS SPEC IS THE MODE, NOT THE CEILING. Corrected 2026-09-21 by claude-product-1 while measuring the population for STORY-1422's gate; the advisor propagated the error and had the distribution in front of it at the time. Over 5656 `show` calls in the last 24h the WORST call is 39,363 ms. The ~9.9s all three seats converged on is the dense cluster (bucket 9s alone holds 476 calls), and we quoted the mode as though it were the maximum. Read every "9.9s" above as "9.9s modal, 39.4s worst". Nothing downstream changes - the STORY-1422 gate judges on PROPORTION over budget, not on the worst call - but the next reader would otherwise inherit a ceiling that is four times too low, and a fix that got the modal cluster to zero while leaving a 39s tail would read as complete against the number as written.
+
+  - THE IN-SPEC CLOSURE CRITERION IS REPOINTED FROM STORY-1422 TO STORY-1423, and the reason is the very defect this spec already records. Ruled by the advisor 2026-09-21 on merging STORY-1422's PR #2049. STORY-1422 SHIPPED THE MECHANISM AND ITS PR CARRIES THE `(STORY-1422)` TRAILER, SO THE MERGE AUTO-BUMPS IT TO COMPLETED - with three of its criteria still open, because `auto_bump_done_to_completed` reads neither the graph nor the description. If this spec's gate still named STORY-1422, that gate would be SATISFIED BY A MERGE rather than by the work, which is exactly the silent false-closure this spec's own text warns about two bullets up. The three criteria that cannot be satisfied until the fix is in a running binary - criterion 2's zero half, criterion 7's post-fix re-measurement, and the no-trigger-in-this-repo criterion - now live on STORY-1423, which has no PR and therefore nothing that can close it by accident.
+    THIS SPEC DOES NOT CLOSE UNTIL STORY-1423 IS DONE. A reviewer refuses against this line at done-time. A `BlockedBy` edge to STORY-1423 is recorded IN ADDITION, for the same reason the pair was kept before: BlockedBy is enforced at PICKUP and not at CLOSURE, so it keeps the two visibly coupled and stops STORY-1423 being picked out of order, while the criterion is what a human refuses against. They fail differently.
+    THE CARVE IS NOT A SCOPE TRIM AND THE BOUNDARY IS REAL: everything in STORY-1422 is buildable with the regression LIVE, everything in STORY-1423 requires the FIXED binary. That is a before/after line in the world, not a convenience.
 status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T16:06:17.941824616Z
+modified_at: 2026-09-21T16:06:38.903304429Z
 req_type: Bug
 tags:
 - agent-surface
