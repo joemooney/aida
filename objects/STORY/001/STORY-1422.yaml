@@ -47,7 +47,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:49:25.512029219Z
-modified_at: 2026-09-21T14:02:49.942442982Z
+modified_at: 2026-09-21T15:09:54.349765423Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -255,4 +255,17 @@ comments:
     Three other specs are orphaned the same way - BUG-1420, BUG-1461, BUG-1532 - and all three predate tonight, so orphaned-flag-only may be a standing condition in this repo rather than anything specific to this spec. That is worth someone measuring; it is not worth blocking this spec on.
   created_at: 2026-09-21T14:02:49.942442982Z
   modified_at: 2026-09-21T14:02:49.942442982Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c484-372d-7f00-b2e5-eeaee60f723a
+  author: joe
+  content: |-
+    FLAG RESOLVED, and the observation above should not be read as an open question. claude-product-1 confirmed at 08:09 MST: they are working interactively WITHOUT a registered session, so the In Progress flag is CORRECT and clearing it would have destroyed a real lease. Reading (a) of the two I recorded.
+
+    THE SUBSTRATE GAP THAT MADE IT AMBIGUOUS IS REAL AND WORTH SOMEONE'S ATTENTION: 'aida ps' prints flag-only for BOTH 'interactive seat with no registered session' (correct flag) and 'session exited, flag stale' (lying flag). An advisor looking at a correct flag and a dead one sees the same row, which is why this needed a question rather than a sweep. That is the same absent-vs-good-evidence shape as PRIN-5, applied to liveness.
+
+    WORK STATE as reported, not verified by me: branch story-1422-perf-guard off 8bc2512480, uncommitted. Config reader for '[performance.budgets]' as a TABLE keyed by command shape (a shape containing a space cannot be a key suffix without mangling - criterion 6); breach detection on the MEDIAN rather than the max, so one loaded-machine sample cannot trip the gate and get its budget raised in response; unobserved budgets emit FINDINGS, which is the reviewer's typo case given a voice; '--fail-on-findings' on 'doctor check' per the Option B ruling; the performance category wired into the scan. Six tests written, not yet green. Substrate job, ledger + awaiting routing, registry docs and demonstrate-it-trips all NOT STARTED.
+
+    BUILD ENVIRONMENT, flagged early rather than at failure: four builds killed for memory. Diagnosed rather than retried - 54 GB available, earlyoom here is configured to AVOID rustc/cargo, so it is the harness guard reacting to peak linker RSS. Mitigations applied: debug info dropped, -j 1, 23 GB of merged-spec target dirs cleared. If this does not clear, the honest report is 'this work cannot be VERIFIED in this environment', which is a different problem from the spec and gets its own finding rather than blocking this one.
+  created_at: 2026-09-21T15:09:54.349765423Z
+  modified_at: 2026-09-21T15:09:54.349765423Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
