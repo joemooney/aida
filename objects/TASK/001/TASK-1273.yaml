@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-21T07:40:16.789042979Z
+modified_at: 2026-09-21T07:40:39.950928066Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -213,6 +213,57 @@ comments:
   content: 'Round 3 evidence/punt for finding 1: the exact live lifecycle passed locally against gitlab.joemooney.com at 52e0426d33 (MR !1 opened, real pipeline green, approval read as Approved, trait merge succeeded, CiTerminal+PrMerged asserted, branch removed, project deletion scheduled). GitHub workflow dispatch 35573642374 at that head failed before project creation because Cloudflare Access intercepted /api/v4 and returned its HTML sign-in page; the repository has only AIDA_GITLAB_TOKEN, no Cloudflare Access service-token secrets, and no self-hosted GitHub runner. Current-head dispatch 35574028945 records the same infrastructure boundary. PUNT finding 1 only: a green GitHub-hosted lifecycle requires external Cloudflare policy/service-token provisioning or a self-hosted runner; a GitLab PAT cannot cross Cloudflare Access. Finding 2 is fixed in 09364e13dd: missing token is documented as a hard failure, matching cross-platform.yml.'
   created_at: 2026-09-21T07:40:16.789042979Z
   modified_at: 2026-09-21T07:40:16.789042979Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c2e8-ec8e-77e1-888b-7a7284b719a6
+  author: joe
+  content: |-
+    [aida:advisor] BLOCKED ON INFRASTRUCTURE, NOT CODE. The live smoke has never executed a
+    single phase. Drain stopped; this spec cannot progress until the runner can authenticate.
+
+    REVIEWER'S FINDING, VERIFIED INDEPENDENTLY BY THE DRIVER ADVISOR at 00:40 by fetching the
+    job log through the API:
+
+        run 35573642374, job 106250491482, "GitLab live forge smoke" = failure
+        thread 'forge::tests::gitlab_live_mr_round_trip' panicked at forge.rs:3422:
+
+          phase=project-create: create response was not JSON (expected value at line 1
+          column 1; stdout="<!DOCTYPE html>...<title>Sign in ・ Cloudflare Access</title>...
+
+    Every glab API call from the GitHub runner is answered by a CLOUDFLARE ACCESS SIGN-IN
+    PAGE. The runner cannot authenticate to gitlab.joemooney.com past the Access policy.
+
+    PHASE MARKERS IN THE LOG: ZERO. The test prints "forge-smoke phase=" before every stage,
+    and across three live runs — 09364e13dd, 15d1668f5d, 52e0426d33 — the count is zero every
+    time. It dies at the first API call. The 15d1668f5d run lasted 11.78s.
+
+    WHAT THAT MEANS FOR THIS ROUND'S FOUR COMMITS:
+
+        09364e13dd  docs: fail-loud GitLab credentials          useful regardless
+        15d1668f5d  test: tolerate asynchronous project creation  fixes a phase NEVER REACHED
+        af2a4a6d3a  fix: keep GitLab CI polling on driven root    real, and unverifiable here
+        52e0426d33  test: accept scheduled project deletion       fixes a phase NEVER REACHED
+
+    Two of the four correct a cleanup and a creation phase that have not executed once. They
+    are not wrong — the GitLab soft-delete and async-creation semantics they model are real —
+    but they were written against a symptom whose cause is an auth wall, and no amount of
+    further rounds will turn the smoke green.
+
+    ONE THING THE ROUND DID ACHIEVE, and it is why the diagnosis exists: at 09364e13dd the
+    old unwrap panicked with only `Error("expected value", line: 1, column: 1)` — no body,
+    undiagnosable. The 15d1668f5d commit made the panic carry the response body, and THAT is
+    what put the Cloudflare HTML in the log. The fail-loud change diagnosed the blocker that
+    stops its own spec.
+
+    THE DECISION NEEDED IS AN OPERATOR ONE: a GitHub-hosted runner needs to reach
+    gitlab.joemooney.com's API past Cloudflare Access — a service token, a service-auth
+    header pair, or an Access policy exception for the runner. That is credentials and
+    infrastructure, not code, and it is outside what any seat here should configure.
+
+    UNTIL THEN: this spec is parked. Further rounds cannot verify anything. The forge-
+    resolution fix at af2a4a6d3a and its three unfixed sibling call sites are real work that
+    should travel to a spec which does NOT require the live smoke to pass.
+  created_at: 2026-09-21T07:40:39.950928066Z
+  modified_at: 2026-09-21T07:40:39.950928066Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
