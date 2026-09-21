@@ -30,12 +30,12 @@ description: |-
   4. Decide whether the write path can do anything at all. It probably cannot - by the time AIDA sees the string the text is already gone - which is worth stating explicitly so nobody looks for a guard that cannot exist. If that is the conclusion, the detector and the habit are the whole remedy.
 
   WHAT THIS IS NOT. Not a bug in AIDA's write path. The shell consumes the text before any AIDA code runs. It is filed because the DAMAGE is in AIDA's store, is silent, is not rare, and is findable - and because a known hazard that leaves no trace is indistinguishable from one that is not happening.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T04:16:12.635264879Z
+modified_at: 2026-09-21T21:24:01.269927619Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -264,4 +264,10 @@ comments:
     RULE KIND, per the taxonomy above: this is NOT an instrument. It is a property of REPORTING, and by construction it only pays when a second reader exists - which is the resource that disappears under load, per the clause recorded on ADR-49. So its value is real and conditional on the arrangement, and it should not be counted alongside the five instruments as though it works alone.
   created_at: 2026-09-21T04:16:12.635264879Z
   modified_at: 2026-09-21T04:16:12.635264879Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5da-ba75-7a30-8d08-d12629f011a6
+  author: joe
+  content: 'Promoted by joe 2026-09-21: PROMOTED: the damage is in OUR OWN STORE, it is silent, and it is findable. Three confirmed instances (TASK-675, TASK-676, a TASK-1-170 comment), two of them years-old prose that has read as an odd sentence rather than as damage for as long as it has existed. The acceptance is mostly mechanical — sweep with a refined signature, repair IN PLACE (not by appending, which is how this defect''s own first repair failed), and state the prevention where the hazard is. Item 4 is the one I most want kept: DECIDE EXPLICITLY whether the write path can do anything at all, and if the answer is no — the shell consumes the text before any AIDA code runs — say so in the spec so nobody later goes looking for a guard that cannot exist. A documented impossibility is worth more than an open question.'
+  created_at: 2026-09-21T21:24:01.269927619Z
+  modified_at: 2026-09-21T21:24:01.269927619Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
