@@ -1,0 +1,54 @@
+id: 01a0c169-af5f-77d2-a0ab-7c4b49132d71
+spec_id: BUG-1500
+agreed_id: BUG-1500
+title: aida pull advises git rebase --abort on every store-leg failure without checking whether a rebase is in progress, so a transient 502 reads as a broken store
+description: |
+  `aida pull`'s store-leg failure message advises `git rebase --abort` unconditionally, on EVERY store-leg error, including transient network failures where no rebase is in progress and the abort is the wrong action.
+
+  CONFIRMED IN CODE — the hint is not triggered, it is the entire Err arm. lib.rs ~61629:
+
+      Err(e) => {
+          eprintln!(
+              "  {} {}\n  The orphan store may be mid-rebase. To recover:\n    \
+                   cd {} && git rebase --abort\n  Then re-run `aida pull` ...",
+              "Warning:".yellow().bold(), e, store_path.display()
+          );
+          store_failed = Some(format!("store leg pull_rebase failed: {}", e));
+      }
+
+  There is no check for `.git/rebase-merge`, no inspection of the error, no condition of any kind. A second emission site exists at git_backend_cmd.rs:6048. So the answer to "is it unconditional or triggered" is unconditional, and this is not a one-instance anecdote — it fires on every store-leg failure that has ever occurred or will.
+
+  THE OBSERVED INSTANCE, 2026-09-20 by claude-reviewer-1 after merging #2038:
+
+      code leg    local main ahead 0, behind 1 — a clean fast-forward, NOT diverged
+      store       on aida-store...origin/aida-store, clean, NO rebase-merge directory
+      real cause  git pull --ff-only origin main -> fatal: CONNECT tunnel failed, response 502
+
+  A transient proxy 502. Both legs failed for the same reason, neither was in the state the message described, and a retry minutes later succeeded with no intervention. They did not run the suggested recovery; they diagnosed read-only first.
+
+  WHY THIS IS MORE THAN A MISLEADING STRING. `git rebase --abort` on a store that is not mid-rebase fails harmlessly, but the operator who runs it has been told their store is in a broken state when it is not — and the next step a worried operator takes after a failed abort is rarely read-only. The two conditions need opposite responses: a 502 needs a retry and nothing else; a genuine mid-rebase needs the abort. Offering the destructive remedy for both means the message is actively wrong exactly half the time it fires, and wrong in the direction of action.
+
+  It is also PRIN-5's shape in a diagnostic: the message asserts a state it has not checked, and asserts it confidently.
+
+  ACCEPTANCE
+  1. The mid-rebase hint is emitted only when a rebase is actually in progress — check for the rebase-merge / rebase-apply directory in the store worktree.
+  2. When no rebase is in progress, the message names the underlying error and says nothing about recovery it has not established is needed. A transient network failure should read as one.
+  3. Both emission sites are fixed: lib.rs ~61629 and git_backend_cmd.rs ~6048. A fix at one leaves the other asserting the same unchecked state.
+  4. A test covers both branches: store-leg failure WITH a rebase in progress emits the recovery hint; store-leg failure WITHOUT one does not.
+  5. Check whether other failure paths in the two git legs offer remedies for unchecked states. This one was found because a reader distrusted it; the same shape elsewhere would not have been.
+
+  Found by claude-reviewer-1, who declined to file it on one instance. The code read settles the question they could not: it is unconditional, so every store-leg failure carries it.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T00:42:03.999804940Z
+modified_at: 2026-09-21T00:42:03.999804940Z
+req_type: Bug
+tags:
+- batch:night-0920
+- diagnostic-decay
+- diagnostics
+- drain-safe
+- from:session-0920
+- git
