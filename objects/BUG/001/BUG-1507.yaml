@@ -2,7 +2,7 @@ id: 01a0c1a6-767c-74f1-b8ef-177d7dd756b5
 spec_id: BUG-1507
 agreed_id: BUG-1507
 title: 'Four gates treat unknown, absent and did-not-run as consent: the preflight publishes when guards never ran, and a test pins it'
-description: |
+description: |-
   Four gates in this codebase enumerate the values that mean STOP and let everything else fall through as GO. Unknown, absent and could-not-run all become consent. This is PRIN-5 expressed as a code pattern, and it is now frequent enough to be worth finding mechanically rather than one bug at a time.
 
   THE INSTANCES, all verified 2026-09-20. This list is the deliverable - a fix that addresses the shape without addressing each site leaves the others exactly as they are.
@@ -60,12 +60,35 @@ description: |
   5. Each fix names PRIN-5 in a trace comment, so the next reader finds the principle rather than rediscovering the class.
 
   NOT IN SCOPE: the verdict schema itself, which is BUG-1505, and the boundary design decision on TASK-1289, which is with the operator. This spec covers the decision function's treatment of unknowns wherever it appears.
+
+
+  6. THE TESTS HAVE THE SAME DEFECT AS THE CODE, AND FIXING ONLY THE CODE LEAVES THE MECHANISM THAT HID IT. Three tests found 2026-09-20, each asserting an INVARIANT by enumerating the instances that existed when it was written. All three PASS. All three read as proof the invariant is covered.
+
+      (i) `lifecycle_skip_express_tier_forces_full_gate` in auto_complete.rs. Function name and
+          assertion message both claim a universal - "express overrides any lifecycle:* short-circuit
+          - full gate enforced". Body names three of five skip fields and the input tags omit
+          lifecycle:no-preflight, so it cannot fail for the field left open. The universal instrument
+          `skip.is_empty()` is used correctly TWENTY LINES ABOVE in the same function, in the easier
+          case.
+      (ii) The preflight test asserting a timeout yields Skipped. Accurate, and it pins the fail-open
+          decision it should be refusing - a passing test locking in the defect.
+      (iii) PR #2040's `open_pr_for_same_spec_defers_auto_bump` fake: returns 1979 for every
+          invocation without inspecting which spec was searched, so it passes whether the lookup is
+          spec-specific or a constant.
+
+      REQUIRED: where a test asserts an invariant over a set, it must be unable to compile when the
+      set grows - a destructuring bind over every field, an exhaustive match with no wildcard arm, or
+      equivalent. Not a conjunction of the members that existed at authoring time. This is criterion 4
+      applied to the tests, and it is the half that determines whether the fix survives the next field
+      anyone adds. Every enumeration relied on during this investigation narrowed silently rather than
+      failing - including the enumeration in the first version of THIS spec, which cited four line
+      numbers of which two did not exist.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-21T01:53:27.598915596Z
+modified_at: 2026-09-21T02:14:53.074535844Z
 req_type: Bug
 tags:
 - batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
