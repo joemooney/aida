@@ -1,0 +1,93 @@
+id: 01a0c248-3454-7783-bd5f-8e30cff9e230
+spec_id: BUG-1525
+agreed_id: BUG-1525
+title: The agent-brief Setup block always says git worktree add -b <spec-id> origin/main, so a rework brief tells the implementer to start a second lineage that does not contain the PR's commits
+description: |-
+  Found 2026-09-20 21:45 local, reviewer seat, while reading the rework brief written
+  for my own RequestChanges on PR #2035.
+
+  THE GENERATOR EMITS A FRESH-START SETUP BLOCK FOR EVERY BRIEF, including a rework
+  brief for a spec that already has a branch, a worktree and an open PR.
+
+  aida-cli-lib/src/lib.rs, the brief Setup builder around line 13382:
+
+      let branch = spec_id.to_ascii_lowercase();
+      ...
+      git worktree add {worktree_display} -b {branch} origin/main
+
+  branch is derived from the spec id alone. There is no check for an existing branch,
+  an existing worktree, or an open PR for the spec.
+
+  WHAT THAT PRODUCED IN THE LIVE CASE, verified:
+
+      real branch        bug-1470-work          (PR #2035, head 7a4c4f52ec)
+      real worktree      /home/joe/ai/aida-bug1470
+      origin/bug-1470-work has 2 commits not on main
+
+      Setup block says  -b bug-1470  off origin/main
+                        worktree /home/joe/ai/aida-bug-1470
+
+  Both the branch name AND the path differ from the live ones. bug-1470 exists neither
+  locally nor on origin, so the command SUCCEEDS SILENTLY and creates a second lineage
+  containing none of the PR's two commits.
+
+  CONSEQUENCE. An implementer who follows the Setup block literally:
+    - starts from origin/main with none of the reviewed work
+    - commits to a branch that is not the PR's head branch
+    - pushes, and PR #2035 does not move - it stays at 7a4c4f52ec
+    - the reviewer's recorded verdict and merge-hold now apply to a head nobody is
+      working on, and the review round cannot conclude
+
+  That is precisely the two-lineages pathology that put PR #2042 and PR #2043 under
+  reviewer holds tonight, manufactured by the tool rather than by an agent's mistake.
+
+  IT ALSO CONTRADICTS THE SAME BRIEF. The advisor's hand-written item 5 tells the
+  implementer to realign bug-1470-work (it is diverged, ahead 1 behind 7). The generated
+  Setup block four sections later tells them to create bug-1470 off main. One brief, two
+  incompatible instructions, and the generated one reads as canonical because it is the
+  section that looks machine-produced.
+
+  NOT SPEC-SPECIFIC. Checked three other recent briefs; all carry the same shape:
+
+      BUG-1454    -b bug-1454   origin/main
+      STORY-1391  -b story-1391 origin/main
+      TASK-1279   -b task-1279  origin/main
+
+  And the live convention is <spec>-work branches: 18 of the 20 current worktrees use it.
+  So the generated branch name does not match the convention the drain itself creates,
+  for ANY spec - the fresh case merely hides it, because a fresh branch works whatever
+  it is called.
+
+  The session start line already passes --reuse-branch, so reuse was anticipated
+  somewhere; the worktree add above it has already created the divergence by then.
+
+  Acceptance
+  1. When a spec already has a branch with commits ahead of the default branch, or an
+     open PR, the Setup block targets THAT branch and worktree - it never emits
+     worktree add -b <new> origin/main for it.
+  2. When a spec has an existing worktree, the block says to cd into it (and realign if
+     diverged), not to create a second one at a different path.
+  3. The generated branch name matches the convention the drain actually creates
+     (<spec>-work), or is read from the existing branch rather than derived from the
+     spec id.
+  4. A brief cannot contain a Setup block that contradicts its own preamble: if the
+     generator cannot determine the branch, it says so explicitly rather than emitting a
+     confident fresh-start recipe.
+  5. A test generates a brief for a spec with an existing branch + open PR and asserts
+     the Setup block names that branch, not a spec-id-derived new one.
+
+  Related: BUG-583 (the Setup block must reference the target project's location) is the
+  prior fix to this same block; it corrected WHERE, this corrects WHICH BRANCH.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:45:07.028261694Z
+modified_at: 2026-09-21T04:45:07.028261694Z
+req_type: Bug
+tags:
+- agent-briefs
+- orchestrator
+- parent:EPIC-62
+- rework-loop
+- severity:operational
