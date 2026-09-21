@@ -1,0 +1,37 @@
+id: 01a0c3ae-0484-7272-81b0-36bbcbab64ab
+spec_id: BUG-1544
+agreed_id: BUG-1544
+title: ETXTBSY on a freshly-written fixture binary is the fourth occurrence of a class fixed three times, at the one test site both existing remedies skipped
+description: |-
+  FOURTH OCCURRENCE OF A CLASS THIS REPO HAS FILED AND FIXED THREE TIMES, at the one site both existing remedies skipped. Observed 2026-09-21 on the #2047 rework.
+
+  PROVENANCE IS SPLIT THREE WAYS AND THE SPLIT MATTERS.
+
+  RELAYED FROM THE PRODUCT SEAT, NOT INDEPENDENTLY OBSERVED BY ANYONE ELSE: while pushing the #2047 rework they ran the full suite and pushed in one command. The suite reported "5221 passed; 1 failed" and the push went out anyway. The failing test was `fake_gh_short_argv_reaches_fallback`, dying on ExecutableFileBusy. They report it passes 3/3 in isolation and that a clean re-run afterwards was green (5222 passed, exit 0). NOBODY ELSE OBSERVED THE FAILURE. If CI reds on that exact test the mechanism is independently confirmed; short of that, the identity of the failing test and the error kind rest on one report.
+
+  VERIFIED BY THE REVIEWER SEAT: the test at aida-cli-lib/src/lib.rs:1232 invokes the FIXTURE'S fake gh binary directly with argv [] and ["pr"] and asserts exit 2 plus an "unexpected gh call:" stderr. It never enters production code, never constructs a `gh pr list` invocation, and never names the --json field list or headRefOid the #2047 diff touched. The change cannot reach it.
+
+  VERIFIED INDEPENDENTLY BY THE DRIVER-ADVISOR, because the one-line-fix claim rests on it:
+    - the remedy exists: aida-cli-lib/src/process_retry.rs — is_etxtbsy() at :12, retrying_etxtbsy() at :22, command_output_retrying_etxtbsy() at :35
+    - it is applied at exactly three sites: forge.rs:1183, forge.rs:3056, pr_cmd.rs:2630
+    - the failing test uses NONE of it: `std::process::Command::new(&fixture.gh).args(args).output().unwrap()` — a raw output(), no retry, no tolerance
+
+  THE CLASS IS ALREADY CATALOGUED. BUG-423, BUG-463 and BUG-1202 are all completed, plus STORY-1205 reviewing PR-1919 "fix(init): retry ETXTBSY when running hooks". BUG-1202 states the same mechanism in different words: "hook script exec races a concurrent fork holding the just-written fd". pr_cmd.rs:2630's own comment reads "BUG-463: retry transient ETXTBSY so a just-written gh wrapper..." — literally this scenario. There is also a TEST-SIDE remedy at agent_launcher_tests.rs:1882-1897, an inline 5-retry loop with backoff, commented as fixture-only and traced to BUG-423.
+
+  SO THIS IS NOT A FLAKE AND SHOULD NOT BE CALLED ONE. It is the half-fix shape: three filings, three fixes, each patching the cited sites and leaving the siblings, and the class resurfacing a fourth time looking random. Every occurrence costs someone a debugging hour and produces a new "probably flaky" belief.
+
+  WHAT TO BUILD:
+    1. Make the fixture-binary invocation at lib.rs:1232 tolerate ETXTBSY — either by routing through command_output_retrying_etxtbsy or by the established test-side loop at agent_launcher_tests.rs:1882-1897. One line either way.
+    2. ENUMERATE, DO NOT PATCH THE CITED SITE. This is the fourth occurrence precisely because each previous fix patched what was reported. Sweep every direct `Command::new(...).output()` against a binary the test suite itself writes, and fix the set — or add a check that fails when a new one appears. A fix that closes only lib.rs:1232 earns a fifth occurrence.
+    3. State in the code why production and fixture paths differ, since agent_launcher_tests.rs already argues production launches an installed binary and never a freshly-written one. If that argument is still true, the fixture-side loop is the right remedy and should be said to be; if it is not, the production remedy belongs everywhere.
+
+  A SECOND DEFECT, RECORDED HERE BECAUSE IT IS WHY THE FIRST ONE SHIPPED: the push went out with a red suite because the invocation used `|| true`, which swallowed the exit code, and `grep | head -3`, which cut the output above the result line. That is a local harness habit rather than repo code, so it is not this spec's fix — but it is the same shape as the truncated-output rule this board already carries: a command whose output is cut above the verdict cannot report the verdict, and `|| true` on a test run converts a gate into a decoration. Worth a separate filing if it recurs; recorded here so the sequence is legible.
+
+  Filed by the driver-advisor seat. The relay is the product seat's, the test-site analysis the reviewer seat's, the remedy inventory the advisor's. Autonomous-safe.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T11:15:56.676262574Z
+modified_at: 2026-09-21T11:15:56.676262574Z
+req_type: Bug
