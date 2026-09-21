@@ -47,7 +47,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:49:25.512029219Z
-modified_at: 2026-09-21T15:09:54.349765423Z
+modified_at: 2026-09-21T15:21:24.182055092Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -268,4 +268,52 @@ comments:
     BUILD ENVIRONMENT, flagged early rather than at failure: four builds killed for memory. Diagnosed rather than retried - 54 GB available, earlyoom here is configured to AVOID rustc/cargo, so it is the harness guard reacting to peak linker RSS. Mitigations applied: debug info dropped, -j 1, 23 GB of merged-spec target dirs cleared. If this does not clear, the honest report is 'this work cannot be VERIFIED in this environment', which is a different problem from the spec and gets its own finding rather than blocking this one.
   created_at: 2026-09-21T15:09:54.349765423Z
   modified_at: 2026-09-21T15:09:54.349765423Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c48e-bdd6-7e70-8aac-3c3eebf72e2a
+  author: joe
+  content: |-
+    RULING ON THE STATISTIC — PROPORTION OVER A WINDOW, THRESHOLD 10%, WINDOW 24h, WITH A MANDATORY RE-MEASUREMENT AFTER BUG-1480 LANDS. Requested by claude-product-1, who measured rather than tuned and blocked rather than shipped. Every number below re-derived by the advisor from ~/.aida/usage.jsonl.
+
+    THE DISTRIBUTION, REPRODUCED INDEPENDENTLY (23,112 `show` events; 5,571 in the last 24h):
+
+        median all-time      404 ms
+        median 24h           667 ms
+        p90 24h            9,653 ms
+        p99 24h           10,991 ms
+        over 1000 ms       1,133 of 5,571 = 20.3%
+
+        1-second buckets, last 24h:
+          0s 4438 | 1s 188 | 2s 54 | 3s 49 | 4s 48 | 5s 14 | 6s 23 | 7s 69 | 8s 22 | 9s 476 | 10s 135 | 11s 15 | 12s+ 40
+
+    THE HISTOGRAM IS THE PROOF AND IT IS SHARPER THAN A MEDIAN/p90 TABLE. 4,438 calls under one second, a VALLEY of 14-69 per bucket from 5s to 8s, then a SPIKE of 476+135 at 9-10s. Two populations sharing a command name, with an almost-empty gap between them. Not a fast population with outliers.
+
+        fast group (<=5s)  n=4777  median 663  p90 897
+        slow group (>5s)   n=794   median 9836  min 5002  max 39363
+
+    THE FAST GROUP'S p90 IS 897 ms — UNDER THE 1000 ms BUDGET. That matters: the budget is correctly set for the mode it was written for. The defect is not a wrong threshold; it is a statistic that cannot see a second mode.
+
+    WHY EACH OBVIOUS STATISTIC FAILS, confirmed:
+        median            404-667 ms. Never trips, including right now with the bug live and 20% of calls over budget.
+        p90               812 ms to 9,653 ms across windows. Flaps across the threshold by window choice alone — a gate whose verdict depends on the window is not a gate.
+        any-over-budget   20.3% of calls. Always trips, including after a fix.
+
+    PROPORTION IS THE ONE THAT FITS, for product's reasons plus one they did not state: a proportion is the only one of the four that is STABLE ACROSS WINDOWS while the underlying condition persists, and that collapses when the condition is fixed. p90's instability is exactly the bimodality leaking into the statistic — p90 lands in the valley or on the spike depending on the slow mode's share of the window.
+
+    THRESHOLD: 10% OVER A 24-HOUR WINDOW, and the derivation matters more than the number:
+        trips today at 20.3%                          — 2x margin, demonstrate-it-trips is satisfiable now
+        must NOT trip after BUG-1480's fix            — and this is where it gets uncertain, see below
+
+    THE POST-FIX ESTIMATE IS NOT SAFE AND I AM NOT PRETENDING IT IS. If the slow mode vanishes entirely, the residual over-budget population is the 1s-4s band: 188+54+49+48 = 339 calls. Against a post-fix denominator of ~4,777 that is 7.1%. A 5% threshold — product's proposal — WOULD STILL TRIP AFTER THE FIX. That is why I am not taking 5%.
+
+    But 10% against a 7.1% residual is only a 1.4x margin, and I do not know that the 1s-4s band survives the fix. Those calls may be partial-cache cases that disappear with it, or they may be a genuine slower-than-budget tail that stays. NOTHING IN THE DATA DISTINGUISHES THOSE TWO FUTURES.
+
+    SO THE THRESHOLD IS PROVISIONAL AND ITS RE-MEASUREMENT IS A CRITERION, NOT A NOTE:
+      7. After BUG-1480's fix lands, RE-MEASURE the over-budget proportion for `show` over a full 24h window of post-fix traffic, and record it on this spec. If the residual exceeds 7%, the threshold is raised with the measurement attached — not tuned until green. If it is near zero, the threshold may be tightened. Either way the number changes only with a measurement beside it.
+      8. MINIMUM SAMPLE GUARD: a shape with too few calls in the window must not trip on proportion alone — three calls with one slow is 33% and means nothing. Pick a floor, state it, and make it a finding rather than a trip below the floor. "Not enough data to judge" is the cannot-determine state and PRIN-5 says it must be distinguishable from "fine".
+
+    AND THE INSTRUMENT CANNOT EXPLAIN WHAT IT GUARDS — recorded because it bounds what anyone may conclude from a green gate. Product checked every field the log records: role, scope, binary_sha, args_count and exit_code have the SAME shape in both modes. The STORY-122 privacy floor deliberately stores no argument values, so nothing recorded explains why the same command against the same binary takes 400 ms or 9,900 ms. This gate can detect THAT a shape is slow and can never say WHY. That is an acceptable guard and an unacceptable diagnosis, and the distinction should be in the ledger entry's wording so a future reader does not treat a trip as a root cause.
+
+    WHAT IS DONE AND VERIFIED per product, not re-checked by me: config reader, breach detection, unobserved-budget findings, opt-in --fail-on-findings, category registered, substrate job plus a CronJobFailed-keyed routing seat job scaffolded, six tests green with all six mutations confirmed red.
+  created_at: 2026-09-21T15:21:24.182055092Z
+  modified_at: 2026-09-21T15:21:24.182055092Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
