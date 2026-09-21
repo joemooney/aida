@@ -43,7 +43,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:09:49.662292511Z
-modified_at: 2026-09-21T01:09:49.662292511Z
+modified_at: 2026-09-21T01:10:00.515785118Z
 req_type: Bug
 tags:
 - aida:show cli-conformance agent-surface drain-safe from:session-0920
+- batch:night-0920
