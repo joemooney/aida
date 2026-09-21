@@ -35,7 +35,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T21:24:01.269927619Z
+modified_at: 2026-09-21T22:36:44.840834061Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -270,4 +270,45 @@ comments:
   content: 'Promoted by joe 2026-09-21: PROMOTED: the damage is in OUR OWN STORE, it is silent, and it is findable. Three confirmed instances (TASK-675, TASK-676, a TASK-1-170 comment), two of them years-old prose that has read as an odd sentence rather than as damage for as long as it has existed. The acceptance is mostly mechanical — sweep with a refined signature, repair IN PLACE (not by appending, which is how this defect''s own first repair failed), and state the prevention where the hazard is. Item 4 is the one I most want kept: DECIDE EXPLICITLY whether the write path can do anything at all, and if the answer is no — the shell consumes the text before any AIDA code runs — say so in the spec so nobody later goes looking for a guard that cannot exist. A documented impossibility is worth more than an open question.'
   created_at: 2026-09-21T21:24:01.269927619Z
   modified_at: 2026-09-21T21:24:01.269927619Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c61d-4fa8-7782-ab6a-e9ef96668ddc
+  author: joe
+  content: |-
+    [aida:advisor] A FOURTH CONFIRMED INSTANCE, CAUSED BY ME, HOURS AFTER PROMOTING THIS FINDING, AND CAUGHT ONLY BY AN UNRELATED SHELL ERROR.
+
+    2026-09-21 15:34 MST. I ran `aida comment add TASK-1289 "...execution_mode remains BACKTICK-guided-BACKTICK and I am NOT queueing this..."`. Backticks inside a double-quoted shell argument are COMMAND SUBSTITUTION. The shell executed `guided`, which does not exist, and substituted its empty stdout.
+
+        STORED:  execution_mode remains  and I am NOT queueing this for a headless drain.
+                                       ^^ the hole, with this finding's exact signature
+
+    THE SENTENCE STILL PARSES AND READS AS COMPLETE. A reader meets "execution_mode remains and I am NOT queueing this" and has no reason to suspect a word was removed - the grammar survives, and the only trace is the double space this spec identifies as the signature.
+
+    I CAUGHT IT BY ACCIDENT. `bash: line 11: guided: command not found` appeared in the tool output. Had the eaten word been a real command - `date`, `true`, `clear`, `env`, any binary on PATH - THERE WOULD HAVE BEEN NO ERROR AT ALL, and the substitution would have inserted that command's OUTPUT into the spec rather than deleting text. THAT IS STRICTLY WORSE THAN THE THREE INSTANCES ON RECORD, which all lost text. A silent insertion of `date` output into a requirement body would be indistinguishable from an author's own words.
+
+    I have REPAIRED IT IN PLACE per acceptance item 2, not appended: `aida comment edit --req-id TASK-1289 --comment-id 01a0c61c-...` with the corrected content. Verified after: the damaged form now returns zero matches and the corrected form is present in the stored YAML. Item 2's mechanism works and is the right one.
+
+    WHAT THIS INSTANCE ADDS TO THE SPEC, beyond a fourth tally mark:
+
+      1. THE HAZARD IS NOT LIMITED TO LONG PROSE OR TO DESCRIPTIONS. Every previous instance was a
+         long description or comment body. This was a single word in a routine status note. ANY
+         shell-quoted argument containing a backtick is exposed, including short ones, which is
+         where nobody thinks to use a heredoc.
+      2. THE DELETION CASE IS THE LUCKY ONE. The failure this spec documents is text being EATEN.
+         The same mechanism INSERTS arbitrary command output whenever the backticked token happens
+         to name a real executable. The detector's double-space signature finds deletions and would
+         not find an insertion at all.
+      3. WRITING THE SPEC DOES NOT INOCULATE THE AUTHOR. I promoted this finding at 14:2x with the
+         note that its prevention is "a documentation and habit fix, not a code change", and
+         violated it at 15:34. A habit fix that the person who just wrote it down cannot keep for
+         ninety minutes is not a habit fix. THAT IS AN ARGUMENT AGAINST ACCEPTANCE ITEM 3'S
+         FRAMING, and I am recording it against my own earlier disposition rather than quietly.
+
+         Item 4 asks whether the write path can do anything at all, and correctly expects the answer
+         to be no - by the time AIDA sees the string the text is already gone. That remains true for
+         PREVENTION. It is NOT true for DETECTION: AIDA receives the damaged string and could run
+         the double-space signature on inbound description and comment text at write time, warning
+         the author while they are still there to fix it. That is a cheap guard the spec currently
+         does not ask for, and it would have caught this instance at 15:34 instead of by luck.
+  created_at: 2026-09-21T22:36:44.840834061Z
+  modified_at: 2026-09-21T22:36:44.840834061Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
