@@ -20,14 +20,22 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:03:46.513817918Z
-modified_at: 2026-09-21T01:10:28.334261138Z
+modified_at: 2026-09-21T01:15:44.075781042Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+- recurrence:2
 - severity:minor
 relationships:
 - rel_type: References
   target_id: 01a0c183-19de-7051-a727-bb2ac0e728ab
   created_at: 2026-09-21T01:10:28.334253775Z
   created_by: joe
+comments:
+- id: 01a0c188-824b-7122-a90b-710310aa91f7
+  author: joe
+  content: 'Recurrence #2 by joe 2026-09-21: Second through seventh instances. My original claim that a store-wide sweep found no second instance was produced by a pattern matching only the RUNAWAY form (seven or more backslashes); a sweep for the general form - any line consisting solely of backslashes and quotes - finds seven specs across 4140 descriptions: BUG-1106, BUG-1111, BUG-1310, BUG-1450, BUG-1452, STORY-104, STORY-1405. Six carry a single stray quote, STORY-104 carries three. Four of the seven were written today. The two active ones (BUG-1452, STORY-1405) are repaired; the five Completed ones are left frozen. This is the narrow-pattern class again, committed while documenting the narrow-pattern class, and it is the reason the finding understated its own scope by a factor of seven.'
+  created_at: 2026-09-21T01:15:44.075781042Z
+  modified_at: 2026-09-21T01:15:44.075781042Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
