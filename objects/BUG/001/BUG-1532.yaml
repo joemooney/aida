@@ -2,95 +2,13 @@ id: 01a0c266-c94e-76b3-9112-420e020bbd89
 spec_id: BUG-1532
 agreed_id: BUG-1532
 title: A merge-hold marker does not bind aida pr ship unless a drive is live AND its reason text names a running spec, so with the lane stopped no hold in the repo is honoured client-side
-description: |
-  Found by the reviewer 2026-09-20 22:16 while acknowledging the standing instruction on
-  BUG-1531. Re-verified in code by the driver advisor at 22:18 against main at 0b474a66d1.
-  Independent of BUG-1531 and shippable on its own.
-
-  THE CLIENT-SIDE GUARD ALREADY EXISTS AND ALREADY READS THE MARKER. pr_cmd.rs:1476-1478:
-
-      let hold_matches_drive_spec = crate::merge_hold::read_hold(&main_worktree, pr_number)
-          .is_some_and(|reason| drive_specs.iter().any(|spec| reason.contains(spec)));
-      let pr_is_drive_owned = reviewer_live_here || hold_matches_drive_spec;
-
-  So a hold is honoured only when its REASON TEXT contains a spec id that a LIVE DRIVE
-  MEMBER is currently running. drive_specs at pr_cmd.rs:1438-1446:
-
-      drive_state.members.iter().filter(|m| m.is_running()).map(|m| m.spec)
-
-  WITH NO DRIVE RUNNING, drive_specs IS EMPTY. `.any()` over an empty iterator is false,
-  so hold_matches_drive_spec is false for EVERY marker in the repo. Then
-  pr_ship.rs:397-411:
-
-      if override_allow          -> None
-      else if caller_is_drive_seat -> Some(DriveSeat)
-      else if pr_is_drive_owned    -> Some(DriveOwnedPr)
-      else                         -> None        <- a non-drive caller, held PR, NO BLOCK
-
-  STATE AT TIME OF FILING: the rework lane is stopped, running members 0, and there are 23
-  merge-hold markers standing under .aida/merge-holds/. None of them binds `aida pr ship`
-  client-side right now.
-
-  THE MARKER IS THEREFORE NOT A HOLD. It is a hold only during a live drive whose running
-  member's spec id happens to appear as a substring of the reason text. A reviewer who
-  places a hold by hand, outside a drive - which is how every hold tonight was placed -
-  gets a marker that reads as protection and is not consulted.
-
-  LAYERS, stated because it changes how much is actually protecting a held PR:
-
-      aida pr ship 2035            client guard  INERT (hold not honoured, no live drive)
-                                   server gate   CATCHES IT (aida:merge-hold label)
-      aida pr ship pr2035-review   client guard  INERT (new PR number, no marker)
-                                   server gate   INERT (new PR, no label)
-
-  So a held PR on the direct path is protected by exactly ONE layer, and only because the
-  label happens to be present. That single-layer state is this spec; the zero-layer
-  snapshot path is BUG-1531.
-
-  THIS IS THE THIRD WIDENING OF ONE GUARD, not a new concept. The guard's own doc comment
-  records the second:
-
-      v1  does the drive's CURRENT SPEC own this PR     (missed the shelved-spec case)
-      v2  is ANY LIVE MEMBER phase-bound to THIS PR     (TASK-1292, after the 2026-09-18
-                                                         near-miss on PR #1948)
-      v3  is there a HOLD on this PR at all             (this spec)
-
-  Every version so far asks a liveness question - "is someone reviewing RIGHT NOW". A
-  refusal outlives the session that recorded it and the drain that produced it. That is
-  why v2 cannot cover a stopped lane.
-
-  THE FIX IS SMALL AND IS A DELETION. The narrowing to drop is the
-  `drive_specs.iter().any(|spec| reason.contains(spec))` substring test. A merge-hold
-  marker is a hold whether or not a drive is running, whether or not its reason names a
-  running spec, and whoever the caller is. That one change moves `aida pr ship <N>` from
-  one layer to two without touching the snapshot path.
-
-  WHAT WAS NOT VERIFIED, by either seat, deliberately: no ship path was executed. And it
-  is unknown whether the bare-branch form reaches this guard BEFORE or AFTER gh pr create.
-  If it creates first and guards after, the new PR exists regardless of the guard's
-  verdict - which changes the required shape of BUG-1531's fix but not this one's.
-
-  ## Acceptance
-  1. A merge-hold marker for the target PR blocks `aida pr ship` regardless of whether a
-     drive is running, regardless of whether the reason text names a running spec, and
-     regardless of whether the caller is a drive seat.
-  2. The refusal names the hold's reason text, so the caller learns WHY it is held rather
-     than only that it is.
-  3. The reason-text substring match against live drive specs is removed, not extended.
-     A hold's reason is prose written by a human or an agent; matching spec ids inside it
-     is an inference about intent, and the marker's existence is the intent.
-  4. The existing TASK-1292 behaviour is preserved: a live reviewer phase bound to this PR
-     still blocks, independently of any marker. This widens the guard and removes nothing.
-  5. A test asserts a hold placed with NO drive running blocks the ship. A test asserting
-     only the live-drive case passes today and would pass after a no-op change.
-  6. AIDA_PR_SHIP_ALLOW_IN_DRIVE remains the single documented override and continues to
-     bypass, so the escape hatch is unchanged and explicit.
+description: "Found by the reviewer 2026-09-20 22:16 while acknowledging the standing instruction on\nBUG-1531. Re-verified in code by the driver advisor at 22:18 against main at 0b474a66d1.\nIndependent of BUG-1531 and shippable on its own.\n\nTHE CLIENT-SIDE GUARD ALREADY EXISTS AND ALREADY READS THE MARKER. pr_cmd.rs:1476-1478:\n\n    let hold_matches_drive_spec = crate::merge_hold::read_hold(&main_worktree, pr_number)\n        .is_some_and(|reason| drive_specs.iter().any(|spec| reason.contains(spec)));\n    let pr_is_drive_owned = reviewer_live_here || hold_matches_drive_spec;\n\nSo a hold is honoured only when its REASON TEXT contains a spec id that a LIVE DRIVE\nMEMBER is currently running. drive_specs at pr_cmd.rs:1438-1446:\n\n    drive_state.members.iter().filter(|m| m.is_running()).map(|m| m.spec)\n\nWITH NO DRIVE RUNNING, drive_specs IS EMPTY. `.any()` over an empty iterator is false,\nso hold_matches_drive_spec is false for EVERY marker in the repo. Then\npr_ship.rs:397-411:\n\n    if override_allow          -> None\n    else if caller_is_drive_seat -> Some(DriveSeat)\n    else if pr_is_drive_owned    -> Some(DriveOwnedPr)\n    else                         -> None        <- a non-drive caller, held PR, NO BLOCK\n\nSTATE AT TIME OF FILING: the rework lane is stopped, running members 0, and there are 24\nmerge-hold markers standing under .aida/merge-holds/ (counted at 22:19; an earlier draft\nof this spec said 23, which was carried over from a different count and not measured). None of them binds `aida pr ship`\nclient-side right now.\n\nTHE MARKER IS THEREFORE NOT A HOLD. It is a hold only during a live drive whose running\nmember's spec id happens to appear as a substring of the reason text. A reviewer who\nplaces a hold by hand, outside a drive - which is how every hold tonight was placed -\ngets a marker that reads as protection and is not consulted.\n\nLAYERS, stated because it changes how much is actually protecting a held PR:\n\n    aida pr ship 2035            client guard  INERT (hold not honoured, no live drive)\n                                 server gate   CATCHES IT (aida:merge-hold label)\n    aida pr ship pr2035-review   client guard  INERT (new PR number, no marker)\n                                 server gate   INERT (new PR, no label)\n\nSo a held PR on the direct path is protected by exactly ONE layer, and only because the\nlabel happens to be present. That single-layer state is this spec; the zero-layer\nsnapshot path is BUG-1531.\n\nTHIS IS THE THIRD WIDENING OF ONE GUARD, not a new concept. The guard's own doc comment\nrecords the second:\n\n    v1  does the drive's CURRENT SPEC own this PR     (missed the shelved-spec case)\n    v2  is ANY LIVE MEMBER phase-bound to THIS PR     (TASK-1292, after the 2026-09-18\n                                                       near-miss on PR #1948)\n    v3  is there a HOLD on this PR at all             (this spec)\n\nEvery version so far asks a liveness question - \"is someone reviewing RIGHT NOW\". A\nrefusal outlives the session that recorded it and the drain that produced it. That is\nwhy v2 cannot cover a stopped lane.\n\nTHE FIX IS SMALL AND IS A DELETION. The narrowing to drop is the\n`drive_specs.iter().any(|spec| reason.contains(spec))` substring test. A merge-hold\nmarker is a hold whether or not a drive is running, whether or not its reason names a\nrunning spec, and whoever the caller is. That one change moves `aida pr ship <N>` from\none layer to two without touching the snapshot path.\n\nWHAT WAS NOT VERIFIED, by either seat, deliberately: no ship path was executed. And it\nis unknown whether the bare-branch form reaches this guard BEFORE or AFTER gh pr create.\nIf it creates first and guards after, the new PR exists regardless of the guard's\nverdict - which changes the required shape of BUG-1531's fix but not this one's.\n\n## Acceptance\n1. A merge-hold marker for the target PR blocks `aida pr ship` regardless of whether a\n   drive is running, regardless of whether the reason text names a running spec, and\n   regardless of whether the caller is a drive seat.\n2. The refusal names the hold's reason text, so the caller learns WHY it is held rather\n   than only that it is.\n3. The reason-text substring match against live drive specs is removed, not extended.\n   A hold's reason is prose written by a human or an agent; matching spec ids inside it\n   is an inference about intent, and the marker's existence is the intent.\n4. The existing TASK-1292 behaviour is preserved: a live reviewer phase bound to this PR\n   still blocks, independently of any marker. This widens the guard and removes nothing.\n5. A test asserts a hold placed with NO drive running blocks the ship. A test asserting\n   only the live-drive case passes today and would pass after a no-op change.\n6. AIDA_PR_SHIP_ALLOW_IN_DRIVE remains the single documented override and continues to\n   bypass, so the escape hatch is unchanged and explicit.\n\"\nrelationships[2]{rel,id,title}:\n  Related,BUG-1531,\"The unshipped-work detector reports published PR snapshots as unshipped and recommends 'aida pr ship' on them, which would open a hold-free second PR for a commit a reviewer refused\"\n  Related,TASK-1292,\"aida pr ship refuses while a reviewer is live on that PR, whatever spec the reviewer runs under â\x80\x94 the in-drive guard keys on spec ownership and missed a sibling-spec reviewer"
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:18:31.246345754Z
-modified_at: 2026-09-21T05:18:47.989210925Z
+modified_at: 2026-09-21T05:19:15.992554691Z
 req_type: Bug
 tags:
 - parent:EPIC-62 merge-hold pr-ship safety-gate severity:major
