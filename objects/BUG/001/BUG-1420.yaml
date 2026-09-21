@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:21:39.246217841Z
-modified_at: 2026-09-20T12:54:22.407102602Z
+modified_at: 2026-09-21T01:31:02.925984126Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -157,6 +157,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-20T09:01:50.069498155Z
   modified_at: 2026-09-20T09:01:50.069498155Z
+- id: 01a0c196-878d-7d92-a204-de9ec570330e
+  author: joe
+  content: 'AC5 audit (round 2): reviewed all five configured preflight guards in .aida/config.toml against strict Bash behavior. Check formatting, Run clippy, Check Rust test portability ratchet, and Doc-intent gate have no known behavior change attributable to -e/pipefail. CLI-manual drift-guard is already failing, but independently of shell strictness because it is a single final command; the concrete parent-vs-subcommand documentation drift is tracked as TASK-1-152. This is a pre-existing guard finding, not a BUG-1420 regression, and the guard/shell must not be weakened to hide it.'
+  created_at: 2026-09-21T01:31:02.925984126Z
+  modified_at: 2026-09-21T01:31:02.925984126Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
