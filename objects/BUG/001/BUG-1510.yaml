@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:55:50.224652863Z
-modified_at: 2026-09-21T03:56:48.352903283Z
+modified_at: 2026-09-21T03:58:36.893704216Z
 req_type: Bug
 tags:
 - batch:night-0920 orchestrator integrity drain-safe from:session-0920
@@ -67,4 +67,25 @@ comments:
   content: '[aida:advisor] RECURRED AFTER FILING, 2026-09-20 20:26, and the second instance is worse than the first. Comment 01a0c200-091c-78b3-abcd-0120f667d3ed was posted to STORY-1391 headed ''REVIEW FINDINGS TO ADDRESS (BUG-1420)'' - a verdict at commit 065f3df8aa with six findings about the preflight shell contract and a stale 12-commit base, closing with a contract line demanding at least one commit or an explicit punt. All of it is about BUG-1420 and TASK-1289 on PR #2009''s lineage; none of it is about STORY-1391, and 065f3df8aa is not on that spec''s branch. THE FIRST INSTANCE WAS A RECORD; THIS ONE IS AN INSTRUCTION. A misattributed verdict is dangerous because someone might brief from it. A misattributed BRIEF is addressed to an implementer, names a contract, and demands a commit - so an agent reading this spec''s comments finds something that looks exactly like the instruction it is waiting for. This arrived at 20:26, roughly fifty minutes after this bug was filed from the first instance on the same spec, and after that instance had been cleared. The mechanism is live, it has hit one spec twice, and the acceptance here should treat the brief-delivery path as the priority case rather than the verdict-recording path. The comment is NOT deleted - it is the only evidence the defect recurred post-filing - and is marked on STORY-1391 instead.'
   created_at: 2026-09-21T03:56:48.352903283Z
   modified_at: 2026-09-21T03:56:48.352903283Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c21d-a15d-7580-a9a2-8fcdd3ad08da
+  author: joe
+  content: |-
+    [aida:advisor] THE MISATTRIBUTED BRIEF POINTS AT A THIRD LINEAGE, AND ITS CREDIBILITY IS THE HAZARD. Verified 2026-09-20 21:01 after the reviewer seat located the sha rather than only ruling it out.
+
+        065f3df8aa   is the head of PR #2009, branch bug-1420-work, OPEN
+                     NOT contained by story-1391-verdict-rounds
+                     NOT contained by the bug-1420-round2 line that #2042 and #2043 carry
+
+    So the brief posted onto STORY-1391 is not merely foreign to that spec - it points at a branch that is neither the one under review there nor either of the two already in flight in that neighbourhood. An implementer obeying it would work PR #2009's code, under STORY-1391's lease, on a third lineage nobody has assigned to this work.
+
+    AND ITS CONTENT IS CORRECT, CURRENT AND CROSS-REFERENCED. Finding 1 cites BUG-1481 - a finding filed the same evening, about the awaiting view reporting a passing CI rollup for a PR whose Build never ran. The six findings are real review work, correctly reasoned, on a real PR. Nothing in the text reads as stale or generated.
+
+    THAT IS WHY IT IS DANGEROUS RATHER THAN OBVIOUSLY WRONG. A misattributed artifact that looked wrong would be self-limiting. This one is exactly the artifact a waiting implementer would trust, and it would be trusted for the right reasons - it is well-written, specific, and references tonight's work. Credibility is the failure mode, not sloppiness.
+
+    THE PRIORITY ARGUMENT, sharpened by the reviewer seat and recorded because it is better than "more dangerous": a misattributed VERDICT is read by someone DECIDING; a misattributed BRIEF is read by someone ABOUT TO ACT, and it closes with a contract demanding at least one commit or an explicit punt. The verdict path fails when a human reasons from it. The brief path fails when an agent OBEYS it - and obeying is the default, because that is what a brief is for.
+
+    So this spec's acceptance should treat brief delivery as the primary case. A check that compares lease to brief at dispatch covers both, but if only one path can be instrumented first, it is the one where the artifact is an instruction.
+  created_at: 2026-09-21T03:58:36.893704216Z
+  modified_at: 2026-09-21T03:58:36.893704216Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
