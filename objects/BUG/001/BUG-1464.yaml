@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:50:48.740973629Z
-modified_at: 2026-09-21T22:01:50.276748752Z
+modified_at: 2026-09-21T22:07:47.040536968Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -44,6 +44,33 @@ comments:
   created_at: 2026-09-21T22:01:09.610357424Z
   modified_at: 2026-09-21T22:01:09.610357424Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c602-cb60-7291-a441-8e0904ac6dbe
+  author: joe
+  content: |-
+    [aida:advisor] MERGE-TIME NOTE, NON-BLOCKING, RECORDED SO IT IS NOT LOST IN A PR COMMENT. Raised by claude-reviewer-1 on the approving verdict for #2064.
+
+    THIS PR PROMOTES A COMMENT-GUARDED BEHAVIOUR INTO A PUBLISHED CONTRACT WITHOUT UPGRADING ITS GUARD.
+
+    The PR body claims three coverages: legacy refresh, custom-prompt survival, and silent no-op. The tests cover the first two. For the third the reviewer found only TWO COMMENTS - a doc comment at :307 and an inline note at :465 - and ZERO is-none assertions in the added lines.
+
+    AND THE SAME CHANGE WRITES THAT BEHAVIOUR INTO CLAUDE.md AS A PROMISE: "packs you never installed are not created". The mechanism is `starter_roles_refresh()` returning None. If a later change returned Some(empty report), a user who never installed roles would get a roles pack, THE DOCUMENTED CONTRACT WOULD BE FALSE, AND NOTHING WOULD FAIL.
+
+    A contract whose only guard is a comment is the shape this board has catalogued repeatedly today - and the specific move here is worse than the usual case: the behaviour was previously an implementation detail protected by a comment, which is weak but proportionate. Publishing it in CLAUDE.md raises what it OWES a reader without raising what ENFORCES it. The gap between promise and guard widened in a single change.
+
+    REMEDY IS ONE TEST: assert None when no roles directory exists. That is the whole fix.
+
+    WHY THIS DOES NOT BLOCK THE MERGE, stated so the decision is auditable rather than implied: the behaviour is CORRECT TODAY, the comments are ACCURATE today, and the reviewer verified both. BUG-1464's own acceptance - that the starter role system_prompt reaches an already-initialized machine - is satisfied. The missing test is a durability gap in a neighbouring claim, not an unmet criterion of this spec.
+
+    TWO THINGS THE REVIEWER CHECKED THAT ARE WORTH KEEPING ON THE RECORD:
+
+    1. THE CORE CLAIM IS ASSERTED IN ITS STRONGEST AVAILABLE FORM. "Preserve existing role TOML byte-for-byte" is checked with `refreshed.starts_with(legacy)` - not field equality, not a parse round-trip. A prefix assertion on RAW BYTES proves both that existing content is untouched AND that the prompt was APPENDED rather than the file rewritten. A field-level check would have passed a re-serialisation that reordered keys or normalised whitespace, which is exactly what a TOML rewrite produces. The weaker forms were all available and the strongest was chosen.
+
+    2. THE REFERENT RULE RAN ON THIS PR'S PROSE AND PASSED. The edited CLAUDE.md paragraph cites `aida-core/src/scaffolding/refresh.rs` and `aida-cli-lib/src/scaffold_refresh.rs`; both exist at this head. Checked rather than assumed - first application of that rule on a live PR rather than in discussion, and the reviewer's note is that running it was cheaper than deciding whether to.
+
+    ALSO NOTED: the PR body's "Closes BUG-1464" is a GITHUB ISSUE-CLOSING KEYWORD, not an AIDA trailer. It has no effect on spec status. The operative trailer is `(BUG-1464)` in the subject, and both artefacts agree here - but a reader should not learn the wrong lesson from their agreement.
+  created_at: 2026-09-21T22:07:47.040536968Z
+  modified_at: 2026-09-21T22:07:47.040536968Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
