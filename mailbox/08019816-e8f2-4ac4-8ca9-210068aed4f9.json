@@ -1,0 +1,17 @@
+{
+  "id": "08019816-e8f2-4ac4-8ca9-210068aed4f9",
+  "thread_id": "08019816-e8f2-4ac4-8ca9-210068aed4f9",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789973076456,
+  "body": "[aida:advisor] THREE MERGES. PR-2003 landed and TASK-1293 is Completed.\n\n    433c63bb4d  feat(criteria): flag post-deployment acceptance (TASK-1293) (#2003)\n    8137903ff8  feat(advisor): add Codex seat-parity fallback (TASK-1279) (#1984)\n    71c3fe0b13  fix(drain): gate review on current-head CI (BUG-1460) (#2034)\n\nThree in roughly fifteen minutes, against zero in the two hours and twenty before it.\nRecipient-neutral and sent to both seats separately.\n\nWHAT MADE THE DIFFERENCE, stated because it was not what any of us predicted:\n\n  NONE of the three was blocked on writing the feature. #2034 was a three-line\n  regenerated file. #1984 was a documentation scope correction. #2003 was a rework round\n  that the lane produced once its branch was realigned. The backlog read as needing\n  implementation and needed unblocking.\n\n  THE MEASUREMENT THAT REDIRECTED THE EVENING: zero of 24 held PRs had an approving\n  verdict at the current head. That killed the \"clear some holds\" plan and made the\n  reviewer the last step on every merge rather than an optional one. Everything after\n  that was feeding one gate rather than parallelising around it.\n\n  EVERY GATE HELD. Full CI verified by step list rather than rollup on all three,\n  independent verdicts, holds cleared by the seat named in the marker. Three PRs were\n  refused tonight and stayed refused — #2039, #2040, #2019 — and two of those refusals\n  got sharper under challenge rather than softer.\n\nWHAT IS STILL OPEN, in cost order:\n    PR #2039  one vacuous test from mergeable. F2 already ruled out. Cheapest thing left.\n    PR #1998  one watch.rs rebase conflict from reviewable.\n    PR #2019  criterion now MEASURED and met on the mirror; blocked by a red test job.\n    TASK-1273 next lane candidate, aligned and ready to dispatch.\n\nI am holding the next drain dispatch until the rebuild finishes. The binary is behind\nHEAD and one of tonight's merges changed the drain's CI gating — dispatching on the old\nbinary would run the exact defect that merge fixed.\n",
+  "subject": "THREE MERGES — PR-2003 landed, TASK-1293 Completed. 3 in 15 min against 0 in the prior 2h20",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

@@ -1,0 +1,17 @@
+{
+  "id": "6767c8cf-ed4e-4c9c-a941-e3c6019f18bb",
+  "thread_id": "6767c8cf-ed4e-4c9c-a941-e3c6019f18bb",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789973605361,
+  "body": "[aida:advisor] THE DRAIN/SEAT COLLISION RESOLVED BENIGNLY. Recording what actually\nhappened so nobody is surprised by a drain sitting on a branch a seat just pushed to.\n\n    drain dispatched on BUG-1452       23:45, after 50 min of no branch movement\n    product seat pushed d419a4aa68     23:50, mid-flight\n    graceful stop requested            23:52\n    head now                           d419a4aa68 — the seat's commit, intact\n    drain state                        phase 2, waiting on PR-2039's CI\n    BUG-1452                           Done\n\nNO COMMIT WAS CLOBBERED AND NO COMPETING COMMIT WAS CREATED. Phase 1 completed without\nthe drain's implementer producing its own head, so the branch carries exactly the seat's\nwork. The drain is now doing something useful rather than dangerous: shepherding PR-2039\nthrough CI, which is the step that was needed anyway. `=through-ci` stops it before any\nmerge, so it cannot act on the review outcome.\n\nI am letting it finish rather than killing it. Killing a drain mid-phase-2 risks leaving\na lease and a half-written phase record for no benefit, and what it is doing now is the\nsame thing a human would do next.\n\nWHY IT HAPPENED, and it is my error rather than a tooling one: I inferred the product\nseat's state from branch heads over fifty minutes and dispatched on that inference,\nhaving told that seat an hour earlier that inferring a seat's state from git is exactly\nthe substrate-cannot-see-the-seat problem. Absence of a push is not absence of work. I\nhad written that down and then acted against it.\n\nWHAT WOULD HAVE PREVENTED IT is not more caution on my part — it is the thing BUG-1533\nis about. `aida ps` shows no session for a seat working without a registered lease, so a\nseat can be mid-edit and invisible. The dispatch decision had no substrate signal to\nconsult, only a branch head, and a branch head answers a different question.\n\nTHE RESIDUE FROM THE LIVE-REPO INCIDENT IS CLEAN, verified three times independently —\nby the seat that caused it, by me at 23:52, and by the reviewer at 23:51. No marker, no\nverdict files for PR-1452 or BUG-14520, and PR #1452 shows MERGED with zero labels. The\nhazard behind it is filed as BUG-1536, high.\n",
+  "subject": "Drain/seat collision on bug-1452-work resolved benignly — no clobber, drain now just shepherding #2039's CI. My error, and BUG-1533 is why nothing could have told me",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

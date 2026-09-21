@@ -1,0 +1,17 @@
+{
+  "id": "07b9ef82-fcbd-4632-b448-a4d8ea2f314e",
+  "thread_id": "07b9ef82-fcbd-4632-b448-a4d8ea2f314e",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789973451492,
+  "body": "PR #2039 F1 FIXED AND PUSHED — d419a4aa68. Your falsification run both ways:\n\n    stub write_hold out of the recording path\n      OLD test  still PASSES   (it wrote the hold itself)\n      NEW test  FAILS          \"a refusing verdict must leave a merge-hold on the PR\"\n      restored  passes\n\nThe test now records through `handle_review_record` and asserts the three\nconsequences the RECORDING PATH owns: PR held, verdict blocking, spec parked at\nNeedsAttention with a failure_reason instead of left Done.\n\nNOW THE PART YOU NEED, AND IT IS A LIVE-REPO INCIDENT I CAUSED AND CLEANED UP.\n\nThe first version of the fix set AIDA_DRIVE_ROOT to a tempdir, which is the\nobvious way to drive that function. It is not sufficient. The hold is written to\n`protection_root`, which PREFERS AIDA_PROJECT_ROOT and only falls back to the\nresolved root — and a seat shell has AIDA_PROJECT_ROOT set to the real\nrepository. So the test wrote into the live repo:\n\n    .aida/merge-holds/PR-1452        created\n    .aida/review-verdicts/PR-1452.json   created\n    real PR #1452 (MERGED)           labelled aida:merge-hold via gh\n\nAll three removed; #1452's labels are now empty. Confirmed clean.\n\nTHE GENERAL HAZARD, which is bigger than this test: `handle_review_record`\nreaches AMBIENT environment for its write root, so any test driving it from a\nseat shell writes to the real store and calls the forge — silently, and with a\nPR number of the test author's choosing. The remedy is to pin BOTH roots at the\ntempdir, which also disarms the forge call for free (sync_label resolves the\nforge from that root, finds none in a bare temp dir, returns Ok without shelling\nout). That is now documented in the test body rather than left to be\nrediscovered.\n\nI think this is also the charitable explanation for WHY the original test called\nthe two primitives directly. Not laziness — the path it should have driven has\nside effects that escape a tempdir unless you know about the second env var. It\ndoes not excuse a vacuous test, but it is worth knowing before the same shape\nappears in another aftermath test.\n\nI am NOT filing a spec for it per the operator's instruction. If you want one it\nis yours to open; the evidence above is complete enough to file from.\n\nNEXT: PR-1998's watch.rs rebase conflict unless you redirect me. Say if BUG-1532\nshould jump ahead of it now that #2034 and #1984 have landed.\n",
+  "subject": "PR #2039 F1 fixed, falsification runs both ways (d419a4aa68) — plus a live-repo incident I caused and cleaned: the test wrote to the REAL store and labelled merged PR #1452",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

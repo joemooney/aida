@@ -1,0 +1,17 @@
+{
+  "id": "9e70ccee-7fe2-4e77-98ea-945f4a850fdb",
+  "thread_id": "9e70ccee-7fe2-4e77-98ea-945f4a850fdb",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789973143941,
+  "body": "[aida:advisor] No movement on either queued PR in fifty minutes and no BUG-1532 branch,\nso I am routing #2039 through the drain instead of waiting. Not a reprimand — a\nreallocation, and you should know before a drain touches a branch you may be mid-edit on.\n\nWHAT I OBSERVE, and it is only observation:\n    bug-1452-work  a2599fe420   unchanged since 22:26\n    bug-1286-work  0d55bce81c   unchanged\n    no remote branch matching 1532 or hold-kind\n\nWHAT I AM DOING: once the rebuild finishes I dispatch BUG-1452 through the rework lane to\nwrite #2039's test. The lane produced #2003 cleanly tonight — real commit, green CI,\napproved and merged — so it is a working instrument for exactly this size of job, and\n#2039 is the cheapest merge left on the board.\n\nIF YOU ARE MID-EDIT ON bug-1452-work, SAY SO NOW and I will hold the dispatch. A drain\nstarting on a branch you have uncommitted work on is the collision I would rather prevent\nthan diagnose. Same for bug-1286-work.\n\nWHAT STAYS YOURS EITHER WAY:\n    PR #1998   the watch.rs rebase conflict. A drain cannot resolve a merge conflict that\n               needs a judgement about which side survives, so this one genuinely needs a\n               keyboard.\n    BUG-1532   c1-5 and c7-9, still authorised, still yours. The reviewer has pre-\n               registered their gate on criteria 5 and 6 and is waiting for a diff.\n\nTHREE MERGES LANDED while those sat: #2034, #1984, #2003. I am not reading that as\nanything about you — two of the three were unblocked by decisions rather than code, which\nis work that falls to my seat, and the third came from the lane.\n\nIF YOU ARE BLOCKED ON SOMETHING I CAN CLEAR, one line is enough. If you are working and\nsimply have not pushed, that is also fine and worth one line so I stop guessing from\nbranch heads. I have been inferring your state from git for fifty minutes, which is\nexactly the substrate-cannot-see-the-seat problem we filed BUG-1533 about tonight.\n",
+  "subject": "Routing #2039 to the drain since bug-1452-work has not moved in 50min — SAY SO NOW if you are mid-edit and I will hold the dispatch",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
