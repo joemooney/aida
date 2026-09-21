@@ -40,7 +40,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:40:43.370422318Z
-modified_at: 2026-09-21T08:43:35.095628377Z
+modified_at: 2026-09-21T09:01:40.581077433Z
 req_type: Task
 tags:
 - adoption-gap
@@ -78,4 +78,37 @@ comments:
     SEVERITY TAG CORRECTED: severity:cosmetic is wrong. This silently broke a pull request and produced a confident wrong conclusion about a third-party service. It is not cosmetic. Priority stays low because the blast radius was one PR out of roughly twenty and stacked PRs are rare here — rarity is the reason a helper written against the common case passes review and then bites once, which the original filing states well.
   created_at: 2026-09-21T08:42:25.351333424Z
   modified_at: 2026-09-21T08:42:25.351333424Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c333-1765-70f3-be5d-cdb6cb1af20a
+  author: joe
+  content: |-
+    RE-CENTRING CORRECTED BY TELEMETRY — my "discoverability" framing was wrong, and it was wrong in the direction that would have produced a useless fix.
+
+    I re-centred this spec on the claim that `aida pr rebase` exists and was not REACHED, and asked for criteria establishing why. The product seat answered with data instead of agreement, from ~/.aida/usage.jsonl:
+
+        197 recorded `pr rebase` invocations total
+        tonight, that seat's own: 23:10:49, 23:14:01, 23:19:39, 23:24:45, 00:54:36
+
+    Five uses of the native verb BEFORE hand-rolling a loop at 01:22. The verb was not undiscovered. It was found, used five times, and then not reached for when the task changed shape. Every criterion about making it more discoverable would have changed nothing.
+
+    THE ACTUAL GAP IS A BATCH FORM. `aida pr rebase <N>` is single-PR by construction. The moment the task became "six PRs", the verb stopped matching the task and a loop got written — and the loop is where baseRefName got hardcoded, because writing the loop is the step at which that decision exists at all. The native verb never had the bug; the re-implementation introduced it.
+
+    THE SPEC'S CORE, in the product seat's words because they are better than mine:
+
+        A verb that is correct for one and ABSENT FOR MANY will be re-implemented
+        incorrectly for many, and the re-implementation is where the defects appear.
+
+    AND THIS FOLDS THE SURVIVING CRITERION INTO THE SAME FIX RATHER THAN BESIDE IT. The stacked case — order or refuse — is only expressible in a batch verb. A single-PR command cannot detect that two of its invocations stand in a base/head relationship, because it only ever sees one. So the batch form is simultaneously the thing that stops seats writing loops AND the only place the ordering rule can live. Those were two criteria; they are one.
+
+    ACCEPTANCE CRITERIA, superseding both the original four and my re-centred set:
+      1. `aida pr rebase` accepts several PR numbers (or a --batch selector). Each member's base is resolved from the forge per PR, as the single-PR path already does.
+      2. The batch form detects members standing in a base/head relationship and either ORDERS them or REFUSES with the relationship named. Rebasing both independently replays shared commits separately and produces different shas for identical content, which is the failure that occurred.
+      3. Partial failure is reported per member, not as one exit code — a batch that repairs five and conflicts on one must say which.
+      4. NOT WANTED: discoverability work, documentation, or hardening the ad-hoc script. The script should die.
+
+    WHAT THE TELEMETRY ARGUMENT IS WORTH BEYOND THIS SPEC. "It was not discoverable" is the reflex explanation for an unused surface, and it is unfalsifiable without usage data. Here the data falsified it in one query. STORY-122's usage log paid for itself: a spec was aimed at the wrong fix and a five-line grep re-aimed it. That is an argument for consulting `aida usage` BEFORE filing any adoption-gap spec, not after.
+
+    Provenance: the telemetry, the batch diagnosis and the core restatement are the product seat's. The re-centring they corrected was mine.
+  created_at: 2026-09-21T09:01:40.581077433Z
+  modified_at: 2026-09-21T09:01:40.581077433Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
