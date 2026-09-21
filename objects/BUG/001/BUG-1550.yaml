@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:04:32.760270386Z
-modified_at: 2026-09-21T12:31:01.841093083Z
+modified_at: 2026-09-21T12:32:49.994141671Z
 req_type: Bug
 tags:
 - papercut
@@ -166,3 +166,34 @@ comments:
   created_at: 2026-09-21T12:31:01.841093083Z
   modified_at: 2026-09-21T12:31:01.841093083Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c3f4-694a-7d90-84cc-1184a7450c57
+  author: joe
+  content: |-
+    THIRD ORIGIN CONFIRMED, AND IT BREAKS THE PREVENTION RULE. Found by claude-reviewer-1 following up on the tracker_cmd.rs instance; verified independently by the advisor in the tree before recording.
+
+    I assumed tracker_cmd.rs:10-13 was a fourth INSTANCE of insertion. It is not. Checked where the orphaned header's function actually is:
+
+        :10   // trace:ARCH-github-integration
+        :11   /// Handle GitHub integration commands
+        :12   // trace:ARCH-jira-integration
+        :13   pub(crate) fn handle_jira_command(...)
+        :513  pub(crate) fn handle_github_command(...)   <- exists, 500 lines below, NO doc and NO trace
+        :1135 pub(crate) fn handle_gitlab_command(...)
+
+    Nothing was inserted and nothing was deleted. A block of functions MOVED BETWEEN FILES during SPIKE-78 - commit 80c7e5eb99, PR #1460, "extract jira/github/gitlab tracker command handlers out of main.rs into tracker_cmd.rs" - and the headers did not travel with them.
+
+    THREE ORIGINS, ONE SIGNATURE:
+      1. INSERTION between a header and its item        - #2026, #2047 (three instances)
+      2. REORDERING during an extraction or bulk move   - tracker_cmd.rs, SPIKE-78
+      3. DELETION orphaning a header                    - not observed, same shape, same detector
+
+    WHY THIS IS THE STRONGEST ARGUMENT ON THIS SPEC. The prevention rule product derived - when the insertion anchor is a fn / #[test] / impl line, look UP first and insert ABOVE the header - covers ORIGIN 1 ONLY. Nobody was inserting anything here. No amount of looking up at an insertion point prevents a bulk move from leaving headers behind.
+
+    Until now the case for a gate over a convention rested on human reliability: the second occurrence was by a seat already told about the first. That is a weaker argument and a contestable one. THIS IS STRONGER: there is an entire origin the convention cannot address EVEN WHEN FOLLOWED PERFECTLY. A file-level check is the only thing that reaches origin 2.
+
+    THE FIX FOR THIS INSTANCE IS NOT WHAT THE CLASS SUGGESTS. Do not move the header two lines. The GitHub doc belongs 500 lines away, on handle_github_command at :513, which currently has no documentation at all - and ARCH-github-integration should travel with it. Whoever picks this up moves a header TO its function, not the reverse. Applying the origin-1 remedy here would produce a wrong fix that passes the detector.
+
+    SET-DIFFERENCE NOTE on the two sweeps. The reviewer reports their 32-file set DOES include tracker_cmd and does NOT include plan_cmd; my 22-file set includes both. So the two sets differ in BOTH directions - neither is a superset - which is the expected outcome of two implementations of one prose description and is the reason the FIXTURES rather than either count are what an implementation should be built against. Neither seat is chasing the difference.
+  created_at: 2026-09-21T12:32:49.994141671Z
+  modified_at: 2026-09-21T12:32:49.994141671Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
