@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T02:25:58.036648434Z
+modified_at: 2026-09-21T02:33:19.408792262Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1132,6 +1132,12 @@ comments:
   content: '[aida:advisor] LINEAGE ITEM a2 WIDENED 2026-09-20 19:27 TO THREE LEGS. A destructuring bind in the test does not reach the other two sites that enumerate the same phase set independently. THREE sites enumerate it: (1) the express force-off block, which clears no_ci_wait / no_review / no_build and not no_preflight; (2) the test''s three-field conjunction; (3) banner_summary()''s hardcoded string ''express tier - full gate (CI + reviewer + build)''. Fixing (2) alone leaves (1) and (3) able to narrow independently the next time a field is added. SO a2 IS: a2i force-off derived from the field set rather than a hand-written list of three assignments; a2ii the test''s conjunction replaced by a destructuring bind over every field so a new field breaks compilation; a2iii banner_summary() DERIVED from the skip set, or its express branch falling through to the parts-building path so a residual skip is still named. a2iii is the one that cannot be deferred: the banner is USER-FACING and currently tells the operator ''full gate'' for a spec whose preflight is skipped, while active_tokens() on the same struct emits ''no-preflight'' - the two surfaces contradict each other, and the truthful branch at the parts-building path is unreachable for any express spec. A hardcoded summary string is also the only one of the three that no compiler or test can catch, because there is no field whose omission is detectable. Raised by the reviewer seat while verifying the fourth surface.'
   created_at: 2026-09-21T02:25:58.036648434Z
   modified_at: 2026-09-21T02:25:58.036648434Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1cf-8b30-75c2-b7ee-be570f8b6093
+  author: joe
+  content: '[aida:advisor] LINEAGE ITEM a2 REVISED AGAIN 2026-09-20 19:36: a2i, a2ii and a2iii ARE ONE CHANGE, not three legs. The earlier note treated the banner as a separate repair on the grounds that a hardcoded summary string is uncatchable by any compiler or test. That is true of the string''s current shape and false of the situation. The five skip fields are hand-enumerated in SEVEN production sites in auto_complete.rs - from_tags match arms, the trivial expansion, the express force-off, is_empty(), active_tokens(), RECOGNIZED_LIFECYCLE_TAGS, and banner_summary()''s parts - so adding a field needs seven correct hand edits and the compiler checks none, every site being an if-over-a-bool rather than a match over a sum type. REVISED a2: one table, const SKIPS: [(accessor, token, human); N], with is_empty(), active_tokens() and banner_summary() ITERATING it, plus one destructuring bind in the test so a sixth field breaks compilation at one known site. The banner then cannot omit a field because it no longer names fields, and the hardcoded express string becomes a prefix on a derived list rather than a replacement for one. CONSEQUENCE FOR SEQUENCING: shipping the force-off fix and the test bind while deferring the banner is NOT a partial fix - it leaves the only OPERATOR-FACING surface hand-maintained, which is the one surface where a divergence is invisible to the person it misleads. Also note the two surfaces use different vocabularies for the same fields - active_tokens emits ''no-preflight'', the banner says ''implementer preflight'' - so a substring property test between them cannot work either. Raised by the reviewer seat with a detector that reproduces: grep -oE ''no_(preflight|ci_wait|review|build|harvest)'' | sort | uniq -c gives 7/7/7 against 5/5, a two-item candidate list from seven sites.'
+  created_at: 2026-09-21T02:33:19.408792262Z
+  modified_at: 2026-09-21T02:33:19.408792262Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
