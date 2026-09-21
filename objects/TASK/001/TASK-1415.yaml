@@ -218,12 +218,44 @@ description: |
       MERGED IS STRANDED BY DEFINITION. That catches this class without knowing anything
       about rebases, autostashes or which write was lost. Run across the six specs at Done
       on the night this was written: clean, so no backlog.
+
+      QUALIFICATION THAT CHANGES WHICH HALF OF THIS CRITERION MATTERS. Added 2026-09-21
+      00:17 after the reviewer pointed out that the rule as written would not have fired.
+
+      THE TWO FAILURES WERE NOT INDEPENDENT. The lost write was found only because the
+      rebase left an autostash, the autostash blocked a LATER write, the block sent someone
+      to read the autostash, and the lost bump happened to be sitting in it. Had the rebase
+      completed cleanly with no subsequent refusal, nothing would have pointed at
+      STORY-1410 and it would read Approved permanently.
+
+      So the loud failure is what made the silent one discoverable, by accident, four
+      minutes later, to someone doing something else.
+
+      WHICH MEANS THE PROSE HALF OF THIS CRITERION IS THE WEAK HALF. "Confirm the state,
+      not the report" fires when someone thinks to apply it — and this class produces
+      NOTHING THAT SUGGESTS APPLYING IT. That is the opposite of every other rule in this
+      file: the truncation and inflation rules fire when something looks wrong, and here
+      nothing looks wrong. A successful-looking merge with an accurate pull output is the
+      entire failure mode.
+
+      SO THE QUERY IS THE CRITERION AND THE SENTENCE IS THE EXPLANATION:
+
+          ANY SPEC AT Done WHOSE PR IS MERGED IS STRANDED BY DEFINITION.
+
+      One field join, runs in a second, requires no suspicion, no knowledge of rebases or
+      autostashes, and no one to have noticed anything. A rule that requires noticing will
+      not fire on this class. A query that runs regardless will.
+
+      IMPLEMENTATION NOTE: this is the one rule in this file that wants to be RUN rather
+      than read — a doctor check or a post-merge step, not a habit. Whoever lands the
+      discipline file should consider whether this entry belongs in `aida doctor` instead
+      of, or as well as, in prose.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:12:14.796135922Z
-modified_at: 2026-09-21T07:15:56.190255128Z
+modified_at: 2026-09-21T07:17:34.212377911Z
 req_type: Task
 tags:
 - parent:EPIC-62 discipline-pack observation severity:operational propagation-candidate
