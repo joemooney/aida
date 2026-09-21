@@ -1,0 +1,42 @@
+id: 01a0c3ea-3969-74b2-8aab-3a1cdd8ee50c
+spec_id: PRIN-7
+agreed_id: PRIN-7
+title: Merge-readiness is a conjunction of two independently-falsifiable predicates - required checks pass AND a verdict names the current head - and a surface must report them separately
+description: |-
+  A merge-readiness verdict is a CONJUNCTION of two predicates that fail by different mechanisms, so a surface must evaluate and report them separately. Collapsing them into one green is the failure this principle exists to prevent.
+
+  THE TWO PREDICATES:
+
+  1. EVERY REQUIRED CHECK PASSES - where "required" is read from branch protection, not inferred from what is visible on the head. A required check that is ABSENT is not a passing one. On this repo, windows and macos are informational; a seat that does not know that will either block on them or count them as coverage, and both errors come from reading the visible set as the required set.
+
+  2. A RECORDED VERDICT EXISTS WHOSE REVIEWED SHA RESOLVES TO THE CURRENT HEAD - not to the branch, not to a prefix of a different commit, and not to a head that has since moved.
+
+  NEITHER IMPLIES THE OTHER, AND EACH WAS FALSIFIED SEPARATELY ON 2026-09-21:
+
+  - PR #1998 failed predicate 1 while predicate 2 held. A classifier gate aborted the job before the tests ran, so a red Build said nothing about the code - and a green one would have said nothing either. The rollup had an answer; the answer was about the gate, not the code.
+
+  - PR #2048 failed predicate 2 while predicate 1 held. Every required check was green against a head no reviewer had ever seen. The verdict named a commit that was no longer the head. Nothing in the rollup could show this, because the rollup is computed over the head and the verdict is not.
+
+  Neither failure would have been caught by the other predicate's check. That is what makes them two criteria rather than one.
+
+  WHY THIS IS A PRINCIPLE AND NOT A HABIT. On 2026-09-21 two seats - the driver-advisor and the reviewer - each independently checked both predicates before the #2026 merge, and agreed. That agreement is not coverage. It is the shape named in BUG-1549: INDEPENDENT IMPLEMENTATIONS OF THE SAME CHARTER DO NOT GIVE INDEPENDENT COVERAGE. Two seats performing the same check from the same understanding is one check performed twice, and it holds only until either seat is replaced by one that reads the rollup as sufficient. That reading is the DEFAULT, not an unusual one: a green rollup looks like an answer.
+
+  The operative asymmetry is that the next seat will never have had the habit, and nothing in the surface will tell them.
+
+  RELATION TO THE EXISTING PRINCIPLES. This is not a third independent idea; it is their conjunction at the merge gate, and it is load-bearing precisely because each existing principle is blind to the other's violation:
+    - predicate 1 is PRIN-5 applied to checks - absent evidence must not read as good evidence
+    - predicate 2 is PRIN-6 applied to verdicts - present evidence must not read as current evidence
+  A surface satisfying only one of PRIN-5 and PRIN-6 still emits a false merge-ready.
+
+  ENFORCEMENT lives in two existing specs rather than in this principle:
+    - BUG-1481 - ci_rollup must derive the required-check set from branch protection and treat ABSENT as not-pass
+    - BUG-1466 - the reviewed resolution must compare reviewed_sha against the head rather than matching on the verdict kind alone
+
+  WHAT A CONFORMING SURFACE DOES: reports the two predicates as separate facts a reader can see individually, names which one is unmet, and never emits a single merged green that a reader could satisfy by checking only one.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T12:21:42.377462003Z
+modified_at: 2026-09-21T12:21:42.377462003Z
+req_type: Principle
