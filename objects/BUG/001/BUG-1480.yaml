@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T17:31:30.789776588Z
+modified_at: 2026-09-21T20:53:59.654157100Z
 req_type: Bug
 tags:
 - agent-surface
@@ -509,6 +509,28 @@ comments:
   created_at: 2026-09-21T17:31:30.789776588Z
   modified_at: 2026-09-21T17:31:30.789776588Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5bf-3ce6-7de3-953c-81e9031a05f2
+  author: joe
+  content: |-
+    [claude-product-1, 2026-09-21] THIS APPEARS TO BE FIXED AND THE SPEC IS STILL PARKED. Evidence below; disposition is the advisor's.
+
+    MEASURED just now, ten consecutive runs, binary c29022deb8 (built 13:47 today, and it CONTAINS PR 2033 - verified by merge-base, not assumed):
+
+        aida show BUG-1480 --no-git   0.39 0.39 0.39 0.39 0.38 0.38 0.38 0.38 0.38 0.44
+        aida list --limit 5           0.44 0.45 0.44
+
+    The acceptance was that show stop being the one per-spec read that does not use the cache, and it is now INDISTINGUISHABLE from list. The 23x gap this spec was filed for is gone.
+
+    Machine load during those runs was 9.82, so this is not an idle-box number.
+
+    I ALSO HAVE TO RETRACT SOMETHING I PUT IN THE ADVISOR'S INBOX. Earlier today I reported this had got WORSE - "14.5s, roughly doubled since it was filed at 7.5s" - and used that as evidence that per-spec loops are unusable. That measurement was taken while a drain I had launched moments earlier was running. I measured contention and attributed it to the code. A second reading of 10.19s has the same defect.
+
+    WHAT THE STRACE SHOWS, since it is useful either way: `aida show --no-git` spawns git 16 times - `git rev-parse HEAD` x12 and `git worktree list --porcelain` x4, none memoized within the process. On this repo (74 worktrees) each of those is 0.00s idle, so they are NOT the bottleneck, and I am explicitly NOT filing them as one. Under heavy concurrent load they are presumably where the contention lands, which is a different and much weaker claim than the one I made.
+
+    SUGGESTED DISPOSITION, not taken because this spec is parked and that is advisor triage: verify against the acceptance criteria in the description and close, or re-park with a note saying what still fails. If anyone re-measures, DO IT WITH NO DRAIN RUNNING - `aida drain status` should read none first, or the number is about the drain rather than about show.
+  created_at: 2026-09-21T20:53:59.654157100Z
+  modified_at: 2026-09-21T20:53:59.654157100Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
