@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:18.813550852Z
-modified_at: 2026-09-21T10:33:18.901814054Z
+modified_at: 2026-09-21T10:33:44.786073582Z
 req_type: Task
 tags:
 - drain-safe
@@ -231,6 +231,52 @@ comments:
     trace-worthy for the sweep BUG-1494 proposes: the pattern to look for is not "a transition with no check" but "a guarded transition reachable in two hops through an unguarded state". Those are different searches.
   created_at: 2026-09-20T22:53:43.613235003Z
   modified_at: 2026-09-20T22:53:43.613235003Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c387-6252-7ab2-b4a1-fd8ba2ee3f9a
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2014 [AI:codex] feat(drain): gate unattended runs on machine readiness (TASK-1298)
+    merged as: dcb8c64506bdf132d93358c00d7a2d7aab1077cf on origin/main at 2026-09-21T10:33:07Z
+    verdict: APPROVE + merged (proxy for the operator)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — the product seat authored the rework f95b30853e; the reviewer seat verified it and cleared its own hold; this advisor wrote none of the diff and executed only the merge.
+    gates cleared:
+      - Build (ubuntu-latest): pass, 12m33s, 32 success / 1 skipped — the reviewer read the STEP LIST, not the rollup (step 12 Run tests, step 13 classifier inventory, step 25 monitor contract, all success)
+      - merge-hold-gate: pass, after the reviewer cleared its own marker
+      - verdict .aida/review-verdicts/PR-2014.json: APPROVED, recorded_by claude-reviewer-1, reviewed_sha f95b30853e8a — matches the merged head exactly
+      - reviewer checked drain status (none) and session leases (none on TASK-1298) BEFORE clearing — the check that distinguishes releasing a hold from overriding a live seat
+      - mergeStateStatus CLEAN, no label, no marker
+      - auto-bump: TASK-1298 → Completed; STORY-1381 (the review story) auto-completed on the same pull
+    timestamp: 2026-09-21 03:33 -07:00
+
+    THE FINDING. machine_readiness.rs returned ErrorKind::Unsupported on non-Unix and then mapped EVERY inode error to Fail, so `aida burndown readiness` and every unattended launch refused on Windows regardless of byte capacity.
+
+    THE FIX IS A PURE CLASSIFIER WITH THREE ARMS, replacing the map_or that collapsed the distinction:
+
+        Ok(available)                      => decide_capacity(..)
+        Err(e) if e.kind() == Unsupported  => Level::Warn
+        Err(_)                             => Level::Fail
+
+    "Cannot measure" separated from "measured and it is bad" — which is PRIN-5's shape applied to a readiness gate rather than to a coordination surface.
+
+    THE PREMISE CHECK IS THE WHOLE REVIEW AND IS RECORDED AS SUCH. The fix rests entirely on Warn not blocking. The reviewer did not take the code comment's word for it: they read machine_readiness.rs:46-48 and confirmed `ready()` returns `!any(level == Fail)`. Had ready() also tripped on Warn, the change would have been COSMETIC — a plausible three-arm classifier over a finding that still stood, with a green Build on top. The generalisable move is asking what a fix ASSUMES and verifying that, rather than asking whether the fix looks right.
+
+    PROVENANCE OF THE FALSIFICATIONS, stated because the two are different strengths of evidence. The IMPLEMENTER reports mutating the classifier in both directions:
+
+        blanket Err -> Fail    RED   (the original defect)
+        blanket Err -> Warn    RED   (a fix that satisfies Windows and disables the
+                                      check everywhere else)
+
+    The REVIEWER did not run those mutations; they read the arms, read ready(), and read the four test assertions. Read-by-one and mutation-tested-by-the-author are not the same claim and this record says which it has.
+
+    THE TEST PINS THE DISTINCTION RATHER THAN THE NEW BEHAVIOUR, which is what makes it unfakeable: Unsupported -> Warn, PermissionDenied -> Fail, Ok(9_999)/10_000 -> Fail, Ok(10_000)/10_000 -> Pass. The PermissionDenied arm is the load-bearing one — the cheap fake was widening the skip to ALL inode errors, which passes a test asserting only the Unsupported case and silently disables the check everywhere.
+
+    WHAT THE GREEN BUILD DOES NOT ESTABLISH, and this PR is the clearest case of it tonight: F1 was a WINDOWS-path refusal and PR CI is Linux-only by design, so the PREVIOUS head was green too and the refusal stood through it. The round answered that by EXTRACTING THE CLASSIFIER AS A PURE FUNCTION so a Linux runner can guard a Windows defect. They did not argue that CI could not see it; they changed what CI could see. That is the right response to "the usual evidence is unavailable" and it should be the precedent rather than the exception.
+
+    CORRELATION, now at seven for seven across three approvals and four standing refusals: not one finding the reviewer recorded tonight was reachable by the suite that was green beneath it.
+  created_at: 2026-09-21T10:33:44.786073582Z
+  modified_at: 2026-09-21T10:33:44.786073582Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c386-fd34-76e2-adfc-8f063ec227e7
