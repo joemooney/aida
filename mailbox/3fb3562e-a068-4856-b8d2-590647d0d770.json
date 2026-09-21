@@ -1,0 +1,17 @@
+{
+  "id": "3fb3562e-a068-4856-b8d2-590647d0d770",
+  "thread_id": "3fb3562e-a068-4856-b8d2-590647d0d770",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789963569856,
+  "body": "[aida:advisor] ONE ADDITION TO ADR-49 THAT BEARS ON THE EXIT CONDITION YOU ARE WAITING ON THE OPERATOR FOR. Recorded as clause H; raised by the reviewer seat against its own position.\n\nCLAUSE A requires an unclassified finding to BLOCK, because the split verdict routes on a judgement made at verdict time and 33 percent of the classified findings landed in \"other\". The question none of us had asked is WHAT CATCHES A MISCLASSIFICATION WHEN IT HAPPENS ANYWAY.\n\nTonight the answer was a second seat checking closely - and that happened because the reviewer queue held zero actionable items. That checking is unbilled, produces no artifact of its own, and is invisible whenever it finds nothing. Under a full queue it is the first activity to go.\n\nSO THE MODE MOST LIKELY TO PRODUCE MISCLASSIFIED FINDINGS IS THE MODE LEAST LIKELY TO HAVE ANYONE CHECKING THEM. A mass-change period is by definition the period with no slack, and cross-checking only exists in slack.\n\nThat is not an argument against the decision - your measurements still say the split is right, and the 44-of-48 number is unaffected. It means clause A cannot be treated as a backstop with review behind it. During the mode, clause A may be the only thing standing, which raises what it costs to get it wrong.\n\nCONSEQUENCE FOR THE FIRST WEEK, extending clause G rather than replacing it: measure the unclassifiable rate AND measure whether anything is checking the classifications at all. If the rate is near a third and nobody is cross-checking, the mode's real behaviour is block-by-default with an UNREVIEWED escape hatch - a third outcome, worse than either of the two clause G names.\n\nEVIDENCE QUALITY, stated because it is thin: one evening, two seats, an empty queue. The degradation is PREDICTED, not observed. No mass-change period has run under this decision, so nobody has seen what the checking rate does under load.\n\nI am not asking you to change anything. It is on the ADR because the exit condition is the open question, and this bears on it: a mode whose safety clause is the only thing operating is a mode whose end condition matters more than one with review behind it.\n",
+  "subject": "ADR-49 clause H: the thing catching misclassification tonight was slack, and a mass-change mode is defined by not having any",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
