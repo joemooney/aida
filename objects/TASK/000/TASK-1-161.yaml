@@ -26,7 +26,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:26:14.774144314Z
-modified_at: 2026-09-21T21:16:24.303923508Z
+modified_at: 2026-09-21T22:53:00.124217518Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -38,4 +38,64 @@ comments:
   content: 'Promoted by joe 2026-09-21: CONFIRMED BY MEASUREMENT, and the headline number is exact. yaml.safe_load over the live store: 1209 of 4267 objects fail = 28.3%, and EVERY ONE of the 1209 is the same error — ConstructorError: could not determine a constructor for the tag ''!Custom''. Not a sample, not an estimate: the whole store parsed, one failure mode, no others. The serialised form is ''rel_type: !Custom sprint_assignment'', a YAML LOCAL TAG, which serde_yaml round-trips happily and which every standard consumer rejects by design. Consequence: any non-AIDA reader of the store — a script, a CI step, a downstream integration, another tool, a human''s one-off python — fails on 28% of objects, and fails with an error that names a YAML tag rather than anything a reader would connect to relationships. Promoted at major. A METHOD NOTE FOR WHOEVER PICKS THIS UP: my first pass grepped for a leading-''!'' pattern and found 7 objects, 0.2%, and I was one step from reporting that the 28% headline had the wrong mechanism attached. The tag is mid-line after ''rel_type: '', so the grep could not see it. The parser was right and my discriminator was blind. Run the parser, not a pattern.'
   created_at: 2026-09-21T21:16:24.303923508Z
   modified_at: 2026-09-21T21:16:24.303923508Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c62c-315c-7690-a2a1-975300c4b17b
+  author: joe
+  content: |-
+    [aida:advisor] THE 28% IS NOT USER ERROR — IT IS THE SYSTEM'S OWN MOST-GENERATED EDGE TYPE, CUSTOM BY ACCIDENT OF SPELLING. Found while linking two specs and noticing what dominates the Custom population.
+
+    THE DISTRIBUTION, measured across the whole store 2026-09-21 15:51:
+
+        648  !Custom implements          17  !Custom related-to
+        648  !Custom implemented-by      15  !Custom sprint_assignment
+        141  !Custom related             13  !Custom sprint_contains
+
+    1296 OF THE ~1480 CUSTOM EDGES — 87% — ARE `implements` / `implemented-by`, and those are MACHINE-GENERATED: every "Review PR-N" story the drain files links back with one. They are not somebody typing the wrong word. They are AIDA writing its own edges in a form that breaks standard YAML parsers.
+
+    AND THERE ARE THREE DISAGREEING SPELLINGS, which is the actual root:
+
+      1. THE DEFINITION REGISTRY DECLARES IT BUILT-IN. `aida-core/src/models.rs:1919-1930`:
+             RelationshipDefinition::built_in("implements", "Implements", "Implementation
+                 relationship").with_inverse("implemented_by")
+             RelationshipDefinition::built_in("implemented_by", ...).with_inverse("implements")
+         So one registry says these are first-class, with a declared inverse pair.
+
+      2. THE TYPE ENUM SAYS THEY ARE CUSTOM, and a test PINS that. models.rs:8446-8447:
+             if let RelationshipType::Custom(name) = RelationshipType::from_str("implements") {
+                 assert_eq!(name, "implements");
+         `from_str` returns Custom for anything outside the ten enum variants, and there is a test
+         asserting that is what happens for `implements`.
+
+      3. THE STORE USES A THIRD SPELLING. The registry declares `implemented_by` (UNDERSCORE); the
+         store holds 648 `implemented-by` (HYPHEN). Neither registry nor enum recognises the
+         hyphenated form as anything.
+
+    SO A RELATIONSHIP THE SYSTEM CONSIDERS BUILT-IN ENOUGH TO GIVE A DISPLAY NAME AND AN INVERSE IS SERIALISED AS A LOCAL YAML TAG, 1296 TIMES, BY THE SYSTEM ITSELF.
+
+    WHAT THIS CHANGES ABOUT THE FIX. This spec reads as "Custom relationships serialise with a local tag" — a serialisation concern. It is really TWO problems and the larger one is not serialisation:
+
+      (a) THE SERIALISATION. `!Custom foo` is a local tag; standard parsers reject it. Fixing this
+          alone makes the store readable and leaves the taxonomy incoherent.
+      (b) THE TAXONOMY DISAGREEMENT. Three sources disagree about whether `implements` is standard,
+          and the store's own spelling matches none of them. Fixing THIS collapses 87% of the
+          Custom population into whatever it should have been, and (a) becomes a much smaller
+          problem about genuinely-custom edges.
+
+    I am not ruling which to do here — (b) touches a pinned test and a serialisation format with
+    4267 objects behind it, and that needs a deliberate decision rather than an implementer's
+    judgement mid-round.
+
+    INTERACTION WITH BUG-1471 WORTH KNOWING BEFORE EITHER LANDS: BUG-1471's option (a) normalizes
+    `related` to References at the CLI boundary, so NEW `related` edges stop being Custom. IT DOES
+    NOT TOUCH `implements`/`implemented-by`, which is 87% of the population. SO MERGING BUG-1471
+    DOES NOT MEASURABLY MOVE THIS SPEC'S 28% — at most it stops 158 of ~1480 from growing. Anyone
+    expecting the parse-failure rate to drop after #2065 will be disappointed, and should know why
+    in advance rather than re-measuring and being confused.
+
+    VERIFICATION NOTE FOR WHOEVER TAKES THIS: the 28.3% figure (1209 of 4267 objects failing
+    `yaml.safe_load`) was confirmed by running an actual standard parser over the whole store, not
+    by grepping. A grep for a leading `!` finds almost nothing, because the tag sits mid-line after
+    `rel_type: `. RUN THE PARSER, NOT A PATTERN.
+  created_at: 2026-09-21T22:53:00.124217518Z
+  modified_at: 2026-09-21T22:53:00.124217518Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
