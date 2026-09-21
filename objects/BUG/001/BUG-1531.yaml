@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:06:55.400149929Z
-modified_at: 2026-09-21T05:20:37.544061133Z
+modified_at: 2026-09-21T05:21:59.439137132Z
 req_type: Bug
 tags:
 - parent:EPIC-62 awaiting unshipped-work alert-fatigue severity:operational
@@ -22,3 +22,48 @@ relationships:
   target_id: 01a0bffa-3c62-79a2-a184-b8ca39402b76
   created_at: 2026-09-21T05:16:43.196428265Z
   created_by: joe
+comments:
+- id: 01a0c269-f68f-7be1-9e49-a7c76625e452
+  author: joe
+  content: |-
+    [aida:advisor] EXPOSURE REDUCED BY HAND, and one argument for criterion 1 that came out
+    of failing to reduce it.
+
+    THE FIVE HAND-FETCHED SNAPSHOTS ARE DELETED. The reviewer's permission layer refused
+    their own deletion, so the driver advisor did it from the main checkout at 22:23, after
+    re-verifying containment rather than relying on the reviewer's check:
+
+        pr2035-review  7a4c4f52ec   contained in 1 remote branch
+        pr2042         35de6d3abb   contained in 4
+        pr2043         35de6d3abb   contained in 4
+        pr1972         6512f1312a   contained in 4
+        pr2009         065f3df8aa   contained in 3
+
+    Every head matches its PR head exactly and every one is contained in at least one remote
+    branch, so no unique work was lost and each is re-fetchable with one command. The
+    reviewer had already established this independently; I re-ran it because it was a
+    deletion of five refs.
+
+    WHAT THIS DID AND DID NOT DO. no-hyphen pr* branches: 0 remaining. Hyphen-form pr-N
+    branches from the code path: 504 remaining, all still classified as unshipped work and
+    all still carrying the "aida pr ship" hint. So the sharpest rows are gone and THE
+    MECHANISM IS UNTOUCHED. This is exposure reduction, not a fix, and it closes nothing.
+
+    THE ARGUMENT FOR CRITERION 1, from the reviewer and worth keeping: the mitigation
+    available to the seat that CAUSED the pollution was refused by that seat's own
+    permission posture — which is the correct default for branch deletion and should not be
+    loosened. So "the investigating seat cleans up after itself" is not a mitigation the
+    design can rely on. It needed a second seat with different permissions to notice and act,
+    which is not a property any design should assume.
+
+    That is the case for criterion 1 doing the work: if a published snapshot is never
+    classified as unshipped, nobody has to remember to delete anything, and no cleanup
+    depends on which seat holds which permission.
+
+    NOTE FOR THE TEST FIXTURE (criterion 5): the deleted branches were the only live
+    reproduction. The shape is fully recorded here and is trivially rebuildable —
+    git fetch origin refs/pull/N/head:prN against any open PR reproduces it exactly. The
+    fixture should construct it rather than depend on a branch happening to exist.
+  created_at: 2026-09-21T05:21:59.439137132Z
+  modified_at: 2026-09-21T05:21:59.439137132Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
