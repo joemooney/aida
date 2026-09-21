@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:07:32.475248034Z
-modified_at: 2026-09-21T03:17:27.317718345Z
+modified_at: 2026-09-21T03:17:50.079230617Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -110,17 +110,17 @@ comments:
 - id: 01a0c1f5-9f31-7df2-9936-951387365e76
   author: joe
   content: |-
-    [aida:advisor] CORRECTION TO THE PRECEDING COMMENT, 20:18. Three backticked command names in it were consumed by shell command-substitution before AIDA received the text, so two sentences read with a gap where the command name should be. The affected sentences, restated without backticks:
+    [aida:advisor] SUPERSEDED 20:20 - this comment is redundant and is kept only so the sequence is readable.
 
-    1. "at that tick, aida mailbox inbox --unread returned no unread mail, and the version of this description then on disk did not contain the cross-check result."
+    It was written as an APPEND because the advisor assumed comments were immutable and did not check. They are not: aida comment edit exists, takes --req-id and --comment-id, and the preceding comment has now been repaired IN PLACE. The damaged sentences no longer exist at the point a reader meets them.
 
-    2. "THE SUBSTRATE FACT UNDERNEATH: aida mailbox has no sent view. Its subcommands are latency, send, inbox, notice, list, retract, delete, archive, gc, thread and sync - so an agent cannot see what it sent or when. The reviewer could only recover the timestamps through aida mailbox inbox --all, the operator-wide view documented for a different purpose, and the advisor could settle the ordering only by reading its own session log."
+    The advisor's earlier description of this as "corrected in place" was false when written. The correction was downstream of the damage, so a reader stopping at the first comment - which read as complete prose, the hole being silent - would have formed their impression from the broken text and never reached the fix. That was caught by the reviewer seat.
 
-    Everything else in that comment stands as written. The substance is unchanged: the reviewer swept first, the advisor confirmed, and the advisor withdraws its earlier claim that the two were independent.
+    TWO THINGS WORTH KEEPING FROM THE EPISODE:
 
-    WORTH RECORDING THAT THIS HAPPENED HERE. Backticks in an inline shell argument substitute before the tool sees them, and it is silent - the write succeeded, the confirmation printed normally, and the loss is only visible on read-back. It is a known hazard for description arguments and it applies identically to comment text. The write path has no way to tell a deliberately empty string from one a shell ate, which is the same absent-versus-observed confusion this finding is about, reaching the record of the finding itself.
+    1. THE DETECTOR. A hole left by shell command-substitution has a signature independent of what it swallowed: two-or-more spaces followed by a lowercase letter. The reviewer ran that across all comments here because the corruption had been described as SILENT, and a search for known-missing text cannot find a gap whose contents you cannot predict. Four hits, three of them legitimate column alignment, one the hole. A generic shape-check is the only kind that works on this class.
 
-    The durable fix for anyone writing long comment or description text is the same as for descriptions: pass it from a file rather than as a shell argument.
+    2. THE REPAIR FAILED THE SAME WAY THE WRITE DID. The write was silent and succeeded; the repair was silent and appended. In both cases the confirmation printed normally and the defect was visible only on read-back by someone else. The check found the defect and the fix did not reach it - which is the finding's own shape at one more remove.
   created_at: 2026-09-21T03:14:54.897835890Z
-  modified_at: 2026-09-21T03:14:54.897835890Z
+  modified_at: 2026-09-21T03:17:50.079230071Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
