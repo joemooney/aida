@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T16:13:01.277752983Z
+modified_at: 2026-09-21T16:32:00.188238076Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -245,4 +245,23 @@ comments:
     Recorded here by the advisor at the reviewer's own report. The reviewer's framing, kept because tallying beats apologising: "the rules were in my hands and I had written the operational form myself."
   created_at: 2026-09-21T16:13:01.277752983Z
   modified_at: 2026-09-21T16:13:01.277752983Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4cf-60bc-7903-a009-7a94142d490a
+  author: joe
+  content: |-
+    [aida:advisor] A FIFTH FORM, AND IT IS THE ONLY ONE THAT NEVER WORKED EVEN ONCE. Found by claude-reviewer-1 in BUG-1555, re-verified by the advisor.
+
+        AN INSTRUMENT INSTALLED BROKEN ON A PLATFORM ITS AUTHORS COULD NOT SEE.
+
+    The discipline-pack content comparison landed on 2026-09-20 and has FAILED ON EVERY WINDOWS RUN THAT HAS EVER EXECUTED IT - both of them. It has no green baseline on that platform and never had one. PR CI is Linux-only by design, so the only place it could ever have been observed is a nightly, and by the time anyone looked, four unrelated hypotheses had been built on the assumption that it had once worked.
+
+    HOW IT DIFFERS FROM THE OTHER FOUR ON THIS SPEC. The inert instrument and the always-firing one both LOST a capability they once had, or never had it anywhere. This one works correctly on the platform its authors run and is structurally incapable of working on one they do not. It is not a degraded instrument - it is a CORRECT instrument with an unstated platform precondition, deployed where that precondition does not hold.
+
+    WHAT MAKES IT EXPENSIVE RATHER THAN MERELY WRONG: it is indistinguishable from a REGRESSION, and a regression invites a hunt for what changed. Two seats spent a day falsifying six mechanisms - line endings, content drift, stale embed, symlinks, stored CR bytes, runner image - five of which are genuinely dead, because the framing was "it passed before and now it does not." It never passed. The question "what changed?" had no answer because nothing had.
+
+    THE CHECK: FOR ANY GUARD, ASK WHERE IT HAS ACTUALLY BEEN GREEN, NOT WHERE IT IS EXPECTED TO RUN. A guard added under Linux-only PR CI to a project with a nightly cross-platform matrix has an observable answer - and "never green on Windows" is a different defect from "went red on Windows", requiring a different investigation. The cheap version at authoring time: name every platform the guard will execute on, and state which ones you have seen it pass on.
+
+    AND THE COMPANION ERROR THAT MADE IT COSTLY - A TEST NAME IS NOT A TEST. The advisor's control was "the same test passed on Windows the night before". It was the same NAME; the content comparison did not exist in the body at that commit (verified: `git show 26c7f5107e:aida-core/src/templates.rs | grep -c discipline_content_mismatches` -> 0). A CONTROL MUST BE THE SAME ARTIFACT, NOT THE SAME LABEL - and when a test's pass is used as a control across two commits, the body has to be diffed, not assumed. The passing COUNT had even moved, 952 to 954, which was the signal, read as background.
+  created_at: 2026-09-21T16:32:00.188238076Z
+  modified_at: 2026-09-21T16:32:00.188238076Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
