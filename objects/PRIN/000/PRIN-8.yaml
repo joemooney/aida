@@ -1,0 +1,44 @@
+id: 01a0c4f7-8371-7633-8cf5-18d0c7074cf8
+spec_id: PRIN-8
+agreed_id: PRIN-8
+title: A gate must be enforced at the most deterministic rung available — distil the RULE into code, keep the REASON in prose
+description: |-
+  Proposed by the operator, 2026-09-21: "for gating we prefer determinism over non-determinism, prefer what we can put in rust over prose. seek to distill prose into rust."
+
+  STATEMENT. Where a rule must HOLD, enforce it at the most deterministic rung available, and when you cannot reach the top rung, say which rung you are on. Prose is the last resort for enforcement, never the first.
+
+  THE LADDER, strongest first:
+  1. COMPILER-CHECKED - a type or exhaustive match makes the violation not compile. Cannot drift.
+  2. TEST- OR GATE-ENFORCED - a check with an exit code fails loudly at a known moment (CI, a pre-commit gate, a phase gate).
+  3. DETERMINISTICALLY DETECTED - a sweep or lint reports violations mechanically; a human or advisor acts.
+  4. LANGUAGE-JUDGED, LABELLED HEURISTIC - an LLM pass, with its uncertainty stated in the output (the model is ADR-44, which prints the word "heuristic" beside every score).
+  5. PROSE IN A DOC - a rule in CLAUDE.md, a skill, or a memory. Silently ignorable; drifts without signal.
+
+  RUNG 1 IS NOT THE SAME AS "IN RUST", AND THE DIFFERENCE IS WHERE THIS PRINCIPLE EARNS ITS KEEP. BUG-1554 records that a new `aida doctor` category must be hand-registered in three places, that the compiler checks none of them, and that the user-facing valid-name list HAS ALREADY DRIFTED BY TWO CATEGORIES. That rule is in Rust and still drifted, because nothing made the violation fail. Hand-maintained parallel lists in a compiled language are rung 3 at best wearing rung 1's clothing. The question is never "is it in Rust" but "what makes a violation impossible, or loud."
+
+  WHY, beyond taste. A prose rule fails silently and asymmetrically - the reader who most needs it is the one least likely to have read it. Evidence from this project: an agent with CLAUDE.md, docs/lifecycle.md and the full skill set in context still concluded a shipped capability (`--single-branch`, TASK-1003) did not exist, and designed a replacement, because a good-enough prose answer arrived before the query that would have answered exactly. Prose does not merely fail to enforce; it actively pre-empts the surface that would have.
+
+  SCOPE - THIS GOVERNS RULES, NOT REASONS. Distil the RULE into code; keep the REASON in prose. The store's distinguishing value over the code is precisely what cannot be compiled: what was rejected and why, what is aspirational versus actual, which constraint forced a shape. ADR-44's three rejected alternatives were more useful to a working agent this session than any amount of source reading. A gate can require that an ADR exist; it cannot hold the argument. Applying this principle to rationale would destroy the thing that makes the corpus worth keeping.
+
+  EXCEPTION, WHICH IS PART OF THE RULE - some criteria are irreducibly judgement: whether an API is tasteful, whether an error message reads clearly to a newcomer. Forcing those down the ladder produces a Goodhart artifact - a check that verifies something adjacent and cheap, satisfying the gate while confirming nothing, and reading as machine-confirmed. That is WORSE than honest prose. When a rule cannot be mechanised, leave it at rung 4 or 5 and LABEL the rung; do not fake a rung 2.
+
+  EVIDENCE TRIGGER, following PRIN-2's shape - distil when the invariant is load-bearing OR has actually been violated. Not speculatively: every gate costs implementation, surface area and a test matrix, and a gate guarding something nobody gets wrong is pure cost. A recorded violation is the cheapest possible evidence that a rung change is warranted.
+
+  APPLIES TO, as filed this session:
+  - STORY-1424 - an acceptance criterion carrying an executable check moves review from rung 4 to rung 2 for that criterion, while explicitly leaving prose criteria at rung 4 rather than forcing them.
+  - STORY-1426 - deterministic contradiction joins (rung 3) ship BEFORE and independently of the language-judged pass (rung 4).
+  - BUG-1554 - three hand-registered lists are the canonical rung-1-in-name-only failure.
+
+  COMPOSES WITH: PRIN-4 (a diagnostic must be unable to drift from the decision it explains - the same asymmetry, applied to explanations); PRIN-2 (earn the mechanism with evidence); ADR-44 (label the heuristic when you cannot be deterministic). The memory-pack rule "guarantee an invariant via a programmatic gate, not a rule in CLAUDE.md" is this principle's informal predecessor and should now point here.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T17:15:50.513165186Z
+modified_at: 2026-09-21T17:15:50.513165186Z
+req_type: Principle
+tags:
+- architecture
+- determinism
+- gating
+- north-star
