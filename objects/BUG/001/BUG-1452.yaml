@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:02:39.454765774Z
-modified_at: 2026-09-21T06:46:13.109440799Z
+modified_at: 2026-09-21T06:46:14.898461893Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -93,6 +93,21 @@ comments:
   created_at: 2026-09-21T00:40:24.640693192Z
   modified_at: 2026-09-21T00:40:24.640693192Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c2b7-194d-7232-94dc-525a1160fcc3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-1452):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a2599fe42001
+    Recorded: 2026-09-21T06:29:36.374325615+00:00
+    Findings:
+    1. WITHDRAWING MY OWN F2, verified against the spec rather than taken from the arbitration. BUG-1452's criterion 6 now reads: 'WITHDRAWN 2026-09-20 - split to TASK-1307, not dropped... This spec may complete without the sweep; it may NOT complete while TASK-1307 is unfiled, and TASK-1307 is filed, approved and queued.' TASK-1307 exists, approved, high priority, titled for exactly that sweep. So my grep finding was accurate — there is no sweep in the diff — and the conclusion did not follow. The sweep is not missing from the implementation; it is no longer in this spec. F2 is withdrawn in full and is not a blocker.
+    2. WHY I GOT IT WRONG, because the mechanism is not carelessness and will recur. A verdict records a criterion BY NUMBER and nothing re-reads the criterion when the spec is edited underneath it. My prior verdict said 'criterion 6 untouched'; by the time I re-reviewed, criterion 6 said something else entirely. The same thing happened on #1984 where criterion 4 had been scoped to TASK-1308 before my review. Two of the four PRs in tonight's green-and-blocked set carried a stale criterion reference in their own recorded verdict. A re-review MUST re-read the acceptance text, not just the diff and the prior findings — the spec is a moving target between rounds and the verdict does not know it.
+    3. F1 STANDS AND IS THE ONLY BLOCKER, criterion 5, restated from my correction earlier this cycle. The diff DOES add a dedicated module bug_1452_refusal_aftermath_tests with refusal_aftermath_is_parked_held_and_awaiting_visible — my original description of it as a one-line lifecycle addition was false and I withdrew that. The test still does not satisfy criterion 5: it calls merge_hold::write_hold(root, 1452, ...) directly and shelve_spec_on_failure(root, BUG-14520, ...) directly, then asserts the hold exists and the spec is NeedsAttention with a failure_reason. It never records a verdict; handle_review_record is never called. So it proves two primitives work when the test itself invokes them, and would still pass if the recording path stopped calling either. Criterion 5 asks for the aftermath OF A REFUSING VERDICT. FIX: drive it through the recording entry point so the assertions describe what a refusal does rather than what the test just did.
+    4. UNCHANGED AND NOT BLOCKING, carried so the round is not spent rediscovering it: criterion 7 is satisfied by construction — the hold is armed inside handle_review_record gated on kind.blocks_done(), so the hand path and the drain path are the same code. And write_hold plus sync_label are both called at the point of refusal, which closes BUG-1499's label-without-marker split-brain source for the refusal path. DISCLOSURE unchanged: I argued for criterion 7 today and the advisor promoted it from my comment, so I am independent of the implementation but not of the spec's scope, and criterion 7 is both the one I am least entitled to judge and the one I find satisfied.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-21T06:46:14.605319584Z
+  modified_at: 2026-09-21T06:46:14.605319584Z
 execution_mode: drain
 implementation_info:
   implemented: true
