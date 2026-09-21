@@ -1,0 +1,46 @@
+id: 01a0c31f-e86a-7722-8073-348383e90347
+spec_id: TASK-1416
+agreed_id: TASK-1416
+title: A rebase helper that hardcodes origin/main silently breaks a stacked PR, and the symptom looks like a stale GitHub API rather than a local error
+description: |-
+  A rebase helper that assumes every PR targets main will silently break a stacked PR, and the breakage presents as a GitHub bug rather than as a local error.
+
+  OBSERVED 2026-09-21 01:30 local, self-inflicted, while rebasing six PRs onto post-BUG-1526 main.
+
+  My script resolved each PR's head branch and rebased it onto a hardcoded origin/main. Five of the six targeted main and were correct by luck. The sixth, #2009, targeted task-1289-work -- it was STACKED on #1972 -- and #1972 was in the same batch.
+
+    #2009  head bug-1420-work  base task-1289-work
+    every other open PR        base main
+
+  Both branches shared four commits. Rebasing each onto main independently replayed those four separately and produced different shas for identical content. The child then sat 4 behind its own base and conflicted with it, while merge-treeing cleanly against main.
+
+  THE FAILURE MODE IS THE POINT, not the conflict. The symptoms were:
+
+    gh pr view 2009   mergeable=CONFLICTING
+    git merge-tree against origin/main   clean
+    git merge-base --is-ancestor main head   YES
+
+  Three signals, two of them reassuring, and the reassuring ones were the ones I had chosen to measure. I had already composed the sentence "the API is stale, git says it is clean" before checking baseRefName. GitHub was right. I was answering a question about main that nobody had asked, because the PR does not use main.
+
+  That direction matters: the wrong conclusion BLAMED THE TOOL. A conclusion that ends with "the platform is wrong" terminates investigation, where one that ends with "I do not understand this" continues it.
+
+  THE FIX IS ONE LINE: read the PR's baseRefName and rebase onto that, rather than onto a hardcoded main.
+
+  ACCEPTANCE
+  1. Any rebase helper resolves each PR's base from the forge (baseRefName) and rebases onto THAT ref, never onto a hardcoded default.
+  2. When a PR's base is not the repository default branch, the helper says so before acting, because a stacked PR's base may itself be in the same batch and ORDER THEN MATTERS -- the base must be rebased and pushed before the child is rebased onto it.
+  3. A batch helper refuses, rather than proceeds, when two PRs in the same batch stand in a base/head relationship, unless it is explicitly told the order.
+  4. Verification is executable: construct two branches where one targets the other, run the helper over both, and assert the child ends 0 behind its base rather than 0 behind main.
+
+  SCOPE, measured rather than assumed: I enumerated every open PR's base at the time. Exactly one of roughly twenty was not targeting main, so this is rare -- which is precisely why a helper written against the common case survives review and then bites once.
+
+  NOT URGENT. The instance that produced it was resolved by closing both PRs as superseded rounds for unrelated reasons, so no repair is outstanding. Filed because the tooling defect is real, cheap to fix, and will recur the next time anyone stacks a PR.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T08:40:43.370422318Z
+modified_at: 2026-09-21T08:40:43.370422318Z
+req_type: Task
+tags:
+- tooling rebase stacked-pr papercut severity:cosmetic
