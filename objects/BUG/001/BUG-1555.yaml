@@ -429,12 +429,12 @@ description: |
         -> NO autocrlf, NO core.eol, on the checkout step or the post-checkout step
     AND THE RESULT IS LABELLED CORRECTLY BY ITS AUTHOR, WHICH IS THE POINT: actions/checkout never PRINTS core.autocrlf, so this log cannot express the property and its silence is structurally uninformative. It is NOT evidence that autocrlf is unset. That is the fourth instance today of a null from a surface that cannot express the property being asked - after `aida show` grepped for BlockedBy, a hand-written field list that omitted `findings`, and `git check-ignore` naming the precedence winner - and it is THE FIRST ONE CAUGHT PROSPECTIVELY, by the seat running the query, before a conclusion was drawn from it.
     CONSEQUENCE FOR WHOEVER TAKES THIS: the observation must be EMITTED DELIBERATELY. One step on the Windows leg reporting whether a project-copy guide contains \r - or equivalently whether its byte length differs from its LF-normalized length. Still five minutes; five minutes of writing rather than of grepping. It is genuinely unblocked, it is small, and it gates the release path, since scripts/pre-release-check.sh requires a cross-platform run green within 24h of tagging.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T18:11:23.801730426Z
+modified_at: 2026-09-21T18:11:16.531884508Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
