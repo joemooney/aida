@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T16:00:22.990351395Z
+modified_at: 2026-09-21T16:03:38.152577225Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -184,4 +184,25 @@ comments:
     PAIRS WITH the saturation ratio recorded above and its caution - the ratio licenses "stop trusting this instrument", not "here is the cause". Both failures this morning were the same step taken from opposite directions: one seat attached a mechanism to a ratio, the other confirmed a mechanism without testing it against the event. Neither seat asked what would have to be true for the mechanism to be WRONG.
   created_at: 2026-09-21T16:00:22.990351395Z
   modified_at: 2026-09-21T16:00:22.990351395Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4b5-6828-7842-a477-ac09ff607fa7
+  author: joe
+  content: |-
+    [aida:advisor] A FOURTH ENTRY, AND IT IS THE INVERSE OF THE ScheduledJobFailed CATCH ALREADY RECORDED HERE. Found by claude-product-1 2026-09-21 while closing STORY-1422's criterion 4, reported by them unprompted as a near-miss rather than as a finding:
+
+        THREE FAILED GREPS FOR NAMES THAT DO NOT EXIST READ EXACTLY LIKE ABSENCE.
+
+    They were mid-diagnosis on a chain that would not route. They searched for the event-matcher by name: `on_events`, `matches_on`, `trigger_events`. All three returned nothing. Combined with two other locally-true observations - due_reason bails without an interval, events.rs never touches the schedule - they arrived at a chain of true steps ending in a FALSE conclusion: "event-keyed seat jobs are inert, INCLUDING the scaffolded shelf-triage that ships enabled to every new project". That is a high-severity finding about shipped behaviour and it was one message from being sent.
+
+    The matcher exists at maintenance_schedule.rs:708-741. The field is just `on`. Every search name had been invented by the searcher.
+
+    THE INVERSION IS THE POINT. The ScheduledJobFailed catch recorded earlier on this spec is the same seat inventing a NAME and having grep disprove it - grep's silence was TRUE and saved them. Here they invented SEARCH TERMS and grep's silence was MEANINGLESS, and it nearly proved something false. SAME TOOL, SAME SILENCE, OPPOSITE EPISTEMIC VALUE, and nothing in the output distinguishes the two cases. A null grep result is only evidence about the code if the pattern was derived FROM the code.
+
+    This is PRIN-5 - absent evidence must not read as good evidence - aimed at the searcher's own vocabulary rather than at the system. It is more dangerous than the ordinary form because the searcher supplied both the question and the standard for answering it, and three failures feel like corroboration when they are three draws from the same wrong guess.
+
+    THE CHECK: before concluding a thing does not exist, ground at least one search term in something you READ rather than something you named - a call site, a config key, a struct field, a string in the docs. If every pattern came out of your head, the null result is about your head. The cheap version: search for the CALLER instead of the callee, or grep the config key (`on`) rather than the function you imagine handles it.
+
+    RECORDED AS A NEAR-MISS, WHICH IS THE PART TO PRESERVE. This did not become a false finding because the implementer kept looking after the conclusion felt solid, and then reported the sequence against themselves. The catalogue is stronger for the ones that were caught than the ones that shipped.
+  created_at: 2026-09-21T16:03:38.152577225Z
+  modified_at: 2026-09-21T16:03:38.152577225Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
