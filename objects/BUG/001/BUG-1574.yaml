@@ -1,0 +1,65 @@
+id: 01a0c5e6-f66f-7380-bf1a-38e0601ab9d9
+spec_id: BUG-1574
+agreed_id: BUG-1574
+title: A headless --steal drain rebased and force-pushed a topic branch outside its batch, for a spec tagged keyboard-only, over an active rework lane's commit
+description: |-
+  A HEADLESS DRAIN REBASED AND FORCE-PUSHED A TOPIC BRANCH BELONGING TO A SPEC THAT WAS NEITHER IN ITS BATCH NOR ELIGIBLE FOR HEADLESS WORK AT ALL, DESTROYING AN ACTIVE REWORK LANE'S COMMIT.
+
+  PROVENANCE IS SPLIT AND I AM MARKING IT, because half of this is reported and half is verified.
+
+  REPORTED by the implementer lane reworking PR #2019, in its final report:
+    "An autonomous drain (batch:night-0920, PID 1966685) concurrently re-rebased and force-pushed
+     the pre-fix branch state over my first commit mid-task; recovered via force-with-lease, and
+     diffed both commit lists to confirm nothing else was lost."
+  I have NOT reproduced the force-push itself and PID 1966685 has exited, so the actor is not
+  directly confirmed by me.
+
+  VERIFIED BY THE ADVISOR in the tree, 2026-09-21 14:36 MST:
+
+    1. THE SPEC IS NOT IN THAT DRAIN'S BATCH.
+           aida show TASK-1274 -> tags: batch:story-1216 ... keyboard-only ...
+           aida drain status   -> batch night-0920, 20 members, TASK-1274 ABSENT
+       So whatever touched task-1274-work reached OUTSIDE its declared member set.
+
+    2. THE SPEC IS TAGGED `keyboard-only`.
+       The live drain command is:
+           aida queue work --batch night-0920 --auto-complete --no-human=both --escalate-blocks --steal
+       `--no-human=both` is the fully-unattended mode. A spec tagged keyboard-only is by definition
+       not eligible for it. THE TAG DID NOT STOP ANYTHING.
+
+    3. THE REBASES HAPPENED. `git reflog show task-1274-work` carries two rebase(finish) entries
+       the lane did not perform, onto 42b7147bf0 and 4e24c786c7.
+
+    4. THE LIVE DRAIN CARRIES `--steal`, which is the flag whose whole purpose is to take work
+       held by someone else.
+
+  WHY THIS IS MORE THAN A LOST COMMIT. The lane recovered, because its `git rebase --continue` was REFUSED with an explicit ref-lock error and it went looking. A refusal is a LOUD failure and it is the lucky case. HAD THE TIMING DIFFERED BY SECONDS THE FORCE-PUSH WOULD HAVE SUCCEEDED SILENTLY and the lane would have continued on a branch whose history had been replaced underneath it. Nothing in the drain announces that it took a branch, and nothing in the lane would have noticed.
+
+  THE SAME SHAPE RECURRED WITHIN THE HOUR on PR #2061, where the head moved by two blank lines and both the reviewer and I read the PR as having ignored two findings. It had not; it had been overwritten. TWO SEATS DREW A WRONG CONCLUSION ABOUT AN IMPLEMENTER'S WORK FROM A HEAD SOMEONE ELSE HAD PUSHED.
+
+  Acceptance:
+  - A drain must not rebase, force-push, or take a lease on a branch whose spec is NOT in its
+    declared member set. If `--steal` is meant to permit that, it must be scoped to the batch.
+  - A spec tagged `keyboard-only` must be REFUSED by `--no-human` / `--no-human=both` at dispatch,
+    with a named error. Today the tag is documentation that nothing enforces. Demonstrate the
+    refusal fires: attempt to drain a keyboard-only spec headlessly and show it is rejected.
+  - When a drain moves a branch that another session holds, that act must be RECORDED where the
+    other session can see it — a finding, a mailbox message, or an entry the lane's next git
+    operation surfaces. A silent successful force-push is the failure mode; the ref-lock refusal
+    that saved us here was luck, not design.
+  - WORKTREE ISOLATION IS NOT THE MITIGATION AND SHOULD NOT BE OFFERED AS ONE. Every party here
+    was correctly worktree-isolated. Isolation protects working trees; it does nothing about a
+    shared REMOTE REF. Two isolated lanes pushing one branch collide exactly as two lanes in one
+    worktree would, only later and more quietly.
+
+  Filed by the driver-advisor seat. Related: the #2019 and #2061 rework lanes (both hit it),
+  BUG-1567/BUG-1569 (the tests those lanes were fixing).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T21:37:23.055506428Z
+modified_at: 2026-09-21T21:37:23.055506428Z
+req_type: Bug
+tags:
+- orchestrator drain safety
