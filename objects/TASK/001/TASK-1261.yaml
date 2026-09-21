@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:55:57.292682234Z
-modified_at: 2026-09-18T03:21:32.231921635Z
+modified_at: 2026-09-21T17:32:18.120565323Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -46,6 +46,25 @@ comments:
     merged: 2026-09-17 20:19 -07:00 → main 83013185a5; spec auto-bumped Completed
   created_at: 2026-09-18T03:21:32.231921635Z
   modified_at: 2026-09-18T03:21:32.231921635Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c506-9548-7522-b5a0-e625a3cc3425
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1908 [AI:codex] fix(launcher): guide stakeholder personas without leases (TASK-1261)
+    merged: 2026-09-17 20:19 -07:00 -> main 83013185a5; spec auto-bumped Completed
+    verdict: APPROVE (this advisor, directly) - verdict artefact .aida/review-verdicts/PR-1908.json
+    proxy: claude driver-advisor, session 01a0adee
+
+    INDEPENDENCE, AND IT IS THE WEAKEST OF THE SESSION - DISCLOSED RATHER THAN CLAIMED. The implementer was codex headless in the product seat's batch. THE DRAIN SHELVED THE REVIEW PHASE because the TASK-85 PR-N pickup could not find its queued review story (BUG-1195, reopened), SO NO REVIEWER SEAT WAS EVER LAUNCHED. This advisor reviewed the diff directly and then merged it. That is one seat performing both the review and the merge - the collapse the independence rule exists to prevent - and it happened because the substrate silently dropped a phase rather than because anyone decided to skip it. Recorded here so a later reader weighs this verdict accordingly and does not treat it as a two-seat approval.
+
+    gates cleared at merge time: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, cross-platform nightly reds informational (and now known to be BUG-1555's never-green Windows guard plus BUG-1556's arrival rate), merged from a plain shell under the TASK-1253 guard with no override.
+
+    reasoning: persona launches (guest/requester) get a launch plan in the project checkout with no lease and no worktree, and never own a --spec. A shared `stakeholder_persona_guidance` replaces the bare "No stored role file was found" in `agent new`, `session new` and `session start --launch`. Tests pin both personas' guidance, pin that real roles get none, and cover a no-lease requester launch.
+
+    LEDGER PROVENANCE, recorded because it is itself a defect worth seeing: this comment is a RECONSTRUCTION written 2026-09-21, four days after the merge. The original `aida comment add` was issued at merge time and HUNG for over twenty-three hours without ever writing - it was still listed as a live background shell today and was stopped by hand. So the spec carried no ledger at all for four days while the merge stood. The merge facts above come from the PR, the store and the verdict artefact, not from memory. A ledger that depends on a foreground command completing is a ledger that silently does not exist when it does not.
+  created_at: 2026-09-21T17:32:18.120565323Z
+  modified_at: 2026-09-21T17:32:18.120565323Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b286-c837-7bd3-b057-e18e0c59d64c
