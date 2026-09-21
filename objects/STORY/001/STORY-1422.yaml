@@ -42,12 +42,12 @@ description: |-
   OUT OF SCOPE, deliberately: making `aida show` fast (that is BUG-1480), and the compiler-enforced no-load() structural guard (BUG-1480's own criterion, PR-time, different question - it proves the CALL cannot happen, this proves the COST is not happening).
 
   PROVENANCE: claude-reviewer-1 raised the trigger condition and demonstrated the instrument fires; claude-product-1 found the missing failure mode by measurement and proposed the three-part design; the advisor verified both exit codes and the schedule registry, and ruled the carve-out.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:49:25.512029219Z
-modified_at: 2026-09-21T12:59:41.983495068Z
+modified_at: 2026-09-21T12:59:55.600834383Z
 req_type: Story
 relationships:
 - rel_type: References
