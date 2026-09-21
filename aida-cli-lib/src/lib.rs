@@ -78581,16 +78581,25 @@ fn handle_from_pr(
             );
             std::process::exit(1);
         }
-        drain_resume::FromPrOutcome::DriveFrom(start_phase) => {
-            // A prior run's phase number does not carry the head SHA for which
-            // CI terminated. Re-enter phase 2 before any reviewer so the new
-            // process establishes that proof for the current head.
-            // trace:BUG-1460 | ai:codex
-            let start_phase = if start_phase == auto_complete::Phase::Reviewer {
-                auto_complete::Phase::Ci
-            } else {
-                start_phase
-            };
+        drain_resume::FromPrOutcome::DriveFrom(probed_start_phase) => {
+            // `aida drain resume` pins the failed phase from the newest
+            // SpecShelved row; the normal --from-pr path stays reality-based.
+            // trace:TASK-1272 | ai:codex
+            let recorded_phase = std::env::var("AIDA_DRAIN_RESUME_PHASE")
+                .ok()
+                .as_deref()
+                .and_then(drain_resume::shelved_resume_phase);
+            let start_phase = recorded_phase
+                .map(|recorded| {
+                    drain_resume::reconciled_shelved_phase(recorded, probed_start_phase)
+                })
+                .unwrap_or(probed_start_phase);
+            // Last line of defence, keyed on the FACT not a phase name: a recorded
+            // Reviewer outranks a probed Ci through reconciliation and would skip
+            // the wait even after `from_pr_plan` demanded CI. See
+            // `ci_gated_start_phase` for why a phase-name check is not enough.
+            // trace:BUG-1460 trace:TASK-1272 | ai:claude
+            let start_phase = drain_resume::ci_gated_start_phase(start_phase, facts.ci_green);
             println!(
                 "{} driving `{}` from phase {} ({}) — implementation shipped outside the \
                  orchestrator (skipping the implementer phase).",
