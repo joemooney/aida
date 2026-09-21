@@ -1,5 +1,6 @@
 id: 01a0c199-920b-7771-8534-1ec272eec3d7
 spec_id: TASK-1-162
+agreed_id: TASK-183
 title: 'aida review record silently destroys a prior reviewer''s verdict: last-writer-wins, no history, gitignored, no forge copy'
 description: |-
   aida review record silently destroys a prior reviewer's verdict: last-writer-wins, no history, no backup, gitignored, no forge-side copy

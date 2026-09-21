@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-20T21:16:45.328170423Z
+modified_at: 2026-09-21T02:03:47.338508517Z
 req_type: Bug
 tags:
 - drain-safe
@@ -206,6 +206,23 @@ comments:
   content: Commit ff45dcbd6c references this requirement
   created_at: 2026-09-20T21:16:45.328170423Z
   modified_at: 2026-09-20T21:16:45.328170423Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1b4-810a-7151-9749-7cec6146051a
+  author: joe
+  content: |-
+    [aida:advisor] THE INTERIM MITIGATION HAS LANDED, AND ITS PROVENANCE IS WRONG - read this before trusting git blame on it.
+
+    WHAT LANDED. `retry_transient = 1 -> 2` in .aida/config.toml, with the full reasoning comment naming this spec and stating the revert condition. It is on origin/main at line 50 as of 2026-09-20 19:01.
+
+    IT DID NOT LAND VIA ITS OWN PR. It was merged inside PR #2041 (STORY-1041, pipeline_depth 1 -> 2), squashed as 60577cc339, under a (STORY-1041)-ONLY trailer. The advisor's own PR #2032, which carried this change alone with a (BUG-1485) trailer, was closed as superseded - its diff is byte-identical to what is already on main, so merging it would have applied the same edit twice.
+
+    THE CONSEQUENCE, which is why this comment exists. `git blame` on that line, and therefore `aida why`, resolves it to STORY-1041 - a pipeline-depth spec with nothing to do with the retry budget. Anyone later asking "why is retry_transient 2, and when can it go back to 1" follows the blame to the wrong spec and finds no answer. The inline comment in config.toml names this spec, so the answer IS recoverable by reading the file; it is the tooling path that misleads.
+
+    THE REVERT CONDITION, restated here so it survives independently of blame: return retry_transient to 1 once this spec either types the session-to-lease mismatch as a distinct cause or fixes the root cause. The mitigation is blunt - it widens the retry budget for EVERY transient cause, not just the lease mismatch - and it was taken because the mismatch fired 7 times in one day and self-recovered on attempt 2 in 6 of them, meaning the old budget of 1 put every recovery on the last available attempt.
+
+    GENERAL POINT, raised by the reviewer seat when it merged #2041 and worth acting on beyond this instance: a commit bundling two unrelated changes under one spec's trailer makes the second change untraceable by every tool that reads trailers or blame. The fix is a second trailer, not a longer commit body.
+  created_at: 2026-09-21T02:03:47.338508517Z
+  modified_at: 2026-09-21T02:03:47.338508517Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:

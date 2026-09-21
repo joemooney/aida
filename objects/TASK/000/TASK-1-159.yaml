@@ -1,5 +1,6 @@
 id: 01a0c17d-8f51-7151-95ff-295ea30594af
 spec_id: TASK-1-159
+agreed_id: TASK-187
 title: 'Round-tripping a description through a display surface corrupts it: the escape doubling came from the READ path, not the write'
 description: |
   CORRECTED 2026-09-20 18:10. This finding was filed with the wrong cause. The original text blamed shell quoting in the description-as-argument form of the edit verb, and recommended writing from a file instead. That recommendation was already being followed when the corruption happened, so it would have prevented nothing.

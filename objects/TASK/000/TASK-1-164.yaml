@@ -1,5 +1,6 @@
 id: 01a0c1b3-19aa-7b93-a75c-9fee6de00922
 spec_id: TASK-1-164
+agreed_id: TASK-185
 title: aida queue work --help asserts batch concurrency is pinned to 1, which STORY-1091 made false -- it advertises a landed feature as absent
 description: |-
   aida queue work --help tells an operator that batch concurrency is pinned to 1, which has been false since STORY-1091 shipped -- it advertises a landed feature as absent

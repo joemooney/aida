@@ -1,5 +1,6 @@
 id: 01a0c19b-9c2f-74c0-bdb0-9ee70bcbb0af
 spec_id: TASK-1-163
+agreed_id: TASK-188
 title: A merged fix keeps producing its own defect for hours because dev-binary staleness is invisible at the point of use (3 verdicts post-#2037)
 description: |-
   A fix can land on main and the seat it governs keeps producing the defect for hours, because a stale dev binary is invisible at the point of use

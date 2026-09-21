@@ -1,5 +1,6 @@
 id: 01a0c192-21f6-71c0-9893-f0ec7c6789cc
 spec_id: TASK-1-161
+agreed_id: TASK-184
 title: A standard YAML parser fails on 28 percent of store objects because Custom relationships serialise with a local tag
 description: |-
   A standard YAML parser fails on 1,187 of the store's 4,140 objects - 28 percent - because a Custom relationship serialises with a local tag that no ordinary loader knows.

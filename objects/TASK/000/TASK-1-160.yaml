@@ -1,5 +1,6 @@
 id: 01a0c17f-2815-7803-a654-7bca4744df43
 spec_id: TASK-1-160
+agreed_id: TASK-186
 title: Spec heft cannot be edited, so a spec that outgrows its filing-time sizing keeps a stale one that routing reads as truth
 description: |
   Spec size, or heft, cannot be changed by the edit verb, so a spec that grows well past its original sizing keeps a stale heft that routing and drains read as truth.
