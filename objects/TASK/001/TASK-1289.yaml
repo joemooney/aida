@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T02:14:35.331229899Z
+modified_at: 2026-09-21T02:19:52.514725772Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1120,6 +1120,12 @@ comments:
     WITHOUT a2, carrying 6512f1312a closes today's door and leaves the same instrument in place for the next field added. The pattern is now at three instances - this test, decide()'s wildcard swallowing Skipped, and PR #2040's fake gh answering every query identically. All three pass; all three assert an invariant by enumerating the cases that existed when they were written.
   created_at: 2026-09-21T02:14:35.331229899Z
   modified_at: 2026-09-21T02:14:35.331229899Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1c3-3b42-7731-9e8b-93f21f962f76
+  author: joe
+  content: '[aida:advisor] LINEAGE ITEM a2 UPGRADED 2026-09-20 19:22: MANDATORY, not preferred. The earlier note offered two forms for replacing the three-field conjunction - assert!(conflicting.is_empty()) as the cheap option, or a destructuring bind as the stronger one - and marked the second preferred. The reviewer established the mechanism and it removes the choice. The universal assertion was not rejected in favour of the enumeration; it was DROPPED IN A COPY-ADAPT, because the conflicting case was written by adapting the plain-express case and a copy-adapt carries forward the lines with case-specific content to edit and drops the line with nothing to adapt. An assertion dropped because it has no case-specific content cannot be protected by a convention or a review note - its forgettability is a property of its shape. Additionally the is_empty() in the plain case is VACUOUS: from_tags([EXPRESS_TIER_TAG]) sets only skip.express, so that assertion passes even if the entire force-off block is deleted. So the cheap option is not demonstrated to work anywhere in this file. a2 is therefore the destructuring bind over every field, so that adding a sixth field breaks COMPILATION. a1 alone buys one field and loses the next one the same way.'
+  created_at: 2026-09-21T02:19:52.514725772Z
+  modified_at: 2026-09-21T02:19:52.514725772Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
