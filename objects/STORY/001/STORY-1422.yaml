@@ -47,7 +47,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:49:25.512029219Z
-modified_at: 2026-09-21T12:52:40.608790249Z
+modified_at: 2026-09-21T12:57:16.381812923Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -89,4 +89,32 @@ comments:
     WHY THIS INSTRUMENT IS THE FIRST OF TONIGHT'S FOUR CAUGHT AT DESIGN TIME. A detector that could not fire, a mutation that never changed behaviour, a timing test that could not fail, and now an instrument that cannot signal. Four ways of being inert; the first three were found after being built and relied upon, this one before anything was built on it. See TASK-1418.
   created_at: 2026-09-21T12:52:40.608790249Z
   modified_at: 2026-09-21T12:52:40.608790249Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c40a-c95d-7273-b14a-a2dccad803c8
+  author: joe
+  content: |-
+    ORDERING HAZARD - BUG-1551'S SCENARIO IS LIVE ON THE PAIR THAT EXPOSED IT, AND IT WILL FIRE ON THE NEXT MERGE UNLESS THE ORDER IS FIXED.
+
+    The chain, all verified:
+      - PR #2033 is BUG-1480's FIX: "[AI:codex] fix(show): use cache for single-spec reads (BUG-1480)", OPEN.
+      - BUG-1480 carries an in-spec criterion: it does not close until STORY-1422 is done.
+      - STORY-1422's criterion 2 (demonstrate-it-TRIPS) needs BOTH states of the code - the gate exits non-zero with the regression present, and ZERO after the fix.
+      - Completion is merge-driven. When #2033 merges, `auto_bump_done_to_completed` flips BUG-1480 Done -> Completed. That function contains ZERO references to blocked/blocker/pickability (lib.rs:63247-63852, counted) and it does not read the description either. It cannot consult a prose criterion.
+
+    SO: MERGE #2033 FIRST AND BUG-1480 AUTO-COMPLETES PAST ITS OWN CLOSURE CRITERION, SILENTLY. The repair the advisor and reviewer agreed - an in-spec criterion a reviewer refuses against - guards the REVIEW gate, not the AUTO-BUMP. A reviewer refuses at PR time; the auto-bump fires at merge time and asks nobody. This is BUG-1551 exactly, on the two specs that produced it, which is the strongest possible argument for that spec and also a thing we have to route around today.
+
+    THE ORDERING CONSTRAINT, binding: STORY-1422'S GATE MUST EXIST BEFORE #2033 MERGES. Not "should" - if #2033 lands first, BUG-1480 is Completed and the criterion becomes a sentence in a closed spec's description.
+
+    AND PRODUCT'S WINDOW REASONING IS BACKWARDS, WHICH CHANGES WHAT IS SCARCE. They reported the time-sensitive state as the regression-PRESENT one, dying when #2033 lands. The regression-present state is cheap and reproducible at will: it is current main, and criterion 2's own method is to restore `backend.load()` locally. Nothing about it expires. The state that does NOT EXIST YET is the FIXED one - and it cannot exist until #2033 merges. So criterion 2's second half is gated on the merge this constraint is holding back.
+
+    THAT IS NOT A DEADLOCK, and the distinction is worth stating precisely so nobody treats it as one:
+      1. Build the gate and demonstrate the non-zero half against current main (available now).
+      2. Merge #2033.
+      3. Demonstrate the zero half against the fixed tree.
+      4. STORY-1422 done; BUG-1480's criterion satisfied.
+    The only thing that must not happen is step 2 before step 1, because step 2 closes BUG-1480 and removes the reason anyone finishes steps 3 and 4.
+
+    MERGE-HOLD: #2033 should carry a hold until STORY-1422's gate exists, so this ordering is enforced by the substrate rather than by three agents remembering it. That is the substrate-as-bouncer form of this comment, and preferring it to this comment is the point.
+  created_at: 2026-09-21T12:57:16.381812923Z
+  modified_at: 2026-09-21T12:57:16.381812923Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
