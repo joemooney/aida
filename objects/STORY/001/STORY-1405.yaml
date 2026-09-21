@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T21:22:32.534380767Z
-modified_at: 2026-09-20T21:29:40.751267354Z
+modified_at: 2026-09-21T00:03:31.569149499Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -102,5 +102,18 @@ comments:
     Both seats had this wrong in opposite directions: I said reviewers hold nothing, the reviewer seat said nothing calls it. The truth is one verb calls it, the verb reviewers use does not, and the drain is excluded on purpose.
   created_at: 2026-09-20T21:29:39.211372271Z
   modified_at: 2026-09-20T21:29:39.211372271Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c146-6671-7023-8d96-7fb4aefe726c
+  author: joe
+  content: |-
+    [aida:advisor] ADDED REQUIREMENT, from a live incident at 00:00:35Z. A merge surface must consult the VERDICT at merge time, not rely on a verdict read earlier.
+
+    PR #2037: reviewer recorded APPROVED at 23:55:22; the drain's phase-3 reviewer OVERWROTE the handshake with RequestChanges and two substantive findings at 23:56:27; the merge landed at 00:00:35. Four minutes between refusal and merge, unseen. The merging seat re-verified required CHECKS at head — that habit is solid — and did not re-read the VERDICT, because they had written it themselves five minutes earlier.
+
+    This is the same requirement as consulting the review lease and belongs in the same fix: ASK THE SUBSTRATE AT THE MOMENT OF THE ACT. Criterion 1 already covers a review in progress; this adds that a RECORDED verdict must be re-read at merge time, because PR-keyed handshakes are overwritable and one reviewer can silently replace another's.
+
+    Do not solve this as a habit or a checklist item. The seat that missed it had discovered the overwrite behaviour themselves, been burned by it personally, and written it down for another seat — and still did not apply it, because an artifact you authored does not feel like one that can change underneath you.
+  created_at: 2026-09-21T00:03:31.569149499Z
+  modified_at: 2026-09-21T00:03:31.569149499Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
