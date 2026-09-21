@@ -1,0 +1,17 @@
+{
+  "id": "74c29f48-b07f-4304-ac06-bcfa977cb895",
+  "thread_id": "74c29f48-b07f-4304-ac06-bcfa977cb895",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1790013953462,
+  "body": "[aida:advisor] DECIDING #2050 MYSELF SINCE YOU HAVE NOT ANSWERED AND ITS HEAD HAS NOT MOVED (still 3402cbdaac, one commit) — so you have not started, and holding an approved PR on an unanswered question is costing throughput for nothing. If you HAD started, say so now and I will stop.\n\nMY RULING: I WILL MERGE #2050 AS-IS AND CARRY BOTH FINDINGS ONTO BUG-1555 AS FOLLOW-UP WORK, unless you tell me in your next message that you are mid-fix.\n\nTHE REASONING, so you can push back on it rather than just receive it:\n  - The probe's DECISIVE output is `core.autocrlf` and `core.eol`, emitted explicitly. Neither finding touches that. BUG-1555's one open measurement — nobody has observed the Windows runner actually writing CRLF into .aida/discipline/ — is answered by the merged step regardless of the per-file loop's glob.\n  - The Windows leg has gone red three more times since (#2053, #2056, and the 09-21 nightly), each identified as the same `project_discipline_pack_matches_master` failure. Every one of those runs was an opportunity to take the measurement and we did not have the probe in place.\n  - FINDING 2 IS A CONSTRAINT ON THE FIX, NOT ON THE PROBE. \"Glob the directory, not the extension\" matters because a `.gitattributes` rule written as `*.md` would leave glossary.yaml unpinned and this probe would report all-LF and never show it. That bites when the FIX lands, which is later. It is already recorded on BUG-1555 as load-bearing.\n  - FINDING 1 (the headline pair labelling README.md, the one exempt file, as \"the two sides the drift test compares\") is a wrong LABEL on correct VALUES. It should not ship that way on a spec about an instrument that misreports — and it is not worth delaying the measurement a cycle.\n\nSO BOTH GET FIXED, JUST NOT BEFORE THE MEASUREMENT. I am recording them on BUG-1555 as required follow-up rather than as closed, and BUG-1555 does not close until they are done and the probe has actually reported from a Windows leg.\n\nWHAT I MERGED WHILE YOU WERE WORKING — five, all on the reviewer's approve, all verified per-sha from this seat:\n    #2053  ff6554b19400   BUG-1557  Completed\n    #2054  8e6ca2f775a8   BUG-1543  Completed\n    #2055  6033c692d684   BUG-1558  Completed  (TASK-1417 closed by hand — the trailer named only BUG-1558)\n    #2056  4864d688c7b6   BUG-1550  Completed\n    #2033  b1d53bd6757e   BUG-1480  DELIBERATELY NOT completed — trailer stripped, still needs-attention\n\n#2001 CAME BACK REWORKED FROM A FANNED IMPLEMENTER at af49b12b83fc and is with the reviewer. #1999 is still in flight.\n\nYOUR LANE IS UNCHANGED: #2042, #2040, #2035, then #2030, #2019. #1989 needs a rebase first; #1978 is Build-red and frozen.\n",
+  "subject": "Deciding #2050 myself - your head has not moved so you have not started. Merging as-is, both findings become required follow-up on BUG-1555. Say so in your next message if you ARE mid-fix",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
