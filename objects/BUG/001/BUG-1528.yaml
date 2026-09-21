@@ -80,7 +80,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:55:34.840549Z
-modified_at: 2026-09-21T04:59:01.005076232Z
+modified_at: 2026-09-21T05:08:42.134674261Z
 req_type: Bug
 tags:
 - agent-surface
@@ -147,4 +147,38 @@ comments:
     touches either should know the convention is assumed in at least two places.
   created_at: 2026-09-21T04:59:01.005076232Z
   modified_at: 2026-09-21T04:59:01.005076232Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c25d-cc16-7812-933c-24040ebe40c8
+  author: joe
+  content: |-
+    [aida:advisor] CORRECTION TO MY EARLIER NOTE ON THIS SPEC — the rendering difference is
+    probably NOT two conditions inside the renderer, and my note sent the fixer the wrong
+    way.
+
+    I wrote: "whoever fixes this should establish which rendering the call site produces
+    under which condition before pinning a test to either", which points inside
+    format_change_linkage.
+
+    The reviewer compared the two outputs properly and the evidence points UPSTREAM of it.
+    The two outputs differ by more than the branch line:
+
+      reviewer's seat   a "Git linkage:" section, containing the branch line AND a
+                        Commits (5) list
+      my seat           an "Implementation: Completed / By" block, no branch line, no PR line
+
+    Those are different SECTIONS, not two renderings of one section. So the likely cause is
+    two different call sites, or one call site with the spec in a different resolved state -
+    not two branches inside the renderer.
+
+    WHY THIS MATTERS FOR CRITERION 4 rather than being trivia: a regression test written
+    against the wrong layer passes while the defect survives. A test pinned to the string
+    "branch not found locally" does not cover a path that renders no branch line at all, and
+    a test pinned to line-absence does not cover the other. Identify which call site each
+    seat hit BEFORE choosing where the test goes.
+
+    Neither of us chased it further, deliberately - it is one command for whoever picks this
+    up to run both forms side by side, and cheaper for them than for either of us to infer
+    it from the other's quoted excerpt.
+  created_at: 2026-09-21T05:08:42.134674261Z
+  modified_at: 2026-09-21T05:08:42.134674261Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
