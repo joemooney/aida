@@ -41,8 +41,30 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:42:58.222497613Z
-modified_at: 2026-09-21T02:46:21.482367680Z
+modified_at: 2026-09-21T02:46:26.697209537Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a0c1db-8e89-74f0-b191-1b88c1ef2d41
+  author: joe
+  content: |-
+    [aida:advisor] REPRODUCED AND PROMOTED 2026-09-20 19:47, with one measurement that strengthens it.
+
+        aida statusbar --once   64.04s   (reported 68s - reproduces)
+        aida status              0.70s
+        statusbar output: q:0 · live:1 · STALE:7 · you:78 (11 findings · 67 unshipped)
+
+    So a 91x latency ratio against the surface it summarises, both documented cache/local-fast with no network. The 15-second default refresh interval is unsatisfiable by a sample that takes 64 seconds to compute: each refresh is over four times its own interval, so either the cadence silently slips or samples overlap, and nothing the operator reads says which.
+
+    unshipped 67 REPRODUCES against awaiting's 38 - same word, same store, minutes apart, a factor of 1.8.
+
+    AND A FOURTH VALUE FOR q, WHICH I DID NOT EXPECT. The reported capture read q:27. Mine, minutes later, reads q:0. Against aida queue list --for reviewer at 22 and the full queue at 23. So that label has taken the values 0, 22, 23 and 27 within one hour, and two of those came from the same command run by two seats.
+
+    That is almost certainly the BUG-1513 mechanism arriving at a third surface: the queue is keyed on the shell's user identity, statusbar resolves whatever identity its invoking shell has, and neither the number nor the label says whose queue it is. It is the same defect as the queue filter counting the caller's own rows, seen through a surface that never states its scope. I have NOT confirmed the statusbar code path and am recording this as a strong hypothesis rather than a finding - what is measured is that the label takes four values.
+
+    WHICH MAKES THE CORE OF THIS SPEC SCOPE-LABELLING RATHER THAN ARITHMETIC. No number here has been shown wrong. Each surface may be correctly answering a different question. The defect is that they publish bare integers under shared labels with no scope stated, so a reader cannot reconcile them, cannot tell which answers their question, and cannot detect when one is stale. Fixing the latency without labelling the scope leaves a fast surface that still cannot be reconciled with its neighbours.
+  created_at: 2026-09-21T02:46:26.697209537Z
+  modified_at: 2026-09-21T02:46:26.697209537Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
