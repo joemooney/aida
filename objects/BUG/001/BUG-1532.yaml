@@ -229,12 +229,12 @@ description: |
       CONSEQUENCE, STATED SO IT IS NOT A SURPRISE: five PRs are unreleasable through the
       normal path until each is re-reviewed at its current head. That is acceptable and it
       is the point; it is also a concrete cost of BUG-1466 that should be cited there.
-status: InProgress
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:18:31.246345754Z
-modified_at: 2026-09-21T13:47:52.203810243Z
+modified_at: 2026-09-21T16:58:37.946097947Z
 req_type: Bug
 tags:
 - parent:EPIC-62 merge-hold pr-ship safety-gate severity:major
