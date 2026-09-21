@@ -1,0 +1,61 @@
+id: 01a0c4d5-5cc9-7171-bd5a-d9720d8eff29
+spec_id: SPIKE-86
+agreed_id: SPIKE-86
+title: 'Positioning deep-dive: five mutually-inconsistent theses about what AIDA IS are live at once — settle it from where the engineering actually goes, not from the market'
+description: |-
+  TRIGGER (operator, 2026-09-21, after a long session reading two days of filings cold): "this conversation is beginning to articulate what aida is better than the existing documentation ... the gui and tui are all peripheral. and the requirements management is maybe a layer in the stack?"
+
+  THE ACTUAL PROBLEM IS NOT THAT POSITIONING IS WEAK. It is that FIVE answers to "what is AIDA" are simultaneously live, and at least one is contradicted by a Completed decision:
+
+  1. VIS-1 (APPROVED, live): "AIDA is your project's missing index - of intent, not just code."
+  2. STORY-551 + CR-6 (both COMPLETED): retire the "missing index" headline because it collides with free auto-code-graph tools; reposition onto intent traceability + lifecycle truth. This CONTRADICTS the still-approved VIS-1.
+  3. ADR-4 + EPIC-39 (both DRAFT, parked behind stabilisation): "human-governance layer for agent-driven development; concede the substrate race to Beads/Gas Town; interop, don't compete."
+  4. CLAUDE.md strategic positioning (2026-05-14, Trojan-horse): "the visible product is intentionally simple - a TUI wrapping Claude Code sessions (EPIC-26) ... the actual value surfaces through use, not the surface."
+  5. This session's read from the bug corpus: a durable-execution workflow orchestrator with a merge queue, whose workers are non-deterministic LLM agents.
+
+  A newcomer reading the repo cannot determine which is true, because all five are present in approved or documented form. FIRST DELIVERABLE is therefore reconciliation, not a new thesis: for each of the five, say whether it is superseded, subsumed, or still live, and make the substrate agree with the answer (VIS-1's status is the immediate anomaly).
+
+  THE EVIDENCE THAT PROMPTED THIS. Categorising the 49 most recently filed specs: 20 review-verdict/merge-gating, 16 drain/session/lease state, 3 event-feed/completion, 3 diagnostics surfaces, 4 cross-platform CI, 3 performance. 36 of 49 in the control plane (see TERM-5). Separately, only 6 of the last 120 specs mention acceptance criteria, ambiguity or clarification at all - so the complexity is NOT arriving through the requirements door. Nine recent auto-drafted failure stubs are phase 3 (reviewer) or phase 4 (merge).
+
+  THE STACK HYPOTHESIS TO TEST (the operator's "requirements management is maybe a layer"):
+    surfaces        CLI, MCP, TUI, web            - presentation; peripheral
+    control plane   queue/drain/orchestrator/     - where 36 of 49 recent specs live
+                    leases/verdicts/gates/events
+    execution       agent adapters, worktrees,    - the unreliable workers
+                    sessions
+    store           spec graph, ids, typed rels,  - "requirements management"
+                    cache, traces
+  If that layering survives scrutiny, "requirements management" is one layer of four rather than the product, and the TUI is a view onto the control plane rather than the product's face.
+
+  WHAT THE GENERIC READ IMPLIES FOR NEIGHBOURS. docs/positioning/ currently holds 15 vs-* docs oriented to spec and agent tools (spec-kit, kiro, aider, continue, karpathy-md, saas-pm, ultraplan, ultrareview, agent-teams, subagents, workflows, axi) plus two orchestration-adjacent ones (langgraph, a2a). There is NO comparison against the durable-execution or merge-gating families - Temporal, Airflow, Argo, Nomad, Zuul/Bors/Mergify/Aviator - which is where the generic read places AIDA's engineering. Determine whether that absence is a gap or correct.
+
+  COUNTERWEIGHTS THAT MUST BE ADDRESSED, NOT ASSUMED AWAY:
+  (a) BUG DENSITY IS NOT IDENTITY. The control plane is the newest, most concurrent, least-settled code; a mature store layer generates fewer bugs because it is mature, not because it is peripheral. Show the layering holds on an argument other than where defects cluster - for example what a user would lose first if each layer were removed.
+  (b) THE TROJAN-HORSE DECISION IS A DELIBERATE STRATEGY, NOT DRIFT. CLAUDE.md's 2026-05-14 framing chose surface simplicity on purpose. "The TUI is peripheral" overturns a recorded decision and must do so explicitly, with a successor decision, not silently.
+  (c) ADR-4 IS PARKED, NOT DEAD. Reconcile with it rather than routing around it - its "concede the substrate race, interop don't compete" thesis may be compatible with, or refuted by, the control-plane read. Decide which.
+  (d) A GENERIC READ CAN BE TRUE AND UNSELLABLE. "Workflow orchestrator for unreliable workers" describes the engineering accurately and may still be worse marketing than an intent story. Separate the ARCHITECTURAL description (what to tell a contributor, what to measure against) from the MARKET pitch (what to tell a newcomer). They need not be the same sentence, and conflating them is how this got tangled.
+
+  DELIVERABLES
+  1. A reconciliation table for the five theses - superseded / subsumed / live - plus the substrate edits that make it true (starting with VIS-1's status).
+  2. A validated or amended layer model, with the argument from (a).
+  3. A recommendation separating the architectural description from the market pitch, each with its intended audience.
+  4. A verdict on whether the vs-* neighbour set needs durable-execution / merge-queue entries.
+  5. A successor decision for the Trojan-horse framing - reaffirmed or replaced - filed as a decision, not prose.
+
+  METHOD AND CONSTRAINT: dated competitive-analysis snapshots and dated plans stay FROZEN. Append a new dated read; do not rewrite history. Source the evidence from the spec corpus and the code, not from the existing positioning docs, which are the thing under review.
+
+  NON-GOAL: rewriting README/OVERVIEW/CLAUDE.md in this spike. Reach the decision first; the doc edits are separate filings against it.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T16:38:32.393127411Z
+modified_at: 2026-09-21T16:38:32.393127411Z
+req_type: Spike
+tags:
+- architecture
+- documentation
+- ecosystem-watch
+- positioning
+- vision
+human_only: true
