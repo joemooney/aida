@@ -41,7 +41,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:36:15.070702470Z
-modified_at: 2026-09-21T20:36:35.000288427Z
+modified_at: 2026-09-21T20:48:17.727975677Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -56,3 +56,11 @@ relationships:
   target_id: 01a0c547-d064-7531-9c74-d8f911c74b3a
   created_at: 2026-09-21T20:36:35.000282922Z
   created_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'THE FIX IS RIGHT AND NARROWLY SCOPED, AND TWO THINGS NEED CORRECTING BEFORE IT LANDS. What it does is correct: a pipelined child that exits with an unrecognised code AND leaves no result sidecar previously collapsed to OrchestrationResult::failed(Phase::Ci), so the batch summary named an innocent spec and told the reader to fix it - which is why a dead drain went unnoticed for 17.5 hours. It is now FailureKind::Internal with a reason that names the child, actively denies the attribution ("NOT a phase failure"), and enumerates the three indistinguishable causes. The assertions on the message text are the right ones: they pin the DENIAL, not just the presence of words. THE CLASSIFICATION IS GATED ON "NO RESULT SIDECAR", which I checked, and that is narrow - a genuine CI failure writes a sidecar and is unaffected. So the code risk is smaller than the missing test implies; see the findings.'
+  recovery_hint: address the review findings, move BUG-1570 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-21T20:48:17.727975677Z
