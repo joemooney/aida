@@ -1,0 +1,52 @@
+id: 01a0c1e2-5cb8-7d01-87ff-e455a56a682a
+spec_id: TASK-1-169
+title: 'The defective form is more fluent: across 7 errors tonight the wrong version was the better-reading sentence, so care does not correct for it'
+description: |-
+  The defective form is more fluent: across seven errors tonight by two seats, the wrong version was consistently the better-reading sentence — which is why care does not correct for it
+
+  Filed at the advisor's request, who identified the observation and asked that it be written up with the instances before deciding whether it becomes a principle. Promotion is the advisor's call; this records the argument and the evidence.
+
+  THE CLAIM. When a statement can be made in a strong form and a precise form, the strong form is usually the more fluent one — shorter, more quotable, more decisive. Under time pressure a writer selects for fluency without experiencing it as a choice. So the errors that survive are not a random sample of possible errors: they are systematically the ones that read better than the truth.
+
+  This is a selection pressure operating on writing, not a lapse of attention. That distinction is the whole point, because it predicts that "be more careful" fails — the error is not what the writer failed to notice, it is what the writer preferred.
+
+  THE INSTANCES, all from 2026-09-20, all verified:
+
+  ADVISOR SEAT, overstatements:
+    "reachable here"                     vs  "reachable in a GitLab-primary or pure-git project"
+        Written into BUG-1454 criterion 8 as binding text. The local-instance version makes a
+        finding land; it was false for this repo (origin is GitHub, no [forge] override).
+    "the cost of refusing does not exist" vs  "the cost is bounded to four path patterns"
+        Written into STORY-1414. Falsifiable by one docs-only PR, which passes Build without
+        compiling.
+    "a2iii can only be made not to exist" vs  "a2iii is uncatchable by the compiler in its
+                                               current shape"
+        The absolute form closed off the solution that existed.
+
+  REVIEWER SEAT, exit-status inversions and one overstatement:
+    `exit=$?` after a pipe to head/cat   vs  capturing the command's own status
+        Three separate occasions, each time producing `exit=0` on a failed command. The broken
+        form is one character shorter and reads as a complete check.
+    "unrecoverable"                       vs  "I checked three places I thought of"
+        The strongest instance in the set, and the one to lead with. The fluent form was ALSO the
+        more dramatic one — it made the finding sound more important — so the pressure was not
+        only aesthetic. It was false: the verdict was recovered from a session log twenty minutes
+        later.
+
+  WHY THE LAST ONE IS THE LOAD-BEARING INSTANCE. In the others, fluency and overstatement merely coincide. There, the fluent form actively increased the apparent value of the finding, so the writer had a second reason to prefer it and no reason to interrogate it. That is the shape most likely to recur and the hardest to self-detect, because the sentence feels like a good finding rather than like a strong claim.
+
+  WHAT THIS DOES NOT CLAIM. It does not claim every fluent statement is wrong, and it is not an argument for writing badly. Precision and fluency coincide often; the claim is only that when they diverge, the selection pressure runs one way, and that this is invisible from inside the sentence.
+
+  THE ACTIONABLE FORM, if any. The detectable signature is an ABSOLUTE in a statement of fact: "does not exist", "every", "never", "unrecoverable", "only", "all". Each of the seven instances above either contains one or is a status check whose failure mode is a false absolute (`exit=0` asserts success). That is greppable in binding text — acceptance criteria, ADRs, findings — in a way that "check your claims" is not. A weaker version of the same instrument as BUG-1507's field-count detector: it does not decide, it narrows to the sentences worth re-reading.
+
+  COUNTER-EVIDENCE WORTH RECORDING. Two absolutes tonight were correct and load-bearing: "the trailers stay" and "neither PR merges", both in the advisor's TASK-1289 ruling. So the signature has false positives at a meaningful rate, and it flags sentences for re-reading rather than sentences that are wrong. Anyone acting on this should expect roughly half the hits to be fine.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T02:53:52.696962750Z
+modified_at: 2026-09-21T02:53:52.696962750Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
