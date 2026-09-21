@@ -470,8 +470,11 @@ fn re_recording_the_same_round_does_not_manufacture_a_survivor() {
     let body = std::fs::read_to_string(&path).unwrap();
     let v: serde_json::Value = serde_json::from_str(&body).unwrap();
     let rounds = v["rounds"].as_array().map(|a| a.len()).unwrap_or(0);
-    assert!(
-        rounds <= 1,
+    // Exact, not `<= 1`: the permissive form admits 1, which is precisely the
+    // value the defect produces, so the assertion whose message names the
+    // invariant would not have enforced it.
+    assert_eq!(
+        rounds, 0,
         "re-recording one round must not append a second: got {rounds}"
     );
     assert!(
@@ -685,5 +688,65 @@ fn an_unidentifiable_round_is_not_archived_and_produces_no_false_survivor() {
     assert!(
         findings_surviving_round(&body).is_empty(),
         "and must not manufacture a survivor"
+    );
+}
+
+// THE MOTIVATING INCIDENT (PR #2040): the drain recorded a verdict at one head
+// and a second reviewer recorded its own at the SAME head minutes later,
+// destroying four findings. Same-head is the shape of a collision by
+// construction, so a retention rule keyed on "is the head different?" cannot
+// see it. `recorded_by` can.
+// trace:STORY-1391 | ai:claude
+#[test]
+fn a_second_reviewer_at_the_same_head_does_not_destroy_the_first_verdict() {
+    let tmp = tempfile::tempdir().unwrap();
+    record_verdict(
+        tmp.path(),
+        "PR-9",
+        Some("RequestChanges"),
+        Some("a3049c50bf"),
+        Some("b"),
+        Some("drain verdict"),
+        &[
+            "unique to the drain".to_string(),
+            "shared point".to_string(),
+        ],
+        "drain",
+    )
+    .unwrap();
+    record_verdict(
+        tmp.path(),
+        "PR-9",
+        Some("RequestChanges"),
+        Some("a3049c50bf"),
+        Some("b"),
+        Some("human verdict"),
+        &["shared point".to_string()],
+        "claude-reviewer-1",
+    )
+    .unwrap();
+
+    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-9")).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let rounds = v["rounds"].as_array().cloned().unwrap_or_default();
+    assert_eq!(rounds.len(), 1, "the overwritten verdict must be retained");
+    assert_eq!(rounds[0]["recorded_by"], "drain");
+    let kept: Vec<&str> = rounds[0]["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f.as_str().unwrap())
+        .collect();
+    assert!(
+        kept.contains(&"unique to the drain"),
+        "the finding unique to the overwritten verdict is the one that was lost: {kept:?}"
+    );
+
+    // A collision is NOT a round. `shared point` appears in both verdicts, but
+    // no rework happened between them, so reporting it as a survivor would send
+    // someone to rewrite a brief that was fine.
+    assert!(
+        findings_surviving_round(&body).is_empty(),
+        "two reviewers at one head must not manufacture survivors"
     );
 }

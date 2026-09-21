@@ -180,6 +180,55 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
 /// [`findings_surviving_round`] so the two can never disagree about what
 /// "survived" means.
 // trace:STORY-1391 | ai:claude
+type JsonObj = serde_json::Map<String, serde_json::Value>;
+
+/// The commit a round was taken against. `reviewed_sha` is the current key;
+/// `head` is the older one and is still the only provenance on 42 of the
+/// verdict files on disk. A round carrying neither is unidentifiable.
+fn round_sha(m: &JsonObj) -> Option<String> {
+    m.get("reviewed_sha")
+        .or_else(|| m.get("head"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+fn round_findings(m: &JsonObj) -> Vec<String> {
+    m.get("findings")
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+type RecordingKey = (Option<String>, String, String, Vec<String>);
+
+/// Everything about a round that carries review signal. Two rounds with equal
+/// keys are the same recording, so retaining the second adds nothing; any
+/// difference — a different reviewer above all — is signal that overwriting
+/// would destroy.
+fn recording_key(m: &JsonObj) -> RecordingKey {
+    let field = |k: &str| {
+        m.get(k)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    (
+        round_sha(m),
+        field("recorded_by"),
+        field("verdict"),
+        round_findings(m),
+    )
+}
+
 fn surviving_against_previous_round(
     obj: &serde_json::Map<String, serde_json::Value>,
     current: &[String],
@@ -187,19 +236,33 @@ fn surviving_against_previous_round(
     if current.is_empty() {
         return Vec::new();
     }
-    let previous: Vec<String> = obj
+    let rounds: Vec<&JsonObj> = obj
         .get("rounds")
         .and_then(|v| v.as_array())
-        .and_then(|a| a.last())
-        .and_then(|r| r.get("findings"))
-        .and_then(|v| v.as_array())
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str())
-                .map(|s| s.trim().to_string())
-                .collect()
-        })
+        .map(|a| a.iter().filter_map(|r| r.as_object()).collect())
         .unwrap_or_default();
+    let current_sha = round_sha(obj);
+    // A finding SURVIVED only if the implementer pushed new code and it is
+    // still there. Two reviewers recording at one head is a collision, not a
+    // round, so a predecessor must sit at a DIFFERENT commit — otherwise the
+    // second reviewer's overlapping findings would all read as survivors and
+    // send someone to rewrite a brief that was fine. An unidentifiable round
+    // cannot be established as a different commit, so it is not a predecessor.
+    let Some(previous_sha) = rounds
+        .iter()
+        .rev()
+        .filter_map(|r| round_sha(r))
+        .find(|sha| Some(sha) != current_sha.as_ref())
+    else {
+        return Vec::new();
+    };
+    // Every round at that commit, unioned: a finding either reviewer raised
+    // there and that is still open now did survive the round.
+    let previous: Vec<String> = rounds
+        .iter()
+        .filter(|r| round_sha(r).as_deref() == Some(previous_sha.as_str()))
+        .flat_map(|r| round_findings(r))
+        .collect();
     current
         .iter()
         .filter(|f| previous.iter().any(|p| p == *f))
@@ -349,7 +412,7 @@ pub fn read_recorded_verdict_any(project_root: &Path, ids: &[&str]) -> Option<Re
 // trace:STORY-1391 | ai:claude
 fn archive_current_round(
     obj: &mut serde_json::Map<String, serde_json::Value>,
-    incoming_sha: Option<&str>,
+    incoming: &RecordingKey,
 ) {
     let Some(verdict) = obj.get("verdict").and_then(|v| v.as_str()) else {
         return;
@@ -357,28 +420,8 @@ fn archive_current_round(
     if verdict.trim().is_empty() {
         return;
     }
-    let sha_of = |m: &serde_json::Map<String, serde_json::Value>| {
-        m.get("reviewed_sha")
-            .or_else(|| m.get("head"))
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string)
-    };
-    let Some(existing_sha) = sha_of(obj) else {
+    if round_sha(obj).is_none() {
         // Unidentifiable round — see the note above. Refusing is the safe side.
-        return;
-    };
-    let existing_sha = Some(existing_sha);
-    let incoming = incoming_sha
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string);
-    // Same head => the same round being re-recorded (a reviewer correcting its
-    // own summary before anything was pushed). Archiving it would make the
-    // round its own predecessor and `findings_surviving_round` would report
-    // every finding as surviving on the very first re-record.
-    if existing_sha.is_some() && existing_sha == incoming {
         return;
     }
     let mut snapshot = obj.clone();
@@ -387,14 +430,20 @@ fn archive_current_round(
         .get("rounds")
         .and_then(|v| v.as_array().cloned())
         .unwrap_or_default();
-    if let Some(sha) = existing_sha {
-        if rounds
-            .iter()
-            .filter_map(|r| r.as_object())
-            .any(|r| sha_of(r).as_deref() == Some(sha.as_str()))
-        {
-            return;
-        }
+    // Retain iff something would otherwise be LOST. A byte-identical
+    // re-recording carries nothing new; anything else does — including a
+    // second reviewer at the SAME commit, which is the collision this spec
+    // exists for and the one case an is-it-the-same-head test cannot see.
+    let key = recording_key(&snapshot);
+    if &key == incoming {
+        return;
+    }
+    if rounds
+        .iter()
+        .filter_map(|r| r.as_object())
+        .any(|r| recording_key(r) == key)
+    {
+        return;
     }
     rounds.push(serde_json::Value::Object(snapshot));
     obj.insert("rounds".to_string(), serde_json::Value::Array(rounds));
@@ -455,7 +504,20 @@ pub fn record_verdict(
     // the comparison is possible at all. Append-only; the current round stays
     // at the top level so every existing reader is untouched.
     // trace:STORY-1391 | ai:claude
-    archive_current_round(&mut obj, reviewed_sha);
+    let incoming_key: RecordingKey = (
+        reviewed_sha
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
+        recorded_by.trim().to_string(),
+        verdict.unwrap_or_default().trim().to_string(),
+        findings
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect(),
+    );
+    archive_current_round(&mut obj, &incoming_key);
     let mut set = |k: &str, v: Option<&str>| {
         if let Some(v) = v.map(str::trim).filter(|s| !s.is_empty()) {
             obj.insert(k.to_string(), serde_json::Value::String(v.to_string()));
