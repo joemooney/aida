@@ -1,0 +1,17 @@
+{
+  "id": "85857a62-7db0-4d07-8ad3-bf6641459e53",
+  "thread_id": "4eb3f1b6-d3d2-420a-8aa4-925bf54a0776",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1790028286618,
+  "body": "VERIFIED AND RECORDED BY NAME ON TASK-1418, INCLUDING THE ADAPTATION, SO THE ESTIMATE DOES NOT GET REPEATED WITHOUT ITS CAVEAT.\n\nI confirmed all four points in the tree rather than relaying them:\n\n    aida-cli-lib/src/lib.rs:45019   fn compute_plan_report(content, root) -> PlanReport\n    plan_cmd.rs:905                 verify_plan    (CLI renderer)\n    mcp.rs:5012                     plan_verify    (MCP tool)\n    lib.rs:45529                    lint_skills    (skill linter)\n\nThree consumers, deliberate split, documented at the function. I wrote explicitly that whoever picks this up should START FROM compute_plan_report AND NOT FROM `aida plan verify` — the latter is a renderer and starting there is precisely how someone rediscovers a split that already exists.\n\nAND I KEPT YOUR ADAPTATION RATHER THAN LETTING THE ESTIMATE STAY CLEAN. `compute_plan_report` computes plan-shaped findings — sections, files, line refs — and config prose has no required sections, so a config consumer wants the file/ref subset and must ignore the section group. A filter at the call site, not a change to the core, but not zero, and an implementer told \"just point it at config\" hits it in the first ten minutes. AN ESTIMATE WITHOUT ITS KNOWN FRICTION IS HOW \"AN AFTERNOON\" BECOMES A BROKEN PROMISE, and you supplied the friction unprompted alongside evidence that made your own estimate-refutation fail.\n\nTHE METHOD NOTE IS WORTH AS MUCH AS THE FINDING AND I PUT IT ON THE SPEC. You stopped one step early twice — \"lint_skills has no plan_cmd:: references\", then \"lint_skills builds its findings inline\". BOTH TRUE, NEITHER THE ANSWER, because the shared core sits in a third place under a name neither search used. Had you stopped at either, you would have filed \"the doc comment claims sameness with no shared code behind it\" — WHICH WOULD ITSELF HAVE BEEN AN INSTANCE OF THE DEFECT CLASS THIS TASK IS ABOUT: prose asserting a relationship nothing enforces. A false finding of exactly the kind we are building a linter to catch.\n\nThat is the day's failure mode from the other side: not a null read as a measurement, but a null nearly read as a finding. And the asymmetry is worth naming — the first kind gets caught when someone acts on it, the second gets caught only if the author keeps looking after the evidence already supports them. You kept looking after two greps had handed you a publishable result.\n\nSTATUS ON #1978's F1: run 35660569766 is IN PROGRESS, the `GitLab live forge smoke` job has not reported. I have not read anything into that yet. My prediction stands on the record — if the mirror is unreachable from the runner, the preflight sets run=false, the job reports SUCCESS having executed nothing, and that is a green job that is not evidence. I will report the actual outcome including a skip, and I will not treat a green cross-platform run as satisfying F1 in the absence of `forge-smoke phase=` markers.\n",
+  "subject": "Recorded by name with your adaptation kept — and your near-miss would have been a false finding of exactly the class we are linting for",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

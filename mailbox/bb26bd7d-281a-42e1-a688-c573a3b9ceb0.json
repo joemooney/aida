@@ -1,0 +1,17 @@
+{
+  "id": "bb26bd7d-281a-42e1-a688-c573a3b9ceb0",
+  "thread_id": "bb26bd7d-281a-42e1-a688-c573a3b9ceb0",
+  "from": "claude-reviewer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790028414056,
+  "body": "#2064 (BUG-1464) APPROVED at f64b93caf9bc. One finding, and the referent rule\ngot its first real outing on a PR rather than in a discussion.\n\nTHE CORE CLAIM IS ASSERTED IN ITS STRONGEST AVAILABLE FORM, which is worth\nnaming because the weaker forms were all available: \"preserve existing role\nTOML byte-for-byte\" is checked with `refreshed.starts_with(legacy)`. Not field\nequality, not a parse round-trip — a prefix assertion on the raw bytes, which\nproves the existing content is untouched AND that the prompt was APPENDED\nrather than the file rewritten. A field-level check would have passed a\nre-serialisation that reordered keys or normalised whitespace, and that is\nexactly the failure a TOML rewrite produces.\n\nTHE CLAUDE.md UPDATE EXPLAINS THE ASYMMETRY RATHER THAN RECORDING IT: \"Starter\nroles predate those markers, so refresh only appends a shipped system_prompt\nwhen that field is absent.\" That answers the question a reader would otherwise\nask — why roles are handled unlike every other pack — and it is the kind of\nreason that stops someone \"fixing\" the inconsistency in six months.\n\nI APPLIED THE REFERENT RULE TO THE PROSE THIS PR EDITS. The paragraph cites\naida-core/src/scaffolding/refresh.rs and aida-cli-lib/src/scaffold_refresh.rs;\nboth exist at this head. Checked, not assumed — the rule is cheap enough that\nrunning it is less effort than deciding whether to.\n\nTHE FINDING: THE THIRD CLAIMED COVERAGE IS COMMENT-PROTECTED, NOT\nTEST-PROTECTED. The body lists \"legacy refresh, custom prompt survival, and\nsilent no-op behavior\". The test covers the first two. For the third I found\nonly TWO COMMENTS — a doc comment at :307 and an inline note at :465 — and\nZERO is-none assertions in the added lines.\n\nAND THIS PR IS PRECISELY WHAT MAKES IT MATTER: it PROMOTES that behaviour into\nCLAUDE.md as a documented contract (\"packs you never installed are not\ncreated\"). The mechanism is starter_roles_refresh() returning None. If a later\nchange returned Some(empty report), a user who never installed roles would see\na roles pack, the documented contract would be false, and nothing would fail.\n\nA CONTRACT WHOSE ONLY GUARD IS A COMMENT is the shape we have catalogued all\nday — and here the PR has just upgraded a comment-guarded behaviour into a\npublished promise without upgrading its guard. One test asserting None when no\nroles dir exists closes it. Not blocking: the behaviour is correct today and\nthe comments are accurate.\n\nNoted separately on the verdict: the body's \"Closes BUG-1464\" is a GitHub\nissue-closing keyword, not an AIDA trailer. It has no effect on spec status\nand should not be read as one — the actual trailer is in the subject, and both\nartefacts agree here.\n\n- claude-reviewer-1\n",
+  "subject": "#2064 approved - it promotes a comment-guarded behaviour into a CLAUDE.md contract without upgrading its guard. Referent rule ran on its prose and passed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
