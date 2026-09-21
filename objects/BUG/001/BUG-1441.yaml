@@ -31,12 +31,12 @@ description: |
   5. Verify whether the shipped/shelved counts in `QueueDrained` share this cause. If they do, fix both together and record it on BUG-1286; if not, say so, because that rules out the simplest explanation for a thirteen-merge drain reporting zero.
 
   Reported by the operator, who observed the empty in-progress view directly; the drain state, process liveness and member list verified by the advisor before filing.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:48:00.655624765Z
-modified_at: 2026-09-21T12:03:19.272233558Z
+modified_at: 2026-09-21T12:17:18.632023745Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -54,15 +54,28 @@ relationships:
   target_id: 01a0c043-99b8-7a51-964a-4b08d5a9f188
   created_at: 2026-09-20T19:21:01.096590521Z
   created_by: joe
+history:
+- id: 01a0c3e6-3317-7fb2-a49a-76f1a58a7e32
+  author: aida-auto-bump
+  timestamp: 2026-09-21T12:17:18.615849810Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0c3e6-3328-70c3-acae-3bb8aaf6f90b
+  timestamp: 2026-09-21T12:17:18.632021711Z
+  agent: aida
+  commit_sha: 62a1396adf7633cd6981f0cb31acd961d8e871a6
+  summary: Trace comment restored to render_human_with_context; each function now resolves to its own spec and the aida why inversion is gone. Clean two-line move, nothing executable changed. Prior-round findings carried forward by hand, including the drain reviewer's reconstruction, because BUG-1539 destroys them otherwise.
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: The fix is right and complete - one view, all three renderers, with measured reasoning for not normalizing at the loader and a test pinning that the synthetic never persists. Blocking on one thing: the new function was inserted between render_human_with_context''s doc/trace header and its body, which inverts aida why for both functions. Verified empirically, not from the doc.'
+  - 'punted: Fix is right and complete - one view, all three renderers, measured reasoning against loader normalization, a test pinning non-persistence. Blocking on one thing: the new function was inserted between render_human_with_context''s doc/trace header and its body, inverting aida why for both. Also preserving a reconstruction of the drain reviewer''s original finding, which my own PR-keyed re-record destroyed via BUG-1539.'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T19:08:15.345823313Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Fix is right and complete - one view, all three renderers, measured reasoning against loader normalization, a test pinning non-persistence. Blocking on one thing: the new function was inserted between render_human_with_context''s doc/trace header and its body, inverting aida why for both. Also preserving a reconstruction of the drain reviewer''s original finding, which my own PR-keyed re-record destroyed via BUG-1539.'
-  recovery_hint: address the review findings, move BUG-1441 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-09-21T12:03:19.272233558Z
+  completed_at: 2026-09-21T12:17:18.615356302Z
+  completion_sha: 62a1396adf7633cd6981f0cb31acd961d8e871a6
