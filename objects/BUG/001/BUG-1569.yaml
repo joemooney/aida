@@ -1,0 +1,24 @@
+id: 01a0c5a8-81a9-7df0-a1a6-440056b74717
+spec_id: BUG-1569
+agreed_id: BUG-1569
+title: awaiting --notice's protocol-line lookup does a full backend.load(), racing its own 1s-derived fail-open watchdog
+description: |-
+  handle_awaiting_command's `notice` branch (aida-cli-lib/src/lib.rs, STORY-1221/BUG-1239) documents itself as a "CHEAP per-turn path: NO full-store load, NO gh/network" -- but when a worktree holds a spec lease, it then calls `backend.load()` (a full CachedGitBackend read of every requirement object) to resolve that spec's type-protocol notice line. That call is bounded only by the shared `arm_notice_deadline()` watchdog, which forcibly `std::process::exit(0)`s the whole process if ANY of the notice work exceeds its deadline.
+
+  Root-caused via TASK-1274 (rework of PR #2019): `aida-cli/tests/task_1283_protocol_cli.rs::awaiting_notice_tracks_real_lease_through_session_end` failed on the GitLab mirror (pipeline 308, job 655, FAILED after 1256s) and was reproduced failing on a plain local `cargo test` run on an ordinary workstation (not a docker executor -- ruling out the "creator PID unresolvable in a Docker executor" theory a prior commit on that branch guessed at and which did not fix the failure). Raising `NOTICE_DEADLINE` from 1s to 30s made the test pass reliably every run; TASK-1274 shipped an interim bump to 10s as a stopgap.
+
+  The actual fix belongs here: make the type-protocol notice lookup cache-backed (matching the STORY-707 / TASK-1065 pattern already used for `aida status`, `aida list`, `load_metadata_only`, etc. -- none of which pay for a full `backend.load()`), so this per-turn hook never needs to scan the whole store just to render one line. Until then the notice can silently truncate under load (a cold cache, a busy shared runner, or simply a large store) without printing an error -- by design "fail-open", but the design's own cost estimate (1s) was wrong for the case it exists to bound.
+
+  Acceptance: `notice_line_for_scope`'s type-protocol lookup no longer requires backend.load() of the full store (a targeted per-id read suffices); `arm_notice_deadline` can return to a sub-second bound once it is; the TASK-1274-authored regression test stays green under the tighter deadline.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T20:29:09.929894136Z
+modified_at: 2026-09-21T20:29:09.929894136Z
+req_type: Bug
+tags:
+- awaiting
+- ci
+- gitlab
+- perf
