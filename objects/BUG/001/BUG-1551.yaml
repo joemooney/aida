@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:55:06.171955458Z
-modified_at: 2026-09-21T13:47:40.614302203Z
+modified_at: 2026-09-21T16:20:45.760027416Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -157,4 +157,28 @@ comments:
     OPERATIONAL POSITION UNCHANGED: #2033 does not merge before STORY-1422's gate exists. That was never contingent on the hold.
   created_at: 2026-09-21T13:47:40.614302203Z
   modified_at: 2026-09-21T13:47:40.614302203Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4c5-1640-71b0-96a4-5a16fbc3b969
+  author: joe
+  content: |-
+    [aida:advisor] THE BUMP'S ACCEPTED-STATE SET IS FIVE STATES WIDE AND IT IS DELIBERATE. Measured by the advisor 2026-09-21 after being wrong about it in the other direction.
+
+        auto_bump_eligible_status  ->  aida_core::lifecycle::git_merge_completes
+        pub fn git_merge_completes(from: State) -> bool {
+            matches!(from, Approved | Planned | InProgress | Done | NeedsAttention)
+        }
+
+    Intended, not accidental: there is a test called `git_merge_completes_covers_the_in_pipeline_and_shelved_states`. A merge completes a spec from any in-pipeline OR SHELVED state.
+
+    PROVEN LIVE, not read: STORY-1422 was NEEDS-ATTENTION when PR #2049 merged and went straight to Completed in a single store commit - aida-store 3025e09fdc at 2026-09-21T16:17:25Z, `-status: NeedsAttention / +status: Completed`. It never passed through Done.
+
+    WHY THIS WIDENS THIS SPEC RATHER THAN JUST ADDING A DETAIL. The defect was framed as "merging closes a spec past its own criteria". The accepted-state set makes it sharper: A SPEC PARKED NeedsAttention - SHELVED BY A DRAIN BECAUSE SOMETHING GENUINELY WENT WRONG - AUTO-COMPLETES WHEN ANY MERGED COMMIT CARRIES ITS TRAILER. The one status that exists to say "a human must look at this" is on the list of states a merge silently resolves. `aida findings list` and the shelved-work surfaces are built on exactly that status.
+
+    THE DESIGN IS DEFENSIBLE AND THE HOLE IS STILL REAL, which is why this is a comment and not a new spec. If the work merged, it is usually done, and forcing a manual bump from five states would strand specs constantly - that is a sensible default. What has no expression anywhere is a spec saying "my completion is NOT merge-driven, I have an in-spec criterion that a merge cannot satisfy". BUG-1480 is the live case: its criterion names STORY-1423, which by construction cannot be satisfied until BUG-1480's own fix is in a running binary, so the criterion is unsatisfiable at the instant the bump would fire.
+
+    THE INTERIM WORKAROUND IN USE, recorded so its cost is visible: #2033's hold now requires STRIPPING THE `(BUG-1480)` TRAILER from the squash subject at merge. It works - the trailer is the artifact that drives the bump - and it costs the commit-to-spec link that `aida why <file:line>` falls back on via git-blame. Trading traceability for closure correctness one PR at a time is not a fix, it is a toll, and it is paid by whoever remembers to pay it.
+
+    A NOTE ON HOW THE FIVE-STATE FACT WAS ESTABLISHED, because this spec is about closure reasoning and the near-miss is on point. The advisor first reported the gate as Done-only, having grepped a line range inside `auto_bump_done_to_completed` and found exactly one `RequirementStatus::` match - which turned out to be the gate of a SECONDARY loop (the BUG-102 review-story-by-PR-number scan), not the primary trailer-driven one thirty lines earlier. One grep hit taken for a function-wide rule. A merge disposition was then built on it and would have survived unchallenged until BUG-1480 went Completed.
+  created_at: 2026-09-21T16:20:45.760027416Z
+  modified_at: 2026-09-21T16:20:45.760027416Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
