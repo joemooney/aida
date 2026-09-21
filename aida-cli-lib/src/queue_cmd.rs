@@ -513,6 +513,7 @@ pub(crate) fn advance_dispatch(
             // Completing is an advisor-authority act (same gate as approve/
             // reject); an interactive operator clears it via the TTY branch of
             // `has_advisor_authority`. trace:BUG-543
+            let prior_status_for_event = req.status.clone();
             let new_status = RequirementStatus::Completed;
             if status_advance_requires_advisor_authority(&req.status, &new_status)
                 && !has_advisor_authority()
@@ -538,6 +539,15 @@ pub(crate) fn advance_dispatch(
             );
             req.modified_at = chrono::Utc::now();
             backend.update_requirement(&req)?;
+            // BUG-1286 F1: the queue's completion path reaches Completed without
+            // going through auto-bump or reconcile, so it must emit the ship
+            // record itself or the event stream under-reports terminality.
+            // trace:BUG-1286 | ai:claude
+            if crate::is_into_completed_transition(&prior_status_for_event, "Completed") {
+                if let Some(project_root) = store_path.parent() {
+                    crate::emit_spec_completed(project_root, display, "", None, "queue-done");
+                }
+            }
             println!(
                 "  {} closed {} — all children were completed.",
                 crate::glyph(crate::glyphs::Glyph::Check).green(),

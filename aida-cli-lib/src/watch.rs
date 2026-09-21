@@ -384,6 +384,25 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             format!("escalated to human: {}", reason),
         ),
         EventKind::PrMerged { pr } => ("pr-merged", format!("PR #{} merged", pr)),
+        EventKind::SpecCompleted {
+            commit,
+            pr,
+            closed_by,
+        } => (
+            "spec-completed",
+            format!(
+                "completed via {closed_by}{}{}",
+                if commit.is_empty() { "" } else { " at " },
+                commit,
+            ) + &pr.map(|n| format!(" / PR #{n}")).unwrap_or_default(),
+        ),
+        EventKind::RunCompleted {
+            pull_completed,
+            build_completed,
+        } => (
+            "run-completed",
+            format!("trailing phases done — pull={pull_completed}, build={build_completed}"),
+        ),
         EventKind::QueueDrained {
             shipped,
             shelved,

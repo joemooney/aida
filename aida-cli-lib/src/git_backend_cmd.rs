@@ -4885,6 +4885,22 @@ pub(crate) fn handle_git_backend_command(
                 // human surface gets it; the agent/TOON path and every
                 // non-completion edit keep `Updated:`. The workflow-hint line
                 // below is unaffected. trace:STORY-738 | ai:claude
+                // BUG-1286 F1: `aida edit --status completed` is the third
+                // into-Completed path and emitted nothing. `into_completed` was
+                // already computed here for the STORY-738 render against the
+                // PRIOR status, so the transition test is reused rather than
+                // recomputed. trace:BUG-1286 | ai:claude
+                if into_completed {
+                    if let Some(project_root) = store_path.parent() {
+                        crate::emit_spec_completed(
+                            project_root,
+                            req.spec_id.as_deref().unwrap_or(id),
+                            "",
+                            None,
+                            "edit",
+                        );
+                    }
+                }
                 match edit_completion_render(into_completed, agent_output_mode()) {
                     EditCompletionRender::Crescendo => {
                         let display_id = req.spec_id.as_deref().unwrap_or(id);

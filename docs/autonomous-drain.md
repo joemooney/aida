@@ -570,6 +570,17 @@ and the header goes to stderr — piping the feed stays clean. Pair it with
 `--backlog` (replay the history first) or `--once` (classify what is already
 there and exit) when you are debugging a drain after the fact.
 
+**Determining whether a spec finished.** Treat terminality as a property of
+the event kind, never of the event's position in `events.jsonl`. Select the
+newest event for the spec whose kind is terminal (`PrMerged`, `SpecCompleted`,
+or a genuine parked/failed terminal); later `PhaseEntered` and `PhaseDonePr`
+records are expected because pull and build continue after merge. A
+`SpecCompleted` record carries the merge commit, PR number when known, and the
+path that closed it. `RunCompleted` separately records that the trailing pull
+and build phases finished. Events written before the BUG-1286 change were not
+backfilled, so absence of a terminal record in an older stream means
+"unknown", not "still in flight".
+
 ### Product-role nudge loop
 
 Until the permanent re-drive supervisor lands, a product/advisor session can run

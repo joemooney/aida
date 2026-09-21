@@ -196,6 +196,26 @@ pub enum EventKind {
         /// The merged PR number.
         pr: u32,
     },
+    /// A spec transitioned to `Completed`. This is the durable per-spec ship
+    /// record, including completions discovered outside a live drain.
+    // trace:BUG-1286 | ai:codex
+    SpecCompleted {
+        /// Commit that supplied the merge evidence (empty when unavailable).
+        commit: String,
+        /// Pull-request number parsed from that commit, when available.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pr: Option<u64>,
+        /// Transition path, e.g. `auto-bump` or `reconcile-status`.
+        closed_by: String,
+    },
+    /// A spec's drain run completed the post-merge pull and build phases.
+    /// This records run completion; spec terminality does not depend on its
+    /// position because [`Self::is_terminal`] classifies the earlier merge.
+    // trace:BUG-1286 | ai:codex
+    RunCompleted {
+        pull_completed: bool,
+        build_completed: bool,
+    },
     /// A drain finished — the terminal "agent is done" an overnight loop waits
     /// for. **Actionable.**
     QueueDrained {
@@ -330,6 +350,8 @@ impl EventKind {
             | EventKind::PuntFiled { .. }
             | EventKind::AdvisorEscalated { .. }
             | EventKind::PrMerged { .. }
+            | EventKind::SpecCompleted { .. }
+            | EventKind::RunCompleted { .. }
             | EventKind::QueueDrained { .. }
             | EventKind::UnreadMail
             | EventKind::UnshippedWorkDetected { .. }
@@ -339,6 +361,23 @@ impl EventKind {
             | EventKind::MailReceived { .. }
             | EventKind::Unknown => true,
         }
+    }
+
+    /// Whether this kind records a terminal outcome for the keyed spec/run.
+    /// Consumers must select the newest terminal kind, not assume the newest
+    /// event overall is terminal: post-merge phases and retries remain useful.
+    // trace:BUG-1286 | ai:codex
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            EventKind::SpecShelved { .. }
+                | EventKind::SpecSkipped { .. }
+                | EventKind::ReclassifiedNeedsHuman { .. }
+                | EventKind::AdvisorEscalated { .. }
+                | EventKind::PrMerged { .. }
+                | EventKind::SpecCompleted { .. }
+                | EventKind::RunCompleted { .. }
+        )
     }
 
     /// The serialized `event` tag of this kind (e.g. `PrMerged`) — the name a
@@ -358,6 +397,8 @@ impl EventKind {
             EventKind::PuntFiled { .. } => "PuntFiled",
             EventKind::AdvisorEscalated { .. } => "AdvisorEscalated",
             EventKind::PrMerged { .. } => "PrMerged",
+            EventKind::SpecCompleted { .. } => "SpecCompleted",
+            EventKind::RunCompleted { .. } => "RunCompleted",
             EventKind::QueueDrained { .. } => "QueueDrained",
             EventKind::UnreadMail => "UnreadMail",
             EventKind::UnshippedWorkDetected { .. } => "UnshippedWorkDetected",
@@ -386,6 +427,8 @@ impl EventKind {
             "PuntFiled",
             "AdvisorEscalated",
             "PrMerged",
+            "SpecCompleted",
+            "RunCompleted",
             "QueueDrained",
             "UnreadMail",
             "UnshippedWorkDetected",
@@ -478,6 +521,20 @@ pub fn latest_spec_shelved<'a>(events: &'a [Event], spec: &str) -> Option<&'a Ev
             .as_deref()
             .is_some_and(|event_spec| event_spec.eq_ignore_ascii_case(spec))
             && matches!(event.kind, EventKind::SpecShelved { .. })
+    })
+}
+
+/// Return the newest terminal event for `spec`, ignoring later non-terminal
+/// phase telemetry. Legacy streams may return `None`: terminal completion
+/// events were not backfilled when this predicate was introduced.
+// trace:BUG-1286 | ai:codex
+pub fn latest_terminal_for_spec<'a>(events: &'a [Event], spec: &str) -> Option<&'a Event> {
+    events.iter().rev().find(|event| {
+        event
+            .spec
+            .as_deref()
+            .is_some_and(|event_spec| event_spec.eq_ignore_ascii_case(spec))
+            && event.kind.is_terminal()
     })
 }
 
@@ -1097,6 +1154,65 @@ mod tests {
             attempt: 1,
         }
         .is_actionable());
+    }
+
+    // BUG-1286: terminality is a property of the kind, not the event's
+    // position in an append-only stream.
+    #[test]
+    fn latest_terminal_ignores_trailing_phase_events_and_survives_build_crash() {
+        let phase = |idx: i32, slug: &str| {
+            Event::new(
+                Some("BUG-1286".into()),
+                "run",
+                EventKind::PhaseEntered {
+                    idx,
+                    slug: slug.into(),
+                    vendor: None,
+                    seat: None,
+                    model: None,
+                    effort: None,
+                    attempt: 1,
+                },
+            )
+        };
+        let mut stream = vec![Event::new(
+            Some("BUG-1286".into()),
+            "run",
+            EventKind::PrMerged { pr: 42 },
+        )];
+        stream.push(phase(5, "pull"));
+        stream.push(phase(6, "build"));
+
+        // Crash case: the stream stops after build entered. The merge remains
+        // the newest terminal fact even without a completion record.
+        assert!(matches!(
+            latest_terminal_for_spec(&stream, "bug-1286").map(|e| &e.kind),
+            Some(EventKind::PrMerged { pr: 42 })
+        ));
+
+        stream.push(Event::new(
+            Some("BUG-1286".into()),
+            "run",
+            EventKind::PhaseDonePr { pr: 42 },
+        ));
+        assert!(matches!(
+            latest_terminal_for_spec(&stream, "BUG-1286").map(|e| &e.kind),
+            Some(EventKind::PrMerged { pr: 42 })
+        ));
+    }
+
+    #[test]
+    fn completion_kinds_are_known_actionable_and_terminal() {
+        let completed = EventKind::SpecCompleted {
+            commit: "abc1234".into(),
+            pr: Some(42),
+            closed_by: "auto-bump".into(),
+        };
+        assert!(completed.is_actionable());
+        assert!(completed.is_terminal());
+        assert!(EventKind::PrMerged { pr: 42 }.is_terminal());
+        assert!(EventKind::known_names().contains(&"SpecCompleted"));
+        assert!(EventKind::known_names().contains(&"RunCompleted"));
     }
 
     #[test]
