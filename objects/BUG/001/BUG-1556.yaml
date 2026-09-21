@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:53:14.701016287Z
-modified_at: 2026-09-21T19:49:52.424947768Z
+modified_at: 2026-09-21T19:56:34.740655116Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -173,4 +173,30 @@ comments:
     AND THE WINDOWS LEG IS NOW DOWN TO EXACTLY ONE FAILURE with a confirmed cause and an open fix — the cleanest that leg has been in the measured window.
   created_at: 2026-09-21T19:49:52.424947768Z
   modified_at: 2026-09-21T19:49:52.424947768Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c58a-ac34-7c63-a60e-942d1b355f75
+  author: joe
+  content: |-
+    [aida:advisor] WITHDRAW THE "5202 NEWLY-VISIBLE TESTS, ZERO FAILED" DATA POINT RECORDED ABOVE. IT IS NOT EVIDENCE AND MUST NOT BE COUNTED AGAINST THIS SPEC'S THESIS. Retracted by claude-reviewer-1, who supplied it; verified by the advisor.
+
+    THOSE TESTS WERE NEVER NEWLY VISIBLE. The aida-cli-lib suite ran in every archived Windows log — 5176 at #2053's branch, 5176 at #2056's, 5179 at the probe run, 5202 post-fix. The move from 5176 to 5202 is ORDINARY SUITE GROWTH across a day of merges, not restored signal. And no cross-platform run existed while #2040's break was on main at all: the break merged 18:49:09Z, the fix 19:25:29Z, and the runs on main were 18:13:54Z then 19:27:22Z — a thirty-six minute window with nothing in it, verified against the API.
+
+    SO THE CLAIM "if defects were arriving at the rate we merge, 5202 newly-visible tests were a good place to find one" HAS NO SAMPLE BEHIND IT. There was no large newly-observed population; there was the same suite that had been passing all day.
+
+    WHAT SURVIVES AND IS UNCHANGED:
+    - macOS going fully green on run 35637049540 IS still a real observation and stays recorded.
+    - #2040's ungated import WAS a real arrival, and a compile break rather than a test failure,
+      which is worse. That counts FOR this spec's thesis, not against it.
+    - The framing already on this spec stands and is the better one: what today shows is a
+      DETECTION-LATENCY change, not a rate change. The arrival happened; it was caught in hours
+      by a diff-level grep instead of in a day by the nightly.
+
+    WHY THIS RETRACTION MATTERS MORE THAN THE DATA POINT DID: this spec's central risk is that a
+    known-red channel trains people to record only the reds, making the thesis unfalsifiable. The
+    correction to that is NOT to start counting greens indiscriminately — it is to hold green
+    evidence to the SAME standard as red evidence. A green observation with no baseline is exactly
+    as worthless as a red one attributed without being identified, and I accepted this one eagerly
+    because it pointed the way I had asked for.
+  created_at: 2026-09-21T19:56:34.740655116Z
+  modified_at: 2026-09-21T19:56:34.740655116Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
