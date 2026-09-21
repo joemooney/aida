@@ -861,7 +861,6 @@ impl AwaitingReport {
     }
 }
 
-/// `"{n} {singular|plural}"` — the tiny count formatter the compact line uses.
 /// Row-length sha for the awaiting surface. Purely cosmetic — the comparison
 /// that decides a row is done on the full values.
 // trace:STORY-1419 | ai:claude
@@ -869,6 +868,7 @@ fn short_sha_for_row(sha: &str) -> String {
     sha.chars().take(10).collect()
 }
 
+/// `"{n} {singular|plural}"` — the tiny count formatter the compact line uses.
 fn pluralize(n: usize, singular: &str, plural: &str) -> String {
     format!("{} {}", n, if n == 1 { singular } else { plural })
 }
@@ -967,10 +967,6 @@ mod tests {
         aida_core::mailbox::Recipient::Agent(agent.to_string())
     }
 
-    /// The regression: three messages in the operator's own inbox, a big
-    /// backlog in the shared role inbox. Deleting the operator's three drives
-    /// the operator-gated count to 0 — it must NEVER shift to the role
-    /// backlog's size (the observed 3 → 18 jump).
     fn candidate(pr: u64, head: &str, reviewed: Option<&str>, by: Option<&str>) -> ReworkCandidate {
         ReworkCandidate {
             pr,
@@ -1122,6 +1118,10 @@ mod tests {
         assert_eq!(unscoped.len(), 3, "with no seat known, surface everything");
     }
 
+    /// The regression: three messages in the operator's own inbox, a big
+    /// backlog in the shared role inbox. Deleting the operator's three drives
+    /// the operator-gated count to 0 — it must NEVER shift to the role
+    /// backlog's size (the observed 3 → 18 jump).
     #[test]
     fn operator_mail_count_goes_to_zero_when_own_inbox_is_emptied() {
         let wm = std::collections::HashMap::new();
