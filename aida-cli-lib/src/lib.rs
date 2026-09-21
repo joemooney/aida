@@ -9942,6 +9942,7 @@ fn handle_done_command(
         );
         return Ok(());
     }
+    let prior_status_for_event = req.status.clone();
     let new_status = RequirementStatus::Completed;
     if status_advance_requires_advisor_authority(&req.status, &new_status)
         && !has_advisor_authority()
@@ -9967,6 +9968,15 @@ fn handle_done_command(
         )],
     );
     backend.update_requirement(&req)?;
+    // BUG-1286 F1: `aida done` is an into-Completed transition and must emit the
+    // durable ship record. The already-Completed case returned early above, so
+    // reaching here IS the transition; the shared predicate is used anyway so
+    // the rule lives in exactly one place. trace:BUG-1286 | ai:claude
+    if is_into_completed_transition(&prior_status_for_event, "Completed") {
+        if let Some(project_root) = store_path.parent() {
+            emit_spec_completed(project_root, &display_id, "", None, "done");
+        }
+    }
     record_role_activity(&display_id, "done");
     // STORY-738: `aida done` is always an into-Completed transition (the
     // already-Completed case returned early above), so the human path gets
@@ -10037,7 +10047,10 @@ fn completion_crescendo_lines(display_id: &str, title: &str) -> Vec<String> {
 /// status is `Completed` — a no-op re-set of an already-Completed spec is not
 /// a crescendo moment.
 // trace:STORY-738 | ai:claude
-fn is_into_completed_transition(old: &aida_core::RequirementStatus, new_canonical: &str) -> bool {
+pub(crate) fn is_into_completed_transition(
+    old: &aida_core::RequirementStatus,
+    new_canonical: &str,
+) -> bool {
     !matches!(old, aida_core::RequirementStatus::Completed) && new_canonical == "Completed"
 }
 
@@ -62286,7 +62299,7 @@ impl AutoBumpFlip {
 /// Emit the durable ship record after the store confirms a transition to
 /// `Completed`. Best-effort like every event-stream write.
 // trace:BUG-1286 | ai:codex
-fn emit_spec_completed(
+pub(crate) fn emit_spec_completed(
     project_root: &std::path::Path,
     spec_id: &str,
     sha: &str,

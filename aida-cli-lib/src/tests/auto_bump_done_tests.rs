@@ -2245,3 +2245,108 @@ fn auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup() {
         still_open.status
     );
 }
+
+/// BUG-1286 F1: `emit_spec_completed` had exactly TWO call sites — auto-bump and
+/// reconcile-status — while THREE other paths reached `Completed` and emitted
+/// nothing: `aida done`, the queue's completion path, and
+/// `aida edit --status completed`. A consumer reading the event stream therefore
+/// saw terminality for merge-driven completions only, which is precisely the
+/// under-reporting this spec exists to remove.
+///
+/// This drives the real `handle_done_command` rather than the predicate, because
+/// the defect was a MISSING CALL: every predicate involved was already correct.
+// trace:BUG-1286 | ai:claude
+#[test]
+fn aida_done_emits_the_ship_record() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let project_root = tmp.path().to_path_buf();
+    let store = project_root.join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+
+    let backend = aida_core::CachedGitBackend::open(
+        &store,
+        &aida_core::CachedGitBackend::default_cache_path(&store),
+    )
+    .unwrap();
+    let mut req = aida_core::Requirement::new("shipped by hand".into(), String::new());
+    req.spec_id = Some("BUG-12860".into());
+    req.set_status_from_str("Done");
+    use aida_core::db::DatabaseBackend;
+    backend.add_requirement(req).unwrap();
+
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    handle_done_command("BUG-12860", &backend, &store).expect("aida done must succeed");
+
+    let emitted = crate::events::read_all(&project_root);
+    assert!(
+        emitted.iter().any(|event| {
+            event.spec.as_deref() == Some("BUG-12860")
+                && matches!(
+                    &event.kind,
+                    crate::events::EventKind::SpecCompleted { closed_by, .. }
+                        if closed_by == "done"
+                )
+        }),
+        "`aida done` is an into-Completed transition and must emit SpecCompleted; got {:?}",
+        emitted.iter().map(|e| e.kind.name()).collect::<Vec<_>>()
+    );
+}
+
+/// BUG-1286 F1, THE PATH THAT CANNOT BE UNIT-TESTED, pinned as such.
+///
+/// `aida queue`'s Close action reaches `Completed` through `advance_dispatch`
+/// and now emits the ship record — but the arm is gated on
+/// `IsTerminal::is_terminal(stdin)` and falls to `else { false }` otherwise,
+/// because STORY-809 made it operator-confirmed and never silent. So in any
+/// test, and in every headless run, the close DOES NOT HAPPEN.
+///
+/// This asserts that property rather than pretending to cover the emission. The
+/// emission on that arm is verified by reading, not by execution, and saying so
+/// here is the point: a test that drove it would have to defeat the confirmation
+/// gate, and a test that silently passed without reaching it would be worse than
+/// none.
+// trace:BUG-1286 | ai:claude
+#[test]
+fn queue_close_is_tty_gated_so_the_emission_is_unreachable_headlessly() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let project_root = tmp.path().to_path_buf();
+    let store = project_root.join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+
+    let backend = aida_core::CachedGitBackend::open(
+        &store,
+        &aida_core::CachedGitBackend::default_cache_path(&store),
+    )
+    .unwrap();
+    let mut req = aida_core::Requirement::new("closed via queue".into(), String::new());
+    req.spec_id = Some("BUG-12861".into());
+    req.set_status_from_str("Done");
+    use aida_core::db::DatabaseBackend;
+    backend.add_requirement(req).unwrap();
+    drop(backend);
+
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    crate::queue_cmd::advance_dispatch(crate::burndown::AdvanceAction::Close, "BUG-12861", &store)
+        .expect("the close call itself must not error");
+
+    let after = aida_core::CachedGitBackend::open(
+        &store,
+        &aida_core::CachedGitBackend::default_cache_path(&store),
+    )
+    .unwrap();
+    let status = after
+        .get_requirement_by_spec_id("BUG-12861")
+        .unwrap()
+        .unwrap()
+        .status;
+    assert!(
+        matches!(status, aida_core::RequirementStatus::Done),
+        "without a TTY the operator-confirmed close must NOT fire; status was {status:?}"
+    );
+    assert!(
+        crate::events::read_all(&project_root).is_empty(),
+        "and with no transition there must be no ship record"
+    );
+}
