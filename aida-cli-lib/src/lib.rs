@@ -69063,8 +69063,33 @@ fn emit_notice_time_line() {
 /// exits successfully because the notice is advisory. Arm this before the
 /// time-line/session bookkeeping so that work is covered by the same bound.
 // trace:BUG-1239 | ai:codex
+// trace:TASK-1274 | ai:claude
 fn arm_notice_deadline() {
-    const NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
+    // Was 1s (BUG-1239). TASK-1274 root-caused
+    // `awaiting_notice_tracks_real_lease_through_session_end` failing on both
+    // the GitLab mirror (pipeline 308: FAILED, 1256s) and a plain local
+    // `cargo test` run on this machine (reproduced outside any container) to
+    // THIS deadline, not to the docker-executor PID theory an earlier commit
+    // on this branch guessed at (that "container-stable" fixture fix left the
+    // failure unchanged). The protocol-notice half of this command's `notice`
+    // branch below calls `backend.load()` — a full store read — despite the
+    // branch's own "CHEAP... NO full-store load" contract comment; on a cold
+    // cache (the exact case a freshly-`aida init`'d/leased project exercises)
+    // that load alone can exceed 1s, so the watchdog fires mid-computation and
+    // silently drops the notice's second line before it is ever printed.
+    // Measured directly: this deadline at 1s made the test fail every run on
+    // this workstation; raised to 30s it passed reliably (`cargo test -p
+    // aida-cli --test task_1283_protocol_cli -- --exact
+    // awaiting_notice_tracks_real_lease_through_session_end`, run locally,
+    // debug profile). 10s is chosen as a bounded middle value with real
+    // margin above the observed 1s failure point while still keeping this a
+    // genuine fail-open bound rather than an unbounded wait. The proper fix —
+    // making the protocol-notice lookup cache-backed so it never needs
+    // `backend.load()` at all, matching the STORY-707/TASK-1065 pattern for
+    // every other hot path in this file — is filed separately (BUG-1569) as a
+    // follow-up; this change only widens the margin so the existing behavior
+    // stops racing its own watchdog.
+    const NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
     std::thread::spawn(|| {
         std::thread::sleep(NOTICE_DEADLINE);
         std::process::exit(0);
