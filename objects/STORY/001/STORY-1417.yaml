@@ -33,7 +33,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:55:21.794367525Z
-modified_at: 2026-09-21T08:56:50.458612093Z
+modified_at: 2026-09-21T09:25:08.361838717Z
 req_type: Story
 comments:
 - id: 01a0c32e-aa1a-7561-8985-cdb436caf5e8
@@ -83,4 +83,25 @@ comments:
     PROVENANCE: vocabulary and the set-versus-scalar argument are the reviewer seat's, recorded by the driver-advisor. The worked examples are findings that seat wrote tonight, which is what makes the vocabulary grounded rather than aspirational.
   created_at: 2026-09-21T08:56:50.458612093Z
   modified_at: 2026-09-21T08:56:50.458612093Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c348-9289-7933-ab63-58e5c52e1665
+  author: joe
+  content: |-
+    LIVE WORKED EXAMPLE FOR THE `unfalsifiable` CATEGORY, recorded while the vocabulary is still being decided — from #2030's F2 at 293da2d0cc94, stated by the reviewer seat:
+
+        "a fixture that passes PRECISELY BECAUSE IT STOPS SHORT — it asserts branch recovery,
+         which F1 already grants, and halts immediately before the disputed step."
+
+    That is the sharpest one-line statement of the category anyone has produced tonight, and it is better than the definition currently proposed ("a test that cannot fail, or that asserts the undisputed half") because it names the MECHANISM rather than the symptom: the test passes BECAUSE of where it stops. Stopping is the thing that makes it green.
+
+    IT ALSO CARRIES A SECOND CATEGORY, which is more evidence for the set-not-scalar decision already recorded here. #2030's F2 is:
+
+        unfalsifiable   the fixture asserts the granted half and halts before the dispute
+        half-fix        it stops short BECAUSE the production path F1 names was never touched
+
+    The two are not alternative readings — the second CAUSES the first. A test cannot assert a behaviour that does not exist yet, so an untouched production path produces a fixture that necessarily stops before it. Filing this under either category alone would lose the causal link, and the link is what tells a reader the test is not lazy but blocked.
+
+    AND THE CATEGORY HAS A COROLLARY WORTH CAPTURING WITH IT: on a PR whose findings are design-level, a GREEN BUILD IS THE EXPECTED RESULT, not evidence against the findings. F1 is a missing production change that compiles fine without it; F2's fixture passes for the reason above. Any consumer counting `unfalsifiable` findings should expect them to co-occur with green CI rather than red, which is the opposite of the intuition that would otherwise guide a query.
+  created_at: 2026-09-21T09:25:08.361838717Z
+  modified_at: 2026-09-21T09:25:08.361838717Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
