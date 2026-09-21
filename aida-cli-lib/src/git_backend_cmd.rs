@@ -5118,7 +5118,12 @@ pub(crate) fn handle_git_backend_command(
             // forms mutually exclusive. Adding a present tag or removing
             // an absent one is a graceful no-op.
             // trace:TASK-351 | ai:claude
-            if apply_tag_deltas(&mut req.tags, add_tag, remove_tag) {
+            // BUG-1542: keep the REPORT, not just the bool. A `--remove-tag`
+            // that matched nothing used to fall through to the generic
+            // "No changes specified" line, which tells the caller to pass a
+            // flag they already passed. trace:BUG-1542 | ai:claude
+            let tag_report = apply_tag_deltas_report(&mut req.tags, add_tag, remove_tag);
+            if tag_report.changed() {
                 changed = true;
             }
             // TASK-524: typo guard — a `lifecycle:*` tag that isn't a recognized
@@ -5231,6 +5236,16 @@ pub(crate) fn handle_git_backend_command(
                         render_completion_crescendo(display_id, &req.title);
                     }
                     EditCompletionRender::Updated => println!("Updated: {}", id),
+                }
+
+                // BUG-1542: say what the tag flags actually did, on the success
+                // path too. A caller who removes two tags and mistypes one
+                // currently sees only "Updated" and cannot tell. The lines are
+                // emitted whenever tag flags were passed, including the partial
+                // case where some matched and some did not.
+                // trace:BUG-1542 | ai:claude
+                for line in tag_report.summary_lines() {
+                    println!("  {line}");
                 }
 
                 // TASK-928 (SPIKE-71): a tag edit that introduces a
@@ -5359,7 +5374,19 @@ pub(crate) fn handle_git_backend_command(
                 // trace:TASK-1176 | ai:claude
                 && superseded_by.is_none()
             {
-                println!("No changes specified. Use --title, --status, --priority, etc.");
+                // BUG-1542: only say "no changes SPECIFIED" when none were.
+                // If tag flags were passed and matched nothing, say THAT —
+                // conflating the two is what made a no-op indistinguishable
+                // from success and hid this class long enough to be found by
+                // accident. trace:BUG-1542 | ai:claude
+                let tag_lines = tag_report.summary_lines();
+                if tag_lines.is_empty() {
+                    println!("No changes specified. Use --title, --status, --priority, etc.");
+                } else {
+                    for line in tag_lines {
+                        println!("{line}");
+                    }
+                }
             }
 
             // TASK-1176: record the supersede lineage AFTER the scalar save,

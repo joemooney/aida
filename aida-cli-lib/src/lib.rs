@@ -16782,25 +16782,119 @@ fn print_processing_records(records: &[aida_core::ProcessingRecord]) {
 /// entries are ignored. Adding a present tag or removing an absent one is
 /// a graceful no-op. Returns whether the set actually changed.
 // trace:TASK-351 | ai:claude
+/// What a `--add-tag` / `--remove-tag` pass actually did.
+///
+/// BUG-1542: the bool this replaces could not distinguish "removed nothing
+/// because the tag was absent" from "removed nothing because something went
+/// wrong", and the caller rendered both as `No changes specified` — a message
+/// that sends the user looking for a flag they already passed. Naming the tags
+/// that matched nothing turns a silent no-op into a visible one.
+// trace:BUG-1542 | ai:claude
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct TagDeltaReport {
+    /// Tags newly inserted.
+    pub(crate) added: Vec<String>,
+    /// Tags actually removed.
+    pub(crate) removed: Vec<String>,
+    /// `--add-tag` values that were already present.
+    pub(crate) already_present: Vec<String>,
+    /// `--remove-tag` values that matched no existing tag.
+    pub(crate) absent: Vec<String>,
+}
+
+impl TagDeltaReport {
+    pub(crate) fn changed(&self) -> bool {
+        !self.added.is_empty() || !self.removed.is_empty()
+    }
+
+    /// One line per outcome, or `None` when nothing was requested at all.
+    /// Deterministic order so output is stable for tests and scripts.
+    pub(crate) fn summary_lines(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let list = |v: &[String]| v.join(", ");
+        if !self.added.is_empty() {
+            out.push(format!(
+                "added {}: {}",
+                plural(self.added.len(), "tag"),
+                list(&self.added)
+            ));
+        }
+        if !self.removed.is_empty() {
+            out.push(format!(
+                "removed {}: {}",
+                plural(self.removed.len(), "tag"),
+                list(&self.removed)
+            ));
+        }
+        if !self.already_present.is_empty() {
+            out.push(format!(
+                "already present, nothing added: {}",
+                list(&self.already_present)
+            ));
+        }
+        if !self.absent.is_empty() {
+            out.push(format!(
+                "no matching {} to remove: {}",
+                if self.absent.len() == 1 {
+                    "tag"
+                } else {
+                    "tags"
+                },
+                list(&self.absent)
+            ));
+        }
+        out
+    }
+}
+
+fn plural(n: usize, word: &str) -> String {
+    if n == 1 {
+        format!("1 {word}")
+    } else {
+        format!("{n} {word}s")
+    }
+}
+
+/// The reporting form. [`apply_tag_deltas`] is the bool-returning wrapper kept
+/// for callers that only need "did anything change".
+// trace:BUG-1542 | ai:claude
+pub(crate) fn apply_tag_deltas_report(
+    tags: &mut HashSet<String>,
+    add: &[String],
+    remove: &[String],
+) -> TagDeltaReport {
+    let mut report = TagDeltaReport::default();
+    for raw in add {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if tags.insert(trimmed.to_string()) {
+            report.added.push(trimmed.to_string());
+        } else {
+            report.already_present.push(trimmed.to_string());
+        }
+    }
+    for raw in remove {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if tags.remove(trimmed) {
+            report.removed.push(trimmed.to_string());
+        } else {
+            report.absent.push(trimmed.to_string());
+        }
+    }
+    report
+}
+
 pub(crate) fn apply_tag_deltas(
     tags: &mut HashSet<String>,
     add: &[String],
     remove: &[String],
 ) -> bool {
-    let mut changed = false;
-    for raw in add {
-        let trimmed = raw.trim();
-        if !trimmed.is_empty() && tags.insert(trimmed.to_string()) {
-            changed = true;
-        }
-    }
-    for raw in remove {
-        let trimmed = raw.trim();
-        if !trimmed.is_empty() && tags.remove(trimmed) {
-            changed = true;
-        }
-    }
-    changed
+    apply_tag_deltas_report(tags, add, remove).changed()
 }
 
 /// Build the loud-on-clobber warning shown when `aida edit --tags` REPLACES the
