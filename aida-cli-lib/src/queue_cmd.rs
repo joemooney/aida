@@ -6689,6 +6689,45 @@ pub(crate) fn handle_queue_rework(
         }
     }
 
+    // BUG-1470 F1: the SAME advisor-authority gate the three sibling sites in
+    // this file apply (`queue advance --approve`, and the two `queue add`
+    // paths), plus `aida edit`. Lifting an un-triaged Draft or a punted
+    // NeedsAttention spec into a protected target is an advisor act wherever
+    // it happens, and `queue rework` reached that act through a different door.
+    //
+    // Before this PR the bypass was unreachable: `rework_smart_target(Draft)`
+    // returned None, so there was no flip to gate. Mapping Draft -> Approved
+    // for metadata-only rework opened the door, which is why the gate has to
+    // arrive in the same change.
+    //
+    // Placed at the FLIP rather than at target selection, so it also covers an
+    // explicit `--status` override — that path reaches the identical write and
+    // would otherwise remain a side door once this one closed.
+    //
+    // Refuses BEFORE any side effect (no status write, no comment, no queue
+    // entry): a partially-applied rework is harder to reason about than one
+    // that did not run.
+    // trace:BUG-1470 | ai:claude
+    if let Some(ref new_status) = target_status {
+        if new_status != &current_status
+            && status_advance_requires_advisor_authority(&current_status, new_status)
+            && !has_advisor_authority()
+        {
+            println!(
+                "  {} reworking {} from {} to {} needs the advisor role (or an \
+                 interactive terminal). Re-run as advisor: \
+                 `AIDA_SESSION_ROLE=advisor aida queue rework {}`.{}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                display_id.bold(),
+                current_status,
+                new_status,
+                display_id,
+                roleless_recovery_sentence()
+            );
+            return Ok(());
+        }
+    }
+
     // Status flip (if any). update_atomically works for both SQLite and
     // git-canonical paths; queue done uses the same approach.
     if let Some(ref new_status) = target_status {

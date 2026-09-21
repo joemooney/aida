@@ -152,6 +152,57 @@ fn metadata_only_rework_targets_claimable_approved() {
             Some(RequirementStatus::InProgress)
         );
     }
+
+    // F3: THE PASS-THROUGH ARM. Everything above is the constant half of the
+    // function — replace the whole `!launches_work` block with
+    // `Some(Approved)` and every assertion above still passes, so none of them
+    // can tell this function from a constant. These three are the only inputs
+    // where the metadata-only branch defers to `rework_smart_target` instead,
+    // and they are what makes the claim "keeps the spec claimable" different
+    // from "promotes everything".
+    // trace:BUG-1470 | ai:claude
+    assert_eq!(
+        rework_target_for_mode(&RequirementStatus::Approved, false),
+        None,
+        "an already-claimable spec must not be flipped at all"
+    );
+    assert_eq!(
+        rework_target_for_mode(&RequirementStatus::Superseded, false),
+        None,
+        "a superseded spec was handed to a successor; reworking this record \
+         must not guess a status for it"
+    );
+    assert_eq!(
+        rework_target_for_mode(&RequirementStatus::Rejected, false),
+        Some(RequirementStatus::Approved),
+        "rejected reworks to Approved through the pass-through arm, not the \
+         metadata-only constant — the two agree here, and the assertion pins \
+         WHICH path produced it via the two cases above"
+    );
+
+    // And the same three under --work, where no metadata-only mapping applies.
+    assert_eq!(
+        rework_target_for_mode(&RequirementStatus::Approved, true),
+        None
+    );
+    assert_eq!(
+        rework_target_for_mode(&RequirementStatus::Superseded, true),
+        None
+    );
+    assert_eq!(
+        rework_target_for_mode(&RequirementStatus::Rejected, true),
+        Some(RequirementStatus::Approved)
+    );
+    assert_eq!(
+        rework_target_for_mode(&RequirementStatus::Draft, true),
+        None,
+        "with --work, Draft defers to the smart target, which declines to guess"
+    );
+    assert_eq!(
+        rework_target_for_mode(&RequirementStatus::InProgress, true),
+        None,
+        "a spec already In Progress with --work needs no flip"
+    );
 }
 
 /// All status variants are covered — exhaustive match in
@@ -407,7 +458,12 @@ fn rework_tail_keeps_append_semantics() {
 // trace:BUG-1056 | ai:codex
 #[test]
 fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
-    let _guard = crate::test_env::env_lock();
+    // BUG-1470: lifting a punted NeedsAttention spec into Approved is an
+    // advisor act, so this test must hold that authority to exercise the
+    // pickability behaviour it is actually about. EnvVarGuard takes the same
+    // ENV_LOCK `env_lock()` did, so it replaces rather than nests — nesting
+    // the two deadlocks. trace:BUG-1470 | ai:claude
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
@@ -793,5 +849,64 @@ fn rework_explicit_user_still_overrides_role_default() {
     assert!(
         !role_queue.iter().any(|e| e.requirement_id == req_id),
         "an explicit --user must not also land on the role queue"
+    );
+}
+
+/// BUG-1470 F1: `queue rework` reached the Draft -> Approved promotion through
+/// a different door than the three sibling sites in the same file, so it
+/// applied no advisor-authority gate. The promotion only became reachable when
+/// metadata-only rework started mapping Draft to Approved, which is why the
+/// gate and that mapping belong in the same change.
+///
+/// The paired test above proves the act SUCCEEDS with authority; this one
+/// proves it is REFUSED without. Either alone is satisfied by a gate that is
+/// always open or always shut.
+// trace:BUG-1470 | ai:claude
+#[test]
+fn metadata_rework_of_a_draft_is_refused_without_advisor_authority() {
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let req = req_for_test("BUG-14700", RequirementStatus::Draft);
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+
+    handle_queue_rework(
+        &storage,
+        "BUG-14700",
+        false,
+        Some("implementer"),
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("codex"),
+    )
+    .unwrap();
+
+    let updated = storage.load().unwrap();
+    let after = updated.get_requirement_by_spec_id("BUG-14700").unwrap();
+    assert_eq!(
+        after.status,
+        RequirementStatus::Draft,
+        "an un-triaged draft must not be promoted by a non-advisor session"
+    );
+
+    // The refusal must be total, not partial: no queue entry either. A spec
+    // left Draft but queued is a worse state than an untouched one, because
+    // the queue head then refuses it on every later pickup.
+    let entries = storage.queue_list("codex", true).unwrap_or_default();
+    assert!(
+        entries.is_empty(),
+        "a refused rework must not leave a queue entry behind; got {} entries",
+        entries.len()
     );
 }
