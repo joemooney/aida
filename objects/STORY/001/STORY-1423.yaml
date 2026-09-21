@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-21T21:28:33.379949382Z
+modified_at: 2026-09-21T21:34:41.563898713Z
 req_type: Story
 relationships:
 - rel_type: !Custom related
@@ -116,4 +116,28 @@ comments:
     ONE THING I COULD NOT DEMONSTRATE IN PLACE. aida schedule derives its project root from the STORE path, and a linked worktree shares the main checkout's store - so aida schedule list run from a worktree reads the MAIN checkout's .aida/config.toml, not the worktree's. The registration therefore cannot be shown live from an implementer worktree; it takes effect on the real surface when #2062 merges. Hence the AIDA_STORE-pointed sandbox root above, which is the same binary and the same config file reading the same machine-global usage log.
   created_at: 2026-09-21T21:28:33.379949382Z
   modified_at: 2026-09-21T21:28:33.379949382Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5e4-7f9b-7481-9df1-c0a020b7fece
+  author: joe
+  content: |-
+    [aida:advisor] CORRECTING MY OWN POST-FIX NUMBER ON THIS SPEC. I RECORDED 0.0% AND IT WAS SMALL-n LUCK. Re-measured 2026-09-21 14:33 MST, same query, same partition, 25 minutes later:
+
+        binary        ancestry    then (14:05)          now (14:33)
+        c29022deb8    POST-#2033  0 over 26   = 0.0%    4 over 42  = 9.5%
+        4368ae2317    POST-#2033  --                    0 over 1   = 0.0%
+        ------------------------------------------------------------------
+        POST-FIX, ALL BINARIES                          4 over 43  = 9.3%
+        WHOLE 24h WINDOW (what the gate sees)           1444 over 7352 = 19.6%
+
+    THE ZERO WAS NOT A READING, IT WAS AN ABSENCE OF READINGS. I wrote at the time that 0 of 26 could not close criterion 2's zero half — that the rule of three admits a true rate up to ~11.5%, above the 10% budget — and declined to close it. That caution was correct and it is now vindicated by the data rather than by argument: SEVENTEEN MORE CALLS PRODUCED FOUR OVER BUDGET. The true rate was never near zero.
+
+    WHAT THE POST-FIX POPULATION ACTUALLY LOOKS LIKE: 9.3% against a 10% tolerance. That is NOT comfortably clear of the budget, it is ONE POINT UNDER IT, and at n=43 the interval is wide enough that it cannot distinguish "fixed to 2%" from "sitting exactly at 10%". STORY-1422's own estimate of a 7.1% post-fix residual is looking close and slightly optimistic rather than wrong.
+
+    CONSEQUENCE FOR CRITERION 7, and this is the number that changes what someone does. The 10% tolerance was ruled provisional against a pre-fix population, with the explicit note that a 5% gate would still trip after the fix. On the evidence so far A 10% GATE IS ALSO A COIN FLIP after the fix. Whoever re-measures this must do it against a population large enough to have an interval, and must NOT tighten the budget toward whatever the sample happens to show — this spec's own line, "THE NUMBER CHANGES ONLY ALONGSIDE A MEASUREMENT, NEVER TUNED UNTIL GREEN", now cuts against a number I myself put in front of them.
+
+    CONSEQUENCE FOR #2062, which enables these jobs. For roughly the next 24 hours the gate will trip on every 6h tick, because the window still holds 7309 pre-fix calls at ~19.6% aggregate. THOSE TRIPS ARE CORRECT AND MUST NOT BE READ AS A LIVE REGRESSION: the 24h window genuinely was over budget, for a defect that is already fixed on main. They will age out on their own. After that the gate sits near the line for real, and BUG-1572's binary-blind denominator means any lane running an older build pushes it back over. So the first quiet reading is not expected before the window clears, and is not trustworthy as "main is healthy" until BUG-1572 lands.
+
+    I am recording this as a correction rather than an update because a reader who saw "17.1% -> 0.0%" and stopped there would conclude the fix was total and the gate was safe to trust. Neither is established. The direction is real; the magnitude was an artefact of twenty-six samples.
+  created_at: 2026-09-21T21:34:41.563898713Z
+  modified_at: 2026-09-21T21:34:41.563898713Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
