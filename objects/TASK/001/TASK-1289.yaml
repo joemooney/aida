@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T01:50:05.486062325Z
+modified_at: 2026-09-21T01:55:01.246432592Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -791,6 +791,29 @@ comments:
   created_at: 2026-09-21T01:47:03.655569590Z
   modified_at: 2026-09-21T01:47:03.655569590Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c1ac-79fe-70a0-96b0-89a89cb37f7c
+  author: joe
+  content: |-
+    [aida:advisor] MISATTRIBUTED VERDICT, RECOVERED AND PLACED HERE. On 2026-09-20 at 01:53:37Z the drain's reviewer recorded RequestChanges against PR #2043 at head 35de6d3abb with five findings. Every finding is about TASK-1289 or BUG-1420 - the reviewer read the code correctly. But PR #2043 was opened from the story-1391-work branch name, so the shelve at 01:53:44Z landed on STORY-1391, and these five findings were recorded ONLY against a spec they have nothing to do with. TASK-1289 had no record that they were found. Copied here verbatim so the record exists on the right spec; the verdict file itself is left untouched.
+
+    RECORDED BY: aida drain reviewer   REVIEWED SHA: 35de6d3abb540c6cd98537c037815b33c49ed589   BRANCH: story-1391-work   AT: 2026-09-21T01:53:37.059507462+00:00
+
+    SUMMARY: BUG-1420's strict Bash parity is verified, but TASK-1289 still does not enforce the pre-publication boundary and can open after incomplete guards; two required acceptance paths also lack the mandated tests.
+
+    FINDING 1. TASK-1289 publication boundary is advisory rather than enforced: aida-cli-lib/src/lib.rs:87798-87801 explicitly runs preflight before accepting an agent-opened PR, which means that PR is already published; the only prevention is prose in aida-core/templates/skills/aida-pr/SKILL.md:369-378. Add a technical gate so orchestrated implementers cannot create the PR (or close/reject any premature PR before guard execution), and add an end-to-end test proving a failing guard leaves no open PR.
+
+    FINDING 2. TASK-1289 fails open when a configured guard cannot complete: aida-cli-lib/src/implementer_preflight.rs:344-352 maps timeouts and spawn errors to Skipped, while decide() treats every skipped result as Open; the test at lines 455-469 explicitly locks in publication after timeout. Unknown/missing configured guards may skip per acceptance, but an identified guard that times out or cannot start has not passed and must refuse publication or produce an explicit non-publication outcome.
+
+    FINDING 3. TASK-1289's clean-worktree latency criterion is violated and untested: execute() unconditionally runs cargo metadata and cargo build -p aida-cli --bin aida at aida-cli-lib/src/implementer_preflight.rs:300-305 before every configured guard, even when no selected guard uses aida. This adds a build outside the configured CI guard runtimes. Build lazily only for guards that need the worktree binary (or make it a named guard), and add a test proving no extra command runs for a clean guard set.
+
+    FINDING 4. TASK-1289.acc6c6a1 lacks the required portability-ratchet publication test. failing_ci_command_preserves_offending_line_and_fix at aida-cli-lib/src/implementer_preflight.rs:402-427 uses a synthetic echo/exit guard and calls run()/decide() only; it does not create an actual portability-ratchet violation, exercise the real CI command, or prove the PR-open path is blocked while preserving the real guard/offending-line/fix output. Add the required end-to-end test.
+
+    FINDING 5. TASK-1289.ac0032b7 is only partially tested. missing_config_uses_ci_step_name_defaults_and_unknown_steps_skip at aida-cli-lib/src/implementer_preflight.rs:388-400 checks the hard-coded default count and resolves an unknown name against an entirely missing workflow; it never proves [preflight].guards is read, that defaults match the CI guard set, or that an unknown guard in a valid workflow is skipped with a surfaced note. Add coverage for all three branches of the criterion.
+
+    ADVISOR NOTE: findings 2 and 3 overlap BUG-1507, which covers the fail-open decide() across four sites. Finding 2 here is the same defect reported independently by a third reviewer, which is corroboration rather than duplication. Findings 1, 4 and 5 are TASK-1289-specific and are recorded nowhere else.
+  created_at: 2026-09-21T01:55:01.246432592Z
+  modified_at: 2026-09-21T01:55:01.246432592Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
   implemented: true
