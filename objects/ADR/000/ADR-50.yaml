@@ -1,0 +1,57 @@
+id: 01a0c1e8-834e-7d21-a78c-96fc3427939e
+spec_id: ADR-50
+agreed_id: ADR-50
+title: 'Split the review verdict rather than defer review: behaviour defects block, acceptance gaps merge with a child spec, and an unclassified finding blocks'
+description: |
+  CONTEXT
+
+  During a period of mass change the blocking review gate produces a queue that cannot drain. Measured 2026-09-20: 40 `verdict:request-changes` shelves against 32 merges, two waves draining with shipped:0, and a reviewer queue holding 22 routed entries of which ZERO were actionable - fifteen sat refused at an unmoved head waiting on rework.
+
+  The operator proposed: implement everything knowing it may not meet acceptance, defer or background the review phase and file bugs rather than blocking, gate only on the existing regression suite, and file each change's tests as a separate commit at the back of the queue.
+
+  THE MEASUREMENT THAT DECIDES IT
+
+  Of every PR the reviewer rejected, with a resolvable build: 44 green, 3 red, 1 unknown. The regression suite PASSES on roughly 92 percent of the work review rejects. Independently sanity-checked on the currently-open refused set: 16 pass, 2 fail.
+
+  So gating on the regression suite does not filter that work - it admits essentially all of it, defects included. The suite is not a weaker form of review; it is ORTHOGONAL to it. And the same number, read the other way, proves review catches a class of defect the tests structurally cannot.
+
+  Classifying all 78 findings across open refusing verdicts: acceptance unmet 32 (41%), behaviour defect 16 (21%), other 26 (33%, mostly defects on inspection), test gap 4 (5%). So the premise "the code works, it just does not meet the stated bar" holds for roughly half, and the rest are genuine defects.
+
+  DECISION
+
+  1. ADOPT THE SPLIT VERDICT. The reviewer emits two kinds where it today emits one. A BEHAVIOUR DEFECT blocks. An ACCEPTANCE GAP or TEST GAP files a child spec and MERGES. On the 41/21 split this unblocks roughly half the rejected work immediately while leaving the gate where the risk is.
+
+  2. REJECT REGRESSION-TESTS-AS-SOLE-GATE. The 44/48 number says it gates nothing. It is also a suite we have proven permeable: a test that include_str!s 93 characters of its own source and cannot fail, a fake gh returning hardcoded output regardless of input, and a test pinning a fail-open decision as correct.
+
+  3. THE CLASSIFICATION DEFAULT IS BLOCK. This is the clause that decides whether the mode is safe, and it does not appear in the proposal. The split routes on a judgement the reviewer makes at verdict time, and 33 percent of tonight's findings landed in "other". An unclassified, ambiguous, or mixed finding BLOCKS. Absent classification must never read as acceptance-only - that is PRIN-5 at the exact point this decision introduces a permissive path, and it is where the mode will fail silently if it fails.
+
+  4. ADOPT A DEFERRED-FINDINGS BUDGET AS THE FORCING FUNCTION. The drain stops accepting new work above N open deferred findings. It cannot be release-gated: ADR-47 defers releases until the queue empties, so a release-triggered forcing function would never fire. It cannot be "file a bug and move on" either - there are 408 auto-filed shelve drafts nobody triages (BUG-1498), which is the local evidence that filing is where things go to be forgotten. N is set from measurement after the first week, not guessed now; until then it is the count at which the queue stopped draining tonight.
+
+  5. REJECT TESTS-AT-THE-BACK-OF-THE-QUEUE. If the goal is emptying the backlog, the test commit is permanently the lowest-priority item, so the suite stops growing while main grows and the gate weakens exactly as volume rises. It also breaks provenance - the test lands under a different spec at a different time, so the trailer no longer links the test to the change it covers - and it inverts the order that makes a test meaningful: written afterwards against the code rather than against the requirement, it tests what was built rather than what was asked for.
+
+  6. PREREQUISITE: STORY-1391. Verdict files are overwritten per round - 499 on disk, all latest - so the first-round pass rate is currently unmeasurable. Adopting this mode without it means changing the process with no way to observe the effect. STORY-1391 criterion 1 is verdict-history retention per round, which is exactly the missing measurement.
+
+      COLLISION TO RESOLVE BEFORE IMPLEMENTING: BUG-1505 criteria 7 and 10 also require read-before-write and a superseding verdict recording what it superseded. Two specs both own verdict history. One must own it and the other reference it, or it is implemented twice in two shapes and neither is authoritative.
+
+  OPEN QUESTION - FOR THE OPERATOR, NOT DECIDED HERE
+
+  WHAT ENDS THIS MODE. The proposal is scoped to "a period of mass change" and that period has no stated end. Without an exit condition the permissive half becomes the process, and the project ships acceptance-unmet work indefinitely while the deferred-findings pile grows against a budget that was set for a temporary state. The exit should be tied to the same measurement that justifies entry - the queue draining, or the shelve-to-merge ratio inverting - and it should be written down before the mode starts, because the moment to define "temporary" is never going to feel more available than now.
+
+  ALTERNATIVES CONSIDERED
+
+  Defer review entirely and background it. Rejected: it discards the 21 percent behaviour-defect class the suite provably cannot catch, and the 44/48 number is the measurement of exactly that.
+
+  Keep the blocking gate and add capacity. Rejected on measurement: the reviewer queue held zero actionable items across two measurements forty minutes apart. Review is not the constraint; rework is. Adding review capacity spends it on work already correctly refused.
+
+  RECORDED BY
+
+  The advisor seat, on a proposal relayed by the product seat from an operator decision in session 2026-09-20. THIS IS A RELAY: neither the advisor nor the reviewer witnessed the operator's proposal directly, and the modifications in clauses 1, 4 and 5 are the product seat's, with clauses 3 and the open question added by the advisor.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T03:00:35.790745158Z
+modified_at: 2026-09-21T03:00:35.790745158Z
+req_type: Decision
+tags:
+- operator-decision review-gate mass-change from:session-0920
