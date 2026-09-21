@@ -25,7 +25,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:51:57.195181294Z
-modified_at: 2026-09-21T21:29:46.098592003Z
+modified_at: 2026-09-21T21:38:43.083007051Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -50,4 +50,11 @@ relationships:
   target_id: 01a0b5c8-f02f-7c22-84d1-8e58b8d59768
   created_at: 2026-09-20T17:52:57.486858427Z
   created_by: joe
+comments:
+- id: 01a0c5e8-2f0b-7bf2-8208-46a8fa1dd623
+  author: joe
+  content: 'Implementation audit: the core subject_line projection is compact/truncated and returns only a title, while print_mailbox_line is an expanded row that retains the full body beneath an explicit subject. They should not become one formatter because that would change the CLI row contract. Extracted mailbox_line_body instead so the expanded renderer shares the core projection''s nonblank-subject rule without conflating the two output shapes. BUG-1297''s typed MailboxResolveFailure was already present; the send path now preserves it through anyhow context and the ambiguous variant provides lengthen-the-prefix guidance.'
+  created_at: 2026-09-21T21:38:43.083007051Z
+  modified_at: 2026-09-21T21:38:43.083007051Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
