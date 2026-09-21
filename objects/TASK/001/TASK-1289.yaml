@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T02:33:19.408792262Z
+modified_at: 2026-09-21T08:20:42.825797663Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1152,3 +1152,16 @@ failure_reason:
   recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1289 --work`'
   shelved_by: advisor
   shelved_at: 2026-09-20T06:10:58.464534591Z
+decision_request:
+  question: 'Preflight is supposed to gate PR publication but runs AFTER an agent-opened PR is accepted, so the PR is already published; the only prevention is prose in a SKILL.md. Codex has taken two rounds (PR #2042, 5 commits) and the boundary is still advisory - the reviewer''s RequestChanges says so. More rounds will not fix it because the implementer cannot decide where the boundary goes. Which shape should the boundary take?'
+  choices:
+  - label: 'B: retract on failure (RECOMMENDED)'
+    consequence: Implementers keep opening PRs; preflight immediately closes or drafts any PR whose guards failed. Closes the window that matters - a bad PR does not stay open and does not reach a reviewer - without renegotiating who may call gh pr create. Smallest change while the drain is being stabilised.
+    resolution: tag:+decision:retract-on-failure
+  - label: 'A: prevent publication'
+    consequence: Orchestrated implementers lose the ability to open a PR at all; the orchestrator opens it after preflight passes. Strongest guarantee and probably the correct end state, but it changes the implementer contract and touches every implementer path at once.
+    resolution: tag:+decision:prevent-publication
+  - label: 'C: accept it as advisory'
+    consequence: Drop the claim that preflight gates publication, keep it as early warning, stop filing rounds against a boundary we have decided not to enforce. Cheapest and defensible if a briefly-visible bad PR is cheap - but gives up a guarantee we have been describing as real.
+    resolution: tag:+decision:advisory-only
+  asked_at: 2026-09-21T08:20:42.825797663Z
