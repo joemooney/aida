@@ -1,0 +1,43 @@
+id: 01a0c334-612d-71d2-bde8-ccb37a49c4c2
+spec_id: PRIN-6
+agreed_id: PRIN-6
+title: 'Present evidence is not necessarily current evidence: a surface must distinguish a field that holds a value from one that holds a value still true, because a populated field reads as an answer'
+description: |-
+  PRESENT EVIDENCE IS NOT NECESSARILY CURRENT EVIDENCE.
+
+  A coordination surface must distinguish a field that HOLDS A VALUE from a field that holds a value STILL TRUE OF THE THING IT DESCRIBES — because a populated field is read as an answer, and the check that would catch a stale one is always one level deeper than the check a reasonable person runs.
+
+  THE SIBLING OF PRIN-5. PRIN-5 says a surface must distinguish ABSENT evidence from GOOD evidence, because computing a verdict over what is present errs toward reassurance. This is its other half: among the evidence that IS present, a surface must distinguish CURRENT from STALE. PRIN-5 fails open on nothing; this fails open on something, which is harder to see because there is a value to point at.
+
+  TWO INSTANCES, 2026-09-21, IN UNRELATED SURFACES AND FOUND HOURS APART:
+
+      reviewed_sha is PRESENT          ...but may be resolved from a local ref fallback
+                                       rather than the reviewed commit -> STAMPED, not
+                                       REVIEWED. A wrong sha defeats the staleness check by
+                                       SATISFYING it: the tip often matches, the consumer
+                                       sees AtReviewedSha, and work passes on a review that
+                                       never happened at that commit. (BUG-1538)
+
+      refs/pull/N/merge is PRESENT     ...but computed eight hours earlier for a previous
+                                       head, with the current head not an ancestor of it ->
+                                       MERGEABLE-looking, not merged. A seat polled twelve
+                                       minutes for a Build that could never start. (#2030,
+                                       BUG-1481)
+
+  THE SHALLOW CHECK IS THE ONE A REASONABLE PERSON RUNS, which is what makes this a principle rather than a lapse. "Is the field set?" is what you think to test for. The deeper checks are cheap once named — ask WHERE the sha came from; ask what the ref's PARENTS are — but nothing prompts you to ask them, because presence already looks like an answer.
+
+  WHAT IT REQUIRES OF A SURFACE:
+    1. Where a value can be derived several ways, RECORD WHICH WAY. A provenance field costs almost nothing and converts an unanswerable question into a query — this is BUG-1538's criterion 3, generalised.
+    2. Where a value is a snapshot of something that moves, the surface must let a consumer establish CURRENCY without a second system. A merge ref that cannot say which head it was computed for forces every reader to reconstruct it from parents.
+    3. A consumer that cannot establish currency must treat the value as UNPROVEN, not as its face value. `verdict_tip_relation`'s Unknown arm does this correctly today — "A review gate that cannot answer must not wave work through" — and is the worked example of the principle already being honoured somewhere.
+
+  WHY RECORD IT AS A PRINCIPLE RATHER THAN A FINDING. Two independent instances in one night, in surfaces sharing no code, both of which were nearly reported wrong in the reassuring direction. The defect is not in either surface; it is in the shape of "check that the field is populated", which is a habit rather than a bug. PRIN-5 earned its place the same way.
+
+  Derived jointly by the reviewer and driver-advisor seats on 2026-09-21; the pairing of the two instances is the reviewer's, the statement is the advisor's.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T09:03:05.005813823Z
+modified_at: 2026-09-21T09:03:05.005813823Z
+req_type: Principle
