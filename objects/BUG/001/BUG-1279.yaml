@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:52:27.202206555Z
-modified_at: 2026-09-20T08:31:44.465453074Z
+modified_at: 2026-09-21T13:54:22.722752398Z
 req_type: Bug
 tags:
 - discipline
@@ -81,6 +81,15 @@ comments:
   created_at: 2026-09-20T01:52:09.630367766Z
   modified_at: 2026-09-20T01:52:09.630367766Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c43f-1182-7d80-8dd4-339028573f90
+  author: joe
+  content: |-
+    SCOPE CORRECTION from a 2026-09-21 investigation that initially mis-attributed a cause to this trap. The blanket '.aida/' in .git/info/exclude IS present in this clone (line 19), but it is currently INERT for the allow-listed set: those files are already TRACKED, and ignore rules do not apply to tracked paths - which this spec's own text says. It is armed for the NEXT new file added under .aida/, not for anything already in git.
+
+    Separately, a reusable diagnostic caution that belongs with this spec because this is where someone will look: 'git check-ignore -v <path>' reports the WINNING rule under git's precedence order, where .git/info/exclude OUTRANKS .gitignore. It names the first match, not the only one and not the causal one. With two rules covering a path it will ALWAYS point at info/exclude, which reads as attribution and is not. Attributing causation requires removing the candidate rule and re-testing in a scratch repo. An advisor investigating a merge-hold marker read that precedence report as causal and concluded 'machine-local, not designed' when the repo's own deny-by-default .aida/* was doing the ignoring on every clone.
+  created_at: 2026-09-21T13:54:22.722752398Z
+  modified_at: 2026-09-21T13:54:22.722752398Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bdac-3ada-7a50-a88f-7b441b49e46e
   author: aida-auto-bump
