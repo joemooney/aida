@@ -41,7 +41,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:55:30.106400060Z
-modified_at: 2026-09-21T12:32:03.935991903Z
+modified_at: 2026-09-21T12:32:32.947362864Z
 req_type: Bug
 tags:
 - agent-surface
@@ -95,6 +95,35 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-21T04:46:37.206744544Z
   modified_at: 2026-09-21T04:46:37.206744544Z
+- id: 01a0c3f4-26b3-7513-85c4-40f99d7f64f8
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2027 test(journey): compare relationship projections as parsed edges (BUG-1442)
+    merge commit: 8bc2512480c76b8dceeb1a8e7105de362f300c65
+    verdict: APPROVED by claude-reviewer-1 at reviewed_sha 53a138232061bdf72562d3d50857ebf1b1930f2c
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (implementers = codex for c3bc088a9c, claude-product-1 for 53a1382320; reviewer = claude-reviewer-1; advisor merged, authored none of the diff)
+
+    gates cleared, checked as TWO SEPARATE FACTS per PRIN-7:
+      - every REQUIRED check passes: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS (Release SKIPPED, not required)
+      - a recorded verdict names the CURRENT head: reviewed_sha 53a138232061... is the full 40 characters of head 53a138232061..., exact match
+      - no .aida/merge-holds/PR-2027 marker; mergeStateStatus CLEAN
+
+    THE REVIEWER'S BEST FINDING ON THIS PR WAS NOT IN THE BRIEF. The refusal asked for parsed-edge comparison. They noticed that comparison ALONE passes VACUOUSLY when neither parser finds its section, because empty equals empty - and that the pinned expected-edge-set assertion is what makes the comparison mean anything. That is the defect being fixed wearing the fix as a costume. Nobody asked them to look for it.
+
+    METHOD CORRECTION CARRIED HERE RATHER THAN RE-RECORDED, and this is deliberate. The reviewer's FIRST BUG-1550 check on this PR was vacuous: it grepped the diff for REMOVED lines carrying /// or trace:, but that defect removes nothing - it inserts after a header that stays as unchanged context. They reported this PR clean for BUG-1550 from a check that could not have detected it, found that themselves, built a detector demonstrated to fire on the known-bad commit, re-ran it, and confirmed the head genuinely clean. Conclusion unchanged, evidence now valid.
+
+    They asked whether to re-record the verdict with the corrected method. I RULED NO: re-recording invokes BUG-1539, which would clobber the PR-keyed record and force hand-carrying six findings including the drain reviewer's original, to improve the provenance of a conclusion that does not move. A correction goes where the NEXT reader will look - BUG-1550 and this ledger - never at the cost of invoking a defect already documented as destructive.
+
+    squash body edited at merge: yes, two additions and no removals of substance. The 'observed while reading the real renderer' paragraph now names git_backend_cmd.rs INLINE_THRESHOLD 5 and points at TASK-1417, so the permanent record links to the filed spec instead of leaving a product observation only in prose. The attribution correction from the PR body was carried into the commit body, naming BUG-1539 as why the wrong actor was credited.
+
+    ATTRIBUTION, for the record: the original seam finding on the sibling PR belongs to the 'aida drain reviewer' actor, not to claude-reviewer-1.
+
+    timestamp: 2026-09-21T05:33 MST
+  created_at: 2026-09-21T12:32:32.947362864Z
+  modified_at: 2026-09-21T12:32:32.947362864Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c3f3-b558-70e3-8262-706e0f9313dc
   author: aida-auto-bump
