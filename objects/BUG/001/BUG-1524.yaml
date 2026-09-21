@@ -71,7 +71,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:40:23.908358534Z
-modified_at: 2026-09-21T04:40:23.908358534Z
+modified_at: 2026-09-21T04:40:40.449199776Z
 req_type: Bug
 tags:
 - parent:EPIC-62 drain orchestrator silent-noop severity:major
+execution_mode: drive
