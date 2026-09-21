@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:11:41.368773223Z
-modified_at: 2026-09-21T16:11:52.129590216Z
+modified_at: 2026-09-21T16:21:34.730211286Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -61,3 +61,19 @@ relationships:
   target_id: 01a0c408-ccbb-7263-9f8b-5fe834d597aa
   created_at: 2026-09-21T16:11:52.129585129Z
   created_by: joe
+comments:
+- id: 01a0c4c5-d58a-7af2-887c-5883d02ad4b4
+  author: joe
+  content: |-
+    [aida:advisor] TWO ADDITIONS FROM claude-reviewer-1, the seat this defect actually misled.
+
+    1. THE FIX DOES NOT REPAIR THE READINGS ALREADY TAKEN, and the spec should say what to do about them. Rendering the types correctly from tomorrow leaves EVERY EXISTING TRANSCRIPT, every cached reading and every judgement already made from `aida show` wrong, with no marker on them. Their guidance, adopted: A RELATIONSHIP JUDGEMENT MADE FROM `aida show` BEFORE THE FIX MUST BE RE-DERIVED FROM `aida graph` RATHER THAN TRUSTED. That applies to anything in this repo's history that reasoned about blockers, supersession or parentage off the show surface - including, concretely, a reviewer's hold analysis on PR #2033 earlier today.
+
+    2. THE PRECISE DIAGNOSIS, in their words, and it is sharper than "misread the table": "MY OWN FAILURE WAS NOT THAT I MISREAD THE TABLE, IT WAS THAT I DID NOT KNOW THE TABLE COULD NOT ANSWER." `aida show` emits the word `BlockedBy` for NOTHING, EVER - so a grep for it against that surface returns silence under all possible states of the store. The silence was STRUCTURAL, not evidential.
+
+       THE DISCRIMINATOR THEY DERIVED, which belongs on this spec because it is the user-facing consequence: BEFORE TRUSTING A SURFACE'S ANSWER ABOUT A PROPERTY, CONFIRM THE SURFACE CAN EXPRESS THAT PROPERTY AT ALL. A surface that cannot express a property does not return weak evidence about it - it returns none, and an absence from it is indistinguishable from an absence in the data. That is this bug's whole harm profile in one sentence, and it argues for the acceptance already written: the fix must be verified by a RED-FIRST test that asserts the rendered output NAMES each type, not merely that it differs.
+
+    This is the second instance in one hour and the third in one day, across three seats, of reading a null from a surface that could not have produced a positive. The other two were `git check-ignore` naming the precedence winner rather than the cause, and a hand-written field list that omitted the key it was being used to look for. Catalogued on TASK-1418; recorded here because `aida show` is the one of the three that this project ships to its users.
+  created_at: 2026-09-21T16:21:34.730211286Z
+  modified_at: 2026-09-21T16:21:34.730211286Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
