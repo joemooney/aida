@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T03:45:41.774131580Z
+modified_at: 2026-09-21T03:47:33.851025014Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -131,4 +131,28 @@ comments:
     WHY THIS BELONGS ON THIS FINDING SPECIFICALLY. Criterion 1 here requires holes to be MARKED rather than reconstructed, because the eaten text is unrecoverable. A marking is a repair that quotes its own damage. So every remediation this spec produces will be one of the cases where the count alarms and only the passage clears it, and an implementer verifying their sweep by count alone will read correct markings as failed repairs.
   created_at: 2026-09-21T03:45:41.774131580Z
   modified_at: 2026-09-21T03:45:41.774131580Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c213-835b-7b71-86eb-9bdf3f797bb3
+  author: joe
+  content: |-
+    [aida:advisor] TWO ADDITIONS TO THE VERIFICATION HALF. The first completes the scope rule rather than decorating it; the second is this finding's own noise floor, now measured.
+
+    1. THE PRE-CUT AND POST-CUT COUNTS ANSWER DIFFERENT QUESTIONS. Same command, same integer, and only one of them can catch a scoping error. Raised by the reviewer seat and it is the reason the rule works:
+
+        counted BEFORE choosing where to cut   tells you HOW MANY PLACES YOU ARE ABOUT TO NOT EDIT
+        counted AFTER the edit                 tells you how many remain
+
+    The post-cut count is CORRECT WITHIN THE SCOPE IT WAS GIVEN and structurally cannot see outside it. That is why the first repair pass on BUG-1505 verified successfully and still left a copy standing: the editor cut where they had read, counted the result, and the count was right about the region it was asked about.
+
+    So "an edit's scope is a claim about the artifact" is not satisfied by verifying afterwards, however carefully. Only the pre-cut count makes the scope decision on whole-artifact information, and it is the same one-line command either way - the difference is entirely WHEN it is run.
+
+    2. THIS FINDING NOW TRIPS ITS OWN DETECTOR EIGHT TIMES, all self-reference. Measured across the description and comments: "(, RealPhaseDriver)" four times, "pr_ship_create_pr's  through" three, "multi-tool (,)" once as the documented legitimate case. Zero genuine holes.
+
+    The text above already predicts this - "exclude self-references by spec id, or accept a known constant of noise equal to the number of findings that quote holes". THE FLOOR IS NO LONGER HYPOTHETICAL. It is eight, on this file, and it grew from one to eight because the finding was worked on successfully. Every additional instance recorded here adds to it.
+
+    FOR WHOEVER IMPLEMENTS THE DETECTOR: excluding this finding's spec id is not optional bookkeeping. At eight hits it is twice the size of the entire genuine candidate set - four specs, two real - so a sweep that includes it reports a corpus that is two-thirds noise from one file. And the number rises each time the detector is used and the result written down.
+
+    3. A THIRD CLASS OF FALSE ALARM, found while the above was being checked and worth naming with the other two. A count can alarm because the text was REPHRASED rather than removed or quoted: a literal string sent in mail was placed as a section heading instead of a sentence, so the phrase read zero while the substance was present and strengthened. So the count's three failure modes are the quotation, the surviving copy, and the rephrasing - and the passage separates all three. The integer alone distinguishes none of them.
+  created_at: 2026-09-21T03:47:33.851025014Z
+  modified_at: 2026-09-21T03:47:33.851025014Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
