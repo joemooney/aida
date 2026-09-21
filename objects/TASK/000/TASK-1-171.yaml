@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T03:49:25.394635006Z
+modified_at: 2026-09-21T03:49:27.011664571Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -139,8 +139,8 @@ comments:
 
     1. THE PRE-CUT AND POST-CUT COUNTS ANSWER DIFFERENT QUESTIONS. Same command, same integer, and only one of them can catch a scoping error. Raised by the reviewer seat and it is the reason the rule works:
 
-        counted BEFORE choosing where to cut   tells you HOW MANY PLACES YOU ARE ABOUT TO NOT EDIT
-        counted AFTER the edit                 tells you how many remain
+      counted BEFORE choosing where to cut   tells you HOW MANY PLACES YOU ARE ABOUT TO NOT EDIT
+      counted AFTER the edit                 tells you how many remain
 
     The post-cut count is CORRECT WITHIN THE SCOPE IT WAS GIVEN and structurally cannot see outside it. That is why the first repair pass on BUG-1505 verified successfully and still left a copy standing: the editor cut where they had read, counted the result, and the count was right about the region it was asked about.
 
@@ -148,11 +148,11 @@ comments:
 
     2. THIS FINDING NOW TRIPS ITS OWN DETECTOR EIGHT TIMES, all self-reference. Measured across the description and comments: "(, RealPhaseDriver)" four times, "pr_ship_create_pr's  through" three, "multi-tool (,)" once as the documented legitimate case. Zero genuine holes.
 
-    The text above already predicts this - "exclude self-references by spec id, or accept a known constant of noise equal to the number of findings that quote holes". THE FLOOR IS NO LONGER HYPOTHETICAL. It is eight, on this file, and it grew from one to eight because the finding was worked on successfully. Every additional instance recorded here adds to it.
+    The text above already predicts this - "Exclude self-references by spec id. The alternative previously offered here - accepting a known constant of noise - is WITHDRAWN 2026-09-20 20:52: the floor is not constant. It is monotone and unbounded, rising every time anyone works on this finding, because discussing the detector requires quoting an instance. Measured 8 at 20:47 and 11 at 20:50, raised by the act of recording that it was 8. There is no acceptable version.". THE FLOOR IS NO LONGER HYPOTHETICAL. It is eight, on this file, and it grew from one to eight because the finding was worked on successfully. Every additional instance recorded here adds to it.
 
     FOR WHOEVER IMPLEMENTS THE DETECTOR: excluding this finding's spec id is not optional bookkeeping. At eight hits it is twice the size of the entire genuine candidate set - four specs, two real - so a sweep that includes it reports a corpus that is two-thirds noise from one file. And the number rises each time the detector is used and the result written down.
 
     3. A THIRD CLASS OF FALSE ALARM, found while the above was being checked and worth naming with the other two. A count can alarm because the text was REPHRASED rather than removed or quoted: a literal string sent in mail was placed as a section heading instead of a sentence, so the phrase read zero while the substance was present and strengthened. So the count's three failure modes are the quotation, the surviving copy, and the rephrasing - and the passage separates all three. The integer alone distinguishes none of them.
   created_at: 2026-09-21T03:47:33.851025014Z
-  modified_at: 2026-09-21T03:47:33.851025014Z
+  modified_at: 2026-09-21T03:49:27.011664412Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
