@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T12:42:02.692445706Z
+modified_at: 2026-09-21T12:44:54.134125344Z
 req_type: Bug
 tags:
 - agent-surface
@@ -238,6 +238,41 @@ comments:
     CONSEQUENCE FOR THE ACCEPTANCE TEST, and this is a live question rather than a ruling: four fixture shapes have now failed to separate a full load from a cached read against ~90ms of process startup. If the dominant cost does not exist in a tempdir, NO CI-SIZED FIXTURE CAN REPRODUCE IT, and an executable command-level latency test in CI may be unachievable rather than merely hard. What survives is the spec's OWN verification line - `aida usage --cmd show --slower-than 1000ms events` - which measures the real store under real use, where the dominant term actually exists. That instrument is already in the acceptance criteria. The answer may be that the criterion already names the right instrument and CI is the wrong place to run it.
   created_at: 2026-09-21T12:39:39.379843256Z
   modified_at: 2026-09-21T12:39:39.379843256Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3ff-75f6-7333-890e-250c803ded5d
+  author: joe
+  content: |-
+    FIVE FIXTURES, FIVE NEGATIVES - THE CI-RUNNABLE LATENCY TEST CANNOT BE BUILT, AND THE FIFTH FIXTURE EXPLAINS WHY RATHER THAN MERELY FAILING. Measured by claude-product-1, 2026-09-21, reported without substituting a design.
+
+        FIXTURE                          list       show      ratio   verdict
+        3 objects, 1.2 MB, MUTATED       139 ms     250 ms    1.79    passes - no signal
+        500 objects, 176 KB, fixed        90 ms      96 ms    1.07    baseline
+        500 objects, 176 KB, MUTATED      91 ms     153 ms    1.68    passes - no signal
+        500 objects, 9.96 MB, FIXED     1.089 s    1.075 s    0.99    FAILS ON CORRECT CODE
+        (that last fixture takes 346 s - 5.8 minutes - to construct and run)
+
+    THE DECIDING ROW IS THE FOURTH. Look at `list`: 1.089 s. THE CACHE-BACKED BASELINE IS AS SLOW AS THE COMMAND UNDER TEST, and `show` is marginally FASTER at ratio 0.99. Whatever dimensions make a full store load expensive make the supposedly-cached path expensive too, so a ratio bound cannot separate them - and the absolute 1000 ms ceiling then fires on CORRECT code. The test fails the fix it exists to protect.
+
+    UNWORKABLE ON THREE AXES THAT MOVE IN OPPOSITE DIRECTIONS AS THE FIXTURE GROWS:
+        small fixture   no signal              1.68x-1.79x, under any bound worth setting
+        large fixture   no discrimination      ratio 0.99, ceiling false-fails correct code
+        large fixture   not CI-viable          346 s against a ~9-10 min total CI cycle
+    There is no middle setting that escapes all three.
+
+    A MEASURED INVERSION THE ADVISOR IS RECORDING AS A FACT, NOT A DIAGNOSIS:
+
+        real store    4226 objects, 23 MB     list = 0.45 s   (advisor, 05:35 MST)
+        fixture        500 objects, 9.96 MB   list = 1.089 s  (product)
+
+    The fixture is SMALLER in both object count and bytes, and `list` on it is ~2.4x SLOWER than on the real store. A cache-backed read getting slower on a smaller store is not explained by any per-object or per-byte model, and it is the same wall the per-object rate hit earlier. SOMETHING ABOUT A FRESH TEMPDIR STORE IS NOT WHAT IT APPEARS TO BE. Nobody has measured what, and no one should assume - this is recorded as an anomaly with both measurements attached, so the next person starts from the contradiction rather than rediscovering it.
+
+    Filed as its own task for measurement; it is BUG-1480 diagnostic work, not #2033 review work, and product correctly declined to chase it while under a stop-and-report ruling.
+
+    STATUS OF #2033: nothing pushed. Per the ruling, no design was substituted quietly; per TASK-1418, no guard was shipped that had never been demonstrated to fire. Four green fixtures are four instruments that were never live, not four pieces of evidence the code is fine. The branch is rebased in a worktree and unpushed; the PR is as codex left it.
+
+    WHAT THIS MEANS FOR THE AMENDED CRITERION ABOVE: the real-store guard is now the path, not the fallback. The reviewer's stated position, given in advance and on this spec: four measured negatives and the CI requirement is withdrawn without argument. There are five. The two BINDING CONDITIONS still apply in full - the acceptance must name the TRIGGER, and the guard must be DEMONSTRATED TO FIRE against the real store before it is accepted.
+  created_at: 2026-09-21T12:44:54.134125344Z
+  modified_at: 2026-09-21T12:44:54.134125344Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
