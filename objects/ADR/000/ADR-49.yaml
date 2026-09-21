@@ -1,0 +1,79 @@
+id: 01a0c1e7-e607-7002-8000-c781b9291d6a
+spec_id: ADR-49
+agreed_id: ADR-49
+title: 'Mass-change mode: split the reviewer verdict into blocking defects and deferrable acceptance gaps, with a deferred-findings budget, rather than gating on the regression suite'
+description: |
+  CONTEXT
+
+  During a period of mass change the review gate stopped draining. On 2026-09-20: forty `verdict:request-changes` shelves against thirty-two merges, and two consecutive drain waves that completed with `shipped:0 shelved:0`. Work accumulated faster than it could pass review.
+
+  The operator proposed a mass-change mode: implement everything possible accepting it may not meet acceptance criteria, defer or background the review phase so it files bugs rather than blocking, gate only on the existing regression suite passing, and land each change's tests as a later commit that joins the suite if it passes.
+
+  The diagnosis was correct. The remedy was tested against two measurements before adopting.
+
+  MEASUREMENT 1 — what review actually objects to. Across all seventy-eight findings in open CHANGES-REQUESTED verdicts:
+
+      acceptance unmet    32  (41%)
+      behaviour defect    16  (21%)
+      other               26  (33%)   mostly defects on inspection
+      test gap             4  ( 5%)
+
+  So "the code works, it merely misses the stated bar" holds for roughly half. The remainder are genuine defects.
+
+  MEASUREMENT 2 — whether the regression suite substitutes for review. Of every PR the reviewer has rejected, with a resolvable build:
+
+      green = 44        red = 3        unknown = 1
+
+  The suite passes on 92% of the work review rejects. It is not a weaker form of review; it is ORTHOGONAL to it. Gating solely on the suite would admit essentially all rejected work, defects included.
+
+  That second number also argues the other way, and more strongly: review is catching a class of defect the tests structurally cannot. Whatever mode is adopted must not discard it.
+
+  DECISION
+
+  1. SPLIT THE VERDICT rather than defer it. The reviewer emits two outcomes where it currently
+     emits one: behaviour defects BLOCK; acceptance gaps and test gaps file a child spec and the
+     change MERGES. On the measured split this unblocks roughly half the rejected work while
+     keeping the gate where the risk is.
+
+  2. DEFERRED FINDINGS CARRY A BUDGET. The drain stops accepting new work when open deferred
+     findings exceed a threshold. Self-limiting and fails closed.
+
+  3. THE REGRESSION SUITE IS NOT PROMOTED TO SOLE GATE. Measurement 2 says it would gate nothing.
+
+  4. STORY-1391 IS A PREREQUISITE. Verdict files are overwritten per round, so the first-round
+     pass rate is currently unmeasurable — 499 files on disk, every one a latest verdict. Without
+     it the effect of this mode cannot be observed and its success would be argued from anecdote.
+
+  REJECTED FROM THE ORIGINAL PROPOSAL, with reasons
+
+  Tests as a separate commit at the back of the queue — if the goal is emptying the backlog, that commit is permanently the lowest-priority item. The suite stops growing while main grows, weakening the gate exactly as volume increases.
+
+  Deferred findings as ordinary bugs with no forcing function — there are already 408 auto-filed shelve drafts nobody triages (BUG-1498). "File a bug and move on" is empirically where work goes to be forgotten in this repository.
+
+  Release as the forcing function — ADR-47 defers releases until the queue empties, so a release gate would never fire.
+
+  CONSEQUENCES
+
+  - The reviewer's contract changes. Classifying a finding as blocking or deferrable becomes a
+    judgment the reviewer makes explicitly, and mis-classification in the deferrable direction is
+    how a defect reaches main.
+  - Some defects WILL merge. The 21% behaviour-defect share is the floor of what the split must
+    catch; anything it misclassifies ships. This is accepted deliberately, not overlooked.
+  - Child specs filed from deferred findings need somewhere to live that is not the 408.
+  - The budget threshold is a number nobody has evidence for yet. Pick one, observe, adjust.
+
+  RECORDED BY
+
+  The product seat, from an operator decision in session 2026-09-20. This is a relay: the advisor and reviewer seats did not witness it. The reviewer was sent the proposal before this was recorded, specifically so it could object to a change in its own contract.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T02:59:55.527300499Z
+modified_at: 2026-09-21T02:59:55.527300499Z
+req_type: Decision
+tags:
+- operator-decision
+- process
+- review
+- throughput
