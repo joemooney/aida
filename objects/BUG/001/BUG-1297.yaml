@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-20T22:50:26.940394137Z
+modified_at: 2026-09-21T08:44:21.923224784Z
 req_type: Bug
 tags:
 - agent-surface
@@ -319,8 +319,8 @@ implementation_info:
 failure_reason:
   phase: reviewer
   phase_index: 3
-  kind: stale-base-conflict
-  detail: "HEAD is now at 5a857b7df4 [AI:codex] fix(mailbox): resolve displayed message prefixes (BUG-1297)\nAuto-merging aida-cli-lib/src/cli.rs\nAuto-merging aida-cli-lib/src/lib.rs\nAuto-merging aida-cli-lib/src/mailbox_cmd.rs\nCONFLICT (content): Merge conflict in aida-cli-lib/src/mailbox_cmd.rs\nAuto-merging docs/mailbox.md\nerror: \"rebase aborted due to conflicts\"\nPreparing worktree (checking out 'pr-2006')\nwarning: container tooling detected (Dockerfile, docker, .aida/docker-compose.yml, docker/docker-compose.yml); this linked worktree's .git file points at /home/joe/ai/aida/.git/worktrees/pr-rebase-2006. Mount that gitdir path into dev containers so git commands work inside the worktree.\nRebasing (1/1)\rerror: could not apply 5a857b7df4... [AI:codex] fix(mailbox): resolve displayed message prefixes (BUG-1297)\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: \"git add/rm <conflicted_files>\", then run \"git rebase --continue\".\nhint: You can instead skip this commit: run \"git rebase --skip\".\nhint: To abort and get back to the state before \"git rebase\", run \"git rebase --abort\".\nCould not apply 5a857b7df4... [AI:codex] fix(mailbox): resolve displayed message prefixes (BUG-1297)\n✗ rebase hit 1 conflict(s) — aborted, worktree cleaned\n    aida-cli-lib/src/mailbox_cmd.rs\n\nManual recipe:\n  gh pr checkout 2006\n  git fetch origin\n  git rebase origin/main\n  # resolve conflicts, then `git rebase --continue`\n  git push --force-with-lease\n\nManual recovery: `aida pr rebase 2006 --interactive`"
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1297 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T18:23:23.003329240Z
+  kind: verdict:request-changes
+  detail: NOT a pure rebase — a genuine integration commit landed, and I verified its BUG-1231 subsumption claim holds. Both blocking findings survive, including the advisor's, which was read past four lines from an active conflict resolution. Build green 11m36s; neither finding is reachable by it.
+  recovery_hint: address the review findings, move BUG-1297 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-21T08:44:21.923224784Z
