@@ -1,0 +1,70 @@
+id: 01a0c626-bb17-7c21-ad8d-a6fd894af766
+spec_id: ADR-53
+agreed_id: ADR-53
+title: A performance gate must bound the worst call, not only the share of slow ones
+description: |-
+  A PERFORMANCE GATE MUST BOUND THE WORST CALL, NOT ONLY THE SHARE OF SLOW ONES. Decided by the driver-advisor seat 2026-09-21, on an argument raised by claude-reviewer-1 and settled before BUG-1572's PR arrives rather than after, at their request.
+
+  THE ARGUMENT, which is correct and which I did not have when I wrote "a proportion gate cannot see this":
+
+    1. A PROPORTION IS INVARIANT TO THE MAGNITUDE OF ITS OWN OUTLIERS. A 69-second call and a
+       3.1-second call are THE SAME EVENT to a share-over-budget metric. So this is not a tail the
+       gate under-weights - it is a QUANTITY THE GATE CANNOT EXPRESS. Tightening 10% to 3% would
+       not have caught the 69s call; it would have caught a different, milder thing.
+
+    2. THE METRIC IS PERVERSELY ORIENTED. A proportion IMPROVES AS ITS DENOMINATOR GROWS. Add two
+       hundred more fast `aida show` calls tomorrow and the rate halves while the 69s call sits
+       exactly where it is: same defect, healthier gate, nothing fixed. ANY MEASURE WHOSE VALUE
+       IMPROVES WHEN NOTHING IS FIXED WILL EVENTUALLY BE SATISFIED THAT WAY - not by anyone gaming
+       it, but by ordinary growth.
+
+  THE MEASURED FACT THAT FORCED THIS. STORY-1423's post-fix population at n=170 reads 2.9% against
+  a 10% tolerance - comfortably green - WHILE THE WORST OBSERVED CALL ON A POST-FIX BINARY IS
+  69,240 ms, worse than the 39.4s figure quoted as the PRE-FIX worst case. THE CRITERION PASSES
+  WHILE THE HEADLINE SYMPTOM HAS REGRESSED.
+
+  DECISION: the performance gate trips on EITHER (a) the proportion over budget exceeding the
+  tolerance, OR (b) ANY SINGLE CALL EXCEEDING A CEILING. Both, not either-or: the proportion
+  measures the common case and its improvement is real; the ceiling measures what a user actually
+  experiences.
+
+  THE REMEDY IS FAR CHEAPER THAN THE ARGUMENT SUGGESTS, AND THIS IS THE PART THAT DECIDES IT. THE
+  GATE ALREADY COMPUTES THE MAXIMUM AND ALREADY PRINTS IT:
+
+      doctor_cmd.rs:706   pub(crate) worst_ms: u64,
+      doctor_cmd.rs:753   worst_ms: recent.iter().copied().max().unwrap_or(0),
+      doctor_cmd.rs:807   "... (tolerated {:.1}%, worst {} ms)"
+
+  `worst_ms` is derived, carried on the finding, and rendered in the message - AND NOTHING COMPARES
+  IT TO ANYTHING. So this is not "add a metric". It is "gate on the number you already compute and
+  already show the reader". A `ceiling_ms` beside the existing `budget_ms` in
+  `[performance.budgets]`, and one comparison.
+
+  THAT IS THE FOURTH INSTANCE TODAY OF A VALUE COMPUTED, REPORTED, AND NEVER ACTED ON: BUG-1480's
+  withdrawn trigger (a query with no failure mode), STORY-1422's ledger (the proportion and budget
+  discarded at the trip), BUG-1572 (`binary_sha` written on every row and read by nothing), and now
+  `worst_ms`. The recurring shape is not missing data; it is DATA THAT REACHES A HUMAN-READABLE
+  STRING AND STOPS THERE.
+
+  CONSEQUENCES:
+    - STORY-1423's criterion is amended: "observed QUIET against the post-fix population" is
+      insufficient on its own and must be read as quiet on BOTH limbs.
+    - THE CEILING'S VALUE IS NOT SET HERE. Setting it from today's distribution would be tuning a
+      budget to a measurement, which this spec family explicitly forbids. It needs a deliberate
+      decision with the consequence in front of whoever makes it.
+    - THE PROPORTION LIMB IS NOT WEAKENED OR REPLACED. 2.9% is a real improvement in the common
+      case and should keep being measured.
+
+  WHAT THIS DOES NOT SAY: that the fix failed. #2033 moved the common case decisively. It says the
+  ACCEPTANCE CRITERION cannot tell us whether the thing users complain about got better - the
+  measurement and the harm have come apart, and the measurement is the wrong one. Same family as
+  BUG-1471's criterion 4 naming a surface that does not exhibit the defect.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:47:02.167386557Z
+modified_at: 2026-09-21T22:47:02.167386557Z
+req_type: Decision
+tags:
+- performance governance
