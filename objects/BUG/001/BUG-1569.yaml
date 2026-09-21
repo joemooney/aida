@@ -15,10 +15,40 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:29:09.929894136Z
-modified_at: 2026-09-21T20:29:09.929894136Z
+modified_at: 2026-09-21T21:12:50.382696903Z
 req_type: Bug
 tags:
 - awaiting
 - ci
 - gitlab
 - perf
+comments:
+- id: 01a0c5d0-7dce-7ba3-a018-3cadd1d1c919
+  author: joe
+  content: |-
+    [aida:advisor] MEASURED ON MAIN, 2026-09-21 14:12 MST, binary c29022deb8 (ancestry verified against b1d53bd675/#2033). This is the margin the 1s bound actually has in this repo, and it is smaller than the discussion has assumed.
+
+    Per-line timestamps of one `aida awaiting --notice`, wall-clock from process start:
+
+        [0.007s]  "Current date/time: ..."                        <- the time line
+        [0.689s]  "Awaiting you: 11 findings ... 4 in rework"     <- THE NOTICE ITSELF
+        [1.010s]  <exit 0>                                        <- the watchdog
+
+    Three consecutive runs, total 1.016 / 1.016 / 1.016 s. Eight runs earlier the same minute: 1.01 s every time, never less.
+
+    THREE THINGS FOLLOW, AND THEY PULL IN DIFFERENT DIRECTIONS.
+
+    1. THE WORK IS 689 ms AGAINST A 1000 ms HARD KILL. A 311 ms margin, 31%. The bound is NOT comfortably clear of the work - it is the same order of magnitude as the work, on a store that only grows, on a machine where two or three lanes were running during the measurement. BUG-1567 already records the sibling test as LOAD-CORRELATED FLAKY, so the crossing is not hypothetical: it is the same variable, observed.
+
+    2. THE PROCESS EXITS AT THE DEADLINE, NOT WHEN THE WORK FINISHES. The notice is on stdout at 689 ms and the process does not leave for another 321 ms, landing on 1.010 s every single time. A run that completed its work would exit at 689 ms. IT NEVER DOES. So the watchdog is the exit path on SUCCESSFUL runs too, not only on slow ones - which means something in the notice path is not releasing after the output is produced, and the fail-open timer is currently masking that rather than guarding against it. Every turn of every session in this repo pays the full 1000 ms for 689 ms of work.
+
+    3. THE FAILURE IS UNDETECTABLE BY CONSTRUCTION. `arm_notice_deadline` ends the process with `std::process::exit(0)`. When the 311 ms margin is crossed the notice is dropped and the exit status is SUCCESS. Nothing downstream - not the hook, not a caller, not CI - can distinguish "nothing awaits you" from "the query was killed before it could say". That is PRIN-5 wired into a timer: absence of the line reads as absence of work.
+
+    WHAT THIS DOES AND DOES NOT SETTLE FOR THE PRODUCT BOUND. It CONFIRMS the implementer's premise on #2019 that a real `backend.load()` can exceed 1 s - at 689 ms it is two thirds of the way there already, and their refusal to raise the number rather than fix the load is the right call for the reason they gave: a larger number would need to keep growing with the store. It also shows the fix is more urgent than "an inefficiency": at a 31% margin the correct reading is that the notice is ONE BUSY MACHINE AWAY FROM BEING SILENTLY WRONG ON EVERY TURN, and nothing will say so when it happens.
+
+    A CORRECTION TO MY OWN FIRST READING, recorded because the error is instructive. I first measured time-to-first-byte at 7 ms and was about to report that the work costs 7 ms and the remaining 99% is dead wait. The 7 ms line is the DATE/TIME line, emitted by a different and much earlier path; the notice itself is at 689 ms. A first-byte measurement on a multi-line command measures whichever line is cheapest, not the one you care about. The conclusion inverts - from "the watchdog is pure overhead" to "the watchdog has a 31% margin over real work" - and only per-line timestamps distinguish them.
+
+    SUGGESTED SCOPE ADDITION, not binding: whatever cache-backs the protocol-notice lookup should also make the command EXIT WHEN IT IS DONE. Cutting 689 ms to 50 ms while the process still sits until 1010 ms would fix the margin and leave the whole per-turn cost exactly where it is.
+  created_at: 2026-09-21T21:12:50.382696903Z
+  modified_at: 2026-09-21T21:12:50.382696903Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
