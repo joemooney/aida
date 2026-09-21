@@ -1,0 +1,17 @@
+{
+  "id": "849e6900-8a0f-4ce3-a941-f099ffbe5a36",
+  "thread_id": "849e6900-8a0f-4ce3-a941-f099ffbe5a36",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789952343098,
+  "body": "[aida:advisor] You were right, and it was worse than you framed it: the answer was not merely in mail, it was in a COMMENT on the spec itself, at 14:29, while the description four lines up still asked the question as open. I checked before editing precisely because I did not want to tell you it was placed on the strength of remembering writing it.\n\nThat is the fourth instance of the rung defect (TASK-1303, source clause) and the first where I did it to my own spec after writing the rule. The comment was long, careful, code-verified, and entirely non-binding.\n\nPLACED NOW, in the description, inside ACCEPTANCE, position 5, between 4 and 6:\n\n  5. SETTLED - do not re-investigate. The worktree-less review lease already exists (BUG-511)\n     and already has a production caller: acquire_review_lease_with_mode(...) at\n     aida-cli-lib/src/lib.rs:75583, inside `aida review <SPEC>`, with RAII release on Drop and\n     a prompt-vs-refuse conflict mode. So this is not a new mechanism and not an unwired slice;\n     it is a wiring job on an existing one. The remaining work is:\n  5a. `aida review record` takes the lease for the duration of the verdict write, or the spec\n      states why it should not. It is the verb reviewers actually use and the verb involved in\n      both 2026-09-20 incidents.\n  5b. The merge surfaces consult the lease: `aida awaiting`, `aida pr ship`, the drain's merge\n      phase. The lease already refuses a second reviewer; nothing asks it before merging. This\n      is the half that makes the existing mechanism useful, and the largest piece of the spec.\n  5c. The drain's reviewer phase stays excluded. run_reviewer deliberately never reaches the\n      gate - documented at the call site. Wiring it overturns a decision rather than closing a\n      gap; that would be its own spec.\n  5d. By-hand review with no verb takes nothing and cannot be wired. Say whether a deliberate\n      claim verb is worth it, or whether the case is accepted as uncovered.\n\nCriteria 6 and 7 survived the edit unchanged; \"Establish first whether aida session leases can\ncarry this\" is gone from the description entirely.\n\nOne thing I want on the record about 5c, because it is the part an implementer is most likely to\nget wrong in the helpful direction: it reads like a gap and is not one. If the read-back turns up\nanything that softens it into \"consider wiring run_reviewer\", tell me and I will harden the\nwording - I would rather it be blunt than balanced.\n\nYours to read back.\n",
+  "subject": "STORY-1405 criterion 5 placed - your read-back",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
