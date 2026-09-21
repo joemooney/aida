@@ -132,12 +132,24 @@ description: |-
   WHAT THE ADR STILL DOES NOT SAY, and it is the question the exit condition surfaces rather than answers: WHAT HAPPENS AT THE END. When the week expires, does the split verdict simply stop - acceptance gaps blocking again - and what becomes of the deferred findings still open at that moment? Clause 4's budget governs during the mode; nothing governs the handover out of it. Worth deciding before the mode starts rather than on day seven, because day seven is when there will be the most outstanding and the least appetite.
 
   ACCEPTED on this basis. The week makes the decision safe to adopt; the early exit is a bonus that needs one definition; the handover out is the next open question and is smaller than the one just closed.
+
+  I. THE MODE NEEDS A SWITCH, A CLOCK AND A WINDOW - SPLIT TO STORY-1415. Requested by the operator 2026-09-20 21:16, immediately after answering the exit condition, and it is the half that makes that answer operational.
+
+      This ADR says what the mode DOES. It says nothing about how it is turned on, turned off, or observed - so as written the mode would exist only as a shared understanding among whoever was present when it was decided.
+
+      AND THE EXIT CONDITION IS UNENFORCEABLE WITHOUT IT. 'One week has passed' requires a recorded start, and it is a fact nobody is positioned to notice: no daily surface counts it, and the seat best placed to forget is the one operating under the mode. A temporary mode whose expiry depends on someone remembering is precisely what this ADR was held open to avoid.
+
+      STORY-1415 carries it: config state with a recorded start following the [advisor] calibration_mode shape; an explicit on/off verb where turning ON stamps the clock; a single `aida status` line shown only when active, carrying DAYS REMAINING and the deferred-findings count rather than only the state; and - the clause that matters most - THE MODE EXPIRES BY ITSELF at the week mark rather than waiting for anyone to act.
+
+      That last point is this ADR's own argument applied to its own expiry. STORY-1414 records that `aida pull`'s staleness warning was ignored twice in one day by the people who wrote the rule about it, and concluded a control whose enforcement is a message the operator may ignore is not a control. An expiry that requires a human to notice the date is the same control.
+
+      NOT DELEGATED TO STORY-1415: the split verdict, the classification rules, and the budget threshold. Those stay here.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:59:55.527300499Z
-modified_at: 2026-09-21T04:14:14.925001963Z
+modified_at: 2026-09-21T04:18:15.456687983Z
 req_type: Decision
 tags:
 - operator-decision
