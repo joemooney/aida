@@ -1,7 +1,7 @@
 id: 01a0c4a6-f142-7fc1-8ec1-d073af6f4c15
 spec_id: BUG-1555
 agreed_id: BUG-1555
-title: The 2026-09-21 Windows nightly fails the discipline-pack parity test on all 23 compared guides - and the same test PASSED on Windows the night before, which falsifies the line-ending explanation
+title: 'The discipline-pack parity guard was born unable to work on Windows: it compares an LF-pinned master against an unpinned project copy, and the control that seemed to rule that out compared a test NAME across two dates while the body changed'
 description: |
   THE CROSS-PLATFORM NIGHTLY HAS BEEN RED FOR FOUR NIGHTS ON A FALSE POSITIVE. Windows fails one test; macOS is green; Linux PR CI is green on the same commits. The test is not detecting drift - it is comparing LF against CRLF.
 
@@ -339,12 +339,94 @@ description: |
   working tree" is a plausible neighbour to "a comparison whose behaviour changed
   without its inputs changing". That is a lead, not a hypothesis, and it has not been
   added to the ledger because it has not been stated precisely enough to falsify.
+
+  ===============================================================================
+  CAUSE FOUND. MY CONTROL WAS VOID AND MECHANISM 1 IS RESURRECTED.
+  READ THIS BEFORE THE LEDGER; IT OVERTURNS THE LEDGER'S FIRST ENTRY.
+  Found by claude-reviewer-1 2026-09-21, re-verified by the advisor.
+  ===============================================================================
+
+  THE LEDGER KILLS MECHANISM 1 WITH: "the same test PASSED on Windows on 09-20 and
+  FAILED on 09-21; a platform property does not switch on by date."
+
+  IT WAS NOT THE SAME TEST. The NAME was the same. The ASSERTION was not.
+
+      git show 26c7f5107e:aida-core/src/templates.rs | grep -c discipline_content_mismatches
+          -> 0                                    (26c7f5107e = the 09-20 nightly's HEAD)
+
+      e9e2bc4328  [AI:codex] fix(templates): detect stale discipline guides (BUG-1426) (#2018)
+                  committed 2026-09-20T14:58:29Z   -- AFTER the 09-20 nightly at 11:06:35Z
+                  NOT an ancestor of 26c7f5107e    -- verified with merge-base --is-ancestor
+                  +74 lines to templates.rs, including LOCALIZED_DISCIPLINE_GUIDES,
+                  fn discipline_content_mismatches, and (local.trim_end() != *master)
+
+  AT THE 09-20 NIGHTLY'S HEAD THE CONTENT COMPARISON DID NOT EXIST. `project_discipline_pack_matches_master` asserted only that every master had a project file present - `!project_dir.join(name).is_file()`, the "missing guide(s)" arm. It passed on Windows because THERE WAS NOTHING THERE TO COMPARE. The 09-21 nightly was the FIRST Windows run that ever executed the content comparison.
+
+  MY ERROR, precisely: I COMPARED A TEST BY NAME ACROSS TWO DATES AND TREATED THE EARLIER PASS AS A CONTROL. A control has to be the SAME ARTIFACT, not the same label. I even measured the test COUNTS moving (952 -> 954) and read that as "tests were added" without asking whether THIS test's body was among the things that changed. The counts were the signal and I filed them as background.
+
+  WHAT THIS DOES TO THE LEDGER:
+    1. LINE ENDINGS - RESURRECTED. The observation against it was not wrong; it was
+       about a different test body. The `.gitattributes` asymmetry moves from
+       "real, not the cause" to THE PRECONDITION: latent since 5220c4d3ad in May,
+       with only the ACTIVATION new. The check-attr measurement was right and was
+       filed under the wrong conclusion.
+    2-5. CONTENT DRIFT, STALE EMBED, SYMLINKS, STORED CR BYTES - untouched, still
+       dead, none in question. Note mechanism 5 was never evidence either way: git
+       STORES LF and autocrlf converts ON CHECKOUT, so "no CR at origin/main" is
+       expected under the line-ending hypothesis too.
+    6. RUNNER IMAGE - correctly dead, and its lesson stands. The activation WAS
+       real and new; it was a CODE change, not an image change.
+
+    THE GOVERNING STATEMENT WAS RIGHT AND NOW HAS ITS ANSWER. "Whatever fired
+    changed the BEHAVIOUR of the comparison without changing what was compared."
+    THE COMPARISON WAS ADDED.
+
+  THIS IS NOT A REGRESSION - THE INSTRUMENT WAS BORN UNABLE TO WORK ON WINDOWS.
+  It has never had a green baseline there. Every Windows run that has executed the
+  content comparison has failed, and there have been two. For TASK-1418 that is a
+  sharper form of the always-firing family: an instrument INSTALLED BROKEN on a
+  platform its authors could not see, in a repo whose PR CI is Linux-only by design.
+  The nightly is the only place it could ever have been observed, and by the time it
+  was, four unrelated hypotheses had been built on the assumption that it once worked.
+
+  THE ONE LINK NOT YET MEASURED, and the cause is NOT recorded as closed until it is.
+  Nobody has observed the Windows runner actually writing CRLF into .aida/discipline/.
+  Everything above is consistent with it and nothing contradicts it, but that is an
+  inference and this spec has already cost two seats a day of inferences that fit.
+  THE DECISIVE TEST IS ONE LINE ON THE WINDOWS LEG: report whether a project-copy
+  guide contains \r. That converts the last inference into a measurement and it is
+  the first thing whoever picks this up should run.
+
+  REVISED ACCEPTANCE, superseding the earlier list where it conflicts:
+  - RUN THE CRLF PROBE FIRST. One line on the Windows leg reporting whether
+    .aida/discipline/<any>.md contains \r. Do not implement against the hypothesis
+    before measuring it.
+  - Two-sided line-ending normalization AND two-sided trim in
+    `discipline_content_mismatches` - the trim is currently applied to the LOCAL
+    side only, so the function normalizes one side and compares against the other,
+    which is the same shape as the bug.
+  - Pin `.aida/discipline/**` in `.gitattributes` to match the master-side rule.
+    Defense-in-depth, the pairing BUG-244 already chose, and it protects the first
+    Windows developer who checks the project copy out locally - a population with no
+    nightly.
+  - DEMONSTRATE-IT-STILL-FIRES, SHARPENED: the case must include BOTH a CRLF-only
+    change the normalizer SHOULD erase AND a real content edit it MUST NOT, or the
+    fix cannot be distinguished from silencing the comparison. Replacing
+    always-red with always-green is not a fix.
+  - The deletion blindness (`.ok()?` silently skipping a missing project copy) is
+    unchanged and still required; see above.
+  - The tree-wide sweep for other raw content comparisons remains OPEN.
+
+  PRIORITY RESTORED TO HIGH. It was dropped to medium when the cause was unknown
+  and the blast radius looked like one night. It is now a known, reproducible,
+  never-worked instrument on a platform with no other coverage, and it is the
+  reason the release-gating nightly cannot go green.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T16:16:03.347088979Z
+modified_at: 2026-09-21T16:31:27.758789611Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
