@@ -1,0 +1,39 @@
+id: 01a0c4b4-4bf7-7292-8b15-056642a43cb0
+spec_id: BUG-1557
+agreed_id: BUG-1557
+title: A scaffolded [[schedule.jobs]] example whose command is not in parse_scheduled_command's closed allowlist errors at every tick forever, and nothing checks the two hand-maintained lists against each ot
+description: |
+  A SCAFFOLDED `[[schedule.jobs]]` EXAMPLE WHOSE `command` IS NOT IN THE ALLOWLIST IS DEAD ON ARRIVAL - IT ERRORS AT EVERY TICK, FOREVER, WHILE SITTING IN CONFIG LOOKING LIKE A GUARD. NOTHING CHECKS THE TWO LISTS AGAINST EACH OTHER.
+
+  Found by claude-product-1 2026-09-21 while closing STORY-1422's criterion 4, and verified independently by the advisor against the tree at 8bc2512480. It is filed here as the GENERAL form; the specific instance was fixed in PR #2049.
+
+  THE TWO LISTS THAT MUST AGREE AND ARE MAINTAINED SEPARATELY:
+
+    1. `parse_scheduled_command` (aida-cli-lib/src/maintenance_schedule.rs:1511) is a CLOSED
+       match over literal strings - "cache verify", "session reap", "queue gc",
+       "notify check", "doctor", "fetch --code-only", "store compact"|"store gc" - with a
+       `_ => anyhow::bail!("unknown scheduled task command ...")` arm.
+    2. The scaffolded config template (aida-cli-lib/src/init_cmd.rs, around :2224-2248) ships
+       commented `[[schedule.jobs]]` examples, each with a `command = "..."` string.
+
+  Nothing compares them. Today's five scaffolded examples all happen to be allowlisted; that is a property of who wrote them, not of anything enforced.
+
+  HOW IT BIT, and this is why it is worth a spec rather than a comment. STORY-1422 scaffolded a job with `command = "doctor check performance --fail-on-findings"`. That string was NOT in the allowlist, so the job would have bailed on every tick for the life of the project - in a config block explicitly documented as the trigger that makes a performance budget a guard rather than a report.
+
+  AND THE SECOND HALF IS SHARPER. The one allowlisted `doctor` entry maps to bare `args: &["doctor"]`, which exits 0 on everything (BUG-1552). SO BEFORE THIS WAS FIXED, NO ALLOWLISTED COMMAND COULD CARRY A NON-ZERO EXIT OUT OF A DOCTOR CATEGORY AT ALL. The scheduler could run doctor and could never learn that doctor had found something. A whole class of substrate guard was unreachable through the only surface that runs on a cadence.
+
+  WHY EVERY ISOLATED CHECK PASSED. The implementer had verified each link separately: the category exists and exits non-zero with the flag; `CronJobFailed` is a real event, defined at events.rs:291 and emitted at maintenance_schedule.rs:1615 on a non-zero substrate exit; the seat-job matcher exists at maintenance_schedule.rs:708-741; the reviewer independently traced the same three statically. EVERY LINK WAS REAL AND THE CHAIN WAS DEAD, because the allowlist sits between link one and link two and no static reading of either link crosses it. IT WAS FOUND ONLY BY RUNNING IT, under an advisor ruling that scaffolded-is-not-demonstrated and that a live end-to-end run was required before the branch shipped.
+
+  Acceptance:
+  - A test asserts that EVERY `command = "..."` string in the scaffolded config template parses through `parse_scheduled_command` without error. Mechanical, not by reading - the two lists stop being independently maintained.
+  - DEMONSTRATE-IT-FIRES, binding: show the test RED by adding a scaffolded example with an unallowlisted command, then green. A test written against the current five - which already all pass - proves nothing about the drift it claims to catch, and this board has filed that exact failure four times today.
+  - The bail message already enumerates the valid commands; if that enumeration is hand-maintained separately from the match arms, derive it from them in the same change. Same shape as BUG-1554 for `aida doctor` categories - see that spec, where the hand-typed list had already drifted by two names.
+  - Consider whether the allowlist should be closed at all, and record the answer rather than leaving it implicit. A closed allowlist for a SUBSTRATE runner - a command executed unattended, with no human present - is a defensible security posture and probably the right one. If it stays closed, then the scaffold parity test above is not optional, it is the only thing keeping the two halves honest.
+  - Not in scope: making bare `aida doctor` exit non-zero is BUG-1552. This spec is about the allowlist and the scaffold agreeing, which is a defect even if 1552 is never fixed.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T16:02:25.399177125Z
+modified_at: 2026-09-21T16:02:25.399177125Z
+req_type: Bug
