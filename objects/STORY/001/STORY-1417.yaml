@@ -33,5 +33,54 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:55:21.794367525Z
-modified_at: 2026-09-21T08:55:21.794367525Z
+modified_at: 2026-09-21T08:56:50.458612093Z
 req_type: Story
+comments:
+- id: 01a0c32e-aa1a-7561-8985-cdb436caf5e8
+  author: joe
+  content: |-
+    DESIGN INPUT FROM THE SEAT THAT WOULD TYPE THE FIELD, taken while it is still cheap. Two binding additions: a starting vocabulary grounded in real findings, and one design decision that is free now and needs a migration later.
+
+    === BINDING: THE FIELD IS A SET, NOT A SCALAR ===
+
+    A scalar is the obvious choice and it is WRONG here. Several findings carry two categories at once, and which one gets picked changes what the query answers:
+
+        #2040 F1   Some(empty) returned for a non-GitHub forge          absent-as-good
+                   ...and the identical shape at two sibling sites      half-fix
+        #1972 F2   Skipped treated as Open                              absent-as-good
+                   ...and the remedy would patch sites, not the seam    half-fix
+        #2030 F2   the fixture asserts the granted half                 unfalsifiable
+                   ...because the production path was never touched     half-fix
+
+    With a single-valued field each of those is filed under whichever face the reviewer led with, and "how often does half-fix recur" undercounts by however many were filed as absent-as-good. THE COUNT WOULD BE WRONG IN A WAY THE DATA CANNOT REVEAL — which is the same polarity failure, one level up, that this spec exists to stop. Filing a spec whose own storage reproduces its defect is not acceptable.
+
+    So: a SET of categories per finding. Stated here rather than left to the implementer, because the wrong choice is the natural one.
+
+    === STARTING VOCABULARY, derived from findings actually recorded on 2026-09-21 rather than designed ===
+
+      half-fix            sites patched, seam left.
+                          #1978 F3, #2040 F3, #1998 F1, #1972 F2, BUG-1543's filter
+      absent-as-good      a missing answer read as a passing one.
+                          #1972 F2 (Skipped treated as Open), #2040 F1 (Some(empty) as
+                          definitive), #2009 and #2030 F3 (zero check-runs), BUG-1481
+      unfalsifiable       a test that cannot fail, or that asserts the undisputed half.
+                          #2040 F2 (a fake gh answering every query identically),
+                          #2030 F2 (asserts branch recovery, which F1 had granted),
+                          #2046's attacks A/B/C
+      prose-as-contract   control flow or a gate keyed on human-readable text.
+                          #2006 F2 (substring-matching our own bail message); the classifier
+                          inventory keyed on line numbers was the same instinct
+      drifted-reference   a citation that no longer resolves.
+                          #2040 F1's line moving 62239 -> 62292, #1998's refs stale after one
+                          rebase, and a citation to a spec id that resolved to a different spec
+
+    Five categories, one night, each with more than one instance. The reviewer's own caveat, kept: this is not claimed to be the right vocabulary — one night is one night, and a sixth will appear the moment someone reviews a different subsystem. It is a STARTING SET WITH WORKED EXAMPLES ATTACHED, which beats a designed one. The vocabulary must therefore be cheap to extend; a category that does not exist yet must not be a reason to delay recording a verdict.
+
+    === UNCHANGED FROM THE ORIGINAL FILING ===
+
+    Not required, never a gate: a missing or wrong category must never block recording a verdict. A gate that makes REFUSING harder is worse than an uncounted finding. No back-classification of the historical corpus.
+
+    PROVENANCE: vocabulary and the set-versus-scalar argument are the reviewer seat's, recorded by the driver-advisor. The worked examples are findings that seat wrote tonight, which is what makes the vocabulary grounded rather than aspirational.
+  created_at: 2026-09-21T08:56:50.458612093Z
+  modified_at: 2026-09-21T08:56:50.458612093Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
