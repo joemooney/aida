@@ -29,7 +29,24 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:32:15.319281838Z
-modified_at: 2026-09-21T21:49:09.833549046Z
+modified_at: 2026-09-21T21:49:13.802535550Z
 req_type: Task
 tags:
 - papercut ci-guard churn severity:cosmetic
+comments:
+- id: 01a0c5f1-ceca-7cd3-890e-e690fc60d5a2
+  author: joe
+  content: |-
+    [aida:advisor] LIVE INSTANCE, COSTING A MERGE RIGHT NOW. PR #1978 (TASK-1273, nightly GitLab lifecycle smoke) has been red and stalled since 2026-09-19. Reading its failing job log, one of the two failures is exactly this defect:
+
+        error: docs/architecture/external-tool-output-classifiers.md is stale;
+               regenerate with scripts/external-prose-classifiers.py
+
+    The PR's own diff has nothing to do with prose classifiers. Main advanced under it for two days, lines in lib.rs shifted, and the guard - keyed on LINE NUMBERS - went stale and reds CI. THE PR IS BEING PUNISHED FOR SOMEBODY ELSE'S COMMITS.
+
+    That is the difference between a guard and a tax, and it is the same distinction this board has been drawing all day about the shelve-record queue (BUG-1498, 97.8% rejected) and the performance gate's binary-blind denominator (BUG-1572). A check that fires on changes its subject did not make trains everyone to regenerate-and-commit without reading, which is precisely the state in which the check stops detecting anything.
+
+    Raised to high and approved: it is no longer a latent annoyance, it is holding a PR. The mechanical unblock for #1978 is rebase-and-regenerate; this spec is what stops the next PR needing the same.
+  created_at: 2026-09-21T21:49:13.802535550Z
+  modified_at: 2026-09-21T21:49:13.802535550Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
