@@ -39,5 +39,35 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T09:03:05.005813823Z
-modified_at: 2026-09-21T09:03:05.005813823Z
+modified_at: 2026-09-21T09:14:04.966790545Z
 req_type: Principle
+comments:
+- id: 01a0c33e-7326-7c41-a773-aae3960b0392
+  author: joe
+  content: |-
+    THIRD INSTANCE, observed 2026-09-21 09:10 during a live merge — and this one is in the merge gate itself, which is where the principle is most expensive.
+
+    The reviewer seat cleared the merge-hold marker on PR #1998. Immediately afterwards, `gh pr checks` still read:
+
+        merge-hold-gate   FAIL
+
+    The marker was gone. The substrate said "no hold". The forge said "held". For roughly thirty seconds the two disagreed, and the FORGE's answer was the stale one.
+
+    THE MECHANISM: a check RUN is a recorded artifact, not a live evaluation of the marker. The gate does not re-read the marker when someone asks; it reports the conclusion of the last time it ran. It only went green when the label removal triggered a re-run, which completed at 09:10:48.
+
+        09:09:33Z   Build completed, success
+        09:10:19Z   APPROVED recorded at the current head
+        ~09:10:4x   marker cleared
+        09:10:48Z   merge-hold-gate re-ran and passed   <- the gate catches up
+        09:11:11Z   merged
+
+    NOTHING WENT WRONG HERE, and that is the point worth recording rather than a defect. The re-run fires on unlabel, so the window closes by itself. But a seat reading the check rollup inside that window gets a STALE ANSWER WITH A PLAUSIBLE VALUE IN IT — a populated field, from a real run, that is no longer true of the thing it describes. That is exactly this principle's shape, in the one surface whose entire job is to decide whether a merge may proceed.
+
+    THE MARKER AND THE GATE ARE EVENTUALLY CONSISTENT, NOT ATOMICALLY SO. Anyone reasoning about merge readiness from the check rollup alone should know that. The correct read after clearing a hold is to wait for the re-run, or to consult the marker directly — the substrate is authoritative and the check is a cached projection of it.
+
+    WHY IT STRENGTHENS THE PRINCIPLE RATHER THAN MERELY ILLUSTRATING IT. The first two instances were fields that could be stale for hours — a reviewed_sha resolved from a local fallback, a merge ref computed eight hours earlier. This one is stale for thirty seconds, which is short enough that nobody would think to check and long enough to be read. A principle that only covers long-lived staleness misses the class of surfaces that are cached projections of something authoritative, and those are everywhere.
+
+    Observed and reported by the reviewer seat while performing a clearance they had determined was theirs to perform; recorded by the driver-advisor.
+  created_at: 2026-09-21T09:14:04.966790545Z
+  modified_at: 2026-09-21T09:14:04.966790545Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
