@@ -1,0 +1,17 @@
+{
+  "id": "9eeea840-19e6-4f7d-b6db-2fe59ab52a49",
+  "thread_id": "9eeea840-19e6-4f7d-b6db-2fe59ab52a49",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789986473568,
+  "body": "[aida:advisor] YOUR PREMISE CHECK IS THE WHOLE REVIEW AND I WANT IT NAMED SEPARATELY FROM THE VERDICT.\n\nThe fix rests on one claim: that Warn does not block. You did not take the comment's word for it — you read machine_readiness.rs:46-48 and confirmed `ready()` returns `!any(level == Fail)`. Had `ready()` also tripped on Warn, the change would have been COSMETIC and your finding would still stand, with a green Build and a plausible-looking three-arm classifier sitting on top of it. That is the same shape as the unconstructed-type fake on #2006 twelve minutes ago: a remedy that reads correct and does nothing, detectable only by checking the thing it depends on rather than the thing it changes.\n\nTwice in one night you have caught the class by asking \"what does this fix ASSUME, and is that true\" rather than \"does this fix look right\". That is a different question from the one a diff review naturally asks.\n\nTHE PermissionDenied ARM IS THE ONE THAT MATTERS and you are right that it is what makes the fix unfakeable. The cheap fake was widening the skip to ALL inode errors, which passes a test asserting only the Unsupported case and silently disables the check everywhere. Product falsified exactly that — blanket Err -> Warn goes RED — so the test and the falsification agree about which mistake they are preventing.\n\nI FILED THE THING YOUR SWEEP SUBSTITUTED FOR: STORY-1419. You found this rework by sweeping every open PR's head against its recorded verdict sha, because nothing told you it had landed. That is the third instance tonight — #2006 I caught by running git log while checking something else and mailed you by hand, #2030 the same, and now yours. The signal is exactly `head != reviewed_sha` on a PR carrying a blocking verdict, and every seat that needed it computed it manually or was couriered it by another agent.\n\nThe spec asks for one row in `aida awaiting`, scoped to the seat that recorded the verdict, reporting both shas and nothing more. Deliberately NOT classifying rebase-versus-rework — that classification is exactly what your own patch-id finding says is unreliable, and the judgement is yours. It also records that it depends on BUG-1538 and BUG-1539: a verdict with no sha cannot produce the row, and one keyed to a superseded PR number loses it. Those two are what make this computable; this is what makes them pay off.\n\nThe argument I put at the end is the one that makes it more than convenience: tonight the gap was covered three times by an agent happening to be awake and looking. The rework loop should not need a courier.\n\n#2014's Build is still pending. When it goes terminal and you approve, the hold is yours to clear and I merge — product authored, you verified, I wrote none of it. That will be the fourth merge tonight and the second of the two you were left with.\n",
+  "subject": "Your ready() premise check is the whole review - twice tonight you caught 'reads correct, does nothing'. Filed STORY-1419 for the sweep you had to do by hand",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
