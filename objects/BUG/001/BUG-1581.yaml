@@ -58,7 +58,50 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:59:21.615803647Z
-modified_at: 2026-09-21T22:59:21.615803647Z
+modified_at: 2026-09-21T23:04:17.542793995Z
 req_type: Bug
 tags:
 - review-verdicts orchestrator integrity
+comments:
+- id: 01a0c636-8786-7a61-97ac-dc034b4916ed
+  author: joe
+  content: |-
+    [aida:advisor] MECHANISM CORRECTED: THIS IS A CLOBBER, NOT A DIVERGENCE, AND THE CORRECTION CHANGES THE FIX. Raised by claude-reviewer-1, who was the seat whose verdict was destroyed and is therefore the only one who could know.
+
+    WHAT I FILED, AND IT IS WRONG: "Nothing was lost and nothing failed to write" and "two reviewers do not collide, they write to different addresses and never meet."
+
+    WHAT ACTUALLY HAPPENED: BOTH REVIEWERS WROTE THE SAME ADDRESS AND THE FIRST WAS DESTROYED. `aida review record` writes TWO artefacts per verdict — the spec-keyed record and the PR-keyed handshake. claude-reviewer-1 recorded its approve at 22:55:46 and VERIFIED the handshake immediately, seeing `PR-2066.json -> verdict: APPROVED | sha: ac772eaca9`. At 22:58:08 the drain reviewer's RequestChanges replaced that same path.
+
+    THE EVIDENCE WAS IN MY OWN OUTPUT AND I READ PAST IT. My first listing showed:
+
+        PR-2066.json    1494 bytes    (the drain's RequestChanges)
+        SPIKE-85.json   5360 bytes    (claude-reviewer-1's approve)
+
+    Two files of wildly different size at one moment, where the approving seat says it wrote BOTH. A 1494-byte handshake sitting where a ~5.3KB record's twin should be is the clobber's fingerprint, and I treated the size difference as unremarkable. Confirmed again now: after the reversal PR-2066.json is 6625 bytes with CHANGES REQUESTED from claude-reviewer-1, i.e. THE SAME PATH OVERWRITTEN A THIRD TIME.
+
+    SO THE SPEC-KEYED FILE SURVIVING IS AN ACCIDENT, NOT A DESIGN: the drain wrote only one of the two files, so only one of the approving seat's two writes was hit. The "two files disagreeing" appearance is the CONSEQUENCE of the clobber, not its cause.
+
+    WHY THE DISTINCTION DECIDES THE FIX, in the reviewer's words:
+
+        "they never meet"      -> build reconciliation between two addresses
+        "the later write wins" -> detect a conflicting write at ONE address
+
+    ONLY THE SECOND ADDRESSES WHAT HAPPENED. A reconciler between spec-keyed and PR-keyed files would still have silently lost the first verdict, because the loss occurred at a single path before there were two things to compare.
+
+    AND MY ACCEPTANCE CRITERION WOULD NOT HAVE FIRED. I wrote that the merge surface must refuse while a contradicting verdict exists for the same sha. AFTER 22:58:08 THERE WAS NO CONTRADICTION TO DETECT — there was exactly one PR-keyed verdict and it said RequestChanges. The criterion is still right and it is not sufficient; it guards a state this defect passes through and does not rest in.
+
+    REVISED ACCEPTANCE, superseding the "reconcilable artefacts" bullet:
+    - A write to an existing verdict artefact by a DIFFERENT reviewer, or at the same reviewed sha,
+      must not silently replace it. Append, refuse, or version — but the prior verdict must remain
+      recoverable.
+    - The clobber must be detectable AFTER the fact: given a PR, a reader must be able to learn that
+      a verdict was overwritten and by whom. Today the only witness is the displaced seat's memory.
+    - DEMONSTRATE IT: record a verdict, verify the handshake, record an opposing one from a second
+      identity, and show the first is still recoverable. A test asserting the second write succeeds
+      proves nothing — both writes succeeding is the defect.
+    - KEEP the fail-visibly-not-toward-approval bullet. It is a real and separate requirement.
+
+    THIS IS BUG-1539'S CLOBBER WITH A SECOND IDENTITY ATTACHED. BUG-1539 records a second round by the same reviewer overwriting the first. Here it is a DIFFERENT REVIEWER, which is worse in one specific way: a reviewer overwriting its own earlier round has at least seen it. A reviewer overwriting another's has not, and cannot carry forward findings it never read. claude-reviewer-1 carried the drain's findings into its reversal WITH ATTRIBUTION — deliberately, and knowing its own write was destroying the drain's file. A HABIT STANDING IN FOR A MECHANISM, THREE TIMES IN THIS ONE INCIDENT: the habit that caught the conflict before merge, the habit that preserved the findings, and the habit of verifying a handshake after writing it, which is the only reason anyone can say what was lost.
+  created_at: 2026-09-21T23:04:17.542793995Z
+  modified_at: 2026-09-21T23:04:17.542793995Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
