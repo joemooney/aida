@@ -1,0 +1,49 @@
+id: 01a0c408-ccbb-7263-9f8b-5fe834d597aa
+spec_id: BUG-1551
+agreed_id: BUG-1551
+title: 'BlockedBy gates pickup but not closure: a spec already in flight auto-completes past an unsatisfied blocker on merge, so the edge reads as a guarantee it does not provide'
+description: |-
+  A BlockedBy EDGE GATES PICKUP AND NOT CLOSURE, SO ANY SPEC ALREADY IN FLIGHT WHEN A BLOCKER IS ADDED WILL AUTO-COMPLETE PAST IT ON MERGE - SILENTLY, WITH NOTHING REFUSING.
+
+  MEASURED, NOT ARGUED. Found by claude-reviewer-1 while answering an unrelated advisor question; re-verified in the tree by the advisor before filing.
+
+      ENFORCED AT PICKUP
+        pickability::blocked_by_incomplete gates the candidate and ready surfaces
+        zen_drive.rs:412-415 HardRefuses dispatch outright:
+          "blocked by an unshipped dependency (BlockedBy) - ship the blocker first."
+
+      NOT ENFORCED AT CLOSURE
+        auto_bump_done_to_completed  (aida-cli-lib/src/lib.rs:63247-63852, ~606 lines)
+          occurrences of "blocked" / "blocker" / "pickability":  ZERO
+        handle_done_command
+          occurrences of any of them:                            ZERO
+
+  Counted over the whole function rather than sampled, because a partial window is how this class of claim goes wrong.
+
+  THE CONSEQUENCE, CONCRETELY. Completion is MERGE-DRIVEN: a commit carrying the (SPEC-ID) trailer lands on main and `aida pull` flips Done to Completed. That path never consults the requirement graph. So:
+
+    - add a BlockedBy edge to a spec that has not started -> the blocker works, dispatch refuses
+    - add a BlockedBy edge to a spec that ALREADY HAS A BRANCH AND A PR -> the blocker is inert, and the spec closes on merge as if it were never added
+
+  The guard BlockedBy provides is "cannot be STARTED". There is currently NO substrate guard for "cannot be FINISHED".
+
+  WHY THIS IS FILED RATHER THAN NOTED. It was discovered because an advisor tried to use a BlockedBy edge to carry the condition "BUG-1480 must not close until STORY-1422 exists". That is a natural reading of what a blocker means, it is what the word says, and it does not hold for a spec in flight. Anyone reaching for a blocker at that lifecycle point will make the same wrong inference. The immediate case was repaired by adding an in-spec closure criterion alongside the edge, which a reviewer refuses against by hand - a human gate standing in for a substrate one, which is the shape this project treats as a defect rather than a solution.
+
+  THIS MAY BE INTENDED, AND THAT IS THE FIRST QUESTION TO ANSWER RATHER THAN ASSUME. The defensible reading: a blocker's job is to sequence WORK, it did that job by the time work started, and what happens at closure is the implementer's and reviewer's problem. The opposing reading: a dependency that is unsatisfied at merge time is exactly when it matters most, because the thing being merged is the thing that will now ship without it. Both are coherent. Nobody has decided, and the current behaviour is the accident of where the check was placed rather than a recorded choice.
+
+  ACCEPTANCE:
+  1. A DECISION IS RECORDED - as an ADR, not a code comment - on whether BlockedBy is intended to gate closure. "Pickup only, by design" is an acceptable and possibly correct outcome; what is not acceptable is leaving it undecided, since the current behaviour reads as a guarantee it does not provide.
+  2. If the decision is that it SHOULD gate closure: the auto-bump path refuses to flip Done to Completed while an unsatisfied BlockedBy edge exists, and says which blocker, with a documented override for the case where a human has decided to ship anyway.
+  3. If the decision is PICKUP ONLY: the gap is made visible where the wrong inference gets made - `aida rel add --type blocked-by` on a spec that is already in flight should say so at write time, and the term BlockedBy in the machinery glossary should state that it sequences dispatch and does not gate completion.
+  4. Either way, a test pins the decided behaviour, so the next reader learns it from an assertion rather than from counting occurrences in a 606-line function.
+
+  OUT OF SCOPE: BUG-1480 and STORY-1422 themselves. That pair is already repaired by hand; this spec is about the substrate property they exposed.
+
+  PROVENANCE: claude-reviewer-1 measured it and explicitly declined to file, flagging it as bigger than the question they were answering and the advisor's call. The advisor re-verified both halves and filed.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T12:55:06.171955458Z
+modified_at: 2026-09-21T12:55:06.171955458Z
+req_type: Bug
