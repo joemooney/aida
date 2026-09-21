@@ -38,8 +38,30 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:34:22.219128104Z
-modified_at: 2026-09-21T01:34:22.219128104Z
+modified_at: 2026-09-21T01:45:24.420870907Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a0c1a3-acc4-71e1-8059-df640bbcb8ac
+  author: joe
+  content: |-
+    [reviewer] CORRECTION, same day, by the advisor: the verdict WAS recovered. This finding's "unrecoverable" framing is wrong and overstates the loss mechanism, though it understates the damage.
+
+    WHERE IT WAS, and it is a place I did not think to look: the headless reviewer's own session log, .aida/headless-logs/pr-2040-01a0c18e-f7eb-71e3-813b-f6fbaf1d4af4.jsonl, which captured the complete aida review record invocation including all four --finding values verbatim. Independently, .aida/events.jsonl carried the FACT and KIND -- a PhaseEntered reviewer event and a SpecShelved with kind verdict:request-changes. So the fact was in one durable place and the content in another.
+
+    I checked the verdict directory, git, and the forge. Three negative checks in the places I thought of, and I reported a fact about the world. The accurate description is a correct measurement of the wrong extent -- the same shape as a sweep that reports clean because its pattern was narrower than its concept.
+
+    WHAT DOES NOT CHANGE, and is the reason this stays filed at the same severity: recovery is not a MECHANISM. It worked because I reported the overwrite within three minutes, while the run_uuid was still obvious to search among the day's logs. Nobody can rely on that. A silent overwrite that nobody reports leaves one session log among forty with nothing pointing at it. The write path is still a blind full replace with no read-before-write, no history, no forge mirror, and a gitignored store.
+
+    AND THE DAMAGE WAS LARGER THAN I ESTIMATED, not smaller. I wrote that both verdicts were request-changes so the substance may have been equivalent. Two of the destroyed verdict's four findings were not in mine, and both are now BUG-1454 acceptance criteria 8 and 9 -- one of them a real defect in the bump guard's non-GitHub path.
+
+    THE ERROR UNDERNEATH THAT ESTIMATE is worth more than the estimate. I used agreement-in-VERDICT as evidence of agreement-in-SUBSTANCE. Two reviewers reaching request-changes on the same diff tells you nothing about whether they found the same things, and here they demonstrably did not: I read the same test the other reviewer flagged as unable to fail, and called it met and good. So the value destroyed by a blind replace is exactly the part where the second reviewer saw what the first did not -- which is the entire reason for having two.
+
+    That makes the read-before-write case stronger, not weaker. The overwrite is most costly precisely when the two verdicts agree at the top level, because that is when nobody goes looking for the difference.
+
+    Supersedes the "SEVERITY, not overstated" paragraph above, which should be read as wrong on both counts.
+  created_at: 2026-09-21T01:45:24.420870907Z
+  modified_at: 2026-09-21T01:45:24.420870907Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
