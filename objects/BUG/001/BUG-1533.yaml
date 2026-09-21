@@ -1,0 +1,44 @@
+id: 01a0c26d-62d3-7d32-8cd8-dc80bc6bfff7
+spec_id: BUG-1533
+agreed_id: BUG-1533
+title: Mail sender identity falls back to the shell user, so 216 of 336 messages cannot be attributed to a seat from the envelope
+description: |-
+  Mail sender identity collapses every seat whose shell lacks AIDA_USER into the bare shell user, so a recipient cannot tell from the envelope which agent wrote a message.
+
+  MEASURED across the 700+ records in .aida/mailbox/:
+
+    from=joe   336 messages total
+                 120 carry an in-body [aida:<role>] prefix
+                 216 carry NO role tag at all
+
+  The 216 untagged are plainly agent-written, not human -- they discuss merges by PR number, drain scope, review rounds, and spec assignment. Samples:
+
+    "BOTH LANES MERGED -- #1993 at 02:43:14Z and #1994 at 02:46:19Z. Five merges tonight..."
+    "BUG-1207 round 3: the code fixes the round-2 finding..."
+    "Got the drain scope -- but heads up, your info is one step stale..."
+
+  So `joe` is not one writer. It is the fallback identity for every seat that did not have AIDA_USER set, and it is ALSO the identity the human operator would send under. The only discriminator is an OPTIONAL prose prefix inside the body, present on 36 percent of them. The envelope carries nothing.
+
+  This is the queue-identity rule (BUG-89, CLAUDE.md) reaching the mailbox: identity resolves --user then AIDA_USER then USER. A seat launched with AIDA_USER set gets a real identity (claude-product-1, claude-reviewer-1); one without it silently inherits the shell user and becomes indistinguishable from every other such seat and from the human.
+
+  OBSERVED CONSEQUENCE, twice in one evening. The reviewer seat credited work to claude-product-1 that claude-product-1 did not write -- two brief additions (items 1c and 5) and two acceptance criteria (c9 and c7). Both were sent as NEW messages addressed to claude-product-1, in_reply_to null, so this was not a threading slip: the sender believed claude-product-1 was the author. I declined both attributions.
+
+  I am NOT claiming this identity collapse caused those two specific misattributions -- I cannot prove that from the store, and the reviewer may have conflated them for an unrelated reason. What IS established without inference: a recipient cannot determine the authoring seat from the envelope for 216 of 336 messages, so the substrate does not make correct attribution possible in those cases even in principle.
+
+  WHY IT MATTERS BEYOND TIDINESS. Attribution in mail is how seats assign credit, route follow-ups, and decide whose judgement a claim carries -- the independence rule ("review only what you did not implement") is unenforceable if you cannot tell who wrote something. Tonight already produced two defects in this exact family: BUG-1485 attributes work to the wrong lease, BUG-1527 writes a verdict against the wrong spec. This is the same failure at the communication layer.
+
+  ACCEPTANCE
+  1. Every mailbox record carries the authoring SEAT in the envelope -- an agent id and a role -- resolved at send time, not derived from the shell user.
+  2. A send from a seat with no resolvable agent identity either refuses or records an explicit unknown-seat marker; it never silently borrows the shell user.
+  3. `aida mailbox inbox` displays the authoring seat for every message, so a reader never has to infer it from body prose.
+  4. A test asserts two seats sending from the same shell user produce records distinguishable in the envelope.
+  5. Existing records are left as they are. They are the evidence for this bug and a backfill would guess at authorship -- the same mark-do-not-repair call TASK-1-171 requires.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T05:25:43.763465229Z
+modified_at: 2026-09-21T05:25:43.763465229Z
+req_type: Bug
+tags:
+- mailbox identity attribution substrate-truth severity:operational
