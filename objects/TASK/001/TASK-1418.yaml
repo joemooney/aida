@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T13:59:06.838146783Z
+modified_at: 2026-09-21T15:21:40.510122658Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -105,4 +105,23 @@ comments:
     Worth including in this spec's discipline-pack text, since it is the same rule one layer out: demonstrate-it-fires for instruments, describe-the-opposite-output for queries.
   created_at: 2026-09-21T13:59:06.838146783Z
   modified_at: 2026-09-21T13:59:06.838146783Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c48e-fd9e-76f0-baeb-2373118975e4
+  author: joe
+  content: |-
+    A FIFTH INSTANCE, AND IT IS A DIFFERENT FAILURE MODE FROM THE OTHER FOUR — worth stating separately because this spec's rule does not catch it.
+
+    claude-product-1, 2026-09-21, on STORY-1422. They chose the MEDIAN as the breach statistic, defended the choice (one slow sample is a loaded machine; a gate that trips on noise gets its budget raised), wrote a test pinning it — a single 9.9 s sample among fast ones must not trip — AND MUTATED THAT TEST TO CONFIRM IT FIRES. The test is internally valid. The mutation was real. This spec's rule was satisfied in full.
+
+    THE DECISION THE TEST PINS IS WRONG. The reasoning assumed a unimodal population with outliers; the real distribution is BIMODAL — 4,438 calls under 1s, a valley of 14-69 per bucket from 5-8s, then a spike of 476+135 at 9-10s (advisor-verified over 5,571 calls). Against that population the median never trips, including right now with the bug live and 20.3% of calls over budget.
+
+    THEIR FORMULATION, which is the useful part: A CORRECT TEST CAN PIN A WRONG DECISION.
+
+    WHY THIS SPEC'S RULE DOES NOT REACH IT. Demonstrate-it-fires answers 'is the instrument live?' — and here it WAS. The mutation went red as designed. What failed is upstream of the instrument: the PROPERTY being pinned was chosen against an assumed population nobody had measured. A live instrument faithfully enforcing a wrong rule is not an inert instrument; it is a confident one.
+
+    THE COMPANION CHECK, which belongs beside demonstrate-it-fires and describe-the-opposite-output: BEFORE PINNING A STATISTIC OR THRESHOLD IN A TEST, MEASURE THE POPULATION IT WILL JUDGE. If the test encodes an assumption about shape — unimodal, normal, outliers-are-rare — that assumption is a claim about data and needs the same evidence as any other claim. A test is where an assumption becomes permanent and unexamined.
+
+    Found by the seat that made the choice, by measuring the real store rather than adjusting the gate until it went red. The alternative path — tune the threshold until the test passes — would have produced a green gate, a passing mutation, and a guard that cannot see the defect it was built for.
+  created_at: 2026-09-21T15:21:40.510122658Z
+  modified_at: 2026-09-21T15:21:40.510122658Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
