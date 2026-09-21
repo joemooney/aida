@@ -1,0 +1,43 @@
+id: 01a0c5ca-5317-7f00-9828-cdbb0f8b601a
+spec_id: BUG-1572
+agreed_id: BUG-1572
+title: The performance gate counts every binary's calls in one machine-global log, so a stale worktree build can hold main's gate red for a regression that is not on main
+description: |-
+  THE PERFORMANCE GATE'S DENOMINATOR IS BINARY-BLIND, SO ONE SEAT RUNNING A STALE WORKTREE BUILD CAN HOLD MAIN'S GATE RED FOR A REGRESSION THAT IS NOT ON MAIN.
+
+  STORY-1422 shipped `doctor check performance --fail-on-findings`, which reads `~/.aida/usage.jsonl` over a 24h window and trips when the proportion of calls over the configured budget exceeds a tolerance. THE WINDOW IS THE ONLY FILTER. Every row in it counts, whatever binary produced it.
+
+  `~/.aida/usage.jsonl` IS MACHINE-GLOBAL AND EVERY AIDA BINARY ON THE MACHINE APPENDS TO IT. This repo routinely has 20-60 git worktrees, and agent lanes build and run their own binaries out of them. Those calls land in the same file, in the same window, under the same user.
+
+  MEASURED 2026-09-21 14:05 MST, `cmd == "show"`, last 24h, grouped by the `binary_sha` field the log already records - ELEVEN DISTINCT BINARIES contributed to one window:
+
+      1460a0168a   n=5126   17.1% over 1s    (pre-#2033, main lineage)
+      0b474a66d1   n= 870   10.2%
+      a553d7e927   n= 603   45.4%
+      b09197ab72   n= 147   81.6%
+      c29022deb8   n=  26    0.0%            (POST-#2033, main lineage)
+      c2b3c2f0c8   n=   3   33.3%            (an agent lane's own worktree build)
+      ... and five more
+
+  THE FAILURE IS NOT HYPOTHETICAL AND IT IS ASYMMETRIC. A lane on a branch that predates a performance fix - or that carries a performance regression of its own, which is precisely what such a lane is often built to investigate - contributes over-budget calls to main's gate. The gate then reports main as regressed. THE SEAT READING THAT GATE HAS NO WAY TO SEE WHY, because the finding reports a proportion and a denominator and never mentions which binaries produced them. It looks exactly like a real regression on main.
+
+  THIS BLOCKS A CRITERION THAT IS CURRENTLY OPEN. STORY-1423's criterion 1 requires the gate to be observed QUIET against the post-fix population. With a binary-blind denominator that observation may be unreachable in this repo for reasons unrelated to BUG-1480 - the gate can be held red by a single stale lane, indefinitely, and no amount of fixing `show` on main will quiet it.
+
+  THE FIX IS SMALL AND THE DATA IS ALREADY THERE. `binary_sha` is on every row and has been since the telemetry shipped. The gate should, at minimum, be able to scope its population to one binary lineage - the natural default being ancestors of the current HEAD, which is the same ancestry test `aida dev status` already performs to decide whether the active binary matches the branch. At a minimum the FINDING must report the per-binary breakdown, so a seat can tell "main regressed" from "a lane is noisy" without hand-writing the query I had to write to discover this.
+
+  Acceptance:
+  - `doctor check performance` can exclude calls served by a binary that is not an ancestor of the current HEAD, and does so by default when run inside a git repo.
+  - The emitted finding reports the denominator PER BINARY, not only in aggregate, so a mixed population is visible rather than silently averaged.
+  - A test covers the mixed-population case: a window containing one in-lineage binary under budget and one out-of-lineage binary over it must NOT trip the in-lineage gate, and MUST trip if the in-lineage binary is the one over budget. Both directions, or the test cannot tell the two situations apart.
+  - docs/environment-variables.md gains a row if an opt-out is added.
+
+  Found by the advisor while measuring STORY-1423's pre/post pair. The partition that exposed the defect - grouping by `binary_sha` - is also the partition that produced the cleanest evidence the fix works, so the field is load-bearing in both directions and is worth reading rather than only writing.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T21:06:06.231730031Z
+modified_at: 2026-09-21T21:06:06.231730031Z
+req_type: Bug
+tags:
+- performance agent-surface papercut
