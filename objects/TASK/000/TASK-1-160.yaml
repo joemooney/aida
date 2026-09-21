@@ -1,0 +1,24 @@
+id: 01a0c17f-2815-7803-a654-7bca4744df43
+spec_id: TASK-1-160
+title: Spec heft cannot be edited, so a spec that outgrows its filing-time sizing keeps a stale one that routing reads as truth
+description: |-
+  Spec size, or heft, cannot be changed by the edit verb, so a spec that grows well past its original sizing keeps a stale heft that routing and drains read as truth.
+
+  Observed 2026-09-20 on TASK-1303: filed at heft 2, then edited 16 times in one day until its description reached 12,359 characters with 13 acceptance bullets spanning a documentation section and three separate code fixes. It remained heft 2 and execution_mode drain, so a drain implementer would be handed twelve kilobytes of acceptance for a task labelled small.
+
+  The edit verb exposes title, description, status, priority, type, owner, feature, tags, blocked-by, refs, implementation summary, risk notes, test-coverage notes, mode, origin and weight. Weight is documented as a continuous ranking score beyond the priority enum, which is a different axis from size. So there is no advisor-facing way to correct a heft that has gone stale.
+
+  Two things follow. Heft is set at filing, when the least is known about the work, and is never revisited even though grooming is exactly the activity that discovers a spec is bigger than it looked. And a stale heft is not inert: it is a routing input, so the error is consumed rather than merely displayed.
+
+  Worth deciding rather than assuming: whether heft is meant to be advisor-maintained at all, or whether it is intentionally a filing-time artifact and the correct response to a spec outgrowing it is to split the spec instead. If it is the latter, the absence of the flag is deliberate and this finding closes with a note somewhere saying so. If it is the former, the flag is missing.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T01:05:31.157400040Z
+modified_at: 2026-09-21T01:05:31.157400040Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+- severity:minor
