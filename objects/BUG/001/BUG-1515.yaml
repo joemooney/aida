@@ -1,0 +1,64 @@
+id: 01a0c1d2-becf-7a92-b89a-76522a210c70
+spec_id: BUG-1515
+agreed_id: BUG-1515
+title: A rejected round leaves the spec at Done, so five specs with open RequestChanges verdicts are reported as awaiting merge and are invisible in every rework surface
+description: |
+  A spec whose round was REJECTED sits at `Done`, and every surface reads that as "finished, awaiting merge". Five specs are in that state right now, each green on CI, each held, each carrying an open RequestChanges verdict, and each reported by the drain as merge-ready.
+
+  MEASURED 2026-09-21 02:30Z:
+
+      spec        PR     held   Build(ubuntu)  verdict
+      BUG-1460    2034   yes    success        CHANGES REQUESTED
+      TASK-1273   1978   yes    success        CHANGES REQUESTED
+      BUG-1291    2001   yes    success        CHANGES REQUESTED
+      TASK-1272   1981   yes    success        RequestChanges
+      TASK-1293   2003   yes    success        RequestChanges
+
+  And the drain's own ineligibility report for each:
+
+      "Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`"
+
+  Both of those routes ship a PR. Following the hint on any of these five attempts to merge work with open findings.
+
+  HOW THE STATE ARISES. The implementer finishes a round and the spec goes `Done` — correct, it means "work finished on a branch". The reviewer then refuses it. Nothing moves the spec back. `Done` continues to mean "work finished on a branch", which is still literally true and is now deeply misleading: the work finished and was rejected.
+
+  CONSEQUENCES, in order of how much they cost:
+
+  1. The drain cannot act on them and says so with a hint pointing the wrong way. Two consecutive
+     waves tonight reported `shipped:0 shelved:0` because every batched member was either
+     excluded, needs-triage, or one of these five. The drain is now relaunching every seven
+     minutes and doing nothing, each cycle preceded by a full batch refresh.
+  2. They are INVISIBLE AS REWORK. `aida list --status needs-attention` does not show them.
+     `aida findings list` does not show them. The rework queue reads 8 while the true figure is 13.
+     Work that needs a round is absent from every surface that would route a round to it.
+  3. A seat following the recovery hint tries to merge them. I nearly did: I read
+     "Done — awaiting merge" in three separate ineligible lists today and treated those specs as
+     nearly-shipped. They were nearly-rejected. The status field cannot tell the two apart.
+
+  THE FIX IS NOT A NEW STATUS. `Done` plus an open refusing verdict is already a complete description — the information exists, it is just not consulted. The surfaces that read `Done` need to consult the verdict alongside it.
+
+  Acceptance:
+  - A spec at `Done` whose PR carries an open refusing verdict is reported as awaiting REWORK, not
+    awaiting merge, by the drain's ineligibility reason, `aida awaiting`, and the rework queue.
+  - The recovery hint for that state routes to rework, not to `--from-pr` / `integrate`.
+  - `aida list --status needs-attention` (or whatever surface enumerates rework) includes them, or
+    there is a documented reason it deliberately does not.
+  - A drain wave that finds zero eligible members does not silently relaunch into another empty
+    wave; it reports that the batch has no actionable work.
+  - Verification: drive a spec to a RequestChanges verdict, leave it, and assert it appears in the
+    rework surface and not in any merge-routing hint.
+
+  Related: the last criterion is a separate irritation with the same root — two consecutive empty
+  waves tonight were indistinguishable, from the outside, from waves that were working.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T02:36:49.231874688Z
+modified_at: 2026-09-21T02:36:49.231874688Z
+req_type: Bug
+tags:
+- agent-surface
+- drain-safe
+- lifecycle
+- orchestrator
