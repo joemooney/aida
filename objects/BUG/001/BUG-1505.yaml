@@ -2,7 +2,7 @@ id: 01a0c194-809e-7111-a5c6-095faa47a23d
 spec_id: BUG-1505
 agreed_id: BUG-1505
 title: 'The review verdict has no schema: 45 key shapes and 9 verdict spellings across 543 files, two of which contain APPROVED while meaning do-not-merge'
-description: |
+description: |-
   The review verdict is the artifact every merge gate is supposed to consult, and it has no schema. Across 543 verdict files under `.aida/review-verdicts/` there are 45 distinct key sets and 9 distinct spellings of the verdict value. Only two keys, `summary` and `verdict`, appear in every file.
 
   MEASURED 2026-09-20.
@@ -36,12 +36,21 @@ description: |
   6. A test asserts that a verdict whose value is not in the canonical set is rejected at record time, and that a gate fed a shaless legacy verdict reports cannot-determine rather than approving.
 
   NOT IN SCOPE: what the gate then does with a refusal, which is STORY-1405 and BUG-1452. This is about the artifact those depend on being well-formed enough to consult.
+
+
+  7. EVERY VERDICT WRITE IS A BLIND FULL REPLACE, AND THAT IS WHY THE CORPUS DRIFTED. Added 2026-09-20 after a second reviewer overwrote a first reviewer's verdict on PR #2040 three minutes after it was written, with no warning and a clean success message naming both files. No write is ever reconciled against what it replaces, so nothing converges and 45 shapes coexist. A schema alone does not fix this - it would lose the same verdict in a tidier shape. Required: recording reads the existing verdict first, prints it, and requires an explicit supersede to replace it; or verdicts are appended as an array and the current one is derived rather than stored destructively.
+
+  8. THE EXISTING SAFEGUARD IS INVERTED AND MUST BE FIXED WITH IT. `aida review record --help` promises that omitting findings preserves any existing findings[]. That preservation only applies when NO --finding is passed. So a substantive review - the one carrying findings - erases completely, and only an empty verdict is safe. The more a second reviewer has to say, the less of the first survives. Whatever replaces the current behaviour must not preserve that inversion.
+
+  9. THE STORE IS GITIGNORED, SO IT HAS NO SAFETY NET. `.aida/` is not tracked, so an overwritten verdict has no git history to recover from and no dated sibling. State the retention answer explicitly: either the verdict store gains its own retention or append-only history, or verdicts are mirrored somewhere durable at write time. Recovery is currently possible only by accident - the PR #2040 verdict was reconstructed from a headless session log that happened to capture the full command line, which is not a mechanism anyone can rely on.
+
+  10. A verdict that supersedes another records what it superseded. When the record is replaced, the prior verdict's summary, findings, recorder and sha survive somewhere queryable. Two reviewers disagreeing is precisely when the record is load-bearing and precisely when the second write currently erases the evidence of disagreement.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:28:50.078974800Z
-modified_at: 2026-09-21T01:29:05.017222707Z
+modified_at: 2026-09-21T01:38:00.748572288Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity agent-surface from:session-0920
