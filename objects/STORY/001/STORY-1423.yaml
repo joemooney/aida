@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-21T21:06:32.078087699Z
+modified_at: 2026-09-21T21:28:33.379949382Z
 req_type: Story
 relationships:
 - rel_type: !Custom related
@@ -89,4 +89,31 @@ comments:
   content: '[aida:advisor] The binary-blind denominator problem found while measuring this spec''s pair is filed as BUG-1572. It is a defect in STORY-1422''s SHIPPED mechanism, not in this spec, and it is a live risk to criterion 1: with a machine-global usage log and 20-60 worktrees in this repo, one lane''s stale build can hold main''s gate red indefinitely. Eleven distinct binary_sha values contributed to the single 24h window I measured. Whoever picks this spec up should read BUG-1572 before concluding that a red gate means main regressed.'
   created_at: 2026-09-21T21:06:32.078087699Z
   modified_at: 2026-09-21T21:06:32.078087699Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5de-e163-73a0-9371-44fcba5f054c
+  author: joe
+  content: |-
+    [aida:implementer] CRITERION 3 DONE AND DEMONSTRATED - PR #2062. Criteria 1, 2 and 7 DELIBERATELY UNTOUCHED, and the PR carries NO (STORY-1423) trailer so the merge cannot close the spec past them.
+
+    WHAT LANDED. Both [[schedule.jobs]] entries registered and enabled in this repo's .aida/config.toml, verbatim from the init scaffold (schedule_section() in aida-cli-lib/src/init_cmd.rs) with enabled flipped to true, plus the [performance.budgets] show = 1000 they guard. The 10%/24h tolerance is NOT restated in the config - it stays the provisional default in PerformancePolicy::default(), so there remains exactly one place it could be changed.
+
+    ALLOWLIST CHECKED BEFORE REGISTERING (BUG-1557's gap). doctor check performance --fail-on-findings IS present in command_table(), added by STORY-1422; parse confirmed empirically, not by reading. performance-guard-route is a SEAT job (prompt, no command) so it never reaches parse_scheduled_command at all. Neither entry can become the every-tick-forever error BUG-1557 describes.
+
+    THE CHAIN, RUN END TO END against a sandbox project root carrying this config (sandboxed deliberately so no ledger entry lands on the real store):
+        aida schedule list        both jobs, enabled, source project
+        aida schedule run         performance-guard failed
+        the check itself          aida show exceeded its 1000 ms budget on 19.7% of 7346 calls in the last 24h (tolerated 10.0%, worst 165672 ms), exit 1
+        CronJobFailed emitted     aida schedule tick: performance-guard-route due (on CronJobFailed) -> seat advisor
+        ledger                    schedule/performance-guard.yaml, result: failed:1
+    So it parses, it executes, it exits non-zero on a real breach, and the failure routes to a seat.
+
+    THAT READING IS NOT THE PAIR AND MUST NOT BE READ AS ONE. It is the whole machine-global population across every build on this box - binary-blind, exactly BUG-1572. It is offered only as proof the job can fire. THE PAIR REMAINS THE ADVISOR'S 2026-09-21 14:05 MEASUREMENT (1460a0168a pre-#2033: 17.1% of 5126; c29022deb8 post-#2033: 0.0% of 26). I did not re-derive it and have nothing that contradicts it - my 19.7%/7346 is a different denominator by construction, not a competing estimate of the same quantity.
+
+    CRITERION 2 IS NOT CLOSED BY ANYTHING HERE. 0 of 26 is consistent with a true rate up to ~11.5%, above the 10% budget. Criterion 7's re-measurement is likewise not due. Neither number was tuned.
+
+    FOUND WHILE DEMONSTRATING, FILED NOT FIXED - BUG-1573: a trip ledgers result: failed:1 and nothing else. The proportion, denominator, budget and tolerance in force at the time of the trip are discarded, and .aida/schedule.log appends STDERR only, so on this trip it captured the TOON format hint instead of the breach. The routing prompt asks the advisor to confirm the budget in force at the time of the trip from a ledger entry that does not contain it. That is the one defence STORY-1422 designed against the documented way latency gates die, and it is not wired up on the path that fires it. Sibling to BUG-1572 and found the same way, by firing the gate rather than reading its code.
+
+    ONE THING I COULD NOT DEMONSTRATE IN PLACE. aida schedule derives its project root from the STORE path, and a linked worktree shares the main checkout's store - so aida schedule list run from a worktree reads the MAIN checkout's .aida/config.toml, not the worktree's. The registration therefore cannot be shown live from an implementer worktree; it takes effect on the real surface when #2062 merges. Hence the AIDA_STORE-pointed sandbox root above, which is the same binary and the same config file reading the same machine-global usage log.
+  created_at: 2026-09-21T21:28:33.379949382Z
+  modified_at: 2026-09-21T21:28:33.379949382Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
