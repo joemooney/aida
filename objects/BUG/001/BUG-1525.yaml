@@ -83,7 +83,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:45:07.028261694Z
-modified_at: 2026-09-21T04:45:07.028261694Z
+modified_at: 2026-09-21T04:45:11.103979181Z
 req_type: Bug
 tags:
 - agent-briefs
@@ -91,3 +91,7 @@ tags:
 - parent:EPIC-62
 - rework-loop
 - severity:operational
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-21T04:45:11.103979181Z
