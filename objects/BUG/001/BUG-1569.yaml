@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:29:09.929894136Z
-modified_at: 2026-09-21T21:12:50.382696903Z
+modified_at: 2026-09-21T21:30:33.178783894Z
 req_type: Bug
 tags:
 - awaiting
@@ -51,4 +51,52 @@ comments:
     SUGGESTED SCOPE ADDITION, not binding: whatever cache-backs the protocol-notice lookup should also make the command EXIT WHEN IT IS DONE. Cutting 689 ms to 50 ms while the process still sits until 1010 ms would fix the margin and leave the whole per-turn cost exactly where it is.
   created_at: 2026-09-21T21:12:50.382696903Z
   modified_at: 2026-09-21T21:12:50.382696903Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5e0-b55a-7401-9a85-5bab0f30c616
+  author: joe
+  content: |-
+    [aida:advisor] THE DROP IS NO LONGER A MARGIN CALCULATION. IT WAS OBSERVED IN PRODUCTION, AND IT IS NOT RARE.
+
+    45 minutes ago I recorded a 311 ms margin here (689 ms of work against a 1000 ms kill) and wrote that the notice was "one busy machine away from being silently wrong on every turn." That was a prediction. This is the observation.
+
+    MEASURED 2026-09-21 14:29 MST. Binary c9da874c06+dirty; HEAD c9da874c06; `git merge-base --is-ancestor c9da874c06 <binary sha>` VERIFIED, so this is not another stale-binary reading. Ten consecutive `aida awaiting --notice` invocations, watching for the "Awaiting you" line:
+
+        run 0   notice at 0.437s      exit=0   total=1.015
+        run 1   NOTICE ABSENT         exit=0   total=1.010
+        run 2   NOTICE ABSENT         exit=0   total=0.765
+        run 3   notice at 0.442s      exit=0   total=1.015
+        run 4   notice at 0.733s      exit=0   total=1.010
+        run 5   notice at 0.436s      exit=0   total=1.015
+        run 6   notice at 0.438s      exit=0   total=1.015
+        run 7   notice at 0.435s      exit=0   total=1.015
+        run 8   notice at 0.435s      exit=0   total=1.015
+        run 9   notice at 0.440s      exit=0   total=1.016
+
+        PRINTED 8/10.  DROPPED 2/10.  EXIT CODE 0 IN EVERY CASE.
+
+    GROUND TRUTH AT THE TIME: `aida awaiting` reported awaiting 28, 1 unread shared mail, 4 specs in rework, 25 unshipped branches. So the two silent runs were not correctly reporting an empty board. There was work awaiting and THE NOTICE SAID NOTHING, twice, successfully.
+
+    I CAUGHT IT BECAUSE I HAD A REASON TO LOOK. Three runs at 14:27 printed no notice at all and I nearly read that as "the findings backlog is clear, nothing awaits" — which is exactly what it looks like, and which was WRONG. The only thing that stopped me was having written the margin on this spec twenty minutes earlier. NOBODY ELSE WILL HAVE THAT. Every other seat meets this surface as a one-line hook output with no baseline and no reason to doubt it.
+
+    TWO DISTINCT SHAPES, WHICH MATTERS FOR THE FIX:
+      - run 1 ran the full 1.010s and produced nothing: the watchdog killed it mid-work.
+      - run 2 EXITED AT 0.765s and produced nothing: it ended early, under the deadline, without
+        printing. That is not the watchdog. Whatever that is, it is a second path to the same
+        silent-empty output, and a fix that only addresses the deadline will leave it.
+
+    THE VARIANCE IS THE STORY. The successful runs cluster hard at 0.435-0.442s — seven of eight within 7 ms. Then one at 0.733s and two that never arrive. THE WORK IS NOT SLOW; IT IS OCCASIONALLY MUCH SLOWER, and the tail is what crosses the line. Tuning the deadline against the median would look completely safe and would fix nothing.
+
+    ONE PIECE OF GOOD NEWS: #1999 HELPED, MEASURABLY. The notice landed at 0.689s before that merge and lands at ~0.437s after it, on the same machine within the hour. The margin roughly doubled. AND THE DROP STILL HAPPENS AT 20%. So "make the load faster" is necessary and is demonstrably not sufficient — the tail defeats it.
+
+    WHAT THIS CHANGES FOR THIS SPEC. Cache-backing the protocol-notice lookup remains right, but it can no longer be the whole remedy, because a 20% drop survived a 36% latency improvement. The three things now required:
+      1. THE FAILURE MUST STOP BEING SILENT. `std::process::exit(0)` on timeout means no caller, hook,
+         or CI can distinguish "nothing awaits you" from "the query was killed before it could say".
+         A dropped notice should say it was dropped. Fail-open on the CONTENT is defensible; fail-open
+         on the FACT OF FAILING is what makes this undetectable.
+      2. THE SECOND, EARLY-EXIT PATH (run 2) must be identified. It is not the deadline.
+      3. THE TAIL, not the median, is the thing to measure against.
+
+    Cross-reference: TASK-194 lists this surface as the canonical case of a report read by a different party than the one who runs it, and notes its validator (`aida awaiting`) costs a minute, so nobody would run it to check a free one-liner. That is precisely why a 20% drop rate sat here unobserved.
+  created_at: 2026-09-21T21:30:33.178783894Z
+  modified_at: 2026-09-21T21:30:33.178783894Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
