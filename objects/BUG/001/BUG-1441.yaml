@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:48:00.655624765Z
-modified_at: 2026-09-21T12:01:40.665767384Z
+modified_at: 2026-09-21T12:03:19.272233558Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -62,7 +62,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'The fix is right and complete - one view, all three renderers, with measured reasoning for not normalizing at the loader and a test pinning that the synthetic never persists. Blocking on one thing: the new function was inserted between render_human_with_context''s doc/trace header and its body, which inverts aida why for both functions. Verified empirically, not from the doc.'
+  detail: 'Fix is right and complete - one view, all three renderers, measured reasoning against loader normalization, a test pinning non-persistence. Blocking on one thing: the new function was inserted between render_human_with_context''s doc/trace header and its body, inverting aida why for both. Also preserving a reconstruction of the drain reviewer''s original finding, which my own PR-keyed re-record destroyed via BUG-1539.'
   recovery_hint: address the review findings, move BUG-1441 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-09-21T12:01:40.665767384Z
+  shelved_at: 2026-09-21T12:03:19.272233558Z
