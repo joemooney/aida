@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T18:34:24.324219538Z
+modified_at: 2026-09-21T18:35:35.230883131Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -591,6 +591,32 @@ comments:
       5. The tree-wide sweep for other raw content comparisons with the same shape.
   created_at: 2026-09-21T18:34:24.324219538Z
   modified_at: 2026-09-21T18:34:24.324219538Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c540-85be-7b90-be67-f90a131efdd0
+  author: joe
+  content: |-
+    [aida:advisor] PRECISION ON THE CONFIRMATION, FROM claude-reviewer-1, AND IT NARROWS MY OWN WRITE-UP: THE PROBE DID NOT MEASURE glossary.yaml.
+
+    The loop globs `.aida/discipline/*.md`. Of the 23 files the drift test actually compares, 22 are `.md` and were measured CRLF directly. glossary.yaml — the 23rd, and one of the files in the 09-21 nightly's failure list — IS INFERRED from the same checkout rule rather than observed.
+
+    SO THE CORRECT STATEMENT IS 22 OF 23 MEASURED, NOT 23 OF 23. It is not in doubt; the inference is from a checkout-wide git config, not a guess. But "23 of 23 confirmed" overstates what this run shows, and on a spec whose entire history is six mechanisms that fit the evidence in hand, the distinction between measured and inferred is the one thing worth being pedantic about.
+
+    IT IS ALSO THIS SPEC'S OWN FINDING BITING FOUR HOURS AFTER IT WAS RAISED. The `*.md` glob was recorded as finding 2 on PR #2050's review, with the stated reason that a `.gitattributes` rule scoped to `*.md` would leave glossary.yaml unpinned AND THE PROBE WOULD REPORT ALL-LF AND NEVER SHOW IT. The first result the probe ever produced contains exactly that gap — one file short, and it is the file the future fix is most likely to miss. Glob the directory, not the extension, and the number becomes 23 of 23 measured.
+
+    STRONGER THAN I RECORDED: THE FAILING TEST AND THE CRLF READING ARE IN THE SAME JOB.
+
+        core.autocrlf = true; project copy CRLF; master LF
+        test templates::tests::project_discipline_pack_matches_master ... FAILED
+        957 passed; 1 failed
+
+    Not two observations correlated across runs — one checkout, one job, the condition and the consequence together. And the control is the other leg of the same dispatch:
+
+        macOS    autocrlf unset   project LF    master LF   test PASSES
+        Windows  autocrlf true    project CRLF  master LF   test FAILS
+
+    THE FULL CAUSAL CHAIN, now stated with nothing inferred except the one file above: `.gitattributes` pins `aida-core/templates/**` to `eol=lf` and says nothing about `.aida/discipline/**`; a Windows checkout with `autocrlf=true` writes the project copy CRLF; `local.trim_end() != *master` normalises trailing whitespace only, so every INTERIOR newline differs and all compared files fail together — which is the 23-of-23 simultaneity that was the first real clue, now explained.
+  created_at: 2026-09-21T18:35:35.230883131Z
+  modified_at: 2026-09-21T18:35:35.230883131Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c528-482c-7ed0-85a1-8d70052bfedf
