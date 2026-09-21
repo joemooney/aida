@@ -136,5 +136,31 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:43:33.092866010Z
-modified_at: 2026-09-21T18:53:42.629231070Z
+modified_at: 2026-09-21T18:59:35.260657237Z
 req_type: Bug
+comments:
+- id: 01a0c556-7edc-7f02-820a-d12318982900
+  author: joe
+  content: |-
+    [aida:advisor] THE TIMING PLACES ONE OF TODAY'S THREE "database is locked" FAILURES INSIDE THE STALE-LOCK WINDOW, PRECISELY. Found by claude-reviewer-1 while reviewing PR #2057.
+
+        their head committed   2026-09-21T11:51:51 -07:00
+        PR #2057 opened        11:52:39
+        stale lock healed      ~11:54
+
+    SO THE LOCK WAS STILL HELD WHEN THAT SUITE RAN. The implementer's failure of `queue_dead_target_summary_filter_includes_archived_targets_for_gc` — "database is locked", rerun clean in isolation, attributed by them to pre-existing sibling contention — HAS THE SAME TWO CANDIDATE MECHANISMS AS THE COMBINED-MAIN RED. Unlike that one, the timing is precise enough to place it inside the window rather than merely near it.
+
+    THAT IS NOW THREE CONTENTION-SHAPED FAILURES ATTRIBUTED TO LIVE SIBLINGS, ALL OF WHICH OCCURRED WHILE A CORPSE HELD THE CACHE LOCK: the #2053 flake, the combined-main red, and this one. THE ATTRIBUTION WAS NEVER TESTED — it was the mechanism that was salient because five lanes were running, and a dead pid's abandoned lock produces an identical symptom while requiring nothing at all.
+
+    THE DISCRIMINATOR IS CHEAP AND IS NOW CLEAN, WHICH IT WAS NOT AN HOUR AGO: re-run that single test post-heal. A PASS IMPLICATES THE LOCK ACROSS ALL THREE. A FAILURE MEANS SOMETHING ELSE SURVIVES AND THE SIBLING EXPLANATION EARNS ITS PLACE. Either answer is worth more than the assumption, and it is one test rather than a suite. The advisor has that run in flight.
+
+    AND A SHARPENING OF THE "detector exists, nothing runs it" FINDING, from the reviewer, which I think is the most quotable thing on this spec:
+
+        THE DETECTOR CLASSIFIED IT `[safe]`, WHICH IS THE WORD THAT MAKES A WEEKLY NO-OP
+        COMFORTABLE. A FINDING THAT IS BOTH AUTO-HEALABLE AND NEVER RUN IS WORSE THAN ONE
+        THAT IS NEITHER, BECAUSE THE FIRST READS AS HANDLED.
+
+    `aida doctor check stale-locks` saw this lock for seven and a half days and labelled it safe and auto-healable the entire time. The label is accurate and it is exactly what removes the urgency — a reader who runs the check sees a benign, one-command-away item and moves on; a reader who never runs it is told nothing. The failure is not that the classification is wrong. It is that a correct `[safe]` on a never-invoked detector is indistinguishable from no detector at all, while LOOKING like coverage.
+  created_at: 2026-09-21T18:59:35.260657237Z
+  modified_at: 2026-09-21T18:59:35.260657237Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
