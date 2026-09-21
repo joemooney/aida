@@ -1,0 +1,46 @@
+id: 01a0c5f5-622a-7392-a49c-e7a076a99612
+spec_id: BUG-1575
+agreed_id: BUG-1575
+title: The blank-subject predicate re-duplicated at a fourth site three hours after the merge that removed a duplicate of it, and the new copy documents the duplication instead of removing it
+description: |-
+  THE "A BLANK SUBJECT IS AN ABSENT SUBJECT" RULE HAS RE-DUPLICATED WITHIN THREE HOURS OF A MERGE THAT REMOVED A DUPLICATE OF IT, AND THE NEW COPY DOCUMENTS THE DUPLICATION INSTEAD OF REMOVING IT.
+
+  Found by claude-reviewer-1 while approving PR #2063. Verified by the advisor in the tree at 71a581bdbf (post-merge):
+
+      aida-core/src/mailbox.rs:622        pub fn subject_line(...)   <- the canonical home
+      aida-cli-lib/src/mailbox_cmd.rs:77  .filter(|v| !v.trim().is_empty())
+      aida-cli-lib/src/mailbox_cmd.rs     references to subject_line: ZERO
+
+  THE TIMELINE IS THE FINDING. `subject_line` was made `pub` by BUG-1462 SPECIFICALLY so the TUI could stop carrying its own copy of this rule; #2059 landed that and deleted the duplicate, whose own comment had admitted it existed only because the canonical function was private. THREE HOURS LATER #2063 HAND-ROLLED THE SAME PREDICATE AT A FOURTH SITE. The fix for the duplication and the recreation of the duplication are the same afternoon.
+
+  THIS IS THE FOURTH SURFACE IN THE FAMILY - the CLI flag, MCP, the TUI, and now the mailbox CLI print path.
+
+  WHAT IS AND IS NOT DUPLICATED, because the obvious remedy is wrong and would be refused on review. FULL REUSE OF `subject_line` IS NOT CORRECT HERE: it returns a truncated single line with [withdrawn] handling, while this site builds a two-line expanded row with a bold subject and the full body. THE OUTPUTS GENUINELY DIFFER. What is duplicated is the PREDICATE - "a blank subject is an absent subject", including the trim - not the projection. Anyone who tries to fix this by calling `subject_line` from mailbox_cmd will produce wrong output and correctly be sent back.
+
+  WHY THE COMMENT IS NOT A FIX. The new code comments that it shares "its rule that blank subjects are absent". SO THE DRIFT PROTECTION IS DOCUMENTATION, AND DOCUMENTATION IS WEAKER THAN THE STRUCTURE BUG-1462 JUST LANDED FOR THE SAME RULE ON THE SAME DAY. A comment saying "this duplicates X" does not fail when X changes; it just becomes false. The previous duplicate ALSO carried a comment explaining why it existed, and that comment is what let it survive until someone went looking.
+
+  Acceptance:
+  - Extract the predicate - a small `fn subject_is_present(&Option<String>) -> bool` or equivalent -
+    beside `subject_line` in aida-core/src/mailbox.rs, and call it from BOTH `subject_line` and
+    mailbox_cmd.rs. One home for the rule, two projections on top.
+  - Sweep for the other two surfaces (CLI flag, MCP) and route them through the same predicate if
+    they carry their own copy. ENUMERATE WHAT YOU FIND rather than naming the class - the count
+    is the evidence that this is structural.
+  - A test that the shared predicate treats BOTH blank forms as absent: Some("") and
+    Some("   \t"). #2063's test pins both at its own site, which is why an is_empty()-without-trim
+    fix fails there; the shared predicate needs the same pair or the property is only guarded
+    where it happens to have been noticed.
+  - NOT IN SCOPE: unifying the two renderings. They differ for good reasons.
+
+  Filed by the driver-advisor seat, disposing of a reviewer finding rather than leaving it in a PR
+  comment. Non-blocking for #2063, which is merged (71a581bdbf) - the change itself is correct and
+  its map_err -> with_context half is a real improvement.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T21:53:08.138084143Z
+modified_at: 2026-09-21T21:53:08.138084143Z
+req_type: Bug
+tags:
+- mailbox papercut duplication
