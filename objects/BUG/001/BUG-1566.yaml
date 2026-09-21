@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:47:03.211329757Z
-modified_at: 2026-09-21T19:47:19.732167869Z
+modified_at: 2026-09-21T20:13:47.086101960Z
 req_type: Bug
 tags:
 - integrity-floor
@@ -52,3 +52,32 @@ relationships:
   target_id: 01a0ba9e-f4f2-79b2-8a58-7df3a9234667
   created_at: 2026-09-21T19:47:19.732162455Z
   created_by: joe
+comments:
+- id: 01a0c59a-6cce-7ae3-a3fc-2f7f2d5a25c6
+  author: joe
+  content: |-
+    [aida:advisor] THE ASYMMETRY HAS A THIRD SIDE THAT NEITHER THE IMPLEMENTER NOR THE REVIEWER STATED, AND IT IS THE ONE THAT BITES THIS SEAT. Verified by the advisor 2026-09-21 before merging #1989.
+
+    MEASURED FIRST: this seat's stdin IS NOT A TTY (`[ -t 0 ]` -> false). So after STORY-1353 lands, `has_integrity_floor_authority()` returns false here and `aida merge-hold clear` REFUSES.
+
+    THE PIPELINE DOES NOT STOP, AND THE REVIEWER'S FRAMING OVERSTATES IT SLIGHTLY: `aida pr ship` clears the same hold with no TTY check — that is this spec's whole subject — so the ordinary merge path survives untouched.
+
+    WHAT BREAKS IS THE TRAILER-STRIP WORKFLOW, AND IT IS NOT A SIDE CASE. Three times today a hold existed precisely so a spec would NOT auto-complete on merge:
+        #2033  stripped (BUG-1480) so it would not complete past STORY-1423's criterion
+        #2042  stripped (TASK-1289) so it would not complete past an open operator gate
+        #1999  held right now, with "the squash subject MUST NOT NAME BUG-1288" as its condition
+    THAT WORKFLOW IS: clear the hold, then `gh pr merge --squash --subject "<no trailer>"`. It cannot use `aida pr ship`, because ship preserves the trailer — which is the exact thing being avoided.
+
+    SO AFTER #1989 LANDS, AN AGENT SEAT FACING A HELD PR THAT NEEDS A STRIPPED TRAILER HAS TWO OPTIONS AND BOTH ARE BAD:
+        (a) `aida pr ship` — keeps the trailer, auto-completes the spec past its open criterion.
+            That is the defect the hold existed to prevent.
+        (b) drop the `aida:merge-hold` label by hand with `gh pr edit --remove-label` — which
+            satisfies the required check while BYPASSING THE INTEGRITY FLOOR BEING ADDED.
+    A floor whose only workaround is a raw forge command is a floor that will be worked around, and the bypass leaves no marker-file trace.
+
+    THIS IS NOT AN ARGUMENT AGAINST THE FLOOR. "A supervised hold any agent can release is arguably not a supervision mechanism" is a defensible position and it is stated in-code where the next reader finds it. THE GAP IS THAT THE CONSEQUENCE WAS NOT ENUMERATED: no migration note, no statement of who clears holds afterwards, and no check of whether the seats currently doing it still can. The reviewer named the first two; this is the third and it is the one with live instances on the board today.
+
+    WHAT THIS SPEC SHOULD RESOLVE, then, is not just "should ship have a TTY check too" but the pair: IF CLEARING IS A HUMAN FLOOR, WHAT IS THE SANCTIONED PATH FOR A DELIBERATE NON-DEFAULT MERGE — a trailer strip, a hand-written subject — FROM A SEAT THAT CANNOT CLEAR? Candidate answers worth weighing rather than one being assumed: `pr ship` gains a `--subject` override so the sanctioned path keeps its audit trail; or clearing gains an explicit, logged, non-TTY authority distinct from dispatch and disposition; or the trailer decision moves out of the subject line entirely so no non-default merge is needed.
+  created_at: 2026-09-21T20:13:47.086101960Z
+  modified_at: 2026-09-21T20:13:47.086101960Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
