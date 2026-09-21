@@ -1,0 +1,37 @@
+id: 01a0c527-5417-7b32-bf2e-7af046956223
+spec_id: TASK-1422
+agreed_id: TASK-1422
+title: A repo-wide git diff --check flags markdown hard line breaks as errors - it has cost two review rounds with opposite correct answers, and the convention has never been decided
+description: |
+  A REPO-WIDE `git diff --check` TREATS A LEGITIMATE MARKDOWN CONSTRUCT AS AN ERROR, AND IT HAS NOW COST TWO REVIEW ROUNDS ON TWO DIFFERENT DOCUMENTS — WITH OPPOSITE INSTRUCTIONS EACH TIME.
+
+  Raised by claude-reviewer-1 2026-09-21 as a recurring tension rather than an objection, after it surfaced for the second time.
+
+  TWO TRAILING SPACES AT THE END OF A MARKDOWN LINE ARE A HARD LINE BREAK. They are the documented way to force a newline inside a paragraph, and they are indistinguishable from stray whitespace to `git diff --check`. So a guard that exists to catch accidental whitespace fires on deliberate formatting.
+
+  THE TWO INSTANCES, and the reason this is worth deciding once:
+
+      PR #2009 / SPIKE-83 doc     the instruction was DO NOT ACTION IT — the document was already
+                                  merged, so touching it to satisfy a check was the larger risk
+      PR #2001 / ADR-47 doc       the instruction was FIX IT — still an open PR, so leaving a false
+                                  declared-check claim was the larger risk
+
+  Both calls were right for their situation. THAT IS THE PROBLEM: the correct answer depends on whether the document has already merged, which is not a property anyone should have to reason about per document, and the reasoning has to be reconstructed every time.
+
+  Acceptance:
+  - DECIDE ONCE, AND RECORD IT DURABLY — in `.aida/discipline/` or the contributing conventions, not in a PR comment. Two options, and either is acceptable:
+      (a) STANDARDISE ON `<br>` IN docs/plans. Explicit, survives `git diff --check`, and renders identically. The ADR-47 fix already took this route and demonstrated it is line-by-line correct — note that line 6 there correctly has NO `<br>`, because it is the last line before a blank line and never needed one. A uniform rewrite would have been a subtler rendering change than the trailing spaces were.
+      (b) EXEMPT docs/plans FROM THE CHECK. Simpler, and it accepts that a markdown tree is not source.
+  - WHICHEVER IS CHOSEN, SAY WHY THE OTHER WAS NOT. The next person to hit this should find the reasoning rather than re-derive it — which is exactly what did not happen between #2009 and #2001.
+  - If (a): the convention needs to be discoverable at authoring time, not at review time. A rule that is only enforced by a reviewer noticing is a rule that costs a round every time someone has not read it.
+
+  NOT IN SCOPE: changing `git diff --check`'s behaviour for source files. Trailing whitespace in Rust is an error and should stay one; this is only about markdown, where the construct is legitimate.
+
+  Related: BUG-1291 (the ADR-47 instance, fixed at PR #2001), SPIKE-83 (the earlier instance, deliberately not actioned).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T18:08:04.119482952Z
+modified_at: 2026-09-21T18:08:04.119482952Z
+req_type: Task
