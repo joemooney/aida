@@ -171,23 +171,35 @@ pub(crate) fn handle_mailbox_command(
             // `--in-reply-to` (target not found) is rejected: detaching a reply
             // loses the conversation. Message-id prefixes resolve consistently
             // across every mailbox surface. trace:BUG-557 trace:BUG-1297 | ai:codex
-            let mut resolved_reply_id = in_reply_to.clone();
-            let thread_id = if let Some(t) = thread.as_deref() {
+            // BUG-1297 F1: the reply target is resolved WHENEVER --in-reply-to is
+            // given, independent of --thread. It used to sit in an ELSE-IF, so
+            // `--thread X --in-reply-to Y` took the thread branch, never resolved
+            // Y, and wrote the raw user string into the message — an unknown or
+            // ambiguous reply id landed unvalidated. Threading still prefers an
+            // explicit --thread; validation no longer depends on which branch
+            // wins. trace:BUG-1297 | ai:claude
+            let merged = if thread.is_some() || in_reply_to.is_some() {
                 let local = mailbox_store::read_local_messages(project_root)?;
                 let canonical = mailbox_store::read_canonical_messages(store_root)?;
-                let merged = merge_dedup(&local, &canonical);
-                resolve_mailbox_thread(&merged, t, true)?
-            } else if let Some(reply_target) = in_reply_to.as_deref() {
-                let local = mailbox_store::read_local_messages(project_root)?;
-                let canonical = mailbox_store::read_canonical_messages(store_root)?;
-                let merged = merge_dedup(&local, &canonical);
+                merge_dedup(&local, &canonical)
+            } else {
+                Vec::new()
+            };
+            let mut resolved_reply_id = None;
+            let mut reply_target_thread = None;
+            if let Some(reply_target) = in_reply_to.as_deref() {
                 let target = resolve_mailbox_message(&merged, reply_target).map_err(|error| {
                     anyhow::anyhow!(
                         "--in-reply-to '{reply_target}' was not resolved; reply refused: {error}"
                     )
                 })?;
                 resolved_reply_id = Some(target.id.clone());
-                target.thread_id.clone()
+                reply_target_thread = Some(target.thread_id.clone());
+            }
+            let thread_id = if let Some(t) = thread.as_deref() {
+                resolve_mailbox_thread(&merged, t, true)?
+            } else if let Some(t) = reply_target_thread {
+                t
             } else {
                 id.clone()
             };
@@ -701,7 +713,18 @@ fn resolve_mailbox_thread(
     }
     match resolve_mailbox_message(messages, query) {
         Ok(message) => Ok(message.thread_id.clone()),
-        Err(error) if error.to_string().contains("ambiguous") => Err(error),
+        // BUG-1297: match the TYPE, not the wording. The previous
+        // `error.to_string().contains("ambiguous")` meant rewording that bail
+        // message rerouted an ambiguous prefix into the allow_new arm below,
+        // silently creating a detached thread. trace:BUG-1297 | ai:claude
+        Err(error)
+            if matches!(
+                error.downcast_ref::<crate::MailboxResolveFailure>(),
+                Some(crate::MailboxResolveFailure::AmbiguousPrefix { .. })
+            ) =>
+        {
+            Err(error)
+        }
         Err(_) if allow_new => Ok(query.to_string()),
         Err(_) => anyhow::bail!("no such mailbox message or thread: {query}"),
     }
@@ -839,6 +862,41 @@ mod tests {
         }
     }
 
+    // BUG-1297: an ambiguous prefix must be REFUSED by resolve_mailbox_thread,
+    // and the refusal must not depend on the wording of the error. The previous
+    // implementation branched on `to_string().contains("ambiguous")`, so this
+    // asserts the discriminant is carried by the TYPE: the message text is
+    // deliberately never inspected here.
+    // trace:BUG-1297 | ai:claude
+    #[test]
+    fn ambiguous_prefix_is_refused_by_type_not_by_message_text() {
+        let messages = vec![
+            message("0fa629d6-1111", "thread-a"),
+            message("0fa629d6-2222", "thread-b"),
+        ];
+
+        // allow_new = TRUE is the dangerous direction: under the old prose match,
+        // a reworded message fell through to this arm and silently created a
+        // detached thread from an ambiguous id.
+        let err = resolve_mailbox_thread(&messages, "0fa629d6", true)
+            .expect_err("an ambiguous prefix must never become a new thread");
+        assert!(
+            matches!(
+                err.downcast_ref::<crate::MailboxResolveFailure>(),
+                Some(crate::MailboxResolveFailure::AmbiguousPrefix { .. })
+            ),
+            "the refusal must carry the typed discriminant, got: {err}"
+        );
+
+        // and an UNKNOWN id under allow_new is still allowed through — the two
+        // failures must stay distinguishable, or this fix would just refuse
+        // everything and look correct.
+        assert_eq!(
+            resolve_mailbox_thread(&messages, "no-such-id", true).unwrap(),
+            "no-such-id"
+        );
+    }
+
     // trace:BUG-1297 | ai:codex
     #[test]
     fn mailbox_message_prefix_resolves_and_ambiguity_lists_candidates() {
@@ -951,6 +1009,94 @@ mod tests {
         assert!(mailbox_store::read_local_messages(project.path())
             .unwrap()
             .is_empty());
+    }
+
+    // BUG-1297 F1: --thread AND --in-reply-to together used to bypass reply
+    // validation entirely. The --thread branch was taken first and the
+    // in-reply-to resolution sat in an ELSE-IF, so the raw user string was
+    // written into the message unvalidated. Both assertions matter: the unknown
+    // id must be REFUSED even though --thread is present, and nothing must be
+    // written.
+    // trace:BUG-1297 | ai:claude
+    #[test]
+    fn thread_flag_does_not_bypass_reply_id_validation() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let existing = message("abcd1234-3333", "thread-c");
+        mailbox_store::write_message(project.path(), &existing).unwrap();
+
+        let command = MailboxCommand::Send {
+            to: Some("bob".into()),
+            broadcast: false,
+            body: Some("reply".into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: Some("thread-c".into()),
+            in_reply_to: Some("definitely-not-a-real-id".into()),
+            from: Some("alice".into()),
+            urgent: false,
+            intent: "fyi".into(),
+        };
+
+        let error = handle_mailbox_command(&command, &store)
+            .expect_err("an unknown --in-reply-to must be refused even with --thread given")
+            .to_string();
+        assert!(error.contains("reply refused"), "{error}");
+        assert_eq!(
+            mailbox_store::read_local_messages(project.path())
+                .unwrap()
+                .len(),
+            1,
+            "only the pre-existing message may be present; the refused send must not write"
+        );
+    }
+
+    // BUG-1297 F1, the other direction: with BOTH flags and a VALID reply
+    // target, --thread still decides threading and the parent id is recorded in
+    // full. Without this, the fix could satisfy the refusal test by simply
+    // refusing whenever both flags appear.
+    // trace:BUG-1297 | ai:claude
+    #[test]
+    fn thread_flag_wins_threading_while_reply_id_is_still_resolved() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        mailbox_store::write_message(project.path(), &message("abcd1234-3333", "thread-c"))
+            .unwrap();
+        mailbox_store::write_message(project.path(), &message("eeee5555-7777", "thread-z"))
+            .unwrap();
+
+        let command = MailboxCommand::Send {
+            to: Some("bob".into()),
+            broadcast: false,
+            body: Some("reply".into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: Some("thread-z".into()),
+            in_reply_to: Some("abcd1234".into()),
+            from: Some("alice".into()),
+            urgent: false,
+            intent: "fyi".into(),
+        };
+        handle_mailbox_command(&command, &store).expect("valid reply target must succeed");
+
+        let sent = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "reply")
+            .expect("the reply must be written");
+        assert_eq!(
+            sent.in_reply_to.as_deref(),
+            Some("abcd1234-3333"),
+            "the PREFIX must be resolved to the full parent id, not stored raw"
+        );
+        assert_eq!(
+            sent.thread_id, "thread-z",
+            "--thread must still decide threading"
+        );
     }
 
     // trace:BUG-1297 | ai:codex
