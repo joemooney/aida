@@ -1536,6 +1536,23 @@ fn parse_scheduled_command(s: &str) -> Result<ScheduledCommand> {
             args: &["doctor"],
             hook_allowed: false,
         },
+        // A GATING doctor run: unlike bare `doctor`, this exits non-zero when
+        // the category has findings, which is what lets a substrate job carry a
+        // failure into CronJobFailed and on to a seat.
+        //
+        // Spelled out rather than parsed because `args` is a &'static slice, so
+        // a category cannot be threaded through without making it owned. That
+        // is a real change to this struct and every entry above, and it is the
+        // general fix — one entry per gated category is the same hand-
+        // enumeration shape already filed against the doctor category list.
+        // Recorded here so the next person adding a gated category sees the
+        // choice rather than just copying the line.
+        // trace:STORY-1422 | ai:claude
+        "doctor check performance --fail-on-findings" => ScheduledCommand {
+            display: "doctor check performance --fail-on-findings",
+            args: &["doctor", "check", "performance", "--fail-on-findings"],
+            hook_allowed: false,
+        },
         "fetch --code-only" => ScheduledCommand {
             display: "fetch --code-only",
             args: &["fetch", "--code-only", "--quiet"],
@@ -1562,6 +1579,7 @@ fn valid_commands() -> Vec<&'static str> {
         "queue gc",
         "notify check",
         "doctor",
+        "doctor check performance --fail-on-findings",
         "fetch --code-only",
         "store compact",
         "store gc",

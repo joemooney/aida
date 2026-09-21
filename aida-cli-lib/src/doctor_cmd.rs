@@ -300,9 +300,11 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
-    // The performance gate: guarded command shapes whose MEDIAN latency in the
-    // usage log exceeds their configured budget, plus guarded shapes with no
-    // recorded invocations at all. Opt-in by config — a project with no
+    // The performance gate: guarded command shapes that exceed their budget on
+    // TOO LARGE A FRACTION of recent calls, plus guarded shapes with no recorded
+    // calls at all. A proportion over a window, not a median — the distribution
+    // this judges is bimodal, and a median sits at ~665ms and never trips even
+    // with the regression live. Opt-in by config: a project with no
     // `[performance.budgets]` has nothing guarded and nothing to report.
     // trace:STORY-1422 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "performance")? {
