@@ -49,6 +49,11 @@ authorship is conflict resolution that any two engineers would resolve
 identically, and its only judgment is "is this mechanical or not?" — and when the
 answer is "not," it hands off.
 
+The integrator holds dispatch authority for routing and reordering work, but
+not advisor disposition authority. Its merge work remains behind the human-only
+integrity floors described in `authority-boundaries.md`.
+<!-- trace:STORY-1353 | ai:codex -->
+
 ## Order of operations
 
 For each PR the integrator picks up:

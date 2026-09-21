@@ -2800,13 +2800,16 @@ pub(crate) fn handle_queue_command(
             // Only execution-dispatch routes (implementer, unknown/custom roles,
             // and the unrouted `--for any`/no-`--for` cases) stay gated.
             // trace:BUG-631 | ai:claude
-            if for_target_requires_dispatch_authority(r#for.as_deref()) && !has_advisor_authority()
+            // Dispatch is routing, not disposition. Product, advisor, and
+            // integrator seats (plus a live orchestrator) may do it without
+            // acquiring advisor authority. trace:STORY-1353 | ai:codex
+            if for_target_requires_dispatch_authority(r#for.as_deref()) && !has_dispatch_authority()
             {
                 anyhow::bail!(
-                    "queuing work for execution needs advisor authority (advisor role or an \
-                     interactive session). File the spec for advisor triage instead, or run \
-                     as the advisor. (Routing for review — `--for advisor`/`--for human`/\
-                     `--for reviewer` — needs no advisor authority.){}",
+                    "queuing work for execution needs dispatch authority (product, advisor, or \
+                     integrator role, or a live orchestrator). File the spec for advisor triage \
+                     instead, or ask a dispatch-capable seat to route it. (Routing for review — \
+                     `--for advisor`/`--for human`/`--for reviewer` — needs no dispatch authority.){}",
                     roleless_recovery_sentence()
                 );
             }
@@ -3168,6 +3171,13 @@ pub(crate) fn handle_queue_command(
             global,
             r#for,
         } => {
+            // Removing a route is a dispatch mutation. trace:STORY-1353 | ai:codex
+            if !has_dispatch_authority() {
+                anyhow::bail!(
+                    "removing queued work needs dispatch authority (product, advisor, or \
+                     integrator role, or a live orchestrator)"
+                );
+            }
             let user_id = get_user(user);
 
             // TASK-1150: distinct-user identity guard — mutating a queue owned
@@ -3333,6 +3343,13 @@ pub(crate) fn handle_queue_command(
             after,
             force,
         } => {
+            // Reordering work is a dispatch mutation. trace:STORY-1353 | ai:codex
+            if !has_dispatch_authority() {
+                anyhow::bail!(
+                    "moving queued work needs dispatch authority (product, advisor, or \
+                     integrator role, or a live orchestrator)"
+                );
+            }
             // BUG-89: route through the canonical helper so move resolves
             // user_id the same way add/list do (previously this path
             // skipped the USERNAME fallback). trace:BUG-89 | ai:claude
@@ -5268,15 +5285,16 @@ pub(crate) fn handle_queue_command(
                     drain_resolution.max,
                 );
             }
-            // STORY-647: team RBAC guardrail — starting an autonomous drain
-            // (`--auto-complete`) is an advisor-gated op by default (tunable via
-            // `[team.permissions] drain_start`). A live-orchestrator re-entry
-            // (`--resume-drain`, and the phase children the orchestrator spawns)
-            // holds advisor authority via `has_advisor_authority()`'s
-            // orchestrator carve-out, so the gate bypasses those and only the
-            // FRESH launch is checked. Advisor authority (TTY / advisor role)
-            // bypasses; there is no `--force` on this path, so a non-advisor
-            // seats the role. trace:STORY-647 | ai:claude
+            // STORY-1353: starting an autonomous drain (`--auto-complete`) is
+            // DISPATCH, not disposition, so it is gated on
+            // `has_dispatch_authority()` (product, advisor, integrator role,
+            // or a live orchestrator) rather than the old advisor-only
+            // `[team.permissions]` map. A live-orchestrator re-entry
+            // (`--resume-drain`, and the phase children the orchestrator
+            // spawns) holds dispatch authority via the orchestrator carve-out,
+            // so the gate bypasses those and only the FRESH launch is
+            // checked; there is no `--force` bypass on this path, unlike the
+            // `aida burndown run` sibling gate. trace:STORY-647 trace:STORY-1353 | ai:claude
             if auto_complete.is_some() && !*resume_drain {
                 // trace:STORY-1133 | ai:codex
                 if current_role_instance_is_companion() {
@@ -5285,7 +5303,12 @@ pub(crate) fn handle_queue_command(
                          seat for this role, or run `aida queue work --auto-complete` from the driver."
                     );
                 }
-                enforce_team_gate(permissions::GatedOp::DrainStart, false)?;
+                if !has_dispatch_authority() {
+                    anyhow::bail!(
+                        "starting an autonomous drain needs dispatch authority (product, advisor, \
+                         or integrator role, or a live orchestrator)"
+                    );
+                }
             }
             // STORY-246: `--auto-complete` drives the full
             // implementer→CI→reviewer→merge→pull→build lifecycle. It is a
@@ -5954,6 +5977,14 @@ pub(crate) fn handle_queue_command(
             no_pull,
             user,
         } => {
+            // Requeueing is dispatch; any status transition it entails is
+            // checked separately by the handler. trace:STORY-1353 | ai:codex
+            if !has_dispatch_authority() {
+                anyhow::bail!(
+                    "reworking queued work needs dispatch authority (product, advisor, or \
+                     integrator role, or a live orchestrator)"
+                );
+            }
             handle_queue_rework(
                 storage,
                 id,
@@ -6651,6 +6682,13 @@ pub(crate) fn handle_queue_rework(
         Some(s) => Some(parse_status(s)?),
         None => smart_target,
     };
+    // NOTE: the advisor-authority check for this same (current_status,
+    // target_status) pair is NOT done here. It used to be (STORY-1353's
+    // original hard `anyhow::bail!`), but that duplicated the BUG-1470 F1
+    // gate below verbatim -- same predicate, same pair -- and being first,
+    // silently upgraded BUG-1470's designed no-op-with-hint refusal into a
+    // hard error, breaking `metadata_rework_of_a_draft_is_refused_without_advisor_authority`'s
+    // pinned Ok(()) contract. One gate, at the flip, below. trace:STORY-1353 | ai:claude
 
     // Guards. Terminal status (Completed/Rejected) + already-InProgress
     // both require --force. We surface the spec id in the error so the
@@ -10728,14 +10766,15 @@ pub(crate) struct LeasePeek {
 
 /// Statuses the `--auto-complete` orchestrator can drive from scratch
 /// (TASK-292). The orchestrator runs a full implementer → CI → reviewer →
-/// merge lifecycle starting at phase 1, so it can only begin a spec that
-/// hasn't started: Draft / Approved / Planned. In Progress and Done are
-/// mid-flight (someone is on it / it sits on a branch awaiting merge);
-/// Completed and Rejected are terminal. trace:TASK-292 | ai:claude
+/// merge lifecycle starting at phase 1, so it can only begin a spec that the
+/// advisor has disposed into the pipeline: Approved / Planned. A queued Draft
+/// is still undisposed and must never become implicit approval in a batch.
+/// In Progress and Done are mid-flight; Completed and Rejected are terminal.
+// trace:TASK-292 trace:STORY-1353 | ai:codex
 pub(crate) fn auto_complete_head_drivable(status: &RequirementStatus) -> bool {
     matches!(
         status,
-        RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::Planned
+        RequirementStatus::Approved | RequirementStatus::Planned
     )
 }
 

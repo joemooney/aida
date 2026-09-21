@@ -998,6 +998,41 @@ fn advisor_authority_grants_orchestrated_ops_but_gates_bare_agents() {
     assert!(advisor_authority_from("reviewer", false, true)); // orchestrated reviewer phase
 }
 
+/// Dispatch and disposition deliberately have different role matrices.
+// trace:STORY-1353 | ai:codex
+#[test]
+fn dispatch_authority_role_matrix_is_independent_of_advisor_authority() {
+    use super::dispatch_authority_from as dispatch;
+    assert!(dispatch("product", false));
+    assert!(dispatch("advisor", false));
+    assert!(dispatch("integrator", false));
+    assert!(!dispatch("implementer", false));
+    assert!(!dispatch("reviewer", false));
+    assert!(dispatch("implementer", true));
+}
+
+// trace:STORY-1353 | ai:codex
+#[test]
+fn disposition_and_integrity_floor_role_matrices_stay_stricter_than_dispatch() {
+    use super::{advisor_authority_from as disposition, integrity_floor_authority_from as floor};
+    for role in [
+        "product",
+        "advisor",
+        "implementer",
+        "reviewer",
+        "integrator",
+    ] {
+        assert_eq!(disposition(role, false, false), role == "advisor");
+        assert!(
+            !floor(false),
+            "{role} cannot receive an integrity-floor grant"
+        );
+    }
+    assert!(disposition("implementer", false, true));
+    assert!(!floor(false), "an orchestrator cannot cross the floor");
+    assert!(floor(true), "a present human may cross the floor");
+}
+
 #[test]
 fn companion_instance_does_not_hold_advisor_authority() {
     // trace:STORY-1133 | ai:codex

@@ -16,6 +16,10 @@ Substrate enforcement: lease scope binding + `aida session start` refuses to cla
 
 Once the PR is open, the implementer's job is done. Don't poll CI. Don't watch the merge. Don't linger to "check back later." The orchestrator / integrator / next-phase agent handles downstream phases (CI verify, reviewer, merge, auto-bump).
 
+The implementer does not hold dispatch or disposition authority: it consumes
+work already routed and disposed by the appropriate seats. See
+`authority-boundaries.md`. <!-- trace:STORY-1353 | ai:codex -->
+
 Substrate enforcement: BUG-376's `IMPLEMENTER COMPLETE — EXIT NOW` banner fires at the end of `aida pr ship`. When you see it, exit (Ctrl+D in Claude Code; the equivalent in your agent CLI). The lease's worktree gets cleaned up either by `aida session end` from the parent shell, or by `aida doctor heal stale-leases` later.
 
 ### 3. Poll AIDA brief surface as ground truth

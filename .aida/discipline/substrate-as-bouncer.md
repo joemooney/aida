@@ -1,5 +1,20 @@
 # Substrate as bouncer, not passive rules
 
+## Authority boundaries
+
+AIDA separates three authorities. **Dispatch** covers queue add, rework,
+remove, move, and launching a drain or batch wave; it is held by `product`,
+`advisor`, `integrator`, and a corroborated live orchestrator. **Disposition**
+covers approval/rejection, advancing undisposed work, execution mode, finding
+promotion, and archive decisions; it remains with `advisor`. **Integrity
+floors** cover supervised merge, clearing merge holds, reviewer independence,
+and green CI; they require a present human and cannot be granted.
+
+Implementers and reviewers consume routed work but hold neither dispatch nor
+disposition authority. Queue presence is routing evidence, not approval, so an
+autonomous drain skips a queued Draft until the advisor disposes it into
+Approved or Planned. <!-- trace:STORY-1353 | ai:codex -->
+
 Rules in prompt text are useful, but AIDA's reliability improvements come
 from programmatic gates that intercept unsafe lifecycle states.
 

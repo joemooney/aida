@@ -3747,15 +3747,8 @@ impl<'a> McpServer<'a> {
 
     // trace:EPIC-27 trace:BUG-480
     fn tool_queue_add(&self, args: &Value) -> Result<String, String> {
-        // BUG-480 (TASK-647 / ADR-3 caller parity): queuing a spec for
-        // execution commits it to the pipeline — an advisor-authority act, the
-        // exact decision the CLI `aida queue add` gates on
-        // (`has_advisor_authority()`). MCP is never advisor authority (the
-        // server runs non-TTY and may merely inherit an advisor role from the
-        // launching shell), so it refuses unconditionally, mirroring how
-        // `add_requirement` / `update_requirement` (BUG-449) treat MCP as
-        // untrusted. Without this, an MCP agent could file a Draft and then
-        // push it straight into the execution queue, bypassing intake triage.
+        // Queuing is dispatch, not disposition. A queued Draft remains
+        // undisposed and autonomous drains refuse it. trace:STORY-1353 | ai:codex
         // The queue mechanics live in `tool_queue_add_inner` so tests (and any
         // future advisor-corroborated caller) can seed the queue out-of-band,
         // mirroring the `force_status` precedent. trace:BUG-480 | ai:claude
@@ -4167,6 +4160,11 @@ impl<'a> McpServer<'a> {
             // until a worker establishes a lease. trace:BUG-1470 | ai:codex
             None => crate::rework_target_for_mode(&current_status, false),
         };
+        if let Some(ref new_status) = target_status {
+            if let Some(message) = mcp_status_gate_message(&current_status, new_status) {
+                return Err(message);
+            }
+        }
 
         // Terminal-status guard (mirrors the CLI). trace:EPIC-27
         if matches!(
@@ -5839,32 +5837,34 @@ fn mcp_caller_has_advisor_authority() -> bool {
     crate::advisor_authority_from(&role, false, false)
 }
 
+// trace:STORY-1353 | ai:codex
+fn mcp_caller_has_dispatch_authority() -> bool {
+    let role = role_active_env().unwrap_or_default();
+    crate::dispatch_authority_from(&role, false)
+}
+
 /// BUG-480 / BUG-486: the refusal message for MCP queue-for-execution tools
-/// (`queue_add` / `queue_rework`). Queuing a spec for work is an
-/// advisor-authority act (the CLI gates it on `has_advisor_authority()`).
-/// BUG-486: consult the caller's role instead of refusing unconditionally — an
-/// MCP session that has entered an advisor role IS advisor authority and may
-/// queue, exactly as the CLI does under `AIDA_SESSION_ROLE=advisor`. A
-/// non-advisor caller still gets the refusal, told to file the spec for advisor
-/// triage. Returns `None` when the caller may proceed. trace:BUG-486 trace:BUG-480 | ai:claude
+/// (`queue_add` / `queue_rework`). Queue mutation is dispatch rather than
+/// advisor disposition. Returns `None` when the caller may proceed.
+// trace:BUG-486 trace:BUG-480 trace:STORY-1353 | ai:codex
 fn mcp_queue_authority_message() -> Option<String> {
-    mcp_queue_authority_message_for(mcp_caller_has_advisor_authority())
+    mcp_queue_authority_message_for(mcp_caller_has_dispatch_authority())
 }
 
 /// Pure core of [`mcp_queue_authority_message`] (BUG-486): the queue-authority
-/// decision over an explicit `caller_is_advisor`, so it is unit-testable without
+/// decision over an explicit dispatch capability, so it is unit-testable without
 /// mutating the process-global `AIDA_SESSION_ROLE` env. `None` = may proceed.
 /// trace:BUG-486 | ai:claude
-fn mcp_queue_authority_message_for(caller_is_advisor: bool) -> Option<String> {
-    if caller_is_advisor {
+fn mcp_queue_authority_message_for(caller_has_dispatch: bool) -> Option<String> {
+    if caller_has_dispatch {
         return None;
     }
-    Some(format!(
-        "Cannot queue work for execution via MCP: committing a spec to the execution \
-             pipeline is the advisor's decision and needs advisor authority. {} File the spec \
-             (it lands as a draft for advisor triage) and let the advisor queue it.",
-        mcp_advisor_refusal_guidance(None)
-    ))
+    Some(
+        "Cannot queue work for execution via MCP: routing work needs dispatch authority \
+         (product, advisor, or integrator role). File the spec for advisor triage or ask a \
+         dispatch-capable seat to route it."
+            .to_string(),
+    )
 }
 
 /// BUG-449 / BUG-481 / BUG-486: status transitions an MCP caller may NOT make
@@ -12458,10 +12458,13 @@ mod tests {
         }
 
         // ---- Queue authority gate (queue_add / queue_rework) ----
-        // Non-advisor refused; advisor permitted (BUG-480/TASK-718 reconciled).
+        // Non-dispatch caller refused; dispatch-capable caller permitted.
         let refused = mcp_queue_authority_message_for(false)
-            .expect("queue_add/rework via MCP must be refused for a non-advisor");
-        assert!(refused.contains("advisor"), "queue refusal: {refused}");
+            .expect("queue_add/rework via MCP must be refused without dispatch authority");
+        assert!(
+            refused.contains("dispatch authority"),
+            "queue refusal: {refused}"
+        );
         assert_eq!(
             mcp_queue_authority_message_for(true),
             None,

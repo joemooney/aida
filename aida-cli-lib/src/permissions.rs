@@ -46,9 +46,13 @@ pub(crate) enum GatedOp {
     MergeGate,
     /// `aida queue integrate` — merging ready PRs into the default branch.
     Integrate,
-    /// Starting an autonomous drain (`aida burndown run` /
-    /// `aida queue work --auto-complete`).
-    DrainStart,
+    // NOTE: `DrainStart` (starting `aida burndown run` / `aida queue work
+    // --auto-complete`) was removed here — STORY-1353 reclassified starting a
+    // drain as DISPATCH, not disposition, so its production sites
+    // (`handle_burndown_run`, `queue work --auto-complete`) now gate on
+    // `has_dispatch_authority()` directly instead of this team-permissions
+    // map. Dispatch authority is role-based and not team-config-tunable.
+    // trace:STORY-1353 | ai:claude
 }
 
 impl GatedOp {
@@ -60,7 +64,6 @@ impl GatedOp {
             GatedOp::StatusTransition => Some("status_transition"),
             GatedOp::MergeGate => Some("merge_gate"),
             GatedOp::Integrate => Some("integrate"),
-            GatedOp::DrainStart => Some("drain_start"),
             // Protected-spec gating reads the dedicated `protected_role` knob.
             GatedOp::ProtectedSpec => None,
         }
@@ -198,7 +201,6 @@ pub(crate) const POLICY_DISPLAY_OPS: &[(GatedOp, &str)] = &[
     (GatedOp::StatusTransition, "status_transition"),
     (GatedOp::MergeGate, "merge_gate"),
     (GatedOp::Integrate, "integrate"),
-    (GatedOp::DrainStart, "drain_start"),
 ];
 
 /// Whether `effective_role` satisfies the minimum role for `op` under `config`.
@@ -310,7 +312,6 @@ pub(crate) fn refusal_message(
         GatedOp::ProtectedSpec => "editing or transitioning a protected spec",
         GatedOp::MergeGate => "running the merge gate",
         GatedOp::Integrate => "integrating ready PRs",
-        GatedOp::DrainStart => "starting an autonomous drain",
     };
     let role_clause = if source == RoleSource::Roster {
         format!("your team role is `{have_role}`")
@@ -340,7 +341,6 @@ mod tests {
             GatedOp::StatusTransition,
             GatedOp::MergeGate,
             GatedOp::Integrate,
-            GatedOp::DrainStart,
             GatedOp::ProtectedSpec,
         ] {
             assert!(permits(op, "advisor", &cfg), "advisor should pass {op:?}");
@@ -362,7 +362,6 @@ mod tests {
         assert!(permits(GatedOp::Integrate, "implementer", &cfg));
         assert!(permits(GatedOp::Integrate, "advisor", &cfg));
         // Untouched ops still require advisor.
-        assert!(!permits(GatedOp::DrainStart, "implementer", &cfg));
         assert!(!permits(GatedOp::MergeGate, "implementer", &cfg));
     }
 

@@ -6,7 +6,9 @@ use aida_core::RequirementStatus::*;
 // terminal. trace:TASK-292 | ai:claude
 #[test]
 fn drivable_statuses_are_pre_implementation_only() {
-    assert!(auto_complete_head_drivable(&Draft));
+    // A queued Draft is undisposed; dispatch must not become implicit approval.
+    // trace:STORY-1353 | ai:codex
+    assert!(!auto_complete_head_drivable(&Draft));
     assert!(auto_complete_head_drivable(&Approved));
     assert!(auto_complete_head_drivable(&Planned));
     assert!(!auto_complete_head_drivable(&InProgress));

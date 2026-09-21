@@ -1789,7 +1789,16 @@ pub(crate) fn pr_ship_handler(
         // concurrent paths — drain auto-merge, an integrate sweep, another
         // session's merge_change — never clear, so they stay refused. This is
         // the client-side release; the server-side required-check (ADR-37 layer
-        // 2) still governs a raw `gh pr merge`. trace:BUG-1167 | ai:claude
+        // 2) still governs a raw `gh pr merge`.
+        //
+        // KNOWN ASYMMETRY (BUG-1566): `merge-hold clear` requires a human at a
+        // TTY (has_integrity_floor_authority(), STORY-1353); this release site
+        // does not, so any seat that can invoke `pr ship` clears the same
+        // class of hold with no TTY present. Tracked on BUG-1566, not fixed
+        // here — do not fix by copying that gate here without checking
+        // BUG-1566 first (a naive TTY check would break `pr ship` when it's
+        // the deliberate act BUG-1167 exists to support).
+        // trace:BUG-1167 trace:BUG-1566 | ai:claude
         let marker_reason = crate::merge_hold::read_hold(&hold_root, pr_number);
         if marker_reason.is_some() || label_only_hold {
             let reason = marker_reason
