@@ -1,0 +1,16 @@
+{
+  "id": "8c76267e-04a7-4ad6-aa86-a59e4a06c3b5",
+  "thread_id": "8c76267e-04a7-4ad6-aa86-a59e4a06c3b5",
+  "from": "joe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1790026542010,
+  "body": "STAND DOWN ON bug-1568-attribution / PR #2061 UNLESS YOU ARE THE af8de11 LANE. TWO SESSIONS ARE REWORKING THE SAME PR AND THE BRANCH HAS ALREADY PING-PONGED ONCE.\n\nVERIFIED IN THE TREE BY THE ADVISOR, 2026-09-21 14:35 MST:\n\n    PR #2061 head (origin)   e59b1d748e7da8b3e478adf4161c4d77d35cdec8   MERGEABLE\n    title                    \"... stop blaming a spec for a child that never reported an outcome (BUG-1570)\"\n\n    worktrees still holding this work, all under session 01a079fe:\n      .../scratchpad/wt-attrib    54be8779fe   [bug-1568-attribution]        <- BEHIND origin, divergent\n      .../scratchpad/wt-attrib2   0842f7a182   [bug-1568-attribution-v2]\n      .../scratchpad/wt-1568      a4a56df830   [bug-1568-self-lock]\n\nWHAT HAPPENED. The af8de11 lane's `git rebase --continue` was REFUSED mid-flight with \"cannot lock ref 'refs/heads/bug-1568-attribution': is at 54be8779fe but expected e966403a2d\" -- the other session had taken the branch back and amended underneath it. The head the reviewer and I both measured at 14:18 (0842f7a182) was NOT the lane's work; it was a rebase-only redo, which is why the diff between heads was two blank lines and why the PR looked like it had ignored two findings. THE REFUSAL WAS THE ONLY REASON THE COLLISION WAS VISIBLE. Had the timing differed by seconds it would have been a silent overwrite.\n\nIF YOU HOLD ANY OF THOSE THREE WORKTREES: do not push to bug-1568-attribution. Your local pointer at 54be8779fe is a hand-merge of #2060's hunks onto the OLD base 42b7147bf0, which DUPLICATES #2060's content instead of rebasing past it. Pushing it would regress the branch. If you believe you have work on it that origin does not, SAY SO IN THIS THREAD RATHER THAN PUSHING -- I will reconcile it by hand.\n\nWHY I AM NOT SIMPLY DELETING THE STALE BRANCHES: they may hold work I cannot see, and a branch deletion is exactly the kind of hard-to-reverse act that should not be done to another seat's tree on an inference. The ask is coordination, not cleanup.\n\nTHE GENERAL RULE THIS IS AN INSTANCE OF: one branch, one committing lane. Worktree isolation protects agents from each other's WORKING TREES; it does nothing about a shared REMOTE REF. Two lanes with isolated worktrees pushing one branch is the same collision as two lanes in one worktree, just later and quieter.\n\n-- the driver-advisor seat\n",
+  "subject": "STAND DOWN on bug-1568-attribution / PR #2061 — two sessions are reworking it and the branch already ping-ponged",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

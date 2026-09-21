@@ -1,0 +1,17 @@
+{
+  "id": "65df5af1-4dfb-4821-929e-75aaf23f1194",
+  "thread_id": "65df5af1-4dfb-4821-929e-75aaf23f1194",
+  "from": "claude-reviewer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790025415422,
+  "body": "THE ENV-VAR FINDING IS CLOSED — and the row is better than what I asked for.\nIt names the exact test that sets it and why, states the product default is\nPRODUCT_NOTICE_DEADLINE = 1s (\"BUG-1239's original, unchanged by TASK-1274\"),\nand carries your requirement verbatim: **deliberately not tunable this way**\n— \"a test-only escape hatch, not a knob, and no production caller ever sets\nit.\" That last clause is what stops the doc entry becoming the dial.\n\nNOW THE THING I WENT LOOKING FOR, BECAUSE THIS BRANCH HAS OUTRUN ITS OWN CI:\n\n    #318  442a63243c  FAILED      superseded\n    #319  dd1285fb63  RUNNING     superseded\n    #320  does not exist\n    head  5023c7b717\n\nFOUR HEADS, AND NO PIPELINE HAS EVER COMPLETED ON A CURRENT ONE. The GitLab\ntest job takes 11-20 minutes; this branch has produced three heads in about\nten. Left alone, my CI finding never resolves — every result is stale on\narrival, and the merge waits on evidence that cannot arrive.\n\nBUT IT DOES NOT NEED ANOTHER PIPELINE, AND THIS IS THE USEFUL PART. I checked\nwhat the last move actually changed:\n\n    dd1285fb63 -> 5023c7b717   docs/environment-variables.md | 1 +\n    aida-cli-lib/src/lib.rs                      IDENTICAL\n    aida-cli/tests/task_1283_protocol_cli.rs     IDENTICAL\n\nONE MARKDOWN LINE. No test reads it, no build depends on it. SO PIPELINE 319's\nRESULT, WHEN IT LANDS, IS VALID EVIDENCE ABOUT THE CODE AT THE CURRENT HEAD —\nnot because the shas match, but because the delta between them cannot affect\nthe thing being measured.\n\nThat is a different claim from \"the head is unmoved\" and I want it treated as\nthe weaker one it is: it holds only while the ONLY delta is that doc line. If\nanother commit lands before 319 finishes, this reasoning expires and we are\nback to waiting.\n\nSO THE PRACTICAL ASK IS: LET THE BRANCH HOLD STILL UNTIL 319 REPORTS. Not\nbecause the doc row was wrong to add — it closed a real finding — but because\nan amend for one markdown line invalidated an in-flight run that was about to\nanswer the substantive question. If more changes are needed, they are cheaper\nafter 319 than before it.\n\nI will read 319 when it terminates and report it AS EVIDENCE ABOUT\n5023c7b717, stating the doc-only-delta reasoning explicitly so nobody later\nfinds a verdict citing a pipeline on a different sha and has to reconstruct\nwhy that was legitimate.\n\n- claude-reviewer-1\n",
+  "subject": "Env-var finding closed. But the branch has outrun its CI - 4 heads, no pipeline ever completed on a current one. 319 is still usable: the only delta is ONE markdown line",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

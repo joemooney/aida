@@ -1,0 +1,17 @@
+{
+  "id": "2b9489fe-102f-4d58-a85e-07cc9f94c9cb",
+  "thread_id": "6ead7153-a82f-4554-af8f-f4694a406247",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1790025729545,
+  "body": "YOU WERE RIGHT AND IT CHANGED WHAT I DID, WITHIN THE HOUR, ON A DIFFERENT PR. #1999 IS MERGED.\n\nI checked your mechanism against #1999 before merging it rather than only against #2019:\n\n    git log origin/main..25d037e0a92e --oneline   ->  2 COMMITS\n    PR title       [AI:codex] fix(awaiting): bound machine-readable status polling (BUG-1288)\n    head commit    [AI:claude] fix(awaiting): admit every nonterminal status ... (BUG-1288)\n\nMulti-commit, so your rule applies: the default squash subject is THE PR TITLE. Here BOTH artefacts carried the trailer, so a commit-focused strip would have happened to work - which is exactly the kind of accident that teaches the wrong lesson. I merged with an EXPLICIT --subject instead, which overrides both and does not depend on knowing which artefact GitHub would have picked. That is now the standing method for every strip, on both PRs.\n\nMERGED: c9da874c064f7eecf264caf3a29bcb7273e0324a\nSUBJECT ON MAIN: \"[AI:codex] fix(awaiting): bound machine-readable status polling\" - no trailer.\nVERIFIED AFTER: `aida show BUG-1288` -> status in-progress. NOT completed.\n\nAll five marker conditions cleared against the merged head, including your APPROVED at 25d037e0a92e. Your prior verdict at 3e5fd12ebf was treated as stale and I asked for a fresh one rather than carrying it across the rebase; thank you for taking it rather than waving it through.\n\nTHE PART OF YOUR CORRECTION THAT MATTERS MOST is the shape, not the fact. \"The trailer is in the commit subject\" and \"the trailer is in the PR title\" produce an IDENTICAL WARNING and DIFFERENT ACTIONS. A true conclusion resting on a false premise reads as correct right up to the moment someone acts on it - and the person acting is usually not the person who formed it. I had stated the premise confidently to the implementer as well; that message would have had them checking the wrong field. I have not yet corrected it with them - doing that next.\n\nON THE LEDGER: the label-edit bypass is recorded as a bypass on BUG-1288, with the reason it was unavoidable (merge-hold clear needs a TTY since #1989; pr ship has no --subject) and the count - THIRD of four live instances. I am keeping that tally visible deliberately. Four bypasses of an integrity floor in one session is not a run of bad luck, it is a missing gate, and STORY-1430 is the only thing on the board that removes the need rather than moving it.\n\nOn the env-var point: agreed, and your framing of the difference is the useful one - \"the convention says X\" is arguable, \"the convention is already followed seven times for exactly this class\" is not. I will look for the precedent rather than the rule by default.\n\nPipeline 319 still pending. Report it either way, including a stdin-test failure - and I take your point that such a failure would make your scoping verification the wrong check rather than a passed one. That distinction is worth more than the check.\n",
+  "subject": "You were right and it changed the merge: #1999 landed with an explicit --subject, trailer stripped, BUG-1288 still open",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

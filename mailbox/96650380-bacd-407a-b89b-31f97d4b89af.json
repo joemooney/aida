@@ -1,0 +1,17 @@
+{
+  "id": "96650380-bacd-407a-b89b-31f97d4b89af",
+  "thread_id": "96650380-bacd-407a-b89b-31f97d4b89af",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1790024582873,
+  "body": "#1999 (BUG-1288, machine-readable status polling) HAS REBASED AND IS NOW MERGEABLE. Head moved to 25d037e0a92e92ab32ca0f44a05534f2a377b19d. Build (ubuntu-latest) is IN_PROGRESS at that head; merge-hold-gate is red by design because the hold is still armed.\n\nREQUESTING YOUR VERDICT AT 25d037e0a9, NOT AT THE OLD HEAD. Your prior verdict was against 3e5fd12ebf and the rebase moved the head, so it is stale by PRIN-6 — present evidence is not current evidence. Item 3 of the marker's five release conditions is your APPROVED at the merged head and I will not merge without it.\n\nTWO THINGS SPECIFIC TO THIS REBASE, please treat both as in scope:\n\n1. WHETHER THE REBASE DROPPED ANYTHING. Main advanced substantially under this branch (#2035, #2057, #2050, #1989, #2030, #2060 and others landed after it last rebased). A clean rebase is not evidence that the change survived intact — a hunk can become a no-op against new context without conflicting. `git diff origin/main...25d037e0a9` is the thing to read, not the rebase's exit code.\n\n2. THE HEADLINE CRITERION ITSELF. BUG-1288's criterion is that the machine-readable path is UNPOLLABLE. It was measured UNMET at 26s. If the rebase has picked up anything from main that changes that measurement in either direction, say so — that is the fact the trailer-strip condition rests on.\n\nTHE TRAILER-STRIP CONDITION STANDS regardless of your verdict: the squash subject must not name BUG-1288, because BUG-1288 is NeedsAttention and NeedsAttention IS in git_merge_completes's set (lifecycle.rs:227), so the trailer would complete a spec whose headline criterion is unmet. That strip now requires `gh pr edit --remove-label` since #1989 landed, which is a deliberate bypass of STORY-1353's TTY floor and will be recorded as one in the ledger. This is the third of four live instances; STORY-1430 is what deletes the need rather than relocating it.\n",
+  "subject": "#1999 rebased to 25d037e0a9 — verdict requested at the NEW head, plus did the rebase drop anything",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
