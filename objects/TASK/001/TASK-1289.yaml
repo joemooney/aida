@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T08:20:42.825797663Z
+modified_at: 2026-09-21T08:21:00.827684074Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1138,6 +1138,31 @@ comments:
   content: '[aida:advisor] LINEAGE ITEM a2 REVISED AGAIN 2026-09-20 19:36: a2i, a2ii and a2iii ARE ONE CHANGE, not three legs. The earlier note treated the banner as a separate repair on the grounds that a hardcoded summary string is uncatchable by any compiler or test. That is true of the string''s current shape and false of the situation. The five skip fields are hand-enumerated in SEVEN production sites in auto_complete.rs - from_tags match arms, the trivial expansion, the express force-off, is_empty(), active_tokens(), RECOGNIZED_LIFECYCLE_TAGS, and banner_summary()''s parts - so adding a field needs seven correct hand edits and the compiler checks none, every site being an if-over-a-bool rather than a match over a sum type. REVISED a2: one table, const SKIPS: [(accessor, token, human); N], with is_empty(), active_tokens() and banner_summary() ITERATING it, plus one destructuring bind in the test so a sixth field breaks compilation at one known site. The banner then cannot omit a field because it no longer names fields, and the hardcoded express string becomes a prefix on a derived list rather than a replacement for one. CONSEQUENCE FOR SEQUENCING: shipping the force-off fix and the test bind while deferring the banner is NOT a partial fix - it leaves the only OPERATOR-FACING surface hand-maintained, which is the one surface where a divergence is invisible to the person it misleads. Also note the two surfaces use different vocabularies for the same fields - active_tokens emits ''no-preflight'', the banner says ''implementer preflight'' - so a substring property test between them cannot work either. Raised by the reviewer seat with a detector that reproduces: grep -oE ''no_(preflight|ci_wait|review|build|harvest)'' | sort | uniq -c gives 7/7/7 against 5/5, a two-item candidate list from seven sites.'
   created_at: 2026-09-21T02:33:19.408792262Z
   modified_at: 2026-09-21T02:33:19.408792262Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c30d-dd1b-7320-b469-d3d06165b87c
+  author: joe
+  content: |-
+    BLOCKED ON A DESIGN DECISION THAT IS YOURS, not on implementation effort. TASK-1289 is execution_mode guided, status needs-attention, and its own title says it: "the boundary needs a design decision, not another round." I am surfacing it rather than letting it sit as a blocked finding on a held PR, and rather than resolving it myself.
+
+    THE DEFECT. The implementer preflight is supposed to gate PR publication - run CI's guards before the work becomes visible, so a failing guard leaves no open PR. It does not. aida-cli-lib/src/lib.rs runs preflight AFTER accepting an agent-opened PR, by which point the PR is already published. The only thing preventing an implementer from opening the PR first is PROSE in aida-core/templates/skills/aida-pr/SKILL.md. A rule in a skill file is not a gate; it is a request, and the substrate-as-bouncer principle says an invariant guaranteed by documentation is not guaranteed.
+
+    Codex has now taken two rounds at it (PR #2042, five commits). The reviewer's RequestChanges says the boundary is still advisory. That is the signal that more rounds will not fix it: the implementer cannot decide where the boundary goes, because the answer is an architecture choice about who is allowed to create a PR.
+
+    THE FORK, as I see it. I am not asking you to design it, only to pick the shape:
+
+    A. PREVENT PUBLICATION. Orchestrated implementers lose the ability to open a PR at all; the orchestrator opens it after preflight passes. Strongest guarantee, and it changes the implementer contract - every implementer path, including the ones that open a PR on their own today, has to route through the orchestrator.
+
+    B. RETRACT ON FAILURE. Implementers keep opening PRs; preflight runs immediately after and CLOSES or converts to draft any PR whose guards failed. Weaker - the PR exists briefly and anything watching the forge sees it - but it leaves the implementer contract alone and is a much smaller change.
+
+    C. ACCEPT IT AS ADVISORY and say so. Drop the claim that preflight gates publication, keep it as an early-warning signal, and stop filing rounds against a boundary we have decided not to enforce. Cheapest, and defensible if the real cost of a briefly-visible bad PR is low.
+
+    MY RECOMMENDATION IS B, and the reason is scope rather than strength. A is the correct end state if PR creation is genuinely an orchestrator privilege, but tonight it would touch every implementer path at once, and the drain is the thing we are trying to stabilise. B closes the window that matters - a bad PR does not stay open and does not reach a reviewer - without renegotiating who may call gh pr create. C is honest but gives up a guarantee we have been describing as real, and I would rather not ship prose that says "gated" about something advisory.
+
+    WHAT IS NOT BLOCKED. The second finding on that PR is separate and ordinary: preflight FAILS OPEN when a guard cannot complete. implementer_preflight.rs maps timeouts and spawn errors to Skipped, and decide() treats every skipped result as Open. So a guard that times out reads as a guard that passed. That one needs no decision from you - it is a defect with an obvious direction - and it can ship regardless of which way you go on the boundary.
+
+    #2042 stays held with its merge-hold marker and label until you answer. Nothing is waiting on a rebase or a rerun; it is waiting on this.
+  created_at: 2026-09-21T08:21:00.827684074Z
+  modified_at: 2026-09-21T08:21:00.827684074Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
