@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:56:20.778714126Z
-modified_at: 2026-09-21T21:33:15.577679406Z
+modified_at: 2026-09-21T21:40:43.406147136Z
 req_type: Bug
 tags:
 - aida:tests
@@ -68,4 +68,24 @@ comments:
     Cross-reference: BUG-1569 carries the ten-run distribution and the 20% drop rate at the 1 s deadline; TASK-1274's mirror pipeline is where this surfaced; #2019 is the PR whose acceptance the red job blocks.
   created_at: 2026-09-21T21:33:09.460075212Z
   modified_at: 2026-09-21T21:33:09.460075212Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5ea-050e-7060-b01c-e820d259a6d3
+  author: joe
+  content: |-
+    [aida:advisor] THE REVIEWER'S REFRAME, WHICH CHANGES WHAT THIS SPEC IS ABOUT. Pipeline 318 vs 319 on the same test:
+
+        318 (pre-injection)   FAILED  'remained alive for 3.135800526s with an open stdin pipe'
+        319 (post-injection)  FAILED  'awaiting --notice exceeded its two-second budget: 2.008584508s'
+
+    A 3.14s HANG BECAME A 2.0086s COMPLETION. The process no longer outlives the test; it finishes and misses a bound by 8.6 milliseconds. Reporting 319 as 'the same test failed again' would have sent someone back to the injection, which is the thing that now works. ONLY READING THE FAILURE TEXT RATHER THAN THE STATUS DISTINGUISHES THOSE TWO RESULTS.
+
+    THE REMAINING DEFECT IS THE SAME CLASS ONE LAYER OVER, and the code says so itself: the test carries contract_budget = 2s alongside reap_deadline = 3s, with a comment explaining the gap exists to avoid a scheduler race at the assertion/kill boundary. SO THE AUTHOR ALREADY KNEW THE BOUNDARY WAS RACEABLE, WIDENED THE REAP SIDE, AND LEFT THE ASSERTION AT A BARE 2s. That is the same shape as NOTICE_DEADLINE serving two callers with one constant - and the fix for the first surfaced the second.
+
+    THE CAVEAT THE REVIEWER RAISED AND WOULD NOT SMOOTH OVER: one observation at 2.0086s is consistent with a marginal budget AND with the command being genuinely ~2s on that runner. RESOLVED WITH THE DENOMINATOR. Ten local runs put the median at ~0.437s, so 2.0086s is 4.6x the healthy figure; and the same job's trace shows unrelated SQLite tests at 8-26s against sub-second baselines (24.355s and 18.959s for two of them). A 10-40x degradation across unrelated tests plus a 4.6x reading on ours is one environment, not two coincidences. THE BUDGET IS NOT WRONG; THE RUNNER WAS SLOW.
+
+    ONE LIMIT ON THAT INFERENCE, stated rather than buried: my ten runs did not hold an open stdin pipe and the test does, so I characterised the same command under a different input condition. If the open pipe itself costs materially, my median under-states the baseline. I do not believe it does - not waiting on the pipe is the property under test - but that is an argument, not a measurement.
+
+    NEITHER SEAT IS PROPOSING 3s. Widening the constant because a test failed is the move already refused on NOTICE_DEADLINE. The direction is to separate the PRODUCT claim - the notice does not block on an open stdin pipe - from the TEST's wall-clock proxy for it. The claim is testable without a race; the proxy is what fails.
+  created_at: 2026-09-21T21:40:43.406147136Z
+  modified_at: 2026-09-21T21:40:43.406147136Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
