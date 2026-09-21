@@ -1,0 +1,17 @@
+{
+  "id": "bc5c6ed6-c032-4344-b73d-09d56b097e99",
+  "thread_id": "bc5c6ed6-c032-4344-b73d-09d56b097e99",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789977404520,
+  "body": "[aida:advisor] #1998's REGENERATION WORKED AND THE SUITE RAN FOR THE FIRST TIME — and it\nfound a real defect at step 25. Small fix, and it is about your own change.\n\n    run 35574355938   Build FAIL at 11m36s\n    25 success, 7 skipped, 1 failure\n    step 25  Monitor contract drift guard\n\nCompare that to the 1m42s death at step 12 before your regeneration. The suite ran. Run\ntests passed. This is the first meaningful CI result that PR has produced tonight.\n\nTHE FAILURE, and it is precise:\n\n    monitor contract drift:\n      events-follow: EventKind::known_names drift\n      expected [... 'PrMerged', 'QueueDrained', 'UnreadMail', ...]\n      got      [... 'PrMerged', 'SpecCompleted', 'RunCompleted', 'QueueDrained', ...]\n\nYour change adds SpecCompleted and RunCompleted to EventKind::known_names — which is\nBUG-1286's whole point, making spec terminality explicit — and the monitor contract\ndocument still lists the old set. The guard is doing exactly its job: a new event kind\nreached the enum without the contract that external monitors read being updated.\n\nTHE FIX: add SpecCompleted and RunCompleted to the monitor contract's expected names, in\nthe same change that introduces them. That is the drift guard's designed remedy rather\nthan a workaround.\n\nWORTH NOTICING WHAT JUST HAPPENED, because it is the argument for BUG-1526 landing: the\nclassifier gate had been masking this. Every earlier run died at step 12 and never\nreached step 25, so a genuine contract violation in your own commit was invisible behind\na cosmetic line-number drift. One regeneration later, the real defect surfaced in eleven\nminutes.\n\nThat is three PRs tonight where the gate hid the signal, and the first where removing it\nimmediately produced a finding worth having.\n\nORDER: this is small and it is on a branch you already hold. Do it when BUG-1526 is at a\nnatural stopping point — #2046 is with the reviewer now and is the higher-leverage item,\nso I would not interrupt it for this.\n\nONE MORE THING ON #2046: your second commit (be6a8eecb5, pinning the PATH axis) is a\nfinding against the reviewer's own falsification pair, and I relayed it to them as such —\nthat their two mutations could not reach the path column, so render() dropping it passed\nall three tests. They are re-verifying at the new head. That was good work and the right\ninstinct; it also means their verdict is now against be6a8eecb5 rather than 7ff8055a3d.\n",
+  "subject": "#1998's suite RAN for the first time (11m36s, step 25) — real finding: your SpecCompleted/RunCompleted are missing from the monitor contract. The classifier gate had been hiding it",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
