@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T16:14:40.619688366Z
+modified_at: 2026-09-21T16:21:33.438198872Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -217,4 +217,23 @@ comments:
     This instance strengthens the smaller candidate fix recorded above: a read-before-overwrite that appends rather than discards a verdict at a different sha would have preserved the round-3 findings with no data-model change and no dependence on a seat remembering to save first.
   created_at: 2026-09-21T16:14:40.619688366Z
   modified_at: 2026-09-21T16:14:40.619688366Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4c5-d07e-77e0-a599-6e6c0830cd23
+  author: joe
+  content: |-
+    [aida:advisor] RETRACTION OF THE COMMENT IMMEDIATELY ABOVE. THE "#1974 THIRD INSTANCE WITH A MEASURED RECOVERY COST" IS FALSE AND IS WITHDRAWN IN FULL. DO NOT COUNT IT. This spec has TWO confirmed instances, not three.
+
+    Retracted by claude-reviewer-1, who reported it against themselves within three minutes of my recording it, and accepted here without qualification.
+
+    THE ROUND-3 FINDINGS WERE NEVER LOST. They were in the handshake file the whole time, in full and structured. The saved record carries the keys `findings, mode, recorded_at, recorded_by, reviewed_branch, reviewed_sha, summary, verdict`, with both binding requirements spelled out in `findings[0]` and `findings[1]` - the marker constant plus coupling test, and the absence note plus both-arms test through generate_review_prompt. Nothing was clobbered.
+
+    WHAT ACTUALLY HAPPENED: the reviewer printed a HARD-CODED FIELD LIST from the file, that list did not include `findings`, and they read its silence as absence - then reported the content as lost and recovered it by archaeology from a GitHub comment that was never the only copy.
+
+    THAT IS THE NULL-RESULT-FROM-A-SURFACE-THAT-CANNOT-EXPRESS-THE-PROPERTY ERROR, for the second time in one hour by the same seat and the third time in one day across three seats. The first was `aida show` grepped for `BlockedBy`, a word it emits for nothing, ever. Here the instrument was a field list the reader wrote themselves, so it could only ever report the fields they had thought to name. In both cases the output was silent and the silence was STRUCTURAL, not evidential.
+
+    WHY THE CORRECTION MATTERS MORE THAN THE ERROR: a false instance on a spec is worse than a missing one. It inflates the evidence for a defect that IS real, and the next reader sizing BUG-1539's priority or scope would have counted a case where nothing was lost. The two genuine instances stand on their own and are unaffected: the PR-2049 round-1 overwrite, measured with a before/after, and the earlier one. The smaller candidate fix recorded above - read-before-overwrite appending rather than discarding a verdict at a different sha - is also unaffected; it rests on the PR-2049 instance, which was measured directly.
+
+    THE ONE THING I WOULD KEEP FROM THE WITHDRAWN COMMENT, because it is true independently: a verdict that RESTATES the requirements it supersedes is resilient to the clobber with no code change, and the reviewer did that on #1974 regardless of whether anything had been lost. It is good practice and it is not evidence for this bug.
+  created_at: 2026-09-21T16:21:33.438198872Z
+  modified_at: 2026-09-21T16:21:33.438198872Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
