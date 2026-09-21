@@ -1,0 +1,65 @@
+id: 01a0c25c-2b28-7eb3-a52f-37f3aeb2ff46
+spec_id: BUG-1531
+agreed_id: BUG-1531
+title: The unshipped-work detector counts local PR-checkout branches, and the same PR under two naming conventions twice, so the awaiting banner is permanently non-zero from artifacts
+description: |
+  Measured by the driver advisor 2026-09-20 22:03 local, on main at 0b474a66d1, while
+  verifying the reviewer's alert-fatigue report on aida awaiting (BUG-1530).
+
+  This is a SECOND, independent mechanism making that banner constant. BUG-1530 is that
+  the banner names the wrong seat's channels. This is that part of its population is an
+  artifact of local branch accumulation.
+
+  THE SAME PR APPEARS TWICE UNDER TWO SPELLINGS. From aida awaiting, unshipped_work:
+
+      BUG-1420,pr-2009,5,20h    and    BUG-1420,pr2009,5,20h
+      BUG-1420,pr-2043,3h       and    BUG-1420,pr2043,3h
+      TASK-1289,pr-1972,4,22h   and    TASK-1289,pr1972,4,22h
+
+  They are not two branches with similar names. They are the same commits:
+
+      pr-2009 = 065f3df8aa    pr2009 = 065f3df8aa     identical
+      pr-1972 = 6512f1312a    pr1972 = 6512f1312a     identical
+
+  Both spellings exist as LOCAL branches and NEITHER exists on origin - so two code paths
+  are creating a local checkout branch for one PR under two naming conventions, and the
+  detector counts each as separate unshipped work.
+
+  THE POPULATION IS LARGER THAN THE SYMPTOM. There are 510 local branches matching pr*.
+  These are PR-checkout branches, not work anybody authored on this machine, and they
+  accumulate without bound.
+
+  WHAT I DID NOT ESTABLISH, stated so the fixer does not inherit an assumption. I verified
+  two duplicate PAIRS are byte-identical and that 510 pr* local branches exist. I did NOT
+  audit all 40 unshipped entries, and I do NOT claim all 40 are artifacts - several name
+  real spec branches (story-418-2, bug-478-479-resume-lease) with ages over 100 days,
+  which are a different question. The claim here is that the count includes duplicates and
+  PR-checkout branches, not that the whole count is noise.
+
+  WHY IT MATTERS. unshipped: 40 is a component of the standing "awaiting you" banner. A
+  banner that cannot reach zero trains its readers to stop looking - which is exactly what
+  the reviewer reported happening on their seat tonight, and why a genuinely mergeable
+  unheld PR reached them through their own poll instead of through this surface.
+
+  ## Acceptance
+  1. The detector does not report the same underlying commit twice because two local
+     branches point at it. Deduplicate by commit, not by branch name.
+  2. Local PR-checkout branches are distinguished from authored work. A branch that
+     merely checks out someone else's PR is not this machine's unshipped work.
+  3. The two naming conventions are reconciled - one convention, or the second is
+     recognised as an alias of the first. Identify both producers; a fix that changes one
+     writer leaves the other creating duplicates.
+  4. Entries that ARE real - a genuine authored branch never pushed - keep being reported.
+     A fix that suppresses the whole channel is not acceptable: the 100-day-old spec
+     branches are a real signal.
+  5. A test with two local branches at the same commit asserts one entry, and a test with
+     two genuinely different unshipped branches asserts two.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T05:06:55.400149929Z
+modified_at: 2026-09-21T05:06:55.400149929Z
+req_type: Bug
+tags:
+- parent:EPIC-62 awaiting unshipped-work alert-fatigue severity:operational
