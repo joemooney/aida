@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:12:42.984173284Z
-modified_at: 2026-09-21T00:04:28.250692261Z
+modified_at: 2026-09-21T00:13:03.705499640Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -59,4 +59,11 @@ relationships:
   target_id: 01a0bd83-26a9-7a91-aba8-ce5523d6d29c
   created_at: 2026-09-20T17:52:42.033392932Z
   created_by: joe
+comments:
+- id: 01a0c14f-2159-72e2-afe0-f7e18742146e
+  author: joe
+  content: Implemented in fabdce0602 on bug-1450-work. Watchdog-stopped implementers now continue through lease/branch reconciliation, punt delivery, existing-PR detection, and orchestrator PR recovery. If PR recovery fails, the shelve detail explicitly reports the reviewable branch and commits ahead, or states that no committed work remained. Verified cargo fmt and 23 real_phase_driver_wiring_tests.
+  created_at: 2026-09-21T00:13:03.705499640Z
+  modified_at: 2026-09-21T00:13:03.705499640Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
