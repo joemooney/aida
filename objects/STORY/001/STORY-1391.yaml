@@ -64,12 +64,12 @@ description: |
   Filed by the product seat at the operator's prompt — he asked whether this rule should be encoded or
   gated, and the answer is both: the reasoning belongs in the discipline pack, the detection belongs
   here. Disposition is the advisor's.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:28:38.860398318Z
-modified_at: 2026-09-21T02:27:02.897646815Z
+modified_at: 2026-09-21T02:29:22.641919075Z
 req_type: Story
 tags:
 - batch:night-0920
