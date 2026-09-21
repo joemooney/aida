@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:02:39.454765774Z
-modified_at: 2026-09-21T00:28:45.203001851Z
+modified_at: 2026-09-21T00:40:24.640693192Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -79,4 +79,10 @@ comments:
   created_at: 2026-09-20T23:58:25.774929786Z
   modified_at: 2026-09-20T23:58:25.774929786Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c168-2b40-7ef1-a28a-05549e5dfe04
+  author: joe
+  content: '[AI:codex] Historical sweep before shipping the fix (2026-09-20): TASK-1298 NeedsAttention; BUG-1310 Completed; STORY-1350 NeedsAttention; BUG-1429 Completed; TASK-1273 Done; BUG-1432 Completed; TASK-1293 Done; BUG-1485 InProgress. Sampled the five PRs named by the requirement (2014, 2016, 1974, 2021, 2030): none currently has a local merge-hold marker. Thus two known refusals remain visibly stranded at Done, while later intervention moved the other six. This change prevents recurrence through the supported review-record path; historical PR disposition remains an operator decision.'
+  created_at: 2026-09-21T00:40:24.640693192Z
+  modified_at: 2026-09-21T00:40:24.640693192Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
