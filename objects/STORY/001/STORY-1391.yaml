@@ -64,7 +64,7 @@ description: |
   Filed by the product seat at the operator's prompt — he asked whether this rule should be encoded or
   gated, and the answer is both: the reasoning belongs in the discipline pack, the detection belongs
   here. Disposition is the advisor's.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
