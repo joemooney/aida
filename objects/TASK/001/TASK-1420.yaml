@@ -56,7 +56,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T13:58:37.426328724Z
-modified_at: 2026-09-21T18:24:08.750567812Z
+modified_at: 2026-09-21T18:59:12.733660106Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -67,3 +67,34 @@ relationships:
   target_id: 01a0c058-3d0c-7eb1-993d-3976581722cb
   created_at: 2026-09-21T13:59:04.857623447Z
   created_by: joe
+comments:
+- id: 01a0c556-26dd-7593-8943-10de11cdbd45
+  author: joe
+  content: |-
+    [aida:advisor] PROPAGATION DECISION, RULED — because the reviewer correctly declined to make it about their own words.
+
+    THE DISCLOSURE: both memory files this spec propagates — `feedback_check_ignore_names_the_winner` and `feedback_reconstruct_provenance_by_bracketing` — WERE WRITTEN BY claude-reviewer-1 in this session. They flagged that they are not the independent party on whether their own writing should ship into every downstream AIDA project, called it a distribution decision belonging to another seat, and passed it rather than taking it. That is the right line and it is finer than the usual one: they were not reviewing their own CODE, they were reviewing the propagation of their own PROSE, and they noticed the difference.
+
+    RULING: BOTH PROPAGATE. Each is a GENERIC METHOD POINT, not an AIDA fact:
+      - `git check-ignore -v` reports the PRECEDENCE WINNER, not the causal rule, so attribution
+        requires removing the candidate rule in a scratch repo. That is a property of git, useful
+        to anyone debugging an ignore rule in any repository.
+      - Provenance by bracketing: date an event by its OWN durable record rather than an mtime, an
+        `updatedAt`, or memory — WITH the caveat that bracketing establishes an INTERVAL, NOT
+        AUTHORSHIP. The caveat is what makes it a method rather than a trick, and it survived the
+        genericisation intact.
+    Neither depends on AIDA's model, vocabulary or workflow. CLAUDE.md's rule is that a generic discipline memory tagged `propagation: scaffolding-pack` joins the pack; these qualify on the merits rather than by proximity to today.
+
+    WHAT THE REVIEWER COULD VERIFY AS AUTHOR — AND DID, WITH A POSITIVE CONTROL RATHER THAN BY READING:
+
+        their originals            BUG-1279 appears twice
+        the scaffolded versions    ZERO spec ids, ZERO dates, ZERO internal refs
+
+    The measured incident is rewritten as "a status marker under a deny-by-default directory". The lesson and the falsifying method survive; the provenance that would be noise in someone else's repo is gone.
+
+    THAT CHECK MATTERS MORE THAN IT LOOKS. A SCAFFOLDED MEMORY LANDING IN A DOWNSTREAM PROJECT IS USER-FACING TEXT. CLAUDE.md's rule — SPEC-IDs belong in commits, code comments, plans and telemetry, and are stripped from anything a user reads — applies here and is easy to forget, because a memory file FEELS like a developer artefact right up until it is copied into a stranger's repo where `BUG-1279` is opaque noise. Both files also carry `propagation: scaffolding-pack`, which is what actually joins them to the pack.
+
+    RECORDED FOR THE NEXT PROPAGATION: the independence question recurs every time a seat's own memory is proposed for the pack, and the discriminator is not authorship but GENERALITY — does the lesson hold in a repository that has never heard of AIDA? Authorship is a disclosure; generality is the test.
+  created_at: 2026-09-21T18:59:12.733660106Z
+  modified_at: 2026-09-21T18:59:12.733660106Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
