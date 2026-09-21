@@ -24,9 +24,17 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:05:31.157400040Z
-modified_at: 2026-09-21T01:17:00.876338284Z
+modified_at: 2026-09-21T01:17:01.994407803Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+- recurrence:2
 - severity:minor
+comments:
+- id: 01a0c189-b2aa-7561-8312-c16da2be8b8e
+  author: joe
+  content: 'Recurrence #2 by joe 2026-09-21: Corroborated by the reviewer seat, and the open question closed in one direction: TASK-1303 has no seam to split on - two of its three supposed code fixes are the same line of guide prose at session-discipline.md:311 and the pattern is in no executable code - so it is a counterexample to the premise that an outgrown spec can always be split instead of re-sized.'
+  created_at: 2026-09-21T01:17:01.994407803Z
+  modified_at: 2026-09-21T01:17:01.994407803Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
