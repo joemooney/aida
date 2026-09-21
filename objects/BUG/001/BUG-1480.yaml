@@ -61,7 +61,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T13:42:52.484819209Z
+modified_at: 2026-09-21T13:47:32.102393771Z
 req_type: Bug
 tags:
 - agent-surface
@@ -429,6 +429,39 @@ comments:
     DO NOT REMOVE THE MARKER OR THE LABEL - they are correct and they are what SHOULD bind; the point is only that their binding is unverified. When a rework lands on #2033 and the gate re-runs, THAT is the moment to check whether the label actually produces a FAILURE, and to record the answer here. If it does not, that is a second live instance for BUG-1532.
   created_at: 2026-09-21T13:42:52.484819209Z
   modified_at: 2026-09-21T13:42:52.484819209Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c438-cd86-7420-a4dd-8f9bc6eb8dd6
+  author: joe
+  content: |-
+    RETRACTION OF THE PREVIOUS COMMENT. THE HOLD ON #2033 IS EVALUATED AND BINDING. My correction was the error, and I have re-verified every claim below from the API rather than accepting the correction on report.
+
+        labeled  aida:merge-hold  2026-09-20T21:59:16Z  by joemooney
+                 no unlabeled event since - continuously present
+        merge-hold-gate  run 35540275150  event=pull_request  created 21:59:17Z  FAILURE
+        merge-hold-gate  run 35539450215  event=pull_request  created 21:40:54Z  SUCCESS
+        branch protection, main:  required = merge-hold-gate, Build (ubuntu-latest)
+                                  enforce_admins = true
+
+    ONE SECOND separates the labeled event from the run that failed, at an unmoved head. The only run PREDATING the label SUCCEEDED - which is the correct behaviour for a gate with no label to find, and it is why there is an 18-minute-apart SUCCESS/FAILURE pair on a single unmoved sha at all. A stale failure from an earlier cycle would have had to fail BEFORE the label. It passed.
+
+    So the substrate half is neither untested nor incidental. It was evaluated one second after the label landed and it is what returns mergeStateStatus BLOCKED right now, with enforce_admins=true so it binds an admin too. Found and corrected by claude-reviewer-1.
+
+    WHERE MY ERROR CAME FROM, because the mechanism is reusable: I compared the two gate runs' timestamps against my memory of when I ran the add-label command. That comparison cannot distinguish a label-triggered run from a stale one, because a run list has no event column in the view I used. THE LABELED EVENT IS THE ONLY THING THAT DATES A LABEL. The marker file's mtime (Sep 21 05:57 local) and the PR's updatedAt (12:57:27Z) are ~15h AFTER the gate runs, so sizing the gap off either one flips the sign.
+
+    AND A THIRD FACT NEITHER OF US STATED, WHICH IS MINE TO CORRECT: I DID NOT ARM THIS HOLD. The label was applied 2026-09-20T21:59:16Z, yesterday. My `gh pr edit 2033 --add-label aida:merge-hold` this morning was a NO-OP against a label that was already there, and it printed a success URL either way. The marker file I wrote this morning is new; the label that actually binds is not.
+
+    So both my statements were wrong, in opposite directions:
+      - the original - "I armed a hold, it puts the ordering in the substrate" - was right about the substrate and wrong about who armed it and when the decision was made.
+      - the correction - "the hold is unevaluated, the failure is stale" - was wrong on both counts.
+    The reviewer's correction fixes the second. The first is fixed here.
+
+    WHY THAT THIRD FACT MATTERS RATHER THAN BEING A DETAIL: a hold nobody in this session armed is a hold whose ORIGINAL REASON is not the reason recorded in my marker file. Whoever clears it should read the timeline, not my marker, for why it exists. And `gh pr edit --add-label` reporting success on an already-labelled PR is the same absent-vs-good-evidence shape as everything else filed tonight - the command cannot tell you whether it changed anything.
+
+    BUG-1532 IS UNAFFECTED AND IS NOT IMPLICATED BY THIS. Its claim is about the CLIENT layer - a marker not binding `aida pr ship` without a live drive naming a running spec. Nothing measured here touches that; the two layers of ADR-37 fail independently, which is why there are two. My comment on BUG-1532 claiming a live instance is withdrawn there separately.
+
+    OPERATIONAL POSITION UNCHANGED: #2033 does not merge before STORY-1422's gate exists. That was never contingent on the hold.
+  created_at: 2026-09-21T13:47:32.102393771Z
+  modified_at: 2026-09-21T13:47:32.102393771Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
