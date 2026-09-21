@@ -436,6 +436,7 @@ fn run_command(program: &str, args: &[String], label: &str) -> AdapterOutcome {
 }
 
 fn run_terminator_command(program: &str, args: &[String], label: &str) -> AdapterOutcome {
+    // external-prose-classifier: terminal_cmd::run_terminator_command
     match Command::new(program).args(args).output() {
         Ok(out) if out.status.success() && String::from_utf8_lossy(&out.stdout).contains("true") => {
             AdapterOutcome::taken()

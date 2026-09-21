@@ -2593,6 +2593,7 @@ fn glab_lookup_from_list_output(
 /// (auth, not-found)? Mirrors the spirit of the gh-side BUG-257 classification.
 /// trace:STORY-509 trace:BUG-257 | ai:claude
 fn glab_stderr_is_transient(stderr: &str) -> bool {
+    // external-prose-classifier: forge::glab_stderr_is_transient
     aida_core::external_tool_output::contains_any_case_insensitive(
         stderr,
         aida_core::external_tool_output::GLAB_NETWORK_TRANSIENT,
@@ -2709,6 +2710,7 @@ fn parse_gitlab_merge_snapshot(body: &str) -> Result<GitLabMergeSnapshot> {
 // mergeability race: retrying against a newly read SHA could merge unreviewed
 // code. trace:BUG-1232 | ai:codex
 fn gitlab_merge_response_is_stale_head(stderr: &[u8]) -> bool {
+    // external-prose-classifier: forge::gitlab_merge_response_is_stale_head
     let Some(response) = parse_gitlab_api_error(stderr) else {
         return false;
     };
@@ -2722,6 +2724,7 @@ fn gitlab_merge_response_is_stale_head(stderr: &[u8]) -> bool {
 }
 
 fn gitlab_merge_response_is_retryable(stderr: &[u8]) -> bool {
+    // external-prose-classifier: forge::gitlab_merge_response_is_retryable
     let Some(response) = parse_gitlab_api_error(stderr) else {
         return false;
     };

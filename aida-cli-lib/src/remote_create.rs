@@ -837,6 +837,7 @@ fn gitlab_release_token_for_api_url(api_url: &str) -> Option<String> {
 }
 
 fn gitlab_release_body_exists(tag: &str, body: &str) -> Option<bool> {
+    // external-prose-classifier: remote_create::gitlab_release_body_exists
     let json: serde_json::Value = serde_json::from_str(body).ok()?;
     if let Some(message) = json.get("message").and_then(|v| v.as_str()) {
         let normalized = message.to_ascii_lowercase();

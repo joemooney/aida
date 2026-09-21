@@ -700,6 +700,7 @@ impl PhaseFailure {
 /// isolated so the classification rule is unit-testable without a driver.
 /// trace:BUG-455 | ai:claude
 pub(crate) fn is_database_locked_message(reason: &str) -> bool {
+    // external-prose-classifier: auto_complete::is_database_locked_message
     aida_core::external_tool_output::contains_any_case_insensitive(
         reason,
         aida_core::external_tool_output::SQLITE_LOCKED,
@@ -716,6 +717,7 @@ pub(crate) fn is_database_locked_message(reason: &str) -> bool {
 /// hides in `groom`/`room`).
 // trace:BUG-657 | ai:claude
 pub(crate) fn is_environmental_failure(message: &str) -> bool {
+    // external-prose-classifier: auto_complete::is_environmental_failure
     aida_core::external_tool_output::contains_any_case_insensitive(
         message,
         aida_core::external_tool_output::OS_RESOURCE_EXHAUSTION,
@@ -1011,6 +1013,7 @@ pub(crate) fn red_ci_action(budget: usize, attempts_made: usize, kind: FailureKi
 // trace:TASK-975 | ai:claude
 // trace:BUG-1447 | ai:codex
 pub(crate) fn is_merge_conflict_failure(reason: &str) -> bool {
+    // external-prose-classifier: auto_complete::is_merge_conflict_failure
     if is_branch_policy_merge_refusal(reason) {
         return false;
     }

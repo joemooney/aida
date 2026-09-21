@@ -148,6 +148,7 @@ fn preserve_pr_rebase_diagnostic(project_root: &std::path::Path, n: u64, detail:
 /// worktree — instead of the misleading "is the PR number correct?" line.
 /// trace:BUG-289 | ai:claude
 pub(crate) fn pr_fetch_failure_message(stderr: &str, n: u64, pr_local_branch: &str) -> String {
+    // external-prose-classifier: pr_cmd::pr_fetch_failure_message
     if aida_core::external_tool_output::contains_any_case_insensitive(
         stderr,
         aida_core::external_tool_output::GIT_BRANCH_CHECKED_OUT,

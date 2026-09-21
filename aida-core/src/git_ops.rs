@@ -182,6 +182,7 @@ fn git_with_index_lock_retry(repo: &Path, args: &[&str]) -> Result<GitResult> {
 }
 
 fn looks_like_index_lock_failure(stderr: &str) -> bool {
+    // external-prose-classifier: git_ops::looks_like_index_lock_failure
     let tokens = crate::external_tool_output::GIT_INDEX_LOCK;
     crate::external_tool_output::contains_any_case_insensitive(stderr, &tokens[..1])
         && crate::external_tool_output::contains_any_case_insensitive(stderr, &tokens[1..])
@@ -205,6 +206,7 @@ fn commit_redaction_args(public_email: Option<&str>) -> Vec<String> {
 /// this closes the metadata leak. The `-c` override never rewrites the machine's
 /// global git config. trace:TASK-1122 | ai:claude
 pub fn commit(repo: &Path, message: &str) -> Result<bool> {
+    // external-prose-classifier: git_ops::commit
     let (_h, public_email) = read_public_identity();
     let redact = commit_redaction_args(public_email.as_deref());
     let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
@@ -227,6 +229,7 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
 
 /// Push to the remote. Returns true on success, false if rejected (non-fast-forward).
 pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
+    // external-prose-classifier: git_ops::push
     let result = git(repo, &["push", remote, branch])?;
     if result.success {
         Ok(true)
@@ -1299,6 +1302,7 @@ pub enum AutostashRestore {
 /// (the pull's own error is what the caller surfaces).
 // trace:BUG-691 | ai:claude
 pub fn restore_stranded_autostash(repo: &Path, pre_stash_top: Option<&str>) -> AutostashRestore {
+    // external-prose-classifier: git_ops::restore_stranded_autostash
     // (1) merge-in-progress autostash holding pen. Git records the autostash
     // here while a merge is underway and normally consumes it on finish; a hard
     // die (e.g. index.lock during the reset) can leave it behind.
