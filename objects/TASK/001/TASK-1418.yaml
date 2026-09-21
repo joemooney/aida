@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T22:00:50.344389357Z
+modified_at: 2026-09-21T22:04:22.120282756Z
 req_type: Task
 tags:
 - discipline
@@ -485,4 +485,28 @@ comments:
     That also sharpens the finding: the gap is not that we lack the idea of linting referents in prose. WE HAVE THE IDEA, IMPLEMENTED, IN TWO PLACES. The gap is that config-borne agent prose was never recognised as the same artefact class.
   created_at: 2026-09-21T22:00:50.344389357Z
   modified_at: 2026-09-21T22:00:50.344389357Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5ff-aae8-7d80-a0e7-8d17e2be5ac6
+  author: joe
+  content: |-
+    [aida:advisor] THE REUSE POINT, BY NAME, SO WHOEVER PICKS THIS UP DOES NOT REDISCOVER IT. Found by claude-reviewer-1 while testing my "afternoon, not a project" estimate — they went looking for duplication expecting to REFUTE the estimate, and the evidence refuted their hypothesis instead. Verified by the advisor in the tree:
+
+        aida-cli-lib/src/lib.rs:45019   fn compute_plan_report(content: &str, root: &Path) -> PlanReport
+
+        CALLERS TODAY (all four confirmed by grep, not recalled):
+          aida-cli-lib/src/plan_cmd.rs:905   verify_plan   -- the CLI renderer
+          aida-cli-lib/src/mcp.rs:5012       plan_verify   -- the MCP tool
+          aida-cli-lib/src/lib.rs:45529      lint_skills   -- the skill linter
+
+    THE SPLIT WAS DELIBERATE AND IS DOCUMENTED AT THE FUNCTION: "Pure plan-lint pass: compute the section / file / line-ref findings ... Does no I/O beyond reading the source files the plan references, and never writes or exits — the rendering, --fix rewrite, and process exit live in the callers", split out of verify_plan "so both ... compute from the same source of truth".
+
+    SO ADDING A FOURTH CONSUMER IS A DEMONSTRATED PATTERN, NOT A REFACTOR. Start from `compute_plan_report`, NOT from `aida plan verify` — the latter is a renderer in plan_cmd.rs and starting there leads to rediscovering a split that already exists.
+
+    ONE REAL ADAPTATION, RECORDED SO THE ESTIMATE STAYS HONEST RATHER THAN OPTIMISTIC. `compute_plan_report` computes PLAN-SHAPED findings: sections, files, line refs. CONFIG PROSE HAS NO REQUIRED SECTIONS, so a config consumer wants the file/ref subset and must IGNORE the section group rather than report it. That is a filter at the call site, not a change to the core — but it is not zero, and an implementer told "just point it at config" will hit it in the first ten minutes.
+
+    A METHOD NOTE FROM THE REVIEWER THAT IS WORTH AS MUCH AS THE FINDING. They stopped one step early twice on the way: first at "lint_skills has no plan_cmd:: references", then at "lint_skills builds its findings inline". BOTH WERE TRUE AND NEITHER WAS THE ANSWER — the shared core lives in a third place under a name neither search used. A NULL FROM TWO GREPS THAT WERE BOTH LOOKING FOR THE WRONG SYMBOL IS NOT ABSENCE, and stopping at either would have produced a false finding ("the doc comment claims sameness with no shared code behind it") that was itself an instance of the very defect class this task is about — prose asserting a relationship nothing enforces.
+
+    That is the same failure this board has been naming all day, arrived at from the opposite side: not a null read as a measurement, but a null nearly read as a FINDING.
+  created_at: 2026-09-21T22:04:22.120282756Z
+  modified_at: 2026-09-21T22:04:22.120282756Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
