@@ -67541,10 +67541,23 @@ fn collect_unshipped_work_items(
     // longer cause one or more subprocesses each. A requirement branch may
     // carry a suffix (`bug-1288-work`), so prefix matching deliberately keeps
     // those session-created variants while excluding another numeric id.
-    // trace:BUG-1288 | ai:codex
+    //
+    // PR #1999 rework: this was originally an ALLOW-list of only
+    // "inprogress"/"in-progress"/"done", which silently dropped a lease-less
+    // branch whose spec sat in NeedsAttention (shelved-but-not-abandoned),
+    // Approved, Draft, or Planned — each a status a branch can legitimately
+    // carry real unshipped commits under, before the commit/patch probe ever
+    // ran. The bound this exists for is "don't probe every stale ref in the
+    // repo" (301+ of them), not "only probe two statuses" — so the gate is
+    // an EXCLUDE-list of the terminal statuses instead: everything that
+    // isn't Completed/Rejected/Superseded is still eligible for the probe.
+    // The exclusion set intentionally mirrors the terminal-status check
+    // applied to the resolved branch spec_id further below in this
+    // function, so a branch is never filtered here for a reason that
+    // wouldn't also filter it there. trace:BUG-1288 | ai:claude
     let active_prefixes: Vec<String> = status_by_spec
         .iter()
-        .filter(|(_, status)| matches!(status.as_str(), "inprogress" | "in-progress" | "done"))
+        .filter(|(_, status)| !matches!(status.as_str(), "completed" | "rejected" | "superseded"))
         .map(|(spec, _)| spec.to_ascii_lowercase())
         .collect();
     let lease_branches: std::collections::HashSet<&str> =
@@ -68109,6 +68122,44 @@ exit 1
             rows.iter().all(|row| row.branch != "story-1187-squash"),
             "patch-equivalent branches must not be reported as unshipped: {rows:?}"
         );
+    }
+
+    // PR #1999 rework: the reviewer's CHANGES REQUESTED finding on BUG-1288
+    // was that `active_prefixes` (the bounded-probe candidate gate) was built
+    // from only "inprogress"/"in-progress"/"done" statuses, so a branch whose
+    // spec sat in NeedsAttention, Approved, or Draft — with genuine unshipped
+    // commits and NO lease — was filtered out before the commit/patch probe
+    // ever ran, and the detector under-reported. This end-to-end fixture pins
+    // exactly that shape for all three previously-invisible statuses.
+    // trace:BUG-1288 | ai:claude
+    #[test]
+    fn detector_lists_unshipped_work_on_leaseless_nonterminal_branches() {
+        for status in ["NeedsAttention", "Approved", "Draft"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            init_repo(root);
+
+            let branch = format!("bug-9001-{}", status.to_ascii_lowercase());
+            branch_with_commit(root, &branch, "BUG-9001");
+            // Deliberately no lease and no live session: this is exactly the
+            // "shelved but has real unshipped work" shape from the finding.
+
+            let rows = collect_unshipped_work_items(
+                root,
+                &[summary("BUG-9001", status)],
+                true, // no_forge: isolate from gh entirely
+                false,
+            );
+
+            assert_eq!(
+                rows.len(),
+                1,
+                "status={status}: a lease-less {status} branch with unmerged \
+                 commits must be reported as unshipped, got: {rows:?}"
+            );
+            assert_eq!(rows[0].spec_id, "BUG-9001");
+            assert_eq!(rows[0].branch, branch);
+        }
     }
 }
 
