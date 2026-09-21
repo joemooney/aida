@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T03:30:59.539323012Z
-modified_at: 2026-09-21T11:27:26.696730685Z
+modified_at: 2026-09-21T11:39:15.479143574Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity drain-safe from:session-0920
@@ -139,3 +139,33 @@ comments:
   created_at: 2026-09-21T11:27:26.696730685Z
   modified_at: 2026-09-21T11:27:26.696730685Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3c3-5c97-7052-ab4a-450242faefd3
+  author: joe
+  content: |-
+    CRITERION 2 TRACED TO ONE ARGUMENT PATH, 2026-09-21 by the product seat. This narrows criterion 2 from "audit every writer" to "fix one boundary".
+
+    THERE IS EXACTLY ONE WRITER. review_verdict::record_verdict is the only function that sets reviewed_sha; every other site reads it. It accepts the sha as Option<&str> from its caller and stores it verbatim, with no normalisation at the boundary.
+
+    THE DRAIN PATH IS ALREADY CORRECT AND IS NOT THE SOURCE. stamp_pr_review_verdict feeds record_verdict from pr_head_sha_best_effort, which returns the forge's head_sha and is therefore always the full 40.
+
+    ATTRIBUTION ACROSS THE CORPUS CONFIRMS THE CODE READ (572 files, 147 sha-bearing):
+
+        abbreviated                        full-40
+          24  claude-reviewer-1              26  aida drain reviewer
+          12  aida review record             22  aida review record
+           1  advisor (proxy for operator)   14  claude-reviewer-1
+                                              3  unrecorded
+                                              1  advisor, 1 codex, 1 codex review
+
+        aida drain reviewer: 26 full, ZERO abbreviated.
+
+    So every abbreviated record entered through a caller-supplied sha, and none through the forge. The seat writing the most refusals also writes the most abbreviated shas, which is why the symptom concentrates on exactly the verdicts that block merges.
+
+    THEREFORE CRITERION 2 IS ONE NORMALISATION AT ONE BOUNDARY: resolve the supplied sha through git rev-parse inside record_verdict before storing, so a caller may pass a short sha and the record still holds the full 40. That is strictly better than asking every caller to remember, which is the arrangement that produced the abbreviated records in the first place. It also turns criterion 3's backfill into a one-time sweep rather than a recurring one.
+
+    CAVEAT FOR WHOEVER IMPLEMENTS IT: rev-parse resolves against the local object store, so an abbreviated sha for a deleted or never-fetched branch will not resolve. The write must keep the original string and mark it unresolvable rather than dropping it, which is criterion 3's own language. The two criteria want the same helper.
+
+    SEPARATE OBSERVATION FOR CRITERION 3, the malformed-record class. The comparison helper on the awaiting surface slices by BYTE offset. Head always arrives from the forge as ASCII hex so that side is safe, and a reviewed_sha shorter than the head is sliced whole. But a reviewed_sha LONGER than 40 bytes containing a multi-byte character would split a char boundary and panic. Probed, not asserted. Zero instances in the corpus today, which is why it was deliberately left out of the narrow child spec rather than overlooked.
+  created_at: 2026-09-21T11:39:15.479143574Z
+  modified_at: 2026-09-21T11:39:15.479143574Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
