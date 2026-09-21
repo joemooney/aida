@@ -1,0 +1,46 @@
+id: 01a0c1ad-3950-7142-9c8f-2d7b0dbb53f6
+spec_id: BUG-1510
+agreed_id: BUG-1510
+title: A session's lease and brief can name different specs, so correct work is recorded against the wrong spec and the misattributed verdict then briefs the next implementer
+description: |
+  A session's LEASE and its BRIEF can name different specs, and nothing compares them. The work is then done correctly against the brief, recorded against the lease, and every downstream artifact - status, PR, verdict, shelve - attaches to the wrong spec.
+
+  OBSERVED END TO END on 2026-09-20. All timestamps UTC, all read off artifacts.
+
+      lease        STORY-1391
+      brief        BUG-1420 round-2 rework
+      the session  never attempted STORY-1391's acceptance; did the BUG-1420 work correctly
+      01:32:04     implementer pushes local story-1391-work to remote bug-1420-round2, opens PR #2042
+      01:33:50     orchestrator opens PR #2043 from the LOCAL branch name, same head 35de6d3abb
+      phases 1-3   drain drives STORY-1391 on PR #2043
+      01:52:45     unshipped-work detector reads the trailers and attributes PR-2043 to BUG-1420
+      01:53:37     drain reviewer records RequestChanges, five findings, all about TASK-1289/BUG-1420
+      01:53:44     SpecShelved lands on STORY-1391
+      result       STORY-1391 marked done, then needs-attention, on work that is not its own;
+                   BUG-1420 left in-progress while its commits sit on a PR about to merge under
+                   another id; TASK-1289's five findings recorded nowhere but STORY-1391
+
+  THE DOWNSTREAM FAILURE IS THE DANGEROUS ONE. Anyone requeueing STORY-1391 from here reads a coherent RequestChanges verdict citing real file and line evidence, and builds a rework brief that is internally consistent and aimed at entirely the wrong code. Nothing about that brief looks wrong. A misattribution that produced obvious nonsense would be self-limiting; this one produces something that passes every plausibility check a human or an agent would apply.
+
+  TWO SUBSYSTEMS ALREADY DISAGREED AND NEITHER WON. `aida drain status` reported STORY-1391 / in-phase-3 / PR-2043 while events.jsonl recorded BUG-1420 / UnshippedWorkDetected / branch=pr-2043 at 01:52:45. Both read the same branch. The commit trailers are the durable record and they say BUG-1420. So the information needed to detect this was present in the system, in two places, and nothing compared them.
+
+  NOT AN IMPLEMENTER ERROR, and the spec should say so. The session refused an unapproved force-push on #2009's stacked branch, diagnosed a modify/delete conflict as a genuine unmerged-TASK-1289 dependency rather than faking a clean cherry-pick, and published an honestly-named branch. It behaved better than the machinery around it.
+
+  Acceptance:
+  1. At dispatch, the lease's spec id and the brief's spec id are compared, and a mismatch refuses or escalates rather than proceeding. This is the whole fix; everything below is containment for when it fails anyway.
+  2. Before a PR is opened for a spec, the commit trailers on the branch are checked against that spec id. A branch carrying no commit trailered for the spec does not get a PR opened under it. This alone would have prevented PR #2043.
+  3. The orchestrator does not open a PR for a head that already has an open PR. #2042 and #2043 share a head and were created 106 seconds apart.
+  4. A shelve records against the spec the VERDICT is about, or - if that cannot be determined - records that the attribution is uncertain rather than silently choosing the lease. Absent attribution must not read as confirmed attribution.
+  5. `aida drain status` and the unshipped-work detector agree on a PR's owning spec, or the disagreement is surfaced. They disagreed here for at least 52 seconds before the verdict landed and nothing reported it.
+  6. A test drives a session whose lease and brief disagree and asserts the mismatch is caught at dispatch.
+
+  NOT IN SCOPE: the fail-open preflight decide(), which is BUG-1507; the verdict store's blind full replace, which is BUG-1505.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T01:55:50.224652863Z
+modified_at: 2026-09-21T01:55:50.224652863Z
+req_type: Bug
+tags:
+- batch:night-0920 orchestrator integrity drain-safe from:session-0920
