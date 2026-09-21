@@ -1,0 +1,89 @@
+id: 01a0c251-c8b8-7642-ad68-f484def0a326
+spec_id: BUG-1528
+agreed_id: BUG-1528
+title: aida show reports 'branch not found locally' for a spec whose branch IS local, and a failed branch lookup silently suppresses the PR line — three open PRs went unreported
+description: |-
+  Measured 2026-09-20 21:55 local, reviewer seat, on this repo at main 0b474a66d1.
+
+  REPRODUCTION
+
+      aida show BUG-1420 --format human
+
+  prints, in the git-linkage section:
+
+      Branch     work committed but branch not found locally
+
+  and prints NO PR line at all.
+
+  WHAT IS ACTUALLY TRUE FOR BUG-1420, checked three ways:
+
+      git branch --list 'bug-1420*'            -> bug-1420-work   (the branch IS local)
+      git ls-remote --heads origin 'bug-1420*' -> bug-1420-round2, bug-1420-work
+      open PRs referencing BUG-1420            -> #2009 (bug-1420-work),
+                                                  #2042 (bug-1420-round2),
+                                                  #2043 (story-1391-work)
+
+  So the message is false on its own terms - the branch exists locally - and the spec has
+  two remote branches and three open PRs, none of which the surface reports.
+
+  TWO DEFECTS, AND THE SECOND IS THE ONE THAT HURT.
+
+  1. BRANCH RESOLUTION RETURNS NONE WITH THE BRANCH PRESENT. I did not pinpoint the
+     resolver, so the first implementation step is to find why it yields None while
+     `git branch --list bug-1420*` matches. The -work suffix is the obvious suspect: a
+     resolver deriving the branch name from the spec id alone (bug-1420) would miss
+     bug-1420-work, which is the convention the drain creates and 48 origin branches use.
+
+  2. A FAILED BRANCH LOOKUP SUPPRESSES THE PR LINE ENTIRELY. This is independent of 1 and
+     is a structural problem. ChangeLinkageState is one enum whose arms are mutually
+     exclusive (aida-cli-lib/src/lib.rs:45499-45566). The BranchNotFound arm emits a
+     Branch label and nothing else, and the call site at :46856 renders it WITHOUT ever
+     calling change_lookup_for_branch:
+
+         match branch.as_deref() {
+             Some(b) => { ... change_lookup_for_branch(project_root, b) ... }
+             None => render(format_change_linkage(forge, &BranchNotFound), None),
+         }
+
+     So "which branch?" and "which PR?" are collapsed into one state machine, and failing
+     the first answers the second with silence rather than with "unknown". Note the enum
+     already distinguishes CliMissing / CliFailed / Unreachable as explicit
+     state-unknown answers for the PR - the design clearly intends that distinction, and
+     BranchNotFound is the one path that drops it.
+
+  WHY THIS IS MORE THAN COSMETIC. This is the one place a reviewer looks to answer "where
+  is this spec's work?". For a spec with three open PRs on three different branches, it
+  answers "branch not found locally" and stops. The BUG-1420 / TASK-1289 branch-crossing
+  that put PR #2042 and PR #2043 under reviewer holds tonight was invisible on this
+  surface and was only found by enumerating branches by hand. A reviewer who trusted
+  aida show would have concluded there was nothing to see.
+
+  Acceptance
+  1. aida show <SPEC> resolves the spec's branch under the conventions actually in use,
+     including the <spec-id>-work form the drain creates. A regression test uses a spec
+     whose only branch is <spec-id>-work.
+  2. A failed or ambiguous branch resolution NEVER suppresses the PR line. When the branch
+     is unknown, the PR is still looked up (by spec-id reference if not by head) or is
+     explicitly reported as unknown, in the same style as the existing CliMissing /
+     CliFailed / Unreachable arms.
+  3. When more than one branch or more than one open PR references the spec, the surface
+     says so rather than picking one silently. A spec with work on two branches is the
+     shape of a branch-crossing, and it is exactly what a reviewer needs surfaced.
+  4. A test covers the BUG-1420 shape: branch present locally, two remote branches, three
+     open PRs; the rendered linkage must name them rather than reporting not-found.
+
+  Related: BUG-1525 (the brief generator derives a branch name from the spec id alone and
+  forks a fresh lineage) is the same root assumption on the write side - that a spec's
+  branch is named exactly after its spec id. This is the read side of it.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:55:34.840549Z
+modified_at: 2026-09-21T04:55:34.840549Z
+req_type: Bug
+tags:
+- agent-surface
+- aida:show
+- reviewer-surface
+- severity:operational
