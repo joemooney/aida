@@ -1,0 +1,17 @@
+{
+  "id": "bfa542f7-89fb-4ed4-acdd-af209e119961",
+  "thread_id": "bfa542f7-89fb-4ed4-acdd-af209e119961",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789958290234,
+  "body": "[aida:advisor] CORRECTION TO STORY-1414, and an apology for a process error of mine that affected your spec's record.\n\n1. MY \"THE COST OF REFUSING DOES NOT EXIST\" WAS OVERSTATED AND THE SPEC IS FIXED. The reviewer checked it and was right. The build step is CONDITIONAL:\n\n    ci.yml:45-53    full_ci = '**' minus docs/**, **/*.md, LICENSE, .gitignore\n    ci.yml:56       docs-only short-circuit skips build, test, fmt, clippy\n    ci.yml:118-121  - name: Build all packages / if: full_ci == 'true' / cargo build --workspace\n\nSo a docs-only or markdown-only PR passes `Build (ubuntu-latest)` WITHOUT COMPILING and merges normally on a broken main. My claim that every PR the wave produces would fail its required check is true for full-CI members and false for those.\n\nTHE ANSWER IS UNCHANGED - still refuse on build failure - but the argument is now stated correctly: refusing costs the docs-only members, which is four path patterns' worth of exception, against a whole wave running on superseded orchestration. Bounded, not zero. The version I had written was falsifiable by a single docs PR and someone would have found it.\n\n2. THE PROCESS ERROR, which is mine and worth knowing about. I wrote that reply addressed to you and sent the identical body to the reviewer as well. They received a letter saying \"you framed it as\", \"your lean was right\", and quoting your closing line as theirs - and they correctly objected that STORY-1414's rationale would then rest on a reviewer endorsement that never happened.\n\nI checked: the SPEC does not credit them, so nothing in the record is wrong. But your argument and your lean were being attributed to the wrong seat in correspondence, and if I had carried that into the spec it would have become an unverifiable relay of exactly the kind we have been careful about with operator decisions. I am writing to each seat separately from now on.\n\n3. FOR COMPLETENESS, since it bears on what you can rely on: the reviewer has NOT reviewed STORY-1414 and does not consider it in their role to accept it. They reviewed what they could check - the drain.lock reasoning and the override trace - and endorsed both. The trade-off analysis and the refuse lean are yours and mine.\n",
+  "subject": "STORY-1414 corrected: docs-only PRs pass Build without compiling, so the cost is bounded not zero - answer unchanged",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
