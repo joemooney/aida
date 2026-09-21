@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:02:54.706318011Z
-modified_at: 2026-09-21T05:22:09.124377934Z
+modified_at: 2026-09-21T05:28:29.136940784Z
 req_type: Story
 tags:
 - authority
@@ -193,6 +193,67 @@ comments:
     would not have been incurred. A hold reason is read as settled; a question is not.
   created_at: 2026-09-21T05:22:09.124377934Z
   modified_at: 2026-09-21T05:22:09.124377934Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c26f-e8d0-7c43-939b-59c9db4c9345
+  author: joe
+  content: |-
+    [aida:advisor] RULING ON F2 — BINDING ORDERING CONSTRAINT. This PR must NOT land before
+    BUG-1532, or must land with reviewer-refusal holds exempted from the TTY floor.
+
+    THE REVIEWER OFFERED TWO ACCEPTABLE OUTCOMES: do not land before BUG-1532, or land with
+    the ordering stated. I am taking the first, and the reason is that the second is not
+    actually safe.
+
+    WHY. This PR makes `aida merge-hold clear` require a human at a TTY. `aida pr ship`
+    clears a hold with no TTY at all, deliberately, under BUG-1167 (pr_cmd.rs:1793). So
+    landing this first produces a window in which:
+
+        the SUPPORTED release path   locked to a human TTY
+        the UNSAFE release path      wide open, and it also disarms the server-side label
+
+    An agent reviewer who re-reviews, approves, and wants to withdraw their own refusal
+    would find the correct command refused and the bypass working. A safety change whose
+    effect is to route agents onto the bypass is strictly worse than today, and "stating the
+    ordering" in a spec does not stop that — the person hitting the refusal reads the error
+    message, not the spec.
+
+    THE DEEPER POINT, AND IT IS WHY THIS IS NOT A DISAGREEMENT WITH THE PR'S INTENT: the TTY
+    floor is a PROXY for "a human decided", applied uniformly because hold KIND does not
+    exist yet. It is the right floor for a SUPERVISED hold — those mean "a human must decide
+    before this merges", and requiring a human is exactly the point. It is the wrong floor
+    for a REVIEWER REFUSAL hold, which is released by a fresh verdict at the current head,
+    by whichever seat reviews it, agent or human.
+
+    That is BUG-1532's criterion 1 seen from the release side rather than the merge side.
+    One field fixes both: with kind recorded, the floor applies where it belongs and the
+    verdict releases where it belongs.
+
+    SO THE ACCEPTABLE SHAPES, either is fine:
+      (a) land after BUG-1532, with Clear consulting hold kind — TTY floor for supervised,
+          fresh-verdict release for refusal; or
+      (b) land now with refusal-kind holds exempted from the floor, which requires kind,
+          which is BUG-1532 — so (b) collapses into (a).
+
+    IT ALSO CONTRADICTS A CONVENTION RECORDED TONIGHT. TASK-1-170: a hold is cleared by the
+    seat whose refusal it carries. Three of the 24 current markers are the reviewer's and
+    say "clear only on my re-review". If the integrity floor is genuinely the intent for ALL
+    holds, then TASK-1-170 must be amended in the same change and reviewer holds given
+    another release path. I do not think that is the intent; I think kind is missing.
+
+    F1 CONFIRMED INDEPENDENTLY, not just passed along. On main, GatedOp::DrainStart has
+    exactly two enforcement sites — queue_cmd.rs:5278 and lib.rs:49491 — and this PR deletes
+    both, leaving permissions.rs:51 (variant), :63 and :201 (key mapping to "drain_start"),
+    :313 (description) and :343/:365 (test) with no reader, plus cli.rs:2175 still
+    advertising the guardrail in --help. A config key with no reader is worse than no key,
+    because the user believes it works. Either direction is fine; leaving it half-removed is
+    not.
+
+    THE SPLIT ITSELF IS RIGHT and the reviewer said so first: dispatch is routing,
+    disposition is judgement, and gating them separately is correct. Extending the gate to
+    queue remove and queue move — mutations that were ungated — is a tightening nobody asked
+    for and is the best part of the change. Nothing here disputes the design.
+  created_at: 2026-09-21T05:28:29.136940784Z
+  modified_at: 2026-09-21T05:28:29.136940784Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
