@@ -98,7 +98,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-21T02:19:51.491949226Z
+modified_at: 2026-09-21T02:24:53.664784850Z
 req_type: Bug
 tags:
 - batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
@@ -183,4 +183,42 @@ comments:
     So criterion 6's express instance is evidence for a2 being mandatory rather than preferred. Carrying 6512f1312a adds `assert!(!skip.no_preflight)` to a conjunction that will be copied forward again the next time someone adapts this test, and the field after no_preflight will be lost the same way this one was.
   created_at: 2026-09-21T02:18:52.950402729Z
   modified_at: 2026-09-21T02:18:52.950402729Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c1c7-d3a0-7860-9c48-137a8e34f55b
+  author: joe
+  content: |-
+    [reviewer] A FIFTH SURFACE, AND IT IS THE ONLY USER-FACING ONE: the orchestrator banner TELLS THE OPERATOR "full gate" while preflight is skipped, and the code that would have reported the skip is unreachable in exactly that case.
+
+    auto_complete.rs:213-231, banner_summary():
+
+        if self.express {
+            return Some("express tier — full gate (CI + reviewer + build)".to_string());
+        }
+        if self.is_empty() { return None; }
+        let mut parts = Vec::new();
+        if self.no_preflight { parts.push("implementer preflight"); }
+        if self.no_ci_wait   { parts.push("CI wait"); }
+        ...
+
+    The express branch returns EARLY and unconditionally. So for a spec tagged `batch:express` plus `lifecycle:no-preflight`:
+
+        skip.express      = true
+        skip.no_preflight = true      (express does not clear it — the bug)
+        banner_summary()  = "express tier — full gate (CI + reviewer + build)"
+
+    and the `if self.no_preflight { parts.push("implementer preflight") }` line at 223 — the one surface whose entire job is to name the skipped phase — is DEAD CODE for any express spec, because the early return precedes it. The operator is not merely uninformed; they are told the opposite, by the surface built to inform them, and the truthful branch cannot run.
+
+    TWO SURFACES DERIVED FROM THE SAME STRUCT NOW DISAGREE. active_tokens() at 172 does include no_preflight:
+
+        if self.no_preflight { v.push("no-preflight".to_string()); }
+
+    So for express + no-preflight, telemetry records `no-preflight` as an active short-circuit while the banner shown to the operator says full gate. The JSONL is truthful and the human-readable line is false, about the same spec, in the same run, computed from the same value.
+
+    WHY THIS OUTRANKS THE OTHER FOUR INSTANCES. The comment, the function name and the assertion message are developer-facing: wrong, but only misleading to someone reading the file. This one is emitted at runtime to the person deciding whether a spec shipped under a full gate. The project's own convention holds user-facing text to a higher bar than developer artifacts, and this is a user-facing string asserting a safety property that is false at the moment it is printed.
+
+    It also explains why the gap survived operationally rather than just in review. If an express spec had ever run with lifecycle:no-preflight, nothing an operator saw would have looked wrong — the banner would have said full gate, which is what they expected, and the only contradicting evidence was a token in a telemetry file nobody reads per-run.
+
+    FOR a2: this is a third site that must be covered by whatever replaces the enumeration. The force-off block, the test's conjunction, and this banner all enumerate the same three phases independently. A destructuring bind in the test does not reach banner_summary(), so the express branch needs its own treatment — either derive the banner text from the skip set rather than hardcoding a phase list, or make the express branch fall through to the parts-building path so a residual skip is named. The hardcoded string is what makes it unable to be wrong-in-a-detectable-way.
+  created_at: 2026-09-21T02:24:53.664784850Z
+  modified_at: 2026-09-21T02:24:53.664784850Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
