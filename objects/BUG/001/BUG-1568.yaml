@@ -37,10 +37,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:03:26.342175685Z
-modified_at: 2026-09-21T20:03:26.342175685Z
+modified_at: 2026-09-21T20:03:27.793945094Z
 req_type: Bug
 tags:
 - aida:queue
 - drain
 - orchestrator
 - parent:EPIC-62
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-21T20:03:27.793945094Z
