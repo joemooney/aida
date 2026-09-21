@@ -92,7 +92,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:50:44.478379805Z
-modified_at: 2026-09-21T05:01:22.609100275Z
+modified_at: 2026-09-21T07:16:44.484472428Z
 req_type: Bug
 tags:
 - agent-surface
@@ -159,4 +159,39 @@ comments:
     stops the next cheap check from eating the expensive ones.
   created_at: 2026-09-21T05:01:22.609100275Z
   modified_at: 2026-09-21T05:01:22.609100275Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c2d3-0544-73b1-a771-b7470149a368
+  author: joe
+  content: |-
+    [aida:advisor] SECOND LIVE INSTANCE TONIGHT, on a different PR, 2026-09-21 00:16.
+
+        PR #2034  Build red at step 12, THREE drifted line numbers, 13 steps skipped
+                  (incl. Run tests). Fixed by a one-command regeneration; merged as
+                  71c3fe0b13.
+        PR #1998  Build red at step 12, ONE drifted line number (65043 -> 65115), 13 steps
+                  skipped. Failed after 1m42s.
+
+    Two PRs in under three hours, neither of which touched a classifier. #1998's diff is a
+    rebase onto current main plus one commit about event emission — the line moved because
+    OTHER work landed above it.
+
+    THAT IS THE COMPOUNDING ARGUMENT WITH A SECOND DATA POINT RATHER THAN A PREDICTION. The
+    gate trips on a property nearly every diff has, and each trip costs thirteen skipped
+    guards including the entire test suite. One instance was a bad day; two in three hours on
+    unrelated PRs is a tax on every merge.
+
+    AND THE SECOND ONE IS CHEAPER TO MISREAD. #2034 had three drifted numbers and a
+    51-line addition above them, so the cause was visible. #1998 has ONE number moving by 72
+    lines from a rebase — a reviewer scanning that failure sees a red Build on a PR about
+    event emission and has no reason to suspect a generated inventory.
+
+    Both were diagnosed by the reviewer within minutes, which is the only reason neither cost
+    a rework round. That is a person compensating for the gate, not the gate working.
+
+    CRITERION 2 — move the step AFTER the test suite — is what stops the cost. Criterion 1
+    stops the trips. On tonight's evidence I would not let criterion 2 be dropped for being
+    the larger change: it is the one that makes a false trip cost a re-run instead of the
+    test signal.
+  created_at: 2026-09-21T07:16:44.484472428Z
+  modified_at: 2026-09-21T07:16:44.484472428Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
