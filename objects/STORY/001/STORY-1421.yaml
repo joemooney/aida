@@ -26,5 +26,45 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:22:54.824903811Z
-modified_at: 2026-09-21T11:22:54.824903811Z
+modified_at: 2026-09-21T11:25:04.180330443Z
 req_type: Story
+comments:
+- id: 01a0c3b6-5f34-76c0-9ba5-aef76165a045
+  author: joe
+  content: |-
+    BINDING DESIGN CRITERION, and it is the one most likely to be lost when this spec is implemented: THE REMEDY MUST PRESERVE THE GRADE. Do not solve "non-blocking findings vanish" by filing them all as bugs.
+
+    Raised by the reviewer seat from the case immediately adjacent to this spec's own instance. PR #2047 carried two carried-forward items. They are not the same kind of thing:
+
+      F2 EARNED A BUG. A confirmed doc regression, verified on main in the tree by a second
+      seat: awaiting_you.rs:809-817. Filed as BUG-1545.
+
+      F3 EARNED A RECORD, NOT A TICKET. The reviewer measured it rather than answering from
+      memory and found both of its failure modes absent from the entire corpus — not just the
+      open set. Filing it as a bug would assert a defect the data says does not exist.
+
+    THE MEASUREMENT, taken by the reviewer over verdicts carrying a reviewed_sha and verified independently by the driver-advisor over a wider file set (572 files scanned, 147 carrying a sha):
+
+        lengths  {8: 4, 9: 3, 10: 19, 11: 1, 12: 12, 13: 2, 40: 106}
+        shorter than 8: NONE
+
+    The two counts differ in denominator — the reviewer swept 105, the advisor 147, because the advisor's glob included spec-keyed files and sidecars — and agree exactly on the conclusion: the minimum is 8, nothing shorter than 7 exists anywhere, so nothing spuriously fires a row today.
+
+    TWO LIMITS THE REVIEWER RECORDED UNPROMPTED, because "not reachable" is the kind of null result that lies:
+      - THE MARGIN IS ONE CHARACTER. shas_match's floor is n >= 7 and the corpus minimum is 8.
+        A 6-character sha would return false and fire "moved past your refusal" on an UNMOVED
+        head — a false positive in a surface whose entire value is that it can be trusted.
+        Recording the margin, not predicting it is crossed.
+      - THE PANIC PATH NEEDS A HAND-EDITED FILE. record_verdict resolves --sha through git, so
+        every sha it writes is a real object name. Reaching the panic requires someone editing
+        verdict JSON by hand, or a tool writing one without resolving — not a threat model
+        worth a bug for a local dev tool.
+
+    WHY THIS IS A CRITERION AND NOT A FOOTNOTE. If the remedy for "non-blocking findings have no successor" is "promote them all to the backlog", the backlog fills with unreproducible observations and the signal dies a different death — the queue stops being a list of things to do and becomes a list of things someone once noticed. An observation needs a home that KEEPS IT AN OBSERVATION: retrievable when someone next touches shas_match, not sitting in a queue asking to be worked.
+
+    SO THE SUCCESSOR MECHANISM MUST CARRY THE GRADE WITH THE FINDING. A design that cannot distinguish "confirmed regression on main" from "measured absent from the corpus, margin one character" will create the second problem while fixing the first.
+
+    AND ON THE APPORTIONMENT IN THIS SPEC'S DESCRIPTION — the reviewer's correction, which is the more useful version: the convention was proposed twice and accepted twice, and neither half was more load-bearing than the other. What matters is not who owned it but WHY IT WENT UNEXAMINED BY BOTH: the phrase "carried forward in the verdict record" SOUNDED LIKE PRESERVATION. A convention whose name describes the intent rather than the mechanism is one nobody thinks to test.
+  created_at: 2026-09-21T11:25:04.180330443Z
+  modified_at: 2026-09-21T11:25:04.180330443Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
