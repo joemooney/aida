@@ -72,12 +72,12 @@ description: |-
   8. Count the population before fixing: how many of the specs currently at Done carry a refusing verdict at their PR's current head. Five are known from tonight's triage; fourteen sit at Done. The gap between those numbers is the spec's own verification.
 
   NOT REQUEUED, AND THE ADVISOR ENDORSES THAT DECISION. The five were tagged `refused-awaiting-rework` and each carries a comment naming its PR and verdict sha, so they are findable now. They were deliberately NOT requeued: BUG-1476 means a rework round on a spec with an existing PR may produce no commit, and three reviewer cycles were burned this afternoon establishing that. Requeueing into a known-broken path to fix a visibility problem would trade a silent defect for a noisy one.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:36:49.231874688Z
-modified_at: 2026-09-21T02:40:56.021452594Z
+modified_at: 2026-09-21T02:40:58.297168875Z
 req_type: Bug
 tags:
 - agent-surface
