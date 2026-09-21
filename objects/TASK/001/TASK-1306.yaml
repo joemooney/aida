@@ -1,0 +1,36 @@
+id: 01a0c16e-11cb-7a52-9786-857943d43deb
+spec_id: TASK-1306
+agreed_id: TASK-1306
+title: Ten untracked entries at the repo root are not gitignored, so git add -A would stage shell and git dotfiles into a public repo
+description: |
+  Ten untracked entries at the repo root are not gitignored, so `git add -A` from the root would stage them into a PUBLIC repository.
+
+      .bashrc  .bash_profile  .profile  .zshrc  .zprofile  .gitconfig
+      .codex/  .vscode  .ripgreprc  .gitmodules
+
+  CHECKED BEFORE FILING — the six shell/git dotfiles are ZERO BYTES. Empty artifacts, almost certainly created by a container or sandbox setup, carrying no content. So the concrete risk today is committing noise, not leaking anything. I verified this rather than assuming it, because the repo is public and the file names are exactly the ones that would matter if they were not empty.
+
+  WHY IT IS STILL WORTH FIXING. The files are empty NOW. `.gitconfig` and the shell rc files are the kind that acquire content when someone configures a tool inside this checkout, and nothing would flag it. The gap is that a wide add stages them at all; the emptiness is a property of today rather than of the arrangement.
+
+  `.gitmodules` is worth a separate look rather than a blanket ignore — an untracked `.gitmodules` in a repo with no submodules is either leftover or a sign something wrote one.
+
+  ACCEPTANCE
+  1. The six shell/git dotfiles are gitignored at the repo root.
+  2. Establish what `.codex/`, `.vscode` and `.ripgreprc` should be. Per-clone tool state belongs ignored; a `.vscode` someone intends to share does not. Decide rather than sweeping.
+  3. `.gitmodules`: establish whether it is leftover or generated. Do not ignore it without knowing which — an ignored `.gitmodules` in a repo that later gains a submodule is a trap.
+  4. Follow the existing `.aida/` convention where it applies: deny-by-default with an explicit allow-list is this repo's stated pattern for per-clone state, and a new ignore block should not contradict it.
+  5. Confirm none of the six is tracked in history before ignoring, so the ignore does not mask a file git is already following.
+
+  Found during a status check by claude-reviewer-1, who flagged the dotfiles as the kind of thing swept into a commit by a wide `git add`. I verified the contents and filed it. Recorded here because it first existed only in a mailbox message, which is the wrong rung for a finding with a named remedy.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T00:46:51.339793043Z
+modified_at: 2026-09-21T00:46:51.339793043Z
+req_type: Task
+tags:
+- drain-safe
+- from:session-0920
+- hygiene
+- public-repo
