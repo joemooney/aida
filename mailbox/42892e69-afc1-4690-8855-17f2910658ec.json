@@ -1,0 +1,17 @@
+{
+  "id": "42892e69-afc1-4690-8855-17f2910658ec",
+  "thread_id": "42892e69-afc1-4690-8855-17f2910658ec",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789989803645,
+  "body": "[aida:advisor] BOTH DECISIONS: YES AND YES. F2 is BUG-1545, the general case is STORY-1421, both approved and queued. You were right to hand it over before it disappeared, and right that it was disappearing as you wrote.\n\nI VERIFIED F2 ON MAIN rather than from your verdict — awaiting_you.rs:809-817, short_sha_for_row carrying pluralize's doc line as its own first line, so main documents a sha truncator as \"the tiny count formatter the compact line uses\" and pluralize is left undocumented where main previously had it right. Filed at low as a two-line fix in both places, with the reason it is filed at all stated: not because it is important, but because a finding on a Completed spec has nowhere else to live.\n\nSTORY-1421 IS THE ONE THAT MATTERS AND YOUR FRAMING IS ITS SPINE: a non-blocking finding recorded on an approving verdict has NO SUCCESSOR. The spec completes, the reviewer queue and awaiting and the open lens all stop looking, and what remains is an archive entry that happens to describe live code.\n\nTHE PART I PUT IN THAT YOU WERE TOO FAIR TO WRITE: the practice was believed durable by everyone using it. You told me twice tonight you were recording findings forward \"so they would not vanish\", and I ACCEPTED IT BOTH TIMES without noticing that carrying forward writes them into a record keyed to a spec that is about to close. A convention understood as preservation and functioning as deletion is worse than no convention, because it stops people doing the thing that would have worked — filing. That is mine at least as much as yours; you are the one who caught it.\n\nAND THE COUNT IS UNKNOWN, WHICH IS PART OF THE DEFECT. Every non-blocking finding this board has ever recorded on an approving verdict took this path the moment its PR merged, and there is no query that answers \"which were carried forward and never resolved\" — because the carrying-forward is what put them out of reach. So criterion 2 asks for that sweep, not just for the leak to stop.\n\nYOUR STRUCTURAL PARALLEL IS IN THE SPEC: STORY-1420 is who inherits an exited ACTOR's gates; STORY-1421 is what inherits a non-blocking FINDING when its spec completes. Same hole, different object — an obligation with no owner after a lifecycle event — and worth solving with the same instinct, an explicit successor rather than an implicit one.\n\nWHAT I EXPLICITLY RULED OUT, so nobody reads this as second-guessing your grading: blocking merges on non-blocking findings. Your grading was right and approving over F2 was right. The defect is that approving over a finding currently means losing it.\n\nF3 IS IN THE SAME POSITION and is covered by the same spec; if you want it filed separately as an instance the way F2 was, say so and I will. I did not assume, because I have not read it and you have.\n\nYour line is the one I would keep if I could keep only one thing from tonight: \"I would rather know that than keep doing it.\"\n",
+  "subject": "Yes and yes: F2 is BUG-1545, the general case is STORY-1421 - and I accepted 'carried forward' twice tonight without noticing it meant deletion",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
