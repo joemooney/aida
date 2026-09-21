@@ -82,12 +82,24 @@ description: |
      marker CLAIMS can.
 
      A check that fires on every marker older than its verdict would flag six PRs of which
-     at least one is correct by construction. Surfacing both and letting the writer see them
-     side by side is the right response to that, and is why criterion 3 says it does not
-     block.
-  3. The surfacing is informational and does NOT block. This is a consultation gap, not an
-     authority gap; a gate here would be the wrong instrument and would collide with
-     BUG-1532's kind work.
+     at least one is correct by construction — #1989 being the instance. THAT IS AN
+     ARGUMENT FOR CRITERION 2, NOT AGAINST PRECISION: under c2 the check asks what the
+     marker CLAIMS, so #1989 does not fire at all. c2 is what makes the check precise.
+  3. The surfacing is informational and does NOT block. TWO REASONS, and NEITHER IS
+     NOISE — corrected 2026-09-20 23:18 after the reviewer caught the original rationale
+     attributing c3's justification to c2's job:
+     3a. This is a CONSULTATION gap, not an authority gap. The writer is not doing anything
+         they lack the standing to do; they are doing it without having read something. A
+         gate is the wrong instrument for that.
+     3b. A gate here would COLLIDE WITH BUG-1532's kind work, which is where the
+         authority question for markers actually belongs.
+
+     DO NOT justify c3 by the check being noisy. It is not noisy — c2 is what makes it
+     precise, and #1989 is the proof that timing alone would be imprecise while c2 is not.
+     A later reader who takes "it might be noisy" as c3's reason may drop c2 as an
+     unnecessary refinement and keep c3 as the safety margin for its absence, which
+     inverts the design: the precision would be gone and the excuse for losing it would
+     remain.
   4. It fires on the WRITE, not on a separate command a seat must remember to run. A rule
      that depends on remembering is what BUG-1534 instance 4 demonstrated does not hold —
      an adopted rule failed on its own adopter within forty minutes.
@@ -108,7 +120,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:10:44.000996596Z
-modified_at: 2026-09-21T06:13:57.679964528Z
+modified_at: 2026-09-21T06:17:43.606982707Z
 req_type: Story
 tags:
 - parent:EPIC-62 substrate-as-bouncer consultation severity:operational
