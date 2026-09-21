@@ -72,12 +72,35 @@ description: |-
   8. Count the population before fixing: how many of the specs currently at Done carry a refusing verdict at their PR's current head. Five are known from tonight's triage; fourteen sit at Done. The gap between those numbers is the spec's own verification.
 
   NOT REQUEUED, AND THE ADVISOR ENDORSES THAT DECISION. The five were tagged `refused-awaiting-rework` and each carries a comment naming its PR and verdict sha, so they are findable now. They were deliberately NOT requeued: BUG-1476 means a rework round on a spec with an existing PR may produce no commit, and three reviewer cycles were burned this afternoon establishing that. Requeueing into a known-broken path to fix a visibility problem would trade a silent defect for a noisy one.
+
+  PRODUCT ADDITION 2026-09-20 22:35 — CRITERION 6 AS WRITTEN PERMITS A HALF-FIX, because the verb it would route to ALSO REFUSES from this state. Discovered by the advisor probing ONE spec before dispatching fifteen.
+
+  Criterion 6 says the hint must name a rework route instead of a shipping verb. Correct, and not sufficient: fixing the TEXT while the named verb still refuses converts a wrong instruction into an impossible one. Both verbs are closed against a refused-but-Done spec, and the pair is circular:
+
+    aida queue work <SPEC>            REFUSES: "not pickable for fresh work: Done — awaiting
+                                      merge; route via `aida queue work --from-pr`"
+    aida queue work <SPEC> --from-pr   SKIPS THE IMPLEMENTER by its own help text
+                                      ("implementation already shipped OUTSIDE the
+                                      orchestrator... SKIP the implementer phase")
+
+  So the verb that would rework refuses BECAUSE the spec is Done, and the verb it recommends instead cannot produce the new commits a refused round needs. A spec in this state is unreachable by both. Observed directly: the advisor dispatched BUG-1460 and phase 1 refused with exactly that message; the drain then printed "CI: green / Review: routed to reviewer queue" with the PR head unchanged at the sha the reviewer had refused.
+
+  The working route is two commands, and it is not what any hint names:
+
+    aida queue rework <SPEC>                                    flips Done -> InProgress, queues
+    aida queue work <SPEC> --auto-complete=through-ci --no-human=both
+
+  ADDITIONAL ACCEPTANCE
+  9. The route named by the hint EXECUTES SUCCESSFULLY from the refused-but-Done state. Verification is running it, not reading it: take a spec at Done with a refusing verdict at its PR's current head, run the hinted command verbatim, and assert phase 1 ENTERS rather than refusing. A test that asserts only the hint's text passes while the state stays unreachable.
+  10. If the working route requires more than one command, the hint gives ALL of them in order. A hint naming the second command of a two-command recipe is the same defect in a new place.
+
+  WHY THIS IS A SEPARATE CRITERION RATHER THAN A NOTE ON 6: an implementer reading 6 alone will change a string, run a test asserting the new string, and ship. Both seats would review it as complete, because it matches the criterion. That is the enumerate-the-instances failure — naming the class reads as done and is not.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:36:49.231874688Z
-modified_at: 2026-09-21T04:32:54.343360060Z
+modified_at: 2026-09-21T05:36:03.067624623Z
 req_type: Bug
 tags:
 - agent-surface
