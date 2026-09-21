@@ -37,12 +37,16 @@ description: |-
 
 
   7. SCOPE FIXED 2026-09-20 18:35, so this spec can merge without burying a deliverable. An advisor COMMENT on this spec added two further criteria - that a pre-Done spec whose work is already on main must not be left pre-Done, and that criterion 5's sweep run in both directions. They were never in this ACCEPTANCE block. A drain implements the acceptance block, so they were invisible at the rung the implementer reads, and PR #2040 correctly implemented the six visible criteria and none of those two. They are NOT part of this spec and must not block it: they are now BUG-1506, filed, approved and queued. Criterion 5 here delivers ONE direction only - Completed specs with an open PR referencing them - and BUG-1506 delivers the other. This note exists because merging this PR auto-completes this spec, Completed is terminal and drops out of every open-work lens, and a remaining deliverable recorded only in a comment on a Completed spec is the most reliable way to lose it - which is the harm this very spec argues at length.
+
+  8. An unsupported or unqueried forge must not read as "no open PR". specs_with_open_prs returns an empty map for every non-GitHub forge, and an empty map is currently interpreted as definitively no open change, which permits completion. That directly violates criterion 3 of this spec - where the bump is ambiguous, prefer Done - because unqueried forge state is ambiguous, not negative. This project has a live GitLab mirror, so the path is reachable here rather than hypothetical. Either query the configured forge, or return inconclusive and preserve Done. Raised by the codex drain reviewer on PR #2040 and recovered from the session log after the verdict was overwritten; promoted here so it is binding rather than comment-borne.
+
+  9. The regression fixture in criterion 6 must be faithful to the shape it claims to test. open_pr_for_same_spec_defers_auto_bump creates only ONE local commit, and its fake gh returns PR #1979 for every invocation without validating which spec was searched or modelling a second trailered commit. A fake that answers every query identically cannot demonstrate the lookup is spec-specific, so the test passes whether or not the code is correct. Build a two-deliverable fixture - one merged commit and one on an open PR, both carrying the same trailer - and assert the lookup was performed for that spec. Same provenance as criterion 8.
 status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:22:32.343565248Z
-modified_at: 2026-09-21T01:37:32.329342315Z
+modified_at: 2026-09-21T01:37:44.322621708Z
 req_type: Bug
 tags:
 - auto-bump
