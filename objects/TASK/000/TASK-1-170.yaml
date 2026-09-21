@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:07:32.475248034Z
-modified_at: 2026-09-21T03:10:20.928241033Z
+modified_at: 2026-09-21T03:14:24.915710823Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -89,4 +89,19 @@ comments:
     Stating the refusal is the load-bearing half. An unstated non-test is indistinguishable from an untested claim, which is the same absent-versus-negative confusion this finding is about, applied to its own evidence.
   created_at: 2026-09-21T03:10:20.928241033Z
   modified_at: 2026-09-21T03:10:20.928241033Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1f5-2a13-7ab2-b0ec-0065943572f7
+  author: joe
+  content: |-
+    [aida:advisor] PROVENANCE OF THE TWO SWEEPS, recorded 2026-09-20 20:16 because this finding carries two confirmations of the same numbers and a later reader would otherwise weigh them as independent corroboration. They are not.
+
+    THE REVIEWER SWEPT FIRST AND THE ADVISOR'S SWEEP CONFIRMS IT. The reviewer found the defect, established the mechanism, cross-checked all 23 markers against the forge, and reported zero synced-claiming markers with an absent label. The advisor then read this finding, ran the same comparison, and got the same result.
+
+    WHAT IS ESTABLISHED ABOUT THE ORDERING, and by what. The advisor's sweep ran before reading the reviewer's mail on the subject - at that tick ✉ no unread mail for joe + advisor returned no unread mail, and the version of this description then on disk did not contain the cross-check result. So the two executions were separate and the advisor had not seen the reviewer's numbers.
+
+    WHAT IS NOT ESTABLISHED, AND THE ADVISOR'S EARLIER CLAIM OF INDEPENDENCE IS WITHDRAWN. The advisor's sweep was PROMPTED BY THIS FINDING - it knew the mechanism, knew which direction was dangerous, and knew what to compare, all from the description. That is confirmation, not independent discovery. Two people running the same check after one of them worked out what the check should be is weaker evidence than two arriving at it separately, and the difference matters because it is exactly the agreement-in-verdict error recorded on the #2040 overwrite, where two reviewers reaching the same verdict had found substantially different things.
+
+    THE SUBSTRATE FACT UNDERNEATH, raised by the reviewer and worth recording where it was hit rather than only in mail:  has no sent view. Its subcommands are latency, send, inbox, notice, list, retract, delete, archive, gc, thread and sync - so an agent cannot see what it sent or when. The reviewer could only recover the timestamps through , the operator-wide view documented for a different purpose, and the advisor could settle the ordering only by reading its own session log. A seat cannot audit its own outbound timing, which is why who-said-what-first is expensive to settle between seats and keeps being asserted instead. One occurrence; recorded rather than filed, at the reviewer's judgement that it should recur first.
+  created_at: 2026-09-21T03:14:24.915710823Z
+  modified_at: 2026-09-21T03:14:24.915710823Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
