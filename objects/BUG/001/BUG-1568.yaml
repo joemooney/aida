@@ -1,0 +1,46 @@
+id: 01a0c590-f406-70b0-8b36-4b799402f01f
+spec_id: BUG-1568
+agreed_id: BUG-1568
+title: 'The overnight drain has shipped nothing for 17.5 hours: every launch dies on a drain lock held by a process started seconds earlier, and the error is reported as a phase-2 failure of the first batch m'
+description: |-
+  THE AUTONOMY LOOP HAS BEEN DEAD SINCE 02:24 TODAY AND EVERY SURFACE REPORTED IT AS HEALTHY WORK IN PROGRESS.
+
+  MEASURED. From .aida/events.jsonl: the last QueueDrained with shipped greater than zero is 2026-09-21T02:24:06Z. Since then there are 221 CONSECUTIVE QueueDrained events with shipped=0, shelved=0, one roughly every four minutes. Over the same window the launcher log records a launch every cycle, each reading "launched night-0920 with 24 approved".
+
+  THE ACTUAL ERROR, from the drain logs rather than the events:
+
+      error: "a drain is already running (pid 1910690, started 2026-09-21T19:59:15Z,
+              cmd `queue work --auto-complete --batch night-0920`, host imac)."
+
+  Of the 40 most recent drain logs, 40 died this way. Each ran about 6 seconds and reported "0 shipped, 0 shelved, 0 skipped, 0 iterations".
+
+  IT IS COLLIDING WITH ITSELF, NOT WITH A COMPETING DRAIN. For each log, the reported holder's start timestamp falls in the SAME MINUTE as that log's own launch: the 12:59 log reports a holder started 19:59:15, the 12:55 log one started 19:55:12, and so on for twelve consecutive cycles. Every one of those holder pids is now dead. There is no long-lived squatter; each launch is blocked by something that came into existence seconds before it and then vanished.
+
+  THE MISLEADING PART, AND IT IS WHY THIS SURVIVED A DAY. The lock error is not what the drain reports as its outcome. The summary says:
+
+      x batch `batch:night-0920` drain stopped at BUG-1462 (phase 2 failed)
+      -> the rest of the batch is untouched - fix BUG-1462 (hint above), then re-run
+
+  So the failure is attributed to the first pickable batch member and framed as a phase-2 failure of that spec. Anyone reading the summary goes to debug BUG-1462, which has nothing wrong with it. The lock error appears earlier in the log and is not surfaced in the summary at all.
+
+  SECOND-ORDER DAMAGE: this loop has produced 230 drain log files, holds the machine at a steady load that correlates with BUG-1567's flaky test firing, and every cycle re-tags and re-reads the batch.
+
+  Acceptance:
+  - A drain that cannot start because the lock is held reports THAT as its outcome. Attributing a lock refusal to a phase failure of an unrelated spec is the defect that made this invisible; a wrong explanation is worse than no explanation because it routes the reader away.
+  - The self-collision is diagnosed: identify what takes the lock seconds before the launched drain reaches it, whether that is a re-exec, a child invocation, or the lock being written before the holder is fully live. Fix that, or make lock acquisition wait rather than fail when the holder is the same logical run.
+  - A stale lock whose holder pid is dead does not block a new drain. Every holder observed here was dead by the time anyone looked.
+  - Demonstrated by a drain that ships at least one spec from the batch, not by the absence of the error.
+
+  NOT IN SCOPE: the launcher script. It is behaving correctly given what the CLI tells it - drain status reports none, so it launches. The defect is that launching then fails for a reason the tooling misattributes.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T20:03:26.342175685Z
+modified_at: 2026-09-21T20:03:26.342175685Z
+req_type: Bug
+tags:
+- aida:queue
+- drain
+- orchestrator
+- parent:EPIC-62
