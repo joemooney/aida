@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T18:01:47.501882420Z
+modified_at: 2026-09-21T18:07:46.359875782Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1262,6 +1262,28 @@ comments:
   created_at: 2026-09-21T18:01:47.501882420Z
   modified_at: 2026-09-21T18:01:47.501882420Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c527-0eb7-7013-86fa-1024c90cf019
+  author: joe
+  content: |-
+    [aida:advisor] RETRACTION IS NOT NON-PUBLICATION, AND THIS DISTINCTION MUST NOT BE LOST WHEN THIS SPEC CLOSES. Found by claude-reviewer-1 while approving PR #2042; recorded here so nobody later reads this spec as having closed the publication hole.
+
+    Finding 0 offered two remedies — PREVENT CREATION, or CLOSE a premature PR. The implementation took the second, which satisfies the criterion as written, and the closure notice is well built: it states that a machine closed it, why, and what to do next, which is what stops someone reopening it as a mistake.
+
+    BUT CLOSING A PR DOES NOT UNPUBLISH IT, AND THIS REPO IS PUBLIC. A closed PR keeps its diff, its commits, its body and its timeline permanently visible in the UI and the API. So the two possible readings of this spec's purpose diverge:
+
+        "orchestrated implementers do not PUBLISH unreviewed work"     -> MITIGATED, not achieved
+        "unguarded work does not SURVIVE AS AN OPEN PR"                -> achieved fully
+
+    The criterion's own wording admits the retraction path, so this is not a defect in the implementation and it did not block the review. It is a statement about what the shipped thing does and does not buy.
+
+    TWO CONSEQUENCES, recorded deliberately:
+    1. DO NOT RECORD THIS SPEC AS HAVING CLOSED THE PUBLICATION HOLE. It reduces exposure from "indefinitely open and inviting review" to "closed but permanently readable". On a PUBLIC repository that difference matters, and the standing rule for this repo is that employer or sensitive content is scrubbed BEFORE it lands — retraction does not undo a push.
+    2. IF THE STRONGER REMEDY IS TAKEN LATER — preventing creation rather than closing after — IT SHOULD START FROM THIS RECORDED REASON rather than from scratch. The reason the weaker one was chosen is not that the stronger was rejected; it is that the criterion permitted either and this one shipped first.
+
+    ALSO NOTED FOR THE MERGE: PR #2042 carries BOTH this spec's work and BUG-1420's, so a trailer decision at merge affects two specs, not one.
+  created_at: 2026-09-21T18:07:46.359875782Z
+  modified_at: 2026-09-21T18:07:46.359875782Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
   implemented: true
