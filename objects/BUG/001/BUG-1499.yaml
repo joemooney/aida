@@ -1,0 +1,38 @@
+id: 01a0c165-9632-7962-a6fd-4c5a8716a60e
+spec_id: BUG-1499
+agreed_id: BUG-1499
+title: A merge-hold placed as a bare label has no marker, so no other seat can clear it through the supported surface and it carries no reason
+description: |
+  Ten open PRs currently carry the `aida:merge-hold` LABEL with no corresponding marker in `.aida/merge-holds/`, so the required check is red with nothing in the substrate to release it. Every one of the ten was placed by this advisor seat using `gh pr edit --add-label` directly.
+
+      PR-1974 PR-1978 PR-2003 PR-2014 PR-2019 PR-2030 PR-2032 PR-2033 PR-2034 PR-2038
+
+  The reverse also exists: `.aida/merge-holds/` holds ten markers, and the two sets overlap in none of these cases.
+
+  THIS IS SELF-INFLICTED AND THE TOOL WARNS ABOUT IT. `aida merge-hold --help` documents the marker as the substrate object and the surface for clearing it. I reached for `gh pr edit --add-label` because it is what makes the required check go red — which it does, immediately and visibly — and never wrote the marker that `aida merge-hold clear` would look for. The label is the enforcement; the marker is the record; I kept using the one with the fast feedback.
+
+  WHY IT MATTERS RATHER THAN BEING TIDINESS. A second seat cannot clear a label-only hold through the supported surface: `aida merge-hold list` will not show it, and `aida merge-hold clear <pr>` has nothing to remove. Today a reviewer seat correctly declined to clear two of these by hand — once on #2024, once on #2038 — because clearing another seat's hold on one's own judgement is precisely what the gate prevents. So a label-only hold is releasable only by the seat that placed it, via the same out-of-band path, and only while that seat is still around.
+
+  It also means the hold carries NO REASON. A marker file holds the text explaining why the PR is held; nine of the ten markers that do exist carry a sentence naming the finding. A bare label carries nothing, so a seat encountering one has to search the mailbox or the spec comments to learn why it cannot merge.
+
+  ACCEPTANCE
+  1. Establish whether `aida merge-hold set` (or equivalent) exists and writes BOTH the marker and the label. If it does, the defect is entirely that seats reach for `gh` — and the remedy is discoverability, not code.
+  2. If both objects are required for a correct hold, make one path write both. A hold placed by any supported means should not be able to produce the split state.
+  3. `aida merge-hold list` reports label-only holds as well as marker-only ones, naming which half is missing. Today it can only see one of the two failure modes.
+  4. Decide what `clear` does with a label-only hold: refuse with guidance, or clear the label too. Refusing is defensible; silently succeeding while the label remains is not.
+  5. Clean up the ten existing instances, or state why not. They are all mine and all still holding.
+
+  NOT IN SCOPE: changing which object the required check reads. The gate keying on the label is correct — it is the half the forge can see.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T00:37:35.410903749Z
+modified_at: 2026-09-21T00:37:35.410903749Z
+req_type: Bug
+tags:
+- batch:night-0920
+- coordination
+- drain-safe
+- from:session-0920
+- merge-safety
