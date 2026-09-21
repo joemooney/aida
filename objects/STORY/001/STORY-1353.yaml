@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:02:54.706318011Z
-modified_at: 2026-09-20T03:51:35.716219284Z
+modified_at: 2026-09-21T05:22:09.124377934Z
 req_type: Story
 tags:
 - authority
@@ -144,6 +144,55 @@ comments:
     Build is otherwise clean: 5093 passed, one failed. The `lib.exe` errors earlier in the log are the known report-only cross-target check and are not what failed the job — the failing step is `Run tests`.
   created_at: 2026-09-20T03:51:35.716219284Z
   modified_at: 2026-09-20T03:51:35.716219284Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c26a-1c64-7570-a899-f7b87387bb3d
+  author: joe
+  content: |-
+    [aida:advisor] HOLD CLAUSE (b) WITHDRAWN. My design objection was wrong and the evidence
+    is in the code, not in an argument.
+
+    MY HOLD SAID: "the split classifies NeedsAttention -> InProgress as disposition, which
+    blocks the reviewer-finding-to-rework cycle this spec was written to unblock."
+
+    WHY IT IS WRONG. has_advisor_authority() at lib.rs:44148, comment at 44152-44156
+    (trace BUG-460):
+
+        a CLI op spawned by (or under) a live --auto-complete drain inherits
+        AIDA_AUTO_COMPLETE + the run token, so orchestrator::detect corroborates it against
+        the drain-state file. Grant it authority so --no-human drains can auto-queue the
+        review + let the phase children mutate; a bare headless agent (no live orchestrator)
+        stays gated.
+
+    So the gate does NOT block the rework cycle. An orchestrated drain has authority, and the
+    advisor seat has authority — those are the two paths the reviewer-finding-to-rework cycle
+    actually runs on. What the gate blocks is a bare headless agent and a non-advisor seat,
+    which is what it is for.
+
+    CORROBORATED BY TONIGHT RATHER THAN BY READING ALONE: I ran `aida queue rework BUG-1442`
+    and `aida queue rework BUG-1460` successfully from the advisor seat. The product seat was
+    refused on the same transition twice. That is the gate behaving exactly as designed, and
+    I mistook the refusal reports for evidence that the cycle was blocked.
+
+    IT ALSO POINTS THE SAME WAY AS AN ACTIVE REVIEWER FINDING. BUG-1470's blocking F1 is that
+    `handle_queue_rework` performs a gated Draft -> Approved transition with NO authority
+    check at all, reopening STORY-566 on a different verb. This spec ADDS the gate that
+    finding demands. I was holding one spec for adding the check that another spec is being
+    reworked for omitting.
+
+    CLAUSE (a), "build red", is also stale — green at 20881480b8.
+
+    THE HOLD REMAINS, FOR A DIFFERENT AND NARROWER REASON, and I rewrote the marker to say
+    so rather than clearing it: there is no independent reviewer verdict for PR #1989, and
+    the author is a seat that has a commit on the branch. It clears on a reviewer verdict,
+    not on the advisor. Replacing a withdrawn objection with no gate at all would leave a
+    product-authored PR one command from merging with nobody having reviewed it.
+
+    RECORDED BECAUSE IT COST SOMETHING: the product seat fixed two mechanical CI failures
+    before reading the hold text, and in doing so pinned the contested semantics into a test.
+    Had I stated clause (b) as a question to them rather than as a hold reason, that cost
+    would not have been incurred. A hold reason is read as settled; a question is not.
+  created_at: 2026-09-21T05:22:09.124377934Z
+  modified_at: 2026-09-21T05:22:09.124377934Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
