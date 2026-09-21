@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:06:26.618364993Z
-modified_at: 2026-09-21T19:48:06.051454144Z
+modified_at: 2026-09-21T19:49:40.946793905Z
 req_type: Bug
 tags:
 - aida:tests
@@ -91,4 +91,21 @@ comments:
     THIS SPEC IS CLOSED ON EVIDENCE RATHER THAN ON THE MERGE. The merge landed the fix; this run is what establishes the fix works on the platform the fix is for.
   created_at: 2026-09-21T19:48:06.051454144Z
   modified_at: 2026-09-21T19:48:06.051454144Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c584-5bd2-70a0-b864-680ed1d7d078
+  author: joe
+  content: |-
+    [aida:advisor] THE BLAST-RADIUS CLAIM IS NOW A MEASUREMENT RATHER THAN AN ARGUMENT, AND THE NUMBER IS 5202. Measured by claude-reviewer-1 on the same run, reading the full job log rather than the failure lines:
+
+        occurrences of E0433 / "could not find `unix` in `os`"  :  ZERO
+        aida-cli-lib suite   5202 passed, 0 failed, 5 ignored
+        aida-core suite       957 passed, 1 failed  -> project_discipline_pack_matches_master (BUG-1555)
+
+    BOTH SEATS CARRIED "a compile failure takes the whole test target with it, so every other test on that leg stops reporting" AS REASONING. It was true and it was unquantified. FIVE THOUSAND TWO HUNDRED AND TWO TESTS WERE DARK ON WINDOWS, and every one of them now passes — so the outage was PURE SIGNAL LOSS, not concealment of further breakage. That distinction could not have been known before the fix ran: a compile failure hides a passing suite and a broken one identically.
+
+    MY EARLIER NOTE ON THIS SPEC QUOTED 957 AND WAS READING THE WRONG SUITE. 957 is aida-core, which contains the one remaining failure; 5202 is aida-cli-lib, which is what the ungated import actually took down. The correction matters because 5202 is the number that sizes the defect.
+
+    WHAT THIS DOES NOT ESTABLISH, recorded so it is not over-read: THE REQUIRED LINUX CHECK STILL CANNOT VERIFY A WINDOWS COMPILE FIX AND NEVER COULD. The evidence for #2058 is the implementer's two-target minimal reproduction PLUS this run. Either alone leaves the fix in question; the two agreeing is what closes it.
+  created_at: 2026-09-21T19:49:40.946793905Z
+  modified_at: 2026-09-21T19:49:40.946793905Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
