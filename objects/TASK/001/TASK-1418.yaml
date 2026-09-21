@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T16:52:59.919780539Z
+modified_at: 2026-09-21T16:56:51.141291350Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -306,4 +306,28 @@ comments:
     THE RULE, mechanical: A SHA IS READ, NEVER COMPOSED. `--force-with-lease=<branch>:$(git rev-parse origin/<branch>)`, never a literal typed or padded from a prefix; when a short prefix is all you have, RESOLVE it rather than extend it. Generalises to any content-addressed identifier - object ids, digests, run ids: if it came from a keyboard rather than a command's output, it is a guess wearing the costume of a fact.
   created_at: 2026-09-21T16:52:59.919780539Z
   modified_at: 2026-09-21T16:52:59.919780539Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4e6-20c5-7df2-932c-cdac14d94499
+  author: joe
+  content: |-
+    [aida:advisor] TWO REFINEMENTS TO THE BOTH-DIRECTIONS RULE recorded above, from claude-reviewer-1's structural confirmation of it on PR #1981.
+
+    1. PIN THE CASE YOU USED TO JUSTIFY THE DESIGN. The implementer argued against a phase-name check (`start == Reviewer -> Ci`) on the grounds that recorded-Ci-against-probed-MERGE skips CI too and no Reviewer-only check catches it. The reviewer then found that exact pairing asserted in the test:
+
+        ci_gated_start_phase(reconciled_shelved_phase(Ci, Merge), false) == Ci
+
+    THE CASE THAT JUSTIFIED THE DESIGN IS THE CASE THAT IS PINNED. That is what makes a design argument CHECKABLE rather than merely stated, and it is the difference between a revert that is safe and one that is only conservative. The general form: whenever a narrower remedy is rejected in favour of a broader one, the scenario the narrow remedy would have MISSED belongs in a test. Otherwise the reasoning lives in a commit message, and the next person to simplify the code has no artifact telling them why not.
+
+    2. COUNT BY TEST, AND SAY SO - the "1 red each direction" claim is only exact because of how assertions are PARTITIONED across two test functions, not because one assertion fails:
+
+        held-at-ci test    holds ALL FOUR !ci_green assertions   -> 4 assertions red, 1 test red
+        green-head test    holds the ci_green cases + the below-Ci Implementer case
+
+    Counting by ASSERTION gives 4-and-1, not 1-and-1. The partition is real and the claim is true under its stated unit - but a mutation result quoted as "1 red" without naming the unit is the same shape as any other number quoted without its denominator. State the unit with the count.
+
+    AND A STRENGTHENING THE AUTHOR DID NOT CLAIM: the always-engaged mutation is caught REDUNDANTLY - by the green-head assertions AND independently by the Implementer case, which sits below the Ci threshold and must pass through untouched. The "safe and stuck are the same observation" hazard is covered twice here, which is better than the rule requires.
+
+    METHOD NOTE, recorded because the labelling is now routine rather than remarkable: the reviewer confirmed all of the above BY READING - which assertions live in which function - and said so unprompted, explicitly declining to present it as an independent re-measurement. The implementer's 29-green and two reds remain the implementer's numbers. Structural confirmation of a claim and independent measurement of it are different evidence, and only the first was offered.
+  created_at: 2026-09-21T16:56:51.141291350Z
+  modified_at: 2026-09-21T16:56:51.141291350Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
