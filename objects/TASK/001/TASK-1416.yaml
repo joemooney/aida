@@ -40,13 +40,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:40:43.370422318Z
-modified_at: 2026-09-21T08:42:55.164105035Z
+modified_at: 2026-09-21T08:42:56.926064539Z
 req_type: Task
 tags:
 - adoption-gap
 - severity:functional
 - tooling rebase stacked-pr papercut severity:cosmetic
-- zzprobe
 comments:
 - id: 01a0c321-76c7-7bc0-b085-b4bdc092df39
   author: joe
