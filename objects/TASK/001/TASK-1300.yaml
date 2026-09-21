@@ -27,12 +27,12 @@ description: |
   5. If the predicate cannot be stated precisely enough to be useful, say so with the cases that defeat it and stop, rather than shipping an approximation that reports a number nobody should trust. A negative result here is a real result and closes the question BUG-1310 could not.
 
   Split out of BUG-1310 by the advisor after three review rounds failed to converge. BUG-1310 keeps the centralization and structured-alternative work, which did ship and is verifiable.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:03:07.230562710Z
-modified_at: 2026-09-20T16:31:22.448452584Z
+modified_at: 2026-09-21T01:53:52.219008253Z
 req_type: Task
 tags:
 - batch:night-0920
