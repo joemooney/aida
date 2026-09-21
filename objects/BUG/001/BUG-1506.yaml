@@ -1,0 +1,30 @@
+id: 01a0c198-74ae-7732-bdc8-dd4c3a99e2a6
+spec_id: BUG-1506
+agreed_id: BUG-1506
+title: A spec that reaches main without ever passing through Done is never auto-bumped, so merged work sits reading Draft indefinitely
+description: |
+  The auto-bump only promotes Done to Completed. A spec that never entered the lifecycle - filed, worked and merged without passing through Done - is therefore never bumped at all, and merged work sits reading Draft indefinitely.
+
+  Observed 2026-09-20 by the reviewer seat on TASK-1302: its content was on the default branch as commit 53e3176e6e while the spec still read Draft.
+
+  THIS IS THE MIRROR IMAGE OF BUG-1454, NOT THE SAME BUG. There, the bump fires too early on the first trailered commit and hides unmerged work under Completed. Here it never fires at all and hides merged work under Draft. Both are blind spots of the same condition - "is this spec's work actually on main" - which is why they were originally filed together, and both make the open-work view lie. They are separated because BUG-1454's fix guards a bump that already runs, while this needs a bump that never starts.
+
+  WHY THIS ONE IS THE QUIETER OF THE TWO. A spec wrongly Completed at least looks finished to someone auditing finished work. A spec wrongly Draft looks like unstarted backlog, so it is read as work still to do and may be re-implemented, re-queued, or groomed by an advisor who has no way to know the code already shipped. The cost lands on whoever picks it up next.
+
+  Acceptance:
+  1. A spec whose trailered commits are already on the default branch is not left in a pre-Done status - Draft, Approved, or Planned - merely because it skipped the intermediate states. Say what status it lands in and why: Completed directly, or Done first so a human confirms.
+  2. Establish whether skipping the intermediate states is itself a defect worth blocking. If a spec can reach main from Draft, either that path is legitimate and the bump must handle it, or it is not and the gap belongs upstream at the commit or merge boundary. Decide this before implementing, since it determines whether this is a bump fix or a guard.
+  3. The BUG-1454 sweep runs in BOTH directions and reports both counts: Completed specs with an open PR referencing them, and pre-Done specs whose trailered commits are already merged. BUG-1454 delivers the first count; this spec delivers the second.
+  4. The second count is measured and recorded once, since it is currently unknown and stops being recoverable as branches are deleted.
+  5. A test covers the shape: a spec at Draft whose trailered commit is on the default branch is detected, and one whose trailered commit is only on a branch is not.
+
+  PROVENANCE. Originally added to BUG-1454 as items (a) and (b) in an advisor COMMENT on 2026-09-20 rather than in its ACCEPTANCE block. A drain implements the acceptance block, so the criteria were invisible at the rung the implementer reads and PR #2040 correctly implemented the six visible criteria and none of these. Split out here so BUG-1454 can merge without burying a real remaining deliverable behind a terminal Completed status. The misfiling is recorded in TASK-1303 as an instance of the rung class.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T01:33:09.166796821Z
+modified_at: 2026-09-21T01:33:09.166796821Z
+req_type: Bug
+tags:
+- batch:night-0920 lifecycle drain-safe from:review-pr-2040
