@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T12:34:43.299598103Z
+modified_at: 2026-09-21T12:39:39.379843256Z
 req_type: Bug
 tags:
 - agent-surface
@@ -205,6 +205,36 @@ comments:
     The green on the rebuilt fixture is not evidence until the mutation is re-run against it. That constraint is TASK-1418 and it applies here directly.
   created_at: 2026-09-21T12:34:43.299598103Z
   modified_at: 2026-09-21T12:34:43.299598103Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3fa-a873-74e0-8309-2e1cdc5466d3
+  author: joe
+  content: |-
+    STRIKE THE 2.4ms-PER-OBJECT FIGURE FROM THE COMMENT ABOVE. IT IS WRONG AND IT WILL MIS-SIZE A FIXTURE.
+
+    claude-product-1 retracted it within minutes of my recording it, unprompted, and the retraction is correct. The figure was derived by DIVISION, not measurement: 9.9s / 4226 objects. That assumes the entire 9.9s IS per-object parsing, which is the proposition the number was offered as evidence for. A true quotient and a false rate.
+
+    THEIR CONTROLLED DATA, with the regression deliberately restored:
+
+        3 objects, 1.2 MB     full load cost  +110 ms   ratio 1.79
+        500 objects, 176 KB   full load cost   +57 ms   ratio 1.68
+        real store            4226 objects, 23 MB       ~9,460 ms
+
+    A linear fit to the two controlled points gives roughly 0.08 ms/object and 0.09 ms/KB. Applied to the real store that predicts about 2.4 SECONDS against an actual 9.9. THE MODEL UNDER-PREDICTS BY ~4x.
+
+    THE DEFENSIBLE STATEMENT, which replaces the struck one: per-object and per-byte costs measured in a fresh fixture account for only about a quarter of the production cost. THE DOMINANT TERM IS UNIDENTIFIED. Nobody should size a fixture from a per-object rate - 400 objects at the struck rate yields ~30ms of signal and the regression reads as absent.
+
+    ONE CANDIDATE RULED OUT BY THE ADVISOR, measured not reasoned, 2026-09-21 05:39 MST:
+
+        aida show BUG-1442            9.89 s, 9.88 s
+        aida show BUG-1442 --no-git   9.86 s, 9.85 s
+
+    The git-linkage section is NOT the dominant cost - suppressing it entirely moves the number by ~30ms, which is inside run-to-run noise. So whatever scales with a real store and not with a tempdir lives in the store-read path, not in the git-linkage lookup. That is one hypothesis eliminated, not a cause identified, and it is recorded as such.
+
+    Context for whoever picks this up: this repo's .git is 209 MB with a 176 MB pack, and .aida-store is a worktree on the orphan branch. Those are FACTS ABOUT THE ENVIRONMENT, not a diagnosis - I am not proposing them as the cause and no one should treat them as one without measuring.
+
+    CONSEQUENCE FOR THE ACCEPTANCE TEST, and this is a live question rather than a ruling: four fixture shapes have now failed to separate a full load from a cached read against ~90ms of process startup. If the dominant cost does not exist in a tempdir, NO CI-SIZED FIXTURE CAN REPRODUCE IT, and an executable command-level latency test in CI may be unachievable rather than merely hard. What survives is the spec's OWN verification line - `aida usage --cmd show --slower-than 1000ms events` - which measures the real store under real use, where the dominant term actually exists. That instrument is already in the acceptance criteria. The answer may be that the criterion already names the right instrument and CI is the wrong place to run it.
+  created_at: 2026-09-21T12:39:39.379843256Z
+  modified_at: 2026-09-21T12:39:39.379843256Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
