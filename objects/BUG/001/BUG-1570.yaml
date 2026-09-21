@@ -36,12 +36,12 @@ description: |
   STORY-1430 (auto-completion never reads closure criteria — this split exists because a trailer
   would otherwise have closed BUG-1568 past this item), BUG-1563 (a stale lock from a dead pid
   went unnoticed for 179 hours; the dead-vs-live distinction above is the same seam).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:36:15.070702470Z
-modified_at: 2026-09-21T21:33:32.753651491Z
+modified_at: 2026-09-21T21:48:27.293484846Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -82,11 +82,26 @@ comments:
   created_at: 2026-09-21T20:52:38.882260534Z
   modified_at: 2026-09-21T20:52:38.882260534Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'RE-RECORDED TO CORRECT A FALSE PREMISE IN MY OWN PRIOR FINDING. Verdict and both findings are unchanged in substance; one stated mechanism was wrong for THIS PR and I am fixing it rather than leaving a verdict that would send the next reader to the wrong field. WHAT I GOT WRONG: my previous record said the trailer must be handled at the PR TITLE "because for a multi-commit branch the squash subject defaults to the PR title". THIS BRANCH IS ONE COMMIT (verified: git log origin/main..0842f7a182 = 1), so the default comes from the COMMIT SUBJECT here, not the title. My conclusion was unaffected - both artefacts read "(BUG-1568)", so retargeting the four trace markers alone fixes neither - but the reason I gave would have had someone checking the wrong field on this PR. THE RULE THAT ACTUALLY HOLDS, and it is stronger than the one I used: WHICH ARTEFACT SUPPLIES THE DEFAULT IS A MOVING PROPERTY OF THE BRANCH - it changes as commits are added, squashed or rebased away, and today''s three open PRs had 1, 2 and 12 commits. So the operative rule is NEVER REASON FROM THE COMMIT COUNT: set both artefacts and pass an explicit --subject at merge, which is correct under every branch shape and needs no knowledge of which one GitHub would pick. BOTH FINDINGS OTHERWISE STAND AT THIS HEAD: the binding other-direction test is still absent, and the spec attribution is still BUG-1568 for BUG-1570''s work.'
-  recovery_hint: address the review findings, move BUG-1570 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-09-21T21:33:32.753651491Z
+history:
+- id: 01a0c5f1-18fa-7310-af76-3d0b5d1abfe6
+  author: aida-auto-bump
+  timestamp: 2026-09-21T21:48:27.258312975Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0c5f1-191d-7eb2-b147-e69ab56a97d8
+  timestamp: 2026-09-21T21:48:27.293481481Z
+  agent: aida
+  commit_sha: ac831fa3938fb4fb9d6a127933724014006513d3
+  summary: 'BOTH FINDINGS ARE ADDRESSED AT e59b1d748e. Note for the record: my previous refusal was recorded at 0842f7a182, which the driver-advisor has since established was NOT this lane''s work - it was a rebase-only redo pushed by a second session that had taken the branch back and amended underneath the working lane. That is why the diff between heads was two blank lines and why the PR appeared to have ignored two findings. The refusal was correct about that head and wrong about the lane''s intent; recording it so nobody reads the earlier verdict as evidence about this implementer. F1 IS CLOSED BY THE TEST I ASKED FOR, and its reasoning is stated better than my finding stated it: a_child_that_reported_a_real_ci_failure_still_travels_the_shelvable_path, with the doc comment "Fixing the first without pinning the second would flatten every genuine shelve into Internal, which is un-shelvable, and the batch drain would stop dead". The load-bearing assertion is the exact inverse of the first test - a child that DID report an outcome must NOT be relabelled an orchestrator fault - and it asserts NOT-Internal rather than asserting a message string, so it pins the SHELVABILITY rather than the prose. The fixture builds the real sidecar bytes a CI-red child leaves ("shelved": true, phase 2) and drives classify_pipelined_child_outcome, so it exercises the classifier through its real input rather than constructing the result directly. A mutation that classified every child failure as Internal now fails this test, which was the gap. F2 IS CLOSED ON BOTH ARTEFACTS, WHICH IS THE PART THAT MATTERED: the PR TITLE reads "(BUG-1570)", the commit subject reads "(BUG-1570)", and the trace markers are now SIX occurrences of trace:BUG-1570 with zero BUG-1568. Both fields set means the default squash subject is correct whichever one GitHub picks - which is the rule that survives the branch''s commit count changing under it, and this branch''s count has changed repeatedly today.'
+  punted:
+  - 'punted: THE FIX IS RIGHT AND NARROWLY SCOPED, AND TWO THINGS NEED CORRECTING BEFORE IT LANDS. What it does is correct: a pipelined child that exits with an unrecognised code AND leaves no result sidecar previously collapsed to OrchestrationResult::failed(Phase::Ci), so the batch summary named an innocent spec and told the reader to fix it - which is why a dead drain went unnoticed for 17.5 hours. It is now FailureKind::Internal with a reason that names the child, actively denies the attribution ("NOT a phase failure"), and enumerates the three indistinguishable causes. The assertions on the message text are the right ones: they pin the DENIAL, not just the presence of words. THE CLASSIFICATION IS GATED ON "NO RESULT SIDECAR", which I checked, and that is narrow - a genuine CI failure writes a sidecar and is unaffected. So the code risk is smaller than the missing test implies; see the findings.'
+  - 'punted: RE-RECORDED AT 0842f7a182. BOTH FINDINGS REMAIN UNADDRESSED - the head moved because main advanced beneath the branch (#2060 and #2059 landed), not because the PR responded. I checked rather than assuming: comparing the two commits'' own added/removed lines, the ONLY difference is TWO BLANK LINES. Effectively a rebase. F1 IS STILL OPEN: the only test remains a_child_that_reported_nothing_is_not_blamed_on_the_spec, asserting the new behaviour in one direction. Nothing pins that a GENUINE phase-2 failure of a real spec still names that spec and stays shelvable - and FailureKind::Internal is un-shelvable (auto_complete.rs:695), so an over-broad classification converts EPIC-28''s shelve-and-continue into a full stop. A mutation classifying every child failure as Internal still passes the suite as written. The defect being fixed blames one innocent spec; over-correcting halts the drain. F2 IS STILL OPEN: the subject still reads "(BUG-1568)" and all FOUR trace markers still say trace:BUG-1568, while BUG-1570 - whose title is verbatim this PR''s subject matter - is approved and open. Merging as-is completes a spec that #2060 already completed, leaves BUG-1570 open despite being implemented, and points every future `aida why` on those lines at the wrong spec. AND THE TRAILER MECHANICS ARE NOW KNOWN PRECISELY, which changes what a strip has to target: I verified this branch''s commit count and GitHub''s default squash subject for a multi-commit branch is the PR TITLE, not the head commit''s subject. Retargeting the four trace markers fixes the code provenance; it does NOT fix the merge trailer unless the PR title or an explicit --subject is also handled.'
+  - 'punted: RE-RECORDED TO CORRECT A FALSE PREMISE IN MY OWN PRIOR FINDING. Verdict and both findings are unchanged in substance; one stated mechanism was wrong for THIS PR and I am fixing it rather than leaving a verdict that would send the next reader to the wrong field. WHAT I GOT WRONG: my previous record said the trailer must be handled at the PR TITLE "because for a multi-commit branch the squash subject defaults to the PR title". THIS BRANCH IS ONE COMMIT (verified: git log origin/main..0842f7a182 = 1), so the default comes from the COMMIT SUBJECT here, not the title. My conclusion was unaffected - both artefacts read "(BUG-1568)", so retargeting the four trace markers alone fixes neither - but the reason I gave would have had someone checking the wrong field on this PR. THE RULE THAT ACTUALLY HOLDS, and it is stronger than the one I used: WHICH ARTEFACT SUPPLIES THE DEFAULT IS A MOVING PROPERTY OF THE BRANCH - it changes as commits are added, squashed or rebased away, and today''s three open PRs had 1, 2 and 12 commits. So the operative rule is NEVER REASON FROM THE COMMIT COUNT: set both artefacts and pass an explicit --subject at merge, which is correct under every branch shape and needs no knowledge of which one GitHub would pick. BOTH FINDINGS OTHERWISE STAND AT THIS HEAD: the binding other-direction test is still absent, and the spec attribution is still BUG-1568 for BUG-1570''s work.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T21:48:27.257298287Z
+  completion_sha: ac831fa3938fb4fb9d6a127933724014006513d3
