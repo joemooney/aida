@@ -19,12 +19,12 @@ description: |-
   - The handler threads it onto Message.subject.
   - The read_inbox response shape and its documented description include subject.
   - A test covers an MCP send-with-subject then read-inbox roundtrip that observes the subject (the existing mcp_mailbox_send_then_read_inbox_roundtrip test does not).
-status: InProgress
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:43:54.000177243Z
-modified_at: 2026-09-21T04:18:56.437982756Z
+modified_at: 2026-09-21T16:58:36.507867542Z
 req_type: Bug
 tags:
 - agent-ux mailbox mcp parity from:review-pr-1976
