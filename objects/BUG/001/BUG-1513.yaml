@@ -1,7 +1,7 @@
 id: 01a0c1c0-a44d-7ab1-8be7-8527c5e42822
 spec_id: BUG-1513
 agreed_id: BUG-1513
-title: aida queue list --for reviewer returns an implementer row and counts it, so the declared count disagrees with the filter and two careful counts cannot be reconciled
+title: aida queue list --for <role> passes the caller's OWN rows through regardless of role and counts them, so the seat that can see the bug is not the seat qualified to report it
 description: |-
   `aida queue list --for reviewer` returns a row whose for_role is `implementer`. The declared count includes it, so the command's own header disagrees with its own filter, and two people counting carefully get different right answers.
 
@@ -52,7 +52,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:17:02.797763307Z
-modified_at: 2026-09-21T02:22:54.509018799Z
+modified_at: 2026-09-21T02:22:58.515047008Z
 req_type: Bug
 tags:
 - batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
