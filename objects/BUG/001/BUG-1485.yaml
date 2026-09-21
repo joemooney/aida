@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-21T04:52:20.401040214Z
+modified_at: 2026-09-21T04:54:41.376976930Z
 req_type: Bug
 tags:
 - drain-safe
@@ -230,6 +230,35 @@ comments:
   created_at: 2026-09-21T04:52:20.401040214Z
   modified_at: 2026-09-21T04:52:20.401040214Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c250-f7e0-7391-bd16-854fd03f7d6b
+  author: joe
+  content: |-
+    FRESH OCCURRENCE OBSERVED LIVE 2026-09-20 21:47-21:53 local, with full evidence. This is the fifth, and it is the cleanest recorded instance so far because the whole run is in the event log.
+
+    The advisor dispatched BUG-1442 into the sequential rework lane. Raw events:
+
+      04:47:00.510  spec=BUG-1442  run_uuid=01a0c249-e8b3-7651-a356-baa1ffb575aa  PhaseEntered idx=1 implementer
+      04:52:57.180  spec=BUG-1442  run_uuid=01a0c249-...                          PhaseEntered idx=2 ci
+      04:53:09.906  spec=BUG-1442                                                 PhaseDonePr pr=2030
+
+    BUG-1442 own PR is 2027 on branch bug-1442-work. PR 2030 is on branch bug-1485-work -- a different spec.
+
+    WHAT ACTUALLY HAPPENED, and the distinction matters because the first reading is worse than the truth. PR 2030 head moved from 8ba48f5b98 to 05969aa397 at 04:52:42Z, inside the BUG-1442 implementer window. The new commit is
+
+      05969aa397  [AI:codex] test(orchestrator): reproduce lease handoff lifecycle (BUG-1485)
+
+    That is GENUINE BUG-1485 work, correctly trailered, on BUG-1485 own branch. No code went to the wrong place and nothing needs reverting. The defect is ATTRIBUTION, not contamination: a run whose lease is BUG-1442 executed a BUG-1485 implementer session and bound its phase-done PR to 2030.
+
+    CONSEQUENCES, both live:
+    1. BUG-1442 advances toward CI and reviewer against PR 2030, a PR that is not its own. Its real PR 2027 is untouched -- still head 6c692a496b, last updated 19:46, carrying the CHANGES REQUESTED that shelved it.
+    2. BUG-1485 receives a commit produced under another spec lease, so its own run accounting does not show the work.
+
+    This is the same shape as the stranded-pushed-work occurrence already recorded here: the orchestrator could not match its child session to its lease. What is new is that this time the child did real work for the OTHER spec rather than none, so nothing failed loudly.
+
+    Relevant to fix design: capture_phase_done_pr sets phase_done_pr from self.pr_number, so whatever resolved pr_number returned 2030 during a BUG-1442 run. That resolution is the place to look. trace:BUG-1485
+  created_at: 2026-09-21T04:54:41.376976930Z
+  modified_at: 2026-09-21T04:54:41.376976930Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
