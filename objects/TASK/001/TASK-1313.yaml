@@ -284,17 +284,45 @@ description: |
       2026-06-07   3
       2026-06-08   1     (2026-06-10 1, 2026-06-11 3, 2026-06-12 1)
 
-  THE DATING IS EXACT RATHER THAN A PROXY, and the reason is worth stating: these are
-  last-touch commit dates, and a spec is only IN this set if its description is STILL
-  flattened. Any later write by a non-flattening path would have restored block form and
-  removed it from the set. So last-touch IS the date the flattening path last wrote that
-  spec.
+  THE DATING ABOVE IS AN UPPER BOUND, NOT THE FLATTENING DATE. *** The claim first
+  written here — that last-touch IS the flattening date, because any later write by a
+  non-flattening path would have restored block form — IS FALSE. Reviewer's correction,
+  verified by the driver advisor. ***
 
-  WHAT IT SHOWS: the path has been in use since at least 2026-05-31, with a heavy early
-  cluster (44 of 78 in the first four days), a long thin tail through June and July, near
-  silence in August, and a resurgence this month culminating in SEVEN TODAY. So it is
-  neither a new habit nor a dormant one — it is a long-running path that is currently
-  active, which is consistent with the six damaged instances clustering today.
+  THE ASSUMPTION THAT FAILS: that an ordinary edit rewrites the description as a block
+  scalar. It does not. THE WRITER PRESERVES THE EXISTING SCALAR STYLE, so a flattened
+  description stays flattened through any number of later edits, and membership in the 78
+  survives ordinary writes.
+
+  Measured on the corrupted specs — flattening-entry commit versus last-touch commit:
+
+      BUG-1106     entry 09-12 10:23:10   last 09-12 10:23:30    8 commits
+      BUG-1111     entry 09-12 13:00:44   last 09-12 13:00:57
+      BUG-1310     entry 09-20 07:04:15   last 09-20 07:44:49   28 commits
+      BUG-1450     entry 09-20 17:29:03   last 09-20 17:40:31
+      BUG-1452     entry 09-20 16:51:27   last 09-20 18:15:25   20 commits
+      STORY-1405   entry 09-20 17:51:50   last 09-20 18:29:06   11 commits
+
+  Six of six differ, by 13 seconds to 84 minutes, with 8 to 28 commits per file after
+  flattening — every one preserving the quoted form.
+
+  WHAT SURVIVES AND WHAT DOES NOT:
+
+      SURVIVES   today's seven, dated BY CONTENT rather than by last-touch:
+                   BUG-1310 07:04   BUG-1458 10:04   BUG-1473 11:23   BUG-1488 13:29
+                   BUG-1452 16:51   BUG-1450 17:29   STORY-1405 17:51
+                 All seven genuinely entered today; the skew moved none of them out of the
+                 day. The live-producer conclusion is unaffected.
+      SURVIVES   the earliest instance is at least 2026-05-31.
+      DOES NOT   the middle of the curve. A spec flattened in May and edited since carries
+                 its EDIT date, so the May/June cluster is a LOWER bound and the June-July
+                 tail may be inflated by ordinary edits to older flattened specs.
+
+  So the shape is reliable at the ends — long-running, currently active — and unreliable
+  between them. Only content dating settles the middle, at one git walk per spec; that is
+  worth spending only if the frequency distribution matters to the investigation. The two
+  facts that carry the argument are both confirmed by content: earliest at least 05-31, and
+  seven entered today.
 
   WHAT THIS DOES NOT ANSWER: whether one seat or several run it. Every commit is subject
   `update <SPEC>` authored as the human (BUG-1533), so the 78 cannot be attributed. Dating
@@ -304,7 +332,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T06:06:02.069609384Z
+modified_at: 2026-09-21T06:08:25.310825609Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
