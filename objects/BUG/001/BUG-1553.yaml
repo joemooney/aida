@@ -1,0 +1,44 @@
+id: 01a0c485-0e45-74e1-80cb-82609d5ac626
+spec_id: BUG-1553
+agreed_id: BUG-1553
+title: aida ps cannot distinguish a seat that is working, a seat blocked on a human approval gate, and a seat that has exited - and the blocked one is the only state a human can fix
+description: |-
+  `aida ps` REPORTS TWO LIVENESS OUTCOMES - live, or flag-only/STALE - BUT THERE ARE AT LEAST THREE STATES A SEAT CAN BE IN, AND THE THIRD IS THE ONE A HUMAN CAN FIX.
+
+      A. working, session registered                 -> live
+      B. working INTERACTIVELY, no registered session -> flag-only
+      C. ALIVE BUT BLOCKED on a human approval gate   -> flag-only
+      D. session exited, flag is lying                -> flag-only
+
+  B, C and D print the same row. A reader cannot tell a correct flag from a stale one from a seat sitting on a prompt nobody has answered.
+
+  THE INCIDENT, 2026-09-21. The advisor observed STORY-1422 flag-only for ~20 minutes with no live session and no reply from the seat. Two readings were considered - B and D - and neither could be eliminated from the substrate, so the advisor declined to clear the flag (correctly: clearing under reading B destroys a real lease) and asked the seat by mail. The seat answered B.
+
+  THEN THE SEAT CORRECTED ITSELF: the true cause was C. A permission prompt had been waiting on the operator's approval the entire time. The session was alive and blocked - neither working nor gone - and the advisor's list of possible states did not contain the true one.
+
+  WHY C IS THE MOST IMPORTANT OF THE THREE TO SURFACE, and the reason this is worth fixing rather than documenting:
+    - B needs nothing. The seat is working; the flag is right.
+    - D needs a sweep, and there is already tooling and judgement around stale flags.
+    - C NEEDS A HUMAN, RIGHT NOW, AND NOBODY IS TOLD. The work is stopped, the fix is one keystroke by a person who does not know they are the blocker, and the substrate renders it identically to a seat that is fine and a seat that is dead.
+
+  An hour and a half of a seat's time was lost to C in this instance, and it was found by the operator mentioning it in conversation - not by any surface.
+
+  THIS IS THE PRIN-5 SHAPE APPLIED TO LIVENESS: a surface computing a verdict over what it can see (is there a registered session?) rather than over what it needs to distinguish (is this seat working, waiting on me, or gone?). Absent evidence - no session row - is rendered as one outcome when it covers three.
+
+  ACCEPTANCE:
+  1. `aida ps` distinguishes at least: live-with-session; flag-only-BLOCKED (a seat alive and waiting on a human gate); and flag-only-UNKNOWN (no session, no evidence of a live process). The blocked state must be visually distinct, not a footnote.
+  2. The BLOCKED state names WHO is being waited on where that is knowable, since the whole value is telling the human they are the blocker.
+  3. If blocked-ness cannot be detected reliably, the surface says SO - "cannot determine whether this seat is blocked or exited" beats printing the same row for both. A three-state relation with an explicit cannot-determine is the PRIN-5-conforming answer and is preferable to a confident two-state one. See BUG-1546 for the same three-state move at the row surface.
+  4. `aida awaiting` surfaces a blocked seat to the human whose approval is pending, if that is knowable. A blocked seat is by definition something awaiting a person.
+  5. A test pins that the three states render differently, including the cannot-determine case.
+
+  OUT OF SCOPE: the orphan-flag conditions on BUG-1420, BUG-1461 and BUG-1532. Those are specs whose flags are stale; this is about the SURFACE being unable to tell stale from blocked from fine. Fixing this makes those easier to triage but is not the same work.
+
+  PROVENANCE: claude-product-1 identified state C after the operator supplied the cause, and explicitly declined to file, judging that the advisor had the better view of whether it was distinct from the orphan-flag conditions. It is distinct: those are instances, this is the instrument.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T15:10:49.413002836Z
+modified_at: 2026-09-21T15:10:49.413002836Z
+req_type: Bug
