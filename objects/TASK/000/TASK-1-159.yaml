@@ -1,22 +1,26 @@
 id: 01a0c17d-8f51-7151-95ff-295ea30594af
 spec_id: TASK-1-159
-title: Repeated description edits via the shell-argument form accumulate escape characters into the acceptance list
-description: |-
-  Repeated edits to a long description through the shell-argument form accumulate escape characters, one doubling per round, until literal backslash-quote lines sit interleaved with the acceptance criteria.
+title: 'Round-tripping a description through a display surface corrupts it: the escape doubling came from the READ path, not the write'
+description: |
+  CORRECTED 2026-09-20 18:10. This finding was filed with the wrong cause. The original text blamed shell quoting in the description-as-argument form of the edit verb, and recommended writing from a file instead. That recommendation was already being followed when the corruption happened, so it would have prevented nothing.
 
-  Observed once, on TASK-1303, 2026-09-20. Five corrupted lines inside the acceptance list, in a 1-3-7-15 backslash progression that is characteristic of re-escaping an already-escaped body on every write rather than a one-off quoting slip. A store-wide sweep found no second instance, which is why this is an observation and not a bug.
+  THE ACTUAL CAUSE IS THE READ, NOT THE WRITE. A description was repeatedly edited by reading the current text out of the DISPLAY surface, transforming it with sed, and writing it back from a file. The display surface escapes for presentation and has no inverse. The extraction captured everything after the description marker INCLUDING the YAML string's closing quote, and converted escaped newlines to real ones without unescaping the quotes. Each round trip therefore appended the trailing quote as a fresh line and doubled every previous one, producing a 1-3-7-15-31 backslash progression across five round trips.
 
-  Mechanism: passing the body as a shell argument routes it through shell quoting on every write. The same command already offers two forms that skip that path entirely, reading the body from a file or from stdin, and a body written through either lands byte-clean.
+  Observed once, on TASK-1303, 2026-09-20: five escape-only lines sitting between binding acceptance criteria, where an implementer reads them as part of the contract. A store-wide sweep found no second instance. Now repaired.
 
-  Why it is worth capturing at one instance even so: the corrupted lines land between binding acceptance criteria, where an implementer reads them as part of the contract, and nothing in the write path reports that it happened. The practice to adopt now is that a long description is never written through the shell-argument form.
+  THE PRACTICE TO ADOPT: never round-trip a description through a display surface. Anything reading a description in order to rewrite it must read the stored form - the canonical YAML through a parser. Writing from a file is good practice for other reasons and is not the protection here.
 
-  Promote if a second instance appears, or if a sweep after more editing activity finds the progression on another spec.
+  TWO THINGS THAT MAKE THIS EASY TO GET WRONG, both verified:
+    The obvious clean path does not work. The show verb accepts the json format pin, ignores it, prints the human form and exits 0. That is now filed as its own bug, and it is why the repair fell back to parsing display text in the first place - the missing machine-readable read caused the corruption rather than merely failing to prevent it.
+    The stored file is sharded by count, not fixed at the 000 directory the project documentation uses in its example path. TASK-1303 lives under 001 because 000 filled at a thousand entries. Someone following the documented path literally concludes the file is missing.
+
+  Promote if a second instance appears. The underlying enabler is being fixed separately; this finding records the practice.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:03:46.513817918Z
-modified_at: 2026-09-21T01:03:46.513817918Z
+modified_at: 2026-09-21T01:10:27.288146663Z
 req_type: Task
 tags:
 - from-advisor:general
