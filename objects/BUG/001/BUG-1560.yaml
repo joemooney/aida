@@ -1,0 +1,44 @@
+id: 01a0c509-4f9f-7643-850a-37da86263bed
+spec_id: BUG-1560
+agreed_id: BUG-1560
+title: The stale-review-flip sweep excludes Draft at three sites for the same unexamined reason BUG-1543 just fixed in its sibling - the exclusion is by omission, not by judgement
+description: |
+  THE STALE-REVIEW-FLIP SWEEP HAS THE SAME Draft BLIND SPOT BUG-1543 FIXED IN ITS SIBLING, AT THREE SITES — AND NOBODY HAS DECIDED WHETHER IT SHOULD.
+
+  Found by claude-reviewer-1 2026-09-21 while approving PR #2054 (BUG-1543). Two of the three filters verified independently by the advisor against main after that merge.
+
+  THE SITES, enumerated rather than named as a class, because naming the class is how a half-fix ships with both sides calling it done:
+
+      aida-cli-lib/src/lib.rs:62552   stale-review-flip candidate selection
+                                      `matches!(review_story.status,
+                                          RequirementStatus::Approved | RequirementStatus::InProgress)`
+                                      CONFIRMED at main
+      aida-cli-lib/src/lib.rs:63029   apply_stale_review_flip's re-check
+                                      `matches!(r.status,
+                                          RequirementStatus::Approved | RequirementStatus::InProgress)`
+                                      CONFIRMED at main
+      aida-cli-lib/src/lib.rs:64261   the write loop that sets Completed
+                                      reported by the reviewer; the advisor's confirmation at this
+                                      site is partial — the surrounding lines show the write, not
+                                      the filter, so whoever picks this up must locate the guard
+                                      governing this loop rather than trusting the line number
+
+  WHY IT IS THE SAME DEFECT. This sweep selects the SAME spec population as the one BUG-1543 just fixed — it finds review stories through `parse_review_story_pr_number` — and applies the SAME `Approved | InProgress` filter, excluding Draft for the same reason: nobody wrote the filter with Draft in mind. BUG-1543's measured population showed exactly one Draft review story stranded against a terminal PR (STORY-1362, PR #1986, merged 2026-09-20T17:54:33Z), so the case is not hypothetical in the sibling either.
+
+  THE FINDING IS NOT "WIDEN IT" — IT IS THAT THE DECISION HAS NOT BEEN MADE. Draft may legitimately be excluded from a stale-review FLIP where it was not from a stranded-PR RESOLUTION; the two sweeps do different things to the spec they touch. The reviewer's framing, which is the point: THE SIBLING IS UNWIDENED BY OMISSION, NOT BY JUDGEMENT. BUG-1543's reasoning either transfers or it does not, and nobody has looked.
+
+  Acceptance:
+  - Decide, per site, whether Draft belongs in the filter, and RECORD THE REASONING either way. A decision to exclude Draft is a fine outcome and must be written down; leaving it excluded by omission is not.
+  - If widened: widen ALL THREE sites together. BUG-1543's own review established that widening only the collector and not apply's re-check yields a SILENT NO-OP — the exact half-fix this shape invites — and that was caught only because the reviewer looked for it specifically.
+  - DEMONSTRATE-IT-FIRES, RED-FIRST, if widened: a Draft review story against a terminal PR must fail before the change and pass after, with the failure text quoted.
+  - OPPOSITE-DIRECTION FALSIFIER, BINDING: a Draft review story whose PR is still OPEN must be left alone. Without it, a sweep that flipped EVERYTHING would satisfy every happy-path assertion. This is the assertion most people skip and it is the one BUG-1543's implementation got right.
+  - Carry a non-regression control at the pre-existing statuses (Approved, InProgress) so the widening is shown not to change them.
+
+  Related: BUG-1543 (the sibling, fixed at #2054), TASK-1296 (the original stranded Review-PR sweep), BUG-1432.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T17:35:16.895737820Z
+modified_at: 2026-09-21T17:35:16.895737820Z
+req_type: Bug
