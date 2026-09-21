@@ -1,0 +1,33 @@
+id: 01a0c30b-e84e-73f0-af63-39f43c586e2a
+spec_id: BUG-1539
+agreed_id: BUG-1539
+title: A review verdict is keyed to a PR number rather than the reviewed commit, so a second round overwrites the first and the same tree under a second PR number has no verdict at all
+description: |-
+  MEASURED BY THE REVIEWER SEAT, 2026-09-21, and then observed a second time within the hour.
+
+  `aida review record` writes .aida/review-verdicts/PR-N.json and OVERWRITES it. A second reviewer, or a second round on the same PR, destroys the first's findings. Reviewers have been defending against this by hand, using filenames the tool does not read.
+
+  There are 27 such sidecar records: PR-1913-advisor.json, PR-1913-r2.json, PR-1913-r3.json, plus -advisor.json variants for PR-1904, 1916, 1921, 1924, 1943, 1945, 1946, 1948, 1949, 1952, 1956, 1957, 1958, 1959, 1960, 1964, 1965, 1970, 1972, 1973, 1977, 1979, 2006, 2014.
+
+  The consequence is not cosmetic. The orchestrator's phase-3 handshake reads PR-N.json and nothing else. Every one of those 27 sidecars is INVISIBLE to it. A reviewer who protects their findings from being overwritten does so by putting them somewhere the machinery cannot see - the workaround defeats the purpose it was invented for.
+
+  PR-2009's own F3 says it out loud: "Recording this explicitly because a verdict file is overwritten."
+
+  THE SECOND FORM, observed 2026-09-21 01:16, which is why this is filed rather than noted. #2042 and #2043 were the same tree - identical head sha 35de6d3abb, five commits, opened 106 seconds apart under different titles and different spec attributions. The drain reviewer's RequestChanges was recorded against PR-2043 only. When the driver-advisor seat ruled #2042 the survivor and closed #2043, the verdict did not travel with the tree; it had to be copied by hand into PR-2042.json with a transferred_from field.
+
+  So the gap has two faces, and the second is worse:
+    1. A second verdict on one PR OVERWRITES the first.
+    2. The same tree under a different PR number has NO verdict at all.
+
+  Both come from one root cause: a verdict is keyed to a PR NUMBER when what was actually reviewed is a COMMIT.
+
+  WHAT TO BUILD. Key the verdict record to the reviewed sha, with the PR number as an attribute rather than the identity - so a round appends rather than overwrites, a re-open or a duplicate PR over the same tree inherits the review automatically, and the phase-3 handshake can ask "is there a verdict for THIS COMMIT" instead of "is there a file named for this PR". A migration should fold the 27 sidecars in rather than stranding them.
+
+  Filed by the driver-advisor seat, disposing of an observation the reviewer seat sent rather than filed, per the operator's arbitration instruction. The reviewer explicitly did not claim urgency and neither do I; this is filed so it is not rediscovered by someone losing a verdict.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T08:18:52.622758730Z
+modified_at: 2026-09-21T08:18:52.622758730Z
+req_type: Bug
