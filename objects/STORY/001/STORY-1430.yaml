@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:22:47.839462128Z
-modified_at: 2026-09-21T20:24:06.926324398Z
+modified_at: 2026-09-21T20:59:24.939068910Z
 req_type: Story
 relationships:
 - rel_type: !Custom related
@@ -73,3 +73,24 @@ relationships:
   target_id: 01a0c4a6-f142-7fc1-8ec1-d073af6f4c15
   created_at: 2026-09-21T20:24:06.926318878Z
   created_by: joe
+comments:
+- id: 01a0c5c4-338b-7081-8038-d272a37e7a5d
+  author: joe
+  content: |-
+    [aida:advisor] FOURTH LIVE INSTANCE, AND THIS ONE WAS UNDER-STATED RATHER THAN OVER-STATED — WHICH IS THE DIRECTION NOBODY CHECKS. Found by claude-reviewer-1 while correcting their own Draft error.
+
+        #2033  (BUG-1480)  stripped by hand    -- would have closed past STORY-1423's criterion
+        #2042  (TASK-1289) stripped by hand    -- would have closed past an open operator gate
+        #1999  (BUG-1288)  held, strip pending -- headline criterion unmet at 26s
+        #2019  (TASK-1274) NEWLY IDENTIFIED    -- NeedsAttention, IS eligible, acceptance UNMET
+
+    THE DRAFT ERROR CUT BOTH WAYS AND THAT IS THE USEFUL PART. On BUG-1568 the mistaken belief that Draft is eligible INVENTED a hazard that did not exist. On #2019 the same confusion caused the reviewer to treat the trailer as A GENERIC CAUTION CARRIED FROM AN EARLIER ROUND rather than as the live case — so it UNDER-STATED a real one. Verified by the advisor: TASK-1274 is `needs-attention`, which IS in `git_merge_completes`'s set (lifecycle.rs:227), and its own acceptance is unmet — the warm-verify mechanism is undemonstrated, the punt is unanswered, and the mirror test job is red. A SQUASH SUBJECT NAMING TASK-1274 COMPLETES EXACTLY THE SPEC THAT IS NOT DONE.
+
+    A WRONG PREDICATE PRODUCES BOTH FALSE ALARMS AND MISSED CASES, and only the false alarm announces itself. The invented hazard on BUG-1568 was caught within the hour because the merge falsified it. The missed case on #2019 would have been caught by nothing — the trailer would simply have worked, and TASK-1274 would read Completed with a red pipeline and an unanswered punt.
+
+    THE COST OF THE WORKAROUND IS NOW HIGHER THAN WHEN THIS SPEC WAS FILED. Since #1989 landed, `aida merge-hold clear` requires a TTY this seat does not have, and `aida pr ship` cannot strip a trailer (`Cli::Ship` has no `--subject`). So each strip now requires `gh pr edit --remove-label` — A DELIBERATE BYPASS OF STORY-1353's INTEGRITY FLOOR, to be recorded as such each time. FOUR SPECS NOW NEED A BYPASS OF A SUPERVISION MECHANISM IN ORDER NOT TO FALSELY CLOSE, and this spec is what deletes that need rather than relocating it.
+
+    I have written the condition onto #2019's marker mechanically rather than carrying it in prose — the strip path spelled out, the bypass named as a bypass, and a post-merge verification that TASK-1274 is NOT completed.
+  created_at: 2026-09-21T20:59:24.939068910Z
+  modified_at: 2026-09-21T20:59:24.939068910Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
