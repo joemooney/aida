@@ -41,12 +41,12 @@ description: |
   - A failure occurring AFTER the implementer has pushed does not leave the spec `done` with an unshipped branch: either the PR is opened, or the spec is not marked done, or the shelve names the stranded branch and the recovery is one command.
   - The error text drops the active-lease list, or explains what a reader is meant to do with it.
   - Regression fixture reproduces both positions: a mismatch at session start (BUG-1445's 25-second shape) and a mismatch after a successful push (BUG-1442's shape).
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-21T09:21:32.796494910Z
+modified_at: 2026-09-21T19:21:33.391939819Z
 req_type: Bug
 tags:
 - drain-safe
@@ -378,12 +378,4 @@ implementation_info:
     cargo fmt --all -- --check
   implemented_at: 2026-09-20T20:38:28.859924217Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'F3 CLOSED — the rebase resolved the conflict and the PR produced its first CI, Build green 32/1. F1 and F2 both stand, established by content: the only change in either rebased commit is an import line, and F1 re-verified against the code at the new head.'
-  recovery_hint: address the review findings, move BUG-1485 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-09-21T09:21:32.796494910Z
 interface_changes: {}
