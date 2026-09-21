@@ -1,0 +1,46 @@
+id: 01a0c581-f3ab-7072-aa1d-1cf98d1108b7
+spec_id: BUG-1566
+agreed_id: BUG-1566
+title: aida pr ship clears a merge-hold with no human/TTY check, unlike merge-hold clear's integrity floor
+description: |-
+  STORY-1353's merge-hold clear now requires has_integrity_floor_authority()
+  (a human at an interactive terminal) -- dispatch or advisor authority cannot
+  clear a supervised hold. That is by design: clearing a merge-hold is listed
+  as a human-only integrity floor in STORY-1353's own acceptance text.
+
+  Flagged by the STORY-1353 reviewer (claude-reviewer-1, PR #1989, F2): `aida pr
+  ship` clears the SAME hold with NO TTY check at all (pr_cmd.rs, the BUG-1167
+  release site: read_hold + clear_hold + sync_label(false)). BUG-1167's own
+  rationale is that `pr ship` IS the explicit human/advisor act, so an
+  additional gate seemed redundant when it was written -- but any agent seat
+  that can invoke `aida pr ship` (a headless drain, an advisor-role env var,
+  etc.) now clears a hold through that path with no TTY present, which is
+  exactly the side door has_integrity_floor_authority() was introduced to close
+  on the merge-hold clear path.
+
+  Net effect until this is resolved: the SUPPORTED release path
+  (`merge-hold clear`) is locked to a human at a keyboard, while the ship path
+  still clears the same class of hold from a non-human seat. Fix in one of two
+  directions -- gate the BUG-1167 release site on has_integrity_floor_authority()
+  too (with whatever carve-out `pr ship`'s own invocation context needs), or
+  document explicitly why `pr ship`'s existing human/advisor framing is
+  sufficient and does not need the new floor. Either way, the two release paths
+  for a merge-hold should not disagree on who may clear it.
+
+  Also flagged: reviewer-placed holds (three standing markers on PR-2035/2042/
+  2043 at review time) say "clear only on my re-review" -- a convention that
+  collides with a human-only clear floor unless the re-reviewing agent seat is
+  explicitly carved out, or a documented convention says the clearing act moves
+  to a human once the reviewer approves. Needs an explicit ruling, not a silent
+  default.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T19:47:03.211329757Z
+modified_at: 2026-09-21T19:47:03.211329757Z
+req_type: Bug
+tags:
+- integrity-floor
+- merge-hold
+- parent:EPIC-69
