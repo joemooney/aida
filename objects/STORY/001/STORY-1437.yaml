@@ -1,0 +1,26 @@
+id: 01a0c62b-a429-7313-b791-b27f1afd3e38
+spec_id: STORY-1437
+agreed_id: STORY-1437
+title: 'Review PR-2066: [AI:codex] docs(spike): sweep self-referential blind spots (SPIKE-85)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0c61f`) for branch `spike-85-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2066>
+  - Branch: `spike-85-work` → `main`
+
+  ## Covers
+
+  - SPIKE-85
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2066` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:52:23.977370025Z
+modified_at: 2026-09-21T22:52:23.977370025Z
+req_type: Story
