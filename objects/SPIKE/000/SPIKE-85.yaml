@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:45.252179213Z
-modified_at: 2026-09-21T22:39:18.075294870Z
+modified_at: 2026-09-21T22:43:37.691870320Z
 req_type: Spike
 tags:
 - batch:night-0920
@@ -80,5 +80,11 @@ comments:
   created_at: 2026-09-20T22:52:12.358797525Z
   modified_at: 2026-09-20T22:52:12.358797525Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c623-9c5b-7ef0-8cc6-03ad1883df3f
+  author: joe
+  content: 'Research sweep completed in docs/spikes/2026-09-21-self-referential-blind-spots.md. The bounded inventory found one demonstrated new defect, BUG-1578 (docs-only CI suppresses documentation guards), and surfaced two advisor decisions without choosing them: whether external-prose classification becomes a closed architectural boundary, and whether aggregate/detail equivalence should be universal or claim-scoped.'
+  created_at: 2026-09-21T22:43:37.691870320Z
+  modified_at: 2026-09-21T22:43:37.691870320Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 human_only: true
