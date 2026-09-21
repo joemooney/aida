@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:56:20.778714126Z
-modified_at: 2026-09-21T19:56:23.070484296Z
+modified_at: 2026-09-21T21:33:09.460075212Z
 req_type: Bug
 tags:
 - aida:tests
@@ -45,3 +45,27 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-21T19:56:23.070484296Z
+comments:
+- id: 01a0c5e3-17d4-7b23-b60d-9e2e7579b206
+  author: joe
+  content: |-
+    [aida:advisor] THE FLAKE IS NOT ONLY LOAD-CORRELATED — THE ASSERTION IS FRAGILE BY CONSTRUCTION, AND THE DISTRIBUTION SHOWS WHY. Measured locally 2026-09-21 14:29 MST on a verified-current binary (c9da874c06, ancestry checked against HEAD, so not another stale-binary reading). Ten consecutive `aida awaiting --notice` runs:
+
+        8 runs   notice printed at 0.435-0.442s   (seven within 7 ms of each other)
+        1 run    notice printed at 0.733s
+        2 runs   NOTICE NEVER PRINTED             exit 0; one ran 1.010s, one exited at 0.765s
+
+    A TIGHT BODY WITH A HEAVY TAIL. The median is rock-steady; the command is not slow on average, it is OCCASIONALLY MUCH SLOWER, and the tail has no reliable ceiling.
+
+    WHY THAT CONDEMNS THE ASSERTION INDEPENDENTLY OF CONTENTION. `awaiting_notice_does_not_read_an_open_stdin_pipe` asserts elapsed < 2.000s. On GitLab pipeline 319 it failed at 2.0086s — 0.4% over. A test that a 0.4% excursion can fail, on a metric whose tail is unbounded in practice, is not measuring the property it was written to protect. IT WOULD EVENTUALLY FAIL ON A QUIET RUNNER.
+
+    BOTH EXPLANATIONS ARE TRUE AND THEY ARE NOT COMPETING, which is the part worth preserving. The contention on pipeline 319 is real and independently evidenced: unrelated `aida-core::db::cache::tests` in the same job ran 8-26 s each against sub-second baselines (`cache_schema_drift_detects_missing_column_only` 24.355 s, `list_summaries_filter_by_owner_or_assignee` 18.959 s), and the runner `imac-docker` is shared, so a concurrent job from another project is invisible from this project's API by construction. CONTENTION MOVED THE DISTRIBUTION; THE DISTRIBUTION COULD ALREADY CROSS THE LINE. Do not let the contention explanation retire the structural one — the contention account is the one that will be available every time, and accepting it each time is how this test stays red for years.
+
+    THE REMEDY IS ALMOST CERTAINLY NOT A BIGGER NUMBER. Raising 2 s to 3 s is the same bet at a different price. The same defect exists one layer down and is already measured: the product notice deadline is 1 s, the work lands at ~0.437 s, and the notice is still SILENTLY DROPPED 2 times in 10 with exit 0 (recorded on BUG-1569). A wall-clock ceiling over this distribution buys a drop rate, not a guarantee.
+
+    WHAT THE TEST IS ACTUALLY FOR: that the notice does not BLOCK on an open stdin pipe. That is a behavioural property and it is testable without a wall-clock race — it does not need to know how long the command takes, only that it does not wait on the pipe. An assertion written against the behaviour cannot be failed by a busy runner, and cannot pass on a quiet one while the behaviour is broken.
+
+    Cross-reference: BUG-1569 carries the ten-run distribution and the 20% drop rate at the 1 s deadline; TASK-1274's mirror pipeline is where this surfaced; #2019 is the PR whose acceptance the red job blocks.
+  created_at: 2026-09-21T21:33:09.460075212Z
+  modified_at: 2026-09-21T21:33:09.460075212Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
