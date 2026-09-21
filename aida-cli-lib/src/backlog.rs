@@ -145,39 +145,31 @@ pub(crate) fn serialize_batch_command(
         .then(|| format!("aida queue work --batch {batch} --auto-complete --single-branch"))
 }
 
-// Find a serialize-bearing batch shared by `member` and its batch siblings.
-pub(crate) fn member_serialize_batch_command(
-    all: &[Requirement],
-    member: &Requirement,
-    project_root: &Path,
-) -> Option<String> {
-    let mut batches: Vec<&str> = member
-        .tags
-        .iter()
-        .filter_map(|tag| tag.strip_prefix("batch:"))
-        .collect();
-    batches.sort_unstable();
-    for batch in batches {
-        let tag = format!("batch:{batch}");
-        let members: Vec<Requirement> = all
-            .iter()
-            .filter(|req| req.tags.iter().any(|t| t.eq_ignore_ascii_case(&tag)))
-            .cloned()
-            .collect();
-        if let Some(command) = serialize_batch_command(&members, project_root, batch) {
-            return Some(command);
-        }
-    }
-    None
-}
-
 fn serialize_pairs<'a>(
     reqs: &'a [Requirement],
     project_root: &Path,
 ) -> Vec<(&'a Requirement, &'a Requirement, Vec<String>)> {
+    // Scan source once for the whole batch. `collect_spec_files` is convenient
+    // for one spec, but calling it N times repeats a complete repository walk
+    // N times and made the lightweight `aida show` hint dominate latency.
+    // trace:BUG-1480 | ai:codex
+    let wanted: HashSet<String> = reqs.iter().map(|req| display_id(req).to_string()).collect();
+    let trace_hits = scan_trace_graph(project_root, &wanted);
     let files: Vec<BTreeSet<String>> = reqs
         .iter()
-        .map(|req| collect_spec_files(project_root, display_id(req)))
+        .map(|req| {
+            let spec_id = display_id(req);
+            let mut found = BTreeSet::new();
+            if let Some(hits) = trace_hits.get(spec_id) {
+                found.extend(hits.iter().map(|hit| hit.file.clone()));
+            }
+            for plan in find_plan_files_for_spec(project_root, spec_id) {
+                if let Ok(content) = std::fs::read_to_string(&plan) {
+                    found.extend(parse_plan_critical_files(&content));
+                }
+            }
+            found
+        })
         .collect();
     let mut pairs = Vec::new();
     for i in 0..reqs.len() {

@@ -29,6 +29,98 @@ struct ListTableOptions {
     terminal_width: Option<usize>,
 }
 
+/// Resolve the two whole-store facts used by `aida show` from the cache.
+///
+/// The cache already projects an EPIC's derived status and the durable
+/// `serialize:<group>` tags used to sequence collision-prone batch members.
+/// Keeping this helper free of `backend.load()` and live repository scans is
+/// the load-bearing part of the single-spec read latency contract.
+// trace:TASK-1268 trace:BUG-1480 | ai:codex
+/// The cache-backed reads `aida show`'s canonical path is allowed to make.
+///
+/// COMPILER-ENFORCED, NOT TEXT-MATCHED. The regression this guards was a
+/// `backend.load()` on the single-spec show path — a full-store scan costing
+/// ~10s against a 4200-object store where the cache answers in under half a
+/// second. The previous guard was a test that `include_str!`d this file, split
+/// it on two literal markers, and asserted the substring `backend.load()` was
+/// absent. That check breaks on any reformat, proves nothing about a DIFFERENT
+/// expensive call, and is itself a text match standing in for a contract.
+///
+/// This trait exposes only the two reads the path actually needs, so `load()`
+/// is not merely discouraged there — it does not exist to be called, and
+/// reintroducing it is a compile error rather than a test failure.
+///
+/// Scoped deliberately: this is the canonical-path context helper, which is
+/// where the regression was. The COST dimension is guarded separately and on
+/// the real store by `aida doctor check performance`, because a structural
+/// guard cannot see a slowdown that arrives without any call site changing —
+/// this bug grew from 7.5s to 9.9s with no code change at all.
+// trace:BUG-1480 | ai:claude
+pub(crate) trait CacheOnlyReads {
+    fn list_summaries(
+        &self,
+        filter: &aida_core::ListFilter,
+    ) -> anyhow::Result<Vec<aida_core::RequirementSummary>>;
+}
+
+impl CacheOnlyReads for aida_core::CachedGitBackend {
+    fn list_summaries(
+        &self,
+        filter: &aida_core::ListFilter,
+    ) -> anyhow::Result<Vec<aida_core::RequirementSummary>> {
+        aida_core::CachedGitBackend::list_summaries(self, filter)
+    }
+}
+
+fn show_cached_context(
+    backend: &impl CacheOnlyReads,
+    req: &Requirement,
+) -> (Option<String>, Option<String>) {
+    let mut effective_status = None;
+    let mut serialize_command = None;
+    let mut batches: Vec<&str> = req
+        .tags
+        .iter()
+        .filter_map(|tag| tag.strip_prefix("batch:"))
+        .collect();
+    batches.sort_unstable();
+
+    let all = backend.list_summaries(&aida_core::ListFilter {
+        archive: aida_core::ArchiveFilter::Both,
+        defer: aida_core::DeferFilter::Both,
+        ..Default::default()
+    });
+    let Ok(summaries) = all else {
+        return (effective_status, serialize_command);
+    };
+
+    if req.req_type == RequirementType::Epic {
+        effective_status = summaries
+            .iter()
+            .find(|summary| summary.id == req.id)
+            .map(|summary| summary.status.clone());
+    }
+
+    for batch in batches {
+        let tag = format!("batch:{batch}");
+        let has_durable_serialize_verdict = summaries.iter().any(|summary| {
+            summary.tags.iter().any(|t| t.eq_ignore_ascii_case(&tag))
+                && summary
+                    .tags
+                    .iter()
+                    .any(|t| t.to_ascii_lowercase().starts_with("serialize:"))
+        });
+        if has_durable_serialize_verdict {
+            serialize_command = Some(format!(
+                "aida queue work --batch {batch} --auto-complete --single-branch"
+            ));
+            break;
+        }
+    }
+
+    (effective_status, serialize_command)
+}
+
 // trace:BUG-1207 | ai:codex
 fn render_list_table<F>(
     reqs: &[aida_core::RequirementSummary],
@@ -555,6 +647,41 @@ mod proxy_approval_tests {
         );
 
         assert!(parse_proxy_approval_comment("STORY-1173", "Proxy ledger", &comment).is_none());
+    }
+}
+
+#[cfg(test)]
+mod show_latency_regression_tests {
+    use super::*;
+
+    /// THE GUARANTEE IS THE TYPE. `show_cached_context` takes
+    /// `&impl CacheOnlyReads`, which exposes `list_summaries` and nothing
+    /// else, so a whole-store read on that path is a COMPILE ERROR:
+    ///
+    ///     error[E0599]: no method named `load` found for reference
+    ///                   `&impl CacheOnlyReads` in the current scope
+    ///
+    /// verified by injecting `backend.load()` into `show_cached_context` and
+    /// observing the build fail, then restoring to a clean build.
+    ///
+    /// THIS TEST DELIBERATELY ASSERTS ALMOST NOTHING. An earlier revision
+    /// parsed this file to count the trait's methods, so that widening the
+    /// trait would be caught. Mutation proved that check INERT: it extracted
+    /// the body with `split_once('}')`, which stops at the first brace, and a
+    /// default method body supplies one INSIDE the trait — so adding a bodied
+    /// method truncated the extraction and the count still read 1. It could
+    /// not fire on the exact change it existed to catch.
+    ///
+    /// Rather than repair a source-text parser to guard a property the
+    /// compiler already enforces, it is gone. Widening the trait is a visible
+    /// deliberate act in a diff; a whole-store read through it is not
+    /// expressible at all. What remains is a witness that the restricted view
+    /// is what the path is typed against.
+    // trace:BUG-1480 | ai:claude
+    #[test]
+    fn the_show_path_is_typed_against_the_cache_only_view() {
+        fn requires_cache_only_view<T: CacheOnlyReads>() {}
+        requires_cache_only_view::<aida_core::CachedGitBackend>();
     }
 }
 
@@ -3454,38 +3581,13 @@ pub(crate) fn handle_git_backend_command(
                     // the cache (recomputed on rebuild from the relationship
                     // graph; never stored in YAML). trace:STORY-632 | ai:claude
                     let degrees = backend.degrees(&req.id).unwrap_or_default();
-                    // BUG-626: an EPIC's status is the read-only rollup of its
-                    // children, not the stored field. Derive it from the full
-                    // store (a one-shot load on a single-spec view — not a hot
-                    // loop) so `aida show <epic>` agrees with `aida list` and
-                    // `aida graph tree`. Non-epics keep `effective_status()`.
-                    // trace:BUG-626 | ai:claude
-                    let effective_status_str: String = if req.req_type == RequirementType::Epic {
-                        backend
-                            .load()
-                            .ok()
-                            .and_then(|store| aida_core::rollup::derive_epic_status(&store, req.id))
-                            .map(|s| format!("{s}"))
-                            .unwrap_or_else(|| format!("{}", req.effective_status()))
-                    } else {
-                        format!("{}", req.effective_status())
-                    };
-                    // Keep a groomed serialize verdict discoverable from any
-                    // member after the grooming command has left scrollback.
-                    // trace:TASK-1268 | ai:codex
-                    let serialize_cluster_command = backend.load().ok().and_then(|store| {
-                        let project_root = find_project_root().unwrap_or_else(|_| {
-                            store_path
-                                .parent()
-                                .map(|p| p.to_path_buf())
-                                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
-                        });
-                        backlog::member_serialize_batch_command(
-                            &store.requirements,
-                            &req,
-                            &project_root,
-                        )
-                    });
+                    let (cached_epic_status, serialize_cluster_command) =
+                        show_cached_context(&backend, &req);
+                    // BUG-626: the cache projects an EPIC's read-only child
+                    // rollup. Using that projection avoids loading every YAML
+                    // object merely to render one spec. trace:BUG-626
+                    let effective_status_str =
+                        cached_epic_status.unwrap_or_else(|| format!("{}", req.effective_status()));
                     // STORY-632: `--json` emits the spec as a machine object,
                     // including the centrality fields, then returns early.
                     // trace:STORY-632 | ai:claude
