@@ -251,6 +251,68 @@ fn init_test_project() -> (tempfile::TempDir, std::path::PathBuf, std::path::Pat
     (tmp, project_root, store_path)
 }
 
+/// BUG-1454: one deliverable has landed with the spec trailer while another
+/// commit carrying the same trailer remains on an open PR. The first landing
+/// must not hide the spec by promoting Done → Completed.
+// trace:BUG-1454 | ai:codex
+#[test]
+fn open_pr_for_same_spec_defers_auto_bump() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-1454", "Done");
+    run_git(
+        &project_root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/example/aida.git",
+        ],
+    );
+
+    let fake_gh = project_root.join("fake-gh");
+    std::fs::write(&fake_gh, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'gh version test'; else echo '[{\"number\":1979}]'; fi\n").unwrap();
+    let mut permissions = std::fs::metadata(&fake_gh).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&fake_gh, permissions).unwrap();
+    let _gh = crate::test_env::EnvVarGuard::set(
+        "AIDA_TEST_GH_BINARY",
+        fake_gh.to_string_lossy().as_ref(),
+    );
+
+    let pre_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+    std::fs::write(project_root.join("first.txt"), "first deliverable\n").unwrap();
+    run_git(&project_root, &["add", "first.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", "fix: first deliverable (BUG-1454)"],
+    );
+
+    let storage = Storage::new(&store_path);
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(flips.is_empty(), "open remainder must suppress completion");
+    let req = storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id("BUG-1454")
+        .unwrap()
+        .clone();
+    assert_eq!(req.status, RequirementStatus::Done);
+
+    // The wider manual replay sees the already-landed trailer too; the same
+    // guard must make a Completed → Done recovery durable.
+    handle_db_reconcile_status(&store_path, None, Some("BUG-1454"), false).unwrap();
+    let req = storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id("BUG-1454")
+        .unwrap()
+        .clone();
+    assert_eq!(req.status, RequirementStatus::Done);
+}
+
 /// Insert a Story spec at the given status with the given spec_id into
 /// the store and persist it. Returns the spec_id we used.
 fn seed_spec_at(store_path: &std::path::Path, spec_id: &str, status: &str) -> String {

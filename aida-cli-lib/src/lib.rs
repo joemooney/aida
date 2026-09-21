@@ -62536,6 +62536,52 @@ struct AutoBumpFlip {
     prior_status: RequirementStatus,
 }
 
+/// BUG-1454: return the candidate specs that still have an open GitHub PR.
+///
+/// A completion trailer proves that *some* work landed, but an open PR naming
+/// the same spec is stronger evidence that the spec has another deliverable in
+/// flight. Keep those specs at Done until the final PR closes. One search is
+/// made per candidate because GitHub's PR search covers title, body, and
+/// comments without downloading every open PR in a large repository.
+///
+/// `None` means the GitHub lookup was unavailable or failed. Callers
+/// default-to-preserve in that ambiguous case; hiding unfinished work is more
+/// damaging than leaving shipped work visible for another pass.
+// trace:BUG-1454 | ai:codex
+fn specs_with_open_prs(
+    project_root: &std::path::Path,
+    spec_ids: impl IntoIterator<Item = String>,
+) -> Option<std::collections::BTreeMap<String, u64>> {
+    if forge::resolve_forge_kind(project_root) != forge::ForgeKind::GitHub {
+        return Some(std::collections::BTreeMap::new());
+    }
+    let gh = resolve_gh_binary()?;
+    let mut open = std::collections::BTreeMap::new();
+    for spec_id in spec_ids {
+        let out = std::process::Command::new(&gh)
+            .current_dir(project_root)
+            .args([
+                "pr", "list", "--state", "open", "--search", &spec_id, "--limit", "1", "--json",
+                "number",
+            ])
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let rows: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+        if let Some(number) = rows
+            .as_array()
+            .and_then(|items| items.first())
+            .and_then(|item| item.get("number"))
+            .and_then(|number| number.as_u64())
+        {
+            open.insert(spec_id, number);
+        }
+    }
+    Some(open)
+}
+
 impl AutoBumpFlip {
     fn new(spec_id: String, sha: String, prior_status: RequirementStatus) -> Self {
         Self {
@@ -63698,6 +63744,38 @@ fn auto_bump_done_to_completed(
         flips.push(flip);
     }
 
+    // BUG-1454: a trailer only completes the spec when this merge finishes
+    // it. If another open PR references the same spec, the current merge is
+    // only one deliverable: preserve Done so every open-work surface keeps the
+    // remainder visible. An unavailable GitHub lookup is ambiguous and also
+    // preserves Done; a later pull/reconcile can complete it once the forge is
+    // reachable and no open PR remains. trace:BUG-1454 | ai:codex
+    let candidate_ids = flips.iter().map(|flip| flip.spec_id.clone());
+    match specs_with_open_prs(project_root, candidate_ids) {
+        Some(open) => {
+            flips.retain(|flip| {
+                let Some(pr) = open.get(&flip.spec_id) else {
+                    return true;
+                };
+                eprintln!(
+                    "  {} {} stays Done — open PR #{} still references it",
+                    "↷".yellow(),
+                    flip.spec_id,
+                    pr
+                );
+                false
+            });
+        }
+        None if !flips.is_empty() => {
+            eprintln!(
+                "  {} auto-bump deferred — could not verify whether candidate specs have open PRs",
+                "↷".yellow()
+            );
+            flips.clear();
+        }
+        None => {}
+    }
+
     // TASK-246 / BUG-219: a review story whose PR merged before the
     // review lifecycle finished — left at `InProgress` (a reviewer asked
     // for fixups, then the PR self-merged instead of a fresh /aida-review
@@ -64296,7 +64374,42 @@ fn handle_db_reconcile_status(
         flips.push(flip);
     }
 
+    // BUG-1454: replay must enforce the same open-PR guard as pull-time
+    // auto-bump. Otherwise a manual Completed → Done recovery would be undone
+    // immediately by the already-landed trailer in this wider scan.
+    let mut open_pr_deferred = false;
+    let candidate_ids = flips.iter().map(|flip| flip.spec_id.clone());
+    match specs_with_open_prs(project_root, candidate_ids) {
+        Some(open) => {
+            flips.retain(|flip| {
+                let Some(pr) = open.get(&flip.spec_id) else {
+                    return true;
+                };
+                open_pr_deferred = true;
+                eprintln!(
+                    "  {} {} stays Done — open PR #{} still references it",
+                    "↷".yellow(),
+                    flip.spec_id,
+                    pr
+                );
+                false
+            });
+        }
+        None if !flips.is_empty() => {
+            open_pr_deferred = true;
+            eprintln!(
+                "  {} reconcile deferred — could not verify whether candidate specs have open PRs",
+                "↷".yellow()
+            );
+            flips.clear();
+        }
+        None => {}
+    }
+
     if flips.is_empty() && stale_review_flips.is_empty() {
+        if open_pr_deferred {
+            return Ok(());
+        }
         // BUG-418: disambiguate "already recovered" from "nothing matched".
         // If a referencing commit was found but the spec is already terminal,
         // say so plainly — the operator who just ran a recovery needs to read
