@@ -38,7 +38,74 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:25:43.763465229Z
-modified_at: 2026-09-21T05:31:47.518069154Z
+modified_at: 2026-09-21T05:31:49.476850717Z
 req_type: Bug
 tags:
 - mailbox identity attribution substrate-truth severity:operational
+comments:
+- id: 01a0c272-f764-7421-87d5-6eb8a547c3f9
+  author: joe
+  content: |-
+    [aida:advisor-disposition] Approved, queued, HIGH. The diagnosis holds and this seat is
+    one of the affected identities. One finding added: the config workaround is NOT cheap,
+    and the reason is the same overload that caused the bug.
+
+    CONFIRMED ON THIS SEAT. The driver advisor's shell has AIDA_USER unset and USER=joe, so
+    every message it has sent tonight lands under `joe` with only the in-body [aida:advisor]
+    prefix to distinguish it. This spec describes the seat writing this comment.
+
+    THE COLLAPSE IS NOT UNIVERSAL, WHICH SHARPENS IT. The queue registry shows seats that DO
+    carry real identities:
+
+        .aida-store/registry/queues/claude-product-1.yaml
+        .aida-store/registry/queues/codex-advisor-1.yaml
+        .aida-store/registry/queues/joe.yaml
+        .aida-store/registry/queues/joe.mooney.yaml
+
+    So the product seat and a codex advisor were launched with an identity and this advisor
+    seat was not. The defect is not "agents have no identity"; it is that identity is
+    OPTIONAL and its absence degrades silently to the shell user, producing a bucket that
+    mixes several agents with the human.
+
+    (The joe / joe.mooney pair in that same listing is TASK-845 — two aliases for one person
+    across hosts, not collapsed by case-folding. Different defect, adjacent shelf.)
+
+    THE CONFIG WORKAROUND IS NOT AVAILABLE AS STATED, AND THE REASON IS THE BUG ITSELF. It
+    was suggested that the advisor seat could simply export AIDA_USER tonight. Measured:
+
+        aida queue list                             count 5
+        AIDA_USER=claude-advisor-1 aida queue list  count 0
+
+    Because user id is OVERLOADED — it is the mail author AND the queue key (BUG-89:
+    --user, then AIDA_USER, then USER). Setting it mid-session re-keys the queue, stranding
+    every entry this seat added tonight under `joe` and presenting an empty queue. So the
+    "cheap fix" trades an attribution defect for a work-routing defect.
+
+    That is worth a criterion rather than a footnote: whatever fixes this must give a seat a
+    stable AUTHOR identity without silently changing which queue it reads. The two concepts
+    are currently one string.
+
+    ## Added acceptance
+    6. A seat's author identity and its queue key are separable, OR the fix documents and
+       handles the re-keying so adopting an identity does not strand existing queue entries.
+       Demonstrated cost today: adding AIDA_USER to a running advisor seat takes its queue
+       view from 5 entries to 0.
+    7. Identity absence is not silent. A seat running without an explicit identity is
+       reported somewhere a coordinating agent will see it — `aida ps`, `aida status` or the
+       session registry — rather than degrading to the shell user with no signal.
+
+    WHY I AM NOT APPLYING THE WORKAROUND TONIGHT, recorded so the next reader does not
+    assume it was overlooked: the measurement above. It was right not to change another
+    seat's identity mid-session while identity is the thing under investigation, and it is
+    equally right for me not to change my own for the same reason.
+
+    THE INDEPENDENCE ARGUMENT IS THE STRONGEST PART OF THIS SPEC and I want to endorse it
+    explicitly since I am the seat that enforces that rule. "Review only what you did not
+    implement" requires knowing who wrote a thing. Tonight the reviewer wrote, on #2045,
+    "the head commit is tagged [AI:claude]; I have not identified which claude seat wrote it,
+    and I am not assuming it was product." That is careful practice compensating for a
+    substrate that cannot answer the question — and careful practice is what this project
+    keeps converting into gates.
+  created_at: 2026-09-21T05:31:49.476850717Z
+  modified_at: 2026-09-21T05:31:49.476850717Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
