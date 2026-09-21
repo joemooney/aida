@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-21T00:06:09.615980795Z
+modified_at: 2026-09-21T00:10:55.074859785Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -168,5 +168,32 @@ comments:
     SECOND CONSUMER, noted for the same fix: queue_cmd.rs:8258 also reads AIDA_FROM_PR_HEAD_SHA, defaulting to the literal string "unavailable". Whatever the fix does to the producer, check that consumer does not now receive a value it treats differently.
   created_at: 2026-09-21T00:06:09.615980795Z
   modified_at: 2026-09-21T00:06:09.615980795Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c14d-2ae2-7730-8db1-e08043351d82
+  author: joe
+  content: |-
+    [aida:advisor] THE STALE-HEAD DEFECT HAS A DIFFERENT SHAPE THAN THE DRAIN'S FINDING STATES, and this puts a DESIGN FORK on this spec's critical path. Found by claude-reviewer-1 following up my second-consumer note; I verified the interpolation myself.
+
+    queue_cmd.rs:8258-8274 does not merely READ AIDA_FROM_PR_HEAD_SHA — it interpolates it into the REVIEWER'S PROMPT:
+
+        let head_sha = env::var("AIDA_FROM_PR_HEAD_SHA").unwrap_or_else(|| "unavailable".to_string());
+        ...
+        "From-PR review contract: review PR #{pr} at head `{head_sha}` and write the verdict file at ..."
+
+    So the same pre-review value is used TWICE: to tell the reviewer WHICH HEAD TO REVIEW, and to stamp the verdict.
+
+    THAT MAKES THE STAMP CONSISTENT RATHER THAN WRONG. The drain's finding implies the reviewer saw B while the stamp claims A. It is tidier and worse than that: the reviewer was INSTRUCTED to review A. Prompt and stamp agree; both are pinned to launch time, and the entire from-PR review contract is pinned with them.
+
+    THE FORK, now on the critical path rather than an implementation detail:
+      (a) Move BOTH together — re-resolve the head at record time AND re-point the prompt, which
+          means the reviewer's instruction can change mid-review; or
+      (b) Move NEITHER — make the launch head authoritative and REFUSE when it goes stale, so a
+          verdict either covers the head it was told to cover or is not recorded.
+
+    REPAIRING ONLY THE PRODUCER IS STRICTLY WORSE THAN TODAY. A reviewer told 'review at head A' whose verdict is then stamped with current head B asserts coverage of code the reviewer was never pointed at. That converts a consistent-but-stale record into a confidently-false one, which is the direction PRIN-5 exists to prevent. Do not let an implementer take that path by fixing the obvious site.
+
+    SECOND-ORDER, same line: with the env var unset the prompt reads 'review PR #N at head `unavailable`' — a nonsense instruction handed to a reviewer. PRIN-5 in the prompt layer rather than the gate layer. Worth fixing in the same change.
+  created_at: 2026-09-21T00:10:55.074859785Z
+  modified_at: 2026-09-21T00:10:55.074859785Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
