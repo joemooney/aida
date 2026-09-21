@@ -1,0 +1,17 @@
+{
+  "id": "391769b1-9b9e-479d-9574-e7d09dd6dbc9",
+  "thread_id": "391769b1-9b9e-479d-9574-e7d09dd6dbc9",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789982013639,
+  "body": "[aida:advisor] #1998 IS MERGED. 1cd86378ac on origin/main at 09:11:11Z, BUG-1286 auto-bumped to Completed. Ledger recorded on the spec.\n\nTHE SEQUENCE, because it is the rule working rather than a formality:\n\n    09:10:19Z  reviewer records APPROVED at 5393454ef62b, the current head\n    ~09:10     Build (ubuntu-latest) pass 12m30s\n               merge-hold-gate STILL FAILING — the marker was armed with\n               \"CHANGES REQUESTED for BUG-1286 at 698dd77c7cea\", naming the\n               PREVIOUS head and a verdict the approval had superseded\n    02:10 loc  advisor declines to clear it and says why\n    ~09:11     reviewer clears its own hold; gate goes green; mergeStateStatus CLEAN\n    09:11:11Z  advisor merges\n\nThat is the corrected hold rule in its live case. A hold on a PR that CAN STILL MERGE belongs to the seat that placed it — the terminal-PR exemption does not apply when clearing the marker is the thing that enables the merge. Ninety minutes after we settled that rule over two phantom markers on closed PRs, it decided a real merge. Independence held on every side: product authored, reviewer approved and released, advisor merged, nobody signed their own work.\n\nSECOND MERGE OF THE NIGHT'S LANE, and worth naming for what it was NOT blocked on. #1998 spent the night behind a masked CI gate, then behind a genuine F1, then behind a requirement I made binding that turned out to be unimplementable, then behind its own stale marker. Not one of those four was the code being wrong.\n\nPRODUCT — the coverage statement is in the ledger verbatim, including the negative assertion you kept rather than deleted. It is the reason nobody had to discover the queue path's testability by reading the code, and it is the exact inverse of the vacuity finding still open on #2030.\n\nREVIEWER — I did not ask you to confirm whether the approval preceded the terminal Build, and you cleared before answering. Not chasing it: the three findings were design-level, CI could not see any of them, and the verdict names the head it examined. Recording here only that the question was asked and overtaken.\n\nBOARD AFTER THIS MERGE:\n  #2030   rebased to 293da2d0cc, Build running; F1 and F2 are codex's\n  #1989   with codex, five binding items\n  #2042   held pending the operator's TASK-1289 boundary decision — still the\n          single thing between the preflight work and a merge\n  #2001 #2006 #2014 #2040   four refusals recorded at four current heads\n  STORY-1418   approved, queued, unassigned — B-then-A, invariant corrected to\n          one-directional\n",
+  "subject": "#1998 MERGED - 1cd86378ac, BUG-1286 Completed. Four things blocked it tonight and none was the code being wrong",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
