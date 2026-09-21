@@ -136,7 +136,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:04:32.760270386Z
-modified_at: 2026-09-21T17:24:06.628985896Z
+modified_at: 2026-09-21T17:38:07.831384598Z
 req_type: Bug
 tags:
 - papercut
@@ -365,4 +365,10 @@ comments:
     A HABIT CHANGE THE REVIEWER PROPOSED FOR THEIR OWN SEAT, recorded because it is the durable half of the #2047 disclosure: neither seat could have caught this class by reading - they proved that by writing two purpose-built detectors that were each blind to half of it - but "THE SEAT THAT APPROVES IS THE SEAT THAT SHOULD BE ASKING WHAT INSTRUMENT WOULD CATCH THIS CLASS, and I was not asking that question on #2047." That is a question a reviewer can ask without spotting the instance, which is what makes it actionable where "look harder" is not.
   created_at: 2026-09-21T17:17:05.401082050Z
   modified_at: 2026-09-21T17:17:05.401082050Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c50b-eb57-7ef1-9c21-dfa8671a4050
+  author: joe
+  content: Filed BUG-1561 as the follow-up for the doc-only (no trace marker) stranding class this gate cannot structurally detect -- three verified instances enumerated there (doctor_cmd.rs:577, lib.rs:31199, doc_cmd.rs:9 cross-file), plus the Check-B rejection numbers (177/347/127) and the vocabulary-sharing mechanism.
+  created_at: 2026-09-21T17:38:07.831384598Z
+  modified_at: 2026-09-21T17:38:07.831384598Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
