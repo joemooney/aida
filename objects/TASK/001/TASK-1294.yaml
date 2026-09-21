@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-21T02:17:13.649932930Z
+modified_at: 2026-09-21T22:24:12.135189937Z
 req_type: Task
 tags:
 - follow-up:TASK-1291
@@ -194,6 +194,68 @@ comments:
   created_at: 2026-09-21T02:17:13.649932930Z
   modified_at: 2026-09-21T02:17:13.649932930Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c611-d367-7bb3-85bc-ff61857b2730
+  author: joe
+  content: |-
+    [aida:advisor] MEASUREMENT REPORT, 2026-09-21, run by the driver-advisor seat. THE HEADLINE IS THAT THE COMPARISON THIS SPEC ASKS FOR CANNOT BE MADE, and acceptance item 14 is the reason that is a result rather than a failure. The numbers are below anyway, with the reason the comparison fails, because the reason is the most useful thing here.
+
+    METHOD, as specified: window opens at each spec's first `RunStarted` in `.aida/events.jsonl`, closes at the spec's Done-to-Completed commit in the `aida-store` git log (found by diffing each `update SPEC-ID` commit for a `+status: Completed` line). SpecShelved events counted inside that window, split by cause. PrMerged was NOT used, per the method correction.
+
+    POPULATION. 135 specs transitioned into Completed since TASK-1291 merged (2026-09-19T20:07:33Z). 58 are auto-created "Review PR-N" stories - artefacts, not work - and are excluded. Of the remaining 77 WORK SPECS:
+
+        43   have a RunStarted in the feed      -> DRAIN-DRIVEN, measurable
+        34   have NO RunStarted in the feed     -> LANE-DRIVEN, not measurable by this method
+
+    THE 34 ARE NAMED, per item 12, and NOT silently dropped: STORY-1238, STORY-1240, STORY-1241, BUG-1277, BUG-1279, BUG-1283, BUG-1285, BUG-1287, BUG-1289, BUG-1290, BUG-1294, BUG-1295, BUG-1299, BUG-1461, BUG-1495, BUG-1526, BUG-1543, BUG-1545, BUG-1546, BUG-1550, BUG-1554, BUG-1555, BUG-1557, BUG-1558, BUG-1565, BUG-1568, BUG-1570, TASK-1290, TASK-1292, TASK-1296, TASK-1297, TASK-1302, TASK-1417, TASK-1420. FORTY-FOUR PERCENT OF THE POPULATION WAS GOVERNED BY A DIFFERENT PROCESS - advisor-gated lanes, no `queue done`, some merged without a reviewer phase at all. They are not diluting the drain figures and they are not hidden.
+
+    DRAIN-DRIVEN RESULT, n=43:
+
+        total shelves                      54
+        specs shelved at least once        27   (16 specs shelved ZERO times)
+        shelves per COMPLETED spec         1.26   median 1
+        shelves per SHELVED spec           2.00   median 2
+
+    PER-CAUSE, after-window (item 11, the primary result):
+
+        verdict:request-changes   38        ci-red                 3
+        tool-exit                  9        stale-base-conflict    3
+        ci-unavailable             1
+
+    BASELINE, as recorded on this spec: 40 shelves across 19 specs; 26 request-changes, 10 ci-red, 4 tool-exit.
+
+    WHY THE COMPARISON FAILS, AND IT IS A DENOMINATOR PROBLEM, NOT A SAMPLE-SIZE ONE.
+
+        baseline   40 shelves / 19 specs = 2.11 per SHELVED spec
+        after      54 shelves / 27 specs = 2.00 per SHELVED spec     <- essentially unchanged
+        after      54 shelves / 43 specs = 1.26 per COMPLETED spec   <- a 40% "improvement"
+
+    THE BASELINE'S 19 IS A COUNT OF SPECS THAT SHELVED. IT NEVER RECORDED HOW MANY SPECS COMPLETED IN ITS WINDOW. So the only comparison the baseline supports is shelved-spec to shelved-spec, and on that comparison the change is 2.11 -> 2.00: WITHIN NOISE AT THESE COUNTS. The 40% figure is obtained by changing the denominator mid-comparison, which is the one thing a before/after must not do. I can compute it; I cannot compare it.
+
+    A READER WHO WANTED A POSITIVE RESULT COULD REPORT 2.11 -> 1.26 AND EVERY NUMBER IN IT WOULD BE REAL. That is precisely the re-cutting this spec's acceptance forbids, and it is why the acceptance forbade it.
+
+    WHAT THE PER-CAUSE SPLIT SUGGESTS, stated as a direction and not a conclusion, since the totals are not comparable:
+
+        ci-red        10 of 40 baseline (25%)  ->  3 of 54 after (6%)
+        tool-exit      4 of 40 (10%)           ->  9 of 54 (17%)
+        req-changes   26 of 40 (65%)           -> 38 of 54 (70%)
+
+    The ci-red SHARE fell hard. That is the effect TASK-1289 (pre-flight guards) predicts, NOT the effect TASK-1291 predicts - TASK-1291 targets request-changes, whose share did not fall. So the one movement large enough to notice is attributable to a DIFFERENT in-window change than the one this measurement was built to assess. Item 13's exposure question cannot be answered per-spec from the feed, so I am not going to attribute it further.
+
+    VERDICT ON THE QUESTION ASKED - "did requiring an exhaustive first-round sweep reduce rounds, or only move the cost into a longer first round?" - UNANSWERED, AND NOT ANSWERABLE FROM THIS DATA. The comparable metric moved 2.11 to 2.00 across 19 and 27 specs. Nothing that small survives partitioning three ways by cause, by driver, and by exposure. THE SAMPLE IS NOT TOO SMALL IN THE USUAL SENSE; THE BASELINE IS TOO THIN - it recorded a numerator and a partial denominator.
+
+    WHAT A LATER MEASUREMENT NEEDS, which is the actionable output:
+      1. A baseline that records SPECS COMPLETED in its window, not only specs shelved. Without it
+         no rate is comparable.
+      2. Lane-driven specs need a feed event at pickup. 44% of completions are currently invisible
+         to any drain-based measurement, and that fraction is growing.
+      3. Exposure per spec - which of TASK-1289 / TASK-1290 / TASK-1291 / BUG-1277 was live when it
+         ran - must be recorded AT RUN TIME. Reconstructing it afterwards from merge timestamps is
+         possible but was not done here and would itself need verification.
+
+    PROCESS NOTE ON WHY THIS SPEC FAILED TWICE WITH `no-pr`. It was dispatched to a code implementer on two attempts and both correctly produced no PR, BECAUSE THERE IS NO CODE TO WRITE. Its execution_mode is `operator` and its output is a report comment. The failure was routing, not execution - a measurement task sent twice to a seat that writes code. That is the same shape as TASK-1418 item 3: a work item whose clearing seat is not the one it was handed to.
+  created_at: 2026-09-21T22:24:12.135189937Z
+  modified_at: 2026-09-21T22:24:12.135189937Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: operator
 failure_reason:
   phase: implementer
