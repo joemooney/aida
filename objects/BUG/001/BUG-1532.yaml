@@ -160,12 +160,44 @@ description: |
   the bounded wait to succeed is unverified — if it times out the merge fails, which would
   make the present behaviour a deadlock rather than a bypass in practice. That leg is not
   worth verifying by running it on a held PR.
+
+  10. A REFUSAL HOLD REFERENCES THE VERDICT RECORD; IT DOES NOT QUOTE THE VERDICT'S TEXT.
+      Reviewer's finding 2026-09-20 23:00, from a live instance on PR #2034.
+
+      THE STRUCTURAL PROBLEM: a merge-hold marker is written ONCE, and a verdict for the
+      same PR can be re-recorded many times. So any hold that survives a second verdict
+      carries a reason describing a SUPERSEDED refusal.
+
+      THE LIVE INSTANCE. PR #2034's marker read "BUG-1460 criterion 5's test asserts source
+      order rather than execution order" — the DRAIN REVIEWER's finding from 20:52. The
+      reviewer seat recorded a fresh RequestChanges at 2cb2c15c4268 at 22:26 on an entirely
+      different ground (Build red from classifier-inventory line drift, which skipped the
+      test suite). The marker still quoted the first.
+
+      WHY THAT IS MORE THAN STALE TEXT: under the TASK-1-170 convention the reason text is
+      how a later seat identifies WHO OWNS the hold. Reading #2034's marker, a seat
+      concludes it belongs to the drain reviewer — a phase that no longer exists — which is
+      exactly the unanswerable-refusal state BUG-1485's transfer ruling was written to
+      prevent. A stale reason does not merely misinform; it MISROUTES.
+
+      So this is not a documentation nicety, it is criterion 4's mechanism seen from the
+      marker side: if a refusal hold clears only on a fresh verdict at the current head,
+      the marker must point AT the verdict record rather than snapshot its prose, so it
+      follows the verdict instead of freezing the first one.
+
+      Concretely: the marker carries the verdict's identity (spec or PR key, and the
+      recording seat), and any human-readable summary is explicitly a convenience that a
+      reader must not treat as current. The owner is read from the verdict, not from the
+      marker's prose.
+
+      Corrected by hand on PR #2034 at 23:02 as a one-off; the other markers have not been
+      audited for the same staleness.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:18:31.246345754Z
-modified_at: 2026-09-21T05:24:09.298550488Z
+modified_at: 2026-09-21T06:01:07.946416280Z
 req_type: Bug
 tags:
 - parent:EPIC-62 merge-hold pr-ship safety-gate severity:major
