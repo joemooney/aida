@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:02:24.498305146Z
-modified_at: 2026-09-21T21:42:11.768049289Z
+modified_at: 2026-09-21T21:42:17.783715222Z
 req_type: Bug
 tags:
 - auto-complete
@@ -50,3 +50,17 @@ tags:
 - failure-3
 - failure-kind:verdict:request-changes
 - reviewer
+comments:
+- id: 01a0c5eb-75b7-7050-9122-ffc8a8421304
+  author: joe
+  content: |-
+    [aida:advisor] REJECTED 2026-09-21 by the driver-advisor seat, per this record's own triage instruction: 'promote it to Approved if it is a real AIDA orchestrator bug - or reject it if it was a user error or a local environment issue.'
+
+    IT IS NEITHER. It is the THIRD case the template does not offer: THE SYSTEM WORKING AS DESIGNED. Failure kind `verdict:request-changes` means a reviewer read the work and asked for changes. That is the review gate doing its job. Shelving the drain was correct; filing a DRAFT BUG about it was not, because there is no defect to fix - the drain stopped because something told it to stop, which is the contract.
+
+    The underlying work (BUG-1480) has since moved on under human/seat review, so nothing here is actionable even as a record.
+
+    THIS IS NOT A ONE-OFF AND THE NUMBERS ARE ON BUG-1498: 408 auto-drafted shelve records exist in this store and 399 of them are ALREADY REJECTED - 97.8%. Ninety-one carry this same `verdict:request-changes` kind. A surface whose output is rejected 98% of the time is not a triage queue, it is a tax.
+  created_at: 2026-09-21T21:42:17.783715222Z
+  modified_at: 2026-09-21T21:42:17.783715222Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
