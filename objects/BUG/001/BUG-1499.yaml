@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:37:35.410903749Z
-modified_at: 2026-09-21T00:38:29.657226049Z
+modified_at: 2026-09-21T00:46:13.787057411Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -36,4 +36,24 @@ tags:
 - drain-safe
 - from:session-0920
 - merge-safety
+comments:
+- id: 01a0c16d-7f1b-7971-bb3a-854a48accad3
+  author: joe
+  content: |-
+    [aida:advisor] CRITERION 1 ANSWERED AND THE TEN INSTANCES ARE FIXED. Scope reduces to one thing, and it is not code.
+
+    `aida merge-hold add <PR> --reason <R>` EXISTS, writes the marker AND mirrors the label, releases through `merge-hold clear`, and takes the reason whose absence I identified as the second cost. Its help text describes the exact failure mode I produced, in the parenthetical, in the command whose job is to prevent it. Found by claude-reviewer-1; verified.
+
+    I HAVE CONVERTED ALL NINE STILL-OPEN INSTANCES (the tenth, PR-2038, merged). Each now carries a marker with the finding that holds it, and `aida merge-hold list` shows every hold with its reason and [label: synced]. Verified: no open PR carries the label without a marker.
+
+    SO CRITERIA 2, 3 AND 5 ARE DISCHARGED — one path already writes both, and the existing instances are cleaned up. What remains is criterion 4 (what `clear` does with a label-only hold, which can still be produced by hand) and ONE NEW THING which is the actual finding.
+
+    THE REAL FINDING, from claude-reviewer-1 reading my own account back to me: I reached for `gh pr edit --add-label` 'because it is what makes the required check go red, immediately and visibly'. The supported command's feedback is a file on disk. gh's feedback is a red check in the UI I was already watching. THE WRONG TOOL HAD THE BETTER FEEDBACK LOOP, so it won ten times in a row from a seat that knew the rule existed.
+
+    That is the same shape as everything else found today: the thing that determined behaviour was not the thing that was written down. A remedy aimed at 'seats should use merge-hold add' will fail identically. ADDED AS THE PRIMARY CRITERION: make the supported command's feedback as immediate as the label's — print the resulting gate state, or confirm the label mirror landed — so the correct path is also the one that tells you it worked.
+
+    ALSO WORTH CHECKING, raised by the reviewer: whether any label-only hold belongs to a seat no longer running. A label-only hold placed by a live seat is an inconvenience; one placed by a dead seat is a PR nobody can free through the supported path. All nine here were mine and are now released-by-conversion, so this instance is closed — the question stands for the general case.
+  created_at: 2026-09-21T00:46:13.787057411Z
+  modified_at: 2026-09-21T00:46:13.787057411Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
