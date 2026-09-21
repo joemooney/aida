@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T02:13:07.273372692Z
+modified_at: 2026-09-21T02:14:35.331229899Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1082,6 +1082,45 @@ comments:
   created_at: 2026-09-21T02:13:07.273372692Z
   modified_at: 2026-09-21T02:13:07.273372692Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c1be-6443-7da0-b900-632d50be2f13
+  author: joe
+  content: |-
+    [aida:advisor] LINEAGE RULING, ITEM (a) EXPANDED 2026-09-20 19:19. Carrying 6512f1312a is necessary and NOT sufficient. The test change ships with it.
+
+    SCALE CORRECTED: express forces off THREE of FIVE skip fields, not three of four.
+
+        fields   no_preflight, no_ci_wait, no_review, no_build, no_harvest
+        express  clears no_ci_wait, no_review, no_build
+        excluded no_harvest, correctly - documented at line 110 as advisory, never a phase, never blocking
+        left open no_preflight
+
+    So four of the five are gates and express covers three of the four.
+
+    WHY THE BYPASS SURVIVED, and this is the part that makes the one-line fix insufficient. The test written to prevent exactly this passes:
+
+        fn lifecycle_skip_express_tier_forces_full_gate()
+            let conflicting = from_tags(["lifecycle:trivial", EXPRESS_TIER_TAG, "lifecycle:no-review"]);
+            assert!(!conflicting.no_ci_wait && !conflicting.no_review && !conflicting.no_build,
+                    "express overrides any lifecycle:* short-circuit - full gate enforced");
+
+    The function NAME claims a universal. The assertion MESSAGE claims a universal - "any lifecycle:* short-circuit", "full gate enforced". The BODY enumerates three fields, and the input tags never include lifecycle:no-preflight. The test therefore cannot fail for the field it does not name, while reading to the next author as proof the invariant is covered.
+
+    AND THE CORRECT INSTRUMENT WAS ALREADY IN THE SAME FUNCTION. Twenty lines above, the plain-express case asserts `skip.is_empty()` - which covers all five fields. The author knew the universal form, used it in the easy case, and enumerated in the case that actually matters. That is not carelessness; it is what happens when a test is written by listing the instances in front of you.
+
+    SO ITEM (a) NOW REQUIRES BOTH:
+        a1. carry 6512f1312a - forces no_preflight off under express, registers lifecycle:no-preflight
+            in the conflicting-skips check
+        a2. replace the three-field conjunction with a form that CANNOT silently narrow. Either
+            `assert!(conflicting.is_empty())`, which already covers all five, or - stronger - a
+            destructuring bind over every field so that ADDING a sixth field breaks COMPILATION and
+            forces whoever adds it to decide whether express must clear it.
+
+    The second is preferred. It is BUG-1507 criterion 4's make-the-unknown-case-unrepresentable applied to the test rather than the code, and it is the only form of this that has held up: every enumeration relied on tonight has silently narrowed instead of failing.
+
+    WITHOUT a2, carrying 6512f1312a closes today's door and leaves the same instrument in place for the next field added. The pattern is now at three instances - this test, decide()'s wildcard swallowing Skipped, and PR #2040's fake gh answering every query identically. All three pass; all three assert an invariant by enumerating the cases that existed when they were written.
+  created_at: 2026-09-21T02:14:35.331229899Z
+  modified_at: 2026-09-21T02:14:35.331229899Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
   implemented: true
