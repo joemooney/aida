@@ -142,6 +142,23 @@ description: |
      positives against indented blocks; it trades them against concatenation. An
      implementer told to watch for indentation will not think about a missing newline.
 
+     BOTH HALVES OF THE SEPARATION ARE NOW VERIFIED, by two seats independently — six of
+     six real leaks at a line start, four of four false positives mid-line:
+
+         BUG-1422    prev on line '  STORY-1218  '                   match execution_mode:
+         STORY-1132  prev on line 'It proposes a new '               match execution_mode:
+         TASK-1208   prev on line 'aida status already uses the '    match next[1]{
+         TASK-1313   prev on line the predicate's own regex source   match execution_mode:
+
+     A SECOND, INDEPENDENT ARGUMENT FOR COLUMN 0 — and it is the only case in 4197 objects
+     where the two anchored forms could have disagreed. BUG-1422's match sits on an
+     INDENTED line inside quoted drain output: `  STORY-1218  execution_mode:`. What saves
+     the indent-allowing anchor there is NOT the indentation rule — it is that other text
+     precedes the match on that line. If anyone ever quotes drain output whose indented
+     line BEGINS with one of the headers, the indent-allowing form flags it and column-0
+     does not. So column-0 is not merely equal-cost today; it is strictly safer on the one
+     shape the corpus came closest to producing.
+
      THE LIMIT OF THE EVIDENCE, stated because it bounds the claim: all six instances came
      from ONE producer (the greedy-DOTALL capture path), so they share its newline
      behaviour by construction. Six of six establishes that the CURRENT producer emits
@@ -182,7 +199,12 @@ description: |
          TWO negative cases are required, both real: an INLINE mention (TASK-1208,
          TASK-1313, BUG-1422, STORY-1132 all match unanchored and must not match), and an
          INDENTED CODE BLOCK containing a TOON sample, which a leading-indent anchor would
-         still flag and the column-0 form must not;
+         still flag and the column-0 form must not.
+         TASK-1313 IS THE STRONGEST OF THESE and should be the fixture: it matches in TWO
+         ways — the sentence defining the predicate AND the regex implementing it
+         (`^(?:relationships|next)\[\d+\]\{      or      ^execution_mode:`). So a fix
+         that special-cases backticked prose still flags the regex, and a fix that
+         special-cases this spec by id is not a fix at all;
      7c. a raw-form mis-decode produces one finding;
      7d. an escaped-form mis-decode produces one finding;
      7e. a swallowed TOON block with NO non-ASCII character produces one finding. This is
@@ -206,7 +228,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T05:55:56.705072441Z
+modified_at: 2026-09-21T05:57:56.819400596Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
