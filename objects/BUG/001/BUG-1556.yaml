@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:53:14.701016287Z
-modified_at: 2026-09-21T18:30:06.415169058Z
+modified_at: 2026-09-21T18:37:03.469676587Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -101,3 +101,38 @@ comments:
   created_at: 2026-09-21T18:30:06.415169058Z
   modified_at: 2026-09-21T18:30:06.415169058Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c541-de6d-7090-80c6-5c748be3e468
+  author: joe
+  content: |-
+    [claude-product-1, 2026-09-21] TWO OBSERVATIONS THAT CONTRADICT A LOAD-BEARING PREMISE OF THIS SPEC. Reporting them with the provenance caveat up front, because the caveat may dissolve one of them.
+
+    PROVENANCE CAVEAT FIRST: this is a cross-platform.yml run triggered against a PR head (bug-1420-round2 at 84a7ea68a0), NOT a scheduled nightly. This spec's population is the last 30 SCHEDULED runs, so my run is not a member of it and does not move the 27-of-30 denominator. What it can still do is falsify a claim stated as a general property of the failures rather than of the schedule.
+
+    OBSERVATION 1 - A RUN WITH TWO FAILURES. The spec says "Each run reports EXACTLY ONE failure, no test repeats, and the passing count grows night over night", and treats that as the evidence for the arrival-rate reading. Run 35635917435, job 106453170740 (Build windows-latest):
+
+        test result: FAILED. 956 passed; 2 failed; 1 ignored
+
+        failures:
+            fs_atomic::tests::read_atomic_returns_notfound_when_missing
+            templates::tests::project_discipline_pack_matches_master
+
+    Two, not one. If exactly-one was doing work in the argument - and it is, because "a single failure is enough to make the run red and the run stops being informative about the rest" depends on it - then the suite does keep going and does report more than one, and the saturation claim needs re-examining.
+
+    OBSERVATION 2, THE MORE IMPORTANT ONE - A TEST RECURRED ACROSS PLATFORMS. This spec already names fs_atomic::tests::read_atomic_returns_notfound_when_missing, as the 09-14 Build (macos-latest) failure. It failed again tonight on WINDOWS. Same test, different platform, seven days apart.
+
+    That is not consistent with "each night's defect IS being fixed within about a day, and a new one lands to take its place". This one was not fixed; it was not seen again until a different platform was slow enough to surface it. The distinction changes the remedy: an arrival rate wants an exposure-window fix, whereas a recurring timing assumption wants the test changed, and counting a recurrence as a fresh arrival inflates the arrival rate that justifies the former.
+
+    WHY IT RECURS, from the source rather than the pattern. aida-core/src/fs_atomic.rs, the assertion at the end of read_atomic_returns_notfound_when_missing:
+
+        assert!(elapsed < Duration::from_secs(2), "retry budget should be bounded, got {elapsed:?}");
+
+    with a comment above it reading "~200 ms (200 x 1 ms) is the cap; the test gives generous slack." Tonight it measured 2.0852102s - over by 85ms on a 10x slack.
+
+    The test intends to assert that the RETRY BUDGET is bounded. What it actually measures is WALL-CLOCK elapsed across the call, which on a loaded CI runner includes scheduler delay and filesystem latency that have nothing to do with the budget. It is the same instrument-shape catalogued in TASK-1418: the measurement is a proxy that can be wrong in a way the assertion cannot distinguish from the thing it is guarding. A 10x slack does not fix that, it only sets how loaded the runner must be before it lies - and both times it has lied, it has been on the non-Linux leg, which is exactly where nobody can reproduce it quickly.
+
+    WHAT I AM NOT CLAIMING: that either observation overturns the 27-of-30 measurement, the guard-effectiveness analysis, or the exposure-window conclusion. Those stand. What I am claiming is that the "exactly one, none recurring" characterisation is not a property of the failures, and that at least one of the four families is a recurring timing assumption rather than a fresh arrival - so the acceptance criterion asking for classification by root-cause family should count this one under timing, and should check the other three for prior instances before treating them as distinct arrivals.
+
+    SUGGESTED, NOT TAKEN: assert the bound on the number of RETRIES or on a monotonic budget the code itself tracks, rather than on wall-clock. I have not filed that as its own spec because it may belong inside this one's classification work.
+  created_at: 2026-09-21T18:37:03.469676587Z
+  modified_at: 2026-09-21T18:37:03.469676587Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
