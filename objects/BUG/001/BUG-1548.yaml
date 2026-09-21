@@ -1,0 +1,60 @@
+id: 01a0c3cc-68db-7661-9adb-cb057b115513
+spec_id: BUG-1548
+agreed_id: BUG-1548
+title: A drain runs every four minutes and aida drain status, schedule list, cron, systemd and an anchored pgrep all report nothing
+description: |-
+  A DRAIN RUNS EVERY ~4 MINUTES AND NO DIAGNOSTIC SURFACE CAN SEE IT. Observed 2026-09-21, first reported by the product seat, investigated by the driver-advisor.
+
+  WHAT IS HAPPENING, verified from artifacts rather than inferred:
+
+      QueueDrained events in .aida/events.jsonl, all shipped=0:
+          11:22:37  11:27:11  11:33:00  11:36:53  11:40:52  11:45:05  (UTC)
+      gaps: 4m34s, 5m49s, 3m53s, 3m59s, 4m13s — recurring but NOT a fixed interval
+      .aida/last-drain.json rewritten at 2026-09-21 04:45:05 local, matching the last event
+      each run re-reads live state: excluded_from_batch moves 45 → 48 → 47 → 47 → 48 → 48
+
+  So it is a real, repeating invocation that reads current state each time and writes the drain's own artifacts.
+
+  EVERY SURFACE THAT SHOULD SEE IT REPORTS NOTHING. Each of these was run, not assumed:
+
+      aida drain status              "status: none"
+      aida schedule list             no jobs configured
+      crontab -l                     no aida/drain entries
+      systemctl --user list-timers   no aida/drain timers
+      pgrep -f, ANCHORED on argv[0]  no drain process
+                                     (the product seat's first attempt self-matched its own
+                                     wrapper shell; anchoring is why this null is trustworthy)
+
+  WHAT I RULED OUT, stated because a null result that does not say what it could not see is worthless:
+      .claude/settings.json hooks — zero commands matching drain or `queue work`
+      .aida/burndown/nohup-v14.log — actively suspected, then DISPROVED: its mtime is
+          2026-07-22, two months stale. It looked live under a time-only `ls` format and was
+          not. I checked the date rather than trusting the clock column.
+      the four long-lived `aida agent` processes — started Sep 5, Sep 6, Sep 15 and Sep 20;
+          none is a drain and none matches the 4-minute cadence.
+
+  WHAT I DID NOT ESTABLISH: the invoker. Something outside the schedule registry calls a drain, it completes fast enough that the lock is never observed held, and no surface names it. I stopped short of tracing it by filesystem watch or process accounting; that is the spec's work.
+
+  WHY IT IS A DEFECT RATHER THAN A CURIOSITY. `aida drain status` exists to answer "is a drain running", and the board's own safety rule — ONE drain per repo, never force past a live one — depends on that answer. Tonight it said "none" six times while a drain ran six times. A seat following the rule correctly would conclude the lane is clear and start a second drain. The rule is sound and the instrument is blind, which is the instruments-cannot-see-themselves shape: the surface whose charter is drain visibility is the one that cannot see this drain.
+
+  IT IS ALSO BURNING REAL WORK. Six runs, shipped=0 each time, each re-evaluating 45-48 excluded specs and a 13-entry ineligible list. Harmless in outcome, not free in cost, and every run writes an event that makes the log look like drains are being attempted deliberately.
+
+  WHAT TO BUILD:
+    1. Find the invoker. A drain that runs must be attributable — process, schedule entry, hook
+       or parent session. If something can invoke one without registering, that is the defect
+       under the defect.
+    2. `aida drain status` must report a drain that ran recently as well as one running now.
+       .aida/last-drain.json already carries finished_at and an `acknowledged: false` flag that
+       nothing appears to surface — a "last drain finished 3m ago, shipped 0, unacknowledged"
+       line would have made this visible immediately and costs one file read.
+    3. A recurring drain that ships nothing N times consecutively should say so rather than
+       repeating silently. Six identical shipped=0 runs is a signal, not noise.
+
+  NOT IN SCOPE: the reason shipped=0, which is the nine-refusals ceiling recorded separately. This spec is about a drain being invisible, not about it being idle.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T11:49:08.443039479Z
+modified_at: 2026-09-21T11:49:08.443039479Z
+req_type: Bug
