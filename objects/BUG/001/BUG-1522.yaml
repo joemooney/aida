@@ -40,12 +40,12 @@ description: |-
   2. A rework round against an already-open PR whose head is unchanged produces a ReworkNoOp failure and a SpecShelved event, for each ImplementerOutcome variant that can advance.
   3. A test per advancing variant asserts the guard fires; a test asserts a genuine new commit still passes, so the fix cannot be a blanket refusal.
   4. Confirm and record which variant the already-open-PR rework path actually returns.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-21T04:48:41.815812854Z
+modified_at: 2026-09-21T04:48:48.351048221Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
