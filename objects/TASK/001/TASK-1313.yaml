@@ -93,10 +93,44 @@ description: |
 
   1. `aida doctor` gains a check for round-trip artifacts in stored spec text, reporting
      the spec id, the field and the offset.
-  2. THE PRIMARY PREDICATE IS THE CAUSE, NOT THE SYMPTOM: a description containing a TOON
-     row header — `relationships[N]{`, `next[N]{`, a bare `execution_mode:` line — is a
-     round-trip artifact. One string match, no encoding subtleties, and it catches all
-     nine including the three whose em-dashes were already repaired.
+  2. THE PRIMARY PREDICATE IS THE CAUSE, NOT THE SYMPTOM, AND IT IS LINE-ANCHORED AT
+     COLUMN 0. A description containing a TOON row header AT THE START OF A LINE is a
+     round-trip artifact:
+
+         ^(?:relationships|next)\[\d+\]\{      or      ^execution_mode:
+
+     ANCHORING IS WHAT SEPARATES THE LEAK FROM PROSE, and it is not a refinement — the
+     unanchored form flags this very spec. A genuine swallow puts the header at the start
+     of a line because that is where the TOON renderer emits it. Prose discussing the
+     convention puts it inline, usually inside backticks.
+
+     MEASURED over all 4197 store objects, parsed descriptions:
+
+         unanchored                        10 hits
+         anchored (leading indent allowed)  6 hits
+         anchored at column 0               6 hits   <- identical set
+
+         dropped by anchoring: BUG-1422, STORY-1132, TASK-1208, TASK-1313
+         retained:             BUG-1106, BUG-1111, BUG-1310, BUG-1450, BUG-1452,
+                               STORY-1405
+
+     Four false positives removed, no true positive lost, and the two anchored forms agree
+     exactly on the current store.
+
+     USE THE COLUMN-0 FORM. It costs nothing today and it closes the case a leading-indent
+     anchor would still flag: a spec quoting a TOON sample as an INDENTED CODE BLOCK. No
+     such spec exists in the store today, so this is a cheap guard against a shape someone
+     will eventually write rather than a fix for an observed miss.
+
+     THE TRADE-OFF, stated rather than hidden: if a swallowed block ever arrives indented,
+     column-0 misses it. That has not occurred in any of the six real instances — the
+     renderer emits the header at column 0 — but it is the failure mode this choice buys,
+     and whoever implements it should know which way the strictness cuts.
+
+     THIS SPEC IS ITSELF THE WORKED EXAMPLE. Its own description contains the sentence
+     defining the predicate, so the unanchored form flags the document that defines the
+     detector, in the clause that defines it.
+
   3. THE MOJIBAKE CHECK IS RETAINED ALONGSIDE IT, not instead of it. The two find
      overlapping but different sets: a round trip through a path that does not emit TOON
      would corrupt encoding without leaving a row header. Its predicate is the alternation
@@ -118,8 +152,11 @@ description: |
   6. Coverage is the whole object store and every text field, not only descriptions.
   7. TESTS, negative cases load-bearing:
      7a. a legitimate lone Â/Ã/â produces NO mojibake finding;
-     7b. prose that merely DISCUSSES the TOON convention produces no round-trip finding —
-         TASK-1208 is the real instance that a naive `next[N]{` probe flags;
+     7b. prose that merely DISCUSSES the TOON convention produces no round-trip finding.
+         TWO negative cases are required, both real: an INLINE mention (TASK-1208,
+         TASK-1313, BUG-1422, STORY-1132 all match unanchored and must not match), and an
+         INDENTED CODE BLOCK containing a TOON sample, which a leading-indent anchor would
+         still flag and the column-0 form must not;
      7c. a raw-form mis-decode produces one finding;
      7d. an escaped-form mis-decode produces one finding;
      7e. a swallowed TOON block with NO non-ASCII character produces one finding. This is
@@ -138,7 +175,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T05:48:26.606955158Z
+modified_at: 2026-09-21T05:52:13.240179246Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
