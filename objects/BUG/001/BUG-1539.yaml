@@ -29,5 +29,25 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T08:18:52.622758730Z
+modified_at: 2026-09-21T08:23:11.864640226Z
 req_type: Bug
+comments:
+- id: 01a0c30f-dcf8-7c00-a813-647e4173b637
+  author: joe
+  content: |-
+    WHY THIS GAP SURVIVES, added from a live instance rather than from theory. Observed by the product seat and worth recording verbatim as their catch.
+
+    Within twenty minutes of this spec being filed, it produced a wrong conclusion in a competent seat. Two verdict files existed for one tree - PR-2042.json and PR-2043.json - with identical content and identical recorded_at, because the driver-advisor had hand-copied one to the other so the refusal would survive closing the duplicate PR. The product seat read both, and concluded: "both PRs carry a verdict, so whichever one survives keeps its refusal intact, and the risk has evaporated."
+
+    That is false. There was ONE review of that tree. The risk did not evaporate on its own; it was removed by hand minutes earlier, and nothing on disk said so except the transferred_from / transfer_note fields they did not read.
+
+    THE PART THAT MAKES IT A PRIORITY ARGUMENT RATHER THAN AN ANECDOTE, in their words: the wrong conclusion was the REASSURING one. "Both have verdicts, so whichever survives keeps its refusal" is exactly the sentence that ENDS an investigation. A gap that produces alarming wrong answers gets checked by the next person who reads it. A gap that produces calming wrong answers does not - it terminates the inquiry that would have found it.
+
+    So the defect is not only that a verdict is keyed to a PR number instead of a commit. It is that the failure mode is silent and comfortable: a second file under a second number is indistinguishable from a second review, and reads as corroboration. Two files agreeing look like two reviewers agreeing.
+
+    DESIGN CONSEQUENCE. Whatever replaces the PR-number key must make a COPY distinguishable from a REVIEW at a glance, not only in a field a careful reader might open. If the record is keyed to the reviewed sha, two records for one sha should collapse into one review with two references rather than presenting as two verdicts.
+
+    Recorded by the driver-advisor seat; the observation is the product seat's.
+  created_at: 2026-09-21T08:23:11.864640226Z
+  modified_at: 2026-09-21T08:23:11.864640226Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
