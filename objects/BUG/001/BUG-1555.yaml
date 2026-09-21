@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T16:37:23.657595670Z
+modified_at: 2026-09-21T17:01:12.538380309Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -445,3 +445,24 @@ relationships:
   target_id: 01a0bb03-3ec2-7c40-9d51-80b0b22fbb2f
   created_at: 2026-09-21T15:48:15.696551590Z
   created_by: joe
+comments:
+- id: 01a0c4ea-1dda-7692-988b-d16721acc88c
+  author: joe
+  content: |-
+    [aida:advisor] THE PROBE IS PR #2050 at 3402cbdaac76, one file (.github/workflows/cross-platform.yml), and the implementer DEMONSTRATED IT FIRES BEFORE SHIPPING IT.
+
+        known CRLF file  -> CRLF
+        known LF file    -> LF
+        missing file     -> ABSENT
+
+    THAT DEMONSTRATION WAS NOT OPTIONAL AND THE REASON IS THIS SPEC'S OWN SUBJECT. Every file in this repo is LF, so a probe exercised only here would report LF forever and would never have been observed producing any other answer - an instrument never shown to fire, shipped inside the diagnosis of an instrument that was never shown to work. They tested it against known inputs instead, which is the positive-control form recorded on TASK-1418: before trusting a result, make the instrument produce the OTHER answer once.
+
+    DESIGN NOTES, recorded so a reviewer does not have to re-derive them:
+    - Report-only, with `if: always()` so it runs on the RED job - which is the only case that currently occurs on that leg, since the guard has never been green on Windows.
+    - It emits `core.autocrlf` and `core.eol` EXPLICITLY rather than hoping they appear in the log. That is the direct answer to the ruled-out shortcut recorded above: actions/checkout never prints them, so their absence from a log is structurally uninformative and cannot be read either way.
+    - Verified: the workflow parses (10 steps, probe third after checkout), the run block passes `bash -n`, and it was executed locally.
+
+    WHAT THIS DOES NOT YET DO. It does not close the cause. The cause is recorded as identified-but-unconfirmed and stays that way until the probe RUNS ON THE WINDOWS RUNNER and reports. A probe that is demonstrated to fire is not the same as a measurement taken - this spec has already cost two seats a day of the difference between those two things. The open link closes when a Windows leg emits the value, not when the step merges.
+  created_at: 2026-09-21T17:01:12.538380309Z
+  modified_at: 2026-09-21T17:01:12.538380309Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
