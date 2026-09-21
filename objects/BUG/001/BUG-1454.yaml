@@ -41,12 +41,12 @@ description: |-
   8. An unsupported or unqueried forge must not read as "no open PR". specs_with_open_prs returns an empty map for every non-GitHub forge, and an empty map is currently interpreted as definitively no open change, which permits completion. That directly violates criterion 3 of this spec - where the bump is ambiguous, prefer Done - because unqueried forge state is ambiguous, not negative. CORRECTED 2026-09-20 18:47: this path is NOT reachable in this repository, and the earlier claim that it was is withdrawn. resolve_forge_kind (aida-cli-lib/src/forge.rs:1023) reads [forge] from .aida/config.toml first and otherwise detects from ORIGIN; this repo has no [forge] section and origin is https://github.com/joemooney/aida.git, so it resolves to GitHub and the empty-map branch is never taken. The gitlab remote here is a secondary mirror and does not affect resolution. The defect is still real and still worth fixing: a GitLab-primary or pure-git project silently auto-completes every spec with an open change, which is this exact bug left unfixed for those forges. It is a correctness defect for other projects, not a live exposure here. The mechanism is also sharper than 'returns an empty map': it returns Some(empty), and Some is a DEFINITIVE answer meaning no spec has an open PR, so everything bumps. None is the could-not-determine value, and the same function already returns None correctly when gh is missing or the call fails, so the correct shape is already present a few lines away. Either query the configured forge, or return inconclusive and preserve Done. Raised by the codex drain reviewer on PR #2040 and recovered from the session log after the verdict was overwritten; promoted here so it is binding rather than comment-borne.
 
   9. The regression fixture in criterion 6 must be faithful to the shape it claims to test. open_pr_for_same_spec_defers_auto_bump creates only ONE local commit, and its fake gh returns PR #1979 for every invocation without validating which spec was searched or modelling a second trailered commit. A fake that answers every query identically cannot demonstrate the lookup is spec-specific, so the test passes whether or not the code is correct. Build a two-deliverable fixture - one merged commit and one on an open PR, both carrying the same trailer - and assert the lookup was performed for that spec. Same provenance as criterion 8.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:22:32.343565248Z
-modified_at: 2026-09-21T08:38:03.529179093Z
+modified_at: 2026-09-21T18:49:16.517027960Z
 req_type: Bug
 tags:
 - auto-bump
@@ -119,16 +119,29 @@ comments:
   created_at: 2026-09-21T01:37:32.329342315Z
   modified_at: 2026-09-21T01:37:32.329342315Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c54d-0de3-71a3-a624-8a86d8095960
+  author: aida-auto-bump
+  timestamp: 2026-09-21T18:49:16.515740413Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0c54d-0de5-7d13-bc2d-492d55df6e41
+  timestamp: 2026-09-21T18:49:16.517025988Z
+  agent: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+  brief_ref: .aida/agent-briefs/codex/BUG-1454-2026-09-21T014600Z.md
+  commit_sha: 55b87a508a2c50eb770d1408e670f94017e8184c
+  summary: 'ALL THREE FINDINGS ADDRESSED, AND F1''s FIX CORRECTS MY OWN FINDING - WHICH IS THE MOST VALUABLE THING IN THIS ROUND. I wrote that Some(empty) on a non-GitHub forge is a definitive answer and must not be, which implied returning None for every non-GitHub case. THAT LITERAL FIX IS WRONG AND THEY SHOWED WHY WITH EVIDENCE: "not GitHub" is TWO situations needing OPPOSITE answers. ForgeKind::GitLab - merge requests exist and gh cannot read them, so the state is genuinely UNKNOWN and None is right, and that IS the defect I named. ForgeKind::None - a pure-git project has no change-request concept at all, so "no open PR references this spec" is a MEASURED TRUTH and Some(empty) is correct. Collapsing both into None turns 20 existing tests red, every one a remoteless fixture, and auto-bump would never complete a spec again on any repo without a GitHub remote. They treated those 20 reds as EVIDENCE FOR THE DISTINCTION rather than as an obstacle to the fix, and recorded the reasoning at the site. My finding was right about the defect and wrong about its scope. F2 IS FIXED WITH MORE THAN I ASKED FOR. The fake gh now parses --search, answers only for the spec that has an open PR, and appends every argv to a log the test asserts against - so the test can no longer pass on a constant. They added the opposite-direction control the old test lacked: a second spec (BUG-1455) with the SAME status and the SAME landed trailer but NO open PR, which MUST still complete. Without it an implementation that defers everything passes, which is the failure mode a one-directional test cannot see. AND ONE ASSERTION BEYOND THE FINDING: the log must contain --search for BOTH spec ids, proving every candidate is looked up rather than just the first - that catches a short-circuiting loop, which nothing in my finding asked about. F3 IS ANSWERED THE WAY IT WAS ASKED: I enumerated three sites and asked for an explicit decision on each INCLUDING a decision to leave one alone. Both siblings are KEPT with the reasoning recorded AT EACH SITE rather than only in the commit message - so the next reader finds the decision where the code is, not in a message they would have to go looking for.'
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: Pure rebase, zero rework; Build now GREEN (11m5s) but neither finding is reachable by it. Both blocking findings re-verified — F1''s line moved ~53 lines in the rebase and is now cited by symbol. NEW: the same early-return shape exists at two further sites.'
+  review_verdict: approve
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-21T01:10:34.470574866Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Pure rebase, zero rework; Build now GREEN (11m5s) but neither finding is reachable by it. Both blocking findings re-verified — F1''s line moved ~53 lines in the rebase and is now cited by symbol. NEW: the same early-return shape exists at two further sites.'
-  recovery_hint: address the review findings, move BUG-1454 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-09-21T08:38:03.529179093Z
+  completed_at: 2026-09-21T18:49:16.515326492Z
+  completion_sha: 55b87a508a2c50eb770d1408e670f94017e8184c
