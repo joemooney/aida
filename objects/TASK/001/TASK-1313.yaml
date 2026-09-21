@@ -1,7 +1,7 @@
 id: 01a0c278-312e-7922-883b-52ddb6a9416e
 spec_id: TASK-1313
 agreed_id: TASK-1313
-title: aida doctor has no check for mojibake in stored spec text, so a corrupted acceptance criterion is invisible until someone reads that one spec
+title: 'aida doctor has no check for round-trip artifacts in stored spec text: a read-modify-write through rendered output swallows neighbouring fields into the description and mis-decodes UTF-8'
 description: |
   Filed by the driver advisor 2026-09-20 22:38 on the reviewer's suggestion, after a
   corruption incident in this repo's own store.
@@ -138,7 +138,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T05:48:22.779337676Z
+modified_at: 2026-09-21T05:48:26.606955158Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
