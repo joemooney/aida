@@ -63134,8 +63134,13 @@ fn report_stranded_review_pr_lookup_failures(failures: &[StrandedReviewPrLookupF
 /// (offline, no `gh`/`glab`, auth) fail open — "cannot confirm" leaves the
 /// spec untouched — but are returned separately so `aida pull` cannot mistake
 /// an unavailable forge for an open PR.
+///
+/// BUG-1543: also covers `Draft` — a review story left Draft by a failed
+/// queueing step (the shape BUG-1230 records) is exactly the stranded case
+/// this sweep exists to clean up, not an exclusion from it.
 // trace:TASK-1296 | ai:claude
 // trace:BUG-1432 | ai:codex
+// trace:BUG-1543 | ai:claude
 fn collect_stranded_review_pr_resolutions(
     store: &aida_core::RequirementsStore,
     pr_to_sha: &std::collections::BTreeMap<u64, String>,
@@ -63150,7 +63155,7 @@ fn collect_stranded_review_pr_resolutions(
     for req in &store.requirements {
         if !matches!(
             req.status,
-            RequirementStatus::Approved | RequirementStatus::InProgress
+            RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::InProgress
         ) {
             continue;
         }
@@ -63194,8 +63199,9 @@ fn collect_stranded_review_pr_resolutions(
 
 /// Applies one [`StrandedReviewPrResolution`]. Re-checks the live status —
 /// concurrent edits (or a second pull racing this one) may have moved it off
-/// Approved/InProgress already.
+/// Draft/Approved/InProgress already.
 // trace:TASK-1296 | ai:claude
+// trace:BUG-1543 | ai:claude
 fn apply_stranded_review_pr_resolution(
     r: &mut aida_core::Requirement,
     resolution: &StrandedReviewPrResolution,
@@ -63203,7 +63209,7 @@ fn apply_stranded_review_pr_resolution(
 ) -> bool {
     if !matches!(
         r.status,
-        RequirementStatus::Approved | RequirementStatus::InProgress
+        RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::InProgress
     ) {
         return false;
     }
@@ -63569,8 +63575,8 @@ fn auto_bump_done_to_completed(
                 backend.update_requirement(&r)?;
             }
         }
-        // TASK-1296: review stories stranded Approved/InProgress whose PR
-        // reached a terminal state the git-log scan above couldn't see
+        // TASK-1296 / BUG-1543: review stories stranded Draft/Approved/InProgress
+        // whose PR reached a terminal state the git-log scan above couldn't see
         // (closed without merging, or merged outside the scan window).
         for resolution in &stranded_review_pr {
             let Some(mut r) = backend.get_requirement_by_spec_id(&resolution.spec_id)? else {

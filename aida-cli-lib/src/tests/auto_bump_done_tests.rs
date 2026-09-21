@@ -2246,6 +2246,119 @@ fn auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup() {
     );
 }
 
+/// BUG-1543: the stranded Review-PR sweep's status filter excluded Draft,
+/// so a review story left Draft by a failed queueing step (BUG-1230 records
+/// that exact failure shape) was never resolved against its own terminal
+/// PR — even though Draft-and-stranded is precisely the case the sweep
+/// exists to clean up. Regression fixture: STORY-1362, the single Draft
+/// "Review PR-N" spec found stranded against a MERGED PR while its five
+/// Approved siblings resolved normally.
+///
+/// Covers both directions: a Draft review story whose PR is terminal MUST
+/// resolve (merged → Completed, closed-unmerged → Rejected), and a Draft
+/// review story whose PR is still OPEN must NOT resolve — a sweep that
+/// can't tell "terminal" from "open" is exactly as broken as one that
+/// skips Draft outright. An Approved case rides along as a non-regression
+/// control.
+// trace:BUG-1543 | ai:claude
+#[test]
+fn auto_bump_resolves_draft_stranded_review_pr_specs() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    run_git(
+        &project_root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/repo.git",
+        ],
+    );
+
+    // STORY-1362 shape: left Draft by a failed queueing step, PR already merged.
+    seed_review_story_at(
+        &store_path,
+        "STORY-1362",
+        1986,
+        "merged while draft",
+        "draft",
+    );
+    // Draft + closed-without-merging: must reject too, not just merged.
+    seed_review_story_at(
+        &store_path,
+        "STORY-1363",
+        1987,
+        "closed while draft",
+        "draft",
+    );
+    // Draft + still open: must NOT resolve — the opposite-direction falsifier.
+    seed_review_story_at(
+        &store_path,
+        "STORY-1364",
+        1988,
+        "still open, draft",
+        "draft",
+    );
+    // Approved control, unchanged behavior from TASK-1296.
+    seed_review_story_at(
+        &store_path,
+        "STORY-1365",
+        1989,
+        "merged, approved",
+        "approved",
+    );
+
+    let fake_gh = write_fake_gh_for_pr_states(
+        &project_root,
+        &[
+            (1986, "MERGED"),
+            (1987, "CLOSED"),
+            (1988, "OPEN"),
+            (1989, "MERGED"),
+        ],
+    );
+    let _env =
+        crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake_gh.to_str().unwrap())]);
+
+    // No commit references any of these PRs — only the forge fallback can resolve them.
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    std::fs::write(project_root.join("unrelated.txt"), "noop\n").unwrap();
+    run_git(&project_root, &["add", "unrelated.txt"]);
+    run_git(&project_root, &["commit", "-m", "chore: unrelated work"]);
+
+    let storage = Storage::new(store_path.clone());
+    auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+
+    let after = storage.load().unwrap();
+
+    let merged_draft = after.get_requirement_by_spec_id("STORY-1362").unwrap();
+    assert!(
+        matches!(merged_draft.status, RequirementStatus::Completed),
+        "a Draft review story against a MERGED PR must auto-complete, was {:?}",
+        merged_draft.status
+    );
+
+    let closed_draft = after.get_requirement_by_spec_id("STORY-1363").unwrap();
+    assert!(
+        matches!(closed_draft.status, RequirementStatus::Rejected),
+        "a Draft review story against a CLOSED-unmerged PR must auto-reject, was {:?}",
+        closed_draft.status
+    );
+
+    let open_draft = after.get_requirement_by_spec_id("STORY-1364").unwrap();
+    assert!(
+        matches!(open_draft.status, RequirementStatus::Draft),
+        "a Draft review story against a still-OPEN PR must be left untouched, was {:?}",
+        open_draft.status
+    );
+
+    let approved_control = after.get_requirement_by_spec_id("STORY-1365").unwrap();
+    assert!(
+        matches!(approved_control.status, RequirementStatus::Completed),
+        "the pre-existing Approved case must keep resolving (no regression), was {:?}",
+        approved_control.status
+    );
+}
+
 /// BUG-1286 F1: `emit_spec_completed` had exactly TWO call sites — auto-bump and
 /// reconcile-status — while THREE other paths reached `Completed` and emitted
 /// nothing: `aida done`, the queue's completion path, and
