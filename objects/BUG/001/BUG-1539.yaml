@@ -29,12 +29,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T13:51:14.725842408Z
+modified_at: 2026-09-21T13:51:18.943444697Z
 req_type: Bug
 relationships:
 - rel_type: References
   target_id: 01a0c266-c94e-76b3-9112-420e020bbd89
   created_at: 2026-09-21T13:51:14.725836536Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0bb03-3ec2-7c40-9d51-80b0b22fbb2f
+  created_at: 2026-09-21T13:51:18.943439163Z
   created_by: joe
 comments:
 - id: 01a0c30f-dcf8-7c00-a813-647e4173b637
