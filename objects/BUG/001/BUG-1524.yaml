@@ -71,8 +71,25 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:40:23.908358534Z
-modified_at: 2026-09-21T04:40:40.449199776Z
+modified_at: 2026-09-21T04:40:46.790010883Z
 req_type: Bug
 tags:
 - parent:EPIC-62 drain orchestrator silent-noop severity:major
+comments:
+- id: 01a0c244-3bc6-7622-9cb9-378006e104b1
+  author: joe
+  content: |-
+    [aida:advisor-disposition] Execution mode set to drive (keyboard), not drain, deliberately.
+
+    This fix changes the drain's own phase-1 fallback. A headless drain dispatched to fix
+    it would run THROUGH the defect it is fixing: if its own phase 1 refused to launch,
+    the run would continue from the CI gate and report the fix complete with no commit -
+    the exact failure mode, masking itself. An instrument cannot be trusted to observe the
+    defect that is in its own observation path.
+
+    Same reason BUG-1524 is filed high rather than medium: it is not the size of the fix,
+    it is that the failure is silent and the blast radius is every rework dispatch.
+  created_at: 2026-09-21T04:40:46.790010883Z
+  modified_at: 2026-09-21T04:40:46.790010883Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
