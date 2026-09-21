@@ -1,0 +1,58 @@
+id: 01a0c5a2-ad1f-7a12-b65c-4081ca5148f7
+spec_id: STORY-1430
+agreed_id: STORY-1430
+title: Auto-completion never reads a spec's own closure criteria, so every protection against false closure is a hand-run grep - three open specs are circling this one missing gate
+description: |
+  AUTO-COMPLETION DOES NOT CONSULT A SPEC'S OWN CLOSURE CRITERIA, SO EVERY PROTECTION AGAINST FALSE CLOSURE IS A HUMAN HABIT. THREE OPEN SPECS ARE CIRCLING THIS ONE MISSING GATE.
+
+  Proposed by claude-reviewer-1 2026-09-21 as the ROOT of BUG-1566's asymmetry, after three narrower candidates had been recorded. Filed here because it is larger than that spec's scope and deletes the need for the workaround rather than relocating it.
+
+  THE MECHANISM TODAY. A merged commit whose subject carries `(SPEC-ID)` flips that spec to Completed via `auto_bump_eligible_status` -> `lifecycle::git_merge_completes`, which accepts Approved | Planned | InProgress | Done | NeedsAttention — five states, deliberately. NOTHING IN THAT PATH READS THE SPEC'S DESCRIPTION, ITS ACCEPTANCE CRITERIA, OR ITS GRAPH.
+
+  THE CONSEQUENCE, MEASURED ON THIS BOARD IN ONE SESSION:
+    - #2033 the `(BUG-1480)` trailer was STRIPPED BY HAND so the spec would not close past
+      STORY-1423's criterion, which by construction cannot be satisfied before the fix runs.
+    - #2042 the `(TASK-1289)` trailer was STRIPPED BY HAND so the spec would not close past an
+      open operator decision on the publication boundary.
+    - #1999 is HELD RIGHT NOW with "the squash subject MUST NOT NAME BUG-1288" as its release
+      condition, because BUG-1288's headline criterion is unmet at 26s.
+    - #2050 WAS MERGED WITH ITS TRAILER INTACT AND BUG-1555 AUTO-COMPLETED PAST FIVE OPEN ITEMS.
+      The advisor had written the condition in a mail rather than onto the marker, forgot it at
+      merge time, and had to force-reopen the spec. THAT IS THE CONTROL CASE: the same seat, the
+      same rule, the same hour — it held where it was mechanical and failed where it was prose.
+
+  THE EVIDENCE THAT THIS IS A MISSING MECHANISM RATHER THAN A DISCIPLINE PROBLEM is the advisor's own pre-merge checklist, which contains a hand-run "closure-criterion grep" over the spec description. A GREP. Run by a human, per merge, against free text, looking for sentences like "this spec does not close until X". IT WORKED FOUR TIMES AND FAILED ONCE, and the failure was not inattention — it was that the check lived in the reader rather than in the system.
+
+  WHY THE OTHER THREE CANDIDATES DO NOT FIX IT. Recorded on BUG-1566: give `pr ship` a `--subject` override; give clearing an explicit non-TTY authority; move the trailer decision out of the subject line. EACH CHANGES WHO MAY PERFORM THE WORKAROUND OR WHERE IT LIVES. NONE REMOVES THE NEED FOR ONE. If the bump refused on unmet criteria, the trailer would be SAFE, nothing would need stripping, no non-default merge would be required, and STORY-1353's TTY floor would stop colliding with the merge path at all.
+
+  Acceptance:
+  - A SPEC MUST BE ABLE TO DECLARE A CLOSURE CRITERION IN A MACHINE-READABLE FORM. Today the
+    convention is a sentence in the description ("THIS SPEC DOES NOT CLOSE UNTIL X"), which is
+    why the current check is a grep. Decide the representation — a field, a typed relationship,
+    a tagged criterion — and state why the others were rejected.
+  - THE AUTO-BUMP MUST REFUSE, NOT WARN, when a spec carries an unmet declared criterion. A
+    warning on a path that runs inside `aida pull` is a warning nobody reads; this board has
+    recorded that shape three times today under BUG-1552, BUG-1555 and BUG-1556.
+  - THE REFUSAL MUST SAY WHAT IS UNMET AND WHO CAN RESOLVE IT. A bump that refuses opaquely
+    relocates the confusion rather than removing it.
+  - DEMONSTRATE-IT-FIRES, RED-FIRST, WITH THE REAL CASES: BUG-1480 against STORY-1423 and
+    BUG-1288 at 26s are live, documented instances. A synthetic fixture alone is weaker
+    evidence here than replaying a case that actually happened.
+  - AND FALSIFY THE OTHER DIRECTION: a spec with NO declared criterion must still auto-complete
+    exactly as today. A gate that refuses everything is indistinguishable from one that refuses
+    nothing, and the ordinary path is the overwhelming majority.
+  - NOT IN SCOPE: changing the five-state eligibility set. That set is deliberate and has a test
+    named for it; the defect is not WHICH states bump, it is that the bump never asks whether
+    the spec said it was not ready.
+
+  Related: BUG-1551 (BlockedBy gates pickup but not closure — the same seam approached via the
+  graph), STORY-1423 (exists so post-fix criteria are not falsely closed — a symptom of this
+  gap), BUG-1566 (the TTY asymmetry whose workaround this would delete), BUG-1555 (the spec that
+  auto-completed past five open items).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T20:22:47.839462128Z
+modified_at: 2026-09-21T20:22:47.839462128Z
+req_type: Story
