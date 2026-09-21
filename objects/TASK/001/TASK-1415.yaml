@@ -67,12 +67,37 @@ description: |
      and needs no population.
 
      So the rule is phrased for the author of a predicate, not for the reader of a count.
+
+  8. A SECOND, SMALLER TEST FOR THE SAME FILE — verify a CONVERSION against a known event,
+     not by recomputing it.
+
+     Reviewer's method, 2026-09-20. A unit conversion (timezone, epoch, base) that is
+     checked by redoing the arithmetic is checked in the same direction that produced it,
+     so a systematic error survives the check. Landing the converted value on an
+     independently-known event settles it instead:
+
+         a verdict's recorded_at converted from UTC to local was verified by matching the
+         time the reviewer had separately recorded WRITING that verdict, not by subtracting
+         seven hours again.
+
+     WORKED COUNTER-EXAMPLE, same night: marker mtimes printed in local time were compared
+     against verdict timestamps left in UTC, producing an apparent seven-hour gap between a
+     hold and its verdict where the real gap was five to seventeen minutes.
+
+     AND THE REASON IT MATTERS MORE THAN AN ORDINARY SLIP: the error direction was toward
+     ALARM. A seven-hour gap is a far more serious-looking finding than a five-minute one,
+     and alarming findings get escalated before they get checked. An instrument that errs
+     toward alarm buys itself less scrutiny, not more.
+
+     Keep this shorter than the criterion-1 rule — one paragraph plus the two examples.
+     It belongs in the same file because it is the same class: how a measurement earns
+     being reported.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:12:14.796135922Z
-modified_at: 2026-09-21T06:16:22.109989610Z
+modified_at: 2026-09-21T06:17:46.271931548Z
 req_type: Task
 tags:
 - parent:EPIC-62 discipline-pack observation severity:operational propagation-candidate
