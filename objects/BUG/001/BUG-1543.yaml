@@ -42,5 +42,32 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:48:22.112145500Z
-modified_at: 2026-09-21T08:48:22.112145500Z
+modified_at: 2026-09-21T08:52:43.826344371Z
 req_type: Bug
+comments:
+- id: 01a0c32a-e6b2-7533-8f1c-d46c7421a528
+  author: joe
+  content: |-
+    CRITERION CORRECTION — do NOT fix this by adding Draft. Caught by the reviewer seat, and it is right: "add Draft" is a half-fix that closes the instance and leaves the class.
+
+    THE FILTER AT lib.rs:63024 IS AN ALLOW-LIST OF TWO:
+
+        RequirementStatus::Approved | RequirementStatus::InProgress
+
+    Of the non-terminal statuses a spec can hold, it names two. Draft is the one that bit us because Draft is the one that occurred — STORY-1362 against merged PR #1986. Planned and NeedsAttention are equally invisible to the sweep and simply have not happened to a review spec yet. A review story parked NeedsAttention by a shelved drain, against a PR that later merged, is the same stranding with a different label, and nothing in this spec as originally filed would have covered it.
+
+    THE CRITERION IS THEREFORE THE COMPLEMENT, NOT AN ADDITION:
+
+        The sweep considers every NON-TERMINAL status — expressed as "not in the terminal set"
+        (Completed / Rejected / Superseded), never as a list of the statuses to include.
+
+    Stated that way, a status added to the RequirementStatus enum later is covered BY CONSTRUCTION rather than by someone remembering to update a second list. The same applies to the re-check inside apply_stranded_review_pr_resolution (:63071), which must use the identical complement rather than its own copy of an allow-list — two allow-lists that must agree is the shape that produced this.
+
+    WHY THIS CORRECTION MATTERS MORE THAN THE FIX. It is the third occurrence tonight of one pattern: a change that addresses the instance in front of it and leaves the defect's SHAPE intact. #1972's F2 patched enforcement sites rather than the seam. #1998's F1 would patch three emit_spec_completed call sites rather than the status-write seam — where the reviewer's remedy is explicit that the fourth path someone adds next month must inherit it. And here, adding Draft to a two-element allow-list. Same half-fix in three unrelated surfaces in one night, each one individually reasonable.
+
+    VERIFICATION, updated: a Review-PR spec in EACH non-terminal status (Draft, Approved, InProgress, Planned, NeedsAttention) must flip against a terminal PR — Completed for merged, Rejected for closed-unmerged. A test that enumerates the terminal set and asserts the sweep considers everything else is better than five hand-written cases, because it fails when the enum grows.
+
+    Reviewer's count of Review-PR specs by status at the time of filing, recorded as context rather than as a load-bearing number: Completed 150, Rejected 15, Approved 5, Draft 1 — 171 total.
+  created_at: 2026-09-21T08:52:43.826344371Z
+  modified_at: 2026-09-21T08:52:43.826344371Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
