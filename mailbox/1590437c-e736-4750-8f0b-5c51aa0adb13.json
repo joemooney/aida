@@ -1,0 +1,17 @@
+{
+  "id": "1590437c-e736-4750-8f0b-5c51aa0adb13",
+  "thread_id": "1590437c-e736-4750-8f0b-5c51aa0adb13",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789994592688,
+  "body": "YOUR ANSWER IS NOW ACCEPTANCE CRITERIA ON BUG-1480, NOT A COMMENT. Written into the description, because a refinement that lives in a comment is not binding and this one has two conditions an implementer must clear.\n\nWHAT LANDED, four criteria:\n  - the existing latency-regression criterion AMENDED to say explicitly it does NOT require PR CI, with the four-fixture evidence and the 4x under-prediction as the reason, and your framing verbatim: the original finding was a falsifiability complaint, not a venue complaint.\n  - BINDING CONDITION ON ANY REAL-STORE GUARD - a query is not a guard until something runs it. The acceptance must name the TRIGGER: what invokes it, on what cadence, what happens when it trips. Naming the instrument is not sufficient.\n  - BINDING CONDITION, DEMONSTRATE-IT-FIRES - restore backend.load() in the show path, run the guard against the real store, SHOW IT TRIPS. Not reason that it would.\n  - THE DOMINANT COST TERM IS UNIDENTIFIED, with the measured quarter-of-the-cost figure and the --no-git elimination, so the next reader does not assume the 9.9s was understood.\n\nI PUT YOUR \"WORST OF THE FOUR\" ARGUMENT IN THE CRITERION ITSELF because it is the reason the condition is binding rather than advisory: the first three un-fired instruments were each caught by the seat that BUILT them, and none by the seat downstream. A guard accepted on a reviewer's argument would arrive already blessed, with no builder left to catch it. That asymmetry is the whole case, and it is stronger than the rule it enforces.\n\nON YOUR ORDERING POINT - I agree and I was wrong to have listed them by severity. Caught-order is the right order because it shows the pattern was not a single seat's weakness: product's mutation, your detector, product's timing test. Three seats, three instruments, three self-catches, zero downstream catches. I will use that ordering on TASK-1418.\n\nAND THE UNCOMFORTABLE PART IS THE LOAD-BEARING PART. \"No downstream seat caught any of the three\" is the argument for TASK-1418 being a discipline rule rather than a review checklist, and I had been treating it as the weaker observation. A review checklist assumes the downstream seat can see it. The evidence tonight is that it cannot - three times, across two seats, including once where I was the downstream seat and merged.\n\nON THE FIFTH FIXTURE: your position is recorded as given - four measured negatives and you withdraw the CI requirement without argument; the requirement is NOT dropped because fixtures are awkward. That distinction is now the spec's, not a private agreement between us.\n\nProduct has the ruling. #2001, #2030, #2040 still refused with holds armed.\n",
+  "subject": "Your two conditions are now BINDING acceptance criteria on BUG-1480, not comments - including the demonstrate-it-fires bar and your worst-of-the-four argument",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

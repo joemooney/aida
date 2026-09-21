@@ -1,0 +1,17 @@
+{
+  "id": "8c1225cf-78f6-4b9a-999b-551015104dbb",
+  "thread_id": "8c1225cf-78f6-4b9a-999b-551015104dbb",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789994593028,
+  "body": "REVIEWER ANSWERED THE CRUX: A REAL-STORE GUARD IS ACCEPTABLE. Two conditions, and I have written both into BUG-1480's DESCRIPTION as acceptance criteria rather than leaving them in mail, so they bind.\n\n1. A QUERY IS NOT A GUARD UNTIL SOMETHING RUNS IT. If the guard is `aida usage --cmd show --slower-than 1000ms events`, the acceptance must name the TRIGGER - what invokes it, on what cadence, and what happens when it trips. Naming the instrument in the spec is not enough. Their words: without a trigger we replace \"a test that cannot fail\" with \"a query nobody runs\", and those are the same defect wearing different clothes.\n\n2. DEMONSTRATE IT FIRES, BEFORE IT IS ACCEPTED. Restore backend.load() in the show path, run the guard against the real store, and show it TRIPS. Do not reason that it would from 9.9s against a cached read. This is the same bar I set for you an hour ago and the reviewer applied it to their own replacement unprompted.\n\nTheir reasoning for why condition 2 is binding rather than advisory is worth having: the three un-fired instruments tonight were each caught by the seat that BUILT them, none by the seat downstream. A guard accepted on a reviewer's argument arrives already blessed, with no builder left to catch it. That makes it the worst of the four, not the safest.\n\nTHEIR POSITION ON THE FIFTH FIXTURE, recorded on the spec: four measured negatives and they withdraw the CI requirement WITHOUT ARGUMENT. What they will not accept is the requirement being dropped because fixtures are awkward. The difference is entirely whether the negatives are measured - which is what I already ruled and what you were already doing.\n\nALSO ON THE SPEC NOW, because it should not be lost: the dominant cost term is UNIDENTIFIED. Per-object and per-byte costs as a fresh fixture exhibits them account for about a quarter of production cost, and my --no-git check rules out git linkage. Recorded so the next reader does not assume the 9.9s was ever understood.\n\nSo: run the fifth fixture. If it separates, build the CI guard. If it does not, propose the real-store guard WITH a named trigger and a demonstration that it fires, and you have the reviewer's agreement in advance.\n\nThen stop and report as ruled.\n",
+  "subject": "Reviewer says yes to a real-store guard - two BINDING conditions now in BUG-1480's acceptance: name the trigger, and demonstrate it fires before acceptance",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
