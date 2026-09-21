@@ -280,12 +280,71 @@ description: |
     earlier told the advisor that confirming a mechanism is not explaining an event.
     That is the discipline this ledger exists to record, and it is the reason the
     ledger is more useful to whoever picks this up than a sixth candidate would be.
+
+  ===============================================================================
+  THERE IS NOW A REPRODUCER, AND IT IS THE MOST USEFUL FACT IN THIS SPEC.
+  ===============================================================================
+
+  Found by the advisor 2026-09-21 16:11Z while reading the informational Windows leg
+  on PR #2049, having committed not to discount a red Windows check as "probably the
+  nightly thing".
+
+      run 35622795066, Build (windows-latest), branch story-1422-perf-guard
+      test templates::tests::project_discipline_pack_matches_master ... FAILED
+      panicked at aida-core\src\templates.rs:1245
+      test result: FAILED. 954 passed; 1 failed; 1 ignored
+
+  IDENTICAL failing test, identical panic site, identical pass/fail counts to the
+  09-21 nightly. THREE CONSEQUENCES, in increasing order of usefulness:
+
+   1. IT IS NOT NIGHTLY-ONLY. It reproduces on the path-filtered informational
+      Windows matrix on a PR. Whoever picks this up can trigger it on demand instead
+      of waiting 24h per attempt - which until now was the actual cost of every
+      hypothesis in the ledger above. Bisecting the four-commit window is now hours
+      rather than days.
+
+   2. IT IS NOT ABOUT THE BRANCH'S CONTENT. #2049 touches cli.rs, doctor_cmd.rs,
+      init_cmd.rs, lib.rs and maintenance_schedule.rs - NOTHING under either copy of
+      the discipline pack. The failure travels with the tree, not with the diff.
+      That independently reinforces the governing statement: whatever fired changed
+      the BEHAVIOUR of the comparison, not what was compared.
+
+   3. THE FAILURE IS PERSISTENT, NOT A ONE-NIGHT EVENT. 12:34Z on the nightly and
+      16:11Z on this PR, same day, same result. Any explanation involving a transient
+      - a flaky runner, a partial checkout, a one-off cache state - has to account
+      for two independent occurrences four hours apart on different branches.
+
+  HOW THIS WAS FOUND IS WORTH RECORDING AS METHOD, because the default would have
+  buried it. A red Windows leg on a PR is INFORMATIONAL by design and the required
+  checks were green, so the ordinary move is to merge and move on. The reason it got
+  read is a rule written thirty minutes earlier: with six falsified mechanisms and NO
+  SURVIVING CAUSE, a red Windows check is UNEXPLAINED, NOT EXPLAINED-AWAY, and must
+  be treated as a finding about the PR until something distinguishes it. It was then
+  distinguished - same test, same counts, on a diff touching no discipline files -
+  which is what makes it safe to merge #2049 AND is what produced the reproducer.
+  A KNOWN-RED CHANNEL IS EXACTLY THE CONDITION UNDER WHICH THE NEXT REAL SIGNAL GETS
+  DISCARDED; the only defence is to identify the red rather than recognise it.
+
+  STANDING OBSERVATION, NOT A MECHANISM - recorded because it has now appeared in
+  BOTH failing runs and was dismissed as out of scope the first time. During the
+  "Run tests" step, the Windows log emits twice:
+
+      error: The following untracked working tree files would be overwritten by merge:
+
+  Some test shells out to git and hits an untracked-file collision. It does not fail
+  the run. It appeared in the 09-21 nightly and again in run 35622795066, and it also
+  appeared in the 09-14 macOS failure log. Whether it is related to this bug is
+  UNKNOWN and nobody should assume it is - it is logged here so the next reader does
+  not re-dismiss it three times as noise, and because "a test that manipulates a git
+  working tree" is a plausible neighbour to "a comparison whose behaviour changed
+  without its inputs changing". That is a lead, not a hypothesis, and it has not been
+  added to the ledger because it has not been stated precisely enough to falsify.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T16:03:11.384450472Z
+modified_at: 2026-09-21T16:16:03.347088979Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
