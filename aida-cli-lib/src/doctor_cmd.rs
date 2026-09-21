@@ -312,11 +312,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         let budgets = performance_budgets(cfg.as_ref());
         let policy = performance_policy(cfg.as_ref());
         if !budgets.is_empty() {
+            let events = crate::usage::read_events();
+            let now = chrono::Utc::now();
+            // BUG-1572: `~/.aida/usage.jsonl` is machine-global, so scope the
+            // population to binaries in THIS HEAD's lineage before judging.
+            // trace:BUG-1572 | ai:claude
+            let lineage = resolve_binary_lineage(&project_root, &events, &budgets, &policy, now);
             findings.extend(performance_findings(
-                &crate::usage::read_events(),
-                &budgets,
-                &policy,
-                chrono::Utc::now(),
+                &events, &budgets, &policy, now, &lineage,
             ));
             findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
         }
@@ -686,6 +689,248 @@ pub(crate) fn performance_policy(cfg: Option<&toml::Value>) -> PerformancePolicy
     policy
 }
 
+/// BUG-1572: which binaries' calls the performance gate is allowed to count.
+///
+/// `~/.aida/usage.jsonl` is MACHINE-GLOBAL — every `aida` binary on the box
+/// appends to it — and this repo routinely runs 20-60 git worktrees, each able
+/// to build and run its own binary. Measured 2026-09-21, ELEVEN distinct
+/// `binary_sha` values contributed to one 24h `show` window. So a single lane
+/// on a stale build, or on a branch carrying a performance regression of its
+/// own (precisely what such a lane is often built to investigate), could hold
+/// MAIN's gate red indefinitely, and the aggregate finding gave the reading
+/// seat no way to tell "main regressed" from "a lane is noisy".
+///
+/// The scope is ONE BINARY LINEAGE: ancestors of the current HEAD. That is the
+/// same ancestry test `aida dev status` performs to decide whether the active
+/// binary matches the branch, and it is reused rather than rewritten —
+/// [`crate::current_branch_head_sha`] + [`crate::classify_sha_match`].
+///
+/// FAIL OPEN, NEVER CLOSED. Only a sha git POSITIVELY places off-lineage
+/// ([`crate::ShaMatch::Unrelated`] — `merge-base --is-ancestor` exited a clean
+/// `1` with both commits resolved) is excluded. A row with NO `binary_sha`, a
+/// sha too short or too mangled for git to resolve, and a sha from another
+/// project's repo or from a build whose commit was never pushed all classify
+/// [`crate::ShaMatch::Unknown`] (exit `128`) and are COUNTED. Silently dropping
+/// unplaceable rows would shrink the denominator, which is the very defect this
+/// fixes; failing closed on them would make the gate unusable on any machine
+/// whose log predates this repo.
+// trace:BUG-1572 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct BinaryLineage {
+    /// Lowercased shas git positively placed OFF this HEAD's lineage.
+    off_lineage: std::collections::BTreeSet<String>,
+    /// `false` = count every row (not a git repo, git unavailable, or opted out).
+    scoped: bool,
+}
+
+impl BinaryLineage {
+    /// The pre-BUG-1572 behaviour: every row in the window counts.
+    pub(crate) fn unscoped() -> Self {
+        Self::default()
+    }
+
+    /// Scope to HEAD's lineage, excluding exactly the given shas.
+    pub(crate) fn scoped<I: IntoIterator<Item = String>>(off_lineage: I) -> Self {
+        Self {
+            off_lineage: off_lineage
+                .into_iter()
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect(),
+            scoped: true,
+        }
+    }
+
+    pub(crate) fn is_scoped(&self) -> bool {
+        self.scoped
+    }
+
+    /// Does a call served by `sha` count toward the gate's decision? Pure, so
+    /// the fail-open rule is unit-testable without a git repo.
+    pub(crate) fn counts(&self, sha: Option<&str>) -> bool {
+        if !self.scoped {
+            return true;
+        }
+        match sha {
+            // Absent sha: unplaceable, so counted. See the fail-open note above.
+            None => true,
+            Some(s) => !self.off_lineage.contains(&s.trim().to_ascii_lowercase()),
+        }
+    }
+}
+
+/// Env opt-out for the BUG-1572 lineage scope — restores the pre-fix
+/// count-every-binary population. Documented in `docs/environment-variables.md`.
+// trace:BUG-1572 | ai:claude
+pub(crate) const PERF_GATE_ALL_BINARIES_ENV: &str = "AIDA_PERF_GATE_ALL_BINARIES";
+
+/// Pure: does this env value turn the lineage scope off?
+// trace:BUG-1572 | ai:claude
+pub(crate) fn perf_gate_scope_disabled_by(value: Option<&str>) -> bool {
+    matches!(
+        value.map(str::trim).unwrap_or(""),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
+/// Normalize a row's `binary_sha` — an empty/whitespace field is the same as
+/// an absent one.
+// trace:BUG-1572 | ai:claude
+fn event_binary_sha(ev: &crate::usage::UsageEvent) -> Option<&str> {
+    ev.binary_sha
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+}
+
+/// Resolve the lineage scope for the guarded shapes' WINDOW population.
+///
+/// `repo` is `aida doctor`'s project root, which `main_worktree_root_from`
+/// already resolves to the MAIN worktree — so the gate asks the same question
+/// of the same repo from whichever of the 20-60 worktrees it is run in, and
+/// two seats reading it get the same verdict. A lane's own unmerged build is
+/// therefore off-lineage, which is the intended reading: this gate judges the
+/// mainline, not whatever branch the caller happens to be standing on.
+///
+/// Deliberately narrowed to rows a budget actually guards that fall inside the
+/// window: `read_events` returns the whole log, and classifying every sha it
+/// has ever seen would fork one `git merge-base` per historical build. The
+/// guarded window is ~10 distinct binaries.
+// trace:BUG-1572 | ai:claude
+pub(crate) fn resolve_binary_lineage(
+    repo: &std::path::Path,
+    events: &[crate::usage::UsageEvent],
+    budgets: &[PerformanceBudget],
+    policy: &PerformancePolicy,
+    now: chrono::DateTime<chrono::Utc>,
+) -> BinaryLineage {
+    if perf_gate_scope_disabled_by(std::env::var(PERF_GATE_ALL_BINARIES_ENV).ok().as_deref()) {
+        return BinaryLineage::unscoped();
+    }
+    // No HEAD means nothing to be an ancestor OF — run unscoped rather than
+    // excluding everything.
+    let Some(head) = crate::current_branch_head_sha(repo) else {
+        return BinaryLineage::unscoped();
+    };
+    let cutoff = now - chrono::Duration::hours(policy.window_hours);
+    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for ev in events {
+        if !budgets.iter().any(|b| b.cmd == ev.cmd) {
+            continue;
+        }
+        if !usage_event_time(&ev.ts).is_some_and(|t| t >= cutoff) {
+            continue;
+        }
+        if let Some(sha) = event_binary_sha(ev) {
+            seen.insert(sha.to_ascii_lowercase());
+        }
+    }
+    let off_lineage: Vec<String> = seen
+        .into_iter()
+        .filter(|sha| {
+            matches!(
+                crate::classify_sha_match(repo, sha, &head),
+                crate::ShaMatch::Unrelated
+            )
+        })
+        .collect();
+    BinaryLineage::scoped(off_lineage)
+}
+
+/// The label used for a row whose `binary_sha` field is absent or blank.
+pub(crate) const UNKNOWN_BINARY_LABEL: &str = "unknown";
+
+/// One binary's slice of a guarded shape's window population.
+///
+/// BUG-1572: the finding carries these so a MIXED population is VISIBLE
+/// instead of silently averaged. "Main regressed" and "one lane is noisy"
+/// produce the same aggregate proportion; only the per-binary denominators
+/// tell them apart, and the seat reading the gate should not have to
+/// hand-write the grouping query that discovered the defect.
+// trace:BUG-1572 | ai:claude
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct BinaryTally {
+    pub(crate) sha: String,
+    pub(crate) samples: usize,
+    pub(crate) over_budget: usize,
+    pub(crate) over_pct: f64,
+    /// Did this binary's calls count toward the gate's decision?
+    pub(crate) counted: bool,
+}
+
+/// Group a shape's window population by `binary_sha`. Pure; sorted by sample
+/// count descending then sha, so the breakdown is stable across runs.
+// trace:BUG-1572 | ai:claude
+pub(crate) fn tally_by_binary(
+    window: &[(Option<&str>, u64)],
+    budget_ms: u64,
+    lineage: &BinaryLineage,
+) -> Vec<BinaryTally> {
+    let mut by_sha: std::collections::BTreeMap<String, (usize, usize, bool)> =
+        std::collections::BTreeMap::new();
+    for (sha, ms) in window {
+        let key = sha
+            .map(|s| s.to_ascii_lowercase())
+            .unwrap_or_else(|| UNKNOWN_BINARY_LABEL.to_string());
+        let entry = by_sha.entry(key).or_insert((0, 0, lineage.counts(*sha)));
+        entry.0 += 1;
+        if *ms > budget_ms {
+            entry.1 += 1;
+        }
+    }
+    let mut tallies: Vec<BinaryTally> = by_sha
+        .into_iter()
+        .map(|(sha, (samples, over_budget, counted))| BinaryTally {
+            sha,
+            samples,
+            over_budget,
+            over_pct: (over_budget as f64) * 100.0 / (samples as f64),
+            counted,
+        })
+        .collect();
+    tallies.sort_by(|a, b| b.samples.cmp(&a.samples).then(a.sha.cmp(&b.sha)));
+    tallies
+}
+
+/// Render the per-binary denominators onto a breach summary.
+///
+/// Every binary is listed, counted and excluded alike — truncating the list
+/// would re-hide exactly the mixed population BUG-1572 exists to expose.
+// trace:BUG-1572 | ai:claude
+pub(crate) fn binary_breakdown_phrase(per_binary: &[BinaryTally], lineage_scoped: bool) -> String {
+    fn render(t: &BinaryTally) -> String {
+        let short = t.sha.get(..t.sha.len().min(10)).unwrap_or(&t.sha);
+        format!("{} {:.1}% of {}", short, t.over_pct, t.samples)
+    }
+    let counted: Vec<String> = per_binary
+        .iter()
+        .filter(|t| t.counted)
+        .map(render)
+        .collect();
+    let excluded: Vec<&BinaryTally> = per_binary.iter().filter(|t| !t.counted).collect();
+    let mut phrase = format!("; per binary — counted: {}", counted.join(", "));
+    if !lineage_scoped {
+        phrase.push_str(
+            " (lineage scope OFF — this denominator spans every aida binary on the machine)",
+        );
+    }
+    if !excluded.is_empty() {
+        let n: usize = excluded.iter().map(|t| t.samples).sum();
+        phrase.push_str(&format!(
+            "; excluded {} calls from {} binar{} outside this HEAD's lineage: {}",
+            n,
+            excluded.len(),
+            if excluded.len() == 1 { "y" } else { "ies" },
+            excluded
+                .into_iter()
+                .map(render)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    phrase
+}
+
 /// One breached budget, kept machine-readable for the ledger.
 ///
 /// `budget_ms` and `tolerated_pct` are both recorded because a CONFIGURED
@@ -704,6 +949,17 @@ pub(crate) struct PerformanceBreach {
     pub(crate) tolerated_pct: f64,
     pub(crate) window_hours: i64,
     pub(crate) worst_ms: u64,
+    /// BUG-1572: the FULL window population split by `binary_sha` — counted
+    /// and excluded binaries alike — so a mixed population is visible rather
+    /// than silently averaged into one proportion.
+    pub(crate) per_binary: Vec<BinaryTally>,
+    /// Calls in the window dropped because their binary is off this HEAD's
+    /// lineage. `0` when the gate runs unscoped.
+    pub(crate) excluded_samples: usize,
+    /// Was the lineage scope ACTIVE for this decision? Recorded because
+    /// "nothing was excluded" and "the scope was off" otherwise render
+    /// identically, and only the second means the denominator is machine-wide.
+    pub(crate) lineage_scoped: bool,
 }
 
 /// Parse a usage event's timestamp, tolerating both `Z` and offset forms.
@@ -714,43 +970,73 @@ fn usage_event_time(ts: &str) -> Option<chrono::DateTime<chrono::Utc>> {
         .map(|t| t.with_timezone(&chrono::Utc))
 }
 
+/// A guarded shape's window population: every in-window call, paired with the
+/// binary that served it. Kept together because BUG-1572 needs BOTH the scoped
+/// subset (the gate's decision) and the full split (the finding's breakdown).
+// trace:BUG-1572 | ai:claude
+fn window_population<'a>(
+    events: &'a [crate::usage::UsageEvent],
+    cmd: &str,
+    cutoff: chrono::DateTime<chrono::Utc>,
+) -> Vec<(Option<&'a str>, u64)> {
+    events
+        .iter()
+        .filter(|ev| ev.cmd == cmd)
+        .filter(|ev| usage_event_time(&ev.ts).is_some_and(|t| t >= cutoff))
+        .map(|ev| (event_binary_sha(ev), ev.duration_ms))
+        .collect()
+}
+
 /// Which guarded shapes exceed their budget TOO OFTEN inside the window.
 ///
-/// Pure over its inputs INCLUDING `now`, so the decision is testable without a
-/// usage log on disk and without depending on the wall clock.
-// trace:STORY-1422 | ai:claude
+/// Pure over its inputs INCLUDING `now` and `lineage`, so the decision is
+/// testable without a usage log on disk, without a git repo, and without
+/// depending on the wall clock.
+///
+/// BUG-1572: `lineage` scopes the DECISION population to one binary lineage.
+/// The reported `per_binary` split still covers every binary in the window —
+/// scoping the gate without showing what was scoped out would just relocate
+/// the blind spot.
+// trace:STORY-1422 trace:BUG-1572 | ai:claude
 pub(crate) fn performance_breaches(
     events: &[crate::usage::UsageEvent],
     budgets: &[PerformanceBudget],
     policy: &PerformancePolicy,
     now: chrono::DateTime<chrono::Utc>,
+    lineage: &BinaryLineage,
 ) -> Vec<PerformanceBreach> {
     let cutoff = now - chrono::Duration::hours(policy.window_hours);
     let mut breaches = Vec::new();
     for budget in budgets {
-        let recent: Vec<u64> = events
+        let window = window_population(events, &budget.cmd, cutoff);
+        let per_binary = tally_by_binary(&window, budget.budget_ms, lineage);
+        let counted: Vec<u64> = window
             .iter()
-            .filter(|ev| ev.cmd == budget.cmd)
-            .filter(|ev| usage_event_time(&ev.ts).is_some_and(|t| t >= cutoff))
-            .map(|ev| ev.duration_ms)
+            .filter(|(sha, _)| lineage.counts(*sha))
+            .map(|(_, ms)| *ms)
             .collect();
-        if recent.is_empty() {
-            // No samples in the window is NOT a pass — `performance_unobserved`
-            // reports it, so silence is explained rather than assumed.
+        if counted.is_empty() {
+            // No in-lineage samples in the window is NOT a pass —
+            // `performance_unobserved` reports it (and says how many
+            // off-lineage calls were dropped), so silence is explained
+            // rather than assumed.
             continue;
         }
-        let over_budget = recent.iter().filter(|ms| **ms > budget.budget_ms).count();
-        let over_pct = (over_budget as f64) * 100.0 / (recent.len() as f64);
+        let over_budget = counted.iter().filter(|ms| **ms > budget.budget_ms).count();
+        let over_pct = (over_budget as f64) * 100.0 / (counted.len() as f64);
         if over_pct > policy.tolerated_pct {
             breaches.push(PerformanceBreach {
                 cmd: budget.cmd.clone(),
                 budget_ms: budget.budget_ms,
                 over_budget,
-                samples: recent.len(),
+                samples: counted.len(),
                 over_pct,
                 tolerated_pct: policy.tolerated_pct,
                 window_hours: policy.window_hours,
-                worst_ms: recent.iter().copied().max().unwrap_or(0),
+                worst_ms: counted.iter().copied().max().unwrap_or(0),
+                per_binary,
+                excluded_samples: window.len() - counted.len(),
+                lineage_scoped: lineage.is_scoped(),
             });
         }
     }
@@ -764,21 +1050,43 @@ pub(crate) fn performance_breaches(
 /// in a shape name is exactly how a scheduled guard watches nothing for months
 /// while reporting success. Absent evidence is not good evidence.
 // trace:STORY-1422 | ai:claude
+///
+/// BUG-1572: "unobserved" is judged against the SCOPED population, because a
+/// gate scoped to one binary lineage has no evidence about that lineage when
+/// every in-window call came from another one. `excluded_samples` records how
+/// many calls were dropped so the message can say WHY it is silent — a bare
+/// "no recorded calls" would be false where 800 calls exist off-lineage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct UnobservedBudget {
+    pub(crate) cmd: String,
+    /// In-window calls dropped as off-lineage. `0` = genuinely no calls.
+    pub(crate) excluded_samples: usize,
+}
+
 pub(crate) fn performance_unobserved(
     events: &[crate::usage::UsageEvent],
     budgets: &[PerformanceBudget],
     policy: &PerformancePolicy,
     now: chrono::DateTime<chrono::Utc>,
-) -> Vec<String> {
+    lineage: &BinaryLineage,
+) -> Vec<UnobservedBudget> {
     let cutoff = now - chrono::Duration::hours(policy.window_hours);
     budgets
         .iter()
-        .filter(|budget| {
-            !events.iter().any(|ev| {
-                ev.cmd == budget.cmd && usage_event_time(&ev.ts).is_some_and(|t| t >= cutoff)
+        .filter_map(|budget| {
+            let window = window_population(events, &budget.cmd, cutoff);
+            let counted = window
+                .iter()
+                .filter(|(sha, _)| lineage.counts(*sha))
+                .count();
+            if counted > 0 {
+                return None;
+            }
+            Some(UnobservedBudget {
+                cmd: budget.cmd.clone(),
+                excluded_samples: window.len(),
             })
         })
-        .map(|budget| budget.cmd.clone())
         .collect()
 }
 
@@ -796,46 +1104,66 @@ pub(crate) fn performance_findings(
     budgets: &[PerformanceBudget],
     policy: &PerformancePolicy,
     now: chrono::DateTime<chrono::Utc>,
+    lineage: &BinaryLineage,
 ) -> Vec<DoctorFinding> {
-    let mut findings: Vec<DoctorFinding> = performance_breaches(events, budgets, policy, now)
-        .into_iter()
-        .map(|b| DoctorFinding {
-            category: "performance".to_string(),
-            id: b.cmd.clone(),
-            summary: format!(
-                "`aida {}` exceeded its {} ms budget on {:.1}% of {} calls in the last {}h \
-                 (tolerated {:.1}%, worst {} ms)",
-                b.cmd,
-                b.budget_ms,
-                b.over_pct,
-                b.samples,
-                b.window_hours,
-                b.tolerated_pct,
-                b.worst_ms
-            ),
-            action:
-                "investigate the regression, or change the budget deliberately in [performance] \
-                 — raising a threshold the moment it trips is how a latency gate dies, so the \
-                 numbers in force are recorded with the trip"
+    let mut findings: Vec<DoctorFinding> =
+        performance_breaches(events, budgets, policy, now, lineage)
+            .into_iter()
+            .map(|b| DoctorFinding {
+                category: "performance".to_string(),
+                id: b.cmd.clone(),
+                summary: format!(
+                    "`aida {}` exceeded its {} ms budget on {:.1}% of {} calls in the last {}h \
+                 (tolerated {:.1}%, worst {} ms){}",
+                    b.cmd,
+                    b.budget_ms,
+                    b.over_pct,
+                    b.samples,
+                    b.window_hours,
+                    b.tolerated_pct,
+                    b.worst_ms,
+                    binary_breakdown_phrase(&b.per_binary, b.lineage_scoped)
+                ),
+                action: "investigate the regression, or change the budget deliberately in \
+                 [performance] — raising a threshold the moment it trips is how a latency gate \
+                 dies, so the numbers in force are recorded with the trip"
                     .to_string(),
-            safe_heal: false,
-        })
-        .collect();
+                safe_heal: false,
+            })
+            .collect();
 
     findings.extend(
-        performance_unobserved(events, budgets, policy, now)
+        performance_unobserved(events, budgets, policy, now, lineage)
             .into_iter()
-            .map(|cmd| DoctorFinding {
+            .map(|u| DoctorFinding {
                 category: "performance".to_string(),
-                id: cmd.clone(),
-                summary: format!(
-                    "`aida {cmd}` has a budget but NO recorded calls in the last {}h — the \
-                     guard is watching a command it never sees",
-                    policy.window_hours
-                ),
-                action: "check the shape spelling in [performance.budgets] and that telemetry \
-                         is enabled; an unobserved budget proves nothing"
-                    .to_string(),
+                id: u.cmd.clone(),
+                summary: if u.excluded_samples > 0 {
+                    // BUG-1572: say WHY it is silent. "No recorded calls" would
+                    // be plainly false with hundreds of off-lineage calls in
+                    // the window, and a reader would chase the wrong cause.
+                    format!(
+                        "`aida {}` has a budget but NO recorded calls from this HEAD's binary \
+                         lineage in the last {}h — {} in-window call(s) were served by binaries \
+                         outside it and were not counted",
+                        u.cmd, policy.window_hours, u.excluded_samples
+                    )
+                } else {
+                    format!(
+                        "`aida {}` has a budget but NO recorded calls in the last {}h — the \
+                         guard is watching a command it never sees",
+                        u.cmd, policy.window_hours
+                    )
+                },
+                action: if u.excluded_samples > 0 {
+                    "run the guarded command on a binary built from this HEAD's lineage, or set \
+                     AIDA_PERF_GATE_ALL_BINARIES=1 to count every binary on the machine"
+                        .to_string()
+                } else {
+                    "check the shape spelling in [performance.budgets] and that telemetry \
+                     is enabled; an unobserved budget proves nothing"
+                        .to_string()
+                },
                 safe_heal: false,
             }),
     );
@@ -891,6 +1219,7 @@ mod story_1422_performance_gate_tests {
             &[budget("show", 1000)],
             &PerformancePolicy::default(),
             now(),
+            &BinaryLineage::unscoped(),
         );
         assert_eq!(breaches.len(), 1, "{breaches:?}");
         assert_eq!(breaches[0].over_budget, 203);
@@ -909,8 +1238,14 @@ mod story_1422_performance_gate_tests {
         let events = mix(71, 1000); // 7.1%
         let budgets = [budget("show", 1000)];
         assert!(
-            performance_breaches(&events, &budgets, &PerformancePolicy::default(), now())
-                .is_empty(),
+            performance_breaches(
+                &events,
+                &budgets,
+                &PerformancePolicy::default(),
+                now(),
+                &BinaryLineage::unscoped()
+            )
+            .is_empty(),
             "7.1% must clear the ruled 10% tolerance"
         );
         let five_pct = PerformancePolicy {
@@ -918,7 +1253,14 @@ mod story_1422_performance_gate_tests {
             window_hours: 24,
         };
         assert_eq!(
-            performance_breaches(&events, &budgets, &five_pct, now()).len(),
+            performance_breaches(
+                &events,
+                &budgets,
+                &five_pct,
+                now(),
+                &BinaryLineage::unscoped()
+            )
+            .len(),
             1,
             "and 5% would have tripped on it — the rejected threshold, pinned"
         );
@@ -932,8 +1274,14 @@ mod story_1422_performance_gate_tests {
         events.extend((0..100).map(|_| ev_at("show", 400, 1)));
         let budgets = [budget("show", 1000)];
         assert!(
-            performance_breaches(&events, &budgets, &PerformancePolicy::default(), now())
-                .is_empty(),
+            performance_breaches(
+                &events,
+                &budgets,
+                &PerformancePolicy::default(),
+                now(),
+                &BinaryLineage::unscoped()
+            )
+            .is_empty(),
             "48h-old breaches fall outside a 24h window"
         );
         let wide = PerformancePolicy {
@@ -941,7 +1289,7 @@ mod story_1422_performance_gate_tests {
             window_hours: 72,
         };
         assert_eq!(
-            performance_breaches(&events, &budgets, &wide, now()).len(),
+            performance_breaches(&events, &budgets, &wide, now(), &BinaryLineage::unscoped()).len(),
             1,
             "widening to 72h brings them back — so the window IS the filter"
         );
@@ -955,19 +1303,26 @@ mod story_1422_performance_gate_tests {
         let events = vec![ev_at("show", 400, 1)];
         let policy = PerformancePolicy::default();
         let typo = [budget("shwo", 1000)];
-        assert!(performance_breaches(&events, &typo, &policy, now()).is_empty());
+        let unscoped = BinaryLineage::unscoped();
+        assert!(performance_breaches(&events, &typo, &policy, now(), &unscoped).is_empty());
         assert_eq!(
-            performance_unobserved(&events, &typo, &policy, now()),
-            vec!["shwo"]
+            performance_unobserved(&events, &typo, &policy, now(), &unscoped),
+            vec![UnobservedBudget {
+                cmd: "shwo".to_string(),
+                excluded_samples: 0,
+            }]
         );
-        let findings = performance_findings(&events, &typo, &policy, now());
+        let findings = performance_findings(&events, &typo, &policy, now(), &unscoped);
         assert_eq!(findings.len(), 1, "{findings:?}");
         assert!(findings[0].summary.contains("NO recorded calls"));
 
         let stale = vec![ev_at("show", 9_900, 48)];
         assert_eq!(
-            performance_unobserved(&stale, &[budget("show", 1000)], &policy, now()),
-            vec!["show"]
+            performance_unobserved(&stale, &[budget("show", 1000)], &policy, now(), &unscoped),
+            vec![UnobservedBudget {
+                cmd: "show".to_string(),
+                excluded_samples: 0,
+            }]
         );
     }
 
@@ -982,12 +1337,25 @@ mod story_1422_performance_gate_tests {
         };
         let events = mix(300, 1000);
         let budgets = [budget("show", 1234)];
-        let b = &performance_breaches(&events, &budgets, &policy, now())[0];
+        let b = &performance_breaches(
+            &events,
+            &budgets,
+            &policy,
+            now(),
+            &BinaryLineage::unscoped(),
+        )[0];
         assert_eq!(b.budget_ms, 1234);
         assert_eq!(b.tolerated_pct, 10.0);
         assert_eq!(b.window_hours, 24);
         assert_eq!(b.worst_ms, 9_900);
-        let summary = &performance_findings(&events, &budgets, &policy, now())[0].summary;
+        let summary = &performance_findings(
+            &events,
+            &budgets,
+            &policy,
+            now(),
+            &BinaryLineage::unscoped(),
+        )[0]
+        .summary;
         assert!(summary.contains("1234 ms"), "{summary}");
         assert!(summary.contains("tolerated 10.0%"), "{summary}");
     }
@@ -1033,6 +1401,258 @@ mod story_1422_performance_gate_tests {
             .parse()
             .unwrap();
         assert_eq!(performance_policy(Some(&bad)), PerformancePolicy::default());
+    }
+}
+
+/// BUG-1572: the gate reads a MACHINE-GLOBAL log, so its population must be
+/// scoped to one binary lineage and its finding must show the per-binary split.
+#[cfg(test)]
+mod bug_1572_binary_lineage_tests {
+    use super::*;
+
+    fn now() -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339("2026-09-21T12:00:00+00:00")
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+    }
+
+    fn ev(cmd: &str, duration_ms: u64, sha: Option<&str>) -> crate::usage::UsageEvent {
+        crate::usage::UsageEvent {
+            ts: (now() - chrono::Duration::hours(1)).to_rfc3339(),
+            cmd: cmd.to_string(),
+            args_count: 0,
+            exit_code: 0,
+            duration_ms,
+            binary_sha: sha.map(|s| s.to_string()),
+            role: None,
+            scope: None,
+        }
+    }
+
+    fn budget(cmd: &str, budget_ms: u64) -> PerformanceBudget {
+        PerformanceBudget {
+            cmd: cmd.to_string(),
+            budget_ms,
+        }
+    }
+
+    /// `slow` of `total` `show` calls over a 1000ms budget, all served by `sha`.
+    fn calls(sha: &str, slow: usize, total: usize) -> Vec<crate::usage::UsageEvent> {
+        (0..total)
+            .map(|i| ev("show", if i < slow { 9_900 } else { 400 }, Some(sha)))
+            .collect()
+    }
+
+    /// THE DEFECT, BOTH DIRECTIONS. One window, two binaries: `inlineage` under
+    /// budget and `otherlane` far over it. Scoped to HEAD's lineage the gate
+    /// must stay QUIET — a noisy lane cannot hold main red. Flip WHICH binary
+    /// is slow and the same window MUST trip — otherwise the scope is not a
+    /// discriminator, it is just a mute button. One direction is half a test.
+    // trace:BUG-1572 | ai:claude
+    #[test]
+    fn a_noisy_off_lineage_binary_does_not_trip_the_in_lineage_gate_but_a_noisy_in_lineage_one_does(
+    ) {
+        let budgets = [budget("show", 1000)];
+        let policy = PerformancePolicy::default();
+        let scoped = BinaryLineage::scoped(["otherlane".to_string()]);
+
+        // Direction 1: in-lineage clean (5%), off-lineage filthy (80%).
+        let mut mixed = calls("inlineage", 5, 100);
+        mixed.extend(calls("otherlane", 80, 100));
+        assert!(
+            performance_breaches(&mixed, &budgets, &policy, now(), &scoped).is_empty(),
+            "a lane's own noisy build must not hold this HEAD's gate red"
+        );
+        // …and the un-scoped population WOULD have tripped, so the scope is
+        // what quiets it — not an accidentally-clean fixture.
+        assert_eq!(
+            performance_breaches(&mixed, &budgets, &policy, now(), &BinaryLineage::unscoped())
+                .len(),
+            1,
+            "unscoped, the SAME window trips at 42.5% — that is the defect"
+        );
+
+        // Direction 2: swap which binary is slow. Same shape, same counts.
+        let mut regressed = calls("inlineage", 80, 100);
+        regressed.extend(calls("otherlane", 5, 100));
+        let breaches = performance_breaches(&regressed, &budgets, &policy, now(), &scoped);
+        assert_eq!(
+            breaches.len(),
+            1,
+            "a real regression ON THIS LINEAGE must still trip"
+        );
+        assert_eq!(breaches[0].samples, 100, "denominator is the scoped set");
+        assert_eq!(breaches[0].over_budget, 80);
+        assert_eq!(breaches[0].excluded_samples, 100);
+    }
+
+    /// The emitted finding reports the denominator PER BINARY, counted and
+    /// excluded alike — the mixed population is visible instead of averaged.
+    // trace:BUG-1572 | ai:claude
+    #[test]
+    fn the_finding_reports_the_denominator_per_binary() {
+        let mut events = calls("inlineage", 80, 100);
+        events.extend(calls("otherlane", 5, 40));
+        let findings = performance_findings(
+            &events,
+            &[budget("show", 1000)],
+            &PerformancePolicy::default(),
+            now(),
+            &BinaryLineage::scoped(["otherlane".to_string()]),
+        );
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        let s = &findings[0].summary;
+        assert!(s.contains("80.0% of 100 calls"), "aggregate stays: {s}");
+        assert!(s.contains("counted: inlineage 80.0% of 100"), "{s}");
+        assert!(
+            s.contains("excluded 40 calls from 1 binary outside this HEAD's lineage"),
+            "{s}"
+        );
+        assert!(s.contains("otherlane 12.5% of 40"), "{s}");
+    }
+
+    /// FAIL OPEN on a sha that cannot be placed. A row with no `binary_sha`,
+    /// and a sha git never classified (short, purged, or from another
+    /// project's repo), are COUNTED — only a positively off-lineage sha is
+    /// dropped. Silently dropping unplaceable rows would shrink the
+    /// denominator, which is the defect being fixed; failing closed on them
+    /// would make the gate unusable.
+    // trace:BUG-1572 | ai:claude
+    #[test]
+    fn unplaceable_and_absent_shas_are_counted_not_dropped() {
+        let scoped = BinaryLineage::scoped(["otherlane".to_string()]);
+        assert!(scoped.counts(None), "absent binary_sha counts");
+        assert!(
+            scoped.counts(Some("abc")),
+            "a short/unresolvable sha counts"
+        );
+        assert!(
+            scoped.counts(Some("deadbeefdeadbeef")),
+            "a sha from another project's repo counts"
+        );
+        assert!(
+            !scoped.counts(Some("otherlane")),
+            "only proven off-lineage drops"
+        );
+        assert!(
+            scoped.counts(Some("INLINEAGE")) && !scoped.counts(Some("OTHERLANE")),
+            "sha matching is case-insensitive in both directions"
+        );
+
+        // …and it shows up in the population, not just the predicate.
+        let mut events = calls("otherlane", 10, 10);
+        events.push(ev("show", 9_900, None));
+        events.push(ev("show", 9_900, Some("abc")));
+        let breaches = performance_breaches(
+            &events,
+            &[budget("show", 1000)],
+            &PerformancePolicy::default(),
+            now(),
+            &scoped,
+        );
+        assert_eq!(breaches.len(), 1, "{breaches:?}");
+        assert_eq!(
+            breaches[0].samples, 2,
+            "the unplaceable rows form the denominator"
+        );
+    }
+
+    /// An unscoped lineage is byte-for-byte the pre-BUG-1572 behaviour, so the
+    /// no-git-repo / opted-out path cannot silently change a verdict.
+    // trace:BUG-1572 | ai:claude
+    #[test]
+    fn an_unscoped_lineage_counts_every_binary() {
+        let unscoped = BinaryLineage::unscoped();
+        assert!(!unscoped.is_scoped());
+        assert!(unscoped.counts(None) && unscoped.counts(Some("anything")));
+        let mut events = calls("inlineage", 0, 100);
+        events.extend(calls("otherlane", 100, 100));
+        let b = performance_breaches(
+            &events,
+            &[budget("show", 1000)],
+            &PerformancePolicy::default(),
+            now(),
+            &unscoped,
+        );
+        assert_eq!(b.len(), 1);
+        assert_eq!(b[0].samples, 200);
+        assert_eq!(b[0].excluded_samples, 0);
+        assert!(!b[0].lineage_scoped);
+        assert!(
+            binary_breakdown_phrase(&b[0].per_binary, b[0].lineage_scoped)
+                .contains("lineage scope OFF"),
+            "an unscoped denominator must SAY it is machine-wide"
+        );
+    }
+
+    /// A shape whose every in-window call came from off-lineage binaries is
+    /// UNOBSERVED, and the finding says so — "no recorded calls" would be
+    /// plainly false with calls sitting in the window, and would send a reader
+    /// hunting a telemetry outage instead of a binary mismatch.
+    // trace:BUG-1572 | ai:claude
+    #[test]
+    fn an_all_off_lineage_window_reports_why_it_is_silent() {
+        let events = calls("otherlane", 50, 60);
+        let budgets = [budget("show", 1000)];
+        let policy = PerformancePolicy::default();
+        let scoped = BinaryLineage::scoped(["otherlane".to_string()]);
+        assert_eq!(
+            performance_unobserved(&events, &budgets, &policy, now(), &scoped),
+            vec![UnobservedBudget {
+                cmd: "show".to_string(),
+                excluded_samples: 60,
+            }]
+        );
+        let findings = performance_findings(&events, &budgets, &policy, now(), &scoped);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(
+            findings[0]
+                .summary
+                .contains("60 in-window call(s) were served"),
+            "{}",
+            findings[0].summary
+        );
+    }
+
+    /// The opt-out env value is parsed, not guessed.
+    // trace:BUG-1572 | ai:claude
+    #[test]
+    fn the_opt_out_recognizes_only_affirmative_values() {
+        for on in ["1", "true", "yes", "on", " 1 "] {
+            assert!(perf_gate_scope_disabled_by(Some(on)), "{on}");
+        }
+        for off in ["0", "false", "", "no", "off", "maybe"] {
+            assert!(!perf_gate_scope_disabled_by(Some(off)), "{off}");
+        }
+        assert!(!perf_gate_scope_disabled_by(None));
+    }
+
+    /// The tally is ordered by sample count descending, so the breakdown is
+    /// stable across runs and the biggest contributor reads first.
+    // trace:BUG-1572 | ai:claude
+    #[test]
+    fn the_per_binary_tally_is_stable_and_labels_absent_shas() {
+        let window: Vec<(Option<&str>, u64)> = vec![
+            (Some("aaa"), 9_900),
+            (Some("bbb"), 400),
+            (Some("bbb"), 400),
+            (Some("bbb"), 9_900),
+            (None, 400),
+        ];
+        let tallies = tally_by_binary(&window, 1000, &BinaryLineage::scoped(["bbb".to_string()]));
+        assert_eq!(
+            tallies
+                .iter()
+                .map(|t| (t.sha.as_str(), t.samples, t.over_budget, t.counted))
+                .collect::<Vec<_>>(),
+            vec![
+                ("bbb", 3, 1, false),
+                ("aaa", 1, 1, true),
+                (UNKNOWN_BINARY_LABEL, 1, 0, true),
+            ],
+            "biggest contributor first, then sha — and \"aaa\" sorts before the \
+             absent-sha label, so the tie-break is by name, not by insertion order"
+        );
     }
 }
 
