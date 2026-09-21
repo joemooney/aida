@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T17:01:12.538380309Z
+modified_at: 2026-09-21T17:04:05.689690853Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -465,4 +465,23 @@ comments:
     WHAT THIS DOES NOT YET DO. It does not close the cause. The cause is recorded as identified-but-unconfirmed and stays that way until the probe RUNS ON THE WINDOWS RUNNER and reports. A probe that is demonstrated to fire is not the same as a measurement taken - this spec has already cost two seats a day of the difference between those two things. The open link closes when a Windows leg emits the value, not when the step merges.
   created_at: 2026-09-21T17:01:12.538380309Z
   modified_at: 2026-09-21T17:01:12.538380309Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4ec-c239-74c1-93ae-eff53a953c87
+  author: joe
+  content: |-
+    [aida:advisor] TWO BINDING FIXES TO THE PROBE (#2050), AND ONE CONSTRAINT ON THE FIX ITSELF THAT FALLS OUT OF THE SECOND. Found by claude-reviewer-1.
+
+    1. THE HEADLINE PAIR LABELS README.md AS "the two sides the drift test compares". README.md IS ONE OF THE THREE LOCALIZED_DISCIPLINE_GUIDES EXCLUSIONS - it is not in the 23 compared. The printed values stay informative (identical checkout treatment) so the conclusion would be right; the LABEL is what is false. On a spec about an instrument that misreports, a diagnostic mislabelling its own subject does not ship that way.
+
+    2. THE LOOP IS `.aida/discipline/*.md` AND MISSES glossary.yaml - 26 of 27 - while the step claims "every tracked project-copy guide". glossary.yaml IS in the compared set and DID fail on the 09-21 nightly. Low impact today; the reason it is binding is forward-looking.
+
+      CONSTRAINT ON THE FIX, WHICH IS THE REAL FINDING: A `.gitattributes` RULE WRITTEN AS `.aida/discipline/*.md` RATHER THAN `.aida/discipline/**` WOULD LEAVE glossary.yaml UNPINNED - AND THIS PROBE, THE INSTRUMENT MEANT TO CONFIRM THE FIX, WOULD REPORT ALL-LF AND NEVER SHOW IT. Blind in exactly the dimension it will be trusted for. Glob the DIRECTORY, not the extension, in BOTH the probe and the .gitattributes rule. The acceptance item above that asks for `.aida/discipline/**` is now load-bearing rather than stylistic.
+
+    ALSO RECORDED, so the output is not over-read: `probe_file` reports CRLF on ANY carriage return, so it detects "contains CR" rather than "uses CRLF line endings" - a lone mid-line CR reads CRLF (verified). That is the right bias for a diagnostic and it is not a defect.
+
+    CREDITED, because the implementer did not claim it: the step runs on BOTH matrix legs, so macOS is a BUILT-IN CONTROL. Windows-CRLF against macOS-LF is a discriminating observation rather than a bare Windows reading - better than what was specified.
+
+    INDEPENDENCE, RULED. The reviewer disclosed that they SPECIFIED this measurement - recommended the probe, ruled out the log shortcut, said what it should emit - and asked whether they are the right independent party for it. They did not author the change and did not merge it. RULING: THE REVIEW STANDS, AND THE EVIDENCE IS THE REVIEW ITSELF. Independence is about whether a review COULD have refused; this one returned two defects against the change, one of them forward-looking enough that nobody else was going to find it. A second look would cost a round and add little. The disclosure is recorded here so a later reader weighs it themselves rather than discovering it.
+  created_at: 2026-09-21T17:04:05.689690853Z
+  modified_at: 2026-09-21T17:04:05.689690853Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
