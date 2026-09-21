@@ -1,0 +1,45 @@
+id: 01a0c1cc-e5ee-7bf3-9a2a-ebec2c1e7a46
+spec_id: BUG-1514
+agreed_id: BUG-1514
+title: 'A red-CI unclaimed PR appears on NO surface: every gate excludes it for a locally correct reason and the composition is invisibility'
+description: |
+  A pull request whose CI is RED and which nobody has claimed appears on no surface in the system. Not in the reviewer queue, not in `aida awaiting`, not in unshipped-work, not in findings, and not in any open-work lens, because its spec reads Done. Every exclusion is locally correct; composed, they produce invisibility.
+
+  VERIFIED INSTANCE, 2026-09-20 19:30. PR #2035, "[AI:codex] fix(queue): keep metadata rework claimable (BUG-1470)", open since 22:41:18Z - 3.8 hours:
+
+      Build (ubuntu-latest)   FAIL          merge-hold-gate   pass
+      verdict                 none          hold              none, neither layer
+      queue                   not routed    BUG-1470 status   Done
+      aida awaiting           absent from prs, briefs, escalations and unshipped_work
+
+  WHY EACH SURFACE IS RIGHT TO EXCLUDE IT.
+    - The BUG-1291 orphan sweep, which claims unowned PRs for review, requires GREEN: ci_rollup in
+      (None | pass). This PR's Build fails, so the sweep skips it CORRECTLY - claiming a red PR
+      would spend a reviewer on a branch that cannot merge.
+    - No queue entry exists, so no reviewer picks it up.
+    - No hold exists, so nothing is stopping it. There is simply nothing driving it.
+    - The spec is Done, which drops it from every open-work lens by the ordinary rules.
+
+  So the spec says finished, the PR says failing, and NOTHING RECONCILES THE TWO. This is not a gate failing open; it is work falling between gates that are each behaving correctly, which is why auditing any single gate would never find it.
+
+  IT IS A DIFFERENT SHAPE FROM BUG-1291 AND SHOULD NOT BE FOLDED INTO IT. That bug is a CLEAN PR nobody claims - ready work with no owner. This is a BROKEN PR nobody claims. The orphan sweep does not merely fail to cover the red case, it covers it with an EXCLUSION, and a recovery predicate requiring green can never recover what is red. Red-with-nobody-assigned is the state most likely to persist indefinitely, because there is no green moment at which anything begins watching.
+
+  AND `Done` IS WHAT HIDES IT. Done is literally true - work finished on a branch - and operationally false, because the branch does not build. The one field that could have kept the work visible is set to the value that removes it, set correctly by the rules as written. This is the third distinct defect tonight in which a status that is true by definition is false in effect.
+
+  Acceptance:
+  1. `aida awaiting` surfaces the two-way inconsistency: a spec at Done whose referenced PR has failing checks. This is the general form - it catches the red-CI case and also a Done spec whose PR is closed, conflicting, or missing - and it is a check nothing currently performs in either direction.
+  2. A red-and-unowned PR reaches SOME surface. The cheapest form is the exact complement of the orphan sweep's green predicate, so the two together cover every open PR instead of leaving the red ones in the gap between them. Whether that routes for repair or merely reports is the implementer's call; state which and why.
+  3. Establish how long the condition must hold before surfacing. A PR is red for several minutes during a normal rework cycle and should not alarm; #2035 has been red and unowned for 3.8 hours. Name the threshold rather than leaving it implicit.
+  4. Count the existing instances before fixing. #2035 is one; the number across open PRs is unknown, and the same sweep that finds them is the fix's own verification.
+  5. The surfacing names WHY the PR is stuck - red CI, no owner - rather than only that it is. A row saying "PR #2035 needs attention" sends someone to rediscover what this spec already established.
+
+  NOT IN SCOPE: whether a spec should be Done while its PR is red. That is a lifecycle question and belongs with the Done-versus-Completed work; this spec is about the work being findable either way.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T02:30:26.030629266Z
+modified_at: 2026-09-21T02:30:26.030629266Z
+req_type: Bug
+tags:
+- batch:night-0920 visibility merge-safety drain-safe from:session-0920
