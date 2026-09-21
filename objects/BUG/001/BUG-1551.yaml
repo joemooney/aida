@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:55:06.171955458Z
-modified_at: 2026-09-21T12:59:47.590614834Z
+modified_at: 2026-09-21T13:42:57.377135901Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -90,4 +90,38 @@ comments:
     #2033 is therefore held by THREE INDEPENDENT THINGS: a current blocking verdict at the live head, the merge-hold marker plus label, and the ordering. The reviewer's own ranking, which is worth recording: the VERDICT is the one to rely on least in an argument and most in practice - it is substrate, it is current, and `queue done` refuses against it. The HOLD is the one that survives a reviewer being replaced.
   created_at: 2026-09-21T12:59:47.590614834Z
   modified_at: 2026-09-21T12:59:47.590614834Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c434-9c61-72e1-b9a6-964a5ec8593b
+  author: joe
+  content: |-
+    CORRECTION TO MY OWN CLAIM: I SAID THE MERGE-HOLD ON #2033 ENFORCES THE ORDERING "BY THE SUBSTRATE RATHER THAN BY THREE OF US REMEMBERING IT". THE SUBSTRATE HAS NOT EVALUATED IT. Verified 2026-09-21 06:42 MST.
+
+        marker  .aida/merge-holds/PR-2033   present, 267 bytes
+        label   aida:merge-hold              applied
+        merge-hold-gate  FAILURE  started 2026-09-20T21:59:20Z
+        merge-hold-gate  SUCCESS  started 2026-09-20T21:41:33Z
+        head    74ff448f32d6 - UNMOVED
+        mergeStateStatus  BLOCKED
+
+    BOTH GATE RUNS PREDATE MY LABEL BY ROUGHLY NINE HOURS. I applied the label this morning; the most recent evaluation is from 21:59 YESTERDAY. So:
+
+      - #2033 IS blocked, and that is true and checkable.
+      - It is NOT blocked by my hold. It is blocked by a stale gate FAILURE left over from the earlier reviewer refusal cycle.
+      - WHETHER MY HOLD BINDS IS UNVERIFIED. It gets its first evaluation only when the gate next runs, which happens when someone pushes to the branch.
+
+    THE PRACTICAL EFFECT TODAY IS THE SAME - blocked is blocked - AND THE REASON IS WRONG, which is the part that matters. A hold whose enforcement has never been evaluated is indistinguishable, from the outside, from one that works. That is the instrument-never-fired shape (TASK-1418) applied to a gate I armed and then described as enforcing something.
+
+    BUG-1532 IS DIRECTLY ON POINT and is open in the backlog: "a merge-hold marker does not bind aida pr ship unless a drive is live AND its reason text names a running spec, so with the lane stopped no hold in the repo is honoured client-side". No drive is live. So the CLIENT-side layer is likely inert for this hold, and the SERVER-side layer (the required merge-hold-gate check, ADR-37's second layer) is the one that would have to carry it - and it has not run since the label was applied.
+
+    WHAT ACTUALLY HOLDS THE ORDERING TODAY, stated accurately so nobody relies on the wrong thing:
+      1. The stale gate FAILURE, which blocks merge regardless of its cause.
+      2. The drain reviewer's RequestChanges verdict at 74ff448f32d6, current at an unmoved head - substrate, and `queue done` refuses against it.
+      3. claude-reviewer-1's stated commitment not to approve #2033 into a state where merging auto-completes BUG-1480 past an unsatisfied criterion.
+      4. This prose criterion on BUG-1480, which a reviewer reads.
+
+    Three of those four are human or incidental. The one I presented as the substrate guarantee is the one that has not been tested.
+
+    DO NOT REMOVE THE MARKER OR THE LABEL - they are correct and they are what SHOULD bind; the point is only that their binding is unverified. When a rework lands on #2033 and the gate re-runs, THAT is the moment to check whether the label actually produces a FAILURE, and to record the answer here. If it does not, that is a second live instance for BUG-1532.
+  created_at: 2026-09-21T13:42:57.377135901Z
+  modified_at: 2026-09-21T13:42:57.377135901Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
