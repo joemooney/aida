@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T12:06:47.058086745Z
+modified_at: 2026-09-21T13:50:42.422600047Z
 req_type: Bug
 comments:
 - id: 01a0c30f-dcf8-7c00-a813-647e4173b637
@@ -102,4 +102,39 @@ comments:
     ACCEPTANCE ADDITION: the PR-keyed write must read the existing file and preserve prior rounds by the same mechanism the SPEC-keyed write uses, and a test must pin that a second recorder on a PR that already carries another actor's verdict does not lose the first actor's summary, findings, or recorded_by.
   created_at: 2026-09-21T12:06:47.058086745Z
   modified_at: 2026-09-21T12:06:47.058086745Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c43b-b4f6-7421-8c69-0dc921bc3ce1
+  author: joe
+  content: |-
+    SECOND ARTIFACT WITH THIS EXACT DEFECT, SO THIS SPEC'S SCOPE SHOULD WIDEN FROM REVIEW VERDICTS TO THE CLASS. Found by claude-reviewer-1 while pulling provenance on a merge-hold; every claim below re-verified by the advisor.
+
+    THE MERGE-HOLD MARKER LOSES ITS REASON THE SAME WAY A VERDICT LOSES A PRIOR ROUND:
+
+        git log -- .aida/merge-holds/PR-2033     -> EMPTY, no history
+        grep merge-hold rows in .aida/events.jsonl for 2033 -> 0 (14 rows mention "2033", none are hold events)
+        the aida:merge-hold label                -> carries a static description, not a per-PR reason
+
+    So the marker file is the ONLY place a hold's reason lives, it is not in git, no event records it, and the write path overwrites. I rewrote PR-2033's marker at 05:57 today and whatever reason was there before is gone with no trace - I did not read it first, which is the same move this spec documents for the PR-keyed verdict write.
+
+    SAME SHAPE, DIFFERENT ARTIFACT: a clobbering write, on a file with no history, so the loss is silent AND unrecoverable. Fixing this spec's verdict path and leaving the marker path would be the half-fix - the class survives in the artifact next door. That is why this belongs here rather than as its own spec: the remedy is one rule (read-before-write, preserve prior text, on every coordination artifact that carries a reason) applied to two writers.
+
+    ONE REFINEMENT TO THE REVIEWER'S FINDING, and it changes where to look. They described the directory as gitignored. The actual exclusion source is:
+
+        git check-ignore -v .aida/merge-holds/PR-2033
+          .git/info/exclude:19:.aida/
+
+    That is NOT the repo's designed .gitignore allow-list - it is a blanket `.aida/` in .git/info/exclude, which is the BUG-1279 trap documented in CLAUDE.md: a per-clone, untracked line that silently defeats every `!.aida/...` re-include. So the durability answer here is MACHINE-LOCAL. On a clone without that line the marker's ignore status could differ, and anyone reproducing this must run check-ignore rather than assume. It does not change the defect - a reason that lives only in a clobbered file is lost either way - but it means "gitignored by design" is the wrong description of why.
+
+    RECONSTRUCTIBILITY, which narrows the damage this time and should not be read as narrowing the defect. The reviewer reconstructed the original reason from adjacent timestamps:
+
+        21:58:01Z  .aida/review-verdicts/BUG-1480.json  request-changes  sha 74ff448f32
+        21:59:16Z  label applied                                         <- 75s later
+        21:59:17Z  gate run FAILURE
+        22:02:15Z  .aida/review-verdicts/PR-2033.json   RequestChanges   sha 74ff448f32d6...
+
+    The label lands inside a review cycle whose recorded reason is "the acceptance-mandated latency regression test is absent: the new test is only a source-text check and never executes or times the command" - substantively the same as the marker text I wrote over it. So nothing was lost that mattered THIS TIME, by luck of two adjacent records happening to bracket it. The next hold armed outside a review cycle has no such bracket.
+
+    ACCEPTANCE ADDITION PROPOSED: whatever preserves prior rounds on the verdict path must also apply to `.aida/merge-holds/<PR>` - read before write, preserve the prior reason with its timestamp, or emit a merge-hold event so the reason survives outside the clobbered file. A test should pin that re-arming a hold over an existing marker does not lose the first reason.
+  created_at: 2026-09-21T13:50:42.422600047Z
+  modified_at: 2026-09-21T13:50:42.422600047Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
