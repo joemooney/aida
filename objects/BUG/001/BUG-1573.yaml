@@ -1,0 +1,38 @@
+id: 01a0c5dc-a7dc-7d93-a779-615229bcf1cb
+spec_id: BUG-1573
+agreed_id: BUG-1573
+title: 'A performance-guard trip ledgers result: failed:1 and nothing else - the proportion, denominator, budget and tolerance in force at the time of the trip are discarded, so the record cannot tell a fixed'
+description: |-
+  OBSERVED DIRECTLY 2026-09-21 while demonstrating STORY-1423 criterion 3 (the schedule registration). Not inferred - reproduced end to end in a sandbox project root with the STORY-1423 config.
+
+  WHAT STORY-1422 PROMISED. The PerformanceBreach doc comment in aida-cli-lib/src/doctor_cmd.rs states the reason both budget_ms and tolerated_pct are carried on the struct: 'a CONFIGURED threshold is a number someone can quietly raise the moment it trips - the documented way latency gates die. A later reader must be able to tell a fixed regression from a raised ceiling, and that is only possible if the numbers in force AT THE TIME OF THE TRIP are in the record.'
+
+  WHAT THE SUBSTRATE-JOB PATH ACTUALLY RECORDS. The check itself prints the full line on STDOUT:
+
+      aida show exceeded its 1000 ms budget on 19.7% of 7346 calls in the last 24h (tolerated 10.0%, worst 165672 ms)
+
+  The scheduler keeps none of it. Two artefacts survive a trip and neither carries a number:
+
+  1. The store ledger, schedule/performance-guard.yaml:
+         job: performance-guard
+         last_run: 2026-09-21T21:11:59.675192004Z
+         last_by: {seat: substrate, vendor: tick}
+         result: failed:1
+
+  2. The local failure log, .aida/schedule.log - which appends STDERR only, so on this trip it captured the TOON format hint and not the breach:
+         task=performance-guard command=doctor check performance --fail-on-findings status=1 stderr=note: stdout is not a terminal - aida switched to compact TOON output...
+
+  3. The emitted CronJobFailed event inherits the same stderr string as its error field, so the routed advisor item says a job failed and attaches a format hint.
+
+  WHY THIS MATTERS RATHER THAN BEING COSMETIC. The routing prompt tells the advisor to 'read the ledger entry at schedule/performance-guard.yaml, confirm the budget in force at the time of the trip'. The budget in force is NOT in that file. The advisor can only re-run the check, which measures the population as it stands NOW against the config as it stands NOW - which is precisely the reading that cannot distinguish a fixed regression from a budget someone raised in between. The one defence STORY-1422 designed against the documented failure mode of latency gates is not actually wired up on the path that fires it.
+
+  Record_outcome_local in aida-cli-lib/src/maintenance_schedule.rs captures TaskOutcome, which already holds stdout. The fix is to carry it (or a structured finding projection) into the ledger entry and the event, not to add a new measurement.
+
+  OUT OF SCOPE FOR THE SPEC THAT FOUND IT. STORY-1423 criterion 3 is the registration; this is a defect in STORY-1422's shipped mechanism, sibling to BUG-1572 (the binary-blind denominator), found the same way - by actually firing the gate rather than reading its code.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T21:26:07.580218491Z
+modified_at: 2026-09-21T21:26:07.580218491Z
+req_type: Bug
