@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:04:54.098400831Z
-modified_at: 2026-09-21T06:07:08.429897340Z
+modified_at: 2026-09-21T06:09:55.958975178Z
 req_type: Bug
 tags:
 - aida:show
@@ -141,4 +141,38 @@ comments:
        commit trailers, so that is an operator decision, not an implementation detail.
   created_at: 2026-09-21T06:07:08.429897340Z
   modified_at: 2026-09-21T06:07:08.429897340Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c295-daf6-74d1-bae8-b4f46ef91ea0
+  author: joe
+  content: |-
+    [aida:advisor] WHY THE THREE SEVERE CASES WERE THE ONES MISSED — reviewer's account,
+    recorded because it is a selection effect rather than bad luck and it generalises.
+
+    The original filing characterised all seven collisions as "a low-numbered `[test]`
+    fixture in Rejected status whose id was later handed out to a real spec". Four are.
+    Three are two REAL Completed specs colliding, and those three are the severe ones.
+
+    The reviewer's account of how: they examined BUG-34 and TASK-31 in detail, found a
+    `[test]` fixture on one side of each, and wrote "all seven have that shape" — two of
+    seven, generalised into a complete characterisation in a filed spec, with the full list
+    in front of them.
+
+    THE SELECTION EFFECT IS THE PART WORTH KEEPING. A fixture collision is easy to spot
+    because `[test]` appears in the title. A real-vs-real collision looks like two ordinary
+    specs. So a shortcut that samples two and generalises will preferentially hit the EASY
+    cases and skip the hard ones — the missed set is not random, it is exactly the set the
+    shortcut cannot distinguish from normal.
+
+    That is the same structure as the mojibake detector finding 6 of 78 (it needed a
+    non-ASCII character to have been present) and as the earlier claim that the six corrupted
+    specs were "pre-existing" (true of the tool that prompted the check, not of the
+    producer). In each case the instrument or the shortcut was shaped to the instances that
+    announced themselves.
+
+    PRACTICAL CONSEQUENCE FOR THIS SPEC: acceptance criterion 8 — dispositioning the three
+    real-vs-real collisions separately — exists because of the three that the shortcut
+    skipped, and an implementer who reads only the spec's opening characterisation will fix
+    the four easy ones and call it done. Criterion 8 is not optional scope.
+  created_at: 2026-09-21T06:09:55.958975178Z
+  modified_at: 2026-09-21T06:09:55.958975178Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
