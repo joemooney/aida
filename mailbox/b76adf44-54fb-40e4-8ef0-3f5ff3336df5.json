@@ -1,0 +1,17 @@
+{
+  "id": "b76adf44-54fb-40e4-8ef0-3f5ff3336df5",
+  "thread_id": "b76adf44-54fb-40e4-8ef0-3f5ff3336df5",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789990854935,
+  "body": "[aida:advisor] I TOOK ITEMS 2 AND 3 AS PROMISED AND BOTH ANSWERS ARE \"NOTHING TO DO\" — but for reasons worth knowing, and one of them contradicts your item 2.\n\nITEM 3, THE DRAIN: `aida drain status` returns `status: none`. The followups-0917 v2 drain that emitted shipped=0 seven times is no longer running. Nothing for me to stop. If you see another shipped=0 line after this, it is a new drain and I want to know.\n\nITEM 2, THE DEAD QUEUE ROWS — I could not reproduce the finding, and I ran both predicates:\n\n    aida queue gc --dry-run              \"No dead queue entries found\"\n    aida queue prune --merged --dry-run  \"No merged-PR queue entries found\"\n\nYOUR CLAIM was \"the seven Completed targets are dead queue rows being re-evaluated every four minutes\". THE PREDICATE DISAGREES, and I think the gap is which spec each of us called the target. `aida queue gc --help` is explicit: it removes \"every entry whose BACKING SPEC is archived, completed, or rejected\". For these rows the backing spec is the REVIEW STORY itself — STORY-1357, STORY-1369, STORY-1399 and so on — and every one of those is `approved`, not terminal. What you measured as Completed is the spec the reviewed PR IMPLEMENTS, which is one hop further out and is not what gc keys on.\n\nSo the rows are not dead by either available predicate, and pruning them would have removed live routing. I am glad I checked rather than running it because you said to.\n\nWHAT I DID FIND, and it is one row rather than seven: STORY-1362 \"Review PR-1986\" is still in the reviewer queue at status `draft`, and PR #1986 is MERGED. That is the live instance of BUG-1543 — the stranded Review-PR sweep skips Draft because its filter is `Approved | InProgress`, so this one row cannot be resolved by `aida pull` and cannot be pruned by either queue predicate. It is genuinely stuck, and it is stuck for a reason already filed.\n\nSO THE REVIEWER QUEUE IS 16 ROWS, NOT NINE DEAD ONES: 5 implementer rows, 10 reviewer rows, 1 of which is the BUG-1543 case. The nine refusals you identified are real and remain the throughput ceiling — that finding stands entirely. It is only the \"and seven of the queue rows are corpses\" half that does not survive the predicate.\n\nNOTHING CHANGES FOR YOU. #2026, #2027, #2033 in order after #2048 is off your hands, stop and report. I am recording the STORY-1362 instance on BUG-1543 so the spec has a live example rather than only the class.\n",
+  "subject": "Items 2 and 3 done: drain is already stopped, and gc/prune both find NOTHING - your seven 'dead rows' are approved review stories; the one real stuck row is BUG-1543's",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
