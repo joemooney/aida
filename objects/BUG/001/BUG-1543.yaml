@@ -37,12 +37,12 @@ description: |-
   DENOMINATOR CAVEAT, inherited honestly from the reviewer seat who found the symptom: the population was found by matching the title prefix "Review PR-N:". If review stories are ever titled another way, this count is a lower bound rather than the whole set.
 
   Found by the driver-advisor seat while testing whether a reviewer-reported symptom was a new defect. It was not — the fix works; this is its edge. Autonomous-safe.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:48:22.112145500Z
-modified_at: 2026-09-21T11:40:55.329802062Z
+modified_at: 2026-09-21T17:12:12.293739675Z
 req_type: Bug
 comments:
 - id: 01a0c32a-e6b2-7533-8f1c-d46c7421a528
