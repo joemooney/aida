@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T10:27:25.705842018Z
-modified_at: 2026-09-21T11:04:28.178841608Z
+modified_at: 2026-09-21T11:08:05.373565675Z
 req_type: Story
 comments:
 - id: 01a0c384-9466-7c53-a41e-375bbbf79cc5
@@ -83,6 +83,31 @@ comments:
     Recorded by the driver-advisor. The question and the live-data check are the reviewer seat's; they verified the seat scoping against AIDA_USER rather than trusting the test, which is what made the ruling answerable at all.
   created_at: 2026-09-21T11:04:28.178841608Z
   modified_at: 2026-09-21T11:04:28.178841608Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3a6-d37d-7550-9b0e-faf0f60e41b7
+  author: joe
+  content: |-
+    CORRECTION TO THIS SPEC'S RULING COMMENT — the ruling stands, the SIZING in it was wrong, and it was wrong in the reassuring direction.
+
+    I wrote: "Today #2042's gate is the operator's TASK-1289 boundary decision rather than any reviewer, so nothing is stranded in practice." That sentence is false, and the reason it is false is a denominator error I have a standing rule against.
+
+    I SIZED THE GAP AT 27 OF 572 VERDICT FILES — 4.5%, an edge case — and generalised from #2042, the one instance I had touched. The reviewer measured the population the feature actually runs on and I verified it independently with a separate script:
+
+        open PRs carrying a BLOCKING verdict:  15
+        routes to a live seat:                  8   PR-1978 1989 2001 2019 2030 2035 2040 2047
+        SUPPRESSED, recorded_by drain reviewer: 7   PR-1974 1981 1999 2026 2027 2033 2042
+
+    SEVEN OF FIFTEEN. Forty-seven per cent, not four. And SIX of the seven are sitting in the reviewer's queue right now, each one a refusal whose recorder has exited — so when rework lands on any of them, the row this spec exists to emit goes to nobody.
+
+    #2042 IS THE EXCEPTION I GENERALISED FROM. It is the only one of the seven where the operator holds the gate. Every other one is a reviewer gate with no reviewer.
+
+    WHY THE DENOMINATOR FLIPPED THE CONCLUSION: the 572-file corpus is mostly CLOSED PRs that never enter the open-PR collector. It cannot size a feature that only reads the open set. Same actor, same predicate, opposite conclusion — the number was correct about the corpus and false about the thing being decided.
+
+    WHAT DOES NOT CHANGE: the ruling. A transfer copies the RECORD, not the GATE; the predicate reading only `recorded_by` is correct; widening it to `transferred_by` would deliver rows to whoever last touched the file, which looks like routing while being worse than silence. The reviewer says they would refuse that change themselves.
+
+    WHAT CHANGES: the residual is not hypothetical and is no longer a footnote on this spec. Filed as STORY-1420 with the measurement, the six queued instances, and three forks (inherit / surface-as-unroutable / stop recording unroutable verdicts). This spec ships correct and incomplete: it will emit rows for 8 of 15 open blocking verdicts, and STORY-1420 is what makes the other 7 reachable.
+  created_at: 2026-09-21T11:08:05.373565675Z
+  modified_at: 2026-09-21T11:08:05.373565675Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 failure_reason:
   phase: reviewer
