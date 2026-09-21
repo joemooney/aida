@@ -1116,11 +1116,11 @@ if [ "${{1:-}} ${{2:-}}" = "pr view" ]; then
   printf '%s\n' '{{"state":"OPEN","title":"test","baseRefName":"main","headRefName":"bug-1265","headRefOid":"deadbeefdeadbeefdeadbeef","isCrossRepository":false,"isDraft":false}}'
   exit 0
 fi
-if [ "$1 $2" = "pr list" ]; then
+if [ "${{1:-}} ${{2:-}}" = "pr list" ]; then
   printf '%s\n' '[{{"number":1265,"statusCheckRollup":[{{"name":"merge-hold-gate","status":"COMPLETED","conclusion":"FAILURE"}}]}}]'
   exit 0
 fi
-if [ "$1 $2" = "pr checks" ]; then
+if [ "${{1:-}} ${{2:-}}" = "pr checks" ]; then
   mode=$(cat '{}')
   if [ "$mode" = unavailable ]; then
     if printf '%s' "$*" | grep -q -- '--required'; then
@@ -1220,6 +1220,25 @@ exit 2
                 auto_complete::Phase::Ci,
             );
             (result, harness.finish_ci_calls, harness.shelf_calls)
+        }
+    }
+
+    /// The fake `gh` must tolerate probes with fewer than two arguments and
+    /// reach its normal fallback under `set -u` instead of aborting while
+    /// expanding an unset positional parameter.
+    // trace:BUG-1460 | ai:codex
+    #[test]
+    fn fake_gh_short_argv_reaches_fallback() {
+        let fixture = Fixture::new();
+        for args in [&[][..], &["pr"][..]] {
+            let output = std::process::Command::new(&fixture.gh)
+                .args(args)
+                .output()
+                .unwrap();
+            assert_eq!(output.status.code(), Some(2));
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(stderr.contains("unexpected gh call:"), "stderr: {stderr}");
+            assert!(!stderr.contains("parameter not set"), "stderr: {stderr}");
         }
     }
 

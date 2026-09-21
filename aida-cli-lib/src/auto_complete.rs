@@ -6135,11 +6135,11 @@ mod tests {
         /// TASK-975: how many times `finish_ci` fails with a red-CI
         /// `PhaseFailure` before going green (decrements per call).
         ci_red_failures: usize,
-        /// BUG-1460: reproduce a freshly pushed head with no registered checks,
-        /// followed by another push while phase 2 is still observing CI.
+        /// BUG-1460: reproduce phase 2 reporting PrNoChecks for one head,
+        /// followed by another push before the reviewer handoff.
         ci_no_checks_head_advance: bool,
-        /// Heads observed by the BUG-1460 CI-ordering fixture.
-        ci_heads_observed: Vec<&'static str>,
+        /// Observable CI/head events in the BUG-1460 ordering fixture.
+        ci_ordering_events: Vec<&'static str>,
         /// TASK-975: what `attempt_ci_fix` returns — did the fix session
         /// push a change?
         ci_fix_pushes: bool,
@@ -6236,7 +6236,7 @@ mod tests {
                 ci_fix_budget: 0,
                 ci_red_failures: 0,
                 ci_no_checks_head_advance: false,
-                ci_heads_observed: Vec::new(),
+                ci_ordering_events: Vec::new(),
                 ci_fix_pushes: false,
                 ci_fix_calls: Vec::new(),
                 merge_conflicts: 0,
@@ -6561,6 +6561,12 @@ mod tests {
         }
         fn finish_ci(&mut self) -> Result<(), PhaseFailure> {
             self.record(Phase::Ci)?;
+            if self.ci_no_checks_head_advance {
+                // This is the incident's first observation: phase 2 sees the
+                // pushed head before its checks have registered.
+                self.ci_ordering_events
+                    .push("ci:PrNoChecks@pre-review-head");
+            }
             // TASK-975: simulate a red terminal CI run that a pushed fix
             // (eventually) turns green.
             if self.ci_red_failures > 0 {
@@ -6574,11 +6580,11 @@ mod tests {
         }
         fn verify_ci_for_review(&mut self) -> Result<(), PhaseFailure> {
             if self.ci_no_checks_head_advance {
-                // Phase 2 reports PrNoChecks for its initial head. Before the
-                // handoff, the PR advances to the would-be reviewed commit,
-                // whose checks have not started.
-                self.ci_heads_observed.push("pre-review-head");
-                self.ci_heads_observed.push("reviewed-head");
+                // The PR advances mid-phase to the would-be reviewed commit;
+                // its checks likewise have not registered. The production
+                // boundary rejects this before PhaseEntered(reviewer).
+                self.ci_ordering_events.push("head:reviewed-head");
+                self.ci_ordering_events.push("ci:PrNoChecks@reviewed-head");
                 return Err(PhaseFailure::of(
                     FailureKind::CiTimeout,
                     "CI checks did not register for the current head PR-46",
@@ -7586,9 +7592,13 @@ mod tests {
 
         assert_eq!(result.failed_phase, Some(Phase::Ci));
         assert_eq!(
-            driver.ci_heads_observed,
-            vec!["pre-review-head", "reviewed-head"],
-            "fixture must advance the head while CI has no registered checks"
+            driver.ci_ordering_events,
+            vec![
+                "ci:PrNoChecks@pre-review-head",
+                "head:reviewed-head",
+                "ci:PrNoChecks@reviewed-head",
+            ],
+            "fixture must report no checks, advance the head mid-phase, then reject its unregistered checks"
         );
         assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
         assert!(
