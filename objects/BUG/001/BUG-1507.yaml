@@ -117,7 +117,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-21T02:25:46.590761686Z
+modified_at: 2026-09-21T02:32:04.584712153Z
 req_type: Bug
 tags:
 - batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
@@ -240,4 +240,49 @@ comments:
     FOR a2: this is a third site that must be covered by whatever replaces the enumeration. The force-off block, the test's conjunction, and this banner all enumerate the same three phases independently. A destructuring bind in the test does not reach banner_summary(), so the express branch needs its own treatment — either derive the banner text from the skip set rather than hardcoding a phase list, or make the express branch fall through to the parts-building path so a residual skip is named. The hardcoded string is what makes it unable to be wrong-in-a-detectable-way.
   created_at: 2026-09-21T02:24:53.664784850Z
   modified_at: 2026-09-21T02:24:53.664784850Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c1ce-66e8-7ad2-a387-52165ffe1411
+  author: joe
+  content: |-
+    [reviewer] a2iii IS CATCHABLE, AND THERE IS A ONE-LINE MECHANICAL DETECTOR FOR THIS ENTIRE CLASS. The advisor's reading — that a hardcoded summary string is the only leg no compiler and no test can catch, because no field's omission is detectable — is right about the string as written and wrong about the situation, because the omission IS detectable from outside.
+
+    FIRST, THE SCALE. The five skip fields are hand-enumerated in SEVEN separate places in production code (everything below line 320; the test module starts there):
+
+        128-133   from_tags match arms                5 fields    complete
+        135-137   lifecycle:trivial expansion          3 fields    narrowed  (correct by design)
+        151-153   express force-off                    3 fields    narrowed  (THE BUG)
+        159-163   is_empty()                           5 fields    complete
+        172-184   active_tokens()                      5 fields    complete   vocabulary A
+        196-200   RECOGNIZED_LIFECYCLE_TAGS const      5 tags      complete
+        223-236   banner_summary() parts               5 fields    complete   vocabulary B
+
+    Adding a sixth field to the struct requires seven correct hand edits. The compiler checks none of them, because every site is an `if` over a bool rather than a match over a sum type.
+
+    AND TWO VOCABULARIES FOR THE SAME FIELDS:
+
+        active_tokens():    no-preflight | no-ci-wait | no-review | no-build | no-harvest
+        banner_summary():   implementer preflight | CI wait | reviewer | build | harvest
+
+    So a naive cross-surface property test — "the banner names every skip that active_tokens reports" — cannot be written as a substring check. That is itself a latent divergence: two operator-visible vocabularies for one field set, maintained independently.
+
+    THE DETECTOR, and it needs no new tooling:
+
+        grep -oE "no_(preflight|ci_wait|review|build|harvest)" <file> | sort | uniq -c
+
+        7  no_build        7  no_ci_wait        7  no_review
+        5  no_harvest      5  no_preflight
+
+    Unequal counts mean some enumeration omits a field. The 7s appear in every site; the 5s are missing from exactly two. Those two are lines 135-137 and 151-153 — and one of them is correct while the other is the bug.
+
+    That is the right output for a detector of this class: it does not claim a defect, it produces a two-item candidate list from a set of seven sites, and a human decides. `lifecycle:trivial` omitting no_preflight is CORRECT — the doc at 94-96 says these skip only non-integrity phases, preflight is an integrity gate, and trivial predates preflight entirely. Express omitting it is the defect. Two candidates, one real, and no judgement about "which match arms constitute a gate" required to generate the list.
+
+    WHY THIS CHANGES a2iii FROM "MAKE IT NOT EXIST" TO SOMETHING ENFORCEABLE. The clean form collapses the enumerations into one table:
+
+        const SKIPS: [(fn(&LifecycleSkip)->bool, &str /*token*/, &str /*human*/); N]
+
+    with active_tokens(), banner_summary() and is_empty() iterating it, and one destructuring bind in a test binding every struct field so adding a sixth breaks compilation at a single known site. Then the banner cannot omit a field, because it no longer names fields — it iterates them. The hardcoded express string becomes a prefix on a derived list rather than a replacement for one.
+
+    So a2iii's failure mode is not undetectable. It is undetectable BY THE COMPILER IN ITS CURRENT SHAPE, which is a statement about the shape rather than about the class — and the same restructuring that makes a2i and a2ii enforceable makes a2iii enforceable too. All three are one change.
+  created_at: 2026-09-21T02:32:04.584712153Z
+  modified_at: 2026-09-21T02:32:04.584712153Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
