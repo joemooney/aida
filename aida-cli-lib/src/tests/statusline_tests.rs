@@ -2314,9 +2314,10 @@ fn card_count_acceptance_counts_checkboxes() {
     assert_eq!(card_count_acceptance(""), 0);
 }
 
-/// TASK-265: card_rel_label buckets a `Child` edge under "Parent"
-/// (the edge reads "I am a child of the target") and everything else
-// under "Related". trace:TASK-265 | ai:claude
+/// TASK-265: card_rel_label buckets a `Child` edge under "Parent".
+/// BUG-1471: custom edges are explicitly labeled Custom so the card does not
+/// teach their name as though it were a standard relationship type.
+// trace:TASK-265 trace:BUG-1471 | ai:codex
 #[test]
 fn card_rel_label_buckets_relationships() {
     assert_eq!(card_rel_label(&RelationshipType::Child), "Parent");
@@ -2324,7 +2325,7 @@ fn card_rel_label_buckets_relationships() {
     assert_eq!(card_rel_label(&RelationshipType::References), "Related");
     assert_eq!(
         card_rel_label(&RelationshipType::Custom("blocks".into())),
-        "Related"
+        "Custom"
     );
 }
 

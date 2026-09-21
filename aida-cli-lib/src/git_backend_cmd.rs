@@ -5924,27 +5924,11 @@ pub(crate) fn handle_git_backend_command(
                 .get_requirement_by_spec_id(to)?
                 .ok_or_else(|| not_found::requirement_not_found(to, Some(store_path)))?;
 
-            let rel_type = match r#type.to_lowercase().as_str() {
-                "parent" => RelationshipType::Parent,
-                "child" => RelationshipType::Child,
-                "duplicate" => RelationshipType::Duplicate,
-                "verifies" => RelationshipType::Verifies,
-                "verified-by" | "verifiedby" => RelationshipType::VerifiedBy,
-                "references" => RelationshipType::References,
-                // STORY-333: typed `blocked-by` + `blocks` so the pickability
-                // gate can match by variant rather than by string content.
-                // trace:STORY-333 | ai:claude
-                "blocked-by" | "blocked_by" | "blockedby" => RelationshipType::BlockedBy,
-                "blocks" => RelationshipType::Blocks,
-                // TASK-1176: the supersede lineage pair — first-class, so
-                // `aida graph`/`query_graph` can walk "what replaced this".
-                // trace:TASK-1176 | ai:claude
-                "superseded-by" | "superseded_by" | "supersededby" => {
-                    RelationshipType::SupersededBy
-                }
-                "supersedes" => RelationshipType::Supersedes,
-                other => RelationshipType::Custom(other.to_string()),
-            };
+            // BUG-1471: normalize the natural `related` spelling to the
+            // traversable standard References edge before anything is written.
+            // Other aliases and custom names retain the core parser's behavior.
+            // trace:BUG-1471 | ai:codex
+            let rel_type = cli_relationship_type(r#type);
 
             // TASK-887: a `--type` that isn't a standard relationship type lands
             // as a `Custom` edge, which the graph traversals (blocked-by,

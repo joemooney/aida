@@ -71491,6 +71491,29 @@ fn rel_should_write_inverse(rel_type: &RelationshipType, bidirectional_flag: boo
     bidirectional_flag || matches!(rel_type, RelationshipType::Parent | RelationshipType::Child)
 }
 
+/// Parse the relationship vocabulary accepted by `aida rel add`.
+///
+/// `related` is the natural spelling for a general link, but storing it as a
+/// custom edge makes the link invisible to standard graph traversal. Keep the
+/// core parser lossless for existing `Custom("related")` data and normalize
+/// only the CLI input to the existing `References` taxonomy member.
+// trace:BUG-1471 | ai:codex
+fn cli_relationship_type(input: &str) -> RelationshipType {
+    match input.to_lowercase().as_str() {
+        "parent" => RelationshipType::Parent,
+        "child" => RelationshipType::Child,
+        "duplicate" => RelationshipType::Duplicate,
+        "verifies" => RelationshipType::Verifies,
+        "verified-by" | "verifiedby" => RelationshipType::VerifiedBy,
+        "references" | "related" => RelationshipType::References,
+        "blocked-by" | "blocked_by" | "blockedby" => RelationshipType::BlockedBy,
+        "blocks" => RelationshipType::Blocks,
+        "superseded-by" | "superseded_by" | "supersededby" => RelationshipType::SupersededBy,
+        "supersedes" => RelationshipType::Supersedes,
+        other => RelationshipType::Custom(other.to_string()),
+    }
+}
+
 fn looks_like_cross_store_spec_ref(s: &str) -> bool {
     let Some((project, spec)) = s.split_once('#') else {
         return false;
@@ -71630,6 +71653,7 @@ const STANDARD_REL_TYPES: &[&str] = &[
     "verifies",
     "verified-by",
     "references",
+    "related",
     "blocked-by",
     "blocks",
     // trace:TASK-1176 | ai:claude — the supersede lineage pair.
@@ -71669,10 +71693,7 @@ fn nearest_standard_rel_type(input: &str) -> Option<&'static str> {
         return None;
     }
     // Already standard (or an accepted alias normalizing to one) → no hint.
-    if !matches!(
-        RelationshipType::from_str(&needle),
-        RelationshipType::Custom(_)
-    ) {
+    if !matches!(cli_relationship_type(&needle), RelationshipType::Custom(_)) {
         return None;
     }
     let mut best: Option<(&'static str, usize)> = None;
@@ -72595,8 +72616,11 @@ fn card_rel_label(rt: &RelationshipType) -> &'static str {
     match rt {
         // This spec is a child of the target → target is the parent.
         RelationshipType::Child => "Parent",
-        // Everything else is surfaced under the "Related" bucket; the
-        // canonical `aida show` / `aida rel` views carry the edge detail.
+        // Custom edges must not be presented with a label that looks like a
+        // standard type: that taught users to type `--type related`, creating
+        // graph-inert edges. trace:BUG-1471 | ai:codex
+        RelationshipType::Custom(_) => "Custom",
+        // Standard non-parent edges share the general Related bucket.
         _ => "Related",
     }
 }

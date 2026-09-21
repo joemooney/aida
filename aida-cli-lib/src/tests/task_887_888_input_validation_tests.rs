@@ -1,4 +1,41 @@
-use super::nearest_standard_rel_type;
+use super::{cli_relationship_type, nearest_standard_rel_type};
+use aida_core::graph_walk::{walk_union, Direction};
+use aida_core::models::{RelationshipType, Requirement, RequirementsStore};
+
+#[test]
+fn related_alias_writes_an_edge_reached_by_references_traversal() {
+    let mut store = RequirementsStore::new();
+    let source = Requirement::new("Source".into(), "desc".into());
+    let target = Requirement::new("Target".into(), "desc".into());
+    let (source_id, target_id) = (source.id, target.id);
+    store.add_requirement_with_spec_id(source);
+    store.add_requirement_with_spec_id(target);
+
+    let parsed = cli_relationship_type("related");
+    assert_eq!(parsed, RelationshipType::References);
+    store
+        .add_relationship(&source_id, parsed, &target_id, false)
+        .unwrap();
+
+    let walked = walk_union(
+        &store,
+        source_id,
+        &[(vec![RelationshipType::References], Direction::Outgoing)],
+        None,
+    );
+    assert!(
+        walked.nodes.contains(&target_id),
+        "the edge produced by `rel add --type related` must be graph-traversable"
+    );
+}
+
+#[test]
+fn core_parser_preserves_historical_custom_related_edges() {
+    assert_eq!(
+        RelationshipType::from_str("related"),
+        RelationshipType::Custom("related".into())
+    );
+}
 
 #[test]
 fn typos_of_standard_rel_types_get_a_did_you_mean() {
@@ -22,6 +59,7 @@ fn standard_rel_types_and_aliases_get_no_hint() {
         "verifies",
         "verified-by",
         "references",
+        "related",
         "blocked-by",
         "blocks",
     ] {
