@@ -103,6 +103,7 @@ mod exit_signal;
 mod external_import_bleed;
 mod feature_cmd;
 mod findings;
+mod implementer_preflight;
 // trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.
 mod first_run;
 mod focus;
@@ -88691,6 +88692,104 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &recorded_branch,
         );
         self.branch = Some(branch.clone());
+
+        // TASK-1289: the orchestrator owns the publication boundary. Run the
+        // configured commands exactly as CI defines them, in the implementer
+        // worktree, before either accepting an agent-opened PR or exercising
+        // the BUG-893 auto-open recovery below.
+        if self.lifecycle_skip.no_preflight {
+            if !self.json {
+                eprintln!(
+                    "  {} implementer preflight skipped per lifecycle:no-preflight (binary: none; guards not executed)",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+                );
+            }
+        } else {
+            let results = implementer_preflight::run(&worktree_path);
+            if !self.json {
+                for result in &results {
+                    match result {
+                        implementer_preflight::GuardResult::Passed(name) => eprintln!(
+                            "  {} preflight passed: {name}",
+                            crate::glyph(crate::glyphs::Glyph::Check).green()
+                        ),
+                        implementer_preflight::GuardResult::Skipped(note) => eprintln!(
+                            "  {} preflight skipped: {note}",
+                            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+                        ),
+                        // An inconclusive guard is NOT a skip: it was selected and could not
+                        // finish, so it is reported in its own right and refuses below. The
+                        // detail reaches the operator through the refusal message.
+                        // trace:TASK-1289 | ai:claude
+                        implementer_preflight::GuardResult::Inconclusive { name, reason } => {
+                            eprintln!(
+                                "  {} preflight inconclusive: {name} ({reason})",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                            )
+                        }
+                        implementer_preflight::GuardResult::Failed { .. } => {}
+                    }
+                }
+            }
+            if let implementer_preflight::PreflightDecision::Refuse { failed } =
+                implementer_preflight::decide(&results)
+            {
+                let detail = failed
+                    .into_iter()
+                    .map(|(name, output)| format!("guard `{name}` failed:\n{output}"))
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+                // TASK-1289: the guards refused — but the implementer may have
+                // ALREADY opened the PR, because `/aida-pr` runs inside the
+                // implementer phase, before the orchestrator regains control.
+                // A refusal that leaves that PR open is advisory, not a gate:
+                // the work the guards rejected sits published and mergeable by
+                // anyone who never reads this log line, and the only thing
+                // standing between it and `main` is prose in a skill file.
+                // Retract it here, so "the guards refused" and "nothing is
+                // published" are the same state.
+                //
+                // Best-effort by design: a retraction that fails is reported
+                // loudly and the phase still fails. The branch is untouched
+                // either way, so no work is lost.
+                // trace:TASK-1289 | ai:claude
+                if let Phase1PrResolve::Found(pr) = self.detect_phase1_pr(&branch) {
+                    let change = crate::forge::ChangeRef {
+                        id: pr.number,
+                        url: pr.url.clone(),
+                        branch: pr.head_branch.clone().unwrap_or_else(|| branch.clone()),
+                        base: String::new(),
+                        title: Some(pr.title.clone()),
+                    };
+                    let note = implementer_preflight::retraction_notice(&detail);
+                    match crate::forge::forge_for(&self.project_root).close_change(&change, &note) {
+                        Ok(()) => {
+                            if !self.json {
+                                eprintln!(
+                                    "  {} closed PR-{} — it was opened before the publication \
+                                     guards ran, and they refused it",
+                                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                                    pr.number,
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            if !self.json {
+                                eprintln!(
+                                    "  {} PR-{} is OPEN and its publication guards FAILED — \
+                                     close it by hand: {e}",
+                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                                    pr.number,
+                                );
+                            }
+                        }
+                    }
+                }
+                return Err(auto_complete::PhaseFailure::new(format!(
+                    "implementer preflight refused to open the PR:\n{detail}"
+                )));
+            }
+        }
 
         // The pipeline has nothing to review or merge without a PR — verify
         // the implementer opened one before exiting. The branch-keyed lookup

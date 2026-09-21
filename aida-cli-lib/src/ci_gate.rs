@@ -691,6 +691,9 @@ mod tests {
         fn comment(&self, _: &crate::forge::ChangeRef, _: &str) -> anyhow::Result<()> {
             unimplemented!()
         }
+        fn close_change(&self, _: &crate::forge::ChangeRef, _: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
         fn checkout_change(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<()> {
             unimplemented!()
         }
