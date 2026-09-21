@@ -1,0 +1,37 @@
+id: 01a0c1b5-2794-7b21-8a56-c0c14c1b630b
+spec_id: BUG-1511
+agreed_id: BUG-1511
+title: Eight personal dotfiles sit untracked and UNIGNORED at the root of a public repo, so any git add -A publishes whatever later fills them
+description: |
+  Eight personal dotfiles sit untracked at the root of this PUBLIC repository and none of them is ignored, so any `git add -A` stages them. They are empty today, which is the only reason this is a hazard rather than an incident.
+
+  MEASURED 2026-09-20 with `git check-ignore -v` on each path - checking IGNORED status, not merely whether git status lists them, because untracked and ignored look identical in a casual read:
+
+      .bashrc  .bash_profile  .profile  .zshrc  .gitconfig  .ripgreprc  .gitmodules  .codex/
+      all NOT IGNORED
+
+  The six shell and git dotfiles are currently ZERO LINES. `.codex/` is not: it holds config.toml (3 lines) and hooks.json (108 lines). No credential-shaped strings were found in any of them.
+
+  WHY THIS IS WORTH FILING WHILE THEY ARE EMPTY. The exposure is structural, not about current content. These are the exact filenames that accumulate machine-local and employer-context material over time - a proxy setting, an internal host, a work email in .gitconfig, a corporate alias in a shell rc. The moment anything populates them, one `git add -A` publishes it, and this repository is public. An agent running a broad add, a scaffolding step, or a human tidying a dirty tree all reach that outcome without anyone deciding to commit a dotfile.
+
+  AND THE EMPTINESS IS ITSELF A SIGNAL. Six zero-line dotfiles do not appear by accident; something created them. Whatever did that can populate them later, and the same path exists for `.claude/agents`, `.claude/launch.json`, `.claude/routines` and `.claude/output-styles`, which are also untracked at the root of the working tree.
+
+  THE PATTERN ALREADY EXISTS IN THIS REPO AND IS NOT BEING APPLIED HERE. `.gitignore` uses deny-by-default for `.aida/` - `.aida/*` plus an explicit allow-list - precisely so a new runtime file does not become a surprise commit. The repository root has no equivalent for personal dotfiles.
+
+  Acceptance:
+  1. The six shell/git dotfiles and any equivalents are ignored by an explicit rule, so `git add -A` cannot stage them. Prefer named entries over a broad root glob, so the rule states what it is protecting against.
+  2. Decide `.codex/` deliberately rather than by omission: it currently holds 111 lines of real configuration. Either it is project configuration and should be TRACKED - in which case track it, since untracked-and-unignored is the one state that is neither - or it is per-machine state and should be ignored. `.claude/` is already handled; `.codex/` is the same question for the other vendor.
+  3. Confirm no dotfile of this class is already in the repository's HISTORY. If one is, that is a separate and more urgent item - rules stop future commits and do nothing about published ones.
+  4. State the rule somewhere a scaffolding change will see it, since `aida init` writes agent packs into a project root and this repo dogfoods its own scaffolding.
+  5. Verification: create a non-empty `.bashrc`, run `git add -A`, and assert it is not staged.
+
+  NOT IN SCOPE: auditing the contents of the current files. They were checked for credential-shaped strings and none was found; this spec is about the path being open, not about what is on it today.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T02:04:29.972266635Z
+modified_at: 2026-09-21T02:04:29.972266635Z
+req_type: Bug
+tags:
+- batch:night-0920 public-repo hygiene drain-safe from:session-0920
