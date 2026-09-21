@@ -1,0 +1,50 @@
+id: 01a0c614-9932-7c01-a8be-6af6ee4ef259
+spec_id: STORY-1434
+agreed_id: STORY-1434
+title: A carved-out acceptance criterion leaves stale text in the description and the correction in a comment the default view never shows, so a drain picks the spec up against a gate that has moved
+description: |-
+  WHEN AN ADVISOR CARVES A CRITERION OUT OF A SPEC, THE SUPERSEDED TEXT STAYS IN THE DESCRIPTION AND THE CORRECTION LANDS IN A COMMENT THE DEFAULT VIEW DOES NOT SHOW. The spec then reads, authoritatively, as gated on something that has moved - and for a `drain`-mode spec, the next pickup acts on the stale text.
+
+  THREE INSTANCES TODAY, all by the driver-advisor seat, all the same shape:
+
+      BUG-1480    closure criterion repointed STORY-1422 -> STORY-1423
+      STORY-1423  criteria 1, 2 and 7 carved from STORY-1422, criterion 3 shipped separately
+      TASK-1273   live-smoke acceptance carved to TASK-1425; spec repointed to F3 alone
+
+  CAUGHT ON THE THIRD BY claude-reviewer-1, who verified the repointing was real before approving #1978 and then noticed WHERE it lived: the decision was in a comment roughly 300 lines into the YAML, while the description still ended "Acceptance: a green nightly proves the GitLab path end to end." `aida show TASK-1273` surfaces the description. The comment is not in the default view.
+
+  WHY THAT IS NOT COSMETIC. TASK-1273 is `execution_mode: drain`. A drain picking it up reads an acceptance criterion that NO BRANCH CHANGE CAN SATISFY - the live smoke fails on Cloudflare Access at phase=project-create, before any of the seven forge-smoke markers emit. THAT IS PRECISELY THE LOOP THAT ALREADY COST FOUR REVIEW ROUNDS on this spec: the reviewer refused correctly, the implementer had no path to clear the refusal, and it reworked the branch because the branch was the only surface it could act on. The carve-out fixed the substance; leaving the text in place recreated the trap.
+
+  THE IMMEDIATE FIX WAS APPLIED BY HAND AND IS NOT THE REMEDY. I rewrote TASK-1273's description, then checked the DEFAULT view and found the repointing sitting at the tail of a truncated field - still invisible to the reader it was written for. I moved it to the head, so the first line a drain reads now says the spec does not close on a green nightly. That worked, and it worked because I remembered to re-read the surface a consumer actually sees. NOTHING MADE ME DO THAT AND NOTHING WOULD HAVE CAUGHT ME NOT DOING IT.
+
+  THE GAP. AIDA has first-class superseding for a WHOLE SPEC - `--superseded-by` writes a typed relationship walkable by `aida graph`. It has nothing for a CRITERION. A carve-out is therefore a prose edit, unverified, in a field whose default rendering truncates, with the correction's visibility depending on where in the paragraph the editor happened to put it.
+
+  Acceptance:
+  - A way to record that a named criterion on spec A is now carried by spec B, such that the
+    default `aida show A` CANNOT render the superseded text as current. The mechanism matters
+    less than the property: a reader of the default view must not be able to act on carved text.
+  - The carve is a typed edge, not a tag or a prose convention, so `aida graph` and `query_graph`
+    can answer "what still gates A" without parsing English.
+  - A spec whose `execution_mode` is `drain` or `operator` and which carries a carved criterion
+    must make that visible AT PICKUP. Pickup is the moment the stale text does damage.
+  - DEMONSTRATE IT: carve a criterion, then run the default `show` and the pickup path, and
+    show that neither presents the superseded text as live. Reading the code will not establish
+    this - the failure is a rendering-and-truncation interaction, which is how the third instance
+    survived the first correction.
+
+  NOT IN SCOPE: changing how descriptions are stored or rendered generally. The problem is the
+  absence of a carve primitive, not the description field.
+
+  Filed by the driver-advisor seat, on the third instance, at its own stated promotion threshold.
+  The pattern was identified by claude-reviewer-1, who explicitly declined to file it and left the
+  determination to this seat. Related: STORY-1430 (auto-completion never reads a spec's own closure
+  criteria - the same substrate gap seen from the closing end rather than the carving end).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:27:13.842442950Z
+modified_at: 2026-09-21T22:27:13.842442950Z
+req_type: Story
+tags:
+- substrate lifecycle papercut
