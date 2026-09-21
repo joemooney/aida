@@ -87,12 +87,12 @@ description: |-
   then exits 0. The script has no --write flag; the bare run rewrites in place. Worth
   saying in the error message, which currently says "regenerate with <path>" without
   stating that a bare run is the regeneration.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:50:44.478379805Z
-modified_at: 2026-09-21T04:50:44.478379805Z
+modified_at: 2026-09-21T04:55:50.805697330Z
 req_type: Bug
 tags:
 - agent-surface
