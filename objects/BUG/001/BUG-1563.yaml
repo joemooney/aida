@@ -136,7 +136,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:43:33.092866010Z
-modified_at: 2026-09-21T19:01:13.421779910Z
+modified_at: 2026-09-21T19:03:30.995450066Z
 req_type: Bug
 comments:
 - id: 01a0c556-7edc-7f02-820a-d12318982900
@@ -184,4 +184,42 @@ comments:
     WHAT A PASS WILL AND WILL NOT ESTABLISH, stated before the result so it cannot be read generously afterwards: a pass with the lanes demonstrably busy IMPLICATES THE LOCK across all three failures. A pass with the lanes quiet ESTABLISHES NOTHING, because quiet is the alternative explanation. A FAILURE means something survives the heal and the sibling-contention explanation earns its place independently.
   created_at: 2026-09-21T19:01:13.421779910Z
   modified_at: 2026-09-21T19:01:13.421779910Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c55a-17b3-70e3-a791-76688024219a
+  author: joe
+  content: |-
+    [aida:advisor] THE SECOND DISCRIMINATOR PASSED AND IT ALSO DOES NOT DISCRIMINATE. I PRE-REGISTERED THE CRITERIA AND THEY RULE OUT THE CLAIM I WOULD LIKE TO MAKE.
+
+        post-heal, FULL aida-cli-lib suite, all 5273 tests
+        test result: ok. 5273 passed; 0 failed; 1 ignored   (109.95s)
+        -- including queue_dead_target_summary_filter_includes_archived_targets_for_gc,
+           the test that failed pre-heal under the same command
+
+    THE PASS IS REAL AND IT IS NOT EVIDENCE, because of the number I recorded at launch:
+
+        CONCURRENT CARGO PROCESSES AT LAUNCH: 2
+        at the time of the failures:           8
+
+    I wrote, before running it: "a pass with the lanes demonstrably busy IMPLICATES THE LOCK across all three failures. A PASS WITH THE LANES QUIET ESTABLISHES NOTHING, because quiet is the alternative explanation." The lanes were quiet. Four of the five implementer lanes had finished while the heal was being investigated.
+
+    SO BOTH VARIABLES MOVED TOGETHER. The treatment (lock healed) and the confound (lane count 8 -> 2) changed in the same interval, and the outcome flipped. THE EXPERIMENT IS CONFOUNDED AND NO CAUSAL CLAIM SURVIVES IT — not for the lock, and not against it. That is a weaker result than "inconclusive about the lock": it is inconclusive in BOTH directions, because the sibling-contention explanation is equally well supported by the same pass.
+
+    THIS IS THE SECOND DISCRIMINATOR IN A ROW THAT DID NOT DISCRIMINATE, AND THE TWO FAILED DIFFERENTLY:
+        first   a single-test filter removed the contention that was the failure mode -
+                the run could not have failed for the reason under test
+        second  the run could have failed, and the confound moved at the same time as
+                the treatment, so a pass supports both hypotheses equally
+    The first was a badly-formed question. The second was a well-formed question asked in an uncontrolled environment.
+
+    WHAT WOULD ACTUALLY SETTLE IT, and it is cheap but it requires CONTROL rather than opportunity:
+        (1) restore the lock condition deliberately (or find a machine where one is held),
+            run the full suite with a KNOWN, RECORDED lane count -> expect failure
+        (2) same lane count, lock healed -> expect pass
+        ONE VARIABLE MOVES BETWEEN THE TWO RUNS. Without that, every future pass here will be
+        attributable to whichever explanation the reader prefers.
+    Alternatively, accept that the causal question is not worth the control it needs, AND SAY SO ON THE SPEC rather than leaving a confounded pass to be read later as a confirmation.
+
+    WHAT IS STILL ESTABLISHED, unaffected by any of this: a stale lock from a dead pid existed for 179 hours, `aida doctor check stale-locks` could see it the entire time and classified it `[safe]`, nothing ran the check, and it is now healed. That is a finding about cadence and it needed no experiment.
+  created_at: 2026-09-21T19:03:30.995450066Z
+  modified_at: 2026-09-21T19:03:30.995450066Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
