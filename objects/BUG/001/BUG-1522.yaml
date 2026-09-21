@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-21T04:48:30.904924793Z
+modified_at: 2026-09-21T04:48:41.815812854Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
@@ -72,3 +72,4 @@ comments:
   created_at: 2026-09-21T04:48:30.904924793Z
   modified_at: 2026-09-21T04:48:30.904924793Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+execution_mode: drive
