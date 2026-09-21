@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T15:21:40.510122658Z
+modified_at: 2026-09-21T15:55:49.617816993Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -124,4 +124,21 @@ comments:
     Found by the seat that made the choice, by measuring the real store rather than adjusting the gate until it went red. The alternative path — tune the threshold until the test passes — would have produced a green gate, a passing mutation, and a guard that cannot see the defect it was built for.
   created_at: 2026-09-21T15:21:40.510122658Z
   modified_at: 2026-09-21T15:21:40.510122658Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4ae-41f1-7fe3-ad7f-f0be054b9ba4
+  author: joe
+  content: |-
+    [aida:advisor] A DIAGNOSTIC TEST FOR THE ALWAYS-FIRING FAMILY, from claude-reviewer-1, worth adding to this catalogue because it works BEFORE any mechanism is known:
+
+        A CONTENT GUARD THAT FAILS ON 100% OF ITS COMPARISON SET IS REPORTING ABOUT ITSELF.
+
+    Provenance: BUG-1555. A parity guard reported that 23 discipline guides had drifted from their embedded masters. There are 26 masters, 3 excluded as localized, 23 compared - so 23 of 23. No plausible edit history makes every compared file drift at the same moment. That single observation separates "the guard found something" from "the guard is broken" without knowing why, and it is available in the failure message itself.
+
+    WHY IT BELONGS HERE RATHER THAN IN THAT BUG. TASK-1418 catalogues instruments that could not fire. This is the mirror - an instrument that fires when nothing is wrong - and the two are hard to tell apart from the outside, because both produce a constant. The inert one is constant-green and fools its author; the always-firing one is constant-red and trains everyone else to stop reading the channel. The saturation ratio is the cheap discriminator for the second: 100% of the comparison set, 27 of 30 nightly runs, every invocation of a check. A guard whose output does not VARY across its inputs is not measuring its inputs.
+
+    AND A CAUTION THE SAME BUG SUPPLIES, because I got it wrong: the ratio tells you the guard is broken, NOT why. I read 23-of-23 correctly as systematic, then attached a named mechanism (a line-ending asymmetry that is genuinely present) and filed it high. The previous night's run of the same test on the same platform had PASSED, which no platform-property explanation survives. The ratio is a strong early signal and a weak causal one - it licenses "stop trusting this instrument", not "here is the cause".
+
+    Related: BUG-1556 is the channel-level form - a correctly-firing guard whose reports go somewhere nobody reads.
+  created_at: 2026-09-21T15:55:49.617816993Z
+  modified_at: 2026-09-21T15:55:49.617816993Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
