@@ -25,7 +25,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:05:31.157400040Z
-modified_at: 2026-09-21T21:17:21.522768726Z
+modified_at: 2026-09-21T23:05:44.704576073Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -44,4 +44,25 @@ comments:
   content: 'Promoted by joe 2026-09-21: CONFIRMED LIVE: ''aida edit --help'' has no heft flag, so a spec''s filing-time sizing is permanent. Heft is read by routing, so a spec that outgrows its estimate keeps feeding routing a number that is known to be wrong by everyone including the seat that noticed. Filed twice (x2), which is its own signal that the gap gets rediscovered rather than remembered.'
   created_at: 2026-09-21T21:17:21.522768726Z
   modified_at: 2026-09-21T21:17:21.522768726Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c637-dc00-75b3-8e29-5705e41a16e4
+  author: joe
+  content: |-
+    IMPLEMENTER PUNT (cli-surface-185-186 lane, 2026-09-21): --heft was NOT added to aida edit. The spec's premise does not survive verification, and implementing the flag as written would contradict an operator-resolved design decision. Evidence, all from code rather than docs:
+
+    1. heft IS NOT A STORED FIELD. It is a derived graph-centrality score (STORY-632), computed in aida-core/src/db/cache.rs::compute_degrees from the relationship graph and materialized ONLY in the rebuildable cache projection. Requirement in aida-core/src/models.rs has no heft field. Zero of 4287 store YAMLs carry a top-level heft key (grep -rl for it over .aida-store/objects). aida show prints degrees.heft, not a spec field.
+
+    2. STORY-632 EXPLICITLY DECIDED AGAINST STORING IT. Its description records the operator-resolved fork of 2026-06-15: "Deriving it into canonical YAML would force rewriting both endpoints heft on every edge add/remove (write-amplification on the orphan branch + constant staleness). Therefore: materialize degree/centrality in .aida/cache.db ... Never stored in the spec YAML." An edit flag would write a value the next aida cache rebuild silently discards.
+
+    3. THE PREMISE "matching how the field is already set at aida add time" IS FALSE. There is no --heft anywhere on the CLI surface: aida add --help, aida edit --help and aida help-all all return 0 hits for --heft. The only settable numeric axis is --weight, which exists on BOTH add and edit already.
+
+    4. THE OBSERVATION THAT STARTED THIS IS A MISREADING. TASK-1303 was never "filed at heft 2". Its heft is 2 because it has exactly one inbound and one outbound references edge, each weight 1, per the edge_weight table (blocks/blocked-by 3, parent/child 2, supersede 2, verifies 1, references 1, duplicate 0). Measured: TASK-1303 heft=2 in=1 out=1; STORY-1091 heft=5 in=2 out=1 (one child edge out, weight 2, plus 3 inbound); TASK-185 heft=0 in=0 out=0. The number tracks edges, not size, and it did not stay at 2 because nobody could edit it - it stayed at 2 because the spec's edge count did not change while its description grew.
+
+    5. THE ROUTING CLAIM IS UNSUPPORTED. Nothing in the drain, queue, dispatch, groom or burndown paths reads heft. Grepping every non-plan heft reference in the repo (81 hits) finds only: the cache computation, aida list --sort heft / --fields heft, the show/TOON/JSON render, and the MCP mirror of the same. STORY-1050 PROPOSES a max_heft backpressure knob, but it is not built, so today a stale heft is displayed, not consumed.
+
+    WHAT THE FINDING IS ACTUALLY POINTING AT, restated so it can be decided: the name heft reads as "size" and is in fact "graph centrality", so an advisor reading it as a sizing estimate gets a plausible wrong number twice independently. That is a naming defect, not a missing flag. Options for the decider: (a) treat --weight, which already exists on add and edit, as the advisor-maintained sizing axis and document heft as centrality; (b) add a genuinely new stored estimate field under a name that is not already taken (schema change, not a few lines); (c) rename the derived metric so it stops reading as size. Recurrence 2 on this finding is explained by (c): both filings mis-read the same word.
+
+    The TASK-185 half of this lane shipped normally. trace:TASK-186 | ai:claude
+  created_at: 2026-09-21T23:05:44.704576073Z
+  modified_at: 2026-09-21T23:05:44.704576073Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
