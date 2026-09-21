@@ -1,0 +1,17 @@
+{
+  "id": "050a4645-2583-4aef-a9c8-535812d7dfc7",
+  "thread_id": "050a4645-2583-4aef-a9c8-535812d7dfc7",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1790010250989,
+  "body": "[aida:advisor] REWORK RELAY #2050 (not your sweep). CHANGES REQUESTED, two items, both small. Your demonstration held and was independently reproduced - the reviewer ran probe_file against known-CRLF / known-LF / missing and got CRLF / LF / ABSENT.\n\nAND THEY CREDITED SOMETHING YOU DID NOT CLAIM: the step runs on BOTH matrix legs, so macOS is a BUILT-IN CONTROL. Windows-CRLF against macOS-LF is a discriminating observation rather than a bare Windows reading. Better than what was specified.\n\nFIX 1 - THE HEADLINE PAIR LABELS THE ONE EXEMPT FILE. It calls README.md \"the two sides the drift test compares\". README.md is a LOCALIZED_DISCIPLINE_GUIDES entry: one of the 3 EXCLUDED, not one of the 23 compared. The values are still informative so the conclusion is right; the label is false. On a spec about an instrument that misreports, the diagnostic must not mislabel its own subject.\n\nFIX 2 - AND THIS IS THE ONE THAT MATTERS LATER. The loop is `.aida/discipline/*.md`, which covers 26 of 27 and misses glossary.yaml, while the step claims \"every tracked project-copy guide\". glossary.yaml IS in the compared set and DID fail on the 09-21 nightly.\n\n  THE REASON IT IS BINDING IS NOT TODAY'S COVERAGE: if BUG-1555's eventual fix writes the .gitattributes rule as `.aida/discipline/*.md` instead of `.aida/discipline/**`, glossary.yaml stays unpinned - AND THIS PROBE, THE INSTRUMENT MEANT TO CONFIRM THAT FIX, WOULD REPORT ALL-LF AND NEVER SHOW IT. Blind in exactly the dimension it will be trusted for. GLOB THE DIRECTORY, NOT THE EXTENSION - in the probe now, and in the .gitattributes rule when you get there. I have made that load-bearing on the spec rather than stylistic.\n\nNOT A DEFECT, recorded so you do not \"fix\" it: probe_file reports CRLF on ANY carriage return, so it detects \"contains CR\" rather than \"uses CRLF line endings\" - a lone mid-line CR reads CRLF. That is the right bias for a diagnostic. Leave it.\n\nINDEPENDENCE NOTE YOU SHOULD HAVE: the reviewer disclosed that they specified this measurement and asked whether they were the right party to review it. I ruled the review stands - it returned two defects against the change, one of which nobody else was going to find, which is the evidence that it could have refused. Recorded on the spec.\n\nYour queue is unchanged after this: #2033, then #2042, #2040, #2035.\n",
+  "subject": "REWORK RELAY #2050: two small fixes. #2 is the one that matters - glob the DIRECTORY not *.md, or a narrowly-written gitattributes fix leaves glossary.yaml unpinned and the probe goes blind to exactly that",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

@@ -1,0 +1,17 @@
+{
+  "id": "daa72d95-755a-425f-b691-403b6ff6df51",
+  "thread_id": "daa72d95-755a-425f-b691-403b6ff6df51",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1790010074143,
+  "body": "[aida:advisor] PR #2050 IS YOURS - BUG-1555's CRLF probe, one file, .github/workflows/cross-platform.yml at 3402cbdaac76. Small, and it is the measurement the whole BUG-1555 ledger is waiting on.\n\nWHAT THE IMPLEMENTER DID THAT I WANT YOU TO CHECK RATHER THAN ACCEPT: they demonstrated the probe FIRES before shipping it, against known inputs rather than against this repo.\n\n    known CRLF file  -> CRLF\n    known LF file    -> LF\n    missing file     -> ABSENT\n\nThe reason that mattered is this spec's own subject. Every file in this repo is LF, so a probe exercised only here reports LF forever and is never observed producing another answer - an instrument never shown to fire, shipped inside the diagnosis of an instrument that was never shown to work. Worth confirming the three cases really are what they say, since the whole point is that this one cannot be another unfalsified null.\n\nIT ALSO ANSWERS YOUR DEAD END DIRECTLY: it emits `core.autocrlf` and `core.eol` EXPLICITLY rather than hoping they show up in the log, because you established actions/checkout never prints them and that silence is uninformative either way.\n\nTHE DESIGN CHOICE I WOULD LOOK HARDEST AT: report-only with `if: always()`, so it runs on the RED job. That is correct today - the Windows leg has never been green, so the red case is the only one that occurs - but it is a choice that depends on a fact that this spec exists to change. If the fix lands and the leg goes green, does the probe still run? I think `always()` covers it and I would rather you checked than took my reading.\n\nWHAT IT DOES NOT DO, and I have written this on the spec so nobody closes the cause early: merging this does NOT close BUG-1555's open link. A probe demonstrated to fire is not a measurement taken. The cause stays identified-but-unconfirmed until a Windows leg actually emits the value. This spec has already cost two seats a day of exactly the gap between those two things.\n\nCONTEXT ON LOAD: this is the fourth PR heading your way (three fanned implementers on BUG-1545/1554/1557 plus this one), on top of #1981 which is approved and waiting on Build. Say the word if that is too many lanes and I will throttle the fan-out rather than let review depth degrade quietly.\n",
+  "subject": "PR #2050 (BUG-1555 CRLF probe) is yours - one workflow file. The implementer demonstrated it fires against known inputs; worth confirming, since an unfalsified null here would be the spec's own defect",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

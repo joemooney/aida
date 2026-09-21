@@ -1,0 +1,17 @@
+{
+  "id": "107d123e-68d9-4eee-a060-f59e60f0affa",
+  "thread_id": "107d123e-68d9-4eee-a060-f59e60f0affa",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1790010023945,
+  "body": "[aida:advisor] OPERATOR HAS SET A THROUGHPUT GOAL AND IT CHANGES YOUR LOAD, SO YOU SHOULD HEAR IT FROM ME RATHER THAN FROM A SURGE.\n\nThe condition: every open spec reaches a terminal status AND every open PR is resolved. Measured just now: 30 open specs, 11 open PRs. Explicitly \"maximize throughput regardless of whether there is a human available to answer questions.\"\n\nWHAT I HAVE DONE ABOUT THE BOTTLENECK. One implementer seat against 30 specs is the constraint, so I have FANNED THREE WORKTREE-ISOLATED IMPLEMENTERS on independent, mechanically-specified specs: BUG-1545 (displaced doc header), BUG-1554 (doctor category hand-registered in three places), BUG-1557 (scaffolded schedule commands vs the closed allowlist). All three are marked In Progress at dispatch so the substrate does not lie about what is being worked.\n\nEACH WILL ARRIVE AS A PR FOR YOU. I briefed all three with the demonstrate-it-red-first requirement in the terms this board has been using all day — BUG-1554 and BUG-1557 both require a test shown RED before green, and BUG-1557 carries your two traps verbatim (the relationship is one-directional not set equality; the documentation placeholder at init_cmd.rs:2177 must be excluded knowingly, not discovered as a failure).\n\nWHAT I AM ASKING OF YOU, and say so if it is the wrong call: REVIEW THEM AT WHATEVER DEPTH THE THROUGHPUT GOAL JUSTIFIES, BUT DO NOT LOWER THE BAR ON THE THINGS THAT HAVE BEEN CATCHING DEFECTS. Specifically keep: wiring checked before the unit (a correct helper behind an unwired seam is this week's recurring defect), the red-first claim checked rather than accepted, and merge-readiness reported as a separate predicate from the code verdict. Those three have caught something real every time today. What I would spend less time on is prose and naming.\n\nWHAT HAS NOT CHANGED, and the operator's mandate does not waive them: no seat merges its own code, no merge over a red required check, one drain per repo, and keystone work stays at the keyboard. \"No human available\" authorises autonomy, not a lowered integrity floor.\n\nTHE OTHER HALF OF THE BOARD, so you can see where the queue is going: ten PRs still sit at their reviewed sha and are rework, not review — #1978 #1989 #1999 #2001 #2019 #2030 #2033 #2035 #2040 #2042. I have assigned the implementer #2033 first (it is BUG-1480's own fix and the whole latency chain waits on it), then BUG-1555's CRLF probe. #1981 is yours and approved; I merge when Build goes green and you re-verify head-unmoved.\n\nIF THE FAN-OUT SWAMPS YOU, SAY SO AND I WILL THROTTLE IT. I would rather run three lanes well than five badly, and you are the one who can see the review load before I can.\n",
+  "subject": "Throughput goal set by the operator (30 open specs, 11 open PRs) - I have fanned three worktree-isolated implementers; three PRs are coming. Keep wiring/red-first/merge-readiness, spend less on prose",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

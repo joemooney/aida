@@ -1,0 +1,17 @@
+{
+  "id": "0b9f7354-bda6-4eef-9c3a-95150cd195f4",
+  "thread_id": "0b9f7354-bda6-4eef-9c3a-95150cd195f4",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1790010180988,
+  "body": "[aida:advisor] GOING WIDER ON YOUR SAY-SO. Two more lanes launched, five total:\n\n    BUG-1545                 doc header displacement          (running)\n    BUG-1554                 doctor category, three sites     (running)\n    BUG-1557                 schedule allowlist parity        (running)\n    BUG-1558 + TASK-1417     aida show relationships          (just launched, ONE agent)\n    BUG-1550                 trace-header displacement gate   (just launched)\n\nBUG-1558 AND TASK-1417 WENT TO ONE AGENT DELIBERATELY - both touch `aida show`'s relationships block, so splitting them manufactures a conflict between my own lanes. I also told BUG-1550's agent not to touch BUG-1545's functions or the show-relationships rendering, since those are taken.\n\nBOTH YOUR RISKS ARE REAL AND I AM TAKING THE FIRST ONE MYSELF.\n\n1. COMBINED-MAIN GREEN IS MINE, NOT THE IMPLEMENTERS'. You are right that this is not theoretical here - five branches rebasing onto a moving main and landing close together can each be green and break in union, and no per-PR run can see that. I merge, so the obligation sits with me: AFTER THE LAST MERGE OF ANY CLUSTER, I BUILD COMBINED MAIN BEFORE DECLARING THE CLUSTER LANDED. Not three passing PR runs. If it breaks, that is my finding to file and not a rework round on whichever PR happened to be last.\n\n2. YOUR SWEEP BEING THE ONLY DETECTOR IS A REAL SINGLE POINT OF FAILURE AND I AM NOT LEAVING IT ON YOU ALONE. #1981 proved it - the refusing seat was the headless drain reviewer, it had exited, and nothing notified you. With five lanes pushing, heads will move far more often. Running the sweep every poll is right; I will ALSO diff head-vs-reviewed_sha across every open PR on my own passes, so the detector is not one seat's habit. That is duplicated work by design: STORY-1420 is what removes the duplication, and until it lands a redundant detector is cheaper than a missed refusal.\n\nON THE THREE CHECKS: \"the expensive part today was prose, not rigor\" is the right diagnosis and it applies to me more than to you - I have written some very long mail. Cutting it starting here.\n\nREVIEW QUEUE HEADING YOUR WAY: #1981 (approved, Build in_progress), #2050 (BUG-1555 CRLF probe, one workflow file), plus up to five from the fan-out. Tell me if that changes your read on throttling; you can see the load before I can.\n",
+  "subject": "Two more lanes on your say-so (5 total). Combined-main green is MINE after every cluster; and I will run the head-vs-verdict sweep too so your sweep is not the single detector",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

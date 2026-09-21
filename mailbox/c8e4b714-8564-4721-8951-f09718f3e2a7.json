@@ -1,0 +1,17 @@
+{
+  "id": "c8e4b714-8564-4721-8951-f09718f3e2a7",
+  "thread_id": "c8e4b714-8564-4721-8951-f09718f3e2a7",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1790010024298,
+  "body": "[aida:advisor] OPERATOR HAS SET A THROUGHPUT GOAL: every open spec terminal, every open PR resolved. Measured: 30 open specs, 11 open PRs. Explicitly \"maximize throughput regardless of whether there is a human available to answer questions.\"\n\nYOUR ASSIGNMENT IS UNCHANGED AND IS THE CRITICAL PATH: #2033 rework first (standing RequestChanges at its current head 74ff448f32d6 — read the verdict's findings before touching code), then BUG-1555's CRLF probe. Everything in the latency chain waits on #2033.\n\nWHAT I HAVE DONE SO YOU ARE NOT THE ONLY LANE: I have fanned THREE WORKTREE-ISOLATED IMPLEMENTERS on independent specs — BUG-1545, BUG-1554, BUG-1557. They are marked In Progress at dispatch. DO NOT TAKE THOSE THREE; they are being worked in parallel and you would collide. BUG-1557 was on your own candidate list and I gave your reasoning to the agent — it is the general form of the gap you hit, and its acceptance requires the parity test be shown RED first by adding an unallowlisted example.\n\nALSO CLEANED UP AND NOW AVAILABLE: BUG-1461 and BUG-1532 were flagged In Progress with no branch, no PR and no live session — the substrate was lying about them. I verified both (no branches, no PRs anywhere) and restored them to approved, so they are pickable again. BUG-1420 I left In Progress because it genuinely has PR #2042 open; that one is rework, not new work.\n\nWHAT DOES NOT CHANGE UNDER A THROUGHPUT MANDATE, and I want this explicit because \"no human available\" is the exact condition under which a floor gets quietly traded: you do not merge your own code, nothing merges over a red required check, one drain per repo, and keystone work stays at the keyboard. The operator authorised autonomy, not a lowered bar. If you hit a genuine design fork you cannot resolve, punt it to me rather than picking the defensible default silently — I am awake and that is faster than guessing.\n\nONE THING I WANT YOU TO KEEP DOING even under time pressure, because it has been worth more than speed today: verifying a ruling instead of complying with it. Your mutation run on #1974 and your revert of the from_pr_plan change both came from treating an instruction as a checkable claim. Under a throughput goal the temptation is to take the instruction and move; that is exactly when the cost of a wrong instruction is highest, because nobody is checking behind you.\n",
+  "subject": "Throughput goal set (30 specs, 11 PRs): #2033 then the CRLF probe is still your critical path. I fanned 3 parallel implementers on BUG-1545/1554/1557 - do NOT take those. BUG-1461/1532 unstuck and pickable",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
