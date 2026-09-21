@@ -1,0 +1,25 @@
+id: 01a0c5ae-a6d8-7d43-bac8-b1a0e5dbb8ba
+spec_id: TASK-1424
+agreed_id: TASK-1424
+title: GitLab mirror CI evidence has no link back to the GitHub PR reviewing it
+description: |-
+  Surfaced by the review of PR #2019 (TASK-1274): the reviewer's own F1 finding, after amendment, states the core defect precisely -- "the evidence and the review live on different forges with nothing linking them." A GitLab pipeline can be the ONLY evidence a claim (a timing measurement, a job passing) is true, since GitHub's required check is Linux-only and knows nothing about the GitLab mirror (this repo's own F2: a green GitHub Build says nothing about a GitLab job). Right now nothing in a GitHub PR -- description, comment, or check -- points a reviewer at the corresponding GitLab MR/pipeline for the exact reviewed sha, so establishing that evidence exists (let alone what it says) requires a reviewer to already know to go look, on a second system, with separate credentials.
+
+  Candidates, roughly in order of effort:
+  1. A PR-description/comment convention: whenever a change touches .gitlab-ci.yml or is otherwise GitLab-relevant, the implementer (or a lightweight CI step) posts the GitLab MR link + latest pipeline id/status for the current sha as a PR comment.
+  2. A GitHub status/check (even a non-blocking one) that mirrors the GitLab pipeline's current state for the reviewed sha, so `gh pr checks` at least surfaces "GitLab: <status>" instead of silence.
+  3. `aida show <spec>`'s git-linkage section (TASK-241) learning to resolve and print the matching GitLab MR/pipeline when the project has a `gitlab` remote and the spec's tags/paths suggest GitLab relevance.
+
+  Acceptance (draft, needs grooming): a reviewer looking at a GitHub PR that touches GitLab CI config can find the corresponding GitLab pipeline's status for the exact reviewed sha without leaving the review surface they started on, or with at most one obvious link/command.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T20:35:52.664720290Z
+modified_at: 2026-09-21T20:35:52.664720290Z
+req_type: Task
+tags:
+- ci
+- forge
+- gitlab
+- parent:EPIC-68
