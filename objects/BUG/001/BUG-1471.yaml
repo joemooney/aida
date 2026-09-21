@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-21T22:47:47.382252172Z
+modified_at: 2026-09-21T22:51:55.148000305Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -252,6 +252,38 @@ comments:
     CRITERION 4 is the card, per the 15:39 correction — and the first cut of that fix made it worse. card_rel_label started returning "Custom" while render_spec_card still filtered on the two exact labels "Parent" and "Related", so all 1480 Custom edges rendered NOWHERE: this spec's own card would have stopped showing the story that implements it. That is now fixed by the missing third bucket rather than by reverting the relabel. Custom edges render under their own "Custom" heading with the edge's real name inline, e.g. "[implemented-by] STORY-1435 — ...". Every heading is now driven from one CARD_REL_BUCKETS list through one card_rel_sections function, and a test asserts the completeness invariant — every relationship type renders in exactly one bucket — so a future label added without its heading fails the suite instead of silently dropping edges off the surface the reader actually reads.
   created_at: 2026-09-21T22:47:47.382252172Z
   modified_at: 2026-09-21T22:47:47.382252172Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c62b-338c-78c0-8453-0cb2fd209d71
+  author: joe
+  content: |-
+    [aida:advisor] I JUST CREATED ONE OF THESE EDGES WHILE THE FIX IS HELD, BY REACHING FOR THE NATURAL WORD — WHICH IS THIS SPEC'S OWN THESIS, DEMONSTRATED BY THE SEAT HOLDING THE PR.
+
+    2026-09-21 15:51. Linking STORY-1436 to ADR-53 as siblings, I typed the obvious thing:
+
+        $ aida rel add STORY-1436 --to ADR-53 --type related
+        note: 'related' isn't a standard relationship type (parent, child, duplicate, verifies,
+        verified-by, references, blocked-by, blocks, superseded-by, supersedes); created as a
+        custom edge — graph traversals won't follow it.
+        Added relationship: STORY-1436 --[Custom("related")]--> ADR-53
+
+    THE COMMAND SUCCEEDED, THE NOTE WAS PRINTED, AND I DID NOT CHANGE COURSE. That is the whole defect in one transaction: the word is natural, the warning is advisory, the edge is written, and the caller proceeds. I know this spec intimately — I wrote three comments on it today and am holding its PR — and the affordance still won.
+
+    THE COUNT IS GROWING DURING THE HOLD. Measured just now across the whole store:
+
+        141  !Custom related
+         17  !Custom related-to
+        ---
+        158  related-family inert edges
+
+    This spec's F3 discussion works from 103 remaining / 128 existing. IT IS 158 NOW. I contributed one of them twelve minutes after writing "the migration of the existing set is what determines whether this spec fixes anything or just stops the count growing" — and the count did not stop growing, because the fix is not merged.
+
+    WHAT THAT SETTLES FOR F3, and it is a genuine argument rather than impatience: the choice between migrating the existing edges and leaving them documented-as-inert has been framed as a judgement call. It is partly a RACE. Every day the fix sits, the population the migration would have to handle gets larger, and the 13 twins that make a blind conversion produce duplicates rather than repairs get more numerous too. THE CHEAPEST MOMENT TO DECIDE F3 IS BEFORE THE SET GROWS FURTHER, and that is now.
+
+    I am NOT using this to argue the PR should merge past its findings. F1 is real — over 1480 edges rendering nowhere is worse than the defect being fixed — and the rework is running. This is an argument about F3's disposition, not about the hold.
+
+    ONE MORE THING WORTH RECORDING, because it is the strongest evidence for option (a) that exists: the CLI's note is accurate, specific, lists the ten valid types, and states the exact consequence ("graph traversals won't follow it"). IT IS A GOOD WARNING AND IT DID NOT WORK. That rules out the remedy of improving the message, which is the first thing a reader would propose. The fix has to be in the behaviour, which is what (a) does.
+  created_at: 2026-09-21T22:51:55.148000305Z
+  modified_at: 2026-09-21T22:51:55.148000305Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
