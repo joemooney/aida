@@ -62,6 +62,39 @@ jobs:
           echo "::error::Deliberate cross-platform failure requested by workflow_dispatch"
           exit 1
 
+      # BUG-1555 PROBE: is the project-copy discipline guide checked out with
+      # CRLF on Windows while its embedded master is LF?
+      #
+      # The discipline-drift test compares `local.trim_end() != *master`, which
+      # normalises TRAILING whitespace only — every interior newline still
+      # differs if one side is CRLF. `.gitattributes` pins
+      # `aida-core/templates/**` to LF (BUG-244) and says nothing about
+      # `.aida/discipline/**`, so the two sides can disagree by line ending
+      # alone and 23 of 23 compared guides fail at once.
+      #
+      # REPORT-ONLY, DELIBERATELY. It never fails the job: the point is to emit
+      # an observation that does not exist today. The log shortcut is already
+      # ruled out — actions/checkout never prints core.autocrlf, so its absence
+      # from an 8820-line job says nothing either way.
+      # trace:BUG-1555 | ai:claude
+      - name: Probe discipline-pack line endings
+        if: always()
+        shell: bash
+        run: |
+          probe_file () {
+            if [ ! -f "$2" ]; then echo "  $1: ABSENT ($2)"; return; fi
+            if grep -qU $'\r' "$2"; then echo "  $1: CRLF  ($2)"; else echo "  $1: LF    ($2)"; fi
+          }
+          echo "BUG-1555 line-ending probe on ${{ runner.os }}"
+          echo "core.autocrlf = $(git config --get core.autocrlf || echo '(unset)')"
+          echo "core.eol      = $(git config --get core.eol || echo '(unset)')"
+          echo "--- the two sides the drift test compares ---"
+          probe_file "project copy" ".aida/discipline/README.md"
+          probe_file "master      " "aida-core/templates/.aida/discipline/README.md"
+          echo "--- every tracked project-copy guide ---"
+          for f in .aida/discipline/*.md; do probe_file "$(basename "$f")" "$f"; done
+          echo "(report-only — this step never fails the job)"
+      
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
