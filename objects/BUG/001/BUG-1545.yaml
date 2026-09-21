@@ -1,0 +1,33 @@
+id: 01a0c3b3-ed61-7bd1-aac4-486acbf8e475
+spec_id: BUG-1545
+agreed_id: BUG-1545
+title: short_sha_for_row carries pluralize's doc line on main, so a sha truncator is documented as a count formatter and pluralize is undocumented
+description: |-
+  A DOCUMENTATION REGRESSION THAT LANDED ON MAIN, verified in the tree rather than from the verdict that named it.
+
+  `git show origin/main:aida-cli-lib/src/awaiting_you.rs`, lines 809-817:
+
+      /// `"{n} {singular|plural}"` — the tiny count formatter the compact line uses.
+      /// Row-length sha for the awaiting surface. Purely cosmetic — the comparison
+      /// that decides a row is done on the full values.
+      // trace:STORY-1419 | ai:claude
+      fn short_sha_for_row(sha: &str) -> String { sha.chars().take(10).collect() }
+
+      fn pluralize(n: usize, singular: &str, plural: &str) -> String { ... }
+
+  `short_sha_for_row` now carries PLURALIZE's doc line as its own first line, so main documents a sha truncator as "the tiny count formatter the compact line uses". `pluralize` is left undocumented, where origin/main had it right before this change. The same shape appears a second time on the `candidate()` helper in the tests module.
+
+  It is two lines and takes longer to describe than to fix: move the pluralize doc back above pluralize, in both places.
+
+  WHY IT IS FILED AT ALL, given it is cosmetic. It was recorded as F2 on PR #2047's verdict, graded non-blocking, and approved over — correctly; it was never worth blocking a merge. But the verdict was attached to STORY-1419, which auto-completed on merge, and a finding on a completed spec is not a backlog item. It is an archive entry that happens to describe live code. This spec exists so the fix has somewhere to live that someone will actually look at.
+
+  The general case — that a non-blocking finding recorded on an approved verdict has NO successor once its spec completes — is filed separately. This is the instance; that is the mechanism.
+
+  Found by the reviewer seat during #2047's review, verified on main by the driver-advisor after the merge. Autonomous-safe: doc comments only, no behaviour.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T11:22:23.969332952Z
+modified_at: 2026-09-21T11:22:23.969332952Z
+req_type: Bug
