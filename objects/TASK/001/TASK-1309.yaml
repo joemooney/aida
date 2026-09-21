@@ -24,12 +24,12 @@ description: |-
   4. A test adds a new classifier and asserts the guard goes red.
 
   If keeping the line number is wanted for navigation, it may stay as non-authoritative display detail that the comparison ignores.
-status: Draft
-priority: Medium
+status: Approved
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:32:15.319281838Z
-modified_at: 2026-09-21T04:32:15.319281838Z
+modified_at: 2026-09-21T21:49:09.833549046Z
 req_type: Task
 tags:
 - papercut ci-guard churn severity:cosmetic
