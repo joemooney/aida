@@ -64,12 +64,12 @@ description: |
   Filed by the product seat at the operator's prompt — he asked whether this rule should be encoded or
   gated, and the answer is both: the reasoning belongs in the discipline pack, the detection belongs
   here. Disposition is the advisor's.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:28:38.860398318Z
-modified_at: 2026-09-21T03:58:37.841191865Z
+modified_at: 2026-09-21T04:15:27.709886762Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -283,7 +283,29 @@ comments:
   created_at: 2026-09-21T03:58:37.841191865Z
   modified_at: 2026-09-21T03:58:37.841191865Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c22d-0ddc-7c83-884a-0bed25ac0e50
+  author: aida-reconcile
+  timestamp: 2026-09-21T04:15:27.708731018Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c22d-0ddd-7043-915a-e30c1fd8ab81
+  timestamp: 2026-09-21T04:15:27.709884931Z
+  agent: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+  brief_ref: .aida/agent-briefs/codex/STORY-1391-2026-09-21T033218Z.md
+  commit_sha: 9c8373f5d6e025d78367b91fb9998d689c9ae2b6
+  summary: F3 and F5 both genuinely fixed, Build green, and the design change is better than the fix I asked for. Two comment figures contradict each other but the decision they justify survives re-measurement.
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  review_verdict: approved
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T04:15:27.327499400Z
+  completion_sha: 9c8373f5d6e025d78367b91fb9998d689c9ae2b6
 failure_reason:
   phase: reviewer
   phase_index: 3
