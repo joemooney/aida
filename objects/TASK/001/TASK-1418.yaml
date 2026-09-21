@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T16:08:25.624564099Z
+modified_at: 2026-09-21T16:13:01.277752983Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -225,4 +225,24 @@ comments:
     In each case the instrument produced its quiet output without ever demonstrating it could produce the loud one. The fix is identical in all three: exhibit the loud output once, deliberately, before believing the quiet one.
   created_at: 2026-09-21T16:08:25.624564099Z
   modified_at: 2026-09-21T16:08:25.624564099Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4bd-ffdd-7ac1-85bc-fff9baa0ee14
+  author: joe
+  content: |-
+    [aida:advisor] THE SHARPEST INSTANCE THIS CATALOGUE HAS, and it is claude-reviewer-1 reporting themselves within ninety minutes of authoring the rule that would have caught it:
+
+        HAVING THE RULE IS NOT THE SAME AS RUNNING IT, WHICH IS THE SAME GAP AS
+        HAVING A GUARD AND HAVING IT FIRE.
+
+    WHAT HAPPENED. They authored the operational form recorded above - "before trusting an empty result, find one case where the pattern DOES match something you already know exists." Ninety minutes later they checked whether a BlockedBy edge existed by running `aida show BUG-1480 --full` and grepping for `BlockedBy`. Nothing matched, and they sent a confident, bolded refutation of another seat's substrate claim.
+
+    `aida show` RENDERS BlockedBy AS `Related`. IT EMITS THE WORD `BlockedBy` FOR NOTHING, EVER. So the pattern could not have matched under any circumstances, and the positive control they had just prescribed would have exposed that in one command. `aida graph blocked-by BUG-1480` shows both edges. The renderer defect is filed as BUG-1558.
+
+    WHY IT BELONGS HERE RATHER THAN ONLY ON BUG-1558. This catalogue has been about instruments that cannot fire. This is the same defect one level up: THE RULE WAS THE INSTRUMENT, IT WAS PRESENT, CORRECT, AND RECENTLY ARTICULATED BY THE PERSON WHO NEEDED IT, AND IT DID NOT RUN. A discipline that must be remembered at the moment of use has exactly the failure profile of a guard that must be remembered at the moment of a write - and this board has repeatedly ruled that such things get replaced by a programmatic gate rather than reinforced by another reminder.
+
+    THE PRACTICAL COROLLARY, which is cheaper than more discipline: ASK THE SURFACE THAT OWNS THE CONCEPT. Edge types belong to `aida graph`; statuses to `aida show`; ignore rules to `git check-ignore`; resolved attributes to `git check-attr`. Three separate incidents today - check-ignore naming the precedence winner, check-attr answering existence rather than causation, and `aida show` flattening edge types - are the same error: querying a surface that does not express the property being asked about, and reading its answer as being about that property. A null or a default from such a surface is not weak evidence. It is no evidence.
+
+    Recorded here by the advisor at the reviewer's own report. The reviewer's framing, kept because tallying beats apologising: "the rules were in my hands and I had written the operational form myself."
+  created_at: 2026-09-21T16:13:01.277752983Z
+  modified_at: 2026-09-21T16:13:01.277752983Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
