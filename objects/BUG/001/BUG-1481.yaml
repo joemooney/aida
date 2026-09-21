@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:33.668555610Z
-modified_at: 2026-09-20T21:01:12.966015567Z
+modified_at: 2026-09-21T08:59:53.901547988Z
 req_type: Bug
 tags:
 - awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
@@ -181,5 +181,45 @@ comments:
     This is the same derivation criterion 1 already requires, used for a second purpose — which is an argument for doing that derivation properly once rather than approximating it in two places.
   created_at: 2026-09-20T21:01:12.966015567Z
   modified_at: 2026-09-20T21:01:12.966015567Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c331-76ad-77f1-8444-a10b6e5f5ba1
+  author: joe
+  content: |-
+    A SECOND, INDEPENDENT PRODUCER OF THE ZERO-CHECK-RUNS CONDITION — which means the predicate proposed for this bug earlier tonight is necessary but NOT sufficient.
+
+    EARLIER TODAY I recorded that a PR whose base is not main can never satisfy main's required checks and should never be listed as mergeable — from #2009, whose base was task-1289-work while ci.yml fires only on `pull_request: branches: [main]`, giving total_count 0 on its head.
+
+    THE REVIEWER SEAT HAS NOW FOUND A DIFFERENT ROUTE TO THE SAME ZERO. #2030 targets MAIN, so the base predicate does not catch it, and it still has zero check-runs. Evidence, in the order it settled:
+
+        gh pr view 2030      mergeable=false  mergeable_state=dirty
+        refs/pull/2030/head  05969aa3978d     (the new commit, pushed 04:52Z)
+        refs/pull/2030/merge 8bcf8e9b565f     dated 2026-09-20 13:38:23 -0700
+                             parents: a8c1877576 + 8ba48f5b98   <- the PREVIOUS head
+        git merge-base --is-ancestor 05969aa397 8bcf8e9b56  ->  NO
+
+    The merge ref is NOT ABSENT — it EXISTS and is STALE, computed eight hours earlier for the previous head. GitHub could not recompute it against the conflict, so the pull_request event never produced a runnable merge ref and no workflow was dispatched. The reviewer explicitly corrected their own first hypothesis here: they expected the ref to be missing, and checking its PARENTS rather than its existence is what distinguished the two stories. An existence check alone would have concluded the opposite.
+
+    AND CONFLICTING DOES NOT ALWAYS MEAN ZERO — the population was checked rather than assumed. All 17 open PRs by mergeable_state and check-run count:
+
+        blocked     14    checks 2-13      the normal held state
+        dirty        3    #2030 checks=0, #1981 checks=3, #1989 checks=3
+        unstable     1    #2042 checks=17
+
+    THE DIFFERENCE IS THE ORDER OF EVENTS:
+        main moves under a PR that already ran      -> the head KEEPS its checks; they are
+                                                       merely against a stale merge base
+                                                       (#1981, #1989)
+        a commit is pushed while the PR conflicts   -> that commit NEVER GETS A RUN AT ALL
+                                                       (#2030)
+
+    The second case is the dangerous one and it is this bug's exact condition: a freshly pushed commit on a conflicted PR presents as nothing-failing while nothing has been tested.
+
+    CONSEQUENCE FOR THE FIX. Do not key the remedy on "base is not main". That catches #2009 and misses #2030, and a third producer will appear. THE PRIMARY SIGNAL IS THE ZERO ITSELF: a head with zero check-runs has not been tested, whatever the reason, and must never be reported as ci_rollup pass or listed under mergeable_prs. Absent is not green. The base check and the conflict check are useful for the DIAGNOSTIC MESSAGE — telling a reader why there are no runs is worth a great deal — but they belong in the explanation, not in the predicate. Keying on the causes means enumerating them, and tonight has already produced two.
+
+    A PRACTICE NOTE WORTH KEEPING WITH THIS. The reviewer polled #2030 for about twelve minutes waiting for a Build that could never start; mergeable_state was one field away the whole time. Check mergeable_state BEFORE waiting on CI.
+
+    Recorded by the driver-advisor seat; the #2030 diagnosis, the population sweep and the ordering distinction are the reviewer seat's.
+  created_at: 2026-09-21T08:59:53.901547988Z
+  modified_at: 2026-09-21T08:59:53.901547988Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
