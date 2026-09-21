@@ -1,0 +1,50 @@
+id: 01a0c1d4-1685-7152-aee6-eba2a0339f08
+spec_id: TASK-1-167
+title: 'The per-turn notice and full awaiting report name different channel sets (notice has ''rework'', report has ''unshipped: 38'') and no one party sees both'
+description: |-
+  The per-turn notice and the full awaiting report name DIFFERENT channel sets, and no one party sees both — so neither can be validated against the other
+
+  FOUND PROSPECTIVELY by applying TASK-1-166's diagnostic question to a surface neither seat audited tonight, rather than by chasing a symptom. That is the advisor's stated promotion trigger for that pattern, so the method is part of the finding.
+
+  THE QUESTION: for a surface reporting a condition, who sees it, and separately who would recognise it as wrong? The per-turn notice has an unusually clean split — it is injected into every agent turn by the UserPromptSubmit hook, so its reader is an agent mid-task; the full report is run deliberately, typically by an operator or a seat doing a check. Two audiences, two moments, no overlap.
+
+  MEASURED, same store, seconds apart:
+
+      aida awaiting --notice
+          "Awaiting you: 10 findings · 8 in rework — run `aida awaiting`"
+
+      aida awaiting  (scalar fields, complete)
+          awaiting: 46       findings: 10      mail_unread: 0     mail_urgent: 0
+          mail_shared_unread: 0                directives_pending: 0
+          unshipped: 38      nightly_red: <3 nights>
+
+  THEY DISAGREE IN BOTH DIRECTIONS:
+
+    - The notice reports "8 in rework". The string "rework" does not appear anywhere in the full
+      report - zero matches across the whole output. So the notice names a channel the report does
+      not.
+    - The full report carries `unshipped: 38`, the largest channel by an order of magnitude. The
+      notice never mentions it. I have now seen roughly twenty of these notices this session and
+      not one included unshipped work.
+    - Neither surface's components reconstruct the headline. `awaiting: 46` against findings 10 +
+      unshipped 38 = 48, and against the notice's 10 + 8 = 18. I am not asserting an arithmetic
+      error - 46 may be a deduplicated count - but no reader of either surface can derive it, so
+      no reader can tell whether a channel is missing.
+
+  WHY NOBODY IS POSITIONED TO NOTICE. The agent is shown a number every turn that omits the largest channel, and has no cue that a larger number exists. The operator sees `unshipped: 38` but never sees the notice, so cannot observe that the notice drops it. A discrepancy between two surfaces is normally caught by someone reading both; these two are structurally read by different parties at different moments. The notice is the single most frequently displayed AIDA surface in an agent session and it is the one with no validator.
+
+  WHAT IS AND IS NOT DOCUMENTED. CLAUDE.md documents exactly one omission: "PRs omitted from the line", justified by the notice being cache/local-backed with no network. That justification is sound and does not extend to `unshipped`, which is local git state and needs no network. So the PR omission is a stated design decision and the unshipped omission is not stated anywhere I can find.
+
+  WHY THIS MATTERS BEYOND TIDINESS. The notice exists to tell an agent what awaits it without being asked. An agent that works an entire session on "10 findings · 8 in rework" is being told, once per turn, a number it has no reason to doubt. Tonight's reviewer queue is the demonstration of the cost: 38 unshipped branches is the single largest pool of stalled work in the project right now, and the surface designed to surface stalled work does not mention it.
+
+  SCOPE NOTE: I have NOT read the notice's implementation. This is measured from both surfaces' output only. Whether "8 in rework" is a subset of unshipped, a distinct channel, or a differently-named view of one, is exactly the question a reader cannot answer from what is displayed - which is the finding.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T02:38:17.221867061Z
+modified_at: 2026-09-21T02:38:17.221867061Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
