@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-21T01:42:21.569368461Z
+modified_at: 2026-09-21T02:40:00.245324251Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -44,6 +44,7 @@ tags:
 - from:session-0919
 - orchestrator
 - parent:EPIC-62
+- refused-awaiting-rework
 - reviewer
 - throughput
 relationships:
