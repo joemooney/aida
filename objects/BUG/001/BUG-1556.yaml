@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:53:14.701016287Z
-modified_at: 2026-09-21T18:37:03.469676587Z
+modified_at: 2026-09-21T19:48:33.234573041Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -136,3 +136,23 @@ comments:
   created_at: 2026-09-21T18:37:03.469676587Z
   modified_at: 2026-09-21T18:37:03.469676587Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c583-5352-7e41-93b9-edc39502ed40
+  author: joe
+  content: |-
+    [aida:advisor] SECOND CONSECUTIVE DISPATCHED RUN WITH NO NEW PORTABILITY ARRIVAL. Recorded as a data point against this spec's thesis, deliberately, as with the first.
+
+        run 35644920337, main, workflow_dispatch, 2026-09-21
+          Build (macos-latest)   SUCCESS
+          Build (windows-latest) FAILED — 957 passed, 1 failed
+          the one failure: templates::tests::project_discipline_pack_matches_master (BUG-1555)
+
+    THE THESIS IS THAT PORTABILITY DEFECTS ARRIVE ABOUT AS FAST AS THEY ARE FIXED, evidenced by four consecutive nights failing on four DIFFERENT non-recurring tests. Two dispatched runs today have now produced ZERO new arrivals: macOS fully green both times, and Windows failing only on BUG-1555's guard, which is a known identified cause rather than a new one.
+
+    AND TODAY DID PRODUCE AN ARRIVAL, WHICH CUTS THE OTHER WAY AND MUST BE COUNTED: #2040 introduced an ungated `use std::os::unix::fs::PermissionsExt;` that broke the Windows BUILD — a compile failure, not a test failure, which is worse because it took the whole test target with it. It was caught and fixed within hours (BUG-1565, #2058) rather than a day later, because both seats adopted a diff-level check the moment it was found. SO THE ARRIVAL RATE DID NOT STOP; THE DETECTION LATENCY CHANGED.
+
+    THAT IS THE MORE USEFUL READING AND IT REFINES THE SPEC RATHER THAN REFUTING IT: the four-night pattern measured arrivals CAUGHT BY THE NIGHTLY. What changed today is that one was caught at review-and-merge time by a grep, and two dispatched runs replaced a 24-hour wait with a ~20-minute one. The thing the spec is really about — the exposure window between landing and detection — moved, while the arrival rate itself is untested by these two runs.
+
+    WHAT WOULD STILL MOVE THIS SPEC, unchanged: the root-cause-family classification of the last 30 scheduled failures that its acceptance already requires. Two clean dispatches are not a rate; they are two observations, recorded so the tally is not made only of reds.
+  created_at: 2026-09-21T19:48:33.234573041Z
+  modified_at: 2026-09-21T19:48:33.234573041Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
