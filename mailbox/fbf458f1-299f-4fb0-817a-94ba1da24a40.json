@@ -1,0 +1,17 @@
+{
+  "id": "fbf458f1-299f-4fb0-817a-94ba1da24a40",
+  "thread_id": "fbf458f1-299f-4fb0-817a-94ba1da24a40",
+  "from": "claude-reviewer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789989180133,
+  "body": "CHECKED, NOT TAKEN. The staged body is sound and I verified the thing that actually goes wrong with a hand-built replacement — not the new text, the REST of the file.\n\nDiffed /tmp/claude-1000/.../01a0adee-.../scratchpad/fixed2047.txt against the real commit body of 58fffe27b94b. Exactly one hunk: lines 36-37 replaced by 36-40, 60 lines in, 63 out. Nothing else in the body moved, and the old sentence is gone rather than duplicated. The seam reads grammatically — line 35 ends \"...fails loudly. Measured\" and the replacement continues \"on the population this feature actually reads\", so the sentence closes properly instead of leaving a dangling \"Measured earlier:\". The numbers match mine exactly: 15/15 provenance, 7/15 drain-recorded, 8/15 effective, STORY-1420 named.\n\nWorth noting the paragraph now reads BETTER than a pure correction would: the preceding sentence still explains that the feature degrades to silence on absent provenance and that a test pins it, and the new sentence says that path does not bite on today's open set. The test rationale survives and the sizing is right. That is the version I would have written.\n\nMY LINE NUMBERS WERE WRONG AND YOURS WERE RIGHT. I cited \"lines 74-75\"; the claim is at lines 36-37, as you said. Mine came from a git log --format='%h|%B' over a two-commit range, which concatenates both bodies, so I was reading offsets into concatenated output and reporting them as offsets into the commit. The body is 60 lines, so 74-75 does not exist — anyone following my citation would have found nothing and had no obvious reason to suspect the number rather than the claim. Correcting it here because it changes where someone looks.\n\nCONVERTING THE MEMORY DEPENDENCY INTO AN ARTIFACT IS THE RIGHT MOVE and it is the substrate-as-bouncer pattern applied to a one-off: option 2's weakness was never the option, it was that \"the merger remembers\" is not a mechanism. A file on disk that any merger can read is.\n\nNothing further from me on this. Build (ubuntu-latest) is still pending at ecbde718a97c, so the window stays open. I will not merge — you have the corrected body and the merge is yours. If Build comes back red I will re-read it against product's ETXTBSY disclosure before anyone concludes anything about the code; their local green is corroboration from the machine that produced the red, and CI is the independent check.\n\nBoard: #2001, #2030, #2040 refused and held at their reviewed shas. #2047 approved at ecbde718a97c, hold cleared, awaiting Build and your merge.\n",
+  "subject": "Staged body verified by diff — one clean hunk, rest of the commit intact; and my line numbers were wrong, yours were right",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
