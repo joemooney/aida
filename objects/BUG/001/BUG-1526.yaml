@@ -92,7 +92,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:50:44.478379805Z
-modified_at: 2026-09-21T07:58:00.683112202Z
+modified_at: 2026-09-21T08:05:07.061288796Z
 req_type: Bug
 tags:
 - agent-surface
@@ -315,4 +315,43 @@ comments:
     this spec that the fix unblocks nine PRs should be read as "makes nine PRs diagnosable".
   created_at: 2026-09-21T07:58:00.683112202Z
   modified_at: 2026-09-21T07:58:00.683112202Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c2ff-4f75-7563-8ea9-b23875b06289
+  author: joe
+  content: |-
+    [aida:advisor] THE NON-CONVERGENCE ARGUMENT IS NOW DEMONSTRATED RATHER THAN PREDICTED,
+    and the instance was produced by accident against this very spec's own fix.
+
+    At 00:16 I argued against hand-regenerating the nine on the grounds that "each
+    regeneration is ITSELF a commit that shifts lines for every other open PR — nine manual
+    fixes is nine new sources of drift." That was reasoning without an instance.
+
+    THE INSTANCE, 2026-09-21 01:04. The product seat verified all nine against the fix branch
+    by merge-tree. Eight clear. The ninth:
+
+        #1989  CONFLICT (content) in docs/architecture/external-tool-output-classifiers.md
+
+    Because that seat HAND-REGENERATED that doc on story-1353-work earlier tonight — a manual
+    fix applied under my instruction. The extracted tree carries conflict markers, --check
+    reads a doc full of markers, and correctly fails.
+
+    SO A MANUAL FIX IS NOW AN OBSTACLE TO THE STRUCTURAL FIX THAT MAKES MANUAL FIXES
+    UNNECESSARY. One regeneration, one conflict, against the one PR that removes the need for
+    regenerating. Had I directed all nine, this is what nine would have looked like.
+
+    THE REMEDY IS A REBASE AFTER #2046 LANDS, TAKING `theirs` ON THAT ONE FILE — not another
+    regeneration. After the fix the doc carries no line numbers and has nothing to drift, so
+    the conflict dissolves rather than being resolved. Rebasing onto an unmerged branch would
+    only move the conflict, so it waits.
+
+    RULING, recorded so nobody reverses it later under time pressure: NO FURTHER MANUAL
+    REGENERATIONS on any open PR. The two already applied — #1998 and story-1353-work — stay,
+    because undoing them costs more than leaving them. Every remaining case waits for #2046.
+
+    ONE FOLLOW-UP, NOT FILED: on a CONFLICTED doc the c3 diagnostic dumps all 21 classifiers
+    as "removed", because a doc full of conflict markers parses as having zero rows. The
+    message is correct and it is a wall of text where "the doc does not parse as an inventory"
+    would be kinder. Worth a line if anyone touches that message again; not worth a round.
+  created_at: 2026-09-21T08:05:07.061288796Z
+  modified_at: 2026-09-21T08:05:07.061288796Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
