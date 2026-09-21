@@ -28,7 +28,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:13:16.135937840Z
-modified_at: 2026-09-21T01:13:16.135937840Z
+modified_at: 2026-09-21T01:13:24.607339601Z
 req_type: Task
 tags:
 - batch:night-0920 drain-safe merge-safety from:review-pr-2039
+relationships:
+- rel_type: Parent
+  target_id: 01a0bf8e-26de-77e3-9c89-52e785cc6649
+  created_at: 2026-09-21T01:13:24.607330339Z
+  created_by: joe
