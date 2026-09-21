@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:28:38.860398318Z
-modified_at: 2026-09-21T03:01:08.233853867Z
+modified_at: 2026-09-21T03:12:57.637933311Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -183,6 +183,39 @@ comments:
     NOTE ON THIS SPEC'S STATE: it read Approved at 19:31 when the advisor reset it after the lease-and-brief mixup that had it marked Done on work belonging to BUG-1420 and TASK-1289. It now reads InProgress. If a session picked it up, confirm the brief names THIS spec before it goes further - the failure that produced BUG-1510 was precisely a lease and a brief naming different specs with nothing comparing them.
   created_at: 2026-09-21T03:01:08.233853867Z
   modified_at: 2026-09-21T03:01:08.233853867Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1f3-d525-7752-a293-a438dd2f0aca
+  author: joe
+  content: |-
+    [aida:advisor] OWNERSHIP DECIDED 2026-09-20 20:14, so parallel work cannot produce two shapes.
+
+    THIS SPEC OWNS THE VERDICT-HISTORY RETENTION SHAPE. Criterion 1 here - retain verdict history per round rather than overwriting - defines the on-disk format, the round identity, and how a prior round's findings are read back. BUG-1505 criteria 7 and 10 (read-before-write with explicit supersede; a superseding verdict recording what it superseded) are CONSUMERS of that shape and must not define a second one. If BUG-1505 is implemented first, it consumes whatever this spec defines or waits; it does not invent a retention format.
+
+    WHY THIS NEEDED DECIDING RATHER THAN FLAGGING. Both specs are queued and this one is execution_mode drain. A drain implementer hitting an undecided ownership question decides it unilaterally and silently, and the two shapes would then differ in exactly the way that makes neither authoritative - which is the defect this spec exists to fix, arriving through its own implementation.
+
+    THREE OPERATIONAL NOTES FOR WHOEVER PICKS THIS UP:
+
+    1. BRANCH. Use story-1391-verdict-rounds. Do NOT use story-1391-work: that branch is the contaminated one from the lease-and-brief mixup - it carries five commits trailered BUG-1420 and TASK-1289, none of this spec's, and its remote is the held duplicate PR #2043. Someone has already created the clean branch correctly.
+
+    2. CONFIRM THE BRIEF NAMES THIS SPEC BEFORE STARTING. The last run under this spec's lease was briefed BUG-1420 rework and produced no code of its own; the resulting verdict, with five findings about TASK-1289, was recorded against this spec. That is BUG-1510 - a lease and a brief naming different specs with nothing comparing them - and this spec is its worked instance.
+
+    3. THE SUBSTRATE IS CURRENTLY LYING ABOUT IT. view: ps
+    running: 1
+    stale_hidden: 7
+    orphaned: 3
+    operator_last_seen: 47s ago
+    operator_presence: active
+    running[1]{session,spec,role,pid,elapsed,live,locked_by,dispatch_state,dispatch_hint}:
+      abf9f7f087dbb254e-c3a7f12a9af4d18b,-,advisor,1508190,335h 21m,live,"",moving,""
+    orphaned[3]{spec,title,liveness,likely_fanout}:
+      BUG-1420,"The implementer preflight runs CI's guards under a more permissive shell than CI does, so a guard can pass locally and fail in CI",flag-only,true
+      BUG-1485,"The orchestrator cannot match its own child session to a lease — four occurrences, three today, and one of them stranded pushed work as a done spec with no PR",flag-only,true
+      STORY-1391,"A finding that survives a review round is evidence the brief is unimplementable, and nothing can detect it because verdict files are overwritten each round",flag-only,true
+    salvageable[0]{session,spec,worktree,hint}: reports this spec flag-only: the In Progress flag is set with no live session backing it. Either a session exited without releasing, or the flag was set at dispatch for a session that has not started. Reconcile that before dispatching, or a second pickup will contend with a lease nothing holds.
+
+    THIS SPEC IS ALSO NOW A PREREQUISITE FOR ADR-49 - the mass-change split-verdict mode - because without per-round history the first-round pass rate is unmeasurable and the mode would be adopted with no way to observe whether it helped. Its priority follows from that, not from its own heft.
+  created_at: 2026-09-21T03:12:57.637933311Z
+  modified_at: 2026-09-21T03:12:57.637933311Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 failure_reason:
