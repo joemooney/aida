@@ -1426,8 +1426,6 @@ pub(crate) fn render_human(state: &DrainState, stale: bool) -> String {
     render_human_inner(state, stale, None, chrono::Utc::now())
 }
 
-/// Render the human summary with project-local pacing context.
-// trace:STORY-948 | ai:codex
 /// The members a READER should see, which is not always the members the state
 /// STORES.
 ///
@@ -1466,6 +1464,8 @@ fn display_members(state: &DrainState) -> Vec<DrainMember> {
     members
 }
 
+/// Render the human summary with project-local pacing context.
+// trace:STORY-948 | ai:codex
 pub(crate) fn render_human_with_context(
     state: &DrainState,
     stale: bool,
