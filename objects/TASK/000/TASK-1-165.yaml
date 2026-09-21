@@ -39,13 +39,20 @@ description: |-
   SUGGESTED SHAPE, advisory: the complement of the orphan sweep. Where that sweep claims clean-and-unowned PRs for review, something needs to surface RED-and-unowned PRs for repair - or `aida awaiting` needs a line for "your spec is Done and its PR is failing", which is a two-way check between spec status and PR state that nothing currently performs. The cheapest version is a predicate that is the exact negation of the sweep's green test, so the two together cover every open PR rather than leaving the red ones in the gap between them.
 
   NOTE ON PROVENANCE: I did not review #2035 and am not proposing to. Its CI is red; a review now would produce findings against a tree that cannot merge. This is filed as a routing and visibility defect, not a code finding.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:29:00.515328965Z
-modified_at: 2026-09-21T02:29:00.515328965Z
+modified_at: 2026-09-21T21:26:18.875421673Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a0c5dc-d3fb-74b2-8096-e121e98df5f3
+  author: joe
+  content: 'Promoted by joe 2026-09-21: PROMOTED AS THE ACTIONABLE HALF OF A PATTERN I JUST DEFERRED. TASK-194 records this as instance 3 (BUG-1514) of a structural class — every surface excluded PR #2035 for a LOCALLY CORRECT reason and the composition was invisibility: the orphan sweep requires green (correct — claiming a red PR wastes a reviewer), Done drops it from open-work lenses (correct — Done means finished on a branch), no verdict, no hold, no queue entry. I deferred TASK-194 because its own promotion trigger has not fired and the pattern needs an instance outside the queue/lifecycle/drain subsystems. But the INSTANCE is not a pattern and does not need that trigger: a red, unowned, unheld PR sitting 3.8 hours with nothing surfacing it is a concrete gap with a concrete fix. The specific instance is resolved (BUG-1470 completed, #2035 merged) — the gap is not, and closing the instance while leaving the gap is what makes this class recur.'
+  created_at: 2026-09-21T21:26:18.875421673Z
+  modified_at: 2026-09-21T21:26:18.875421673Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
