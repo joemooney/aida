@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-21T07:11:08.049231744Z
+modified_at: 2026-09-21T07:40:16.789042979Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -208,6 +208,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-21T07:11:07.727440633Z
   modified_at: 2026-09-21T07:11:07.727440633Z
+- id: 01a0c2e8-9215-7d11-b1f2-87aa6b05024f
+  author: joe
+  content: 'Round 3 evidence/punt for finding 1: the exact live lifecycle passed locally against gitlab.joemooney.com at 52e0426d33 (MR !1 opened, real pipeline green, approval read as Approved, trait merge succeeded, CiTerminal+PrMerged asserted, branch removed, project deletion scheduled). GitHub workflow dispatch 35573642374 at that head failed before project creation because Cloudflare Access intercepted /api/v4 and returned its HTML sign-in page; the repository has only AIDA_GITLAB_TOKEN, no Cloudflare Access service-token secrets, and no self-hosted GitHub runner. Current-head dispatch 35574028945 records the same infrastructure boundary. PUNT finding 1 only: a green GitHub-hosted lifecycle requires external Cloudflare policy/service-token provisioning or a self-hosted runner; a GitLab PAT cannot cross Cloudflare Access. Finding 2 is fixed in 09364e13dd: missing token is documented as a hard failure, matching cross-platform.yml.'
+  created_at: 2026-09-21T07:40:16.789042979Z
+  modified_at: 2026-09-21T07:40:16.789042979Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
