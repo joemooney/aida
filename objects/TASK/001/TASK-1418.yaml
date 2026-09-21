@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T12:24:53.979276159Z
+modified_at: 2026-09-21T12:35:03.873751835Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -48,3 +48,32 @@ relationships:
   target_id: 01a0c058-3d0c-7eb1-993d-3976581722cb
   created_at: 2026-09-21T12:24:53.979270782Z
   created_by: joe
+comments:
+- id: 01a0c3f6-7441-75d3-8755-1773499cc556
+  author: joe
+  content: |-
+    THIRD INSTANCE TONIGHT, AND IT ARRIVES FROM A THIRD KIND OF INSTRUMENT - so the rule this spec records is broader than mutation testing and the wording must not scope it to mutations.
+
+    The three, all found and disclosed by the seat that owned the instrument, none found by a reviewer:
+
+      1. MUTATION THAT NEVER CHANGED BEHAVIOUR (the filing instance, #2027). Two of three mutations first reported green: one swap applied inside the row loop and cancelled out, the retry missed its anchor on an indentation miscount. Green meant "the code was never changed", not "the test did not catch it".
+
+      2. DETECTOR THAT COULD NOT FIRE (claude-reviewer-1, BUG-1550 on #2027). The check grepped the diff for REMOVED lines carrying /// or trace:. That defect removes nothing - it inserts after a header that stays as unchanged CONTEXT - so the grep was structurally incapable of detecting it. They reported the PR clean for BUG-1550 from that check, then built a detector demonstrated to FIRE on the known-bad commit and re-ran. Conclusion unchanged, evidence replaced.
+
+      3. TIMING TEST THAT PASSED WITH THE REGRESSION RESTORED (claude-product-1, BUG-1480 / #2033). They wrote the executable latency guard a reviewer had asked for, then restored backend.load() in the show path to falsify it, and BOTH TESTS STAYED GREEN. The replacement guard had the same defect as the guard it replaced - it ran the command, timed it, and passed anyway.
+
+    WHY INSTANCE 3 IS THE MOST INSTRUCTIVE. The reviewer's original finding was that the old guard "can pass while another expensive operation regresses the command". The replacement satisfied the LETTER of that finding - it was executable, it timed the real command, it was strictly more expensive to run - and left the property untested. Had the falsification not been run, both seats would have called it done and the spec would have closed with a guard carrying the defect it was written to remove.
+
+    AND THE CAUSE WAS MEASURED, NOT GUESSED, which is what turned a failed test into a real finding. Instrumenting with the regression in place gave list=139ms, show=250ms, ratio=1.79 on a 1,232,186-byte fixture. The fixture was the size intended; the DIMENSION was wrong. A full load over one large object costs ~110ms against ~139ms of process startup. Measuring the real store gave ~10s over 4226 objects = ~2.4ms PER OBJECT, so per-file overhead dominates per-byte cost by an order of magnitude and the discriminating fixture is many small objects, not one large one.
+
+    WORDING CONSEQUENCE FOR THIS SPEC - acceptance criterion 3 already asks for the generalization and a non-mutation instance; these three fix what it must say. The rule is NOT about mutation harnesses. It is:
+
+        A NEGATIVE RESULT IS EVIDENCE ONLY IF THE INSTRUMENT PRODUCING IT HAS BEEN
+        DEMONSTRATED TO PRODUCE A POSITIVE ON A KNOWN-BAD INPUT.
+
+    Mutation green, detector clean, test passing - three surfaces, one rule. An instrument never shown to fire is indistinguishable from one that cannot fire, and the three instances differ only in what the instrument was.
+
+    CROSS-REFERENCE: BUG-1550's acceptance criterion 3 is the local enforcement of this for the header-displacement detector (exercise against a known-bad fixture, in an automated test, not by hand). If this spec's wording and that criterion ever disagree, this spec is the general statement and that one is an instance.
+  created_at: 2026-09-21T12:35:03.873751835Z
+  modified_at: 2026-09-21T12:35:03.873751835Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
