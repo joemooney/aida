@@ -41,6 +41,7 @@ pub(crate) fn handle_doctor_command(
             force,
             all,
             since: since.map(str::to_string),
+            fail_on_findings: false,
         });
     };
     match cmd {
@@ -48,6 +49,7 @@ pub(crate) fn handle_doctor_command(
             category,
             all: sub_all,
             json,
+            fail_on_findings,
         } => doctor_multi_agent(DoctorRunOptions {
             heal: false,
             yes,
@@ -56,6 +58,7 @@ pub(crate) fn handle_doctor_command(
             force,
             all: all || *sub_all,
             since: since.map(str::to_string),
+            fail_on_findings: *fail_on_findings,
         }),
         cli::DoctorCommand::Heal {
             category,
@@ -71,6 +74,7 @@ pub(crate) fn handle_doctor_command(
             force: *force,
             all: all || *sub_all,
             since: since.map(str::to_string),
+            fail_on_findings: false,
         }),
         cli::DoctorCommand::MigrateCounterScope {
             to,
@@ -108,6 +112,7 @@ pub(crate) fn run_merged_agent_worktree_gc(yes: bool, force: bool, json: bool) -
         force,
         all: false,
         since: None,
+        fail_on_findings: false,
     })
 }
 
@@ -126,6 +131,12 @@ struct DoctorRunOptions {
     /// TASK-673: cutoff for the completed-without-commit integrity check —
     /// specs completed before this ref/date are exempt (legacy history).
     since: Option<String>,
+    /// Exit non-zero when the selected category has any finding, so a scheduled
+    /// job can GATE on it rather than only report. Opt-in: `doctor check` stays
+    /// report-only unless the caller asks, which keeps this a caller's choice
+    /// rather than a contract change to a shared surface.
+    // trace:STORY-1422 | ai:claude
+    fail_on_findings: bool,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -289,6 +300,26 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // The performance gate: guarded command shapes whose MEDIAN latency in the
+    // usage log exceeds their configured budget, plus guarded shapes with no
+    // recorded invocations at all. Opt-in by config — a project with no
+    // `[performance.budgets]` has nothing guarded and nothing to report.
+    // trace:STORY-1422 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "performance")? {
+        let cfg = crate::read_project_config_value(&project_root);
+        let budgets = performance_budgets(cfg.as_ref());
+        let policy = performance_policy(cfg.as_ref());
+        if !budgets.is_empty() {
+            findings.extend(performance_findings(
+                &crate::usage::read_events(),
+                &budgets,
+                &policy,
+                chrono::Utc::now(),
+            ));
+            findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+        }
+    }
+
     let mut report = DoctorReport::from_findings(findings);
     report.hidden_completed_without_commit = hidden_completed_without_commit;
 
@@ -322,6 +353,22 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         && doctor_category_selected(opts.category.as_deref(), "permission-posture")?
     {
         anyhow::bail!("permission-posture finding(s) detected — see the report above");
+    }
+
+    // The opt-in gate. Deliberately GENERAL rather than a second hardcoded
+    // category beside the permission-posture check above. That one is the
+    // precedent, and adding a second special case is exactly how two categories
+    // end up behaving differently under one verb — which a later reader
+    // "fixes" in the wrong direction, and the wrong direction here is silence.
+    // A caller that wants to be gated asks, and asks in the job definition
+    // where the next reader can see that the job is gating.
+    // trace:STORY-1422 | ai:claude
+    if !opts.heal && opts.fail_on_findings && !report.findings.is_empty() {
+        anyhow::bail!(
+            "{} finding(s) in {} — failing because --fail-on-findings was requested",
+            report.findings.len(),
+            opts.category.as_deref().unwrap_or("all categories")
+        );
     }
 
     // BUG-471: heal now continues past a single finding's failure (no more
@@ -533,6 +580,460 @@ fn scan_scaffold_drift(
 /// and flags any raw value present. Detection only, no auto-heal (removing an
 /// already-landed value needs a history rewrite).
 // trace:TASK-1122 | ai:claude
+/// One guarded command shape and the latency it must stay under.
+///
+/// Per-shape rather than one global number, so guarding a second command is a
+/// new row rather than a reshaped config.
+// trace:STORY-1422 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PerformanceBudget {
+    pub(crate) cmd: String,
+    pub(crate) budget_ms: u64,
+}
+
+/// Read `[performance.budgets]` — a table of command shape to millisecond
+/// budget:
+///
+/// ```toml
+/// [performance.budgets]
+/// show = 1000
+/// "queue list" = 2000
+/// ```
+///
+/// A TABLE rather than `show_budget_ms`-style keys because a command shape can
+/// contain a space (`queue list`), which a key suffix cannot express without
+/// mangling. Absent section means no guarded commands, which is not a failure —
+/// a project that has not opted in has nothing to breach.
+// trace:STORY-1422 | ai:claude
+pub(crate) fn performance_budgets(cfg: Option<&toml::Value>) -> Vec<PerformanceBudget> {
+    let Some(table) = cfg
+        .and_then(|c| c.get("performance"))
+        .and_then(|p| p.get("budgets"))
+        .and_then(|b| b.as_table())
+    else {
+        return Vec::new();
+    };
+    let mut budgets: Vec<PerformanceBudget> = table
+        .iter()
+        .filter_map(|(cmd, value)| {
+            let budget_ms = value.as_integer().filter(|ms| *ms > 0)? as u64;
+            Some(PerformanceBudget {
+                cmd: cmd.to_string(),
+                budget_ms,
+            })
+        })
+        .collect();
+    budgets.sort_by(|a, b| a.cmd.cmp(&b.cmd));
+    budgets
+}
+
+/// How much of a shape's recent traffic may exceed its budget before the gate
+/// trips, and over what window.
+///
+/// A PROPORTION, not a median and not "any call over budget" — ruled after the
+/// distribution was measured rather than assumed. The `show` population is
+/// BIMODAL: 4,438 calls under 1s and a second cluster at 9-10s, sharing one
+/// command name and indistinguishable by every field the usage log records.
+/// Against that shape the obvious statistics all fail — the median sits at
+/// ~665ms and never trips even with the regression live, p90 swings from 812ms
+/// to 9653ms depending on the window, and "any call over budget" is true 18-21%
+/// of the time including after a fix.
+// trace:STORY-1422 | ai:claude
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PerformancePolicy {
+    /// Tolerated fraction of over-budget calls, as a percentage.
+    pub(crate) tolerated_pct: f64,
+    /// How far back to look.
+    pub(crate) window_hours: i64,
+}
+
+impl Default for PerformancePolicy {
+    fn default() -> Self {
+        // 10% over 24h, PROVISIONAL. It trips today at 20.3% with 2x margin and
+        // clears a post-fix residual estimated at 7.1% with only 1.4x. That
+        // second margin is thin and known to be thin: the 1s-4s band may be
+        // partial-cache cases that vanish with the fix, or a genuine tail that
+        // stays, and nothing in the data distinguishes those futures. The number
+        // changes only alongside a re-measurement, never by tuning until green.
+        Self {
+            tolerated_pct: 10.0,
+            window_hours: 24,
+        }
+    }
+}
+
+/// Read `[performance]` policy knobs, falling back to the provisional default.
+// trace:STORY-1422 | ai:claude
+pub(crate) fn performance_policy(cfg: Option<&toml::Value>) -> PerformancePolicy {
+    let section = cfg.and_then(|c| c.get("performance"));
+    let mut policy = PerformancePolicy::default();
+    if let Some(pct) = section
+        .and_then(|p| p.get("tolerated_over_budget_pct"))
+        .and_then(|v| v.as_float().or_else(|| v.as_integer().map(|i| i as f64)))
+        .filter(|pct| (0.0..=100.0).contains(pct))
+    {
+        policy.tolerated_pct = pct;
+    }
+    if let Some(hours) = section
+        .and_then(|p| p.get("window_hours"))
+        .and_then(|v| v.as_integer())
+        .filter(|h| *h > 0)
+    {
+        policy.window_hours = hours;
+    }
+    policy
+}
+
+/// One breached budget, kept machine-readable for the ledger.
+///
+/// `budget_ms` and `tolerated_pct` are both recorded because a CONFIGURED
+/// threshold is a number someone can quietly raise the moment it trips — the
+/// documented way latency gates die. A later reader must be able to tell a
+/// fixed regression from a raised ceiling, and that is only possible if the
+/// numbers in force AT THE TIME OF THE TRIP are in the record.
+// trace:STORY-1422 | ai:claude
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PerformanceBreach {
+    pub(crate) cmd: String,
+    pub(crate) budget_ms: u64,
+    pub(crate) over_budget: usize,
+    pub(crate) samples: usize,
+    pub(crate) over_pct: f64,
+    pub(crate) tolerated_pct: f64,
+    pub(crate) window_hours: i64,
+    pub(crate) worst_ms: u64,
+}
+
+/// Parse a usage event's timestamp, tolerating both `Z` and offset forms.
+// trace:STORY-1422 | ai:claude
+fn usage_event_time(ts: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::parse_from_rfc3339(ts)
+        .ok()
+        .map(|t| t.with_timezone(&chrono::Utc))
+}
+
+/// Which guarded shapes exceed their budget TOO OFTEN inside the window.
+///
+/// Pure over its inputs INCLUDING `now`, so the decision is testable without a
+/// usage log on disk and without depending on the wall clock.
+// trace:STORY-1422 | ai:claude
+pub(crate) fn performance_breaches(
+    events: &[crate::usage::UsageEvent],
+    budgets: &[PerformanceBudget],
+    policy: &PerformancePolicy,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Vec<PerformanceBreach> {
+    let cutoff = now - chrono::Duration::hours(policy.window_hours);
+    let mut breaches = Vec::new();
+    for budget in budgets {
+        let recent: Vec<u64> = events
+            .iter()
+            .filter(|ev| ev.cmd == budget.cmd)
+            .filter(|ev| usage_event_time(&ev.ts).is_some_and(|t| t >= cutoff))
+            .map(|ev| ev.duration_ms)
+            .collect();
+        if recent.is_empty() {
+            // No samples in the window is NOT a pass — `performance_unobserved`
+            // reports it, so silence is explained rather than assumed.
+            continue;
+        }
+        let over_budget = recent.iter().filter(|ms| **ms > budget.budget_ms).count();
+        let over_pct = (over_budget as f64) * 100.0 / (recent.len() as f64);
+        if over_pct > policy.tolerated_pct {
+            breaches.push(PerformanceBreach {
+                cmd: budget.cmd.clone(),
+                budget_ms: budget.budget_ms,
+                over_budget,
+                samples: recent.len(),
+                over_pct,
+                tolerated_pct: policy.tolerated_pct,
+                window_hours: policy.window_hours,
+                worst_ms: recent.iter().copied().max().unwrap_or(0),
+            });
+        }
+    }
+    breaches
+}
+
+/// Guarded shapes that produced NO samples at all.
+///
+/// Reported separately and deliberately: a budget naming a command that never
+/// ran is indistinguishable from a healthy one if both are silent, and a typo
+/// in a shape name is exactly how a scheduled guard watches nothing for months
+/// while reporting success. Absent evidence is not good evidence.
+// trace:STORY-1422 | ai:claude
+pub(crate) fn performance_unobserved(
+    events: &[crate::usage::UsageEvent],
+    budgets: &[PerformanceBudget],
+    policy: &PerformancePolicy,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Vec<String> {
+    let cutoff = now - chrono::Duration::hours(policy.window_hours);
+    budgets
+        .iter()
+        .filter(|budget| {
+            !events.iter().any(|ev| {
+                ev.cmd == budget.cmd && usage_event_time(&ev.ts).is_some_and(|t| t >= cutoff)
+            })
+        })
+        .map(|budget| budget.cmd.clone())
+        .collect()
+}
+
+/// The `performance` category's findings: shapes over budget too often, plus
+/// guarded shapes that produced no samples in the window.
+///
+/// BOTH ARE FINDINGS, and that is the load-bearing decision. The instrument
+/// this category replaces could not distinguish "over budget", "under budget"
+/// and "pointed at a command that does not exist" — three states, one exit
+/// code, which is how a scheduled guard watches nothing for months and reports
+/// health. An unobserved budget is a finding so silence has to be explained.
+// trace:STORY-1422 | ai:claude
+pub(crate) fn performance_findings(
+    events: &[crate::usage::UsageEvent],
+    budgets: &[PerformanceBudget],
+    policy: &PerformancePolicy,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Vec<DoctorFinding> {
+    let mut findings: Vec<DoctorFinding> = performance_breaches(events, budgets, policy, now)
+        .into_iter()
+        .map(|b| DoctorFinding {
+            category: "performance".to_string(),
+            id: b.cmd.clone(),
+            summary: format!(
+                "`aida {}` exceeded its {} ms budget on {:.1}% of {} calls in the last {}h \
+                 (tolerated {:.1}%, worst {} ms)",
+                b.cmd,
+                b.budget_ms,
+                b.over_pct,
+                b.samples,
+                b.window_hours,
+                b.tolerated_pct,
+                b.worst_ms
+            ),
+            action:
+                "investigate the regression, or change the budget deliberately in [performance] \
+                 — raising a threshold the moment it trips is how a latency gate dies, so the \
+                 numbers in force are recorded with the trip"
+                    .to_string(),
+            safe_heal: false,
+        })
+        .collect();
+
+    findings.extend(
+        performance_unobserved(events, budgets, policy, now)
+            .into_iter()
+            .map(|cmd| DoctorFinding {
+                category: "performance".to_string(),
+                id: cmd.clone(),
+                summary: format!(
+                    "`aida {cmd}` has a budget but NO recorded calls in the last {}h — the \
+                     guard is watching a command it never sees",
+                    policy.window_hours
+                ),
+                action: "check the shape spelling in [performance.budgets] and that telemetry \
+                         is enabled; an unobserved budget proves nothing"
+                    .to_string(),
+                safe_heal: false,
+            }),
+    );
+
+    findings
+}
+
+#[cfg(test)]
+mod story_1422_performance_gate_tests {
+    use super::*;
+
+    /// Fixed clock: the window decision must not depend on when the suite runs.
+    fn now() -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339("2026-09-21T12:00:00+00:00")
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+    }
+
+    fn ev_at(cmd: &str, duration_ms: u64, hours_ago: i64) -> crate::usage::UsageEvent {
+        crate::usage::UsageEvent {
+            ts: (now() - chrono::Duration::hours(hours_ago)).to_rfc3339(),
+            cmd: cmd.to_string(),
+            args_count: 0,
+            exit_code: 0,
+            duration_ms,
+            binary_sha: None,
+            role: None,
+            scope: None,
+        }
+    }
+
+    fn budget(cmd: &str, budget_ms: u64) -> PerformanceBudget {
+        PerformanceBudget {
+            cmd: cmd.to_string(),
+            budget_ms,
+        }
+    }
+
+    /// `slow` of `total` calls over budget, all inside the window.
+    fn mix(slow: usize, total: usize) -> Vec<crate::usage::UsageEvent> {
+        (0..total)
+            .map(|i| ev_at("show", if i < slow { 9_900 } else { 400 }, 1))
+            .collect()
+    }
+
+    /// TODAY'S MEASURED POPULATION trips: 20.3% of calls over a 1000ms budget
+    /// against the ruled 10% tolerance.
+    // trace:STORY-1422 | ai:claude
+    #[test]
+    fn the_measured_population_trips_the_gate() {
+        let breaches = performance_breaches(
+            &mix(203, 1000),
+            &[budget("show", 1000)],
+            &PerformancePolicy::default(),
+            now(),
+        );
+        assert_eq!(breaches.len(), 1, "{breaches:?}");
+        assert_eq!(breaches[0].over_budget, 203);
+        assert_eq!(breaches[0].samples, 1000);
+        assert!((breaches[0].over_pct - 20.3).abs() < 0.01);
+    }
+
+    /// THE ESTIMATED POST-FIX POPULATION MUST NOT TRIP. If the slow mode goes
+    /// away, the residual 1s-4s band is ~7.1% of traffic. A 5% tolerance — the
+    /// number this seat first proposed — would leave the gate permanently red
+    /// AFTER the bug it guards was fixed. This test is why 5% was rejected, and
+    /// it pins the rejected value so re-tightening is a deliberate act.
+    // trace:STORY-1422 | ai:claude
+    #[test]
+    fn the_estimated_post_fix_population_does_not_trip() {
+        let events = mix(71, 1000); // 7.1%
+        let budgets = [budget("show", 1000)];
+        assert!(
+            performance_breaches(&events, &budgets, &PerformancePolicy::default(), now())
+                .is_empty(),
+            "7.1% must clear the ruled 10% tolerance"
+        );
+        let five_pct = PerformancePolicy {
+            tolerated_pct: 5.0,
+            window_hours: 24,
+        };
+        assert_eq!(
+            performance_breaches(&events, &budgets, &five_pct, now()).len(),
+            1,
+            "and 5% would have tripped on it — the rejected threshold, pinned"
+        );
+    }
+
+    /// The window is the filter, proved in both directions.
+    // trace:STORY-1422 | ai:claude
+    #[test]
+    fn calls_outside_the_window_are_not_judged() {
+        let mut events: Vec<_> = (0..100).map(|_| ev_at("show", 9_900, 48)).collect();
+        events.extend((0..100).map(|_| ev_at("show", 400, 1)));
+        let budgets = [budget("show", 1000)];
+        assert!(
+            performance_breaches(&events, &budgets, &PerformancePolicy::default(), now())
+                .is_empty(),
+            "48h-old breaches fall outside a 24h window"
+        );
+        let wide = PerformancePolicy {
+            tolerated_pct: 10.0,
+            window_hours: 72,
+        };
+        assert_eq!(
+            performance_breaches(&events, &budgets, &wide, now()).len(),
+            1,
+            "widening to 72h brings them back — so the window IS the filter"
+        );
+    }
+
+    /// THE TYPO CASE, window-aware: a budget whose shape produced nothing
+    /// RECENTLY is a finding, not silence.
+    // trace:STORY-1422 | ai:claude
+    #[test]
+    fn a_budget_with_no_recent_calls_is_a_finding_not_a_pass() {
+        let events = vec![ev_at("show", 400, 1)];
+        let policy = PerformancePolicy::default();
+        let typo = [budget("shwo", 1000)];
+        assert!(performance_breaches(&events, &typo, &policy, now()).is_empty());
+        assert_eq!(
+            performance_unobserved(&events, &typo, &policy, now()),
+            vec!["shwo"]
+        );
+        let findings = performance_findings(&events, &typo, &policy, now());
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(findings[0].summary.contains("NO recorded calls"));
+
+        let stale = vec![ev_at("show", 9_900, 48)];
+        assert_eq!(
+            performance_unobserved(&stale, &[budget("show", 1000)], &policy, now()),
+            vec!["show"]
+        );
+    }
+
+    /// The trip records the numbers IN FORCE, so a later reader can tell a
+    /// fixed regression from a raised ceiling.
+    // trace:STORY-1422 | ai:claude
+    #[test]
+    fn a_trip_records_the_budget_and_tolerance_in_force() {
+        let policy = PerformancePolicy {
+            tolerated_pct: 10.0,
+            window_hours: 24,
+        };
+        let events = mix(300, 1000);
+        let budgets = [budget("show", 1234)];
+        let b = &performance_breaches(&events, &budgets, &policy, now())[0];
+        assert_eq!(b.budget_ms, 1234);
+        assert_eq!(b.tolerated_pct, 10.0);
+        assert_eq!(b.window_hours, 24);
+        assert_eq!(b.worst_ms, 9_900);
+        let summary = &performance_findings(&events, &budgets, &policy, now())[0].summary;
+        assert!(summary.contains("1234 ms"), "{summary}");
+        assert!(summary.contains("tolerated 10.0%"), "{summary}");
+    }
+
+    /// Per-shape budgets, including a shape containing a space.
+    // trace:STORY-1422 | ai:claude
+    #[test]
+    fn budgets_are_per_shape_and_tolerate_spaces() {
+        let cfg: toml::Value = "[performance.budgets]\nshow = 1000\n\"queue list\" = 2000\n"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            performance_budgets(Some(&cfg)),
+            vec![budget("queue list", 2000), budget("show", 1000)]
+        );
+        assert!(performance_budgets(None).is_empty());
+    }
+
+    /// A zero or non-integer budget is ignored rather than treated as "every
+    /// call breaches", so a malformed config cannot manufacture findings.
+    // trace:STORY-1422 | ai:claude
+    #[test]
+    fn malformed_budgets_are_ignored_not_treated_as_zero() {
+        let cfg: toml::Value = "[performance.budgets]\nshow = 0\nlist = \"fast\"\n"
+            .parse()
+            .unwrap();
+        assert!(performance_budgets(Some(&cfg)).is_empty());
+    }
+
+    /// Policy is configurable; absent or out-of-range values fall back to the
+    /// provisional default rather than silently disabling the gate.
+    // trace:STORY-1422 | ai:claude
+    #[test]
+    fn policy_falls_back_to_the_provisional_default() {
+        assert_eq!(performance_policy(None), PerformancePolicy::default());
+        let ok: toml::Value = "[performance]\ntolerated_over_budget_pct = 25\nwindow_hours = 6\n"
+            .parse()
+            .unwrap();
+        let p = performance_policy(Some(&ok));
+        assert_eq!(p.tolerated_pct, 25.0);
+        assert_eq!(p.window_hours, 6);
+        let bad: toml::Value = "[performance]\ntolerated_over_budget_pct = 900\nwindow_hours = 0\n"
+            .parse()
+            .unwrap();
+        assert_eq!(performance_policy(Some(&bad)), PerformancePolicy::default());
+    }
+}
+
 fn scan_store_scrub(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     let (pub_host, pub_email) = aida_core::git_ops::public_identity();
     // Redaction not configured → nothing is expected to be redacted, nothing to check.
@@ -3801,6 +4302,7 @@ hostname = "localhost"
                 force: false,
                 all: false,
                 since: None,
+                fail_on_findings: false,
             },
         )
         .unwrap();
@@ -3828,6 +4330,7 @@ hostname = "localhost"
                     category,
                     all,
                     json,
+                    ..
                 }),
             ..
         } = check.command
@@ -4703,6 +5206,7 @@ hostname = "localhost"
                 force: true,
                 all: false,
                 since: None,
+                fail_on_findings: false,
             },
         )
         .unwrap();
@@ -4774,6 +5278,7 @@ hostname = "localhost"
                 force: false,
                 all: false,
                 since: None,
+                fail_on_findings: false,
             },
         )
         .unwrap();
@@ -4811,6 +5316,7 @@ hostname = "localhost"
                 force: false,
                 all: false,
                 since: None,
+                fail_on_findings: false,
             },
         )
         .unwrap();
@@ -4866,6 +5372,7 @@ hostname = "localhost"
                 force: false,
                 all: false,
                 since: None,
+                fail_on_findings: false,
             },
         )
         .unwrap();
@@ -4905,6 +5412,7 @@ hostname = "localhost"
                 force: false,
                 all: false,
                 since: None,
+                fail_on_findings: false,
             },
         )
         .unwrap();
@@ -4950,6 +5458,7 @@ hostname = "localhost"
                 force: false,
                 all: false,
                 since: None,
+                fail_on_findings: false,
             },
         )
         .unwrap();
@@ -5044,6 +5553,7 @@ hostname = "localhost"
             force: false,
             all: false,
             since: None,
+            fail_on_findings: false,
         };
         let result = heal_doctor_finding(project_root, &finding, &opts).unwrap();
         assert_eq!(result.status, "healed");

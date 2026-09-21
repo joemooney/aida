@@ -21805,6 +21805,10 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         | "agent-permissions"
         | "sandbox-posture" => "permission-posture",
         "parent-tag-drift" | "parent-tags" | "parent-drift" => "parent-tag-drift",
+        // A guarded command shape whose median latency in the local usage log
+        // exceeds its configured budget, or a budget watching a shape that
+        // never ran. trace:STORY-1422 | ai:claude
+        "performance" | "perf" | "latency" | "budgets" => "performance",
         // TASK-1124: deployed vendor prompts/skills (project .claude/.codex +
         // ~/.codex/prompts) drifted from the binary's embedded source templates
         // — rule-delivery-rot. trace:TASK-1124 | ai:claude
@@ -21831,7 +21835,8 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
              orphan-queue-entries, stale-reviewer-leases, stale-locks, dead-agents, \
              OBE-briefs, completed-without-commit, legacy-store-cruft, \
              store-tracked-runtime, remote-drift, ci, vendor-binary, permission-posture, \
-             scaffold-drift, store-scrub, agents-wiring, worktree-container-gitdir, parent-tag-drift)",
+             scaffold-drift, store-scrub, agents-wiring, worktree-container-gitdir, parent-tag-drift, \
+               performance)",
             other
         ),
     };
