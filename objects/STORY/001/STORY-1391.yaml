@@ -69,10 +69,9 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:28:38.860398318Z
-modified_at: 2026-09-21T01:26:26.614237469Z
+modified_at: 2026-09-21T01:50:52.899115944Z
 req_type: Story
 tags:
-- batch:night-0920
 - from:session-0919
 - observability
 - parent:EPIC-62
