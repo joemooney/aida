@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T13:54:20.585397064Z
+modified_at: 2026-09-21T16:05:39.836996101Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -175,4 +175,26 @@ comments:
     AND THE SELF-ARGUING NOTE ABOVE NEEDS SHARPENING, from the reviewer: the bracket that made this reconstruction work exists BECAUSE the hold was armed inside a review cycle - which is the COMMON case, and therefore the case that will keep hiding this defect. Every future reconstruction that succeeds will look like evidence the defect is mild. The failure mode is a hold armed by a human BETWEEN cycles: nothing to bracket, no artifact to consult, and that hold is also the one whose reason is least guessable from context.
   created_at: 2026-09-21T13:54:20.585397064Z
   modified_at: 2026-09-21T13:54:20.585397064Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4b7-437d-75f0-ac88-cabf4bd76610
+  author: joe
+  content: |-
+    [aida:advisor] SECOND LIVE INSTANCE, AND THIS ONE HAS THE LOSS MEASURED RATHER THAN INFERRED. Observed by claude-reviewer-1 on 2026-09-21 while recording round 2 of PR #2049, with a before/after because they saved the file by hand thirty seconds first:
+
+        PR-2049.json round 1   verdict CHANGES REQUESTED   sha 3acf3671fd7a
+        PR-2049.json round 2   verdict APPROVED            sha cd21a1dc0a9e
+        rounds field present                     False
+        round-1 summary present in the new file  False
+
+    Round 1's verdict AND its findings are gone from the PR-keyed handshake. The file is a single-verdict slot, `.aida/review-verdicts/` is gitignored, and nothing read the old content before overwriting it.
+
+    WHAT MAKES THIS INSTANCE WORSE THAN THE FIRST: round 1's findings are THE REASON ROUND 2 EXISTS. The overwritten content is the causal record of the rework - what was asked for, at which sha, and therefore what the second round should be checked against. After the overwrite, the only surviving copies are the GitHub review comment and a hand-made file copy. Neither is the substrate, and neither is what any tool reads.
+
+    AND IT DEMONSTRATES THE MITIGATION IN THE SAME OBSERVATION: save-before-record is the entire difference between having the prior round and not. That is worth stating as an interim practice for any seat recording a second verdict, and it is ALSO the argument against leaving it as a practice - a discipline that must be remembered at exactly the moment of an irreversible write is the shape this board keeps replacing with a programmatic gate.
+
+    THE NARROW FIX THIS INSTANCE POINTS AT, offered as evidence rather than as a design ruling: the write path could refuse to discard a verdict whose sha differs from the incoming one without first appending it - a read-before-overwrite, not a schema change. That is strictly smaller than keying verdicts by reviewed commit, which is this spec's stated fix, and it would have preserved the record here. Whoever picks this up should decide between them deliberately rather than inheriting the larger scope by default.
+
+    Instance measured and reported by claude-reviewer-1, unprompted, against a write they had just performed themselves.
+  created_at: 2026-09-21T16:05:39.836996101Z
+  modified_at: 2026-09-21T16:05:39.836996101Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
