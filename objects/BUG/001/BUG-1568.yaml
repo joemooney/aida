@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:03:26.342175685Z
-modified_at: 2026-09-21T20:03:27.793945094Z
+modified_at: 2026-09-21T20:32:05.911742658Z
 req_type: Bug
 tags:
 - aida:queue
@@ -48,3 +48,29 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-21T20:03:27.793945094Z
+comments:
+- id: 01a0c5ab-3117-7d01-bce6-f87f35e37ae4
+  author: joe
+  content: |-
+    [claude-product-1, 2026-09-21] ROOT CAUSE FOUND AND FIXED IN PR 2060. THIS SPEC'S DESCRIPTION IS WRONG WHERE IT SAYS THE DRAIN COLLIDES WITH ITSELF - correcting it here rather than quietly editing it, because the wrong version is what I acted on first.
+
+    WHAT I FILED: "it is colliding with itself, not with a competing drain", inferred from the holder pid appearing seconds before each launch and being dead afterwards.
+
+    WHAT IT ACTUALLY IS: a PIPELINED BATCH CHILD, spawned as its own `queue work <spec> --auto-complete=through-ci`, takes the drain lock at its top while the PARENT batch drive still holds it. The spawn set AIDA_PIPELINED_BATCH_CHILD and AIDA_PIPELINED_RESULT_PATH but not AIDA_DRAIN_BORROW, so the child was refused on the parent's lock.
+
+    WHY MY FIRST READING WAS WRONG, because the mechanism matters: a child inherits the parent's redirected stdout, so its refusal lands in the same log file and names the PARENT as holder. Self-collision and child-not-borrowing produce a byte-identical log. I could not tell them apart from the log, and I assumed the simpler one.
+
+    HOW IT WAS SETTLED: I implemented the self-collision fix (never refuse a lock whose pid is our own), built it, and ran a real drain. THE COLLISION SURVIVED. That falsified the self-collision reading outright. The same run also printed the `--no-human=both` banner TWICE, which is two processes, not one. I reverted that fix - it was wrong, and it contradicted three existing tests that deliberately use the same-process pid as a stand-in for a live holder.
+
+    THE REAL RELATIONSHIP TO BUG-748: this is that defect in a second place. BUG-748 taught the INTEGRATOR child to borrow; the pipelined batch child never got the same treatment. It was UNREACHABLE until pipeline_depth was raised from 1 to 2 on 2026-09-20 - at depth 1 no child ever overlaps a live parent lock. That is why the failure starts at 02:24 on 09-21 and not earlier.
+
+    VERIFIED AGAINST A REAL DRAIN. Before: every launch died in 5-9 seconds, 1 collision, 0 iterations. After: 0 collisions, `aida drain status` reports active, and it proceeds into a headless implementer phase on the first batch member. Autonomy is running again.
+
+    WHAT REMAINS ON THIS SPEC, and PR 2060 deliberately does NOT close it: the misattribution. A lock refusal is still reported as "drain stopped at BUG-1462 (phase 2 failed)", routing every reader to an innocent spec. PR 2060 removes the condition that produced that message but not the message's capacity to mislead, and the next unrelated failure of the same shape will do it again. The first acceptance bullet stands.
+
+    TWO MORE FALSE LEADS FROM THIS INVESTIGATION, recorded because each was caught by checking rather than by being careful:
+    - I reported "the queue is empty" from `aida queue list` run as my own shell user, while the drain uses --user role:implementer. That queue has 86 entries. BUG-89's rule, which I had a memory for.
+    - I counted "19 orphaned test files never declared" by grepping only lib.rs. They are declared in their own subject modules (e.g. worktree_scope_gate.rs declares tests/worktree_scope_gate_tests.rs). The finding was entirely false and I did not file it. One of the 19 was a file I had created myself moments earlier with `cat >>` to a path that did not exist.
+  created_at: 2026-09-21T20:32:05.911742658Z
+  modified_at: 2026-09-21T20:32:05.911742658Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
