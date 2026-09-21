@@ -3,12 +3,12 @@ spec_id: TASK-1274
 agreed_id: TASK-1274
 title: 'Mirror CI: bring the warm verify job under 10 minutes (split build/test jobs, trim what verify runs)'
 description: 'STORY-1216 slices 1+2 (builder image + persistent checkout/target) brought the warm verify run on the mirror from 1271 s cold to 903 s, but the acceptance said under 10 minutes and it is not met. Measured breakdown of the warm run (pipeline 290, 2026-09-18): fetch 14 s, release build 2m30 (5 workspace crates recompiled — the runner''s checkout refresh touches mtimes; deps reused), test-profile build 1m32, clippy 49 s, nextest 6530 tests in 314 s, plus the two MCP shell tests, fmt and doctests. Candidates, in order: (1) split verify into build and test jobs so test build overlaps with bwrap and the release build only runs when a bin is needed; (2) stop the checkout refresh from bumping mtimes (GIT_CLEAN_FLAGS none / keep timestamps) so the release build is a true no-op on unchanged code; (3) nextest partitioning across two jobs; (4) drop the release build from MR pipelines entirely (tests use the dev profile) and keep it for tags. Acceptance: warm verify on an unchanged-deps commit completes in under 10 minutes on the current runner; the job log shows no recompiles of unchanged crates.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:30:55.289650932Z
-modified_at: 2026-09-21T20:37:35.724873157Z
+modified_at: 2026-09-21T20:44:49.387871156Z
 req_type: Task
 tags:
 - batch:story-1216
@@ -69,3 +69,11 @@ deferred: true
 deferred_at: 2026-09-20T00:40:42.574659212Z
 deferred_until: a keyboard session splits the pipeline-waiting from the code change — the work needs more than the 45m phase ceiling because it waits on real GitLab pipelines, so it must not re-enter a drain phase until it is a smaller spec
 execution_mode: drain
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BLOCKING: THE HEAD MOVED DURING REVIEW AND THE REBASE DROPPED THE FIX FOR THE VERY FAILURE THIS BRANCH ROOT-CAUSED. My sweep saw 442a63243c, whose top commit was "ci(gitlab): fix the notice-watchdog race that was actually failing the mirror''s test job". The head is now dbf44b0987 and `git merge-base --is-ancestor 442a63243c dbf44b0987` returns NO - the branch DIVERGED. The fix commit is absent from the new head, and the delta removes exactly the 26 lines it added to aida-cli-lib/src/lib.rs. WHAT WAS LOST IS THE ROOT CAUSE, NOT A CLEANUP: the dropped commit changed NOTICE_DEADLINE from Duration::from_secs(1) to from_secs(10), with the measurement recorded in-code - TASK-1274 root-caused `awaiting_notice_tracks_real_lease_through_session_end` failing on both the GitLab mirror (pipeline 308, FAILED at 1256s) AND a plain local cargo test run REPRODUCED OUTSIDE ANY CONTAINER, to that deadline. "Measured directly: this deadline at 1s made the test fail every run." AND THE BRANCH NOW CARRIES THE THEORY THAT COMMIT DISPROVED: dbf44b0987''s own subject is "make protocol lease fixture container-stable", and the dropped commit states that this fixture fix "left the failure unchanged". So the surviving head is the guess and the dropped head was the answer. MY PRIOR BLOCKING FINDING THEREFORE STANDS UNRESOLVED AT THIS SHA - the GitLab test job failure is unfixed here, because the fix for it is not in this head. GITLAB PIPELINE #318 IS RUNNING ON 442a63243c, NOT ON THIS HEAD - I verified the pipeline sha directly (442a63243cae...) against the PR head (dbf44b0987ae...). Whatever colour it returns, it is evidence about a SUPERSEDED commit and must not be read as validating this one. WHAT THE IMPLEMENTER SHOULD DO: restore the watchdog commit onto this branch (cherry-pick 442a63243c), or - better, and my recommendation - land the NOTICE_DEADLINE fix as its own PR, because it fixes a defect that is LIVE ON MAIN (origin/main:lib.rs:69067 is still from_secs(1)) and has now been hit by three separate seats who each attributed it differently. A root-cause fix for a main-line defect should not ride a branch that has already dropped it once.'
+  recovery_hint: address the review findings, move TASK-1274 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-21T20:44:49.387871156Z
