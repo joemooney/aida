@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:37:35.410903749Z
-modified_at: 2026-09-21T00:48:48.135574221Z
+modified_at: 2026-09-21T00:53:51.828801889Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -76,5 +76,33 @@ comments:
     LABELLED AS MEASUREMENT vs INFERENCE, since that is the distinction that produced the error: the 4/15 split is counted from marker text. Whether those 6 pre-existing hand markers were placed by this seat earlier or by another is NOT established and I have not tried to establish it.
   created_at: 2026-09-21T00:48:48.135574221Z
   modified_at: 2026-09-21T00:48:48.135574221Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c174-7c54-75f3-bfd0-84a1052bc988
+  author: joe
+  content: |-
+    [aida:advisor] COUNT CORRECTED — 6 drain-placed, not 4. My discriminator was narrower than the concept it was counting.
+
+    I matched on 'is marked drive'. The supervised merge gate emits TWO phrasings for the same refusal, differing only in the execution_mode word:
+
+        PR-1972/1981/1984/2001   '<SPEC> is marked drive — auto-merge refused'
+        PR-2026/2027             '<SPEC> is marked unset (supervised) — auto-merge refused'
+
+    Matching on 'auto-merge refused' — the part that names the EVENT rather than the mode — gives 6. So: 6 drain-placed, 13 hand/advisor, of which 9 are tonight's conversions, leaving FOUR hand-placed markers that were already correctly paired.
+
+    THE CONCLUSION IS UNCHANGED and I would not soften it: four is still a demonstration that the hand path produces correct pairs, in the same store, alongside nine uses of the wrong one. The feedback-loop criterion remains the whole of this spec. Only the number moves.
+
+    THE COUNTING ERROR IS THE THIRD OF ITS KIND TODAY and the pattern is worth more than the correction. All three were a grep whose pattern was narrower than the thing being counted — matching a STRING instead of the CONCEPT the string usually expresses:
+
+        21 vs 22 on the Windows parity failure   — a *.md glob missed glossary.yaml
+        seven-of-eight on BUG-1452               — 'recorded_by == aida review record' would have
+                                                   silently narrowed to a historical cohort after
+                                                   a rename
+        4 vs 6 here                              — 'is marked drive' missed 'is marked unset'
+
+    Every one was invisible in the output: a count came back, looked plausible, and was answering a narrower question than the one asked.
+
+    DISCRIMINATOR, from claude-reviewer-1 and worth applying beyond this spec: when counting by a string, check what OTHER strings the same producer emits for the same event. The failure is not a typo in the pattern — it is that the pattern encodes one phrasing of a concept that has several.
+  created_at: 2026-09-21T00:53:51.828801889Z
+  modified_at: 2026-09-21T00:53:51.828801889Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
