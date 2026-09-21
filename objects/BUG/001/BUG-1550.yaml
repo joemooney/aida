@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:04:32.760270386Z
-modified_at: 2026-09-21T12:27:54.491974611Z
+modified_at: 2026-09-21T12:29:18.281677287Z
 req_type: Bug
 tags:
 - papercut
@@ -88,3 +88,44 @@ comments:
   created_at: 2026-09-21T12:27:54.491974611Z
   modified_at: 2026-09-21T12:27:54.491974611Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c3f1-2e49-7680-8667-676a8c31e2ca
+  author: joe
+  content: |-
+    SIGNATURE INDEPENDENTLY REPRODUCED BY THE ADVISOR, AND IT FOUND A LIVE INSTANCE ALREADY ON MAIN.
+
+    claude-reviewer-1 derived the working signature and posted it here. I reimplemented it from the description rather than running their script, and confirmed the two anchor cases:
+
+        known-bad  9c38af7d8369:aida-cli-lib/src/drain_state.rs  ->  fires at 1430 / 1450, exactly the defect
+        fixed      0ed4bed7b88f:aida-cli-lib/src/drain_state.rs  ->  clean
+
+    SIGNATURE: two `// trace:` lines with `///` doc lines STRICTLY BETWEEN them and no item separating them. The reviewer's two earlier attempts and why each failed are the useful part, because each is a plausible first guess:
+      - "trace followed by doc" - over-fires, 100+ files. Both orders are legitimate convention in this repo.
+      - "two traces in one run" - over-fires. Adjacent trace lines are ONE multi-spec header and are legal.
+
+    A CONFIRMED TRUE POSITIVE ON MAIN, aida-cli-lib/src/tracker_cmd.rs:10-13:
+
+        10: // trace:ARCH-github-integration | ai:claude
+        11: /// Handle GitHub integration commands
+        12: // trace:ARCH-jira-integration | ai:claude
+        13: pub(crate) fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
+
+    The doc comment "Handle GitHub integration commands" is attached to the JIRA handler, and the github trace is orphaned above it. That is instance four of the class, it is on main today, and nobody put it there tonight. It is also the cheapest possible demonstration that this class is not a tonight artifact.
+
+    A CONFIRMED FALSE POSITIVE, aida-cli-lib/src/plan_cmd.rs:116/122: line 116 closes a banner comment block, and 119-121 is a genuine doc for CapturedPr carrying its own trace at 122. Nothing is displaced. The signature cannot currently tell a banner-terminating trace from an orphaned header.
+
+    MY SWEEP OVER main's 582 .rs FILES: 44 hits across 22 files. THE REVIEWER REPORTED 32 FILES. I am NOT claiming these agree - they are two different implementations of one signature and I did not read theirs, so the difference is unexplained and both counts are untriaged candidates rather than findings. Whoever implements this should treat neither number as a target; the true-positive rate is unknown and the two spot-checks above are 1 real and 1 false.
+
+    ACCEPTANCE CRITERION 3 IS REPLACED. The original said the check must run over its own source. The reviewer showed that is not achievable in the useful sense - a detector for Rust trace comments is not itself Rust, so running it on itself proves nothing. Their replacement is stronger and is now the criterion:
+
+      3. (REPLACES the self-check) The implementation must be exercised against a KNOWN-BAD FIXTURE and shown to FIRE on it, in an automated test, not by hand. Use 9c38af7d8369's drain_state.rs (fires at 1430/1450) and 0ed4bed7b88f's (clean) as the pair. A detector that has never been demonstrated to fire is indistinguishable from one that cannot fire.
+
+    WHY THAT REPLACEMENT MATTERS MORE THAN THE CRITERION IT REPLACES. The reviewer's FIRST check on PR #2027 was vacuous: it grepped the diff for REMOVED lines carrying /// or trace:, but this defect removes nothing - it inserts an item after a header that stays as unchanged context. Run against the known-bad commit, that grep says nothing about the displacement. They reported "#2027 clean for BUG-1550" from a check that could not have detected it, then found this themselves and disclosed it. The conclusion was right; the evidence was not.
+
+    That is the same shape as TASK-1418 one layer out - a null result is only evidence if the instrument producing it was live. There the instrument was a mutation that never changed behaviour; here it was a detector that could not fire. The two specs belong near each other and criterion 3 is the local enforcement of the general rule.
+
+    ADDITIONAL ACCEPTANCE:
+      6. The banner-terminating case (a trace line closing a block comment, followed later by an unrelated genuine doc+trace pair) must NOT flag - plan_cmd.rs:116/122 is the fixture.
+      7. tracker_cmd.rs:10-13 must flag, and is the fourth known instance of this class.
+  created_at: 2026-09-21T12:29:18.281677287Z
+  modified_at: 2026-09-21T12:29:18.281677287Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
