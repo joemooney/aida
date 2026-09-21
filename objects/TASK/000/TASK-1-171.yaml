@@ -1,0 +1,42 @@
+id: 01a0c1f9-1311-7003-bb9b-ad3c97222f02
+spec_id: TASK-1-171
+title: Shell command-substitution has silently eaten text out of at least two spec descriptions, and the holes have a signature that finds them
+description: |-
+  Shell command-substitution silently eats backticked text out of spec descriptions and comments before AIDA receives it, and it has already damaged at least two specs in the store. The hazard is known for description arguments; what is new is that the damage is undetected, is not limited to descriptions, and has a signature that finds it.
+
+  THREE CONFIRMED INSTANCES, 2026-09-20.
+
+    TASK-675  "Routes pr_ship_create_pr's  through forge_for(root).open_change(...)"
+              A backticked term between "pr_ship_create_pr's" and "through" is gone. The sentence
+              still parses and reads as complete; only the double space marks the loss.
+
+    TASK-676  "Routes the orchestrator's delegated-review trigger (, RealPhaseDriver) through ..."
+              The first element of the parenthetical is gone, leaving a leading comma. This is the
+              more legible damage and it has been in the spec since it was filed.
+
+    TASK-1-170 comment, tonight. Three backticked command names consumed. Repaired in place.
+
+  WHY IT IS INVISIBLE. The write succeeds, the confirmation prints normally, and the result is grammatical. Nothing in the write path can distinguish text the author omitted from text a shell ate, so there is no error to surface and no later reader has a reason to suspect one. TASK-676 has read as an odd parenthetical rather than as damage for as long as it has existed.
+
+  THE DETECTOR, and its honest precision. A substitution hole has a signature INDEPENDENT of what it swallowed - two or more spaces mid-sentence, followed by a lowercase letter. That property is what makes it findable at all: a search for known-missing text cannot find a gap whose contents you cannot predict.
+
+  Run across every description in the store it produced 52 hits, of which these two are the confirmed real ones. The rest are legitimate: column-aligned tables, embedded JSON, and code blocks. So the detector NARROWS, it does not decide - the same shape as the field-count detector on BUG-1507, and it needs a human pass. Restricting it to prose lines (excluding lines that look like tables, JSON, or code) would raise the precision considerably and is the obvious first refinement.
+
+  Acceptance:
+  1. Sweep the store with a refined signature and report every candidate, with the real ones repaired. The count of genuine holes across all descriptions and comments is currently unknown; three are confirmed and two of those are years-old prose nobody noticed.
+  2. The repair path must be in-place. `aida comment edit` exists and takes --req-id and --comment-id; `aida edit --description-from-file` exists. Appending a correction leaves the damaged text where a reader meets it first, which is how this defect's own repair failed tonight.
+  3. State the prevention where the hazard is: long description and comment text is passed from a file, not as a shell argument. The flags already exist. This is a documentation and habit fix, not a code change.
+  4. Decide whether the write path can do anything at all. It probably cannot - by the time AIDA sees the string the text is already gone - which is worth stating explicitly so nobody looks for a guard that cannot exist. If that is the conclusion, the detector and the habit are the whole remedy.
+
+  WHAT THIS IS NOT. Not a bug in AIDA's write path. The shell consumes the text before any AIDA code runs. It is filed because the DAMAGE is in AIDA's store, is silent, is not rare, and is findable - and because a known hazard that leaves no trace is indistinguishable from one that is not happening.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T03:18:41.169078388Z
+modified_at: 2026-09-21T03:18:41.169078388Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+- severity:minor
