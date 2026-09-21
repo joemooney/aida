@@ -380,6 +380,24 @@ pub fn queue_done_verdict_gate(
     let Some(v) = verdict else {
         return VerdictGate::Proceed;
     };
+    // An approval without a commit is not authorization for any particular
+    // head. Fail closed for every verdict kind, including APPROVED: otherwise
+    // a legacy hand-written file silently bypasses the post-review SHA guard.
+    // trace:BUG-1467 | ai:codex
+    if v.reviewed_sha.is_none() {
+        return VerdictGate::Refuse(vec![
+            format!(
+                "error: aida queue done refused (exit 1) — the last review of {display_id} is UNVERIFIABLE because it records no reviewed_sha, so this check could not establish which head it covered."
+            ),
+            summary_line(v),
+            format!(
+                "Record a fresh verdict against the current head: `aida review record {display_id} --verdict approved --summary \"<why>\"`."
+            ),
+        ]
+        .into_iter()
+        .filter(|l| !l.is_empty())
+        .collect());
+    }
     if !v.kind.blocks_done() {
         return VerdictGate::Proceed;
     }
@@ -481,6 +499,8 @@ pub fn verdict_notice_line(v: &RecordedVerdict) -> String {
     }
     if let Some(sha) = v.reviewed_sha.as_deref() {
         line.push_str(&format!(" against {}", short_sha(sha)));
+    } else {
+        line.push_str(" — UNVERIFIABLE (missing reviewed_sha)");
     }
     if let Some(at) = v.recorded_at.as_deref() {
         line.push_str(&format!(" ({at})"));
