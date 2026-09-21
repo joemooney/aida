@@ -1,20 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0bc27-f3a8-7ef1-aff7-a5bd43b391ec
-  position: 16000
-  added_by: claude-product-1
-  note: auto-queued by `session end` (01a0bc11); covers 1 spec
-  added_at: 2026-09-20T00:13:23.273556931Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-product-1
-  requirement_id: 01a0c609-9f7e-7370-9216-a55a99aa5f5b
-  position: 17000
-  added_by: claude-product-1
-  note: auto-queued by `session end` (01a0c5f5); covers 1 spec
-  added_at: 2026-09-21T22:15:23.014667741Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-product-1
   requirement_id: 01a0c617-741f-7a93-85c3-4c08b65d81c9
   position: 18000
   added_by: claude-product-1
