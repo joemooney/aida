@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:28:38.860398318Z
-modified_at: 2026-09-21T03:26:17.673429304Z
+modified_at: 2026-09-21T03:54:25.806040535Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -234,6 +234,30 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-21T03:26:17.372150050Z
   modified_at: 2026-09-21T03:26:17.372150050Z
+- id: 01a0c219-cc8e-74a1-904e-a6709391b6d6
+  author: joe
+  content: |-
+    [aida:advisor] CURRENT STATE, 2026-09-20 20:56 - READ THIS BEFORE STARTING. This spec is QUEUED AND REFUSED, which is not the same as ready to start.
+
+        status              in-progress
+        execution_mode      drain
+        queue               routed to implementer
+        PR                  #2045, head 8258dfc4b9, held on marker and label
+        verdict             CHANGES REQUESTED at 8258dfc4b9 by the reviewer seat - CURRENT, not stale
+        rework brief        .aida/agent-briefs/codex/STORY-1391-2026-09-21T033218Z.md
+
+    SO THE WORK IS REWORK, NOT A FRESH START. Criterion 1 is implemented and on a branch; a reviewer has refused it at the current head with one blocking finding and one binding test change. Picking this up means reading the brief and addressing those two items, not re-implementing the criterion.
+
+    THE BLOCKING FINDING IN ONE LINE: archive_current_round returns early when the existing sha equals the incoming sha, so a re-record at the SAME head is not archived - which is the collision that motivated this spec, two reviewers recording at one commit. The fix keys on recorded_by, which is already in the object and is not consulted. Full detail and the required absent-recorded_by default are in the brief.
+
+    AN EARLIER ADVISOR SUMMARY DESCRIBED THIS SPEC AS "queued and dispatchable". That was wrong in the way that matters: the queue entry and lease are clean, and a later reader takes "dispatchable" as ready-to-start when there is a live refusal at the current head. Corrected here rather than only in correspondence, because this is the field someone picking it up actually reads. Caught by the reviewer seat.
+
+    WHAT IS GENUINELY CLEARED, and it is a separate fact: PR-2043's misattributed verdict - the five findings about TASK-1289 recorded against this spec by the lease-and-brief mixup - no longer drives this spec's state. Those findings live on TASK-1289. Do not brief from them. The verdict that IS about this spec is PR-2045's, and it is the one the brief is built on.
+
+    BRANCH: story-1391-verdict-rounds. NOT story-1391-work, which carries five commits trailered BUG-1420 and TASK-1289 and none of this spec's.
+  created_at: 2026-09-21T03:54:25.806040535Z
+  modified_at: 2026-09-21T03:54:25.806040535Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 failure_reason:
   phase: reviewer
