@@ -1,0 +1,33 @@
+id: 01a0c4d4-9d93-7802-844e-29dd8e41afe5
+spec_id: TERM-5
+agreed_id: TERM-5
+title: control plane
+description: |-
+  AIDA's CONTROL PLANE is the layer that decides whether work may advance and reports the state of work in flight. Borrowed from distributed systems, where the control plane makes decisions and the data plane carries the payload.
+
+  WHAT IS IN IT: the queue, the drain, the orchestrator and its phases, seats, leases, worktree assignment, review verdicts, merge-holds, BlockedBy gating, required-check rollups, the event feed, and the surfaces that report on all of it (aida ps, drain status, awaiting, doctor).
+
+  WHAT IS NOT IN IT: the spec graph itself - the YAML objects, stable ids, typed relationships, the cache, trace comments. That is the DATA PLANE, and it is what "requirements management" names. Presentation surfaces (CLI rendering, TUI, web) are not the control plane either; they display its state.
+
+  WHY THE TERM EXISTS. The machinery glossary defines orchestrator, phase, drain, lease, seat and session individually, but had no name for the LAYER they collectively form. Without it, discussion of where AIDA's engineering effort goes kept defaulting to "requirements management" (wrong - that is the data plane) or "the harness" (too vague - a harness is passive scaffolding, while this layer makes admission decisions and reclaims resources).
+
+  WHY IT IS LOAD-BEARING. A 2026-09-21 categorisation of the 49 most recently filed specs put 36 of them in two control-plane buckets: 20 in review-verdict and merge-gating, 16 in drain, session and lease state. Only 6 of the last 120 specs touched acceptance-criteria quality at all. Naming the layer makes it possible to say where the work actually goes.
+
+  TWO SUB-FACETS, each with its own industry name:
+  - ADMISSION / MERGE GATING - whether a change may land. Generic equivalent: a merge queue (Bors, Zuul, Mergify, Aviator). PRIN-7 states its invariant: merge-readiness is a conjunction of two independently-falsifiable predicates.
+  - STATE RECONCILIATION - the gap between actual, reported and desired state. PRIN-6 states its invariant: present evidence is not necessarily current evidence.
+
+  The characteristic defect of both is a surface asserting a state that is not true - false-green, false-empty, or stale reading as current. That class is more dangerous than a crash, because every downstream consumer believes it.
+
+  RELATED: [[orchestrator]], [[phase]], [[drain]], [[lease]], [[seat]]. Companion guides: aida-core/templates/.aida/discipline/machinery-glossary.md.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T16:37:43.443908816Z
+modified_at: 2026-09-21T16:37:43.443908816Z
+req_type: Term
+tags:
+- architecture
+- glossary
+- machinery-vocabulary
