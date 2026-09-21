@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:22:47.839462128Z
-modified_at: 2026-09-21T20:23:43.949723884Z
+modified_at: 2026-09-21T20:23:54.278399267Z
 req_type: Story
 relationships:
 - rel_type: !Custom related
@@ -64,4 +64,8 @@ relationships:
 - rel_type: !Custom related
   target_id: 01a0c4b7-b38c-7301-89cd-9b7a04a1e703
   created_at: 2026-09-21T20:23:43.949718880Z
+  created_by: joe
+- rel_type: !Custom related
+  target_id: 01a0c581-f3ab-7072-aa1d-1cf98d1108b7
+  created_at: 2026-09-21T20:23:54.278394115Z
   created_by: joe
