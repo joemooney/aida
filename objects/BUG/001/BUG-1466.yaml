@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-21T06:15:23.275889342Z
+modified_at: 2026-09-21T12:22:17.353486676Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -276,5 +276,11 @@ comments:
   content: '[aida:advisor] CONCRETE COST, measured 2026-09-20 23:14: five PRs — PR-1984, PR-1998, PR-2009, PR-2039, PR-2040 — carry a RequestChanges verdict with reviewed_sha, head and recorded_by all absent. Under BUG-1532''s amended criterion 4 (a refusal that cannot be tied to a commit stays refused) those five become unreleasable through the normal path until each is re-reviewed at its current head. That is the fail-safe direction and is correct, but it is a cost this spec is causing today rather than a hypothetical: five held PRs whose holds cannot be discharged because the verdict recorded no provenance. Independently measured twice — by the driver advisor over the verdict corpus and by the product seat auditing markers against PR heads — same five.'
   created_at: 2026-09-21T06:15:23.275889342Z
   modified_at: 2026-09-21T06:15:23.275889342Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3ea-c209-7890-b2d9-6f83174599d8
+  author: joe
+  content: 'PRIN-7 names this bug as one of its two enforcement paths. The principle is that merge-readiness is a CONJUNCTION of two independently-falsifiable predicates - every REQUIRED check passes, AND a recorded verdict names the CURRENT head - and that a surface must report them separately because neither implies the other. This spec is predicate 2: comparing reviewed_sha against the head rather than matching on verdict kind alone. BUG-1481 is predicate 1. The live instance behind predicate 2 is PR #2048 on 2026-09-21: every required check green against a head no reviewer had ever seen, verdict naming a commit that was no longer the head. Nothing in the check rollup could surface that, because the rollup is computed over the head and the verdict is not.'
+  created_at: 2026-09-21T12:22:17.353486676Z
+  modified_at: 2026-09-21T12:22:17.353486676Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
