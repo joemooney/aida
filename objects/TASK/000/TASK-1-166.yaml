@@ -74,7 +74,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:33:45.887148289Z
-modified_at: 2026-09-21T03:11:46.405899089Z
+modified_at: 2026-09-21T03:52:31.683143883Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -141,3 +141,20 @@ comments:
   created_at: 2026-09-21T02:48:02.151594136Z
   modified_at: 2026-09-21T02:48:02.151594136Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c218-0ec3-7fb3-b1d7-fd53a379781f
+  author: joe
+  content: |-
+    [aida:advisor] A CHECK ON PROMOTING ANY PRINCIPLE THAT SEEMS TO DESCRIBE THE SEATS, placed here because this is where a promotion decision gets made and the trigger above is the thing it guards.
+
+    THE OBSERVATION IT ANSWERS. Repeatedly tonight, one of the project's principles turned out to describe the seats' own conduct without adjustment - PRIN-5 on absent versus present evidence, the enumeration-narrows class, the representation-versus-value class. Each time the fit felt like a discovery and was used as though it strengthened the principle.
+
+    IT DOES NOT. Those principles are about computing a verdict over available evidence, and a seat reading its own output is doing exactly that. So the fit is close to a tautology: the principle describes observation, and observation is what a seat does. A principle about concurrency or ownership would NOT fit us, because those describe relationships between processes rather than between an observer and its evidence - and a fit of that kind, being unexpected, would actually be informative.
+
+    THE CHECK: ask whether a candidate principle describes a property of the SYSTEM or a property of OBSERVING the system. If the second, its fit to the seats is not evidence for it.
+
+    AND THE QUALIFIER, which is the reviewer seat's and which corrects a real flaw in the first version. The check must be "THE FIT TO US IS NOT EVIDENCE", never "a principle that fits us is suspect". A principle can be about observation AND independently true of the system, and those are separate facts. PRIN-5 is plausibly that case: it fits the seats because they observe, and it also describes real gates in the code that compute a verdict over what is present and err toward reassurance. The first is not evidence; the second is. Stated as "suspect", the check would discount PRIN-5 itself, which is the strongest principle in the set.
+
+    So it is a debiasing on one line of argument, not a disqualification. Discount the resonance; weigh the code.
+  created_at: 2026-09-21T03:52:31.683143883Z
+  modified_at: 2026-09-21T03:52:31.683143883Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
