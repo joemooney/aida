@@ -1,0 +1,82 @@
+id: 01a0c296-96a0-7ef3-b575-8ce43aa0523f
+spec_id: STORY-1416
+agreed_id: STORY-1416
+title: Writing a claim about an entity does not surface what is already recorded about that entity, so a seat contradicts its own prior record without either party noticing
+description: |
+  Filed by the driver advisor 2026-09-20 23:12, on the reviewer's observation and at their
+  routing. Deliberately scoped to the SMALLEST USEFUL SLICE — the wider version is
+  EPIC-shaped and is not what this asks for.
+
+  THREE INSTANCES TONIGHT, TWO SEATS, ONE SHAPE: a correct fact is recorded, and minutes
+  later a claim is made from a different premise, with neither the author noticing the
+  collision nor anything checking which survives.
+
+    1  driver advisor. The BUG-1485 transfer ruling — a drain-reviewer refusal transfers,
+       because the recorded_by is an ephemeral role artifact — was written ONTO BUG-1485.
+       The PR-2034 merge-hold marker, placed by the same seat, still quoted the drain
+       reviewer's superseded finding, which under the TASK-1-170 convention routes the hold
+       to a seat that no longer exists. The ruling and the marker contradicted each other
+       and the seat did not notice.
+    2  driver advisor. Observed in writing that flattening-ENTRY and LAST-TOUCH commit
+       dates differ and called entry the better measurement. Two messages later built a
+       dating argument on last-touch being exact.
+    3  claude-reviewer-1. Asserted "pr2035-review is intact" when told, minutes earlier and
+       in writing, that all five snapshot branches had been deleted. Reasoned from memory
+       of their own failed deletion instead of the record in their inbox.
+
+  WHAT THIS IS NOT. Not a measurement failure — every one of the three had the
+  disconfirming fact already written down, correctly, by the person who then contradicted
+  it. And not something the "what else does this change exclude" check catches, because
+  nothing about the new claim looks wrong from inside it.
+
+  THE MEDIUM IS NOT THE DISCRIMINATOR, and this is the finding that makes the spec
+  worth filing. The advisor first proposed that conclusions belong in specs rather than
+  mail, on the grounds that a spec can be re-read. The reviewer refuted it with instance 1:
+  that conclusion WAS in a spec, in the substrate, durable and re-readable, and it was
+  contradicted anyway. Instance 3 had its fact in mail; instance 1 had it in a spec. Both
+  failed identically.
+
+  So durability is not the missing property. CONSULTATION is. A spec is re-readable and is
+  not re-read; a mail is searchable and is not searched. Moving a conclusion from one
+  durable store to another does not add a reader.
+
+  THE SLICE: A WRITE-TRIGGERED, ENTITY-SCOPED SURFACING. All three instances are
+  entity-scoped — a PR, a spec, a branch — so the lookup is cheap and the trigger is a
+  write rather than a discipline. On recording a claim ABOUT an entity, show what is
+  already recorded about that entity.
+
+  Concretely, for the instance that produced this: writing a merge-hold marker for PR-N
+  surfaces the existing marker and the current verdict for PR-N before the write lands. The
+  advisor would have seen the drain reviewer's quoted text and the reviewer's newer verdict
+  side by side, which is exactly the collision that went unnoticed.
+
+  ## Acceptance
+  1. Writing a merge-hold marker for a PR that already has a marker OR a recorded verdict
+     surfaces both, with their recorded_by and sha, before the write completes.
+  2. The surfacing is informational and does NOT block. This is a consultation gap, not an
+     authority gap; a gate here would be the wrong instrument and would collide with
+     BUG-1532's kind work.
+  3. It fires on the WRITE, not on a separate command a seat must remember to run. A rule
+     that depends on remembering is what BUG-1534 instance 4 demonstrated does not hold —
+     an adopted rule failed on its own adopter within forty minutes.
+  4. Scope is merge-hold markers only in this slice. Verdicts, spec status writes and
+     lease writes are the obvious next consumers and are explicitly OUT, so this does not
+     become the EPIC it is adjacent to.
+
+  ## Revisit trigger
+  If a fourth instance lands on an entity type NOT covered by this slice — a verdict
+  contradicting a verdict, a status write contradicting a ruling — widen to that type then,
+  with the instance as the evidence. Do not widen speculatively.
+
+  RELATED AND DISTINCT: BUG-1533 is authorship the envelope cannot recover; BUG-1534 is
+  reasoning relayed without provenance. This is neither — every record here is correctly
+  attributed and correctly stored. It is only never read at the moment it matters.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T06:10:44.000996596Z
+modified_at: 2026-09-21T06:10:44.000996596Z
+req_type: Story
+tags:
+- parent:EPIC-62 substrate-as-bouncer consultation severity:operational
