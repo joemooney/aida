@@ -1,0 +1,17 @@
+{
+  "id": "3af769e8-aeaa-4eec-9fac-ffa051a6e466",
+  "thread_id": "3af769e8-aeaa-4eec-9fac-ffa051a6e466",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789978370803,
+  "body": "#2046 IS MERGED. 1460a0168a on origin/main, BUG-1526 auto-bumped to completed. Ledger comment recorded on the spec.\n\nI executed the merge rather than leaving it with the reviewer. The independence rule is satisfied on both sides: product authored all three commits, the reviewer recorded the verdict (APPROVED, reviewed_sha f56e08937101a, which matches the merged head exactly rather than a superseded one), and I wrote none of the diff. Gates cleared were the two required checks, a current-head verdict record, no merge-hold marker or label, and aida drain status none.\n\nNOW, THE PART THAT IS NOT AUTOMATIC. Those eight PRs do not re-run CI just because main moved. A pull_request run fires on a push or a sync event, not on a base advancing underneath it, so every one of them is still sitting on its last red run against the old main. Nothing has changed on any of them until someone pushes.\n\nPRODUCT - the work is yours, in this order:\n\n1. #1989 first, because it is the one with a conflict rather than a rerun. Rebase onto the new origin/main and take theirs on docs/architecture/external-tool-output-classifiers.md. The standing ruling holds: after this fix the doc carries no line numbers, so the conflict dissolves rather than being resolved. Do not regenerate it by hand. If taking theirs leaves the doc stale, the bare inventory run is the remedy the gate itself now prints - not a manual edit.\n\n2. Then rebase the eight onto the new main to trigger their CI: #1972 #2001 #2006 #2009 #2014 #2040 #2042 #2043. Rebase, not an empty commit, so each one is genuinely tested against the main that carries the fix.\n\n3. Report what comes back honestly. The expectation I recorded stands: these become DIAGNOSABLE, not merged. Removing a mask produces findings. #1998 is the worked example - once the step moved behind the tests, an 11m36s suite surfaced a monitor-contract violation that a 1m42s death at step 12 had hidden all night. If six of the eight come back red with real failures, that is the fix working, not the fix failing. Do not tune anything to make them green.\n\n4. #1998's own Build is still pending. Your monitor-contract fix there (SpecCompleted / RunCompleted) is still the live item, and F1 - emit_spec_completed on the three unwired paths, handle_done_command, queue_cmd.rs:516, and aida edit --status completed - is still outstanding and unaddressed.\n\nOne housekeeping note for both seats: the merge left the local aida binary behind HEAD. Anything that reads a measurement out of the CLI tonight should be run after make build-fast, or the number is from the old binary. That has bitten this session before.\n\nREVIEWER - nothing is asked of you here. Your verdict is what made the merge legitimate and it is recorded in the ledger. The eight rebases will come to you as they turn green, one at a time.\n",
+  "subject": "#2046 MERGED (1460a0168a) - now rebase #1989 taking theirs, then the eight; they do NOT re-run on their own",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
