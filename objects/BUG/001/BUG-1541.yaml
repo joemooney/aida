@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:40:53.858735083Z
-modified_at: 2026-09-21T08:44:36.253578043Z
+modified_at: 2026-09-21T09:24:39.544700851Z
 req_type: Bug
 comments:
 - id: 01a0c323-761d-7700-8bde-16fc5daa15a3
@@ -53,4 +53,37 @@ comments:
     CONSEQUENCE FOR THIS SPEC'S IMPLEMENTATION: the terminal-state sweep is not merely a convenience. It is the mechanism that makes the corrected rule enforceable without anyone consulting a convention — a seat running `--stale` should not have to know whose hand placed a marker, because on a terminal PR that fact carries no weight. Substrate as bouncer: the sweep either covers closed-unmerged PRs and the question never arises, or it does not and every phantom becomes a judgement call that two competent seats have now demonstrably gotten wrong.
   created_at: 2026-09-21T08:44:36.253578043Z
   modified_at: 2026-09-21T08:44:36.253578043Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c348-21f8-71a1-a738-6bfc452414d4
+  author: joe
+  content: |-
+    THE HOLD RULE, FINAL FORM — sharpened 2026-09-21 02:24 after two live clearance decisions an hour apart, and the sharpening matters because the earlier phrasing would have gotten the second one wrong.
+
+    THE RULE HAS TWO CLAUSES AND NEITHER MENTIONS CI:
+
+        1. OWNERSHIP:  Do not clear another seat's hold on a PR that CAN STILL MERGE.
+                       On a CLOSED or MERGED PR, any seat may sweep the phantom.
+        2. TIMING:     Clear when the refusal the marker carries is NO LONGER THE
+                       REVIEWER'S POSITION. Not when CI goes green.
+
+    BOTH LIVE CASES FALL OUT OF CLAUSE 2:
+
+        #1998   cleared, because the marker named "CHANGES REQUESTED at 698dd77c7cea" while
+                the reviewer's own APPROVAL at 5393454ef62b had superseded it. The marker was
+                FALSE at the moment it was cleared, and it was blocking a merge on a stale
+                refusal.
+        #2030   NOT cleared, because the marker names "CHANGES REQUESTED for BUG-1485 at
+                293da2d0cc94" and that IS the reviewer's current position. Build (ubuntu-latest)
+                passed at that same head. The marker is TRUE and the gate failing is the
+                substrate working.
+
+    WHY THE CI PHRASING IS DANGEROUS. The driver-advisor's first statement of the distinction was framed around CI — "#1998's marker was stale, #2030's is current, green CI here only means the tree builds." That reaches the right answer on both but for a reason that does not generalise: it fails exactly where CI is GREEN AND THE FINDINGS STAND, which is precisely where #2030 sits. A rule phrased around CI would have invited clearing #2030 the moment its Build passed.
+
+    The reviewer seat caught this and restated it as one sentence covering both. The discriminator is the TRUTH OF THE MARKER, never the colour of the checks.
+
+    WHAT A GREEN BUILD IS WORTH ON A PR WITH DESIGN-LEVEL FINDINGS, recorded here because it is the other half of the same confusion: the tree builds and the suite passes, and neither finding is reachable by it. On #2030, F1 is a missing production change that compiles fine without it, and F2 is a fixture that passes PRECISELY BECAUSE IT STOPS SHORT — it asserts branch recovery, which F1 already grants, and halts immediately before the disputed step. A green Build is the EXPECTED result on both findings, not evidence against either.
+
+    trace:BUG-1541 trace:BUG-1499
+  created_at: 2026-09-21T09:24:39.544700851Z
+  modified_at: 2026-09-21T09:24:39.544700851Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
