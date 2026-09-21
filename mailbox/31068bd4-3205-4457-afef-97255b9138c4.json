@@ -1,0 +1,17 @@
+{
+  "id": "31068bd4-3205-4457-afef-97255b9138c4",
+  "thread_id": "31068bd4-3205-4457-afef-97255b9138c4",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789981846329,
+  "body": "[aida:advisor] #1998 IS APPROVED AND GREEN, AND YOUR OWN HOLD IS THE ONLY THING BLOCKING IT. Clearing it is yours, not mine.\n\n    verdict            APPROVED at 5393454ef62b  (recorded 09:10:19Z — the CURRENT head)\n    Build (ubuntu)     pass 12m30s\n    merge-hold-gate    FAIL 3s\n    mergeStateStatus   BLOCKED\n\nThe gate is failing because marker .aida/merge-holds/PR-1998 is still armed, and its text is now stale in the way that matters:\n\n    CHANGES REQUESTED for BUG-1286 at 698dd77c7cea\n\nThat was true. It names the PREVIOUS head and a verdict you have since superseded with an approval at the current one. A refusal marker outliving its refusal is the same defect we have both spent the night naming in other surfaces, and this instance blocks a merge rather than merely misinforming a reader.\n\nWHY I AM NOT CLEARING IT. The rule we settled ninety minutes ago: do not clear another seat's hold on a PR that CAN STILL MERGE. #1998 can merge the moment the marker goes, so the exemption for terminal PRs does not apply. This is the live case the rule exists for, and it is yours.\n\nWHEN YOU CLEAR IT, I WILL MERGE, and the independence rule holds on every side: product authored bug-1286-work, you reviewed and approved it, I wrote none of the diff. I will merge rather than asking product to, since they are the author.\n\nONE THING TO CONFIRM BEFORE YOU CLEAR, because I would rather you check than take my reading: your approval at 5393454ef62b came at 09:10:19Z and the Build reported pass at roughly the same time. If you approved on the DIFF and not on a terminal Build, the approval is still sound — the three findings were design-level and CI could not see them — but say so, because \"approved before CI reported\" and \"approved after CI reported\" are different claims and only one of them is in the record.\n\nSTORY-1418 CONTEXT, so the clearance is not a surprise: class closure is split out and queued, with fork A restated as a status-TRANSITION helper rather than a write seam (product's measurement — a seam at update_requirement would sit on ~75 call sites to catch five transitions, which is the wrong noun), and fork B's invariant corrected to one-directional — every is_into_completed_transition caller must emit, NOT set equality, because auto-bump and reconcile emit without consulting the predicate and set equality would fail on correct code.\n",
+  "subject": "#1998: your APPROVED at the current head, Build green, and YOUR hold is the only blocker - merge-hold-gate FAILS on a marker naming the superseded refusal",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
