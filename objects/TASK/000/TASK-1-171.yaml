@@ -35,7 +35,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T22:38:03.655717970Z
+modified_at: 2026-09-21T23:16:31.457753536Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -351,4 +351,37 @@ comments:
     ONE ADDITION TO ITEM 4, which asks whether the write path can do anything. For PREVENTION, no - correct, and worth stating as settled. For DETECTION, yes and cheaply: this signature runs over 9243 fields in seconds, so running it on INBOUND description and comment text at write time would warn the author while they are still present to fix it. That would have caught today's TASK-1289 instance at the moment I created it, instead of by an unrelated shell error.
   created_at: 2026-09-21T22:38:03.655717970Z
   modified_at: 2026-09-21T22:38:03.655717970Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c641-ba61-7cc3-81b5-a8ada872f59e
+  author: joe
+  content: |-
+    [aida:advisor] FIFTH INSTANCE, ALSO MINE, TWO HOURS AFTER THE FOURTH — AND IT ADDS TWO THINGS THE EARLIER FOUR DID NOT SHOW.
+
+    2026-09-21 16:14. Writing a standing constraint onto BUG-1572, I put a backticked expression inside a double-quoted shell argument:
+
+        ...the proportion is BACKTICK over_pct = over_budget * 100 / counted.len() BACKTICK, so a
+        counted row UNDER budget grows the denominator...
+
+    Bash attempted command substitution and stored:
+
+        THE RESIDUAL RISK ... FILED ABOUT. , so a counted row UNDER budget grows the denominator...
+                                         ^^ a comma with nothing before it
+
+    Repaired in place via `aida comment edit` per acceptance item 2; verified afterwards that the expression is present and the damaged form returns zero matches.
+
+    FIRST NEW THING — WHERE THE HOLE LANDED. The previous four instances ate a symbol out of descriptive prose. THIS ONE ATE THE FORMULA OUT OF A STANDING CONSTRAINT: the sentence explaining WHY a design decision is safe, written specifically so a future reader who wants to change fail-open understands what it depends on. A hole in a description costs a reader some context. A hole in the load-bearing clause of a constraint costs them the reason, and the reason is the only thing standing between that reader and breaking the pair. THE DAMAGE IS NOT UNIFORM ACROSS TEXT and the detector cannot tell which sentences carry weight.
+
+    SECOND NEW THING, AND IT SHARPENS THE INSERTION HAZARD I FLAGGED LAST TIME. This time bash EMITTED AN ERROR — "syntax error near unexpected token `('" — because the expression contained parentheses. I noticed only because I happened to be reading the tool output. A backticked token that names a real command emits NOTHING and inserts that command's stdout into the spec. So the visibility of this defect is an accident of syntax:
+
+        backticked text with shell metacharacters   -> error printed, sometimes noticed
+        backticked text naming a real command       -> silent, and INSERTS rather than deletes
+        backticked text naming nothing              -> "command not found", easy to miss in noise
+
+    THE DETECTOR THIS SPEC PROPOSES FINDS ONLY THE THIRD CASE. Its signature is the double-space left by a deletion. An inserted `date` or `pwd` output leaves no double space and reads as the author's own words.
+
+    WHAT THAT MEANS FOR ACCEPTANCE ITEM 4, which asks whether the write path can do anything: my earlier answer was that PREVENTION is impossible and DETECTION is cheap. That stands, and the detection half is narrower than I said — it detects deletions and is blind to insertions. A WRITE-TIME CHECK WOULD CATCH THE COMMON CASE AND SHOULD NOT BE DESCRIBED AS CLOSING THE CLASS.
+
+    AND THE RECURRENCE IS NOW THE FINDING. Five instances, four of them mine, two of them AFTER I promoted this spec and wrote up the previous instance. I have described the prevention as "a documentation and habit fix, not a code change" and have now failed that habit twice in two hours while holding the spec open in front of me. A HABIT THAT ITS OWN AUTHOR CANNOT KEEP FOR TWO HOURS, WHILE ACTIVELY THINKING ABOUT IT, IS NOT A HABIT FIX. The reliable remedy is the flag that already exists — `--description-from-file` / `--body-file`, which I use for every mail and every long description and did not reach for on a comment I judged short enough to inline. THE SIZE JUDGEMENT IS THE FAILURE POINT: the hazard is per-backtick, not per-length.
+  created_at: 2026-09-21T23:16:31.457753536Z
+  modified_at: 2026-09-21T23:16:31.457753536Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
