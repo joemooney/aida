@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-21T22:39:08.497767723Z
+modified_at: 2026-09-21T22:41:28.913751096Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -164,6 +164,27 @@ comments:
     3. TWO CRITERIA ARE UNMET FOR THE SAME REASON - SILENCE. Criterion 2 asked that the rejection of options (b) and (c) be recorded; the commit body is empty but for its trailer, the code comment explains the implementation shape rather than the rejection, and the spec comments predate the decision. Criterion 3 permits leaving the 103 remaining inert edges as-is but NOT silently - nothing states that they stay inert, or that migration is deferred, or where it is tracked. Either disposition satisfies it; silence does not. If migration happens, the 13 twins already identified matter: a blind conversion produces 13 duplicates rather than 13 repairs.
   created_at: 2026-09-21T22:39:08.497767723Z
   modified_at: 2026-09-21T22:39:08.497767723Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c621-a551-7901-b840-45b9f02a2e4b
+  author: joe
+  content: |-
+    [aida:advisor] THE GRAPH-SEMANTICS AXIS IS CLOSED WITH NO FINDING, AND ONE FORWARD-LOOKING COUPLING IS RECORDED. Investigated by claude-reviewer-1 on an axis this seat flagged as a question rather than as a defect; the result is that the question is answered and the answer is narrower than the question assumed.
+
+    WHY THE BLAST RADIUS IS SMALL, and it is by construction rather than by luck. The change normalizes CLI INPUT ONLY. `RelationshipType::from_str` is deliberately lossless and a test pins that. SO NO STORED EDGE CHANGES TYPE: the existing `!Custom related` edges keep traversing exactly as badly as before. Nothing that relied on those edges not traversing can change, because those edges did not move. Only edges written AFTER this lands are affected.
+
+    WHAT ACTUALLY CONSUMES References, measured rather than reasoned: TWO non-test call sites in the whole workspace - lib.rs:18510 and lib.rs:74866 - and they are the same computation twice, THE DOC-COVERAGE GAP. A spec counts as documented when some Doc-type requirement holds a References edge to it. That is the entire population of behaviour keyed on this type.
+
+    THE SURFACES THIS SEAT NAMED AS THE RISK ARE ALL UNAFFECTED: epic rollups key on Parent/Child; blocked-by resolution and the candidate/ready surfaces key on BlockedBy. None reads References, so promoting `related` into References cannot reach them.
+
+    THE FAILURE MODE WORTH LOOKING FOR, AND IT IS ABSENT. `inverse()` returns None for BOTH References and Custom(_) (models.rs:1130-1131). So the alias does not begin writing a reciprocal edge where none was written before. HAD References CARRIED AN INVERSE, every `--type related` would silently have started writing TWO edges instead of one - and `rel_should_write_inverse` would NOT have caught it, because it gates on Parent/Child and the bidirectional flag rather than on the type's own inverse. A negative result on the one hypothesis that would have mattered.
+
+    THE ONLY REACHABLE CONSEQUENCE, and it is inert today: a `Doc --type related--> SPEC` edge now marks that spec documented where before it did not. Counted: ZERO existing Custom related/related-to edges originate from a Doc-type spec, and the store holds only TWO Doc specs. F3's deferred migration would not move the doc-coverage metric either.
+
+    THE COUPLING IS RECORDED BECAUSE IT WAS CREATED RATHER THAN CHOSEN. It is currently inert and it is now real: EPIC-24 is living docs, so if Doc usage grows, `--type related` from a Doc becomes a doc-coverage assertion. That is probably CORRECT behaviour - the doc does reference the spec - but it is a semantic link between a relationship alias and a coverage metric that fell out of an aliasing change rather than being decided. A LATER READER WHO FINDS DOC-COVERAGE MOVING SHOULD BE ABLE TO FIND OUT WHY FROM HERE. Not a blocker; it does not affect the verdict.
+
+    METHOD NOTE WORTH KEEPING: this seat raised the axis WITHOUT looking, explicitly as an axis and not a finding. That was the right shape for a question one seat suspects and another is better placed to answer - it cost the reviewer one focused investigation instead of costing the implementer a speculative round. A named axis is cheaper than a guessed finding and more useful than silence.
+  created_at: 2026-09-21T22:41:28.913751096Z
+  modified_at: 2026-09-21T22:41:28.913751096Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
