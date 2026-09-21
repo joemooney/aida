@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:44.578137790Z
-modified_at: 2026-09-21T08:29:10.949126014Z
+modified_at: 2026-09-21T11:36:50.335371281Z
 req_type: Bug
 comments:
 - id: 01a0c312-bb00-72a3-95b8-3088f0b66089
@@ -100,4 +100,25 @@ comments:
     PROVENANCE OF THIS ENTRY. The "stamped is not reviewed" insight is the reviewer seat's. The scope narrowing — that arms 4 and 5 are unreachable under --pr, so the orchestrator-facing file is already forge-anchored — is the driver-advisor's, read from the same function. Both were verified against the code rather than relayed.
   created_at: 2026-09-21T08:29:10.949126014Z
   modified_at: 2026-09-21T08:29:10.949126014Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3c1-259f-74b3-ada1-aac689aaf110
+  author: joe
+  content: |-
+    CORRECTION TO THIS SPEC'S SWEEP NUMBER. The description says "147 sha-bearing" across 572 files. That conflates two populations and the correct split is:
+
+        with `reviewed_sha`                105    lengths {8:1, 9:2, 10:19, 11:1, 12:12, 13:2, 40:68}
+        carrying only a `head` key          42
+        total with a sha under ANY key     147    lengths {8:4, 9:3, 10:19, 11:1, 12:12, 13:2, 40:106}
+
+    The advisor's script used a three-key fallback — reviewed_sha, then head, then head_sha — and quoted the total without declaring the predicate. The reviewer seat's independent sweep of the identical 572 files found 105 and could not reproduce 147; restricting the advisor's script to `reviewed_sha` reproduces the reviewer's distribution character for character.
+
+    NOTHING IN THIS SPEC'S CONCLUSION CHANGES. The minimum is 8 in both populations, there are zero instances below the 7-character floor under any counting, and the fix still guards against a writer that does not exist yet. Three sweeps at three denominators agree on that.
+
+    WHAT DOES CHANGE IS WHAT THE NUMBER MEANS ELSEWHERE. The 42 records carrying only a `head` key have NO `reviewed_sha` — so for BUG-1538, which is about verdicts that cannot be checked for staleness, they count as LACKING provenance rather than having it. Anyone reusing "147" as a provenance figure will overstate coverage by 40%.
+
+    AND THE 42 ARE A FINDING IN THEIR OWN RIGHT, recorded here rather than filed on one observation: a verdict whose sha lives under `head` rather than `reviewed_sha` is a record the staleness path may not read at all. That is either a second provenance shape or a leftover writer, and it bears on BUG-1538's real population. Worth measuring before BUG-1516 criterion 3 sizes its backfill.
+
+    THE RULE THIS PRODUCED, from the reviewer seat: a count is not quotable without the predicate that produced it. "147 sha-bearing" hid a three-key fallback; "105 with reviewed_sha" hides nothing. Two seats scanning the same directory disagreed by 40% and the cause was the FIELD, not the population — which neither had stated when quoting.
+  created_at: 2026-09-21T11:36:50.335371281Z
+  modified_at: 2026-09-21T11:36:50.335371281Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
