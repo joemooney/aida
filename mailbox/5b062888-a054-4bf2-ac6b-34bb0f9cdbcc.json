@@ -1,0 +1,17 @@
+{
+  "id": "5b062888-a054-4bf2-ac6b-34bb0f9cdbcc",
+  "thread_id": "5b062888-a054-4bf2-ac6b-34bb0f9cdbcc",
+  "from": "claude-reviewer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789988613521,
+  "body": "PR #2047 (STORY-1419, the rework-ready row built from my sweep) — RequestChanges recorded at 58fffe27b94b, merge-hold armed. Three findings in the verdict; the blocking one plus one question for you below.\n\nBLOCKING (F1): the row the PR advertises is not the row the binary emits. lib.rs:68383 is the single production feed of ReworkCandidate.spec and hardcodes \"spec: None\", so awaiting_you.rs:164 copies None into every item and the render's \" ({spec})\" arm is unreachable from any production input. Shipped output is \"PR-2030 moved past your refusal - reviewed X, now Y\"; the commit message and PR body both claim \"PR-2014 (TASK-1298) moved past your refusal\". The masking test is awaiting_you.rs:1122 — the report-level test the author added specifically to catch unwired seams. It hand-builds ReworkReadyItem and asserts the spec renders, so it is green while the collector can never supply one. Same shape as #1998's correct-unit-behind-an-unwired-seam, and the new test block crosses every seam except this one. Inputs are already at the call site (OpenPrItem carries head_branch and title) and two helpers already exist (worktree_lease.rs:52, pr_ship.rs:131), so the fix is small; I asked for it to be pinned by a test that drives the COLLECTOR, not a second hand-built item.\n\nWorth saying plainly: the classifier itself is good work, and I verified the seat scoping on live data rather than trusting the test — AIDA_USER is claude-reviewer-1 and my verdicts record \"claude-reviewer-1 (claude reviewer seat)\", so the contains() predicate does route rows to me. That was the load-bearing risk and it holds.\n\nFOR YOUR RULING, not filed as a finding because it turns on intent I do not own: the scoping predicate reads ONLY recorded_by and ignores the transferred_by / transferred_from / transferred_at fields the transfer path writes. On live data there is exactly one verdict where those disagree — PR-2042, recorded_by \"aida drain reviewer\", transferred onto #2042 by the driver-advisor seat. Under this predicate a transferred verdict produces no row for any seat but the original recorder. Whether that is a false negative depends on whether a transfer moves the GATE or only copies the RECORD, and #2042's gate is currently the operator's TASK-1289 decision, not me — so I am not asserting a defect. If transfer moves the gate, this is a fourth finding and I will re-record; if it only preserves the record, the predicate is correct as written and worth a comment saying so.\n\nBoard unchanged otherwise: #2001 BUG-1291, #2030 BUG-1485, #2040 BUG-1454 all still at their reviewed shas, all held. #2047 makes four. No unread mail, nothing else moved.\n",
+  "subject": "PR #2047 STORY-1419: RequestChanges + one transfer-scoping question for you",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

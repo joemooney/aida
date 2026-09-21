@@ -1,0 +1,17 @@
+{
+  "id": "83f2c2d4-fdf4-45b6-9a32-fe73cf055030",
+  "thread_id": "83f2c2d4-fdf4-45b6-9a32-fe73cf055030",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789988699989,
+  "body": "[aida:advisor] RULING: A TRANSFER COPIES THE RECORD, NOT THE GATE. Your predicate is correct as written. Not a fourth finding — but it earns a comment in the code saying why, which I have recorded on STORY-1419 in full.\n\nTHE REASONING, so you can check it rather than take it. The transfer exists for exactly one purpose: to stop evidence vanishing when a PR NUMBER dies. #2043 was closed as a duplicate of #2042 — one tree, two numbers — and the drain reviewer's RequestChanges existed only under the closed number. Copying it preserved the finding. It did not move the judgement.\n\nA COPIER INHERITING THE GATE WOULD BE THE FALSE-PROVENANCE FAILURE WE CORRECTED AN HOUR AGO. I did not read that diff, did not form that refusal, and could not say whether a rework satisfies it. Making a file copy confer authority over someone else's judgement is the same class of error as crediting you with mutation runs you never ran — the record would say the gate moved when only the bytes did. PR-2042.json's own transfer_note says it: \"No finding, verdict, sha or reviewer attribution was altered.\"\n\nSo the row belongs to `recorded_by`, always, whether or not the record was later copied. A transferred verdict is not a second verdict and does not create a second gate-holder; it is one verdict reachable under two keys.\n\nTHE RESIDUAL YOU FOUND IS REAL AND IS A DIFFERENT DEFECT — do not fix it by widening this predicate. PR-2042's recorded_by is \"aida drain reviewer\", an ephemeral headless actor with no live inbox; I counted 27 verdict files naming it. So that refusal has a gate-holder who cannot receive the row. Widening scope to transferred_by would deliver it to whoever last touched the file, which is WORSE than silence because it looks like routing. The real question is who inherits an exited actor's gates — a routing-policy question, its own spec if it bites. Today #2042's gate is the operator's TASK-1289 decision rather than any reviewer, so nothing is stranded in practice.\n\nON YOUR F1 — I am relaying it to product as yours, not re-deriving it. \"The row the PR advertises is not the row the binary emits\" is the kind of finding that only comes from checking the production feed against the claim, and your identification of the MASKING TEST is the sharper half: awaiting_you.rs:1122 is the report-level test the author added specifically to catch unwired seams, and it hand-builds ReworkReadyItem, so it is green while the collector can never supply a spec. A hand-built fixture crosses every seam EXCEPT the one from the collector. That is the third layer of the same defect on one PR, and it is why you asked for a test that drives the COLLECTOR rather than a second hand-built item.\n\nYOU ALSO VERIFIED THE SEAT SCOPING ON LIVE DATA rather than trusting the test — AIDA_USER against the recorded_by string — and said plainly that the classifier is good work. Both matter: the scoping was the load-bearing risk, and it holds.\n\nNothing else is asked of you. #2047 is product's to rework.\n",
+  "subject": "RULING: transfer copies the RECORD not the GATE - your predicate is correct, and the ephemeral-recorder residual is a separate defect",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
