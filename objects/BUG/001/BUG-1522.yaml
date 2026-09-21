@@ -1,0 +1,51 @@
+id: 01a0c242-58c6-7b01-8deb-4ab148eacf95
+spec_id: BUG-1522
+agreed_id: BUG-1522
+title: The rework no-op guard is checked on only one of four implementer-advance paths, and a rework on an already-open PR never takes that path
+description: |-
+  The rework no-op guard is consulted on exactly ONE of the four code paths that advance the implementer phase, and a rework round on an ALREADY-OPEN PR does not take that path.
+
+  In aida-cli-lib/src/auto_complete.rs, the implementer phase arms the guard once (begin_rework_guard, line 3616) and then advances via four branches. Only one checks it:
+
+    ~3623  capture_phase_done_pr + emit_done                      NO guard check
+     3681  Punted -> PuntFlow::Proceed: capture + emit_done        NO guard check
+     3689  PrOpened: capture, THEN rework_no_op_failure, emit_done  guard CHECKED
+     3717  AlreadyMerged: emit_done                                NO guard check
+
+  rework_no_op_failure itself is correct -- it compares the PR head before and after and returns a ReworkNoOp failure unless content changed. It is simply not reached on three of four exits.
+
+  WHY THAT DEFEATS THE GUARD EXACTLY WHEN IT IS NEEDED: the guard exists for a REWORK round, which by definition runs against a PR that is ALREADY OPEN. An implementer in that situation does not open a PR, so it cannot return PrOpened -- the one outcome that checks the guard. The guard is wired to the single case it was not written for.
+
+  OBSERVED, from .aida/events.jsonl, on BUG-1460 / PR #2034:
+
+    04:30:23  PhaseEntered idx=1 implementer  vendor=codex attempt=1
+    04:30:25  PhaseEntered idx=2 ci
+    04:30:28  PhaseDonePr  pr=2034
+    04:32:17  PhaseEntered idx=1 implementer
+    04:32:39  PhaseEntered idx=2 ci
+    04:32:41  PhaseDonePr  pr=2034
+
+  Two implementer phases, two and twenty-two seconds long, no commit produced. No SpecShelved event on either. The only shelves on this spec are from 22:27:52 and 23:13:22, both the original reviewer rounds.
+
+  PR #2034 head is still 8f4b6c85a0, which is the exact sha the CHANGES REQUESTED verdict in .aida/review-verdicts/PR-2034.json was recorded against. So the pipeline advanced an unchanged, already-refused head into CI and on toward the reviewer, twice, and reported it as phase completion.
+
+  The arming preconditions were all satisfied, which is why this is a wiring defect and not a detection one: branch bug-1460-work yields BUG-1460 through rework_pr_head_matches_spec, and blocking_rework_verdict resolves the PR-keyed blocking verdict since BUG-1445 landed.
+
+  CONSEQUENCE: this is the engine of the loop that has consumed the night. A refused spec is redispatched, the implementer no-ops, the guard is bypassed, CI re-runs green on an unchanged head, the reviewer is handed the same sha it already refused and refuses it again. Each iteration costs a full review cycle and converges on nothing. The advisor probed ONE spec before dispatching fifteen and caught it; fifteen would have been fifteen false successful routings.
+
+  NOT CONFIRMED, and deliberately not asserted: which ImplementerOutcome variant the BUG-1460 runs actually returned. The evidence establishes that the run advanced without the guard firing, which is consistent with any of the three unchecked branches. Whoever fixes this should confirm the variant rather than trust this inference -- it changes nothing about the fix, which is to check the guard on every advancing path, but it matters for the regression test.
+
+  ACCEPTANCE
+  1. rework_no_op_failure is consulted on EVERY path that advances past the implementer phase, not only PrOpened. Prefer one check at the single point where the phase advances over four call sites that can drift apart again.
+  2. A rework round against an already-open PR whose head is unchanged produces a ReworkNoOp failure and a SpecShelved event, for each ImplementerOutcome variant that can advance.
+  3. A test per advancing variant asserts the guard fires; a test asserts a genuine new commit still passes, so the fix cannot be a blanket refusal.
+  4. Confirm and record which variant the already-open-PR rework path actually returns.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:38:43.142590781Z
+modified_at: 2026-09-21T04:38:43.142590781Z
+req_type: Bug
+tags:
+- orchestrator drain rework-loop severity:operational parent:EPIC-62
