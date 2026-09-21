@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T09:06:03.019291152Z
-modified_at: 2026-09-21T09:09:37.228791838Z
+modified_at: 2026-09-21T09:18:14.880912540Z
 req_type: Story
 comments:
 - id: 01a0c33a-5d4c-7ab0-81a6-4de8d53a6deb
@@ -75,4 +75,31 @@ comments:
     PROVENANCE: the wrong-noun analysis, the measurement and the transition-helper shape are the product seat's. The one-directional correction to the invariant is the driver-advisor's, verified by counting both sets at 5393454ef6.
   created_at: 2026-09-21T09:09:37.228791838Z
   modified_at: 2026-09-21T09:09:37.228791838Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c342-4360-7e12-bc93-3d4955ec794b
+  author: joe
+  content: |-
+    CORRECTION TO THIS SPEC'S PREMISE — "the three paths do not share a persistence call" is TOO STRONG, and the overstatement would send an implementer to the wrong altitude. Measured on merged main (1cd86378ac), verified independently by the driver-advisor:
+
+        handle_done_command          backend.update_requirement(&req)?        SHARES it
+        advance_dispatch (queue)     backend.update_requirement(&req)?        SHARES it
+        git_backend_cmd edit         if force_dropped_structural_tags.is_empty() {
+                                         backend.update_requirement(&req)?    <- common route
+                                     } else {
+                                         backend.bulk_update(...)             <- DOES NOT
+                                     }
+
+    TWO OF THREE SHARE THE CALL. The edit path BRANCHES, and it branches for a reason that has nothing to do with status — a forced structural-tag drop.
+
+    WHY THE OVERSTATEMENT IS DANGEROUS RATHER THAN MERELY IMPRECISE. "There is no shared call" invites an implementer to look for a seam much higher up, and the seam higher up is Requirement::set_status_from_str — the pure in-memory setter with 62 occurrences that this spec already rules out because emitting from it would fire on loads, dry-runs and tests. The false premise leads directly to the known-wrong answer.
+
+    THE TRUER STATEMENT IS NARROWER AND MORE USEFUL: the write is ALREADY ALMOST SHARED, and one path branches for a reason unrelated to status. That points at a much smaller question than "unify persistence" — can the edit path's two write branches be collapsed, or can both arms route through one status-aware helper? Nobody has answered that and this spec does not assume an answer; it must simply not FORECLOSE it by asserting the call is unshared when two thirds of it is.
+
+    AND IT SHARPENS WHY FORK B FAILED, which is the more instructive half. An enumeration keyed on update_requirement would have found TWO of the three paths and MISSED the bulk_update branch — while looking complete. That is the half-fix shape a third time in one spec: a check that covers most of a set, reports success, and is silent about the member it cannot see. The seat that proposed B found this in their own proposed test, which is the reason it is recorded here rather than discovered by whoever implements it.
+
+    CONSEQUENCE FOR FORK B's INVARIANT, unchanged but now for a stated reason: key the enumeration on the TRANSITION (every is_into_completed_transition caller must emit, one-directional, 3 today) and NOT on the write. Keying on the write is not merely a different choice — it is a choice that silently under-covers.
+
+    PROVENANCE: the branch measurement and the "already almost shared" framing are the product seat's, produced by verifying a reason given for killing their own proposal rather than accepting it. The overstatement being corrected was the driver-advisor's, relayed from the reviewer seat's no-seam finding without checking the specific claim.
+  created_at: 2026-09-21T09:18:14.880912540Z
+  modified_at: 2026-09-21T09:18:14.880912540Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
