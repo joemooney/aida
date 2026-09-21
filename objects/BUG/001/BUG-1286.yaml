@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:33.544062298Z
-modified_at: 2026-09-20T19:07:36.309396338Z
+modified_at: 2026-09-21T08:28:53.143651434Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -216,8 +216,8 @@ implementation_info:
 failure_reason:
   phase: reviewer
   phase_index: 3
-  kind: stale-base-conflict
-  detail: "HEAD is now at 0d55bce81c [AI:codex] fix(events): make spec terminality explicit (BUG-1286)\nAuto-merging aida-cli-lib/src/events.rs\nAuto-merging aida-cli-lib/src/lib.rs\nAuto-merging aida-cli-lib/src/watch.rs\nCONFLICT (content): Merge conflict in aida-cli-lib/src/watch.rs\nerror: \"rebase aborted due to conflicts\"\nPreparing worktree (checking out 'pr-1998')\nwarning: container tooling detected (Dockerfile, docker, .aida/docker-compose.yml, docker/docker-compose.yml); this linked worktree's .git file points at /home/joe/ai/aida/.git/worktrees/pr-rebase-1998. Mount that gitdir path into dev containers so git commands work inside the worktree.\nRebasing (1/1)\rerror: could not apply 0d55bce81c... [AI:codex] fix(events): make spec terminality explicit (BUG-1286)\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: \"git add/rm <conflicted_files>\", then run \"git rebase --continue\".\nhint: You can instead skip this commit: run \"git rebase --skip\".\nhint: To abort and get back to the state before \"git rebase\", run \"git rebase --abort\".\nCould not apply 0d55bce81c... [AI:codex] fix(events): make spec terminality explicit (BUG-1286)\n✗ rebase hit 1 conflict(s) — aborted, worktree cleaned\n    aida-cli-lib/src/watch.rs\n\nManual recipe:\n  gh pr checkout 1998\n  git fetch origin\n  git rebase origin/main\n  # resolve conflicts, then `git rebase --continue`\n  git push --force-with-lease\n\nManual recovery: `aida pr rebase 1998 --interactive`"
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1286 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T17:04:54.718145229Z
+  kind: verdict:request-changes
+  detail: 'F2 CLOSED and verified by CI (step 25 Monitor contract drift guard now success; Build fully green, 32 success / 1 skipped). F1 UNCHANGED at this head: SpecCompleted is still not emitted for every into-Completed transition.'
+  recovery_hint: address the review findings, move BUG-1286 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-21T08:28:53.143651434Z
