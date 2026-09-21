@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:33:09.166796821Z
-modified_at: 2026-09-21T04:15:56.283315905Z
+modified_at: 2026-09-21T04:20:07.132811202Z
 req_type: Bug
 tags:
 - batch:night-0920 lifecycle drain-safe from:review-pr-2040
@@ -43,19 +43,25 @@ comments:
 
     RESOLVED with aida db reconcile-status. The spec now reads Completed. No open PR referenced it, so BUG-1454's defer-while-a-PR-is-open guard correctly permitted the flip.
 
-    BUT THE DEFAULT SCAN RANGE DID NOT FIND IT, and that is a second defect worth recording here because it is the recovery path for this bug:
+    CORRECTED 2026-09-20 21:22 - MY DEFAULT-RANGE DIAGNOSIS WAS WRONG AND IS WITHDRAWN.
 
-        aida db reconcile-status --spec STORY-1391 --dry-run
-          'No eligible flips ... or no commit in the scan range references it.'
+    I originally wrote that the default scan range missed a commit at HEAD. The code rules that out: with no --since the verb runs `git log --max-count=200 HEAD`, which STARTS at HEAD. A commit at HEAD cannot be outside it. The reviewer seat quoted the construction and verified 9c8373f5d6 is one match in that range with zero commits after it.
 
-        aida db reconcile-status --spec STORY-1391 --since HEAD~5 --dry-run
-          'would flip 1 spec -> Completed: STORY-1391 (was In Progress, commit 9c8373f)'
+    WHAT ACTUALLY HAPPENED, from the reflog rather than from inference:
 
-    Local main was at 9c8373f5d6 - the referencing commit was HEAD itself, not a distant one - and the default range still missed it. So the documented recovery for a missed auto-bump reports nothing wrong on the freshest possible case, and only a manually widened --since surfaces it.
+        main@{21:15:04}  pull -q --ff-only origin main: Fast-forward -> 9c8373f5d6
 
-    THAT COMPOUNDS THIS SPEC. The primary defect is that the bump never fires for a spec that skipped Done. The recovery verb then reports 'no eligible flips', which a caller reads as 'nothing to fix' rather than 'I did not look far enough'. Two surfaces, both silent, and the second one is the one someone runs when they already suspect the first.
+    Local main did not contain the merge until 21:15:04. The first reconcile ran against a local main that genuinely did not have the commit, so the verb was correct-but-blind: it reported nothing in range about a commit it could not see. The second run, with --since HEAD~5, came after that fast-forward - so what changed between the two was the LOCAL REF, not the range. Widening --since appeared to be the fix and was coincidental.
 
-    REQUIRED ADDITION: whatever fixes the bump must also make reconcile-status's default range cover the case, or its no-flips message must distinguish 'nothing eligible' from 'nothing in range' - they are different answers and only one means the caller should stop looking.
+    THE REQUIRED ADDITION IS THEREFORE THREE-STATE, NOT TWO, and the third is the one that actually fired:
+
+        nothing eligible                 no spec in scan range is at a graduatable status
+        nothing in range                 the scan window excluded the commit
+        NOTHING IN THE LOCAL CLONE       the commit is not in this checkout at all
+
+    A two-state message would have said "nothing in range" and sent the caller to widen --since - exactly the wrong move when the commit is not local. The verb must also NAME THE REF IT SCANNED, which its output currently does not: "scanned local main at <sha>; if the commit you expect is not there, pull first."
+
+    THE UNDERLYING SHAPE is the same as the rest of this class: the surface reports a true fact about what it LOOKED AT, the reader infers a fact about the WORLD, and nothing in the output distinguishes them. It is PRIN-5 inside a verb whose entire purpose is catching what another surface missed - and the verb's dependence on local state is invisible.
   created_at: 2026-09-21T04:15:56.283315905Z
-  modified_at: 2026-09-21T04:15:56.283315905Z
+  modified_at: 2026-09-21T04:20:07.132811070Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
