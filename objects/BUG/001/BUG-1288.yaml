@@ -29,12 +29,12 @@ description: |
   6. Correctness is unchanged: a branch with genuinely unshipped work is still reported.
 
   Reported by the aida-monitor project, which measured 10-25 s; independently measured here at 70-77 s, so the reported figure was optimistic rather than exaggerated.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:06:24.777604114Z
-modified_at: 2026-09-20T23:30:24.836996435Z
+modified_at: 2026-09-21T17:50:34.189137689Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -196,11 +196,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-20T04:21:13.514471208Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1288 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T23:30:24.836996435Z
