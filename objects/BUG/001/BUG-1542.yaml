@@ -40,5 +40,44 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:43:25.468471381Z
-modified_at: 2026-09-21T08:43:25.468471381Z
+modified_at: 2026-09-21T23:16:23.770161411Z
 req_type: Bug
+comments:
+- id: 01a0c641-9c5a-7092-94ca-35a7e10c6d76
+  author: joe
+  content: |-
+    [claude-product-1, 2026-09-21] THE PRIMARY CLAIM DOES NOT REPRODUCE. Recording the control transcript so this is not re-investigated from scratch, and so the spec is not closed as "fixed" for something that was not broken.
+
+    REPRODUCED WITH THE SPEC'S OWN CONTROL, scratch project, binary c9da874c06 (verified by merge-base to contain everything merged today):
+
+        --add-tag zzflat --add-tag severity:cosmetic --add-tag batch:probe
+          tags: batch:probe severity:cosmetic zzflat
+        --remove-tag zzflat             -> removed        (flat, the control)
+        --remove-tag severity:cosmetic  -> REMOVED        (colon form - works)
+
+    CORROBORATING EVIDENCE, not just my one run:
+    - apply_tag_deltas does a plain `tags.remove(trimmed)`. There is no colon handling anywhere in it, so the spec's hypothesis - "check for a split on ':' in the removal path that the addition path does not perform" - has nothing to point at.
+    - The clap definitions for --add-tag and --remove-tag are symmetric: same value_name, same conflicts_with, no value_delimiter on either.
+    - TASK-1416, this spec's own trigger, no longer carries severity:cosmetic. The tag the spec says could not be removed is gone.
+    - `git log -S remove_tag` over the last three days returns nothing, so no fix landed in between.
+
+    I am NOT claiming the reporter was careless. Two explanations fit and I cannot distinguish them retroactively: a stale binary at that seat (the advisor hit exactly that this morning on BUG-1558, and it cost a high-priority misfiling), or a lost write under concurrent drain load - the drain was running all day and `aida edit` is a read-modify-write on one YAML. The second would look precisely like "silent no-op, exit 0".
+
+    WHAT IS REAL AND IS NOW FIXED - the spec's SECOND criterion, the one it says outlives the bug. Removing an absent tag printed:
+
+        No changes specified. Use --title, --status, --priority, etc.
+
+    Changes WERE specified; the flag matched nothing. That message sends the caller hunting for a flag they already passed, and it is a very plausible route to the original report: a misdirection is indistinguishable from a silent failure. `aida edit` now reports on both paths:
+
+        --remove-tag not-there       -> no matching tag to remove: not-there
+        --remove-tag severity:probe  -> Updated: TASK-1
+                                          removed 1 tag: severity:probe
+
+    and "No changes specified" is printed only when no tag flags were passed.
+
+    STATE: branch bug-1542-tag-report pushed at a920c8ecec. NO PR - it still needs the test the spec asks for (add then remove severity:cosmetic, batch:probe and aida:queue:work, with the flat tag as control). I stopped mid-task because the operator hit a usage limit.
+
+    SUGGESTED DISPOSITION, for the advisor not me: close this as the reporting fix plus this note, rather than as the colon-parsing fix it was filed as. If someone wants the original claim chased further, the thing to check is what binary the reporting seat was running, not the parser.
+  created_at: 2026-09-21T23:16:23.770161411Z
+  modified_at: 2026-09-21T23:16:23.770161411Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
