@@ -356,6 +356,22 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash scripts/glyph-lint.sh --block
 
+      # BUG-1550: trace/doc-header stranding gate. A new item inserted
+      # immediately below an existing `///` doc + `// trace:SPEC-ID` header
+      # steals it, leaving the item the header was written for undocumented
+      # and untraced. Rust compiles either placement fine, so fmt/clippy/
+      # tests never catch it -- and a stranded TRACE marker silently INVERTS
+      # `aida why <file:line>` (nearest-preceding-trace resolution), so the
+      # tool confidently attributes code to the wrong spec. Purely
+      # structural (no prose semantics); see the module docstring in the
+      # script for the measured false-positive investigation into a
+      # doc-only (no trace) variant, which was rejected. trace:BUG-1550 | ai:claude
+      - name: Trace/doc-header stranding gate
+        if: steps.changes.outputs.full_ci == 'true'
+        run: |
+          python3 scripts/check-trace-headers.py
+          python3 -m unittest tests/test_check_trace_headers.py
+
   # Create release artifacts for tags
   release:
     name: Release (${{ matrix.os }})

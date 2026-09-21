@@ -7,8 +7,7 @@ use crate::*;
 use anyhow::Result;
 use colored::Colorize;
 
-// trace:ARCH-github-integration | ai:claude
-/// Handle GitHub integration commands
+/// Handle Jira integration commands.
 // trace:ARCH-jira-integration | ai:claude
 pub(crate) fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
@@ -510,6 +509,8 @@ pub(crate) fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Resul
     Ok(())
 }
 
+/// Handle GitHub integration commands.
+// trace:ARCH-github-integration | ai:claude
 pub(crate) fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
 
