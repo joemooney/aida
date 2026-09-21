@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:12:42.984173284Z
-modified_at: 2026-09-21T00:24:16.949903807Z
+modified_at: 2026-09-21T00:28:07.106772639Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -70,6 +70,31 @@ comments:
   created_at: 2026-09-21T00:13:03.705499640Z
   modified_at: 2026-09-21T00:13:03.705499640Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c15c-ea42-7cc0-9a4a-ce76b06ccb2a
+  author: joe
+  content: |-
+    [aida:advisor] CRITERION 4 SPLIT, not waived — and the split is an amendment to this spec rather than a judgement call at merge time. PR #2038 is held pending it.
+
+    VERIFIED claude-reviewer-1's blocking finding: the diff is exactly two files, lib.rs and real_phase_driver_wiring_tests.rs. unshipped_work is rendered from awaiting_you.rs and also referenced in watch.rs, session_reap.rs and statusbar_cmd.rs. None are touched. Criterion 4 is not partially met; it is untouched.
+
+    WHY SPLIT RATHER THAN REQUIRE IT HERE. Criterion 4 is a rendering change on a different surface — distinguishing "branch with no PR" from "branch whose PR is open and waiting" in the awaiting view — and it shares nothing with the phase-ordering fix this PR makes. Bundling them would hold a correct, well-tested fix behind unrelated UI work.
+
+    WHY IT MUST BE AN AMENDMENT AND NOT A MERGE-TIME DECISION. Merging as-is auto-completes this spec against a criterion nobody implemented, and a Completed spec stops being read. That is the third time today this shape has been flagged and the hardest to notice afterwards. So:
+
+      - Criterion 4 is REMOVED from this spec and filed as its own task. The filing carries the
+        surfaces (awaiting_you.rs primary; watch.rs, session_reap.rs, statusbar_cmd.rs to check)
+        and the reason the distinction matters: the two states need opposite actions — one needs a
+        PR opened, the other needs a merge decision — and today they render identically.
+      - This spec's remaining criteria are 1, 2, 3 and 5.
+
+    CRITERION 5 IS ONLY PARTIALLY MET AND I AM NOT BLOCKING ON IT, but it is recorded so it is not read as done. The tests cover the annotation HELPER in isolation; the REORDERING — the actual fix — has no test. MockPhaseDriver exists for exactly this and BUG-1447 used it that way today.
+
+    CRITERION 3 HOLDS BY CONSTRUCTION, NOT BY GUARD, and that distinction belongs on the record. Verified ordering: watchdog outcome captured at 87585, punt signal read and removed at 87745, watchdog failure returned at 87956. On main the return sat at 87560, immediately after the WatchdogTripped match. The fix moves it ~370 lines later, past punt consumption, so the claim is true — and untested. A later refactor restoring the early return would silently lose punts again with nothing going red.
+
+    WHAT IS GOOD, recorded so a rework round does not disturb it. The tests use git_repo_with_origin, real commits, and call the actual watchdog_failure_with_committed_work, asserting both directions. No source-scanning, no hand-written fixture standing in for the thing under test. After PR-2033's self-scanning test and PR-2030's hand-written fixtures, this is what the criterion meant. And the production shape fixes the cause the spec names — the PR is opened inside the same timed phase the watchdog pre-empts — rather than the symptom.
+  created_at: 2026-09-21T00:28:07.106772639Z
+  modified_at: 2026-09-21T00:28:07.106772639Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
