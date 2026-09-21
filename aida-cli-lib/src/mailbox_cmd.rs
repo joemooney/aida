@@ -188,10 +188,12 @@ pub(crate) fn handle_mailbox_command(
             let mut resolved_reply_id = None;
             let mut reply_target_thread = None;
             if let Some(reply_target) = in_reply_to.as_deref() {
-                let target = resolve_mailbox_message(&merged, reply_target).map_err(|error| {
-                    anyhow::anyhow!(
-                        "--in-reply-to '{reply_target}' was not resolved; reply refused: {error}"
-                    )
+                // Keep the typed resolution failure in the anyhow chain. Besides
+                // preserving the not-found/ambiguous distinction for callers and
+                // tests, the ambiguous variant tells the operator how to recover.
+                // trace:BUG-1465 | ai:codex
+                let target = resolve_mailbox_message(&merged, reply_target).with_context(|| {
+                    format!("--in-reply-to '{reply_target}' was not resolved; reply refused")
                 })?;
                 resolved_reply_id = Some(target.id.clone());
                 reply_target_thread = Some(target.thread_id.clone());
@@ -860,6 +862,68 @@ mod tests {
             deleted: false,
             archived: false,
         }
+    }
+
+    // trace:BUG-1465 | ai:codex
+    #[test]
+    fn blank_subject_uses_body_in_expanded_mailbox_row() {
+        let mut msg = message("abcd1234-3333", "thread-c");
+        msg.body = "Body-derived title\nsecond line".into();
+
+        msg.subject = Some(String::new());
+        assert_eq!(mailbox_line_body(&msg), msg.body);
+
+        msg.subject = Some("   \t".into());
+        assert_eq!(mailbox_line_body(&msg), msg.body);
+    }
+
+    // The send surface must preserve the resolver's typed distinction through
+    // its added context. This intentionally inspects variants, not prose, so a
+    // later wording change cannot collapse ambiguous and missing outcomes.
+    // trace:BUG-1465 | ai:codex
+    #[test]
+    fn reply_target_ambiguity_and_not_found_remain_distinct_typed_outcomes() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        mailbox_store::write_message(project.path(), &message("0fa629d6-1111", "thread-a"))
+            .unwrap();
+        mailbox_store::write_message(project.path(), &message("0fa629d6-2222", "thread-b"))
+            .unwrap();
+
+        let send = |reply_target: &str| MailboxCommand::Send {
+            to: Some("bob".into()),
+            broadcast: false,
+            body: Some("reply".into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: None,
+            in_reply_to: Some(reply_target.into()),
+            from: Some("alice".into()),
+            urgent: false,
+            intent: "fyi".into(),
+        };
+
+        let ambiguous = handle_mailbox_command(&send("0fa629d6"), &store).unwrap_err();
+        assert!(matches!(
+            ambiguous.downcast_ref::<crate::MailboxResolveFailure>(),
+            Some(crate::MailboxResolveFailure::AmbiguousPrefix { .. })
+        ));
+        assert!(
+            ambiguous.to_string().contains("reply refused"),
+            "send context should remain visible: {ambiguous}"
+        );
+        assert!(
+            format!("{ambiguous:#}").contains("lengthen the prefix"),
+            "ambiguous cause should provide recovery guidance: {ambiguous:#}"
+        );
+
+        let missing = handle_mailbox_command(&send("missing"), &store).unwrap_err();
+        assert!(matches!(
+            missing.downcast_ref::<crate::MailboxResolveFailure>(),
+            Some(crate::MailboxResolveFailure::NotFound { .. })
+        ));
     }
 
     // BUG-1297: an ambiguous prefix must be REFUSED by resolve_mailbox_thread,

@@ -19295,7 +19295,7 @@ impl std::fmt::Display for MailboxResolveFailure {
             Self::NotFound { query } => write!(f, "message not found: {query}"),
             Self::AmbiguousPrefix { query, candidates } => write!(
                 f,
-                "message id prefix is ambiguous: {query}; candidates: {candidates}"
+                "message id prefix is ambiguous: {query}; lengthen the prefix to select one of: {candidates}"
             ),
         }
     }
@@ -19394,13 +19394,7 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
     } else {
         String::new()
     };
-    let body = if m.retracted {
-        "[withdrawn]".dimmed().to_string()
-    } else if let Some(subject) = m.subject.as_deref() {
-        format!("{}\n{}", subject.bold(), m.body)
-    } else {
-        m.body.clone()
-    };
+    let body = mailbox_line_body(m);
     println!(
         "  {}{}{}{} {} → {}  {}  {}",
         flag,
@@ -19412,6 +19406,19 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
         when.dimmed(),
         body
     );
+}
+
+/// Expanded mailbox rows retain the full body, unlike the compact core
+/// `subject_line` projection, but share its rule that blank subjects are absent.
+// trace:BUG-1465 | ai:codex
+fn mailbox_line_body(m: &aida_core::mailbox::Message) -> String {
+    if m.retracted {
+        "[withdrawn]".dimmed().to_string()
+    } else if let Some(subject) = m.subject.as_deref().filter(|s| !s.trim().is_empty()) {
+        format!("{}\n{}", subject.bold(), m.body)
+    } else {
+        m.body.clone()
+    }
 }
 
 /// The identity set whose mail a session should see: the shell's agent/user id
