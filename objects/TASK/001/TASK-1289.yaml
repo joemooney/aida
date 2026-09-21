@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T08:26:40.193142476Z
+modified_at: 2026-09-21T08:34:15.436126517Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1184,6 +1184,53 @@ comments:
     #2042 stays held; its merge-hold marker and aida:merge-hold label remain in place.
   created_at: 2026-09-21T08:26:40.193142476Z
   modified_at: 2026-09-21T08:26:40.193142476Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c319-fd0c-7313-b905-859827a0c550
+  author: joe
+  content: |-
+    CONSOLIDATION RULING: BUG-1420 and TASK-1289 had THREE open PRs between them. #2042 survives; #1972 and #2009 are closed as superseded rounds. Every finding from the two closed verdicts is preserved below, because a verdict keyed to a closed PR number is a record nobody will open again (BUG-1539).
+
+    THE THREE, and why this was not obvious from any one of them:
+
+        #1972  task-1289-work   -> main              CHANGES REQUESTED, 4 findings, held
+        #2009  bug-1420-work    -> task-1289-work    CHANGES REQUESTED, 6 findings, held, CANNOT RUN CI
+        #2042  bug-1420-round2  -> main              CHANGES REQUESTED, 2 findings, held
+
+    #2009 CAN NEVER RUN CI, and rebasing it would never have fixed that. Found by the reviewer seat and verified independently: .github/workflows/ci.yml lines 3-7 fire only on `pull_request: branches: [main]`, and #2009 targets task-1289-work. `gh api repos/joemooney/aida/commits/d718d10862d4/check-runs` returns total_count 0 — zero, not pending. The required Build was not late, not flaky, not masked by BUG-1526. It was NOT CONFIGURED TO RUN.
+
+    That also converts a symptom into a predicate for BUG-1481, which was filed for `aida awaiting` reporting ci_rollup pass on this PR and listing it as mergeable: zero check-runs is not a green rollup, it is an EMPTY one, and the surface reads absence as success. PRIN-5 again. A PR whose base is not main can never satisfy main's required checks and should never be listed as mergeable — that is a one-line check.
+
+    #2042 IS THE REMEDY PR-2009'S OWN VERDICT PRESCRIBED. That verdict's F2 established that of the 9 specs #2009 carried, 7 had already landed on main by other PRs, that the branch was 25 commits behind, and that the remedy was "a cherry-pick onto a fresh branch, not another round here." Its F4 said it again: "Cherry-pick 065f3df8aa onto a fresh branch off main and this ships." #2042's own PR body describes itself as transplanting TASK-1289's implementer preflight onto current main. The remedy was prescribed and then executed under a new PR number; nobody noticed the prescription and the execution were the same act, which is how the third PR came to exist.
+
+    MEASURED, not assumed — diffs against each branch's merge-base with main:
+        task-1289-work    6 files, 552 insertions
+        bug-1420-work     6 files, 603 insertions
+        bug-1420-round2   7 files, 649 insertions, and the only one touching .github/workflows/ci.yml
+    That last file is the CI-shell-contract pin, which is what BUG-1420 is actually about. All three are held with CHANGES REQUESTED, so closing two forfeits nothing mergeable.
+
+    === FINDINGS PRESERVED FROM PR-1972 (drain reviewer, sha 6512f1312a) ===
+    Summary: "Preflight still permits PR publication before or without authoritative CI-guard success."
+      F1 The orchestrated launch prompt still tells full/through-ci/through-merge/skip-build implementers to run `aida pr ship --no-merge` and exit after the PR-open checkpoint (lib.rs:25845-25850), while parent preflight runs only after the child exits — so a failing guard can encounter an already-open PR. THIS IS THE PUBLICATION BOUNDARY, now the subject of the pending DecisionRequest on TASK-1289. It is BLOCKED on the operator, not on effort.
+      F2 Resolved guards FAIL OPEN: worktree-binary build failure, timeout and command-start failure return GuardResult::Skipped (implementer_preflight.rs:286-306) while decide() refuses only Failed, and the timeout test pins the incorrect Open decision. SPLIT OUT AS BUG-1540 so it ships regardless of the boundary decision. Note the reviewer flags that the existing test PINS THE WRONG BEHAVIOUR — the fix must change that test, not satisfy it.
+      F3 Guard commands run via plain `bash -c` (implementer_preflight.rs:294-295), not GitHub Actions' fail-fast/pipefail semantics, so an intermediate or pipeline failure followed by success passes locally and fails CI. ADDRESSED in #2042 by github_actions_bash spawning --noprofile --norc -e -o pipefail.
+      F4 execute() unconditionally builds the full aida binary before inspecting the resolved guard set (implementer_preflight.rs:259-265), adding build latency even for configurations containing only lightweight non-aida guards. NOT addressed anywhere yet — carried forward as an open observation, not a blocker.
+
+    === FINDINGS PRESERVED FROM PR-2009 (recorded_by and reviewed_sha both ABSENT — itself an instance of BUG-1538) ===
+    Summary: "Do NOT merge. The BUG-1420 change itself is CORRECT and its tests are exactly what the spec demanded - the blockers are all around it."
+      F1 BLOCKER, the required check never ran. Superseded by the root cause above: the base is not main.
+      F2 BLOCKER, scope and stale base. 12 commits carrying 9 specs on a PR titled for one; 7 already on main (BUG-1279 as a1b39b3769, SPIKE-83 as 85d9bad8c6, TASK-1290 as 6d484a7c20, TASK-1297 as 11332b9b79, BUG-1277 as 4dd24dcbe3, BUG-1298 as c15f83b7b2, TASK-1292 as 1218b35d16); 25 commits behind; three-dot diff 39 files / 4369 insertions for a spec describing a self-contained change to how one subprocess is spawned.
+      F3 LOAD-BEARING AND EASY TO LOSE — two findings on the PREVIOUS verdict at that same head must NOT be actioned. Both were artifacts of the stale base: the BUG-1277 mcp queue-rework test is correct on current main and "reconciling" it would break a passing test, and the SPIKE-83 trailing whitespace is intentional markdown hard-line-breaks in a document that already merged. The reviewer recorded this explicitly BECAUSE a verdict file is overwritten each round and the dispute lived only in a spec comment — a later reader of the verdict alone would action two findings that are wrong. Preserving it here is the whole reason this consolidation comment exists.
+      F4 CODE IS GOOD, stated so a rebase does not lose it. github_actions_bash spawns --noprofile --norc -e -o pipefail, satisfying AC1. AC2 and AC3 are met the way the spec demanded: guard_shell_fails_when_an_intermediate_command_fails and guard_shell_fails_when_a_pipeline_stage_fails assert BEHAVIOUR (a script whose first command fails and last succeeds must fail; `false | true` must fail) rather than asserting the argv, which the spec warned would pass even if the shell ignored the flags.
+      F5 AC4 PARTIALLY MET. The flags are documented against GitHub's contract with a link, satisfying "documented against". But AC4's second sentence asks that if GitHub's defaults change, SOMETHING SHOULD SAY SO rather than the preflight quietly becoming permissive again. A doc comment detects nothing. There is no drift check; the stated failure mode is still open. STILL OPEN on #2042 — whoever reworks it should close this or say why not.
+      F6 AC5 NOT EVIDENCED. "Any existing guard whose behaviour changes under the stricter shell is identified before the change lands, and either fixed or explicitly recorded." The commit touches only implementer_preflight.rs and no record of that audit exists on the spec. The spec's own comment already predicts the CLI-manual guard will fail under the change for an unrelated reason — which IS the AC5 case and should be recorded as the finding AC5 asks for, not discovered during the next round. STILL OPEN on #2042.
+
+    WHAT THIS LEAVES ON #2042, for whoever picks it up:
+      - Its own two findings: the publication boundary (blocked on the operator's DecisionRequest) and fail-open on incomplete guards (split to BUG-1540).
+      - Inherited and still open: PR-1972 F4 (unconditional binary build), PR-2009 F5 (no drift detection for GitHub's shell defaults), PR-2009 F6 (no AC5 audit recorded).
+      - Inherited as a DO-NOT-DO: PR-2009 F3's two non-findings.
+    #2042 keeps its merge-hold marker and label.
+  created_at: 2026-09-21T08:34:15.436126517Z
+  modified_at: 2026-09-21T08:34:15.436126517Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
