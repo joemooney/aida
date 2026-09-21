@@ -1,0 +1,78 @@
+id: 01a0c291-3fd2-7d51-870f-fa39b5a94c26
+spec_id: BUG-1535
+agreed_id: BUG-1535
+title: 'Seven spec IDs resolve to two different requirements each: the merge-gate assigned agreed_ids that collide with existing native spec_ids, and aida show silently returns the rejected test fixture'
+description: |-
+  Measured 2026-09-20 23:05 local, reviewer seat, main at 0b474a66d1.
+
+  SEVEN SPEC IDS RESOLVE TO TWO DIFFERENT REQUIREMENTS EACH. The merge-gate's agreed
+  short id was assigned a value already held as a NATIVE spec_id by another object, so
+  both objects now answer to the same identifier.
+
+      BUG-34   STORY-41   STORY-42   TASK-31   TASK-32   TASK-33   TASK-34
+
+  WORKED EXAMPLE, BUG-34:
+
+      objects/BUG/000/BUG-34.yaml
+        spec_id  BUG-34   agreed_id BUG-34
+        title    [test] dispense skip verification        status Rejected
+
+      objects/BUG/000/BUG-2-081.yaml
+        spec_id  BUG-2-081   agreed_id BUG-34
+        title    /aida-review skill doesn't flip the auto-filed review story's status
+        status   Completed
+
+  Both render under the id BUG-34, because the display/list layer prefers agreed_id. Every
+  one of the seven has the same shape: a native low-numbered `[test]`/Rejected fixture
+  whose id the merge-gate later handed out as an agreed_id to a real spec.
+
+  THE RESOLUTION IS SILENT AND PICKS THE TEST FIXTURE:
+
+      aida show BUG-34
+      -> id: BUG-34, title: [test] dispense skip verification, status: rejected
+
+  No warning, no ambiguity notice. A reader asking about BUG-34 gets a rejected test
+  fixture; the real, Completed spec about /aida-review is unreachable by that id.
+
+  HOW IT SURFACES IN COUNTS. `aida list --all` returns 4197 ROWS over 4190 UNIQUE spec_ids
+  — seven double-counted. The store holds 4197 files. So the row count MATCHES the file
+  count by coincidence: 4190 real + 7 duplicates = 4197. Two errors cancelling into a
+  reassuring equality, which is how it has stayed invisible — any check comparing "rows"
+  to "files" passes.
+
+  WHY IT MATTERS MORE HERE THAN IN A TYPICAL TRACKER. Stable spec IDs are the product's
+  stated premise; trace comments, commit trailers and the (SPEC-ID) merge auto-bump all
+  key on them. A `(BUG-34)` trailer, a `trace:BUG-34` comment, and an `aida show BUG-34`
+  now refer to three things that may not be the same requirement. The auto-bump risk is
+  concrete: a commit trailered for the real spec resolves to the rejected fixture.
+
+  Acceptance
+  1. The merge-gate never assigns an agreed_id that collides with any existing spec_id or
+     agreed_id in the store; it refuses and picks the next free value, saying so.
+  2. A collision already present is DETECTED and REPORTED: a check enumerates every id
+     resolving to more than one object, with both objects named. `aida doctor` is the
+     natural home.
+  3. Resolution of an ambiguous id never silently picks one. `aida show <id>` on a colliding
+     id lists the candidates and exits non-zero rather than answering with one of them.
+  4. `aida list` does not emit two rows under one id; a duplicate is either de-duplicated or
+     surfaced explicitly.
+  5. A count check compares UNIQUE ids to store objects, not row count to file count — the
+     present equality is two errors cancelling.
+  6. The seven existing collisions are resolved. Every colliding native is a `[test]`
+     fixture in Rejected status, so re-assigning the FIXTURE's id (not the real spec's) is
+     the low-risk direction, but which side moves is a disposition call, not a given.
+
+  Related: BUG-89 (identity resolution order) is the same family one layer out — an
+  identifier whose meaning depends on which resolver you ask.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T06:04:54.098400831Z
+modified_at: 2026-09-21T06:04:54.098400831Z
+req_type: Bug
+tags:
+- aida:show
+- identity
+- severity:major
+- substrate-integrity
