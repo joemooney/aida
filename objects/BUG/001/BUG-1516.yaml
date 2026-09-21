@@ -1,0 +1,45 @@
+id: 01a0c204-5753-78d3-abe8-93a94934f79d
+spec_id: BUG-1516
+agreed_id: BUG-1516
+title: A verdict's recorded sha is sometimes abbreviated, so a gate comparing it to the PR head by string equality reports stale for one in five current verdicts
+description: |
+  A verdict's recorded sha is sometimes abbreviated and sometimes full, so any gate comparing it to a PR's head by string equality reports STALE for a verdict that is current. Measured 2026-09-20: 24 of 124 sha-bearing verdicts are abbreviated.
+
+      reviewed_sha lengths across .aida/review-verdicts/
+        40 chars  99    full
+        10 chars  16
+         9 chars   3
+         8 chars   4
+        11 chars   1
+         0 chars   1
+
+  So roughly one in five sha-bearing verdicts fails an equality test against the 40-character head that `gh pr view --json headRefOid` returns.
+
+  DEMONSTRATED, not inferred. PR #2045's verdict records reviewed_sha 8258dfc4b9. The PR's head is 8258dfc4b963497fe7392f1242d30f18beb5fc06 - the same commit. The advisor's stranded-refusal sweep compared them with string equality and reported STALE-SHA, which is a false stale on a verdict recorded minutes earlier at that exact head. The sweep was written by the seat that then had to diagnose its own output.
+
+  WHO THIS BREAKS. Every consumer that answers "was this verdict recorded against the code about to merge" by comparing the two strings:
+    - STORY-1405's merge-time gate, whose entire purpose is that comparison
+    - BUG-1505 criterion 5, which requires distinguishing approved, refused and CANNOT-DETERMINE
+    - the advisor's per-tick protective sweep, demonstrated above
+    - anything built on BUG-1505's migration, since the migration normalises schema and spelling
+      and would not by itself normalise sha length
+
+  THE FAILURE DIRECTION IS SAFE AND THE COST IS NOT. A false stale fails CLOSED - a gate that cannot confirm the verdict matches refuses, which is correct behaviour on an incorrect input. But it produces churn indistinguishable from real staleness: a reviewer re-reviewing work they already reviewed, and a seat unable to tell a genuinely moved head from a differently-rendered one. On a corpus where one in five reads stale, a gate that refuses on stale is a gate that refuses one in five valid verdicts.
+
+  Acceptance:
+  1. Comparison is by commit identity, not string equality. Either compare the shorter prefix against the longer, or resolve both through git rev-parse before comparing. Prefix comparison must require a minimum length - a 4-character prefix is not an identity claim.
+  2. New verdicts record the FULL 40-character sha. One writer already does this for 99 of them; the abbreviated ones come from paths that pass an already-abbreviated string through.
+  3. The 24 existing abbreviated verdicts are resolved to full shas where the commit is still reachable, and marked unresolvable where it is not - a deleted branch's abbreviated sha may no longer resolve.
+  4. A gate that cannot establish identity reports CANNOT-DETERMINE distinctly from STALE. They are different states with different remedies: stale means re-review, cannot-determine means the record is unusable. Collapsing them is the PRIN-5 failure at the point this spec is about.
+  5. A test compares an abbreviated recorded sha against a full head and asserts they are recognised as the same commit.
+
+  RELATED: this is the same shape as the marker-versus-forge comparison in TASK-1-170 and the verdict-spelling normalisation in BUG-1505 - a comparison that cannot distinguish a difference in REPRESENTATION from a difference in VALUE. Third instance tonight.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T03:30:59.539323012Z
+modified_at: 2026-09-21T03:30:59.539323012Z
+req_type: Bug
+tags:
+- batch:night-0920 merge-safety integrity drain-safe from:session-0920
