@@ -44,7 +44,17 @@ description: |-
       the orphan-sweep gap (BUG-1514)            the surfaces that would show a red unowned PR each
                                                  exclude it correctly
 
-  Five instances, five hits, no misses. That is not proof the proxy is complete — it is the set it was derived from — but it is a starting list that can be produced today and checked against the code.
+  Six instances now, all on the list, no misses. That is not proof the proxy is complete - it is largely the set it was derived from - but it is a starting list producible today and checkable against the code.
+
+      HOW THOSE SIX WERE ACTUALLY FOUND, corrected 2026-09-20 20:13 and this is the number that matters for anyone deciding to rely on the proxy. Being ON the list is not the same as having been FOUND BY it:
+
+        found by applying the proxy deliberately        2   (the per-turn notice, the statusbar)
+        found by other means, and on the list after     4   (the queue filter, the express banner,
+                                                             the orphan-sweep gap, the merge-hold listing)
+
+      The merge-hold listing in particular was found while chasing a DIFFERENT and wrong hypothesis - phantom markers left by direct merges - in a column the reader had grepped for an unrelated reason and did not need. The reviewer seat volunteered that correction against a more methodical account it had been offered.
+
+      SO THE HONEST CLAIM IS NARROWER THAN 'five hits'. The proxy has a demonstrated ability to RANK surfaces by auditability, and applying it deliberately produced two findings that were not otherwise suspected. It does not have a demonstrated hit rate, because two thirds of the instances arrived by accident and were classified afterwards. A reader deciding whether to spend time on this should weigh the two prospective hits, not the six.
 
   WHAT IT IS NOT. The proxy identifies where this class CONCENTRATES, not which surfaces are defective. It ranks by auditability and hands back a list; a human still reads each one. That is deliberate and it is the same property that made the field-count detector on BUG-1507 usable: an instrument that narrows a search does not need the judgement that an instrument that decides would need, and the judgement was the part that failed every time tonight.
 
@@ -64,7 +74,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:33:45.887148289Z
-modified_at: 2026-09-21T02:58:03.418696508Z
+modified_at: 2026-09-21T03:11:20.734883253Z
 req_type: Task
 tags:
 - from-advisor:general
