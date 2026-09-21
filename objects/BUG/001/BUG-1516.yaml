@@ -34,12 +34,12 @@ description: |
   5. A test compares an abbreviated recorded sha against a full head and asserts they are recognised as the same commit.
 
   RELATED: this is the same shape as the marker-versus-forge comparison in TASK-1-170 and the verdict-spelling normalisation in BUG-1505 - a comparison that cannot distinguish a difference in REPRESENTATION from a difference in VALUE. Third instance tonight.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T03:30:59.539323012Z
-modified_at: 2026-09-21T11:42:20.315640082Z
+modified_at: 2026-09-21T17:12:08.580672742Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity drain-safe from:session-0920
