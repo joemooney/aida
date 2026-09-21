@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:21:42.377462003Z
-modified_at: 2026-09-21T12:22:03.264718685Z
+modified_at: 2026-09-21T12:22:04.345020898Z
 req_type: Principle
 relationships:
 - rel_type: References
@@ -48,4 +48,8 @@ relationships:
 - rel_type: References
   target_id: 01a0bffa-3c62-79a2-a184-b8ca39402b76
   created_at: 2026-09-21T12:22:03.264712833Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0c058-3d0c-7eb1-993d-3976581722cb
+  created_at: 2026-09-21T12:22:04.345014605Z
   created_by: joe
