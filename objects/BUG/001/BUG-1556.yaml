@@ -1,0 +1,58 @@
+id: 01a0c4ab-e4cd-70d2-89e0-9f7422be54f2
+spec_id: BUG-1556
+agreed_id: BUG-1556
+title: 'Cross-platform portability defects arrive about as fast as they are fixed - 27 of the last 30 nightlies red on four different non-recurring tests, and the three PR-time guards meant to catch them are '
+description: |
+  THE CROSS-PLATFORM NIGHTLY IS NOT RED BECAUSE OF A BUG. IT IS RED BECAUSE PORTABILITY DEFECTS ARRIVE ROUGHLY AS FAST AS THEY ARE FIXED, AND PR CI CANNOT SEE THEM.
+
+  Measured by claude-reviewer-1 (the denominator) and the advisor (the per-night causes), 2026-09-21.
+
+  THE POPULATION, not the streak. Over the last 30 SCHEDULED runs of cross-platform.yml:
+
+      27 failure, 3 success
+
+  The three green nights are 2026-09-15, 09-16, 09-17. Red runs go back to at least 2026-08-23. THE GREEN IS THE ANOMALY. This matters because "red since 09-18" invites a hunt for a regression introduced around 09-18; the denominator says the question is instead what made those three nights pass, and more usefully, why the steady state is red.
+
+  THE FOUR MOST RECENT NIGHTS FAIL ON FOUR DIFFERENT TESTS, NONE RECURRING:
+
+      09-18  windows  reconstitute::tests::scratch_gc_expires_old_runs_and_keeps_only_the_newest        4899 passed, 1 failed
+      09-19  windows  git_ops::tests::failed_pull_rebase_aborts_and_restores_branch                      940 passed, 1 failed
+      09-20  windows  auto_bump_done_tests::auto_bump_resolves_stranded_review_pr_specs_via_forge_lookup 5092 passed, 1 failed
+      09-21  windows  templates::tests::project_discipline_pack_matches_master                           954 passed, 1 failed
+
+  Each run reports EXACTLY ONE failure, no test repeats, and the passing count grows night over night. The only reading consistent with all three facts: each night's defect IS being fixed within about a day, and a new one lands to take its place. This is an ARRIVAL RATE, not a stuck bug - which is why four nights of triage have not produced a green nightly and why fixing the 09-21 one (BUG-1555) will not either.
+
+  IT IS NOT ONE PLATFORM ACROSS THE POPULATION, though the recent streak is Windows-only:
+
+      09-14  Build (macos-latest) FAILURE   fs_atomic::tests::read_atomic_returns_notfound_when_missing
+      09-09  both macos and windows FAILURE
+
+  WHY PR CI CANNOT SEE THESE, AND IT IS BY DESIGN. PR CI is Linux-only for cycle time (TASK-257, ~9-10 min median). Windows and macOS are validated only by this nightly. So the exposure window for a portability defect is: land on main, wait up to 24h, get caught. With an arrival rate near one per day, the nightly is saturated - it can only ever report the newest one, because a single failure is enough to make the run red and the run stops being informative about the rest.
+
+  THE THREE PR-TIME GUARDS MEANT TO CATCH EXACTLY THIS ARE NOT CATCHING THEM. CLAUDE.md documents them as the mitigation for Linux-only PR CI:
+      1. a report-only Linux-hosted `cargo check --workspace --tests` against Windows/macOS targets in ci.yml
+      2. a required Rust-test portability ratchet, `scripts/check-portability.sh`
+      3. a path-filtered informational Windows/macOS matrix for fragile worktree/session/git-backend/workflow changes
+  Four consecutive nightly failures in tests covering scratch GC, git rebase recovery, forge lookup and template parity is the measurement of their combined effectiveness. Two of the three are explicitly REPORT-ONLY or INFORMATIONAL, which means they cannot block anything, and the one that is required (the ratchet) did not fire on any of the four.
+
+  WHAT THIS COSTS, concretely:
+  - RELEASES ARE BLOCKED. scripts/pre-release-check.sh requires a cross-platform run green within 24h of tagging. At 27-of-30 red there is no green to reuse and a fresh dispatch will not produce one, so no release can be cut without --skip-xplat-check. That opt-out exists for emergencies and is becoming the normal path, which is how a release gate turns into a formality.
+  - THE SIGNAL IS DEGRADED FOR EVERYONE. A channel that is red 90% of the time is read as weather. The proof is in this repo's own behaviour: a tracking issue is opened automatically on every nightly failure ("Open tracking issue on nightly failure" succeeded on the recent red runs, "Close tracking issue on nightly recovery" skipped), and it took a seat chasing an unrelated board line to look at any of this.
+
+  A NOTE ON WHERE THE GUARD FIRES, from claude-reviewer-1, and it is a distinct defect class worth keeping separate: the substrate IS already reporting this - the tracking-issue job runs and succeeds. A guard that fires into a place nobody looks is a different failure from a guard that cannot fire, and it wants a different fix. Before adding any new surface here, check whether the tracking issue exists and has simply gone unread.
+
+  Acceptance:
+  - CHARACTERISE THE ARRIVAL RATE BEFORE PROPOSING A FIX. Over the last 30 scheduled runs, classify each failure by root cause family (path separators, line endings, process/permissions semantics, temp-dir and file-locking behaviour, shell assumptions, timing). The distribution decides the remedy: one dominant family is a lint or a helper; a flat spread means the exposure window itself is the defect.
+  - MEASURE THE THREE EXISTING GUARDS AGAINST THE FOUR KNOWN DEFECTS RATHER THAN ASSUMING THEY MISSED. For each of the four tests above, determine whether `scripts/check-portability.sh` would have flagged the change, whether the report-only target check would have errored, and whether the path filter on the informational matrix would have selected it. A guard that WOULD have caught it but was informational is a different problem from one that would not have caught it at all, and the two have opposite fixes.
+  - DECIDE THE EXPOSURE WINDOW DELIBERATELY AND RECORD THE TRADE. The options are a required Windows leg on PR CI (costs cycle time - the reason it was removed), a merge-queue or post-merge-per-commit cross-platform run (catches it in one merge rather than one day), or accepting the window and making the nightly's output actionable. CLAUDE.md already carries the revisit trigger - "re-add Windows + macOS to PR CI once there are non-Linux users and the cross-platform matrix has been quiet for 2+ weeks" - and the matrix has NEVER been quiet for 2 weeks, so that trigger can never fire. A revisit trigger conditioned on a state that has not occurred in the measured history is not a trigger.
+  - WHATEVER SHIPS, THE NIGHTLY MUST BECOME ABLE TO BE GREEN. A gate that has been red 27 of 30 nights is not currently gating; restoring its information content is the point, and a green run is the demonstration.
+  - DO NOT ADD A NEW REPORTING SURFACE until the existing tracking issue is confirmed to exist and be unread. If it exists, the defect is routing/attention, not detection.
+
+  Related: BUG-1555 is the single 09-21 instance, narrowed to that night after its first diagnosis was falsified. TASK-1418 catalogues instrument-failure families; this spec is the always-firing form at the channel level - the mirror of the inert instruments recorded there.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T15:53:14.701016287Z
+modified_at: 2026-09-21T15:53:14.701016287Z
+req_type: Bug
