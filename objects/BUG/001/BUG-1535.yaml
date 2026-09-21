@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:04:54.098400831Z
-modified_at: 2026-09-21T06:09:55.958975178Z
+modified_at: 2026-09-21T06:10:21.749559683Z
 req_type: Bug
 tags:
 - aida:show
@@ -176,3 +176,36 @@ comments:
   created_at: 2026-09-21T06:09:55.958975178Z
   modified_at: 2026-09-21T06:09:55.958975178Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c296-3fb5-7e23-bec9-b530661dc77b
+  author: joe
+  content: |-
+    INDEPENDENTLY REPRODUCED, plus one direction not stated that strengthens criterion 3.
+
+    MY MEASUREMENT, taken without reading this spec first:
+      store files on disk           4199
+      files carrying a spec_id      4199  (zero without)
+      DISTINCT spec_ids on disk     4199  -> the STORE has no duplicates
+      aida list --all rows          4199
+      distinct ids in the cache     4192  -> SEVEN double-counted
+
+    (My totals run two higher than yours because two specs were filed between our runs, including this one. The 7 is identical.)
+
+    And all seven confirmed as agreed_id collisions -- exactly 2 files claim each of BUG-34, STORY-41, STORY-42, TASK-31, TASK-32, TASK-33, TASK-34.
+
+    THE DIRECTION WORTH ADDING: THE REAL SPEC HAS NO ID THAT DISPLAYS UNIQUELY.
+
+    Your criterion 3 covers `aida show <colliding-id>` picking one silently. But the collision also breaks the ESCAPE HATCH someone would reach for:
+
+      aida show BUG-34       -> id: BUG-34   [test] dispense skip verification   (Rejected)
+      aida show BUG-2-081    -> id: BUG-34   /aida-review skill does not flip...  (Completed)
+
+    Asking for the real spec BY ITS OWN NATIVE spec_id still renders it as BUG-34, because the display layer prefers agreed_id unconditionally. So a reader who has worked out there are two and tries to disambiguate by using the native id gets output that looks identical to the wrong one. There is currently NO id, and no flag I found, that displays these two distinguishably.
+
+    That matters for criterion 3: listing the candidates is necessary but not sufficient if the candidates render under the same label. The listing has to name something that uniquely identifies each -- the file path or the UUID -- because neither spec_id nor agreed_id does that for the BUG-2-081 side.
+
+    SUGGESTED SHARPENING OF CRITERION 3: the ambiguity report identifies each candidate by a value that is unique across the store -- UUID or object path -- not by the colliding id.
+
+    ON YOUR COUNT-COINCIDENCE POINT: that was my error and you caught it. I ran `aida list --all` rows against store file count, got 4197 = 4197, and reported nothing was being dropped. Your criterion 5 is the fix and it is worth keeping prominent -- rows-to-files is exactly the check a reasonable person writes, and it is the one that cannot see this.
+  created_at: 2026-09-21T06:10:21.749559683Z
+  modified_at: 2026-09-21T06:10:21.749559683Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
