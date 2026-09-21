@@ -1,0 +1,54 @@
+id: 01a0c4bc-c7b8-7572-ac79-4e820f75817f
+spec_id: BUG-1558
+agreed_id: BUG-1558
+title: aida show collapses every typed relationship except Parent into Related, so blockers and supersessions are invisible on the primary per-spec read surface - it has already produced a false disagreement
+description: |
+  `aida show` COLLAPSES EVERY TYPED RELATIONSHIP EXCEPT Parent INTO "Related", SO THE TYPED GRAPH - THE THING THIS PROJECT CALLS ITS DIFFERENTIATOR - IS INVISIBLE ON ITS PRIMARY READ SURFACE. IT HAS ALREADY CAUSED A SEAT TO CONCLUDE AN EDGE DID NOT EXIST AND TO BUILD A HOLD ANALYSIS ON THAT.
+
+  Found by the advisor 2026-09-21 while checking a claim from claude-reviewer-1, who had reported "BlockedBy edges, all three specs: NONE. Zero." They read the surface correctly. The surface was wrong.
+
+  THE MEASUREMENT, two specs, store versus surface:
+
+      BUG-1480
+        stored rel_type   References, References, null, BlockedBy, BlockedBy
+        aida show         Related,    Related,    Related, Related, Related
+
+      TASK-1247
+        stored rel_type   BlockedBy, Child, Blocks, Parent
+        aida show         Related,   Related, Related, Parent
+
+  Only `Parent` survives the round trip. `BlockedBy`, `Blocks`, `Child`, `References` all render as `Related`.
+
+  THE GRAPH SURFACE IS CORRECT, WHICH IS HOW THIS WAS CAUGHT AND IS ALSO WHY IT PERSISTED:
+
+      aida graph blocked-by BUG-1480
+        blocked_by[2]  STORY-1422, STORY-1423
+
+  So the data is intact and one surface reads it faithfully. Anyone cross-checking with `aida graph` sees the truth; anyone using `aida show` - which is the per-spec read command, the one the skills use and the discipline guides point at - sees a flat undifferentiated list.
+
+  SCALE, counted over the whole store (number of spec files carrying at least one edge of each type):
+
+      Child 997    Parent 414    References 229    BlockedBy 47    Blocks 18
+      Duplicate 11    SupersededBy 4    Supersedes 4    (null) 1195
+
+  Every type in that list except Parent is misrendered. That includes the four SupersededBy / four Supersedes edges TASK-1176 introduced specifically so that "adopted then replaced" would be a first-class walkable relationship rather than a string tag - on `aida show`, a superseded ADR reads as merely "Related" to its successor, which is the exact ambiguity that spec was written to remove.
+
+  HOW IT BIT, and this is why it is filed at high rather than as a cosmetic defect. A reviewer holding PR #2033 checked whether a newly-created BlockedBy edge existed, read `aida show`, saw "Related", and reported the edge missing - then correctly reasoned onward from a false premise about the graph's state. The advisor had created the edge minutes earlier and seen `Added relationship: BUG-1480 --[BlockedBy]--> STORY-1423` confirmed on stdout. TWO SEATS, ONE HONEST DISAGREEMENT, AND THE DISAGREEMENT WAS ENTIRELY MANUFACTURED BY THE RENDERER. Every relationship-based judgement made from `aida show` in this project's history is suspect in the same way, and none of them would look wrong.
+
+  IT IS ALSO A SILENT, ASYMMETRIC FAILURE. `Related` is the weakest, most permissive type, so the misrendering always errs toward "these are merely associated" - it never invents a constraint, it only dissolves one. A reader checking for a blocker sees none; a reader checking for a mere association sees exactly what they expected. That is PRIN-5's shape at the presentation layer: the degraded reading is the reassuring one.
+
+  Acceptance:
+  - `aida show <ID>` renders each relationship with its STORED type - BlockedBy, Blocks, Child, Parent, References, Duplicate, SupersededBy, Supersedes - matching what `aida graph` walks and what the YAML holds.
+  - DEMONSTRATE-IT-FIRES, binding, and it must be RED FIRST: a test that reads a spec carrying at least three distinct non-Parent types and asserts the rendered output names each one. TASK-1247 is a ready-made fixture shape - it holds BlockedBy, Child, Blocks and Parent simultaneously. Written against today's code the test must FAIL, showing three of four collapsed; only then fix it. A test authored after the fix proves nothing about the collapse it claims to catch.
+  - Check the machine-readable paths too, separately and explicitly: `--format json` and the TOON agent output must carry the stored type. An agent reading relationships over the CLI - the primary agent surface by this project's own benchmark - inherits this defect silently if only the human table is fixed.
+  - Check the MCP `show_requirement` and `query_graph` handlers for the same collapse. CLAUDE.md requires CLI and MCP schemas not to drift; if MCP renders the type correctly, the two surfaces have been disagreeing, and if it does not, this bug is wider than the CLI.
+  - Establish whether the collapse is in the renderer, in the cache projection, or in the cache's schema. The cache is a derived read projection and `aida graph` may not use it; if the cache never stored the type, `cache rebuild` is part of the fix and the blast radius includes anything else reading relationships through the cache.
+
+  Related: TASK-1176 (SupersededBy as a first-class typed edge - undermined by this), BUG-1551 (BlockedBy gates pickup not closure - reasoning about blockers is exactly what this surface breaks), PRIN-5 (absent evidence must not read as good evidence).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T16:11:41.368773223Z
+modified_at: 2026-09-21T16:11:41.368773223Z
+req_type: Bug
