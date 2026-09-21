@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:51:11.600098076Z
-modified_at: 2026-09-21T01:51:21.718264541Z
+modified_at: 2026-09-21T02:09:51.664183805Z
 req_type: Bug
 tags:
 - batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
@@ -47,3 +47,42 @@ relationships:
   target_id: 01a0c058-3d0c-7eb1-993d-3976581722cb
   created_at: 2026-09-21T01:51:21.718258760Z
   created_by: joe
+comments:
+- id: 01a0c1ba-1030-7041-99d9-f8e5a7817fe2
+  author: joe
+  content: |-
+    [reviewer] FULL TRIAGE OF ALL 22 QUEUED REVIEWER ENTRIES. The 5-to-1 baseline in this spec was measured on a sample I did not know was a sample. The real figure is worse and more specific: ZERO of 22 are "review this now and it can land".
+
+    I found the sample problem the way this spec predicts: `aida awaiting` reports 5 reviewer rows, `aida queue list --for reviewer` reports 22. I triaged the 5, concluded the seat was not the constraint, and reported that. The conclusion survives; the denominator was wrong by more than four times.
+
+    THE FULL TRIAGE, comparing each PR's current head against its recorded verdict's reviewed_sha:
+
+        PROVABLY REFUSED AT THE CURRENT HEAD -- 15
+          1972 1974 1978 1981 1999 2001 2003 2006 2014 2026 2027 2030 2033 2034 2043
+          Each has a verdict whose reviewed_sha equals the head. Re-reviewing means a second
+          verdict on byte-identical code, and because recording is a blind full replace, each
+          one destroys between one and five existing findings to restate them.
+
+        PERMANENTLY INDETERMINATE -- 6
+          1984 1986 1998 2009 2039 2040
+          These carry a verdict with NO reviewed_sha. I tried the obvious fallback, comparing
+          the head's commit date against the verdict's recorded_at, and it does not work either:
+          the same files carry NO recorded_at. They have neither field. There is no way, from
+          any data on disk, to determine whether these verdicts describe the current head.
+
+        UNREVIEWED -- 1
+          2029, and it is CONFLICTING/DIRTY. It needs a rebase before a review is meaningful;
+          reviewing a conflicted tree produces findings against a merge that cannot happen.
+
+    So the actionable count is not 1 of 5 or 7 of 22. It is 0 of 22. The single unreviewed entry is blocked on a rebase, not on a reviewer.
+
+    TWO DEFECTS THIS EXPOSES THAT ARE NOT YET IN THIS SPEC:
+
+    1. A MERGED PR LEAVES A LIVE QUEUE ENTRY, AND `queue gc` CANNOT SEE IT. STORY-1362 is routed to reviewer, status draft, for PR #1986 -- which MERGED at 17:54:33Z. `aida queue gc` prunes entries whose TARGET SPEC is archived, Completed or Rejected. The target spec here is the review story, and it is draft, because no reviewer ever closed it and the PR merged without one. So gc keys off the wrong object: the review entry's liveness depends on the PR's state, not on the review story's status. Every PR that merges without its routed review being closed leaves one of these forever.
+
+    2. THE INDETERMINATE SIX ARE NOT A MIGRATION PROBLEM, THEY ARE PERMANENT. BUG-1505 is scoped as a schema plus migration. A migration can normalise a spelling and add a schema, but it cannot recover a sha that was never written for a head that has since been superseded. Three of those six are verdicts I recorded tonight. So criterion 1 of this spec -- a queue entry knowing whether a verdict exists at the current head -- is not merely blocked on BUG-1505; for these six it is unachievable at any point in the future, and the acceptance should say what happens to a verdict that can never be placed. Treating it as absent is the PRIN-5-consistent answer and it costs a re-review; treating it as current is the reassuring answer and is how work merges behind a stale verdict.
+
+    AND THE TWO SURFACES DISAGREE, WHICH IS THE THING AN OPERATOR ACTUALLY SEES. `aida awaiting` -- the surface that leads `aida status` and feeds the per-turn notice -- shows 5 reviewer rows. The queue holds 22. The 5 it shows are not a smart subset: all five are in the provably-refused set, so it is not filtering by verdict, it is showing some first-N. So one surface understates depth fourfold while the other overstates actionable work twenty-two-fold, and neither states the number that matters. Criterion 4's "show both routed and actionable" should extend to `aida awaiting`, and whatever caps it should say "5 of 22" rather than "5".
+  created_at: 2026-09-21T02:09:51.664183805Z
+  modified_at: 2026-09-21T02:09:51.664183805Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
