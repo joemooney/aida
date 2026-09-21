@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:47:03.211329757Z
-modified_at: 2026-09-21T20:13:58.470396236Z
+modified_at: 2026-09-21T20:16:57.200239977Z
 req_type: Bug
 tags:
 - integrity-floor
@@ -80,4 +80,24 @@ comments:
     WHAT THIS SPEC SHOULD RESOLVE, then, is not just "should ship have a TTY check too" but the pair: IF CLEARING IS A HUMAN FLOOR, WHAT IS THE SANCTIONED PATH FOR A DELIBERATE NON-DEFAULT MERGE — a trailer strip, a hand-written subject — FROM A SEAT THAT CANNOT CLEAR? Candidate answers worth weighing rather than one being assumed: `pr ship` gains a `--subject` override so the sanctioned path keeps its audit trail; or clearing gains an explicit, logged, non-TTY authority distinct from dispatch and disposition; or the trailer decision moves out of the subject line entirely so no non-default merge is needed.
   created_at: 2026-09-21T20:13:47.086101960Z
   modified_at: 2026-09-21T20:13:47.086101960Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c59d-5370-7332-abad-68f255e27555
+  author: joe
+  content: |-
+    [aida:advisor] A FOURTH SIDE, AND IT IS THE CLEANEST STATEMENT OF THE DEFECT: THE ERROR MESSAGE IS FALSE AS WRITTEN. Found by claude-reviewer-1 while correcting their own overstatement about the merge pipeline.
+
+        "clearing a merge-hold requires a human at an interactive terminal;
+         dispatch or advisor authority cannot override this integrity floor"
+
+    THAT SENTENCE IS NOT TRUE. Any seat that can invoke `aida pr ship` clears the same class of hold with no TTY present — pr_cmd.rs calls `crate::merge_hold::clear_hold(...)` with NO `has_integrity_floor_authority()` check. THE FLOOR IS NOT A FLOOR; IT IS A SPEED BUMP ON ONE OF TWO DOORS. And the message is on the exact surface where someone would go looking to find out whether they can override it.
+
+    THIS IS THE BUG-1559 SHAPE — a message telling the next reader the guarantee is stronger than it is. The reviewer has now flagged the same shape four times in one day: #2050's probe headline naming an exempt file as one of the compared sides, #2056's summary claiming "gates the class" when it gates the trace-carrying subset, BUG-1559's witness doc claiming the path is typed against the restricted view, and this. IN EVERY CASE THE CODE WAS CORRECT AND THE PROSE ABOUT IT WAS NOT, which is the harder half to catch because tests do not read comments.
+
+    SO THE MINIMAL FIX IS SMALLER THAN THE DESIGN QUESTION AND SHOULD NOT WAIT FOR IT: MAKE THE MESSAGE TRUE. Either narrow it to what is actually enforced ("this command requires a human at an interactive terminal") and drop the claim about what authority cannot override, or close the asymmetry so the sentence becomes true. The current text is the only version that is wrong either way.
+
+    CREDITED, BECAUSE IT IS A COMMENT DOING REAL WORK: the implementer left an in-code note at the `pr ship` release site that names this spec AND WARNS AGAINST THE NAIVE FIX — "do not fix by copying that gate here without checking BUG-1566 first (a naive TTY check would break `pr ship` when it's the deliberate act BUG-1167 exists to support)". That stops the next person closing the asymmetry in the way that breaks something, and it is the difference between a known gap and a trap.
+
+    AND THE REVIEWER'S CORRECTION OF THEIR OWN WARNING IS RECORDED AS METHOD: they told the advisor the pipeline would stop at every held PR, then checked the sibling clear path and found it does not. Their assessment — "I should have checked the sibling clear path before saying it, which is the enumerate-the-instances rule applied to a CONSEQUENCE rather than to a DEFECT." A consequence has instances too, and naming the class of thing that breaks is as incomplete as naming the class of a defect.
+  created_at: 2026-09-21T20:16:57.200239977Z
+  modified_at: 2026-09-21T20:16:57.200239977Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
