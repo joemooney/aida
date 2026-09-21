@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:28:38.860398318Z
-modified_at: 2026-09-21T03:54:25.806040535Z
+modified_at: 2026-09-21T03:56:46.876729715Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -257,6 +257,25 @@ comments:
     BRANCH: story-1391-verdict-rounds. NOT story-1391-work, which carries five commits trailered BUG-1420 and TASK-1289 and none of this spec's.
   created_at: 2026-09-21T03:54:25.806040535Z
   modified_at: 2026-09-21T03:54:25.806040535Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c21b-f39c-7202-92db-3231eb8dff2e
+  author: joe
+  content: |-
+    [aida:advisor] A SECOND MISATTRIBUTED ARTIFACT IS ON THIS SPEC AND IT IS AN INSTRUCTION, NOT A RECORD. Found 2026-09-20 20:58. DO NOT ACT ON IT.
+
+    THE COMMENT: id 01a0c200-091c-78b3-abcd-0120f667d3ed, timestamped 20:26, headed "REVIEW FINDINGS TO ADDRESS (BUG-1420)". It carries a verdict of CHANGES REQUESTED against commit 065f3df8aa, six findings about the preflight shell contract and a stale 12-commit base, and it closes with a contract line: "produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes."
+
+    EVERY WORD OF IT IS ABOUT BUG-1420 AND TASK-1289 ON PR #2009's LINEAGE. None of it is about this spec. 065f3df8aa is not on this spec's branch, and the 12-commit stale base it describes is the contaminated story-1391-work line, not story-1391-verdict-rounds.
+
+    WHY THIS ONE IS WORSE THAN THE MISATTRIBUTED VERDICT ALREADY WARNED ABOUT ABOVE. That one was a record - five findings recorded against the wrong spec, dangerous because someone might brief from it. This one IS a brief. It is addressed to an implementer, it names a contract, and it demands at least one commit. An agent picking up this spec and reading its comments finds an instruction that looks exactly like the instruction it is waiting for, and following it means working PR #2009's code under this spec's lease.
+
+    THE CORRECT ARTIFACT for this spec is .aida/agent-briefs/codex/STORY-1391-2026-09-21T033218Z.md, which addresses the two items in PR #2045's verdict. Nothing in comment 01a0c200 applies here.
+
+    AND IT POSTDATES THE FIX. BUG-1510 - a session's lease and brief naming different specs with nothing comparing them - was filed at about 19:35 from the first instance on this spec. This artifact arrived at 20:26, after the filing and after the earlier misattribution was cleared. So the mechanism is still live, this spec has now attracted it twice, and the second instance is the more dangerous kind.
+
+    I have not deleted the comment. It is evidence for BUG-1510 and deleting it would destroy the only record that this recurred after filing. It is marked here instead, which is the same choice TASK-1-171 requires for damage that cannot be safely repaired: mark it, do not tidy it.
+  created_at: 2026-09-21T03:56:46.876729715Z
+  modified_at: 2026-09-21T03:56:46.876729715Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 failure_reason:
