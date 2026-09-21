@@ -1,0 +1,37 @@
+id: 01a0c32d-4fc2-7843-ad9b-6c4cfdbc43e3
+spec_id: STORY-1417
+agreed_id: STORY-1417
+title: A review finding is an untyped string, so the review corpus cannot answer how often a defect class recurs - a vocabulary sweep matches polarity-blind and counts approvals as failures
+description: |-
+  OBSERVED 2026-09-21 as a FAILED MEASUREMENT, which is the evidence.
+
+  A reviewer seat tried to answer "how often has a fix patched the cited site and left its named siblings?" — a defect class with five confirmed instances in one night. The only available query is a text sweep over the free-text `findings` strings in .aida/review-verdicts/*.json. It returned twelve hits and IS NOT USABLE.
+
+  PR-2008 matched on "all three sites". Reading it, that verdict is an APPROVAL: "shared contention classification covers WouldBlock and fs2 native raw codes at ALL THREE SITES" — a fix that DID cover every site, the exact inverse of the defect being counted. The query matched the vocabulary and not the claim.
+
+  So twelve is not a count of anything. It is the number of verdicts using these words, and at least one uses them to say the opposite. The reviewer reported the failure rather than the number, which is why this is filed at all.
+
+  THE GAP. A review finding is an untyped string. Nothing records WHAT KIND of defect it asserts, so the corpus cannot answer any of:
+    - how often does defect class X recur across reviews?
+    - is a class getting better or worse over time?
+    - which classes survive multiple rounds (the STORY-1391 question, one level up)?
+    - do our findings cluster in a way that argues for a lint, a gate, or a template change?
+
+  Every one of those is a question the requirement graph exists to answer, and none is answerable about the reviews themselves. AIDA types relationships between SPECS and leaves the review corpus as prose.
+
+  WHY A TEXT SWEEP CANNOT BE THE ANSWER, stated so nobody proposes a better regex. The failure here was POLARITY, not phrasing: "covers all three sites" and "left two of three sites" share their whole vocabulary and differ only in the claim. No keyword refinement separates them, because the distinguishing content is the assertion, not the words. This is the same failure that produced a duplicate spec an hour earlier — searching the symptom and missing the remedy — in a third form: matching text shaped like the thing instead of text that asserts it. Both felt like evidence until one result was opened.
+
+  WHAT TO BUILD, smallest useful slice. Give a finding an optional typed CATEGORY at record time — a short controlled vocabulary the reviewer picks from (incomplete-fix, absent-evidence-reads-as-good, untested-path, scope-creep, stale-base, contract-drift, …), stored alongside the free text rather than replacing it. Then `aida findings` can group and count by category and the questions above become one query. Categories should be additive and cheap to extend; a wrong or missing category should never block recording a verdict, because a gate that makes refusing harder is worse than an uncounted finding.
+
+  EXPLICITLY NOT WANTED: back-classifying the historical corpus. The same rule as BUG-1538 — inventing structure for records nobody typed is worse than admitting the corpus is prose. Count from the day the field exists.
+
+  RELATED: BUG-1539 (a verdict is keyed to a PR number rather than the reviewed commit) is the storage-shape half of the same weakness — the review corpus is the least structured thing in a system whose whole claim is structure. Fixing either alone leaves the corpus hard to reason about.
+
+  Filed by the driver-advisor seat, disposing of a failed measurement the reviewer seat reported rather than a number they could not stand behind. Autonomous-safe; additive field plus a query surface.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T08:55:21.794367525Z
+modified_at: 2026-09-21T08:55:21.794367525Z
+req_type: Story
