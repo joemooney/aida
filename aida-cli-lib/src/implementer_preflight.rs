@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 const GUARD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const BUILD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+const CI_BASH_SHELL: &str = "bash --noprofile --norc -e -o pipefail {0}";
 
 const DEFAULT_GUARD_NAMES: &[&str] = &[
     "Check formatting",
@@ -25,6 +26,7 @@ pub(crate) struct Guard {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ResolvedGuard {
     Found(Guard),
+    Invalid(String),
     Skipped(String),
 }
 
@@ -102,6 +104,24 @@ pub(crate) fn guards_from_ci(project_root: &Path, names: &[String]) -> Vec<Resol
             .map(|name| ResolvedGuard::Skipped(format!("{name}: CI workflow unreadable")))
             .collect();
     };
+    let configured_shell = yaml
+        .get("jobs")
+        .and_then(|v| v.get("build"))
+        .and_then(|v| v.get("defaults"))
+        .and_then(|v| v.get("run"))
+        .and_then(|v| v.get("shell"))
+        .and_then(|v| v.as_str());
+    if configured_shell != Some(CI_BASH_SHELL) {
+        let actual = configured_shell.unwrap_or("<missing>");
+        return names
+            .iter()
+            .map(|name| {
+                ResolvedGuard::Invalid(format!(
+                    "{name}: CI Bash contract drifted: expected `{CI_BASH_SHELL}`, found `{actual}`"
+                ))
+            })
+            .collect();
+    }
     let steps = yaml
         .get("jobs")
         .and_then(|v| v.as_mapping())
@@ -302,6 +322,10 @@ fn execute(project_root: &Path, guards: Vec<ResolvedGuard>, timeout: Duration) -
     guards.into_iter().map(|resolved| {
         let guard = match resolved {
             ResolvedGuard::Found(guard) => guard,
+            ResolvedGuard::Invalid(output) => return GuardResult::Failed {
+                name: "CI shell parity".into(),
+                output,
+            },
             ResolvedGuard::Skipped(note) => return GuardResult::Skipped(format!("{note}; binary: {binary_label}")),
         };
         if guard_uses_aida(&guard) {
@@ -387,7 +411,7 @@ mod tests {
         .unwrap();
         std::fs::write(
             root.path().join(".github/workflows/ci.yml"),
-            "jobs:\n  build:\n    steps:\n      - name: Portability\n        run: |\n          echo 'tests/x.rs:7 non-portable path; fix: use tempfile' >&2\n          exit 1\n",
+            "jobs:\n  build:\n    defaults:\n      run:\n        shell: bash --noprofile --norc -e -o pipefail {0}\n    steps:\n      - name: Portability\n        run: |\n          echo 'tests/x.rs:7 non-portable path; fix: use tempfile' >&2\n          exit 1\n",
         )
         .unwrap();
 
@@ -400,6 +424,32 @@ mod tests {
         assert!(failed[0]
             .1
             .contains("tests/x.rs:7 non-portable path; fix: use tempfile"));
+    }
+
+    #[test]
+    fn ci_shell_contract_drift_refuses_preflight() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join(".github/workflows")).unwrap();
+        std::fs::write(
+            root.path().join(".github/workflows/ci.yml"),
+            "jobs:\n  build:\n    defaults:\n      run:\n        shell: bash {0}\n    steps:\n      - name: Guard\n        run: true\n",
+        )
+        .unwrap();
+
+        let results = execute(
+            root.path(),
+            guards_from_ci(root.path(), &["Guard".into()]),
+            Duration::from_secs(2),
+        );
+
+        let PreflightDecision::Refuse { failed } = decide(&results) else {
+            panic!("CI shell drift must refuse publication")
+        };
+        assert_eq!(failed[0].0, "CI shell parity");
+        assert!(failed[0]
+            .1
+            .contains("expected `bash --noprofile --norc -e -o pipefail {0}`"));
+        assert!(failed[0].1.contains("found `bash {0}`"));
     }
 
     #[test]
