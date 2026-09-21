@@ -38,9 +38,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:47:03.211329757Z
-modified_at: 2026-09-21T19:47:03.211329757Z
+modified_at: 2026-09-21T19:47:10.501667993Z
 req_type: Bug
 tags:
 - integrity-floor
 - merge-hold
 - parent:EPIC-69
+relationships:
+- rel_type: Child
+  target_id: 01a0ab07-332f-7bc0-9c56-10307b5ced35
+  created_at: 2026-09-21T19:47:10.501667993Z
