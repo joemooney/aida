@@ -64,7 +64,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:47:02.167386557Z
-modified_at: 2026-09-21T22:54:11.344945121Z
+modified_at: 2026-09-21T23:14:37.227551504Z
 req_type: Decision
 tags:
 - performance governance
@@ -136,4 +136,30 @@ comments:
     This limb's remedy is also distinct: enforcement needs a comparison, capture needs a write, and SIGNALLING NEEDS THE FAILURE PATH TO EMIT A DIFFERENT VALUE THAN THE SUCCESS PATH. Keep the bound; print one line on expiry; still exit 0. Recorded here rather than filed, since the specs exist (BUG-1569, STORY-1436) and this ADR is where the shape lives.
   created_at: 2026-09-21T22:54:11.344945121Z
   modified_at: 2026-09-21T22:54:11.344945121Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c63f-fc2b-71f2-bcdd-599ba7fc03f7
+  author: joe
+  content: |-
+    [aida:advisor] A FOURTH VARIANT, contributed by claude-reviewer-1 and verified here: A SURFACE THAT REQUIRES AN INPUT ITS CALLER CANNOT OBTAIN.
+
+        worst_ms          a measurement that never becomes a gate    -> ENFORCEMENT (has data, never acts)
+        refused clear     an event that never becomes a record       -> CAPTURE     (never has the data)
+        notice deadline   a failure that emits the all-clear         -> SIGNALLING  (fabricates a clean result)
+        mailbox thread    a surface unreachable from where it is needed -> ADDRESSABILITY
+
+    THE INSTANCE, verified rather than relayed:
+
+        aida mailbox thread --help   'Show a full conversation thread, oldest-first'
+                                     Usage: aida mailbox thread [OPTIONS] <THREAD_ID>   (REQUIRED)
+        aida mailbox read <id>       prints header and body; ZERO occurrences of a thread id
+
+    So the thread-viewing surface EXISTS, WORKS, and is UNREACHABLE FROM THE ONLY POSITION THAT NEEDS IT. The sender sees the thread id in the send output; the receiver never does. A reader holding a message cannot get from it to its conversation.
+
+    WHY IT IS NOT ONE OF THE OTHER THREE. It is not computed-and-never-compared: nothing is computed. It is not an unrecorded event: the thread id IS stored on every message. It is not a failure wearing the success value: nothing fails. THE DATA EXISTS, IS CORRECT, IS PERSISTED, AND HAS NO PATH TO THE CALLER WHO WOULD USE IT. The remedy is correspondingly different again — enforcement needs a comparison, capture needs a write, signalling needs a distinct failure value, and ADDRESSABILITY NEEDS AN EXISTING VALUE SURFACED AT THE READ PATH. One field in the read output closes it.
+
+    HOW IT WAS FOUND IS WORTH KEEPING. The reviewer asserted that neither seat had ever passed --thread, having named in the preceding sentence that it could only verify its own half. Measurement showed 0 of 276 for them and 25 of 254 for me. The reviewer then TESTED THE EXPLANATION THAT REDUCED ITS OWN FAULT rather than accepting it — 'an explanation that reduces my fault is the one I should check hardest' — and the check is what produced this finding. The excuse turned out to be true AND to name a real defect, which is the outcome neither accepting nor dismissing it would have reached.
+
+    AND THE COROLLARY THAT MATTERS MORE THAN THE FLAG: threading would not have prevented either of today's crossed-message near-misses. My STOP on #2066 WAS threaded and still arrived quoting a verdict that had already been replaced. A THREAD MARKER RECORDS WHAT A MESSAGE ANSWERS; IT DOES NOT SAY WHETHER THAT STATE STILL HOLDS. Adopting --thread as the mitigation would have let both seats believe the problem was handled. The staleness signal is the thing, and it is BUG-1581 at the messaging layer.
+  created_at: 2026-09-21T23:14:37.227551504Z
+  modified_at: 2026-09-21T23:14:37.227551504Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
