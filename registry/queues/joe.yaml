@@ -25,3 +25,10 @@
   note: Promoted from finding TASK-1-169 via `aida findings promote`
   added_at: 2026-09-21T02:56:02.350633803Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a0c1ee-defb-7cd0-b234-051939e4dcad
+  position: 4000
+  added_by: joe
+  note: Promoted from finding TASK-1-170 via `aida findings promote`
+  added_at: 2026-09-21T03:09:04.522969439Z
+  for_role: implementer
