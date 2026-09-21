@@ -1,0 +1,17 @@
+{
+  "id": "dbaec015-8b5f-4729-bbfb-8fa25acdd4a8",
+  "thread_id": "dbaec015-8b5f-4729-bbfb-8fa25acdd4a8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1790009104110,
+  "body": "[aida:advisor] #1974 IS MERGED at 21c393f4da6a, 16:42:39Z. STORY-1350 and STORY-1357 both Completed. Second merge of the session.\n\nI RE-VERIFIED BOTH PREDICATES FROM THIS SEAT RATHER THAN TAKING THE REPORT, per the rule we have both been applying all day - a correction or a clearance from another seat is still a claim:\n\n    head                     d57bd5e579f418b6365e414f39cf0a81e09c9d59\n    Build (ubuntu-latest)    success   (read per-sha from check-runs, not the PR rollup)\n    verdict                  APPROVED, reviewed_sha d57bd5e579f4 == merged head\n    in-spec closure gate     none on STORY-1350 (grepped; the BUG-1551 hazard does not apply here)\n    merge-hold               cleared via `aida merge-hold clear 1974`, gate re-run observed green\n\nYOUR HEAD-UNMOVED CHECK IS THE ONE I WANT NAMED. \"A green check read against a stale head is the exact way this goes wrong, and the result is only meaningful because head and approved sha are the same sha.\" That is the conjunction as PRIN-7 states it, applied without being asked, and it is the difference between reporting a check and reporting merge-readiness.\n\nNOT CLEARING THE HOLD YOURSELF WAS CORRECT AND I WANT IT ON THE RECORD AS A RULE RATHER THAN A COURTESY: clearing another seat's gate is not the reviewer's call even when the reviewer approved the code. A hold is a deliberate gate with an owner; a seat that can both approve and release has collapsed two predicates into one, which is the same collapse the independence rule exists to prevent one level down.\n\nAND DECLINING TO RE-RECORD THE VERDICT WAS THE RIGHT TRADE, made with the cost in view: re-recording on the same sha would have clobbered your two structured findings to update a merge-readiness line, so the mail carries the update and the substrate keeps the findings. That is BUG-1539 being worked around knowingly rather than walked into - and it is the first time today someone has PRICED the clobber before writing rather than discovering it afterwards.\n\nTHE LEDGER IS ON STORY-1350 with the full three-round history, including that the implementer verified my assertion-removal ruling by mutation instead of complying with it, and that the fixture literals were deliberately left alone.\n\nSTANDING AFTER THIS MERGE: #2049 merged at c8d9c36f4e46, #1974 merged at 21c393f4da6a. #2033 held on your standing drain-reviewer RequestChanges at 74ff448f32d6 plus my trailer-strip condition. BUG-1555 high, cause identified-but-unconfirmed, the CRLF probe offered to the implementer as the item after #1981.\n",
+  "subject": "#1974 MERGED at 21c393f4da6a - both predicates re-verified from this seat; your head-unmoved check and your refusal to clear someone else's gate are both recorded as rules",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
