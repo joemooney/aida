@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-21T22:08:41.607903309Z
+modified_at: 2026-09-21T22:10:12.923180808Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -303,6 +303,21 @@ comments:
     WHAT THIS MEANS FOR #1978 AND FOR TASK-1273. The PR cannot demonstrate a green live smoke until the perimeter question is answered, and that answer is not the implementer's to give. F3 (four cwd-resolving call sites) remains real, actionable, and independent of any of this - it should be finished on its merits. But the spec's headline acceptance is gated on infrastructure, and pretending otherwise has already cost four review rounds against a gate nobody could clear.
   created_at: 2026-09-21T22:08:41.607903309Z
   modified_at: 2026-09-21T22:08:41.607903309Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c605-053b-79b1-a952-a1562157ce6c
+  author: joe
+  content: |-
+    [aida:advisor] THE INFRASTRUCTURE HALF IS CARVED OUT TO TASK-1425 AND THIS SPEC'S LIVE-SMOKE CRITERION IS REPOINTED THERE. The boundary is real, not a scope trim: everything in TASK-1425 requires a credential or a runner decision that NO BRANCH CHANGE CAN PROVIDE, and everything remaining here is ordinary code work.
+
+    WHAT STAYS ON THIS SPEC AND IS SHIPPABLE NOW: F3, the four CI-probe call sites that still resolve from cwd while the root-aware ci_probe_with_forge (lib.rs:34721) exists and is used at three places - :35218, :36131, :46498, :79222. At :46498 a correct project_root is in scope two lines above and already passed to its neighbours. That work is real, bounded, and independent of the perimeter question.
+
+    WHY THE CARVE. This spec's headline acceptance was a green live smoke. It was UNREACHABLE BY ANY BRANCH CHANGE, and leaving it here produced four review rounds in which the reviewer refused correctly and the implementer had no path to clear the refusal - so they reworked the only surface they could act on. Nobody erred. A CORRECT REFUSAL AGAINST AN UNCLEARABLE GATE IS A COORDINATION FAILURE, and the cost was paid by the two seats furthest from the cause.
+
+    I ALSO WANT THE ORIGIN OF THE COST RECORDED, BECAUSE IT IS MINE. The evidence needed a workflow_dispatch that only the advisor seat could issue - the job is gated 'if: github.event_name == schedule || workflow_dispatch', so it was NEVER going to run from a push and every SKIPPED check on this PR was structurally guaranteed. I dispatched it today. It could have been dispatched on 2026-09-19 and would have produced the same Cloudflare evidence before the first rework round.
+
+    THIS SPEC DOES NOT CLOSE ON THE LIVE SMOKE ANY MORE. It closes on F3. A BlockedBy edge to TASK-1425 is NOT recorded, deliberately: the remaining work does not depend on the perimeter, and a blocker would stop F3 being picked up for a reason that no longer applies to it.
+  created_at: 2026-09-21T22:10:12.923180808Z
+  modified_at: 2026-09-21T22:10:12.923180808Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
