@@ -1,0 +1,36 @@
+id: 01a0c237-7dd7-7132-93cf-85b1c07025c5
+spec_id: BUG-1519
+agreed_id: BUG-1519
+title: The gitlab mirror main carries a commit whose GitHub PR was closed, so every store and branch mirror push now fails non-fast-forward
+description: |-
+  aida remote status reports main DIVERGED between origin and gitlab. Fetching both and comparing directly:
+
+    git log origin/main..gitlab/main  -> ff45dcbd6c chore(drain): raise transient retry budget 1 -> 2 as interim BUG-1485 mitigation (BUG-1485)
+    git log gitlab/main..origin/main  -> 5+ commits, all normal merges
+
+  That single commit is the entire divergence on main. Its GitHub pull request, #2032, is CLOSED and was never merged. So a change that was DECLINED on the primary hub is sitting on the mirror's main branch, and the two hubs now disagree about what main is.
+
+  OBSERVED CONSEQUENCE, not theoretical: aida pr rebase 1989 completed its rebase and force-push to origin, then printed
+
+    mirror gitlab push failed -- skipped (! [rejected] ... -> story-1353-work (non-fast-forward))
+
+  The mirror fan-out is best-effort by design and warns rather than failing, which is correct, but it means the mirror silently falls further behind on every push while the divergence stands.
+
+  aida-store is separately and much more widely diverged (gitlab +1266 vs origin +4), which may or may not share a cause and should be assessed on its own.
+
+  NOT ACTED ON. Reconciling diverged hub mains is a deliberate, hard-to-reverse operation and the standing instruction is never to force-push a shared main. Filing for a decision rather than performing one.
+
+  ACCEPTANCE
+  1. A decision is recorded on whether ff45dcbd6c is wanted: if yes it lands on origin/main through a PR; if no it is removed from gitlab/main by the documented reconcile procedure.
+  2. After reconcile, aida remote status reports main in sync between origin and gitlab.
+  3. The aida-store divergence is assessed separately and either reconciled or recorded as expected with the reason.
+  4. A mirror push rejected as non-fast-forward is surfaced somewhere durable, not only as a one-line warning inside another command's output.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:26:51.735985744Z
+modified_at: 2026-09-21T04:26:51.735985744Z
+req_type: Bug
+tags:
+- papercut multi-hub mirror-drift severity:operational
