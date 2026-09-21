@@ -1,0 +1,26 @@
+id: 01a0c1c0-8e7b-7131-9190-7b50b0fd3415
+spec_id: STORY-1413
+agreed_id: STORY-1413
+title: 'Review PR-2044: [AI:codex] feat(diagnostics): enumerate prose classifiers mechanically (TASK-1300)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0c1ab`) for branch `task-1300-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2044>
+  - Branch: `task-1300-work` → `main`
+
+  ## Covers
+
+  - TASK-1300
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2044` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T02:16:57.211311122Z
+modified_at: 2026-09-21T02:16:57.211311122Z
+req_type: Story
