@@ -33,7 +33,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:55:21.794367525Z
-modified_at: 2026-09-21T09:26:26.352042978Z
+modified_at: 2026-09-21T10:13:48.678080447Z
 req_type: Story
 comments:
 - id: 01a0c32e-aa1a-7561-8985-cdb436caf5e8
@@ -140,4 +140,27 @@ comments:
     Provenance: the five-for-five measurement and the per-finding characterisation are the reviewer seat's, taken across their own live refusals rather than a sample. The corollary it confirms was the driver-advisor's, drawn from the #2030 F2 mechanism.
   created_at: 2026-09-21T09:26:26.352042978Z
   modified_at: 2026-09-21T09:26:26.352042978Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c375-2206-7a83-80c2-92ec1419a9f3
+  author: joe
+  content: |-
+    A NEW INSTANCE OF `unfalsifiable`, sharper than the ones already recorded, and it appeared in a FIX rather than in a test — observed 2026-09-21 on #2006's rework at ad13bb0ec7a2.
+
+    THE SETUP. A finding said control flow was keyed on substring-matching our own error prose (`error.to_string().contains("ambiguous")`), so rewording the bail message would silently change behaviour. The remedy asked for was a typed discriminant. The advisor warned the reviewer that the fix COULD be faked — freezing the message, or matching a different string, passes every test and leaves the defect.
+
+    THE REVIEWER FOUND THE SHARPER FAKE BY CHECKING FOR IT:
+
+        "a downcast against a type nothing constructs is the sharper version of the fake — it
+         compiles, it reads as typed, the arm never matches, and ambiguous silently falls
+         through to allow_new. That would have been WORSE than the defect."
+
+    That is the category's purest form. A `matches!(error.downcast_ref::<T>(), Some(T::Variant{..}))` arm where nothing ever constructs `T::Variant` is code that CANNOT FAIL A REVIEW BY READING and cannot fail a test suite, because the branch is simply never taken. It looks like the remedy. It is strictly worse than the defect it replaces, because the prose match at least worked until someone reworded the message.
+
+    THE CHECK THAT CATCHES IT IS CHEAP AND NOT OBVIOUS: verify BOTH ENDS. Not "is the discriminant typed" but "is the type CONSTRUCTED at the source AND consumed at the branch". Here both were confirmed — the enum at lib.rs:19272, the construction in resolve_mailbox_message's multi-match arm, the consumption at mailbox_cmd.rs:720.
+
+    WHY THIS BELONGS IN THIS SPEC. The vocabulary's `unfalsifiable` entry currently reads "a test that cannot fail, or that asserts the undisputed half", and the worked example is a fixture that stops short. This instance shows the category is NOT limited to tests: production code can be unfalsifiable in exactly the same way, and when it is, no test can detect it because the test would have to construct a state the code never produces. Whatever the category ends up called, its definition should not say "test".
+
+    AND THE POSITIVE CASE IS WORTH KEEPING TOO. The same rework's tests assert `matches!(err.downcast_ref::<MailboxResolveFailure>(), ...)` with an explicit comment that the message text is NOT the subject of the assertion — the exact inverse of the condition refused two rounds earlier, where tests asserted the same prose the code branched on and therefore moved with the bug. A `prose-as-contract` fix is complete only when the TESTS stop asserting the prose as well.
+  created_at: 2026-09-21T10:13:48.678080447Z
+  modified_at: 2026-09-21T10:13:48.678080447Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
