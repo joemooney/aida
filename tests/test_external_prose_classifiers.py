@@ -87,6 +87,42 @@ class EnumeratorTest(unittest.TestCase):
             before, after, "adding a NEW classifier marker must change the inventory"
         )
 
+    def test_a_moved_classifier_changes_the_inventory(self):
+        """BUG-1526 c1: identity is name + PATH, so a MOVE is a change.
+
+        The reviewer broke the previous pair by attacking the unpinned axis. The
+        other two tests vary LINE POSITION (name+path fixed) and the NAME SET
+        (paths fixed); neither varies PATH with the name held constant, so the
+        path half of the identity was unpinned. Two mutations passed all three:
+
+            render() -> str(len(rows))            the doc becomes one digit
+            render() -> name only, path dropped   silently reverts c1
+
+        The second is the dangerous one — it is plausible as a refactor, and
+        under it a classifier MOVING FILE stops registering as a change. This
+        test closes both, because a move alters neither the row count nor the
+        name set.
+        """
+        def tree(root: pathlib.Path, rel: str) -> str:
+            src = root / rel
+            src.parent.mkdir(parents=True, exist_ok=True)
+            src.write_text(
+                "fn classify(s: &str) -> bool {\n"
+                "    // external-prose-classifier: fixture::new_classifier\n"
+                '    s.contains("upstream prose")\n}\n',
+                encoding="utf-8",
+            )
+            return module.render(module.enumerate_sites(root))
+
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            before = tree(pathlib.Path(a), "aida-example/src/old.rs")
+            after = tree(pathlib.Path(b), "aida-example/src/moved.rs")
+
+        self.assertNotEqual(
+            before, after,
+            "a classifier moving file must change the inventory — identity is name + PATH",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
