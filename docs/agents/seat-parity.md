@@ -11,11 +11,11 @@ The audit was refreshed for TASK-1279 on 2026-09-19.
 |---|---|---|---|
 | Product / interactive | **Works** — `aida agent new claude --role product --show-context` | **Works** — `aida agent new codex --role product --show-context` | **Works** — `aida agent new antigravity --role product --show-context` |
 | Product / headless | **Works** — `AIDA_SESSION_ROLE=product claude -p PROMPT` | **Works** — `AIDA_SESSION_ROLE=product codex exec PROMPT` | **Degraded** — scaffolded launcher; unattended dogfood is pending (TASK-1207) |
-| Product / fork-from-live | **Works** through the Claude resume transport | **Degraded** — no Codex transcript-copy API; use the cold-boot scheduled tick (TASK-1279) | **Degraded** — no portable resume transport (TASK-1207) |
+| Product / fork-from-live | **Works** through the Claude resume transport | **Degraded** — no Codex transcript-copy API; use the cold-boot scheduled tick (TASK-1308) | **Degraded** — no portable resume transport (TASK-1207) |
 | Product / scheduled tick | **Works** — scheduler invokes `AIDA_SESSION_ROLE=product claude -p PROMPT` | **Works** — scheduler invokes `AIDA_SESSION_ROLE=product codex exec PROMPT` | **Degraded** — launcher scaffold only (TASK-1207) |
 | Advisor / interactive | **Works** — `aida agent new claude --role advisor --show-context` | **Works** — `aida agent new codex --role advisor --show-context` | **Works** — `aida agent new antigravity --role advisor --show-context` |
 | Advisor / headless | **Works** — `AIDA_HEADLESS_VENDOR=claude aida advisor watch --once` | **Works** — `AIDA_HEADLESS_VENDOR=codex aida advisor watch --once`; vendor-native cold boot | **Degraded** — cold boot exists; unattended dogfood pending (TASK-1207) |
-| Advisor / fork-from-live | **Works** — `aida advisor register && aida advisor watch --once` | **Degraded** — watch falls back explicitly to a Codex cold boot; Codex has no portable transcript fork (TASK-1279) | **Degraded** — no portable transcript fork (TASK-1207) |
+| Advisor / fork-from-live | **Works** — `aida advisor register && aida advisor watch --once` | **Degraded** — watch falls back explicitly to a Codex cold boot; Codex has no portable transcript fork (TASK-1308) | **Degraded** — no portable transcript fork (TASK-1207) |
 | Advisor / scheduled tick | **Works** — `aida advisor watch --once` | **Works** — `AIDA_HEADLESS_VENDOR=codex aida advisor watch --once` | **Degraded** — needs dogfood evidence (TASK-1207) |
 | Implementer / interactive | **Works** — `aida agent new claude --role implementer --show-context` | **Works** — `aida agent new codex --role implementer --show-context` | **Works** — `aida agent new antigravity --role implementer --show-context` |
 | Implementer / headless | **Works** — `aida queue work ID --no-human=both --vendor claude` | **Works** — `aida queue work ID --no-human=both --vendor codex` | **Degraded** — backend exists; drain dogfood pending (TASK-1207) |
@@ -44,6 +44,13 @@ The audit was refreshed for TASK-1279 on 2026-09-19.
   `AskUserQuestion` or harness-only `Monitor` tools.
 
 ## Evidence captured on 2026-09-19
+
+SCOPE OF THIS EVIDENCE, stated so the matrix is not read as more proven than it is:
+four probes were run against roughly twenty-four non-N/A cells, and two of the four
+are `--help` invocations. A `--help` proves a flag PARSES, not that the seat works.
+So the cells below are supported by a mix of direct probes and reading; the
+per-cell proving runs are TASK-1308's, and travel with the dogfood wave for the
+same reason — that evidence accrues only from running one.
 
 The following probes were run from the TASK-1279 worktree:
 
@@ -77,6 +84,12 @@ real waves and cannot be replaced by a synthetic unit test:
    shelved/merged counts, and link the Codex advisor's merge-gate event.
 2. Codex product + Claude advisor: repeat with the seats reversed.
 
-Record both event-count blocks as comments on TASK-1279 using the SPIKE-82
-count vocabulary. Do not claim completion until the first wave has merged at
+Record both event-count blocks as comments on TASK-1308 using the SPIKE-82
+count vocabulary. TASK-1308 is not complete until the first wave has merged at
 least one drain-mode spec behind the Codex advisor gate.
+
+The dogfood-wave proof was scoped out of TASK-1279 to TASK-1308 on 2026-09-20:
+the evidence accrues only from running a wave, and no wave had run. The two
+Codex **Degraded** cells above therefore cite TASK-1308, which is open, rather
+than TASK-1279, which this document's own audit closes — a gap whose filed spec
+is the spec that just closed cannot be found again by a later reader.
