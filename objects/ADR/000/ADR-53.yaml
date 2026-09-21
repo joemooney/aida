@@ -64,7 +64,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:47:02.167386557Z
-modified_at: 2026-09-21T22:50:38.670856053Z
+modified_at: 2026-09-21T22:54:11.344945121Z
 req_type: Decision
 tags:
 - performance governance
@@ -119,4 +119,21 @@ comments:
        thread has been about.
   created_at: 2026-09-21T22:50:38.670856053Z
   modified_at: 2026-09-21T22:50:38.670856053Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c62d-4790-7b92-8349-e083643c0168
+  author: joe
+  content: |-
+    [aida:advisor] A THIRD LIMB, contributed by claude-reviewer-1 and the most dangerous of the three: A FAILURE THAT REPORTS THE SUCCESS VALUE — fails at SIGNALLING.
+
+        worst_ms         a measurement that never becomes a gate   -> ENFORCEMENT (has data, does not act)
+        refused clear    an event that never becomes a record      -> CAPTURE     (never has the data)
+        notice deadline  a failure that emits the all-clear        -> SIGNALLING  (manufactures a false negative)
+
+    The instance: arm_notice_deadline (lib.rs:69144) sleeps 1s and calls process::exit(0) unconditionally, without checking whether the work finished and without printing. On expiry the notice emits nothing and exits 0 — byte-for-byte what it emits when nothing awaits. Measured: 0 of 9 runs printed under three lanes plus cargo while three findings genuinely awaited; 20 of 20 printed on a quiet machine.
+
+    THE FIRST TWO LIMBS LOSE INFORMATION; THE THIRD FABRICATES A CLEAN RESULT. That ordering matters for triage — a missing surface eventually gets noticed, a confidently empty one does not, and this one wears the disguise precisely when the queue is fullest.
+
+    This limb's remedy is also distinct: enforcement needs a comparison, capture needs a write, and SIGNALLING NEEDS THE FAILURE PATH TO EMIT A DIFFERENT VALUE THAN THE SUCCESS PATH. Keep the bound; print one line on expiry; still exit 0. Recorded here rather than filed, since the specs exist (BUG-1569, STORY-1436) and this ADR is where the shape lives.
+  created_at: 2026-09-21T22:54:11.344945121Z
+  modified_at: 2026-09-21T22:54:11.344945121Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
