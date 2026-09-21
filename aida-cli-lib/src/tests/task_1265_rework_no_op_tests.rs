@@ -136,6 +136,43 @@ fn no_op_failure_names_the_actual_rework_round() {
     assert!(message.contains("fix the guard"), "{message}");
 }
 
+// A stale non-blocking SPEC-keyed verdict must not mask the authoritative
+// blocking verdict the latest PR reviewer wrote. The positive case above has no
+// competing spec-keyed verdict, so it cannot catch a resolution order that
+// returns the first verdict FOUND rather than the first BLOCKING one.
+// trace:BUG-1476 | ai:codex
+#[test]
+fn stale_spec_verdict_does_not_mask_a_blocking_pr_verdict() {
+    let tmp = tempfile::tempdir().unwrap();
+    review_verdict::record_verdict(
+        tmp.path(),
+        "BUG-1432",
+        Some("approved"),
+        Some("older"),
+        Some("bug-1432-work"),
+        None,
+        &[],
+        "older test reviewer",
+    )
+    .unwrap();
+    review_verdict::record_verdict(
+        tmp.path(),
+        "PR-2024",
+        Some("request-changes"),
+        Some("abc123"),
+        Some("bug-1432-work"),
+        Some("the rework still has a blocking defect"),
+        &["fix the unchanged-head path".to_string()],
+        "test reviewer",
+    )
+    .unwrap();
+
+    let verdict = blocking_rework_verdict(tmp.path(), "BUG-1432", 2024)
+        .expect("a PR-keyed blocking verdict must arm the rework guard");
+    assert!(verdict.kind.blocks_done());
+    assert_eq!(verdict.reviewed_sha.as_deref(), Some("abc123"));
+}
+
 // A non-blocking PR-keyed verdict must NOT arm the guard. The positive case
 // above proves a PR-keyed RequestChanges arms it; without this, an
 // implementation that armed on ANY verdict would pass the suite and report a

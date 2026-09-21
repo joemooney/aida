@@ -124,6 +124,14 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash scripts/check-tui-seam.sh
 
+      # Marker enumeration makes the external-prose inventory a generated,
+      # reviewable contract rather than a best-effort audit. trace:TASK-1300
+      - name: External-prose classifier inventory
+        if: steps.changes.outputs.full_ci == 'true'
+        run: |
+          python3 scripts/external-prose-classifiers.py --check
+          python3 -m unittest tests/test_external_prose_classifiers.py
+
       - name: Run tests
         if: steps.changes.outputs.full_ci == 'true'
         # --no-fail-fast: one run reports every failing test binary across

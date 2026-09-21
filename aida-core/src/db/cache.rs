@@ -817,6 +817,7 @@ fn is_sqlite_lock_error(err: &anyhow::Error) -> bool {
 /// dropping and rebuilding the rebuildable projection from the git store.
 // trace:BUG-1097 | ai:codex
 pub fn is_cache_schema_drift_error(err: &anyhow::Error) -> bool {
+    // external-prose-classifier: cache::is_cache_schema_drift_error
     err.chain().any(|cause| {
         let msg = cause.to_string().to_lowercase();
         msg.contains("no such column")
