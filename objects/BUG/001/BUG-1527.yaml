@@ -1,0 +1,82 @@
+id: 01a0c251-ab0f-7760-96bc-07fb52373e62
+spec_id: BUG-1527
+agreed_id: BUG-1527
+title: A drain dispatched for one spec accepts an implementer that swapped to a different spec's branch, marks the DISPATCHED spec Done on the other spec's PR, and contradicts itself three lines later
+description: |
+  Observed by the driver advisor 2026-09-20 21:47-21:52 local, on a rework drain of
+  BUG-1442, against main at 0b474a66d1. This is the fourth distinct way a drain round
+  ends with an untouched PR head, and it is the only one that writes a FALSE Done.
+
+  WHAT WAS DISPATCHED. aida queue work BUG-1442 --auto-complete=through-ci --no-human=both
+  BUG-1442 is "aida show in TOON collapses every relationship type to Related", PR #2027,
+  branch bug-1442-work at 6c692a496b.
+
+  WHAT HAPPENED, from the run log, consecutive lines:
+
+    branch swapped during the implementer phase: `bug-1442-work` -> `bug-1485-work`
+     (lease updated)
+    BUG-1442 was still In Progress after PR-2030 opened - marked Done (the implementer
+     skipped `aida queue done`)
+    phase 1 complete
+    phase 1 was dispatched for BUG-1442 but the PR credits BUG-1485 - crediting BUG-1485,
+     BUG-1442 stays queued
+
+  THE THIRD AND FOURTH LINES CONTRADICT EACH OTHER. Line two marks BUG-1442 Done on the
+  strength of "PR-2030 opened". Line four correctly recognises that PR-2030 credits
+  BUG-1485, not BUG-1442. Nothing undoes the Done. The drain had the fact that would have
+  prevented the write and wrote it anyway, then printed the fact.
+
+  PR-2030 IS NOT BUG-1442'S PR AND NEVER WAS:
+
+    PR #2030  branch bug-1485-work  05969aa3978d  "preserve child lease handoff (BUG-1485)"
+    PR #2027  branch bug-1442-work  6c692a496b7a  "preserve TOON relationship semantics (BUG-1442)"
+
+  The two specs are unrelated - one is a TOON rendering defect, the other an orchestrator
+  lease-matching defect.
+
+  END STATE BEFORE CORRECTION: BUG-1442 status Done, its own branch bug-1442-work
+  untouched at 6c692a496b, its own PR #2027 head unchanged, and an outstanding
+  RequestChanges verdict against it. A spec with unaddressed review findings reading as
+  work-finished-awaiting-merge. Corrected by hand with aida queue rework BUG-1442.
+
+  WHY THE SWAP HAPPENED IS NOT ESTABLISHED. The log shows a vendor error immediately
+  before it: "codex_models_manager: failed to refresh available models: timeout waiting
+  for child process to exit". Whether that is causal or coincident is unknown and this
+  spec does not assert it. The defect here is the drain ACCEPTING the swap, not whatever
+  made the implementer swap.
+
+  DISTINCT FROM THE THREE ALREADY FILED, and all four share the symptom of an unchanged
+  PR head:
+    BUG-1524  drain continues after phase 1 REFUSES to launch          (no implementer ran)
+    BUG-1522  the no-op guard is unreachable on the paths taken        (nothing notices)
+    BUG-1525  the BRIEF generator emits a fresh-lineage Setup block    (brief lane only)
+    this one  the implementer ran, on the WRONG SPEC, and the dispatched spec was closed
+              on the other spec's PR
+
+  BUG-1522's guard would not catch this one either: a PR did open and a head did move -
+  just not the dispatched spec's. A head-moved check that does not verify WHICH branch
+  moved passes this.
+
+  ## Acceptance
+  1. When the implementer's branch at the end of phase 1 is not the branch phase 1 was
+     dispatched for, the drain does NOT write any status to the dispatched spec.
+  2. The dispatched spec is left claimable and surfaced as an anomaly, with the swap
+     named: dispatched X on branch A, implementer ended on branch B crediting Y.
+  3. A Done write is gated on the PR crediting the DISPATCHED spec, not on any PR having
+     opened during the phase.
+  4. The two contradictory log lines cannot both be emitted: the credit check that
+     produces "the PR credits Y" runs BEFORE the status write, not after it.
+  5. Work the implementer genuinely produced for the other spec is not discarded - the
+     swap is reported, and the other spec's PR stands.
+  6. A test drives a phase-1 outcome whose ending branch differs from the dispatched
+     branch and asserts the dispatched spec's status is unchanged. MockPhaseDriver in
+     auto_complete.rs is the instrument.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:55:27.247068049Z
+modified_at: 2026-09-21T04:55:27.247068049Z
+req_type: Bug
+tags:
+- parent:EPIC-62 drain orchestrator substrate-truth severity:major
