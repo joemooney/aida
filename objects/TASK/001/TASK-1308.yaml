@@ -25,7 +25,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:50:10.607837210Z
-modified_at: 2026-09-21T01:50:10.607837210Z
+modified_at: 2026-09-21T01:50:32.119586589Z
 req_type: Task
 tags:
 - batch:night-0920 seat-parity dogfood from:review-pr-1984
+relationships:
+- rel_type: Parent
+  target_id: 01a0b5fe-5f73-78d3-8529-b9a0f585470e
+  created_at: 2026-09-21T01:50:32.119582950Z
+  created_by: joe
