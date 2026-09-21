@@ -2,7 +2,7 @@ id: 01a0c1b3-524f-7c93-b9af-4d821d2d0571
 spec_id: ADR-48
 agreed_id: ADR-48
 title: 'Preflight gates PR publication structurally: the orchestrator opens the PR after guards pass, the implementer never does'
-description: |
+description: |-
   CONTEXT
 
   The drain's implementer opens its own pull request (`aida-pr/SKILL.md` step 10, `gh pr create`), and the pre-flight guards — which check the branch would survive CI — run afterwards, at `aida-cli-lib/src/lib.rs:87798-87801`. By the time a guard can object, the PR is already public: CI has started and reviewers may have been notified.
@@ -41,12 +41,21 @@ description: |
   RECORDED BY
 
   The product seat, from an operator decision taken in session 2026-09-20 via a structured design-fork prompt. This is a relay: the advisor and reviewer seats did not witness it directly.
+
+
+  TWO CONSEQUENCES ADDED BY THE ADVISOR ON ACCEPTANCE, 2026-09-20 19:10. Neither changes the decision; both are ways it fails quietly if unstated.
+
+  A. THE FAIL-OPEN GATE BECOMES A PREREQUISITE, NOT A PARALLEL CLEANUP. decide() in implementer_preflight.rs collects only GuardResult::Failed and lets a wildcard swallow Skipped, so every guard skipping yields Open. Skipped is produced for six conditions, including CI workflow missing and CI workflow unreadable - which map EVERY named guard to Skipped at once. Under today's flow that defect means a gate fails to stop an already-public PR. UNDER THIS DECISION IT MEANS A SKIPPED GUARD IS WHAT AUTHORISES PUBLICATION. The orchestrator asks preflight whether to create the PR; preflight answers Open when it ran nothing; the PR is created. So this design makes the fail-open defect strictly more load-bearing than it is today, and BUG-1507 must land before or with the implementation. Shipping ADR-48 on top of the current decide() would convert a missing ci.yml into automatic publication.
+
+  B. THE DECISION DELIBERATELY CREATES THE STATE BUG-1307 SAYS IS INVISIBLE. 'shelve; no PR exists' leaves a pushed branch carrying real commits with nothing pointing at it. BUG-1307 records that commits stranded on branches with no PR are reported nowhere - twelve such branches from 13-18 September carried unreviewed work. Today that state is an accident; under this decision it is the correct and expected outcome of a refused guard, and its volume goes up. The shelve must therefore make the branch findable - named in the shelve record, in the findings, and in whatever surface an operator reads - or a working gate becomes a quiet work-loss mechanism. This is the same distinction the product seat raised as consequence 1, extended: it is not only that recovery tooling must tell 'guard refused' from 'orchestrator died', it is that SOMETHING must report the branch at all.
+
+  ACCEPTED by the advisor seat 2026-09-20 19:10. The decision is sound, the alternatives are recorded with reasons rather than dismissed, and the ADR correctly labels itself a relay - the advisor and reviewer seats did not witness the operator decision directly, and the text says so.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:02:29.839553987Z
-modified_at: 2026-09-21T02:02:55.664903191Z
+modified_at: 2026-09-21T02:06:22.724808235Z
 req_type: Decision
 tags:
 - operator-decision
