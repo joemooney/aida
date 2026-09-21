@@ -207,9 +207,15 @@ pub(crate) fn rework_ready_rows(
 /// How a recorded sha relates to the current head.
 ///
 /// THREE states, not two. Verdict writers record full or abbreviated shas
-/// depending on the path — 41 of 147 sha-bearing records were abbreviated when
-/// the corpus was swept — so a short-vs-long PAIR IS NOT A MOVED HEAD and must
+/// depending on the path, so a short-vs-long PAIR IS NOT A MOVED HEAD and must
 /// be compared on the shared prefix.
+///
+/// THE POPULATION THIS FUNCTION CAN RECEIVE is only those records carrying a
+/// `reviewed_sha`; a head-only legacy record is dropped upstream and never
+/// reaches here. Of those, 37 of 107 were abbreviated when swept 2026-09-21.
+/// The predicate and the date are stated because the same corpus answers 41 of
+/// 149 under a wider predicate that includes records this code cannot see, and
+/// a bare count outlives the question it was measured to answer.
 ///
 /// `Incomparable` is the state a boolean could not express, and its absence was
 /// a real defect: below the prefix floor the old predicate returned "not equal",
