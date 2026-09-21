@@ -1,0 +1,61 @@
+id: 01a0c604-bf29-7332-a9b4-d4c03997058b
+spec_id: TASK-1425
+agreed_id: TASK-1425
+title: 'The live GitLab forge smoke cannot authenticate from a GitHub-hosted runner: Cloudflare Access answers the API with a sign-in page, and no branch change can clear it'
+description: |-
+  THE LIVE GITLAB FORGE SMOKE CANNOT PASS FROM A GITHUB-HOSTED RUNNER, BECAUSE CLOUDFLARE ACCESS ANSWERS THE API WITH A SIGN-IN PAGE. This is an infrastructure decision, not implementer work, and it has been blocking PR #1978 since 2026-09-19 while four review rounds were spent on the branch.
+
+  MEASURED 2026-09-21 15:08 MST, run 35660569766 / job 106534553599, dispatched by the advisor with `gh workflow run cross-platform.yml --ref task-1273-work`. Verbatim from the job log:
+
+      thread 'forge::tests::gitlab_live_mr_round_trip' panicked at aida-cli-lib/src/forge.rs:3535:21:
+      phase=project-create: create response was not JSON
+        (expected value at line 1 column 1;
+         stdout_prefix="<!DOCTYPE html>\n<html>\n  <head>\n    <title>Sign in ・ Cloudflare ...")
+
+  WHAT IS AND IS NOT ESTABLISHED:
+    - THE MIRROR IS REACHABLE. The job's preflight passed and set run=true; it did not skip.
+    - `AIDA_GITLAB_TOKEN` IS PROVISIONED AND IS NOT THE PROBLEM. It authenticates to GitLab and
+      the request never reaches GitLab.
+    - CLOUDFLARE ACCESS SITS IN FRONT of gitlab.joemooney.com and demands its own credential,
+      which a GitHub-hosted runner does not carry. The HTML title is the proof.
+    - The failure is at the FIRST live step (project-create), so nothing downstream has been
+      exercised and no other conclusion about the smoke test's correctness can be drawn from it.
+
+  TWO REMEDIES, BOTH OPERATOR DECISIONS. I am NOT choosing between them; this spec exists so the choice is made deliberately instead of by another four rounds of branch rework.
+
+    (a) PROVISION A CLOUDFLARE ACCESS SERVICE TOKEN for the runner - CF-Access-Client-Id and
+        CF-Access-Client-Secret as repo secrets, sent as headers alongside the GitLab token.
+        Keeps the job on ubuntu-latest. Cost: a long-lived credential for the perimeter now
+        exists in GitHub Actions secrets, which widens what a compromised workflow reaches.
+
+    (b) MOVE THE JOB TO THE SELF-HOSTED RUNNER that already sits behind the perimeter. No new
+        credential crosses the boundary. Cost: the nightly now depends on a machine being up,
+        and a self-hosted runner executing PR-triggered workflows is its own exposure.
+
+  The security trade is real in both directions and is the reason this is not a mechanical fix.
+
+  WHY IT GETS ITS OWN SPEC RATHER THAN A NOTE ON TASK-1273. TASK-1273's headline acceptance is a green live smoke. That acceptance is UNREACHABLE BY ANY BRANCH CHANGE, and leaving it on the spec produced the failure mode this board has been cataloguing: a reviewer refused it four times, correctly, against a gate nobody could clear, while the implementer kept reworking the only surface it could act on. A CORRECT REFUSAL AGAINST AN UNCLEARABLE GATE IS A COORDINATION FAILURE, NOT AN IMPLEMENTATION ONE. Separating them lets TASK-1273's remaining real work - the four cwd-resolving CI-probe call sites - be judged and shipped on its merits.
+
+  Acceptance:
+  - The `GitLab live forge smoke` job reaches past `phase=project-create` against the real mirror,
+    from whichever runner the chosen remedy selects.
+  - The chosen remedy is recorded as an ADR, including the security trade that was accepted.
+    Both options widen something; which one was widened should be written down.
+  - DEMONSTRATE, DO NOT ASSERT: a run whose log shows the live phases executing. A green job that
+    skipped is not evidence - the job's preflight can set run=false and report success having done
+    nothing, which is the failure mode this spec was almost written against.
+  - docs/forge-providers.md records how the live smoke authenticates, so the next person does not
+    rediscover the perimeter.
+
+  Filed by the driver-advisor seat after dispatching the run that produced the evidence. Related:
+  TASK-1273 (the smoke test itself), and reference notes on the existing self-hosted gitlab mirror
+  runner, which is what makes (b) cheap if it is chosen.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:09:54.985425283Z
+modified_at: 2026-09-21T22:09:54.985425283Z
+req_type: Task
+tags:
+- forge gitlab ci infrastructure
