@@ -83,7 +83,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:45:07.028261694Z
-modified_at: 2026-09-21T04:51:56.385876179Z
+modified_at: 2026-09-21T04:52:16.202035555Z
 req_type: Bug
 tags:
 - agent-briefs
@@ -95,3 +95,61 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-21T04:45:11.103979181Z
+comments:
+- id: 01a0c24e-c0ca-77b2-9347-b8e8c74570f2
+  author: joe
+  content: |-
+    [aida:advisor-disposition] Approved and queued. Confirmed live, ten pending briefs
+    patched by hand as interim protection. One scope correction, with evidence.
+
+    CONFIRMED, IN MY OWN BRIEF. I wrote a rework brief for PR #2035 (BUG-1470) at 04:41Z
+    and the generator appended:
+
+        git worktree add /home/joe/ai/aida-bug-1470 -b bug-1470 origin/main
+
+    PR #2035 is on bug-1470-work. So the brief I had just sent to an implementer would have
+    sent it to a lineage without the PR's commits. The reviewer found this by reading that
+    brief, which is the only reason it was caught before pickup.
+
+    BLAST RADIUS, MEASURED RATHER THAN ESTIMATED. Swept every brief file for the pattern,
+    then narrowed to pending briefs whose spec has a <spec>-work branch on origin. TEN
+    pending briefs across seven specs: BUG-1297 (3 files), TASK-1298 (2), TASK-1293,
+    BUG-1291, BUG-1452, BUG-1454, STORY-1391, plus BUG-1470. All ten now carry a hand-written
+    STOP banner naming the right branch, the patch-id check before realigning, and a
+    head-moved confirmation. That is a stopgap on ten files, not a fix.
+
+    A NOTE ON THE SWEEP ITSELF, because it nearly produced a false count. My first pass
+    flagged BUG-1470 as still affected after I had already fixed it — the detector matched
+    the wrong command inside the warning text that QUOTES it as wrong. Grep cannot tell a
+    live instance from a quotation of one. I re-ran excluding files carrying the banner
+    marker. Anyone verifying this fix by grepping for the pattern will hit the same trap.
+
+    SCOPE CORRECTION — THIS DOES NOT EXPLAIN THE BUG-1460 NO-OPS, and the distinction
+    matters for fix order.
+
+    It was proposed that this bug is the cause behind the BUG-1460 / PR-2034 empty rounds
+    at 04:30 and 04:32. It is not, and the evidence is direct:
+
+      - Those were DRAIN runs, not brief-driven runs. The drain's phase 1 does not use the
+        brief's Setup block. Its log reads: "branch bug-1460-work already exists - checking
+        it out".
+      - The third run, after I realigned the local branch, committed 2cb2c15c42. That commit
+        is on origin/bug-1460-work and is NOT an ancestor of origin/main - verified with
+        git branch -r --contains and git merge-base --is-ancestor. Had the drain forked from
+        main, the commit could not have landed there.
+      - Runs 1 and 2 logged their own cause explicitly: phase 1 REFUSED to launch because
+        local bug-1460-work had diverged from origin, and the drain then continued from the
+        CI gate anyway. That is BUG-1524.
+
+    So there are THREE defects, on two different surfaces, not two:
+
+      BUG-1525  the BRIEF generator emits a fresh-lineage Setup block  (brief-driven work)
+      BUG-1524  the DRAIN continues after a phase-1 launch refusal     (drain-driven work)
+      BUG-1522  the no-op guard is unreachable on the paths either takes
+
+    They share one symptom - an unchanged PR head reported as a completed round - which is
+    why they were collapsed. Fixing this spec repairs the brief path and leaves the drain
+    path intact.
+  created_at: 2026-09-21T04:52:16.202035555Z
+  modified_at: 2026-09-21T04:52:16.202035555Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
