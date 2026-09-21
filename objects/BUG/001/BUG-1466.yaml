@@ -2,7 +2,7 @@ id: 01a0bffa-3c62-79a2-a184-b8ca39402b76
 spec_id: BUG-1466
 agreed_id: BUG-1466
 title: 'aida review record --pr writes a PR handshake with no provenance: reviewed_sha, reviewed_branch, recorded_at and recorded_by are all dropped (452 of 481 files affected)'
-description: |-
+description: |
   A review verdict written with "aida review record <SPEC> --verdict X --pr N" produces TWO files from one invocation, and only one of them carries provenance:
 
     .aida/review-verdicts/<SPEC>.json  -> reviewed_sha, reviewed_branch, recorded_at, recorded_by  ALL PRESENT
@@ -32,17 +32,13 @@ description: |-
   - A test covers approved-verdict-at-stale-sha and asserts the drain does not treat it as reviewed.
   - The bug_775_commits_ahead_tests fixtures are updated to the provenance-carrying shape so they stop encoding the old contract.
   - Backfill is NOT required for the 452 existing files; they stay as historical records.
-  - Add ONE assertion to the EXISTING test rather than creating a new one: `assert_eq!(verdict.reviewed_sha.as_deref(), Some("abc123"));` in pr_keyed_reviewer_verdict_arms_rework_guard. That test asserts the returned verdict's KIND and not WHICH verdict was returned. Since this spec is about reviewed_sha being unchecked, pinning identity rather than kind asserts the property the fix is about. Salvaged from PR #2029 before it closes; the rest of that branch is redundant with main."
-  execution_mode: drain
-  relationships[2]{rel,id,title}:
-    Related,BUG-1460,"The drain enters the reviewer phase with no terminal CI result, against a head that postdates the CI phase — so specs shelve on verdicts rendered before the build finishes, one of them 3.5 minutes bef"
-    Related,PRIN-5,"A coordination surface must distinguish absent evidence from good evidence, because computing a verdict over what is present always errs toward reassurance
+  - Add ONE assertion to the EXISTING test rather than creating a new one: `assert_eq!(verdict.reviewed_sha.as_deref(), Some("abc123"));` in pr_keyed_reviewer_verdict_arms_rework_guard. That test asserts the returned verdict's KIND and not WHICH verdict was returned. Since this spec is about reviewed_sha being unchecked, pinning identity rather than kind asserts the property the fix is about. Salvaged from PR #2029 before it closes; the rest of that branch is redundant with main.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-21T05:31:03.219148478Z
+modified_at: 2026-09-21T05:47:32.550238303Z
 req_type: Bug
 tags:
 - batch:night-0920
