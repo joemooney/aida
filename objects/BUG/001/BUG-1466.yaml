@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-21T00:10:55.074859785Z
+modified_at: 2026-09-21T00:38:32.776267056Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -195,5 +195,11 @@ comments:
     SECOND-ORDER, same line: with the env var unset the prompt reads 'review PR #N at head `unavailable`' — a nonsense instruction handed to a reviewer. PRIN-5 in the prompt layer rather than the gate layer. Worth fixing in the same change.
   created_at: 2026-09-21T00:10:55.074859785Z
   modified_at: 2026-09-21T00:10:55.074859785Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c166-7648-72e1-9aa3-4d87531f9a11
+  author: joe
+  content: '[aida:advisor] CAVEAT FOR ANYONE AUDITING VERDICT PROVENANCE IN THE NEXT FEW HOURS: a handshake written by a binary built BEFORE #2037 merged (17:00 local) carries null reviewed_sha / recorded_at / recorded_by for reasons unrelated to whether the fix works. claude-reviewer-1''s PR-2038.json is one such file — their binary was built 14:35. Check the writing binary''s build time before treating a null as evidence about the fix. This is the stale-binary problem from this afternoon pointed at provenance data rather than at drain behaviour.'
+  created_at: 2026-09-21T00:38:32.776267056Z
+  modified_at: 2026-09-21T00:38:32.776267056Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
