@@ -48,9 +48,9 @@ description: |-
 
   OPEN QUESTION ANSWERED BY THE ADVISOR 2026-09-20 19:33: ON BUILD FAILURE, REFUSE TO LAUNCH.
 
-  AND THE STATED COST OF REFUSING DOES NOT EXIST. The question was framed as a trade: refusing converts a build break into a work stoppage, versus launching stale to keep work moving. The first half is false. `Build (ubuntu-latest)` runs `cargo build --workspace` (.github/workflows/ci.yml:121) and is a REQUIRED check on main. So if HEAD does not build, every PR the wave produces fails its required check and nothing merges. The stoppage is not caused by the gate - IT ALREADY EXISTS, caused by main being broken. The gate only relocates the discovery from "every member's CI fails, one by one, tens of minutes each" to "the wave does not start, immediately, with the reason named".
+  AND THE STATED COST OF REFUSING IS FAR SMALLER THAN IT APPEARS - though it is NOT zero, corrected 2026-09-20 19:40. The question was framed as a trade: refusing converts a build break into a work stoppage, versus launching stale to keep work moving. The first half is false. `Build (ubuntu-latest)` runs `cargo build --workspace` (.github/workflows/ci.yml:121) and is a REQUIRED check on main. So if HEAD does not build, every FULL-CI member the wave produces fails its required check and nothing merges. THE EXCEPTION, and it is why this is a bounded cost rather than none: the build step is conditional on `full_ci` (ci.yml:118-121), an inverted path filter (ci.yml:45-53) matching everything EXCEPT docs/**, **/*.md, LICENSE and .gitignore. A docs-only or markdown-only PR takes the short-circuit at line 56, skips build, test, fmt and clippy entirely, and `Build (ubuntu-latest)` PASSES WITHOUT COMPILING. Those members would merge normally on a broken main, and refusing the wave blocks them. The stoppage is not caused by the gate - IT ALREADY EXISTS, caused by main being broken. The gate only relocates the discovery from "every member's CI fails, one by one, tens of minutes each" to "the wave does not start, immediately, with the reason named".
 
-      So refusing costs nothing that is not already lost, and buys the failure being visible at the point of decision instead of N members later. Launching stale, meanwhile, spends a whole wave on orchestration semantics known to be superseded - which is exactly the two incidents this spec exists to prevent.
+      So refusing costs ONLY the docs-only members - four path patterns' worth of exception - and buys the failure being visible at the point of decision instead of N members later. The trade is still overwhelmingly right, but the spec must not claim the cost is zero: that version is falsifiable by a single docs PR, and someone will find it. Launching stale, meanwhile, spends a whole wave on orchestration semantics known to be superseded - which is exactly the two incidents this spec exists to prevent.
 
   AND THE 'LOUD RECORD' ALTERNATIVE IS THE ONE WITH DIRECT EVIDENCE AGAINST IT. `aida pull` already prints "your aida binary is now behind HEAD". It was ignored twice on 2026-09-20 - once by the seat that had written itself a rule about exactly this. A control whose enforcement is a message the operator may ignore has been tested today, twice, and failed both times. "Launch stale with a loud record" is that same control with a louder message, and this spec's own evidence section is the argument against it.
 
@@ -67,7 +67,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:29:06.068323940Z
-modified_at: 2026-09-21T02:31:40.250851603Z
+modified_at: 2026-09-21T02:37:35.508391414Z
 req_type: Story
 tags:
 - drain-safe
