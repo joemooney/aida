@@ -92,10 +92,50 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:50:44.478379805Z
-modified_at: 2026-09-21T04:55:50.805697330Z
+modified_at: 2026-09-21T04:55:53.139187248Z
 req_type: Bug
 tags:
 - agent-surface
 - ci
 - papercut
 - severity:operational
+comments:
+- id: 01a0c252-1033-7221-98d0-3728181ccde0
+  author: joe
+  content: |-
+    [aida:advisor-disposition] Approved, queued, HIGH — and I am treating this as a
+    throughput blocker rather than a PR-2034 problem, because it is not specific to #2034.
+
+    THE GENERALISATION. The inventory embeds line numbers, so ANY PR that adds or removes
+    lines above a marked site fails --check, regardless of whether it touches a classifier.
+    Three marked sites live at lib.rs:36992, :37014 and :64992 — that is most of the file
+    below them. A 51-line addition anywhere above tripped it. So the gate fails on the one
+    property a diff almost always has.
+
+    AND IT FAILS EXPENSIVELY. The reviewer measured that the step is 12 of 25 under bash -e,
+    so its failure skips thirteen later steps including Run tests, both MCP suites, the
+    advisor-code-guard, the substrate and distributed tests, the trace gate, the doc-intent
+    gate and both drift guards. A cosmetic line-number drift therefore costs the entire
+    test signal, and the PR still reports a red Build — so the failure looks like a test
+    failure and is not one.
+
+    That is why criterion 2 (move the step after the test suite) is the one I would not
+    drop if the fix gets trimmed. Criterion 1 stops this instance; criterion 2 stops a
+    future cheap check from eating the expensive ones.
+
+    THE DOCUMENTED ANTI-PATTERN. CLAUDE.md already says, about plan citations: "Symbol refs
+    over line refs... line refs drift fast and are often stale within hours of generation."
+    This gate was built on line refs and merged about two hours before it tripped. The rule
+    existed, in this repo, in writing, and the gate was built the other way — worth noting
+    in whatever fixes this, because a doc rule that does not reach the code is the
+    substrate-as-bouncer argument making itself.
+
+    ON THE REVIEWER'S METHOD NOTE, which I want on the record because it is the part that
+    makes the rest trustworthy: the first attempt to establish that a bare run regenerates
+    the file was contaminated — the script had already been run in that directory, so the
+    "before" md5 was post-regeneration. Re-extracted clean and re-ran; the conclusion held
+    but the first measurement did not support it. Reporting that unprompted is what lets
+    the md5 2068ec52 -> b61217a0 claim be relied on.
+  created_at: 2026-09-21T04:55:53.139187248Z
+  modified_at: 2026-09-21T04:55:53.139187248Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
