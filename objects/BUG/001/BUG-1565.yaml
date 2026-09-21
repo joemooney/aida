@@ -2,7 +2,7 @@ id: 01a0c55c-c5ba-7352-bed8-bc464d3ae50a
 spec_id: BUG-1565
 agreed_id: BUG-1565
 title: 'A test merged tonight breaks the Windows build outright: an ungated std::os::unix import in auto_bump_done_tests is a compile error, not a test failure'
-description: |-
+description: |
   PR 2040 (BUG-1454) landed a test that cannot COMPILE on Windows. This is a build break, not a failing test: it takes the whole aida-cli-lib test target with it, so every other test on that leg stops reporting.
 
   THE LINE, aida-cli-lib/src/tests/auto_bump_done_tests.rs in open_pr_for_same_spec_defers_auto_bump:
@@ -30,12 +30,68 @@ description: |-
   - The minimal rustc two-target probe above is recorded in the fix so the next reader can re-run it without rebuilding the workspace.
 
   WHY THIS MATTERS BEYOND THE ONE LINE, and it belongs on BUG-1556's evidence rather than being argued here: this is a portability defect arriving on main tonight, caught only because a cross-platform run on an unrelated PR head was being read for another reason. PR CI is Linux-only by design, the portability ratchet greps Rust TEST code for path and shell assumptions but does not catch a cfg-less std::os::unix import, and the report-only Windows target check cannot run to completion on this workspace. All three guards were present and none of them could see it.
+  ===============================================================================
+  RETRACTION, BOTH SEATS: THE "RESTORED SIGNALS" NUMBERS ARE WRONG AND THE
+  CONFIRMING RUN NEVER TESTED ANYTHING. The fix is still correct; the evidence
+  for it is not the run. Retracted by claude-reviewer-1, verified by the advisor.
+  ===============================================================================
+
+  NO CROSS-PLATFORM RUN EXISTED WHILE THE BREAK WAS ON MAIN. Verified independently
+  by the advisor against the GitHub API:
+
+      #2040 merged (break introduced)   2026-09-21T18:49:09Z
+      #2058 merged (fix)                2026-09-21T19:25:29Z
+      cross-platform runs on main       18:13:54Z ... then 19:27:22Z
+
+  A THIRTY-SIX MINUTE WINDOW WITH NOTHING IN IT. THE COMPILE FAILURE WAS NEVER
+  OBSERVED ON WINDOWS.
+
+  WHAT THAT INVALIDATES:
+  - "5202 previously-dark tests now run and all pass" is WRONG. The aida-cli-lib
+    suite ran in every archived Windows log: 5176 at #2053's branch, 5176 at
+    #2056's, 5179 at the probe run, 5202 post-fix. IT WAS NEVER DARK. The
+    difference between 5176 and 5202 is ordinary suite growth across a day of
+    merges, not restored signal.
+  - "957 restored" is WRONG AND WORSE. 957 is aida-CORE's suite. The ungated
+    import was in aida-cli-lib/src/tests/auto_bump_done_tests.rs, so aida-core
+    could not have been the target that failed to compile — that figure names the
+    one suite that was definitely unaffected throughout. The advisor quoted it.
+  - "PREDICTION CONFIRMED" is WEAKER THAN STATED. The discriminator was "the
+    Windows leg REACHES the test phase rather than dying at compile". It reached
+    the test phase — AND IT ALSO REACHED THE TEST PHASE AT 6560f94cbd, BEFORE THE
+    BREAK EXISTED. A DISCRIMINATOR THAT PASSES IDENTICALLY WITH AND WITHOUT THE
+    DEFECT IS NOT DISCRIMINATING. The prediction was never at risk.
+
+  WHAT STILL STANDS, unchanged:
+  - THE FIX IS CORRECT. An ungated `std::os::unix` import does take its test
+    target down; the implementer's TWO-TARGET MINIMAL REPRODUCTION demonstrates
+    it directly — one file containing only the import, both targets, both
+    directions. That was always the load-bearing evidence and it does not depend
+    on any CI run.
+  - The blast-radius reasoning is a sound INFERENCE. What was never sound is
+    attaching a count to it.
+  - The merge-side and review-side diff greps are unaffected; they caught and
+    would catch the class regardless of whether a run ever observed it.
+
+  THE SHAPE OF THE ERROR, named by the seat that made the larger half of it: a
+  mechanism that was TRUE, a reach for a number to make it CONCRETE, and the
+  number taken FROM THE ONLY RUN AVAILABLE rather than from a COMPARISON. That is
+  quoting a count without its baseline — which is the exact correction this same
+  seat made six hours earlier on #1999, where the finding was that a 5s figure was
+  not a baseline because it measured a function skipping 94% of its work. The rule
+  was stated, applied to someone else's number, and then broken on its author's
+  own, inside a message announcing a confirmation.
+
+  AND THE ADVISOR'S HALF: I repeated the 957 figure into this spec as "the point
+  is the 957" WITHOUT CHECKING WHICH CRATE IT BELONGED TO. It was the number
+  adjacent to the failure I was reading. The corrected suite attribution came from
+  the other seat, not from me re-reading my own citation.
 status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:06:26.618364993Z
-modified_at: 2026-09-21T19:49:40.946793905Z
+modified_at: 2026-09-21T19:56:15.420841580Z
 req_type: Bug
 tags:
 - aida:tests
