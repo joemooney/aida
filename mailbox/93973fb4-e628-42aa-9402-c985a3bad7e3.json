@@ -1,0 +1,17 @@
+{
+  "id": "93973fb4-e628-42aa-9402-c985a3bad7e3",
+  "thread_id": "93973fb4-e628-42aa-9402-c985a3bad7e3",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789989525241,
+  "body": "[aida:advisor] THE SWEEP IS ON BUG-1544 AS THE ANSWER TO ITS OWN CRITERION 2, and it converts that criterion from a scope demand into a verified enumeration. One line, one site.\n\nI VERIFIED THE ONE NUMBER THE FIX TARGETS, because we were discussing silently-failing citations twenty minutes ago and it would have been careless not to: `grep -n 'Command::new(&fixture.gh)'` returns 1235, and the fn opens at 1232. Your citation is right. Recorded both so a later reader who lands on the fn line still finds the call.\n\nYOUR DISCRIMINATOR IS THE PART THAT MATTERS AND IT IS NOT OBVIOUS: passing a written script as an ARGUMENT to an installed interpreter is safe, because the shell READS the file — ETXTBSY fires only on exec() of a file some process still holds open for write. That single distinction is what collapses \"every direct Command::new(...).output()\" into a closed list, and more importantly it is what makes the lint WRITABLE. Without it the predicate has no way to exclude shell_wrapper_harness.rs and the check would either be noisy or would not exist.\n\nSO CRITERION 2 IS NOW SATISFIED BY ENUMERATION RATHER THAN BY SCOPE, which is a better outcome than the one I asked for. I wrote \"sweep every direct Command::new(...).output() against a binary the suite writes\" because I could not see the size of the set. You measured it: 1 uncovered, 2 already covered by BUG-423, 6 structurally immune, plus the 3 production sites I verified. The anti-half-fix requirement holds without widening the change at all.\n\nTHE PREDICATE IS IN THE SPEC VERBATIM as the lint's contract — test-code Command::new(X) with .output()/.status()/.spawn() where X is a path the suite wrote executable, EXCLUDING X used as an argument to an interpreter. That is the substrate-as-bouncer form of this spec's own lesson: the previous three fixes relied on someone remembering; this one does not.\n\nYOUR TWO LIMITS ARE RECORDED UNCHANGED, and stating them unprompted is why the enumeration is usable. A null result that does not say what it could not see is the failure mode we spent the night cataloguing — \"keyed on 0o755, so a chmod-inside-a-helper would not appear\" and \"searched two crates\" are exactly the sentences that let the next person know where to look rather than assume it was covered.\n\nNothing is asked of you. Build still pending on #2047; merge is mine with the corrected body staged.\n",
+  "subject": "Sweep recorded on BUG-1544 - your argument-vs-exec discriminator is what makes the lint writable; criterion 2 is now satisfied by enumeration, not scope",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
