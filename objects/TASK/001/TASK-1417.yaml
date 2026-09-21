@@ -1,0 +1,39 @@
+id: 01a0c3eb-cab5-7fc3-9462-efccaadf4b4d
+spec_id: TASK-1417
+agreed_id: TASK-1417
+title: aida show human collapses relationships above five to a count while TOON enumerates, and nothing in either output says the human view withheld rows
+description: |-
+  VERIFIED IN CODE BEFORE FILING, not taken on report. aida-cli-lib/src/git_backend_cmd.rs, the TASK-102 block:
+
+      const INLINE_THRESHOLD: usize = 5;
+      const TRUNCATE_AT: usize = 10;
+      if *rels || total <= INLINE_THRESHOLD {  ... enumerate ... }
+      else { ... print the count + a pointer to aida rel list ... }
+
+  So on aida show, at six or more relationships and without --rels, the HUMAN surface prints a count while TOON enumerates the rows. The two projections of the same spec disagree on whether rows exist at all, and the disagreement is threshold-dependent: identical below six, divergent above.
+
+  THIS IS NOT PROPOSED AS A DEFECT. TASK-102 chose the collapse deliberately and the reason is good - a highly-connected spec would flood a human view, and the agent surface is exactly where full enumeration is wanted. The asymmetry is defensible. What is missing is that it is not DECLARED anywhere a reader can see it, and the surfaces do not say which one they are.
+
+  WHY IT IS WORTH A SPEC ANYWAY. A reader who compares the two projections of one spec and finds different content has no way to tell a deliberate view policy from a bug, and the default reading of "two surfaces disagree" is that one is wrong. That is the PRIN-7 shape pointed at a product surface instead of a gate: two facts collapsed into one presentation, with nothing telling the reader which they are looking at.
+
+  HOW IT SURFACED. claude-product-1 found it while fixing PR #2027 (BUG-1442), whose refusal named "extra collapsed rows" as one of the divergences a substring-searching journey test could not detect. The collapse the refusal was describing as a test blind spot turns out to exist in the product, one layer out. They deliberately kept the test fixture at three relationships so the test measures what it claims rather than straddling the threshold, and did NOT change the product in that PR. That was the right call and this spec exists so the observation is not lost.
+
+  SMALLEST SLICE, which is what is proposed here: make the collapse SELF-DECLARING rather than making the surfaces agree.
+    - the human count line already points at aida rel list; it should also say that this is a view limit, not the full set
+    - whatever the wording, a reader must be able to tell from the output alone that rows were withheld by policy
+
+  EXPLICITLY OUT OF SCOPE for this spec: changing the threshold, applying it to TOON, or making the two projections identical. Making TOON collapse would damage the agent surface, which is the one consumer that wants every edge.
+
+  REVISIT TRIGGER for the larger question - should any two projections of one spec ever differ in CONTENT rather than only in formatting: revisit if a second instance of content-divergence between human and TOON is found in a different command. One instance is a local view policy; two is a surface-contract question worth answering once for all commands.
+
+  ACCEPTANCE:
+  1. With six or more relationships and no --rels, the human output states that rows were withheld by a view limit, distinguishably from a spec that genuinely has only a count.
+  2. TOON is unchanged - it still enumerates.
+  3. A test pins the boundary at exactly the threshold: five enumerates, six collapses with the declaration present.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T12:23:25.109661267Z
+modified_at: 2026-09-21T12:23:25.109661267Z
+req_type: Task
