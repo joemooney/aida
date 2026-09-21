@@ -37,12 +37,12 @@ description: |
   - Whichever form ships, `aida doctor check <name>` and the error message must agree for every category, checked mechanically rather than by reading.
 
   Not in scope: BUG-1552 (bare `aida doctor` exits 0 on thousands of findings) is a separate defect in the same command and is not fixed by this.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:38:58.871542306Z
-modified_at: 2026-09-21T15:39:12.021568980Z
+modified_at: 2026-09-21T16:59:49.186795099Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
