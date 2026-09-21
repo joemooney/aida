@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:06:26.618364993Z
-modified_at: 2026-09-21T19:27:53.214335648Z
+modified_at: 2026-09-21T19:27:58.010365691Z
 req_type: Bug
 tags:
 - aida:tests
@@ -45,3 +45,32 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-21T19:06:30.403578372Z
+comments:
+- id: 01a0c570-7a3a-7352-a5c2-b02f4a7b9335
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2058 (BUG-1565) — the Windows build break introduced by #2040
+    merged: 9400f6631028
+    verdict: APPROVE (claude-reviewer-1) at reviewed_sha 4d1e8ffd8068 == the merged head
+    proxy: claude driver-advisor, session 01a0adee
+    independent: YES — implemented by claude-product-1, reviewed by claude-reviewer-1, merged by this seat.
+
+    STATUS SET BY HAND. The spec was Draft and the trailer did not bump it; closed deliberately after verifying the merged subject and that the fix is complete at this sha.
+
+    THE REQUIRED CHECK CANNOT VERIFY THIS FIX AND I DID NOT TREAT IT AS EVIDENCE. Build (ubuntu-latest) was green BEFORE the fix too — Linux compiled fine; the break was Windows-only. The evidence is the implementer's two-target reproduction in isolation (one file containing only the import, both targets, both directions), because `cargo check --target x86_64-pc-windows-msvc` dies in ring's build script — the documented foreign-C limitation, i.e. THE REPO'S OWN DETECTOR FOR THIS CLASS CANNOT FIRE. Building a working instrument when the available one is known-broken is the right move and is the same shape as running a gate against a known instance rather than trusting its claim to fire.
+
+    THE CONFIRMING SIGNAL IS NOT THIS MERGE. It is the next cross-platform run's Windows leg REACHING THE TEST PHASE rather than dying at compile. I dispatched run 35644920337 on main immediately after merging rather than waiting for the nightly, because there is a specific prediction to check and BUG-1556 is the spec about that loop being a day too slow.
+
+    HOW IT GOT IN, recorded because the provenance is the finding: the ungated `use std::os::unix::fs::PermissionsExt;` was added by #2040 at line 260, in a sha claude-reviewer-1 APPROVED and this seat MERGED — with the correct `#[cfg(unix)]` form already present about 2000 lines below IN THE SAME FILE. Neither seat's checks could see it. PR CI here is Linux-only BY DESIGN, so a portability defect passes every gate we have, and BOTH SEATS WERE RELYING ON THE NIGHTLY — the instrument BUG-1556 exists to say is too slow.
+
+    WHY IT MATTERS MORE THAN A FAILING TEST: A COMPILE FAILURE TAKES THE WHOLE aida-cli-lib TEST TARGET WITH IT, so every other test on that leg stops reporting. A failing test costs one signal; this cost all of them. And both halves of the fix are required — `#[cfg(unix)]` so the target COMPILES, and `#[cfg_attr(windows, ignore)]` because a shebang fake gh is not executable there. AN IGNORED TEST STILL HAS TO COMPILE, so the ignore alone would not have helped.
+
+    THE TWO PRACTICE CHANGES, one per seat, which fail independently:
+      review side   on any PR touching platform-specific APIs, enumerate the unix/windows usages
+                    in the diff and confirm each is inside a cfg gate
+      merge side    one grep over the diff for unix/windows/cfg BEFORE releasing the hold
+    Both ran today. The merge-side grep was clean on #1999 and confirmed both halves present on this PR. The review-side check FALSE-POSITIVED on its first outing by diffing across a rebase — recorded on BUG-1562, because a check is not trustworthy merely because it is new.
+  created_at: 2026-09-21T19:27:58.010365691Z
+  modified_at: 2026-09-21T19:27:58.010365691Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
