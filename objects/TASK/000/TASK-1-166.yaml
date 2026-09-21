@@ -1,0 +1,28 @@
+id: 01a0c1cf-f29f-7bc1-bf57-14484c3f0e36
+spec_id: TASK-1-166
+title: 'Three defects share a structure: the observer who would recognise the problem is the one the system arranged not to show it to'
+description: |-
+  Three defects found on 2026-09-20, in three unrelated subsystems, share a structure that none of the existing principles names: the observer who would recognise the problem is the one the system arranged not to show it to.
+
+  INSTANCE 1 - THE QUEUE FILTER (BUG-1513). `aida queue list --for reviewer` passes the CALLER'S OWN rows through regardless of role. The reviewer seat sees a clean 22 rows, every one correctly tagged, and has nothing to notice. The only caller who sees the leaked row is the one who owns it, and to them it does not read as a leak - it is a spec they are already working, in a list they filtered by a role they are not in. The seat with standing to call it a reviewer-queue defect gets the correct answer; the seat that gets the wrong answer has every contextual reason to accept it.
+
+  INSTANCE 2 - THE EXPRESS BANNER (BUG-1507 criterion 8). For a spec tagged batch:express plus lifecycle:no-preflight, the operator is shown "express tier - full gate (CI + reviewer + build)" while the preflight gate is skipped. The branch that would name the skipped phase is unreachable for any express spec. The operator is not uninformed; they are told the opposite, by the surface built to inform them. Meanwhile active_tokens() on the same struct truthfully emits "no-preflight" - into telemetry nobody reads per run. So had this ever fired, nothing anyone SAW would have looked wrong.
+
+  INSTANCE 3 - THE INVISIBLE RED PR (BUG-1514). PR #2035 sat open 3.8 hours with failing CI, no verdict, no hold, no queue entry, and a spec reading Done. The orphan sweep excluded it because it requires green - correctly, since claiming a red PR wastes a reviewer on a branch that cannot merge. Done dropped it from every open-work lens - correctly, by the rules as written. Every surface excluded it for a locally correct reason and the composition was invisibility.
+
+  WHAT THE THREE SHARE, AND WHY IT IS NOT PRIN-5. PRIN-5 says a coordination surface must distinguish absent evidence from good evidence, because computing a verdict over what is present errs toward reassurance. That describes a surface reasoning wrongly from incomplete data. This is different and in some ways worse: each of these surfaces reasons CORRECTLY. The queue filter correctly includes your own work. The orphan sweep correctly skips red PRs. Done correctly means work finished on a branch. The defect is in the JOIN - which observer is shown which correct answer - and it is invisible from inside any single surface, so auditing any one of them finds nothing.
+
+  THE DIAGNOSTIC QUESTION IT SUGGESTS, which is the actionable part: for any surface that reports a condition, ask WHO SEES THIS, and separately, WHO WOULD RECOGNISE THIS AS WRONG. When those are different people, the surface cannot be validated by its users and will not be corrected by use. All three instances survived repeated auditing by two seats specifically looking for defects in these subsystems, on the same night, because in each case the auditor was on the wrong side of that split.
+
+  NOT A PRINCIPLE YET. Three instances in one session, found by two seats, is enough to name a pattern and not enough to know its boundaries. Promote to a principle if it recurs in a subsystem neither of these touched, or if the diagnostic question above catches something prospectively rather than explaining something already found. Recorded now because the frame was produced tonight and will not survive in anyone's memory otherwise.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T02:33:45.887148289Z
+modified_at: 2026-09-21T02:33:45.887148289Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+- severity:major
