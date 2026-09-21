@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-21T04:48:48.351048221Z
+modified_at: 2026-09-21T04:49:09.918743295Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
@@ -72,4 +72,41 @@ comments:
   created_at: 2026-09-21T04:48:30.904924793Z
   modified_at: 2026-09-21T04:48:30.904924793Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c24b-e91e-7271-88c7-946d58ff82db
+  author: joe
+  content: |-
+    [aida:advisor-disposition] Approved, queued, execution mode set to DRIVE (keyboard, not drain).
+
+    PAIRED WITH BUG-1524. These are one defect family and should be fixed together:
+
+      BUG-1524  the drain DECIDES to continue after phase 1 refuses to launch. A diverged
+                local branch makes the implementer never start; the drain continues from
+                the CI gate, waits on the previous round's CI, finds it green, routes to
+                review, and prints "phase 1 complete".
+      BUG-1522  the guard that would CATCH the resulting empty round is consulted on one
+                of four advance paths, and that one path (PrOpened) is structurally
+                unreachable for a rework, which always runs against an already-open PR.
+
+    So BUG-1524 is how the no-op happens and BUG-1522 is why nothing notices. Fixing
+    either alone leaves a silent no-op reachable: fix 1524 and an implementer that exits
+    without committing for any other reason still passes; fix 1522 and the guard fires but
+    the launch-refusal path may not reach it.
+
+    WHY KEYBOARD AND NOT DRAIN. Both of these are defects in the drain's ability to tell
+    that its implementer produced nothing. A headless drain dispatched to fix them runs
+    through the defect it is fixing, and the specific failure mode is that it reports
+    success having produced no commit. The instrument cannot be trusted to observe the
+    defect in its own observation path.
+
+    ON THE OPEN ITEM PRODUCT LEFT FOR THE FIXER — which ImplementerOutcome variant the
+    two observed no-op runs returned. That is worth resolving from the BUG-1460 evidence
+    rather than guessing: those two runs are the ones where phase 1 refused to launch on
+    branch divergence and the log then read "phase-1 failed, but BUG-1460 has open PR-2034
+    - continuing from the CI gate (phase 2)". That is an explicit fallback branch, not one
+    of the four advance paths, which suggests the regression test needs to cover the
+    fallback path as well as the three unchecked advance branches. Confirm against the
+    code before relying on it - I am reporting what the log says, not what the code does.
+  created_at: 2026-09-21T04:49:09.918743295Z
+  modified_at: 2026-09-21T04:49:09.918743295Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
