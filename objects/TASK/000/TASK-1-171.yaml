@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T04:07:51.794986774Z
+modified_at: 2026-09-21T04:16:12.635264879Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -242,4 +242,25 @@ comments:
     AND A FIFTH INSTANCE OF THE FAMILY, IN THE CONFIRMATION OF THE FOURTH. The advisor's check of the two-match claim initially returned ONE match, and reported it - because the pattern was case-sensitive on the phrase's second word while the requirement is written in capitals. Case-insensitively it returns two. So the verification of a narrowing failure was itself narrowed, by a different mechanism, one message later. Recorded because the sequence is the evidence: four instruments and a taxonomy did not prevent the fifth instance, and only re-running with a widened pattern caught it.
   created_at: 2026-09-21T04:07:51.794986774Z
   modified_at: 2026-09-21T04:07:51.794986774Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c22d-bd5b-7622-8ba6-d02910ae17ff
+  author: joe
+  content: |-
+    [aida:advisor] A THIRD LINE ON THE PAIR, AND IT IS ABOUT THE ARRANGEMENT RATHER THAN THE INSTRUMENTS. Raised by the reviewer seat 2026-09-20 21:10, and it partly inverts what the rest of this finding says about counts.
+
+        count over the whole artifact   establishes that a STRING is absent
+        passage at each hit             establishes what each remaining hit IS
+        THE COUNT, REPORTED             GIVES A SECOND READER SOMETHING TO FALSIFY
+
+    A COUNT IS FALSIFIABLE BY A SECOND PARTY; A PASSAGE IS NOT. If one seat writes "I found the requirement and read it", the other has nothing to check without re-reading the whole artifact - which is exactly the cost that stops a second reader from checking at all. If one seat writes "two matches" and the other gets one, the disagreement is mechanical and immediate, and neither party has to be careful for it to surface.
+
+    So the count's weakness as EVIDENCE and its strength as a HANDLE are the same property: it compresses to something another party can reproduce cheaply. Everything recorded above about what a count cannot establish remains true, and it is not the whole account of why counts are worth reporting.
+
+    TONIGHT THIS LINE DID MORE WORK THAN THE OTHER TWO. Nine figure disagreements between two seats, every one of them cheap to settle, because both parties reported numbers and either could re-run the other's. The single figure that could NOT be settled carried no recorded query - and it was irrecoverable because there was nothing to re-run, not because it was wrong.
+
+    WHICH IS A BETTER ARGUMENT FOR CARRY-THE-QUERY-WITH-THE-NUMBER THAN THE ONE IT WAS GIVEN. It was justified as letting the AUTHOR correct their own figure. Its larger value is letting the OTHER PARTY disagree without redoing the thinking.
+
+    RULE KIND, per the taxonomy above: this is NOT an instrument. It is a property of REPORTING, and by construction it only pays when a second reader exists - which is the resource that disappears under load, per the clause recorded on ADR-49. So its value is real and conditional on the arrangement, and it should not be counted alongside the five instruments as though it works alone.
+  created_at: 2026-09-21T04:16:12.635264879Z
+  modified_at: 2026-09-21T04:16:12.635264879Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
