@@ -10,26 +10,26 @@ an external process; code review must require it for every new such decision.
 
 | Site | Source |
 |---|---|
-| `auto_complete::is_database_locked_message` | `aida-cli-lib/src/auto_complete.rs:703` |
-| `auto_complete::is_environmental_failure` | `aida-cli-lib/src/auto_complete.rs:720` |
-| `auto_complete::is_merge_conflict_failure` | `aida-cli-lib/src/auto_complete.rs:1016` |
-| `cache::is_cache_schema_drift_error` | `aida-core/src/db/cache.rs:820` |
-| `claude_log_indicates_api_outage` | `aida-cli-lib/src/lib.rs:37065` |
-| `compete::parse_gate_result` | `aida-cli-lib/src/compete.rs:195` |
-| `forge::gitlab_merge_response_is_retryable` | `aida-cli-lib/src/forge.rs:2727` |
-| `forge::gitlab_merge_response_is_stale_head` | `aida-cli-lib/src/forge.rs:2713` |
-| `forge::glab_stderr_is_transient` | `aida-cli-lib/src/forge.rs:2596` |
-| `gh_stderr_is_network_error` | `aida-cli-lib/src/lib.rs:37043` |
-| `git_ops::commit` | `aida-core/src/git_ops.rs:209` |
-| `git_ops::looks_like_index_lock_failure` | `aida-core/src/git_ops.rs:185` |
-| `git_ops::push` | `aida-core/src/git_ops.rs:232` |
-| `git_ops::restore_stranded_autostash` | `aida-core/src/git_ops.rs:1305` |
-| `network_retry::classify_transient` | `aida-cli-lib/src/network_retry.rs:193` |
-| `overlay::ci_style` | `aida-tui/src/overlay.rs:387` |
-| `pr_cmd::pr_fetch_failure_message` | `aida-cli-lib/src/pr_cmd.rs:151` |
-| `pr_ship::classify_gh_pr_checks_registration` | `aida-cli-lib/src/pr_ship.rs:453` |
-| `remote_create::gitlab_release_body_exists` | `aida-cli-lib/src/remote_create.rs:840` |
-| `status_context::load_pr_facts` | `aida-cli-lib/src/lib.rs:65043` |
-| `terminal_cmd::run_terminator_command` | `aida-cli-lib/src/terminal_cmd.rs:439` |
+| `auto_complete::is_database_locked_message` | `aida-cli-lib/src/auto_complete.rs` |
+| `auto_complete::is_environmental_failure` | `aida-cli-lib/src/auto_complete.rs` |
+| `auto_complete::is_merge_conflict_failure` | `aida-cli-lib/src/auto_complete.rs` |
+| `cache::is_cache_schema_drift_error` | `aida-core/src/db/cache.rs` |
+| `claude_log_indicates_api_outage` | `aida-cli-lib/src/lib.rs` |
+| `compete::parse_gate_result` | `aida-cli-lib/src/compete.rs` |
+| `forge::gitlab_merge_response_is_retryable` | `aida-cli-lib/src/forge.rs` |
+| `forge::gitlab_merge_response_is_stale_head` | `aida-cli-lib/src/forge.rs` |
+| `forge::glab_stderr_is_transient` | `aida-cli-lib/src/forge.rs` |
+| `gh_stderr_is_network_error` | `aida-cli-lib/src/lib.rs` |
+| `git_ops::commit` | `aida-core/src/git_ops.rs` |
+| `git_ops::looks_like_index_lock_failure` | `aida-core/src/git_ops.rs` |
+| `git_ops::push` | `aida-core/src/git_ops.rs` |
+| `git_ops::restore_stranded_autostash` | `aida-core/src/git_ops.rs` |
+| `network_retry::classify_transient` | `aida-cli-lib/src/network_retry.rs` |
+| `overlay::ci_style` | `aida-tui/src/overlay.rs` |
+| `pr_cmd::pr_fetch_failure_message` | `aida-cli-lib/src/pr_cmd.rs` |
+| `pr_ship::classify_gh_pr_checks_registration` | `aida-cli-lib/src/pr_ship.rs` |
+| `remote_create::gitlab_release_body_exists` | `aida-cli-lib/src/remote_create.rs` |
+| `status_context::load_pr_facts` | `aida-cli-lib/src/lib.rs` |
+| `terminal_cmd::run_terminator_command` | `aida-cli-lib/src/terminal_cmd.rs` |
 
 <!-- trace:TASK-1300 | ai:codex -->
