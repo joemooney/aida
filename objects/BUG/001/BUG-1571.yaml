@@ -58,7 +58,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:42:35.206134427Z
-modified_at: 2026-09-21T20:42:49.861003025Z
+modified_at: 2026-09-21T20:47:19.769161766Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -73,3 +73,37 @@ relationships:
   target_id: 01a0c547-d064-7531-9c74-d8f911c74b3a
   created_at: 2026-09-21T20:42:49.860997701Z
   created_by: joe
+comments:
+- id: 01a0c5b9-22d9-7173-bf9d-a0d3ea693a06
+  author: joe
+  content: |-
+    [aida:advisor] I RAN THE DISCRIMINATOR AND THE ATOMICITY HYPOTHESIS IS **LIVE**, NOT DEAD. claude-reviewer-1 proposed it and named the exact check that would kill it; the check says the opposite.
+
+        aida-cli-lib/src/review_verdict.rs:552
+        std::fs::write(&path, format!("{body}\n"))?;
+
+    NO NamedTempFile, NO .persist(), NO rename ANYWHERE IN THAT FILE — grepped for all three. `std::fs::write` TRUNCATES AND THEN WRITES, so there is a window in which the path exists and is EMPTY or PARTIAL. A concurrent reader in that window sees no usable verdict, and an intermittent "missing handshake" follows WITH NO FAILED WRITE ANYWHERE — which is exactly the shape of this defect: a success message that was true, and an artefact that was not there when someone looked.
+
+    THAT EXPLAINS ONE OF THE TWO OBSERVATIONS AND THE REPORTER SAID SO BEFORE I CHECKED:
+        13:45 sweep read `no-verdict: [2059]` while a file existed at 13:44
+              -> CONSISTENT with a truncate-write window
+        13:28 write, 13:40 observation, file ABSENT
+              -> NOT consistent. NO WRITE WINDOW IS TWELVE MINUTES WIDE.
+
+    THEIR INSTRUCTION IS RECORDED AS BINDING BECAUSE IT IS THE TIDIER STORY THAT WOULD OTHERWISE WIN: DO NOT LET THE ATOMICITY HYPOTHESIS ABSORB BOTH. Either there are TWO phenomena — a read-during-write race AND a write that genuinely did not land — or the 13:28 case has a different cause entirely. A fix that makes the write atomic will close the first and leave the second, and the second is the one where a reviewer's approval is simply absent.
+
+    REVISED ACCEPTANCE:
+    - MAKE THE WRITE ATOMIC — temp file in the same directory, then rename. That is the standard
+      remedy and the code does not do it. It closes the read-during-write window.
+    - AND THEN KEEP LOOKING. An atomic write does not explain a file absent twelve minutes after a
+      reported success. Treat the 13:28 case as SEPARATELY UNEXPLAINED rather than as fixed.
+    - THE REPORTING FIX IS INDEPENDENT OF BOTH AND SHOULD NOT WAIT FOR THEM: the command must not
+      print a path it has not confirmed. Under a truncate-write race the write DOES succeed and the
+      message is honest; under the 13:28 case it is not. Confirming the file after writing covers
+      both without needing to know which occurred.
+    - NOTE THE INTERACTION WITH BUG-1539, now that a live clobber has been measured on this same
+      file: whatever replaces `fs::write` must ALSO not silently discard a richer prior verdict. An
+      atomic rename makes the clobber MORE reliable, not less, if nothing reads first.
+  created_at: 2026-09-21T20:47:19.769161766Z
+  modified_at: 2026-09-21T20:47:19.769161766Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
