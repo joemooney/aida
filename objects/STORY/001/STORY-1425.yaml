@@ -32,10 +32,31 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:46:59.718785414Z
-modified_at: 2026-09-21T16:46:59.718785414Z
+modified_at: 2026-09-21T17:00:21.702475686Z
 req_type: Story
 tags:
 - epic-70
 - measurement
 - north-star
 - reconstitution
+comments:
+- id: 01a0c4e9-5746-7ba1-9dd3-dfb80b601418
+  author: joe
+  content: |-
+    VALIDATION SUBJECT DECIDED (operator, 2026-09-21): aida-monitor, NOT aida-hub. "it is a simple throw-away application that I would love to have when aida stabilizes."
+
+    Measured state of ~/ai/aida-monitor at decision time: 4 commits, ~3,945 Rust LOC (Dioxus), 16 specs, 35 trace comments, 2 of 4 commits carrying a SPEC-ID trailer. Crucially the ROOT commit is `488c563 chore: scaffold AIDA` - AIDA was present from line one, so capture coverage is not retrospectively compromised the way this repo's is. It also consumes STORY-1352's versioned read-only monitor contract, which makes it a second dogfooding channel at no extra cost.
+
+    WHY IT BEATS THIS REPO AND aida-hub AS THE SUBJECT
+    1. THROW-AWAY IS THE ACTUAL EXPERIMENT, NOT A SIMULATION. The north star is "throw away the code and rebuild it." aida-monitor is a subject the operator is genuinely willing to delete, so the test can be RUN rather than probed. Neither this repo nor aida-hub can be deleted, which is why both force the per-spec proxy that ADR-44 settled for.
+    2. SMALL ENOUGH FOR WHOLE-SYSTEM SCOPE. ~4k LOC makes whole-system reconstitution tractable, which closes the gap flagged on SPIKE-86: `aida reconstitute` is per-spec while the objective is whole-system. On a subject this size the objective can be tested directly.
+    3. GENUINELY WANTED, SO THE REQUIREMENTS ARE REAL. A purpose-built test case would have invented requirements and would flatter the result. Something the operator actually wants has contested, evolving requirements - which is what the capture has to survive.
+
+    TWO DESIGN CAUTIONS FOR WHOEVER RUNS THIS
+    (a) OBSERVER EFFECT - LABEL IT A CEILING. Building a subject while knowing it is a reconstitution trial produces better capture than normal practice. That does not invalidate the result, but it changes what the result MEANS: it measures the CEILING achievable with good discipline, not typical practice. Report it as such. A ceiling measurement is still decision-useful - it answers "is the best case good enough to be worth the discipline?" - but presenting it as typical would overclaim.
+    (b) SIMPLE SUBJECTS SHRINK THE DELTA, AND THE DELTA IS THE PRODUCT. This is the counterintuitive risk. The simpler the application, the more of it a baseline agent can re-derive from a README and file names alone - so arm A scores high and AIDA's measured advantage collapses, through no fault of the capture. The delta does NOT live in the features; a feature is re-derivable from its name. It lives in the DECISIONS - why this shape, what was rejected, which constraint forced it. Those are invisible in code and absent from a README, and they are exactly what ADRs and rejected-alternative records hold. So the subject earns its keep as a test only to the extent it accumulates genuine design forks. Recommend recording ADRs in aida-monitor at the normal rate for real decisions, and expecting the measured delta to concentrate there rather than in feature recall.
+
+    FOLLOW-ON THIS ENABLES (separate filing): a whole-system reconstitution trial on aida-monitor - delete the code, regenerate from the store alone, compare - which is the objective's direct test rather than the per-spec proxy. Worth waiting until the subject has accumulated enough decisions for (b) to hold, and until this story's two-arm + coverage reporting exists to measure it with.
+  created_at: 2026-09-21T17:00:21.702475686Z
+  modified_at: 2026-09-21T17:00:21.702475686Z
+  session_id: 01a0b204-9df4-7622-8b91-f12fd291d8df
