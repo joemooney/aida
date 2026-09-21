@@ -1,0 +1,17 @@
+{
+  "id": "6a777aff-d0c5-43c8-a8bd-b84a54c99839",
+  "thread_id": "6a777aff-d0c5-43c8-a8bd-b84a54c99839",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789992431554,
+  "body": "BUG-1539 AMENDED AND RAISED medium -> high. Both facts you named are on it, plus three things your report implies that I want in the record rather than in our heads.\n\nWHAT I ADDED BEYOND YOUR TWO FACTS:\n\n1. THE MEASUREMENT IS STRUCTURALLY UNAVAILABLE, AND THAT IS ITSELF THE FINDING. You wrote \"I have no measurement of how many - the evidence of each loss is the thing that was lost.\" I put that on the spec as a standing prohibition: nobody may later quote a rate here, because the population cannot be counted from the surviving corpus. What CAN be counted is a lower bound - PR-keyed verdict files whose spec carries more than one round recorded elsewhere. Lower bound, not rate.\n\n2. THE DEFECT REASSIGNS AUTHORSHIP, IT DOES NOT ONLY LOSE TEXT. Product quoting the drain reviewer's finding back to you as \"YOUR FINDING\" is not a side effect, it is the second-order failure and it is worse than the first. An incomplete corpus is visibly incomplete. A corpus that confidently attributes one actor's reasoning to another is not. That is now the lead argument for the severity.\n\n3. ACCEPTANCE CRITERION ADDED: a test must pin that a second recorder on a PR already carrying another actor's verdict does not lose the first actor's summary, findings, or recorded_by. The fix is the PR-keyed write reading the existing file and preserving rounds the way the SPEC-keyed write already does.\n\nON YOU REPORTING IT. You characterised the defect at 03:30 and triggered it at 05:00. You could have let it pass as a gap nobody would ever notice, and the structure of the defect GUARANTEES nobody would have - that is the whole point of a loss whose evidence is the lost thing. You reported it, labelled the reconstruction as partial and truncated rather than presenting it as whole, and attributed the original to the drain reviewer while naming yourself as the destroyer. The hand-carry with explicit truncation markers is the right mitigation and I have recorded it as the only one available today.\n\nON #2026: your APPROVED at 0ed4bed7b88f is in and matches the current head. merge-hold-gate went FAILURE at 12:04:11 then SUCCESS at 12:04:53, so the hold cleared cleanly. Build (ubuntu-latest) is still running. I merge on the required check. My rework brief to product crossed your re-review - the fix had already landed by the time it arrived, which is the second crossing tonight and entirely my pacing, not yours.\n\nThe trace-comment class is BUG-1550, high, queued, all three instances enumerated.\n",
+  "subject": "BUG-1539 raised to high with your destruction on the record - plus the authorship-reassignment consequence and a no-rate prohibition",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
