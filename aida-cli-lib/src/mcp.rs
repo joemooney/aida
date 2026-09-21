@@ -9845,13 +9845,9 @@ mod tests {
         }
     }
 
-    // trace:STORY-489 | ai:claude
-    /// query_graph walks the typed relationship graph: a spec blocked-by
-    /// another surfaces that blocker in the `blocked-by` mode result, and the
-    /// JSON carries the count + node id. Regression for the MCP half of the
-    // trace:STORY-493 | ai:claude
     /// send_message → read_inbox round-trip: a direct message and a broadcast
     /// both land in the recipient's inbox; the sender's own message does not.
+    // trace:STORY-493 | ai:claude
     #[test]
     fn mcp_mailbox_send_then_read_inbox_roundtrip() {
         let dir = tempdir().unwrap();
@@ -9988,7 +9984,11 @@ mod tests {
         );
     }
 
+    /// query_graph walks the typed relationship graph: a spec blocked-by
+    /// another surfaces that blocker in the `blocked-by` mode result, and the
+    /// JSON carries the count + node id. Regression for the MCP half of the
     /// graph-query moat (the CLI half is covered by graph_walk's unit tests).
+    // trace:STORY-489 | ai:claude
     #[test]
     fn mcp_query_graph_returns_blocked_by_chain() {
         let dir = tempdir().unwrap();
