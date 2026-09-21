@@ -234,7 +234,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:18:31.246345754Z
-modified_at: 2026-09-21T06:40:17.721436416Z
+modified_at: 2026-09-21T13:42:59.774954752Z
 req_type: Bug
 tags:
 - parent:EPIC-62 merge-hold pr-ship safety-gate severity:major
@@ -325,4 +325,10 @@ comments:
     it is done.
   created_at: 2026-09-21T06:40:17.721436416Z
   modified_at: 2026-09-21T06:40:17.721436416Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c434-a5be-7e81-b706-3436d2010a94
+  author: joe
+  content: 'LIVE INSTANCE, ADVISOR-SIDE, 2026-09-21. I armed a merge-hold on PR #2033 (marker + aida:merge-hold label) and told two seats it enforces a merge ordering. No drive is live, which is precisely this spec''s precondition for the client-side layer being inert. And the SERVER-side layer has not evaluated it either: both merge-hold-gate runs on that PR are from 2026-09-20 21:41 and 21:59, roughly nine hours BEFORE the label was applied. The PR is blocked, but by the stale 21:59 FAILURE from an earlier refusal cycle, not by my hold. So the hold''s binding is UNVERIFIED in both layers. Worth adding to this spec''s acceptance: a hold armed while no drive is live should SAY so at arm time - an advisor arming a hold has no way to learn from the tool that the client layer will not honour it, and the label''s server-side effect is invisible until the next push triggers a gate run.'
+  created_at: 2026-09-21T13:42:59.774954752Z
+  modified_at: 2026-09-21T13:42:59.774954752Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
