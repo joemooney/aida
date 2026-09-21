@@ -46,12 +46,12 @@ description: |
   RECORDED BY
 
   The advisor seat, on a proposal relayed by the product seat from an operator decision in session 2026-09-20. THIS IS A RELAY: neither the advisor nor the reviewer witnessed the operator's proposal directly, and the modifications in clauses 1, 4 and 5 are the product seat's, with clauses 3 and the open question added by the advisor.
-status: Draft
+status: Superseded
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T03:00:35.790745158Z
-modified_at: 2026-09-21T03:01:05.153049659Z
+modified_at: 2026-09-21T03:02:44.259476535Z
 req_type: Decision
 tags:
 - operator-decision review-gate mass-change from:session-0920
