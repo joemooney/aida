@@ -558,10 +558,20 @@ pub(crate) fn probe_resume_facts(
             .unwrap_or(false);
 
     // ci_green — a point-in-time CI probe; a merged PR implies CI cleared.
+    // STORY-516: forge-routed. The branch-origin probe above and the verdict
+    // path below both resolve against `project_root`; this probe did not, so a
+    // resume driven from outside the worktree asked the wrong repository's
+    // forge. trace:TASK-1273 | ai:claude
+    let ci_forge_kind = crate::forge::resolve_forge_kind(project_root);
     let ci_green = pr_merged
         || branch
             .as_deref()
-            .map(|b| matches!(ci_probe_via_forge(b), CiProbe::Green { .. })) // STORY-516
+            .map(|b| {
+                matches!(
+                    ci_probe_with_forge(project_root, ci_forge_kind, b),
+                    CiProbe::Green { .. }
+                )
+            })
             .unwrap_or(false);
 
     // reviewed — an Approved verdict file exists for the PR.

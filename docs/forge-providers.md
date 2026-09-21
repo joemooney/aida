@@ -121,12 +121,17 @@ bodies are separate: `aida-cli-lib/src/forge.rs` contains `GitLabForge` for the
 PR/MR + CI lifecycle, while `aida-core/src/integrations/gitlab/client.rs`
 contains `GitLabClient` for the GitLab Issues integration.
 
-**Live-GitLab end-to-end validation is a manual step.** The CI here is
-Linux-only and has no GitLab credentials, so the e2e drain (MR
-opened → CI → reviewed → merged → spec auto-bumped) is validated by hand against
-a scratch GitLab project (`joe/aida-gl-test`), not in automated CI. The pure
-formatting and the provider parsers are unit-tested in isolation; the
-subprocess-level `glab` wiring is exercised manually.
+**Live-GitLab trait validation runs nightly.** The scheduled
+`cross-platform.yml` workflow creates a throwaway project on the self-hosted
+mirror, opens an MR through `Forge::open_change`, waits for a real pipeline,
+reads its review verdict, and merges it through `Forge::merge_change`. The job
+deletes the project even after a test panic. It reports a skipped probe (rather
+than a red build) when the mirror is unreachable. A missing
+`AIDA_GITLAB_TOKEN` repository secret is a hard configuration failure, as are
+all lifecycle failures after a successful preflight; each fails with the
+affected phase named.
+Ordinary PR CI remains hermetic and continues to test provider parsers with
+mocked output. <!-- trace:TASK-1273 | ai:codex -->
 
 ### Live validation (2026-09-18)
 
