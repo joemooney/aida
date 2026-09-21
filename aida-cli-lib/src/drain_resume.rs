@@ -56,6 +56,31 @@ pub(crate) fn reconciled_shelved_phase(recorded: Phase, probed: Phase) -> Phase 
     }
 }
 
+/// Hold a resume at CI while the CURRENT head is not terminal-green.
+///
+/// The last line of defence, and it keys on the FACT rather than on a phase
+/// name. `reconciled_shelved_phase` takes the LATER of recorded and probed, so
+/// a recorded Reviewer outranks a probed Ci and skips the wait even after
+/// `from_pr_plan` correctly demanded CI — which is how a spec shelved ci-red
+/// and pushed again reached merge on a pipeline nobody validated.
+///
+/// Checking `start == Reviewer` instead would be a guess about which pairings
+/// can occur, and this defect exists because that guess was made once already:
+/// recorded Ci against a probed Merge skips CI too, and no phase-name check
+/// written for the Reviewer case catches it.
+///
+/// `finish_ci` probes the current head first and reuses an already-green
+/// pipeline, so being wrong here costs one probe; being wrong the other way
+/// merges without proof.
+// trace:BUG-1460 trace:TASK-1272 | ai:claude
+pub(crate) fn ci_gated_start_phase(start: Phase, ci_green: bool) -> Phase {
+    if !ci_green && start.index() > Phase::Ci.index() {
+        Phase::Ci
+    } else {
+        start
+    }
+}
+
 /// Whether a crashed or parked drain member may be auto-resumed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Resumability {
@@ -312,8 +337,7 @@ pub(crate) fn from_pr_plan(pr_exists: bool, facts: &ResumeFacts) -> FromPrOutcom
         return FromPrOutcome::RefuseAlreadyMerged;
     }
     // Drive from the reviewer onward. If an approving verdict already exists,
-    // skip straight to the merge; otherwise run the reviewer. We never enter
-    // at CI (implementer-coupled) and never at the implementer.
+    // skip straight to the merge; otherwise run the reviewer.
     if facts.reviewed {
         FromPrOutcome::DriveFrom(Phase::Merge)
     } else {
@@ -324,6 +348,95 @@ pub(crate) fn from_pr_plan(pr_exists: bool, facts: &ResumeFacts) -> FromPrOutcom
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Narrow fixture for the CI-gating tests: the module already has a
+    /// six-field `facts` helper further down, and these tests only vary two.
+    fn ci_facts(ci_green: bool, reviewed: bool) -> ResumeFacts {
+        ResumeFacts {
+            branch_exists: true,
+            ci_green,
+            reviewed,
+            pr_merged: false,
+            spec_completed: false,
+            build_ok: false,
+        }
+    }
+
+    /// THE DEFECT, AS THE INTEGRATION PATH RATHER THAN THE HELPER. A spec
+    /// shelved ci-red and pushed again: recorded Ci, PR open and unreviewed,
+    /// current head NOT green. Reconciliation alone yields Reviewer and skips
+    /// the CI wait entirely — which is how a merge lands on a pipeline nobody
+    /// validated. The composition must hold at Ci.
+    // trace:TASK-1272 | ai:claude
+    #[test]
+    fn a_recorded_ci_resume_is_held_at_ci_until_the_current_head_is_green() {
+        // `from_pr_plan` deliberately never enters at CI — that entry is
+        // implementer-coupled, and two existing tests pin it. So it still
+        // proposes Reviewer here, and the GATE is what holds the resume:
+        assert_eq!(
+            from_pr_plan(true, &ci_facts(false, false)),
+            FromPrOutcome::DriveFrom(Phase::Reviewer),
+            "from_pr_plan's contract is unchanged"
+        );
+        assert_eq!(
+            ci_gated_start_phase(Phase::Reviewer, false),
+            Phase::Ci,
+            "but a not-green current head must be held at CI"
+        );
+        // ...and the same holds when a review already exists: that approval
+        // was given against a head that no longer exists.
+        assert_eq!(
+            ci_gated_start_phase(Phase::Merge, false),
+            Phase::Ci,
+            "an approving verdict does not transfer to a new head"
+        );
+
+        // ...and reconciliation must not be able to outrank it. This is the
+        // pairing the original fix missed: max(recorded, probed) picks the
+        // LATER phase, so a recorded Reviewer beats a probed Ci.
+        let reconciled = reconciled_shelved_phase(Phase::Reviewer, Phase::Ci);
+        assert_eq!(
+            reconciled,
+            Phase::Reviewer,
+            "reconciliation takes the later"
+        );
+        assert_eq!(
+            ci_gated_start_phase(reconciled, false),
+            Phase::Ci,
+            "the clamp must hold it at CI regardless of which phase won"
+        );
+
+        // The recorded-Ci + probed-Merge pairing skips CI too, and no
+        // Reviewer-specific check catches it.
+        assert_eq!(
+            ci_gated_start_phase(reconciled_shelved_phase(Phase::Ci, Phase::Merge), false),
+            Phase::Ci
+        );
+    }
+
+    /// The complement: a GREEN current head is not held back. Without this the
+    /// clamp could be "always return Ci" and every assertion above would still
+    /// pass while the drain never progressed.
+    // trace:TASK-1272 | ai:claude
+    #[test]
+    fn a_green_current_head_resumes_where_the_evidence_says() {
+        assert_eq!(
+            from_pr_plan(true, &ci_facts(true, false)),
+            FromPrOutcome::DriveFrom(Phase::Reviewer)
+        );
+        assert_eq!(
+            from_pr_plan(true, &ci_facts(true, true)),
+            FromPrOutcome::DriveFrom(Phase::Merge)
+        );
+        // the gate is a no-op on a green head — it holds nothing back
+        assert_eq!(ci_gated_start_phase(Phase::Reviewer, true), Phase::Reviewer);
+        assert_eq!(ci_gated_start_phase(Phase::Merge, true), Phase::Merge);
+        // and a phase at or before CI is never pushed FORWARD by the clamp
+        assert_eq!(
+            ci_gated_start_phase(Phase::Implementer, false),
+            Phase::Implementer
+        );
+    }
 
     #[test]
     fn shelved_resume_reenters_the_failed_phase() {

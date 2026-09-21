@@ -78594,20 +78594,12 @@ fn handle_from_pr(
                     drain_resume::reconciled_shelved_phase(recorded, probed_start_phase)
                 })
                 .unwrap_or(probed_start_phase);
-            // A RECORDED PHASE DOES NOT CARRY THE HEAD IT WAS RECORDED FOR.
-            // Whatever phase we resume from, never enter a reviewer without
-            // re-establishing CI proof for the CURRENT head: a spec shelved
-            // ci-red and pushed again would otherwise resolve to Reviewer,
-            // skip finish_ci, and reach merge on an unvalidated pipeline.
-            // finish_ci probes the current head first, so an already-green
-            // pipeline is reused rather than waited on — the cost is a probe,
-            // and the alternative is merging without the proof.
+            // Last line of defence, keyed on the FACT not a phase name: a recorded
+            // Reviewer outranks a probed Ci through reconciliation and would skip
+            // the wait even after `from_pr_plan` demanded CI. See
+            // `ci_gated_start_phase` for why a phase-name check is not enough.
             // trace:BUG-1460 trace:TASK-1272 | ai:claude
-            let start_phase = if start_phase == auto_complete::Phase::Reviewer {
-                auto_complete::Phase::Ci
-            } else {
-                start_phase
-            };
+            let start_phase = drain_resume::ci_gated_start_phase(start_phase, facts.ci_green);
             println!(
                 "{} driving `{}` from phase {} ({}) — implementation shipped outside the \
                  orchestrator (skipping the implementer phase).",
