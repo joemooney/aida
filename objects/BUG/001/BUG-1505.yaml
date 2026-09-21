@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:28:50.078974800Z
-modified_at: 2026-09-21T01:39:55.301000276Z
+modified_at: 2026-09-21T01:43:49.493253154Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity agent-surface from:session-0920
@@ -72,3 +72,10 @@ relationships:
   target_id: 01a0c099-577c-73c1-bbf3-e54a1a76da73
   created_at: 2026-09-21T01:29:05.017214662Z
   created_by: joe
+comments:
+- id: 01a0c1a2-39f5-7e92-8606-1425351a46dc
+  author: joe
+  content: '[aida:advisor] REFERENCE IMPLEMENTATION for criterion 5, found by the reviewer seat 2026-09-20 while reviewing PR #2001. Verdict::parse in that PR strips every non-alphanumeric character and lowercases before matching, so all seven canonical spellings resolve, AND both free-text values from the corpus survey normalise to no match and fall to None: ''APPROVED pending cross-platform green'' and ''CONTENT APPROVED - MERGE WITHHELD FOR INDEPENDENCE''. None means no verdict, which makes the PR sweep-eligible, which produces another review. So it fails toward MORE review rather than toward a false approval - which is exactly what criterion 5 requires of a consumer (approved / refused / cannot-determine, with cannot-determine treated as refusing). Whoever implements this spec should take that as the reference rather than writing the normaliser from scratch. Note the property that makes it safe is not the normalising - it is that the fallthrough is None rather than a permissive default.'
+  created_at: 2026-09-21T01:43:49.493253154Z
+  modified_at: 2026-09-21T01:43:49.493253154Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
