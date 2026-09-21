@@ -1,0 +1,31 @@
+id: 01a0c1a8-0aaf-7c00-a17a-42be2007d594
+spec_id: TASK-1308
+agreed_id: TASK-1308
+title: Prove the two Codex Degraded seat-parity cells with an actual dogfood wave, and stop the matrix citing a Completed spec for its own open gaps
+description: |
+  The Codex seat-parity matrix records two Degraded cells - Product cold-boot and Advisor fork-from-live - and the proof that they are only degraded rather than broken is a dogfood wave that has not run. This spec holds that proof obligation and the two Degraded cells point at it.
+
+  WHY IT IS SEPARATE. docs/agents/seat-parity.md states its own completion condition: do not claim completion until the first wave has merged at least one drain-mode spec behind the Codex advisor gate. The 2026-09-20 06:23Z audit reports advisor-seat events 0 and product-seat events 0, so no wave has run. TASK-1279 delivered the routing, the matrix and the hook-parity test - real work, independently verified - but it cannot also deliver evidence that only accrues from running. Holding it open until a wave lands would block shipped code on an unscheduled operational event; completing it with the obligation inside would bury the obligation behind a terminal status. Split instead.
+
+  THE SELF-BURYING PROBLEM THIS FIXES. Both Codex Degraded cells currently cite TASK-1279, the spec whose merge completes it. A gap whose filed spec is the spec that just closed cannot be found again by anyone reading the matrix later. The correct pattern is already in the same table one column over: every Antigravity Degraded cell cites TASK-1207, which is separate and open. This spec is the Codex equivalent of TASK-1207.
+
+  Acceptance:
+  1. At least one drain-mode spec is implemented and MERGED behind the Codex advisor gate, with the advisor seat actually exercised - not a dry run and not a --help invocation.
+  2. The seat-parity audit reports non-zero advisor-seat events and non-zero product-seat events, and the numbers are recorded here with their date.
+  3. Each of the two Codex Degraded cells is re-evaluated against what the wave showed. A cell either moves off Degraded, or keeps its rating with the wave's evidence naming what is still missing.
+  4. Each cell that remains Degraded cites a spec that is still OPEN. No cell cites this spec once this spec is Completed - if an obligation survives this spec, it gets a successor the way this one did.
+  5. Every non-N/A cell in the matrix has a proving command that WAS RUN with its output pasted. The matrix currently carries four pasted probes against roughly twenty-four non-N/A cells, and two of the four are --help invocations. A --help proves a flag parses, not that a seat works. Either paste the runs or mark the cell unproven - the matrix must not read as evidence where it is a plan.
+  6. The completion clause in seat-parity.md is satisfied or amended. If the bar was wrong, say so and change it deliberately rather than leaving a document that forbids the state it is in.
+
+  NOT IN SCOPE: the routing code, the hook-parity test and the matrix's structure, all delivered by TASK-1279 and verified.
+
+  PROVENANCE: split from TASK-1279 on 2026-09-20 so PR #1984 can merge. Criterion 4 of TASK-1279 is scoped out to here. Raised by the reviewer seat, which noticed the document argues against its own spec's status.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T01:50:10.607837210Z
+modified_at: 2026-09-21T01:50:10.607837210Z
+req_type: Task
+tags:
+- batch:night-0920 seat-parity dogfood from:review-pr-1984
