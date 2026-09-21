@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:44.578137790Z
-modified_at: 2026-09-21T08:26:19.775993329Z
+modified_at: 2026-09-21T08:29:10.949126014Z
 req_type: Bug
 comments:
 - id: 01a0c312-bb00-72a3-95b8-3088f0b66089
@@ -65,4 +65,39 @@ comments:
     The measurement that motivated this spec stands exactly as the reviewer took it. Only the fix site moves.
   created_at: 2026-09-21T08:26:19.775993329Z
   modified_at: 2026-09-21T08:26:19.775993329Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c315-57a5-7253-856f-a5b5e670de0f
+  author: joe
+  content: |-
+    THIRD CORRECTION, and it is a correction to a correction — so the scope needs stating precisely, because the distinction changes which path an implementer touches.
+
+    THE REVIEWER'S CORE INSIGHT IS RIGHT AND LOAD-BEARING: "stamped" is not "reviewed". A populated reviewed_sha field guarantees only that SOMETHING resolved, not that it names the commit the reviewer actually examined. A WRONG sha is worse than an absent one, because an absent one can be treated as UNPROVEN while a wrong one reads as provenance and DEFEATS the staleness check by satisfying it — the PR tip will often match whatever local ref got stamped, so a consumer sees AtReviewedSha and lets work through on a review that never happened at that commit. That is PRIN-5 sitting in the same function as the enforcement, and it must be in the acceptance criteria.
+
+    BUT THE LOCAL-REF FALLBACK IS NOT REACHABLE WHEN --pr IS GIVEN, which is the case that matters most. Verified at aida-cli-lib/src/lib.rs:76285-76313:
+
+        envelope_pr_sha = pr.and_then(|_| env AIDA_FROM_PR_HEAD_SHA)          // only when --pr
+        forge_pr_sha    = if sha.is_none() && envelope_pr_sha.is_none() {
+                              match pr { Some(n) => Some(fetch_change_info_via_resolved_forge(..)?.head_oid),
+                                         None => None } }
+        resolved_sha    = sha .or(envelope_pr_sha) .or(forge_pr_sha)
+                              .or_else(|| resolve_commit_sha(root, branch or HEAD))
+                              .or_else(|| resolve_commit_sha(root, "HEAD"))
+
+    When `--pr N` is passed and no explicit --sha is given, arm 3 either produces the FORGE-RESOLVED head or `?`-bails with "could not resolve PR N's current head for the verdict; pass --sha <commit> explicitly". It is never None. So arms 4 and 5 — the local ones — are unreachable on the PR-keyed path, and the PR-N.json handshake the orchestrator reads is forge-anchored. BUG-1467 already did this work deliberately; its comment says "Prefer it to a checkout's HEAD, which may be stale or may be the drive root rather than the review worktree."
+
+    WHERE THE LOCAL FALLBACK ACTUALLY BITES: a recording with NO --pr. Then forge_pr_sha is None by construction and the sha comes from the local branch ref or local HEAD — a disposable review worktree, a main checkout sitting on something else, or a local branch left behind a force-pushed remote (which this session has already been bitten by once). That produces a spec-keyed <SPEC>.json verdict carrying a confident sha nobody reviewed.
+
+    A SECOND, NARROWER HAZARD ON THE PR PATH, which the same reading exposes: arm 2 trusts AIDA_FROM_PR_HEAD_SHA from the launch envelope WITHOUT comparing it to the PR's current head. A reviewer launched against head A, which advances to B before the verdict is recorded, stamps A — correct as a record of what was examined, and dangerous only if a consumer reads it as "reviewed at the tip". That is an argument for the read side distinguishing "reviewed at a commit that is no longer the tip" from "reviewed at the tip", not for changing the stamp.
+
+    ACCEPTANCE CRITERIA, superseding the previous set:
+      1. The skill template carries reviewed_sha — unchanged, still the cheap half — and the way it obtains it must be the PR head from the forge or an explicit --sha, NEVER a local rev-parse. A skill instruction that says "put the sha here" without saying where it comes from would spread this defect rather than close it.
+      2. Preferred: the skill calls `aida review record --pr <N>`, which is forge-anchored by construction, instead of hand-writing JSON.
+      3. The record should say WHERE the sha came from — an explicit provenance field distinguishing explicit / envelope / forge / local-ref — so a consumer can tell an anchored stamp from a resolved-locally one. This is the criterion that makes "stamped != reviewed" checkable instead of merely true.
+      4. Read side: absent reviewed_sha is UNPROVEN and cannot clear a gate; a locally-resolved sha is likewise not treated as anchored provenance.
+      5. Close the no---pr local fallback: either require --pr for a verdict that will gate anything, or mark the resulting record as locally-resolved per criterion 3.
+      6. NOT WANTED, unchanged: backfilling the 457 historical records.
+
+    PROVENANCE OF THIS ENTRY. The "stamped is not reviewed" insight is the reviewer seat's. The scope narrowing — that arms 4 and 5 are unreachable under --pr, so the orchestrator-facing file is already forge-anchored — is the driver-advisor's, read from the same function. Both were verified against the code rather than relayed.
+  created_at: 2026-09-21T08:29:10.949126014Z
+  modified_at: 2026-09-21T08:29:10.949126014Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
