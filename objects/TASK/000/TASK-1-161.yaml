@@ -1,0 +1,33 @@
+id: 01a0c192-21f6-71c0-9893-f0ec7c6789cc
+spec_id: TASK-1-161
+title: A standard YAML parser fails on 28 percent of store objects because Custom relationships serialise with a local tag
+description: |-
+  A standard YAML parser fails on 1,187 of the store's 4,140 objects - 28 percent - because a Custom relationship serialises with a local tag that no ordinary loader knows.
+
+      - rel_type: !Custom implemented-by
+
+  Measured 2026-09-20. Every failure is the same tag; there is no second cause. The population is old, not new: the oldest example was last touched 2026-07-01 and the newest is from today, so this is the normal serialisation of a Custom relationship rather than damage introduced by any one session.
+
+  WHY IT IS WORTH A FINDING RATHER THAN A SHRUG. The project documents the store as one YAML file per requirement and presents the canonical files as the source of truth, which invites a consumer - a script, an agent, an auditor - to read them directly with a standard parser. That consumer succeeds on 72 percent of objects and fails on the rest, and the failure is distributed by whether an object happens to carry a Custom edge, which correlates with nothing the consumer can predict.
+
+  AND THE FAILURE MODE IS THE DANGEROUS ONE. A loader that raises is recoverable. A loader wrapped in a try/except that returns a placeholder converts a parse failure into a VALUE, and the value then enters a tally as though it were a measurement. That happened in this session: a sweep classifying specs by their parent's status reported 22 rows as "status unknown" when the truth was "this object could not be parsed at all", and the two are indistinguishable downstream. The reading is not that the except was careless; it is that a 28 percent parse failure rate makes some consumer write that except sooner or later.
+
+  THREE POSSIBLE ANSWERS, and choosing between them is the point of filing:
+  1. Serialise the relationship type as a plain string, so the canonical files are parseable by any YAML reader. Widest compatibility; a migration over 1,187 objects.
+  2. Keep the tag and publish the loader, so a consumer has a supported way to read the store that does not involve guessing at tag constructors.
+  3. Decide the canonical files are not a public read surface, and say so where they are currently described as the source of truth - in which case the documented machine-readable path must exist and work, which today it partly does not.
+
+  Option 3 depends on a working machine-readable read, and `aida show --format json` is currently ignored on the show verb, so the alternative a consumer would be pushed toward is itself broken. That coupling is why this should be decided rather than left.
+
+  NOT IN SCOPE: the escape-residue corruption, which is a separate observation about descriptions being round-tripped through a display surface.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T01:26:14.774144314Z
+modified_at: 2026-09-21T01:26:14.774144314Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+- severity:major
