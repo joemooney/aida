@@ -36,7 +36,30 @@ description: |
   NOT CONFIRMED, and deliberately not asserted: which ImplementerOutcome variant the BUG-1460 runs actually returned. The evidence establishes that the run advanced without the guard firing, which is consistent with any of the three unchecked branches. Whoever fixes this should confirm the variant rather than trust this inference -- it changes nothing about the fix, which is to check the guard on every advancing path, but it matters for the regression test.
 
   ACCEPTANCE
-  1. rework_no_op_failure is consulted on EVERY path that advances past the implementer phase, not only PrOpened. Prefer one check at the single point where the phase advances over four call sites that can drift apart again.
+  1. rework_no_op_failure is consulted on EVERY path that advances past the implementer
+     phase, not only PrOpened. THE ARMS ARE ENUMERATED BELOW AND THE COUNT IS SIX, NOT
+     FOUR. Verified in code by the reviewer and re-verified by the driver advisor
+     2026-09-20 22:08 against main at 0b474a66d1. rework_no_op_failure has exactly ONE
+     production call site, auto_complete.rs:3689 (1372 is the trait method, 6497 the test
+     mock). The match on run_implementer has six arms:
+
+       3621  Err(f)                                   UNGUARDED
+       3665  Ok(ImplementerOutcome::Punted)           UNGUARDED
+       3686  Ok(ImplementerOutcome::PrOpened)         GUARDED  (the guard is at 3689)
+       3707  Ok(ImplementerOutcome::AlreadyMerged)    UNGUARDED
+       3728  Ok(ImplementerOutcome::Inconclusive)     UNGUARDED
+       3753  Ok(ImplementerOutcome::Held)             UNGUARDED
+
+     INCONCLUSIVE AND HELD ARE NAMED HERE BECAUSE THEY WERE MISSED. The original report
+     named three unguarded arms and mislabelled a fourth (3717 is inside the PrOpened
+     block, AFTER the guard; AlreadyMerged is 3707). Inconclusive and Held are the
+     "could not determine what happened" shapes - precisely where a silent no-op is most
+     likely and a guard most needed. A fix written against three arms leaves the two most
+     dangerous ones open, and both reviewing seats would call it done.
+
+     Prefer one check at the single point where the phase advances over six call sites
+     that can drift apart again. A fix is NOT complete while any arm that advances the
+     pipeline reaches phase 2 without the check.
   2. A rework round against an already-open PR whose head is unchanged produces a ReworkNoOp failure and a SpecShelved event, for each ImplementerOutcome variant that can advance.
   3. A test per advancing variant asserts the guard fires; a test asserts a genuine new commit still passes, so the fix cannot be a blanket refusal.
   4. Confirm and record which variant the already-open-PR rework path actually returns.
@@ -64,12 +87,22 @@ description: |
   outstanding refusal?" currently answers yes for work that shipped weeks ago. A guard
   built on criterion 6 inherits that. It is small (2 of 53) and is being filed separately;
   this note exists so the fixer does not discover it as a surprise mid-implementation.
+
+
+  8. THE Err ARM AT 3621 IS BUG-1524'S PATH, and this is code evidence for a pairing that
+     previously rested on log evidence alone. That arm calls
+     recover_phase1_failure_with_open_pr (3622) and sets start_phase = reentry_phase
+     (3626): phase 1 fails, the failure is recovered as an open-PR re-entry, the pipeline
+     continues - with no no-op check on the way through. So the arm BUG-1524 travels is
+     one of the five this spec does not guard. Fixing this spec's criterion 1 removes
+     BUG-1524's SILENCE but not BUG-1524's cause; the two remain separate repairs.
+     Reviewer's finding, 2026-09-20; re-verified by the driver advisor.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-21T05:00:50.201756744Z
+modified_at: 2026-09-21T05:08:25.205939996Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
