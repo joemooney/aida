@@ -87,12 +87,12 @@ description: |-
   then exits 0. The script has no --write flag; the bare run rewrites in place. Worth
   saying in the error message, which currently says "regenerate with <path>" without
   stating that a bare run is the regeneration.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:50:44.478379805Z
-modified_at: 2026-09-21T08:05:07.061288796Z
+modified_at: 2026-09-21T08:11:55.435306719Z
 req_type: Bug
 tags:
 - agent-surface
@@ -355,3 +355,22 @@ comments:
   created_at: 2026-09-21T08:05:07.061288796Z
   modified_at: 2026-09-21T08:05:07.061288796Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c305-8aa3-7911-82aa-90a89e18ad73
+  author: aida-auto-bump
+  timestamp: 2026-09-21T08:11:55.427702703Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0c305-8aab-7271-a4b3-c53a77269590
+  timestamp: 2026-09-21T08:11:55.435303805Z
+  agent: aida
+  commit_sha: 1460a0168a787edcc632aa830f7a9f9b56c6805d
+  summary: 'All four criteria verified against the diff, not the report. Six-test suite re-run from a clean extraction at this head with five mutations, every one red. Build green: 32 success / 1 skipped, and the reordered inventory step passed AFTER the suite — the PR validates its own fix.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T08:11:55.427324185Z
+  completion_sha: 1460a0168a787edcc632aa830f7a9f9b56c6805d
