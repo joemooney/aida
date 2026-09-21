@@ -1,0 +1,48 @@
+id: 01a0c510-7a66-73b3-82af-a463194a347e
+spec_id: STORY-1427
+agreed_id: STORY-1427
+title: 'Agent gates as CONTEXT MANAGEMENT: a shipped library of named gates invocable at intake, so discipline is called rather than carried in every agent''s context'
+description: |-
+  Proposed by the operator, 2026-09-21: "we need to focus some thought on agent gates. These can be a nice combination of prose and programmatic checking. 'Is this a well-formed requirement' could be invoked as an agent gate either as part of `aida add` or a gate going into it or a flag like `--gates=...`. A library of such agent gates may be the key to keeping simple without bloating LLM context."
+
+  WHAT ALREADY EXISTS (EPIC-66, Completed 2026-09-16). The agent-gate mechanism is built: declarative [pipeline] block, a gate that dispatches an agent with role + the spec's acceptance + a gate prompt and emits a graph-linked verdict, applies_to selectors over type and tag, and on_fail='warn' for advisory gates that file a finding without blocking. STORY-1155 shipped v1 scoped to BEFORE MERGE. STORY-1157 (draft, deferred) is "arbitrary gate insertion points"; STORY-1156 (draft, deferred) is command/script gates.
+
+  WHAT IS NEW HERE, AND IT IS THE ARGUMENT RATHER THAN THE MECHANISM:
+
+  1. THE RATIONALE IS CONTEXT ECONOMY, NOT QUALITY ASSURANCE. EPIC-66's stated differentiator is that a gate reasons against THIS requirement's acceptance instead of running a dumb script. The operator's argument is different and, for the project's north star, stronger: a gate is INVOKED, while prose is AMBIENT. Discipline carried as prose costs context in every session whether or not it is relevant, and is silently ignorable. Discipline carried as a named gate costs context only at the moment it fires. "Keeping simple without bloating LLM context" is a claim about the agent's working set, not about defect rates.
+
+     This is directly evidenced by a failure in the session that produced this spec. An agent holding CLAUDE.md, docs/lifecycle.md and 48 skills still concluded that `--single-branch` (TASK-1003, shipped) did not exist and designed a replacement across two turns, because an ambient prose answer that was ALMOST right arrived before the query that would have been exactly right. Prose does not merely fail to enforce - it pre-empts the surface that would have. A gate cannot be pre-empted, because it is called.
+
+  2. INSERTION AT INTAKE, WHICH IS OUTSIDE THE PIPELINE ENTIRELY. STORY-1157 frames arbitrary insertion points as PIPELINE PHASES - positions in the drain. `aida add` is not a drain phase; it is a CLI entry point reached long before any pipeline runs. A gate there is a new class of insertion, not a new position in an existing list, and STORY-1157 as written does not cover it.
+
+  3. A SHIPPED LIBRARY, not just the ability to author one. EPIC-66 lets a team WRITE a gate. Nothing ships a catalogue of gates worth having. "Is this a well-formed requirement" is the seed entry; others plausibly include: does this duplicate an existing spec, are these acceptance criteria testable, does this contradict an accepted ADR, is this spec's scope one deliverable or several.
+
+  RECOMMENDATION THAT CUTS AGAINST THE PROPOSAL AS STATED - GATE AT DISPOSITION, NOT AT CAPTURE.
+  `aida add` is the CAPTURE path, and this project's stated deficiency is that too little was captured, not that too much was. An LLM round-trip on every `aida add` adds latency and cost to the exact action the discipline wants to make frictionless; the session that produced this spec filed eight specs, and a per-filing agent gate would have measurably reduced that. A gate that suppresses capture is net-negative for a system whose north star is capture completeness.
+    Proposed instead: the well-formedness gate DEFAULTS to a disposition moment - `aida groom` / `aida backlog groom`, which is already a batch review by an advisor and already the place where a spec earns its way onto the queue. Capture stays free; quality is enforced where judgement already happens. `aida add --gates=...` remains available as an explicit opt-in for a caller who wants the check inline, and that is the right home for the flag.
+
+  DESIGN CONSTRAINTS
+  - TWO-TIER, DETERMINISTIC FIRST (PRIN-8). `aida lint` already answers "is this well-formed" deterministically, EARS-style, with no LLM call. A well-formedness gate MUST run the deterministic pass first and escalate to an agent only for what lint cannot decide. This makes the gate cheaper, more reproducible, and honest about which rung each finding came from.
+  - LABEL THE RUNG. An agent gate's verdict is rung 4; print it as heuristic, per ADR-44's precedent, and never let a rung-4 verdict silently block at intake.
+  - DISCOVERABILITY IS THE LIBRARY'S REAL RISK, and it has a precedent: SPIKE-81 records that `--single-branch`, `batch:express` and `lifecycle:no-ci-wait` all shipped and were never invoked. A library of gates nobody knows about repeats that exactly. The library must ship with a DEFAULT SET wired to lifecycle moments, not a menu to browse; an un-defaulted gate is an unused gate.
+  - NON-DETERMINISM IS A REPRODUCIBILITY COST. The same gate on the same spec can return different verdicts. Under a north star of reconstitution that is a real cost, not a footnote: record the gate verdict with the gate name and version so a later reader knows what judged it and on what.
+
+  ACCEPTANCE
+  - A named gate from the library is invocable outside the drain pipeline, at intake.
+  - `aida add --gates=<names>` runs the named gates inline; without the flag, `aida add` is unchanged in latency and behaviour.
+  - The well-formedness gate runs the deterministic lint pass first and reports which findings came from which tier.
+  - The shipped library has at least one default gate bound to a disposition moment, and that binding is discoverable without reading a catalogue.
+  - A gate verdict records the gate name and version alongside its finding.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T17:43:06.598853252Z
+modified_at: 2026-09-21T17:43:06.598853252Z
+req_type: Story
+tags:
+- context-economy
+- epic-66
+- gates
+- intake
+- north-star
