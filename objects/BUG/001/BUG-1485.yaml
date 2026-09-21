@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-21T02:03:47.338508517Z
+modified_at: 2026-09-21T04:52:20.401040214Z
 req_type: Bug
 tags:
 - drain-safe
@@ -223,6 +223,12 @@ comments:
     GENERAL POINT, raised by the reviewer seat when it merged #2041 and worth acting on beyond this instance: a commit bundling two unrelated changes under one spec's trailer makes the second change untraceable by every tool that reads trailers or blame. The fix is a second trailer, not a longer commit body.
   created_at: 2026-09-21T02:03:47.338508517Z
   modified_at: 2026-09-21T02:03:47.338508517Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c24e-d131-7240-9a1e-84337c383d50
+  author: joe
+  content: 'Round 2: replaced hand-written receipt JSON fixtures with production-path lifecycle fixtures. Tests now exercise RealPhaseDriver receipt preparation (directory creation, stale removal, child env), the queue-work publication hook and atomic writer, lease release, recovery at session-start, and a behaviorally distinct post-push position backed by a real remote branch.'
+  created_at: 2026-09-21T04:52:20.401040214Z
+  modified_at: 2026-09-21T04:52:20.401040214Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
