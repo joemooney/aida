@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:28:38.860398318Z
-modified_at: 2026-09-21T04:15:27.709886762Z
+modified_at: 2026-09-21T05:10:28.303810377Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -283,6 +283,26 @@ comments:
   created_at: 2026-09-21T03:58:37.841191865Z
   modified_at: 2026-09-21T03:58:37.841191865Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c25f-6acf-79e2-9418-a436bc8aeffc
+  author: joe
+  content: |-
+    CORRECTION to a measurement claim in this spec and in PR #2045 body. The design decision is unaffected; the justification I gave for it was sloppy and should not be quoted as-is.
+
+    I wrote: "The 419 are not legacy -- the PR-keyed handshake writer still emits verdicts with no reviewed commit, two of them written the same day."
+
+    That is a non-sequitur. Two live instances do not make 419 files non-legacy. Re-measured across 556 verdict files, split on a 24-hour boundary:
+
+      last 24h    11 of 67 files carry NO reviewed_sha and NO head   (16 percent)
+      older      418 of 489                                          (85 percent)
+
+    So the bulk IS historical, contrary to what I asserted. What is true, and what actually supports the decision, is narrower: the writer is STILL LIVE at roughly one in six, and every recent offender is a PR-keyed file -- PR-1976, PR-1986, PR-2036, PR-2038, PR-2039, PR-2040, PR-1984, PR-2041 -- which matches BUG-1466 exactly (aida review record --pr writes a handshake with no provenance).
+
+    The decision to REFUSE archiving an unidentifiable round stands on that narrower claim: the case keeps recurring, so it cannot be treated as a historical shape that will age out. It did not need the stronger, wrong version.
+
+    COVERAGE CONSEQUENCE WORTH TRACKING. Because this spec refuses to archive rounds it cannot identify, its round-retention is capped at the identifiable share of the corpus -- currently 127 of 556 files, about 23 percent. It reaches the whole corpus only once BUG-1466 stops producing null provenance. BUG-1466 is Approved, High, and not yet on main. Anyone assessing whether STORY-1391 delivered should measure against that cap rather than against the file count.
+  created_at: 2026-09-21T05:10:28.303810377Z
+  modified_at: 2026-09-21T05:10:28.303810377Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0c22d-0ddc-7c83-884a-0bed25ac0e50
   author: aida-reconcile
