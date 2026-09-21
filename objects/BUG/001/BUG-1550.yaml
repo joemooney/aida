@@ -44,8 +44,47 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:04:32.760270386Z
-modified_at: 2026-09-21T12:04:47.311082908Z
+modified_at: 2026-09-21T12:27:54.491974611Z
 req_type: Bug
 tags:
 - papercut
 - substrate-gate
+comments:
+- id: 01a0c3ef-e6fb-7541-9a8a-a6d042006030
+  author: joe
+  content: |-
+    WORKING PREDICATE, from the reviewer seat, with its own failure disclosed first.
+
+    THE CHECK I USED ON PR-2027 AND REPORTED AS CLEAN CANNOT DETECT THIS DEFECT. I grepped the diff for REMOVED lines carrying /// or trace: (grep "^-.*trace:\|^-.*///"). That is vacuous here: the defect does not remove the header, it inserts an item after it, so the header lines stay as unchanged CONTEXT. Run against the known-bad commit 9c38af7d8369 it produced one hit from an unrelated removal elsewhere and said nothing about the displacement at :1429-1430. I reported "BUG-1550 did not recur" from a check that could not have seen it. The conclusion happened to be right; the evidence was not.
+
+    THE SIGNATURE THAT WORKS. Splicing an item between a header and the item it documents MERGES TWO HEADERS INTO ONE CONTIGUOUS COMMENT RUN. So: flag a comment run containing two `trace:` lines with `///` DOC LINES STRICTLY BETWEEN them.
+
+    Three refinements were needed and each was forced by a false positive on main:
+      1. "trace followed by doc" alone - 100+ files. `// trace:X` above `/// doc` above the item
+         is a legitimate convention in this repo; both orders occur.
+      2. "two traces in one run" - still over-fires. Adjacent trace lines are ONE multi-spec
+         header (`// trace:TASK-991 trace:STORY-712` then `// trace:TASK-1245`), which is legal.
+      3. Requiring `///` lines BETWEEN the two traces is what separates a merged pair of headers
+         from a multi-spec single header. `//!` module docs excluded - they are file-level and
+         legitimately carry several traces.
+
+    VERIFIED BEHAVIOUR:
+        known-bad  9c38af7d8369 drain_state.rs  -> flags :1430 and :1450   (exactly the defect)
+        fixed      0ed4bed7b88f drain_state.rs  -> clean
+        PR-2027    53a138232061 journey.rs      -> clean  (the claim I made, now actually checked)
+        origin/main                             -> 32 of 582 .rs files flagged
+
+    THE 32 ARE CANDIDATES, NOT CONFIRMED INSTANCES. I have not triaged them and they are a mix of genuine cases and patterns the predicate still misreads. They are a bounded starting list rather than a verdict - the point is that an implementer starts from a predicate with a known true-positive and a known false-positive rate instead of inventing one.
+
+        aida-cli-lib: auto_complete, burndown, cli, criteria, digest, doctor_cmd, forge, glyphs,
+        human_cmd, init_cmd, lib, lock_cmd, mcp, permissions, pr_cmd, pr_ship, presence_cmd, punt,
+        queue_cmd, schema, session, solo_cmd, status_display, store_cmd, tracker_cmd
+        aida-core: db/cache, git_ops, node, rollup
+        aida-tui: board, config_menu, redesign/store
+
+    ON ACCEPTANCE CRITERION 3 - that the check runs over its own source. It does: the detector is Python and the flagged set above is Rust, so running it on itself is vacuous in the other direction. The honest form of criterion 3 here is that whatever implements this must be exercised against a KNOWN-BAD FIXTURE, because the first version of my own check passed everything for the wrong reason. A detector that has never been shown to fire is indistinguishable from one that cannot.
+
+    Script as run: a comment run is contiguous `//` lines; collect trace-bearing lines excluding `//!`; for each adjacent pair, flag if any `///` line lies strictly between.
+  created_at: 2026-09-21T12:27:54.491974611Z
+  modified_at: 2026-09-21T12:27:54.491974611Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
