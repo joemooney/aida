@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a0bf6f-03cc-76c0-891b-0b7acbc4c8fa
+  position: 40000
+  added_by: role:implementer
+  added_at: 2026-09-21T03:26:18.713644682Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a0ba82-9fb0-7763-a986-b54029980a2c
   position: 41000
   added_by: role:implementer
@@ -149,13 +155,6 @@
   note: auto-queued by `aida pr` (01a0be77); covers 1 spec
   added_at: 2026-09-20T11:10:47.987691475Z
   for_role: reviewer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0bf6f-03cc-76c0-891b-0b7acbc4c8fa
-  position: 160000
-  added_by: role:implementer
-  added_at: 2026-09-20T16:31:21.566681820Z
-  for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
   requirement_id: 01a0bfea-d790-7641-a9d9-acf9e41c3c09
