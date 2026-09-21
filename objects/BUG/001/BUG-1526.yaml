@@ -92,7 +92,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:50:44.478379805Z
-modified_at: 2026-09-21T08:12:31.447152997Z
+modified_at: 2026-09-21T08:13:37.973784719Z
 req_type: Bug
 tags:
 - agent-surface
@@ -382,6 +382,25 @@ comments:
     Expected outcome of the eight is that they become DIAGNOSABLE, not that they merge. Removing a mask produces findings.
   created_at: 2026-09-21T08:12:31.447152997Z
   modified_at: 2026-09-21T08:12:31.447152997Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c307-1b35-7bf3-9d06-8a23e92ccab6
+  author: joe
+  content: |-
+    [aida:proxy-approval] CORRECTION to the ledger comment recorded minutes ago on this spec.
+
+    WHO MERGED. I wrote "this advisor ... executed only the merge." That is wrong. The GitHub record is unambiguous: mergedAt 2026-09-21T08:10:22Z, merge commit 1460a0168a787edcc632aa830f7a9f9b56c6805d. The reviewer seat executed the merge at 01:10:22 local, before my `aida pr ship 2046` ran at roughly 01:11-01:12. Our mails crossed. What ship actually did was find the PR already merged and run the post-merge steps - the store pull and the `aida pull` that produced the Done -> Completed auto-bump. It printed "PR-2046 shipped" for a merge it did not perform, which is how I came to claim it.
+
+    WHAT DOES NOT CHANGE. Every gate in the original ledger entry was verified and still holds, and the independence conclusion is unchanged and in fact cleaner: product authored all three commits, the reviewer verified and merged, and this advisor wrote none of the diff and did not execute the merge either. No seat signed its own work.
+
+    WHAT THE REVIEWER ADDED, on their own record. They did not accept the commit message's claim of a mutation run. They extracted scripts/ and tests/ at f56e089371 into a temp dir holding nothing else and ran the matrix themselves: baseline 6 pass; --check -> return 0, 2 red; render() -> str(len(rows)), 2 red; render() -> drop the path, 2 red; line number back in the row, 1 red; sites() -> cells[1] only, 1 red; restored, 6 pass. The sixth test asserts on the actual stderr string. Both non-blocking findings are closed by observation rather than by assertion.
+
+    They also bounded what they did NOT re-run, which is the part worth keeping. c1 and c2 were verified at 7ff8055a3d. Rather than assume those verifications survived two further commits, they diffed 7ff8055a3d..f56e089371 - 17 lines in the script, 121 in tests - and established that the only non-test change across the three commits is sites(), leaving render() and ci.yml untouched. That is the right shape for carrying an earlier verification forward: name the delta, show it cannot reach what you verified, then carry it.
+
+    RESIDUE. `gh pr merge --delete-branch` removed the remote branch but could not remove the local one: bug-1526-inventory-identity is checked out in a worktree under session 01a079fe's scratchpad. The reviewer left it alone rather than force anything, which was correct. It is that session's to reap.
+
+    WHY I AM AMENDING RATHER THAN LETTING IT STAND. A proxy-approval ledger exists so someone can reconstruct who did what without trusting anyone's memory. An entry that records the wrong actor for the merge act is exactly the kind of error that survives, because nothing downstream contradicts it. timestamp: 2026-09-21 01:14 -07:00
+  created_at: 2026-09-21T08:13:37.973784719Z
+  modified_at: 2026-09-21T08:13:37.973784719Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c305-8aa3-7911-82aa-90a89e18ad73
