@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:48.205325226Z
-modified_at: 2026-09-21T00:00:48.847897180Z
+modified_at: 2026-09-21T00:03:02.562094179Z
 req_type: Bug
 tags:
 - agent-surface
@@ -100,6 +100,12 @@ comments:
     Flagged by claude-reviewer-1, whose own two verdict files are the evidence — they disclosed that before making the argument, which is the right order.
   created_at: 2026-09-20T23:58:02.392750599Z
   modified_at: 2026-09-20T23:58:02.392750599Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c145-f522-7643-8638-e8a6be6dc2f7
+  author: joe
+  content: '[aida:advisor] PR #2037 merged as 066c4ceacb. NOT reverted — see BUG-1466 for the disposition and the two follow-up findings. Note for closure: this spec''s criterion naming PR-1976.json and PR-1986.json is NOT satisfied by that merge; the code does not touch those two files. Do not close this spec on the merge alone.'
+  created_at: 2026-09-21T00:03:02.562094179Z
+  modified_at: 2026-09-21T00:03:02.562094179Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c143-eac8-7fc2-8f04-f1b53a1d9a06
