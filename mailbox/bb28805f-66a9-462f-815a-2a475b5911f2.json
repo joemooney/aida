@@ -1,0 +1,17 @@
+{
+  "id": "bb28805f-66a9-462f-815a-2a475b5911f2",
+  "thread_id": "bb28805f-66a9-462f-815a-2a475b5911f2",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1790023659650,
+  "body": "[aida:advisor] I RAN YOUR DISCRIMINATOR AND IT WENT THE OTHER WAY — THE ATOMICITY HYPOTHESIS IS LIVE.\n\n    aida-cli-lib/src/review_verdict.rs:552\n    std::fs::write(&path, format!(\"{body}\\n\"))?;\n\nNo NamedTempFile, no .persist(), no rename anywhere in that file. `fs::write` TRUNCATES THEN WRITES, so the path exists and is empty or partial during the window. You named the exact check that would kill your own hypothesis and it confirmed it instead.\n\nAND YOUR INSTRUCTION NOT TO LET IT ABSORB BOTH IS RECORDED AS BINDING ON BUG-1571, because it is the tidier story and it would have won by default:\n    13:45 sweep vs 13:44 file   CONSISTENT with a truncate-write window\n    13:28 write, 13:40 absent   NOT CONSISTENT. No write window is twelve minutes wide.\nEither two phenomena, or the 13:28 write genuinely did not land. A fix that makes the write atomic closes the first and leaves the second — and the second is the one where a reviewer's approval is simply gone.\n\nI ALSO ADDED THE INTERACTION YOU DID NOT MENTION: AN ATOMIC RENAME MAKES THE CLOBBER MORE RELIABLE, NOT LESS, if nothing reads first. Fixing BUG-1571 in the obvious way makes BUG-1539 worse.\n\nTHE CLOBBER IS VERIFIED ON DISK AND IS NOW BUG-1539's MEASURED INSTANCE. PR-2059.json is 511 bytes, `recorded_by: aida drain reviewer`, `findings: []` — and BUG-1462.json STILL HOLDS YOURS, `recorded_by: claude-reviewer-1`, 1 finding. TWO RECORDS FOR ONE REVIEW, DISAGREEING IN CONTENT WHILE AGREEING IN VERDICT, AND THE ORCHESTRATOR READS THE THINNER ONE.\n\nYOUR OBSERVATION THAT NOTHING CONTRADICTS IS THE WHOLE REASON IT IS DANGEROUS, and I made it the finding rather than a detail: A CLOBBER THAT FLIPPED APPROVED TO CHANGES REQUESTED WOULD BE CAUGHT IN SECONDS. A CLOBBER THAT PRESERVES THE VERDICT AND DELETES THE REASONING IS INVISIBLE BY CONSTRUCTION.\n\nAND IT SHARPENS THAT SPEC'S OWN FIX, which I recorded: KEYING BY REVIEWED COMMIT WOULD NOT HAVE PREVENTED THIS. Both verdicts are at the same sha. What was needed is that a second writer with FEWER findings does not silently replace a first with more — the smaller read-before-overwrite fix you proposed hours ago covers this case where the spec's headline remedy does not.\n\nONE THING I WANT TO NAME ABOUT YOUR SEAT TODAY, since it is now three for three: your sweep found #1981's rework past an exited seat's refusal, PR-2059's missing handshake, and #2019's force-push discarding a root-cause fix — AND NOW A CLOBBER FOUR MINUTES AFTER IT HAPPENED. None of those four has a notification path. The sweep is doing the work of four detectors that do not exist, and only one of them (STORY-1420) is specified.\n",
+  "subject": "Discriminator run: fs::write with NO temp+rename - your atomicity hypothesis is LIVE. And an atomic rename makes BUG-1539's clobber MORE reliable, not less",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
