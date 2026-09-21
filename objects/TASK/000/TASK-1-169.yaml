@@ -1,8 +1,8 @@
 id: 01a0c1e2-5cb8-7d01-87ff-e455a56a682a
 spec_id: TASK-1-169
-title: 'The defective form is more fluent: across 7 errors tonight the wrong version was the better-reading sentence, so care does not correct for it'
+title: 'The defective form is more fluent: across eight errors tonight by two seats, the wrong version was consistently the better-reading sentence — which is why care does not correct for it'
 description: |-
-  The defective form is more fluent: across seven errors tonight by two seats, the wrong version was consistently the better-reading sentence — which is why care does not correct for it
+  The defective form is more fluent: across EIGHT errors tonight by two seats, the wrong version was consistently the better-reading sentence — which is why care does not correct for it
 
   Filed at the advisor's request, who identified the observation and asked that it be written up with the instances before deciding whether it becomes a principle. Promotion is the advisor's call; this records the argument and the evidence.
 
@@ -33,11 +33,31 @@ description: |-
         only aesthetic. It was false: the verdict was recovered from a session log twenty minutes
         later.
 
+  EIGHTH INSTANCE - ADVISOR SEAT, AND IT IS NOW THE STRONGEST IN THE SET:
+    "judged insufficient, by both seats INDEPENDENTLY"  vs  "the reviewer argued it and the advisor concurred"
+        Written into TASK-1-166's promotion trigger as binding text. Concurrence is not independence.
+        The fluent form is shorter AND made the evidence sound stronger, since two converging
+        judgements beat one accepted - so the pressure ran toward significance, not only toward
+        fluency. Caught by the reviewer on read-back.
+
+        WHAT MAKES IT THE STRONGEST: it was written roughly FIFTEEN MINUTES after its author read
+        this finding, argued its merits, wrote its acceptance scope and set its promotion trigger.
+        Maximum priming, and it did not help. Every one of the first seven has the excuse that the
+        author was not holding the claim in mind. This one does not, which makes it the cleanest
+        available evidence that the remedy is not awareness - the claim this finding rests on,
+        demonstrated against the person who approved it.
+
+  A NOTE ON THIS COUNT. Instances accumulate, and the count in this description and title is a FLOOR
+  rather than a total - later instances may be recorded in comments before anyone folds them up. Check
+  the comments before citing a number. This line exists because the eighth instance sat in a comment
+  while the title said seven, which is the stale-enumeration defect this finding's sibling TASK-1-166
+  exhibited ninety minutes earlier, reproduced here by the same author after fixing it once.
+
   WHY THE LAST ONE IS THE LOAD-BEARING INSTANCE. In the others, fluency and overstatement merely coincide. There, the fluent form actively increased the apparent value of the finding, so the writer had a second reason to prefer it and no reason to interrogate it. That is the shape most likely to recur and the hardest to self-detect, because the sentence feels like a good finding rather than like a strong claim.
 
   WHAT THIS DOES NOT CLAIM. It does not claim every fluent statement is wrong, and it is not an argument for writing badly. Precision and fluency coincide often; the claim is only that when they diverge, the selection pressure runs one way, and that this is invisible from inside the sentence.
 
-  THE ACTIONABLE FORM, if any. The detectable signature is an ABSOLUTE in a statement of fact: "does not exist", "every", "never", "unrecoverable", "only", "all". Each of the seven instances above either contains one or is a status check whose failure mode is a false absolute (`exit=0` asserts success). That is greppable in binding text — acceptance criteria, ADRs, findings — in a way that "check your claims" is not. A weaker version of the same instrument as BUG-1507's field-count detector: it does not decide, it narrows to the sentences worth re-reading.
+  THE ACTIONABLE FORM, if any. The detectable signature is an ABSOLUTE in a statement of fact: "does not exist", "every", "never", "unrecoverable", "only", "all". Each of the eight instances above either contains one or is a status check whose failure mode is a false absolute (`exit=0` asserts success). That is greppable in binding text — acceptance criteria, ADRs, findings — in a way that "check your claims" is not. A weaker version of the same instrument as BUG-1507's field-count detector: it does not decide, it narrows to the sentences worth re-reading.
 
   COUNTER-EVIDENCE WORTH RECORDING. Two absolutes tonight were correct and load-bearing: "the trailers stay" and "neither PR merges", both in the advisor's TASK-1289 ruling. So the signature has false positives at a meaningful rate, and it flags sentences for re-reading rather than sentences that are wrong. Anyone acting on this should expect roughly half the hits to be fine.
 status: Approved
@@ -45,7 +65,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:53:52.696962750Z
-modified_at: 2026-09-21T02:58:30.028266509Z
+modified_at: 2026-09-21T03:03:21.469315118Z
 req_type: Task
 tags:
 - from-advisor:general
