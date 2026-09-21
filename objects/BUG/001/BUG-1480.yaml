@@ -2,7 +2,7 @@ id: 01a0c04e-e506-7173-a849-af7584b7342a
 spec_id: BUG-1480
 agreed_id: BUG-1480
 title: aida show takes 7.5 seconds on a healthy cache while list and search answer in 0.4 — the most-used per-spec read is the only one that does not use the cache
-description: |
+description: |-
   `aida show <SPEC>` takes 7.5 seconds against a healthy cache, while every other read of the same store answers in under half a second. It is the most-used per-spec command in the system and it is twenty-three times slower than the surfaces beside it.
 
   MEASURED 2026-09-20 19:32Z, repeated, on an idle machine with no drain running:
@@ -37,7 +37,10 @@ description: |
   - `aida show <SPEC>` on a warm, non-stale cache completes in under one second for a single spec, in line with `list`/`search`/`status`.
   - The single-spec read resolves through the cache to one YAML file rather than loading the store, matching the documented targeted-write path.
   - `--no-git` remains available for callers that want to skip git linkage, but is not required to get acceptable latency.
-  - A latency regression test covers the single-spec read the way one presumably covers `list` after STORY-707.
+  - A latency regression test covers the single-spec read the way one presumably covers `list` after STORY-707. AMENDED 2026-09-21 by the reviewer seat, binding: this criterion does NOT require the test to run in PR CI. Four fixture shapes have failed to separate a full load from a cached read against ~90ms of process startup, and a linear fit to the controlled points under-predicts the real store's cost by 4x, so a CI-sized fixture may not be able to reproduce the defect at all. A guard that only fires against a REAL STORE is acceptable. The original finding was a falsifiability complaint, not a venue complaint: an instrument that CAN fail when the defect is present satisfies it, and where it runs is a separate question from whether it can fail.
+  - BINDING CONDITION ON ANY REAL-STORE GUARD: a query is not a guard until something runs it. If the guard is `aida usage --cmd show --slower-than 1000ms events` or similar, the acceptance must name the TRIGGER - what invokes it, on what cadence, and what happens when it trips. Naming the instrument in the spec is not sufficient. Without a trigger we replace "a test that cannot fail" with "a query nobody runs", which is the same defect wearing different clothes.
+  - BINDING CONDITION, DEMONSTRATE-IT-FIRES: before the guard is accepted, someone must restore `backend.load()` in the show path, run the guard against the real store, and SHOW IT TRIPS. Not reason that it would from 9.9s against a cached read - demonstrate it. Three instruments tonight were never live (a mutation that never changed behaviour, a detector that could not fire, a timing test that passed with the regression restored); all three were caught by the seat that built them and none by the seat downstream. A guard accepted on argument by a reviewer would be the fourth and the worst, because it would arrive already blessed. See TASK-1418.
+  - THE DOMINANT COST TERM IS UNIDENTIFIED, and this is recorded so the next reader does not assume the 9.9s was understood. Measured: per-object and per-byte costs as a fresh fixture exhibits them (~0.08 ms/object, ~0.09 ms/KB) account for roughly a QUARTER of the production cost. `aida show --no-git` is 9.86s against 9.89s, so git linkage is ruled out. Whatever dominates lives in the store-read path and scales with something a tempdir does not reproduce. A guard watching an uncharacterised cost is weaker than one watching a known term - not a reason to block, but not to be forgotten either.
   - Verification: `aida usage --cmd show --slower-than 1000ms events` shows no entries after the fix; the same query today should show the population.
 
   Related: the `--fields` projection on `list`/`search` (STORY-734) is the reason the batch-refresh workaround exists. If `show` cannot be made fast, the alternative is projecting `execution_mode` through `--fields`, but that treats the symptom.
@@ -46,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T12:39:39.379843256Z
+modified_at: 2026-09-21T12:42:02.692445706Z
 req_type: Bug
 tags:
 - agent-surface
