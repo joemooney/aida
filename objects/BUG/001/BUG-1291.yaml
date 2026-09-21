@@ -29,12 +29,12 @@ description: |
   5. A clean PR with no verdict, no hold and no live owner is visible somewhere an operator or a monitor reads — `aida awaiting` is the natural home — so this class is never again discovered by someone noticing a stale timestamp.
 
   Filed by the product seat as a proposal; the fork is the advisor's to decide.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-21T17:50:27.736992127Z
+modified_at: 2026-09-21T18:15:14.689894860Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -254,8 +254,30 @@ comments:
   created_at: 2026-09-21T02:40:02.690884725Z
   modified_at: 2026-09-21T02:40:02.690884725Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c52d-e600-7140-b31a-f2500851d49f
+  author: aida-auto-bump
+  timestamp: 2026-09-21T18:15:14.688848633Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c52d-e601-7b61-b907-c645a6315493
+  timestamp: 2026-09-21T18:15:14.689893759Z
+  agent: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+  brief_ref: .aida/agent-briefs/codex/BUG-1291-2026-09-21T014341Z.md
+  commit_sha: 42f4e9fd59bdc4ba1d4391ef8f32e293e68cacf5
+  summary: 'MY OWN BLOCKING FINDING IS RESOLVED, AND RESOLVED THE WAY THE FINDING ASKED - AS A DECISION, NOT A SED. F1 was that the PR''s own declared check failed: git diff --check reported trailing whitespace at the ADR''s lines 3-5. F2 warned those were deliberate markdown HARD LINE BREAKS and that a blind strip would change rendering, naming two acceptable remedies. They took one of them: the two-space breaks are now explicit <br>, so the rendering is preserved and the check passes. VERIFIED BOTH HALVES RATHER THAN EITHER: git diff --check origin/main...af49b12b83 is now EMPTY, and reading the rendered source with cat -A confirms "<br>$" with no residual trailing space - and confirms line 6 (**Related:**) correctly has NO <br>, because it is the last line before a blank line and never needed one. A fix that added <br> uniformly would have been a different, subtler rendering change; this one is line-by-line correct. THE SUBSTANTIVE CODE IS UNCHANGED FROM WHAT I ALREADY REVIEWED, established by the method I recorded on the prior round rather than by patch-id: extracting only the added/removed lines of each commit with context stripped gives byte-identical bodies across the rebase (ec1333c692 -> 3b490c07f3 and 64e4e5755b -> a4095b80b7, both hashing 7728b0ff1195 and 0bd003fab114 respectively). So the ONLY new work in this round is the <br> commit, and every prior conclusion about the orchestrator code carries forward as confirmation rather than re-derivation.'
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: Pure rebase, zero rework; Build now GREEN (11m54s). The declared diff-cleanliness check still fails — but the whitespace is intentional markdown hard-line-breaks, so the remedy is a decision rather than a strip.'
+  review_verdict: approve
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T05:13:22.085881820Z
   implemented_by: joe
+  completed_at: 2026-09-21T18:15:14.688375926Z
+  completion_sha: 42f4e9fd59bdc4ba1d4391ef8f32e293e68cacf5
