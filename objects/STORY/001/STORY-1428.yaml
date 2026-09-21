@@ -1,0 +1,52 @@
+id: 01a0c516-3c04-7733-9fd3-cd94fe9c7b39
+spec_id: STORY-1428
+agreed_id: STORY-1428
+title: Recurrence ≥3 promotes to WORK but never to a GATE, so a class fixed three times gets fixed a fourth — route the existing counter to a gate-candidate decision
+description: |-
+  Proposed by the operator, 2026-09-21: "at a meta level, I think we need to ask somewhere in the process: 'is this a candidate for a new or existing agent gate, can an agent gate bring more determinism without adding too much overhead'."
+
+  THE QUESTION IS RIGHT. THE FORM MUST NOT BE A GUIDELINE. A written rule saying "prefer gates over prose" is itself prose - rung 5 on PRIN-8's own ladder - and would drift exactly like the rules that failed to fire in the session this was proposed in. Applying PRIN-8 to its own adoption mechanism means the meta-question has to fire from a trigger, not from someone remembering to ask it.
+
+  THE TRIGGER ALREADY EXISTS AND ROUTES TO THE WRONG DESTINATION.
+  - `aida findings recur` increments a recurrence counter, persisted in a `recurrence:N` tag, and `.aida/discipline/observation-discipline.md` already sets the threshold: "Recurrence >= 3 is the promote-it signal".
+  - `aida findings promote` has exactly one destination: "sets status Approved and adds it to a work queue".
+
+  So the system counts recurrence and then promotes it to MORE WORK. There is no route from "this class has recurred N times" to "stop fixing instances of this class and gate it". Promotion means fix it again.
+
+  VERIFIED INSTANCES IN THE CURRENT CORPUS, all self-reported in the spec's own title:
+  - BUG-1544: "ETXTBSY on a freshly-written fixture binary is the fourth occurrence of a class fixed three times, at the one test site both existing remedies skipped." Three correct promote-to-work decisions, each fixing one instance; the class was never gated, so it returned.
+  - BUG-1550: "Three doc/trace headers were orphaned by insertion in one night and all compiled clean - GATE THE CLASS, because a displaced trace comment silently inverts aida why." A human reached the gate conclusion manually, in a title, with no mechanism behind it.
+  - BUG-1556: cross-platform portability defects "arrive about as fast as they are fixed - 27 of the last 30 nightlies red on four different non-recurring tests, and the three PR-time guards meant to catch them are" insufficient. The class outruns the instance fixes.
+
+  PROPOSAL - A THIRD PROMOTE DESTINATION, not a new checklist.
+  `aida findings promote` gains a gate-candidate route alongside the work route. At recurrence >= 3 the promote prompt presents both destinations rather than defaulting silently to work, and asks the operator's second question - can a gate bring more determinism without too much overhead - at the one moment the evidence for answering it is already in hand.
+
+  THE OVERHEAD TEST, MADE A DECISION RULE RATHER THAN A JUDGEMENT CALL. Gate when the expected cost of future instances exceeds the cost of the gate. Recurrence count is the input to that comparison and is already recorded. The screening questions, in order, each cheap:
+  1. Is the class MECHANICALLY DETECTABLE - can a violation be recognised without judgement? If yes, this is a rung 1-3 gate and almost certainly worth it.
+  2. If not mechanically detectable, would an AGENT gate recognise it reliably? That is rung 4 - allowed, but its verdict must be labelled heuristic and must not silently block.
+  3. If neither, it stays prose and the recurrence is accepted as a known cost. Record that decision so the question is not re-opened at every recurrence.
+
+  A NO is a legitimate and common outcome. Most recurrences do not deserve a gate; the value is that the question gets ASKED with evidence attached, once, at a defined threshold - not that the answer is usually yes.
+
+  WHY THIS AND NOT A PROCESS RULE. A guideline asks everyone to remember something at an undefined moment. This routes an existing counter to an existing decision point. It adds no new surface to learn, no new discipline to carry in context, and it fires on evidence rather than on diligence - which is the same argument STORY-1427 makes for gates over ambient prose.
+
+  ACCEPTANCE
+  - At recurrence >= 3, promoting a finding offers the gate-candidate destination as well as the work destination.
+  - Choosing gate-candidate records the screening answers and, where the answer is "stays prose", records that so the question is not re-litigated on the next recurrence.
+  - A finding promoted as a gate candidate is linked to the gate it produced, so the class can be checked later for whether the gate actually stopped it.
+  - Below the threshold, behaviour is unchanged.
+
+  RELATED: PRIN-8 (the ladder, and the evidence trigger this implements); STORY-1427 (the gate library these candidates would land in); EPIC-66 (the gate mechanism itself); BUG-1544, BUG-1550, BUG-1556 (the instances).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T17:49:23.844095324Z
+modified_at: 2026-09-21T17:49:23.844095324Z
+req_type: Story
+tags:
+- determinism
+- epic-66
+- findings
+- gates
+- prin-8
