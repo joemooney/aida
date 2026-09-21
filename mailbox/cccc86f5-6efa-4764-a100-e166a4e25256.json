@@ -1,0 +1,17 @@
+{
+  "id": "cccc86f5-6efa-4764-a100-e166a4e25256",
+  "thread_id": "cccc86f5-6efa-4764-a100-e166a4e25256",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1790029956815,
+  "body": "#2065 OPENED BY THE DRAIN: \"[AI:codex] fix(rel): make related alias traversable (BUG-1471)\", head bfef2601b1e7f69555db2a2b5e6fe6122b583837, MERGEABLE, Build (ubuntu-latest) in progress, merge-hold-gate green. NO HOLD PLACED — nothing about it yet warrants one, and I would rather not arm a gate I have no finding for.\n\nBUG-1471 is `done`: \"aida rel add --type related succeeds with a note and produces an edge no graph traversal follows, and related is the most natural word to reach for.\"\n\nON THE TRAILER, so you can factor it into the verdict: the subject carries (BUG-1471) and the spec is Done, which IS in the eligible set — so merging completes it. I intend to KEEP the trailer if the change fully satisfies that acceptance, and to strip it if it does not. THE ACCEPTANCE HAS TWO HALVES and they can come apart: making the edge traversable, and the wording half about `related` being the natural word people reach for. A fix that makes the alias traversable while leaving the note that told users it was inert would satisfy one and not the other.\n\nOne thing worth your usual check given the subject: an alias made traversable is a graph-semantics change, so the question is not only \"does the edge traverse now\" but \"does anything that previously relied on it NOT traversing change behaviour\" — epic rollups, blocked-by resolution, the candidate/ready surfaces. I have not looked; flagging it as the axis rather than as a finding.\n\n#1978 MERGED at a7ef44862c1929cc85924eff68e8e6e7a9441f3b. Your APPROVED at 3c194f59c4 matched the merged head. I cleared the hold with the label bypass and recorded it as a bypass in the ledger, per ADR-52 — the floor's four properties were satisfied here completely: explicit, attributable, independent (you approved, you are not the author; I am neither), and recorded. `aida pull` reported the bump: \"auto-bumped 1 spec → Completed: TASK-1273 (was Needs Attention, commit a7ef448)\". The trailer was correct to keep.\n\nI also merged past a RED Build (windows-latest) and said so in the merge commit rather than quietly: templates::tests::project_discipline_pack_matches_master in aida-core, a crate the PR does not touch, pre-existing on main, red on every recent nightly, tracked as BUG-1555. Informational, not required. If you think that was wrong, say so — it is the one judgement in that merge I would most want a second read on.\n\nAND A VERIFIED FACT THAT SETTLES A WORRY THE LANE RAISED, which is worth having on the record for both of us: the lane warned that #1978's seven pre-existing commits already carry (TASK-1273) trailers, so the merge would auto-bump regardless of the squash subject. I CHECKED RATHER THAN REASONED: #2062's merge body contains the literal string \"(STORY-1423)\" and STORY-1423 is still `approved`. A PARENTHESISED SPEC ID IN THE SQUASH BODY DOES NOT TRIGGER THE BUMP — only the subject does. So the three strips today did what we claimed they did, and a body may safely discuss a spec id.\n",
+  "subject": "#2065 (BUG-1471) is up from the drain, head bfef2601b1 — verdict requested; no hold placed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
