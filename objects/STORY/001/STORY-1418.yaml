@@ -36,5 +36,43 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T09:06:03.019291152Z
-modified_at: 2026-09-21T09:06:03.019291152Z
+modified_at: 2026-09-21T09:09:37.228791838Z
 req_type: Story
+comments:
+- id: 01a0c33a-5d4c-7ab0-81a6-4de8d53a6deb
+  author: joe
+  content: |-
+    FORK A IS RESTATED — the seam is on the wrong NOUN, and the reason is sharper than the layering objection this spec was filed with.
+
+    The product seat measured before choosing, and the measurement rules out the seam as originally imagined:
+
+        update_requirement call sites in aida-cli-lib (non-test)    73 (my own count: 76;
+                                                                     grep method differs,
+                                                                     the order is what matters)
+        emit_spec_completed call sites                               8
+        distinct provenance strings   auto-bump, reconcile-status, done, queue-done, edit
+
+    A seam at `update_requirement` sits on ~75 call sites of which a handful are completions. That boundary means "a requirement was written"; the event means "a spec reached Completed". Wrapping seventy-odd writes to catch five transitions puts the guard on the wrong noun, and every future non-status write inherits a completion check it can never trigger.
+
+    THE SEAM THAT WOULD BE RIGHT IS A STATUS-TRANSITION HELPER, NOT A WRITE HELPER — something shaped like set_status(backend, req, new, provenance) — because the thing with one true home is the TRANSITION, not the persistence. That is a real refactor with a real blast radius, which is why it stays in this spec rather than in a rework round.
+
+    FORK B IS ALSO RESTATED, and the restatement is the cheap win. Enumerate on the TRANSITION, not on the write. A test walking ~75 write sites is noise; a test keyed on the predicate is exact.
+
+    BUT THE PROPOSED INVARIANT IS NOT SET EQUALITY, and this correction matters or the test will be written wrong. The product seat proposed "the set of is_into_completed_transition callers equals the set of emit_spec_completed callers". Verified at 5393454ef6, that is FALSE TODAY and correctly so:
+
+        is_into_completed_transition callers (non-test)   3
+            git_backend_cmd.rs:4701, lib.rs:9975, queue_cmd.rs:546
+        emit_spec_completed call sites                     8
+
+    auto_bump_done_to_completed and handle_db_reconcile_status emit WITHOUT consulting the predicate, because a merge-driven bump already knows it is a transition. A set-equality assertion would fail on correct code.
+
+    THE CORRECT INVARIANT IS ONE-DIRECTIONAL: every caller of is_into_completed_transition must emit in its true branch. Predicate caller IMPLIES emission; emission does not imply predicate caller. That set is 3 today and the test fails the moment it becomes 4 without a matching emission — which is the detection property wanted, and it holds without disturbing the two merge-driven sites.
+
+    WHAT B DOES AND DOES NOT BUY, stated by the seat proposing it rather than talked up: it does not PREVENT a fourth silent path, it makes one VISIBLE the moment it appears. Most of the value at a fraction of the cost. It is the same trick as BUG-1543's complement criterion — assert against the enumerated set so the test fails when the set grows.
+
+    RECOMMENDED ORDER: B first, as a small exact test keyed on the predicate with the one-directional invariant. A after, as the transition-helper refactor, with B's test as the safety net WHILE A is done. Fork C (accept per-site permanently) stays available and becomes the answer if A's blast radius turns out not to be worth it — in which case B is the whole fix.
+
+    PROVENANCE: the wrong-noun analysis, the measurement and the transition-helper shape are the product seat's. The one-directional correction to the invariant is the driver-advisor's, verified by counting both sets at 5393454ef6.
+  created_at: 2026-09-21T09:09:37.228791838Z
+  modified_at: 2026-09-21T09:09:37.228791838Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
