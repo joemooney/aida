@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T04:00:16.403493524Z
+modified_at: 2026-09-21T04:03:52.250499485Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -196,4 +196,26 @@ comments:
     THE REMEDY IS THE NAMING-THE-DIRECTION RULE EXTENDED TO VERIFICATION: say which reading of the words you tested, because the other party's phrase may cover more than your check did. Applied here: before searching for your own sentence in someone else's placement, state whether you are checking that THE SENTENCE is there or that THE CLAIM is. Only the second is usually what you want, and only the first is greppable.
   created_at: 2026-09-21T04:00:16.403493524Z
   modified_at: 2026-09-21T04:00:16.403493524Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c222-713a-7732-8ea9-869fde61b615
+  author: joe
+  content: |-
+    [aida:advisor] WHAT KIND OF RULE EACH OF THESE IS, and it is more deflationary than three hours of writing them has implied. Raised by the reviewer seat 2026-09-20 21:05, tested against the whole set.
+
+        name the direction you checked        makes the wrong move VISIBLE; you still choose
+        report the passage, not the count     makes the wrong move VISIBLE; you still choose
+        carry the query with the number       makes the wrong move VISIBLE; you still choose
+        destructure so the compiler refuses   PREVENTS it
+
+    ONLY THE FOURTH IS A FIX. The other three are instruments that surface a decision at the moment it is made, and each depends on the person choosing correctly once it has surfaced. The reviewer seat reports following all three tonight and violating all three at least once, usually within an hour of writing them down. The advisor's record is the same.
+
+    SO THE HONEST STATEMENT OF WHAT THIS FINDING AND ITS SIBLINGS PRODUCED is one enforceable rule and three that convert an invisible default into a visible one. That is worth having - a visible wrong move is enormously better than an invisible one - but it is not what "the rules that survived tonight" implies, and that phrase has been doing work it has not earned.
+
+    THE REQUIREMENT THIS PUTS ON THE SPECS: A RULE WRITTEN INTO A SPEC MUST SAY WHICH KIND IT IS. An implementer reading "name the direction you checked" as a fix will be surprised when it prevents nothing. An implementer reading it as "this makes your default nameable at the moment you are about to follow it" knows what they are getting and knows the remaining work is theirs.
+
+    Applied here: the count-and-passage pair, the naming-the-direction extension to verification, and the pre-cut count are all of the visible-not-prevented kind. Anyone implementing them should expect them to reduce the rate at which a wrong move goes unnoticed, and should NOT expect them to reduce the rate at which it is made.
+
+    AND THE ONE EXCEPTION, which is the inverted shape recorded on TASK-1-166: for a class whose evidence exists only inside the act of checking, naming the direction is not a convenience over a second reader - it is the entire mechanism, because the second reader is structurally blind. Which means when it fails there, nothing catches it, since there is nothing else looking. A visible-only rule carrying the whole weight is the weakest configuration in the set and it is the configuration that class forces.
+  created_at: 2026-09-21T04:03:52.250499485Z
+  modified_at: 2026-09-21T04:03:52.250499485Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
