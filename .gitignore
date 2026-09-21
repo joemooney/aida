@@ -131,3 +131,38 @@ docs/book/
 # mdbook-mermaid vendored lib (2.6MB — regenerate via `mdbook-mermaid install docs`)
 docs/mermaid.min.js
 __pycache__/
+
+# ── Personal dotfiles at the repository root ────────────────────────────────
+# This repository is PUBLIC. These are the filenames that accumulate
+# machine-local and employer context over time — a proxy setting, an internal
+# host, a work email in .gitconfig, a corporate alias in a shell rc. None of
+# them has ever been committed here, and the point of this block is to keep it
+# that way: without it, one `git add -A` by a human tidying a dirty tree, a
+# broad add by an agent, or a scaffolding step publishes whatever has since
+# filled them.
+#
+# Named entries rather than a root glob, so the rule states what it protects
+# against and a genuinely new project dotfile still has to be decided on
+# rather than silently swallowed. Same deny-by-default intent as the .aida/
+# block above. trace:BUG-1511 | ai:claude
+/.bashrc
+/.bash_profile
+/.bash_login
+/.profile
+/.zshrc
+/.zprofile
+/.zshenv
+/.gitconfig
+/.ripgreprc
+/.inputrc
+/.netrc
+/.npmrc
+
+# Codex agent config (BUG-1511 criterion 2, decided rather than left open):
+# `.codex/hooks.json` wires local hooks with ABSOLUTE machine paths, so it is
+# per-machine state. `.codex/config.toml` is portable project configuration —
+# three lines registering the aida MCP server, the Codex twin of the tracked
+# `.mcp.json` — so it stays trackable and is deliberately NOT ignored here.
+# `.codex/skills/` is a scaffolded pack like `.claude/skills/` and is left
+# trackable for the same reason. trace:BUG-1511 | ai:claude
+/.codex/hooks.json
