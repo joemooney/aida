@@ -1,0 +1,41 @@
+id: 01a0c3ff-d1e8-7f63-945d-94626a3cb7c5
+spec_id: TASK-1419
+agreed_id: TASK-1419
+title: A cache-backed aida list is 2.4x SLOWER on a fixture store that is smaller in both objects and bytes - no model explains it, and it is the load-bearing unknown under BUG-1480
+description: |-
+  A CACHE-BACKED READ IS SLOWER ON A SMALLER STORE, AND NOTHING EXPLAINS IT. Two independent measurements on 2026-09-21 that contradict every model anyone has proposed for BUG-1480.
+
+      real store    4226 objects, 23 MB      aida list = 0.45 s     (advisor, 05:35 MST)
+      fixture        500 objects, 9.96 MB    list      = 1.089 s    (claude-product-1)
+
+  The fixture is smaller in BOTH dimensions - 8x fewer objects, less than half the bytes - and the cache-backed list is roughly 2.4x SLOWER on it. No per-object or per-byte model produces that, and this is the second time the same wall has been hit: a linear fit to controlled fixture points under-predicts the real store's aida show cost by 4x (recorded on BUG-1480), and now the same fixtures over-predict list's cost by 2.4x in the other direction.
+
+  WHY THIS IS WORTH MEASURING RATHER THAN ASSUMING. It is the load-bearing unknown under BUG-1480. The whole reason the CI latency test could not be built is that a fixture store does not behave like a real one, and NOBODY HAS CHARACTERISED THE DIFFERENCE. Until someone does:
+    - no fixture-based performance test for any store-reading command can be trusted in either direction
+    - the ~9.9 s aida show cost remains unexplained after per-object, per-byte and git-linkage were each eliminated
+    - anyone sizing a fixture from a measured rate will get a wrong answer, as already happened once tonight with a per-object figure that had to be struck from BUG-1480
+
+  WHAT IS ALREADY ELIMINATED, so this does not restart from zero:
+    - git linkage: aida show 9.89 s vs aida show --no-git 9.86 s on the real store. Not it.
+    - per-object cost alone: under-predicts by 4x.
+    - per-byte cost alone: same fit, same 4x.
+    - object count as the driver: the inversion above rules it out directly - fewer objects, slower read.
+
+  ENVIRONMENT FACTS, OFFERED AS CONTEXT AND EXPLICITLY NOT AS A HYPOTHESIS: the real repo's .git is 209 MB with a 176 MB pack, .aida-store is a worktree on the orphan branch, and the cache at .aida/cache.db is warm and non-stale in the real store. A fresh tempdir store has none of that history and its cache state at first read is whatever the construction left. Do NOT treat any of these as the cause without measuring - a plausible mechanism asserted as a finding is exactly the error this task exists because of.
+
+  ACCEPTANCE:
+  1. The inversion is reproduced - a fixture store smaller in both dimensions than the real store, on which a cache-backed list is measurably slower - or shown not to reproduce, with the conditions that differ stated.
+  2. The dominant cost term in a real-store `aida show` is NAMED, with a measurement that isolates it, not a plausible mechanism.
+  3. The result says explicitly whether a tempdir fixture can EVER model real-store read latency for this codebase. That is the question BUG-1480's test design turned on and it is currently unanswered.
+  4. Any rate quoted states the population it was measured over and the date, because the corpus grows and two correct measurements at different times will disagree.
+
+  OUT OF SCOPE: fixing anything. This is measurement. A fix belongs on BUG-1480 or on whatever this identifies.
+
+  PROVENANCE: claude-product-1 observed the fixture side while running the fifth of five fixtures for #2033, flagged it, and declined to chase it under a stop-and-report ruling - correctly, since it is BUG-1480 diagnostic work rather than #2033 review work. The advisor supplied the real-store side and filed this.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T12:45:17.672410244Z
+modified_at: 2026-09-21T12:45:17.672410244Z
+req_type: Task
