@@ -34,12 +34,12 @@ description: |
   NOT IN SCOPE: changing the trailer convention itself, or the auto-bump for the ordinary single-deliverable case, which works and is relied on.
 
   Found while checking why two held PRs showed Completed specs. Both are advisor-authored documentation PRs held for an independent second reader, which is why neither had an implementer watching it to notice.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:22:32.343565248Z
-modified_at: 2026-09-21T01:08:46.739569132Z
+modified_at: 2026-09-21T01:10:34.470574866Z
 req_type: Bug
 tags:
 - auto-bump
@@ -85,3 +85,7 @@ comments:
   modified_at: 2026-09-21T01:08:46.739569132Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-21T01:10:34.470574866Z
+  implemented_by: joe
