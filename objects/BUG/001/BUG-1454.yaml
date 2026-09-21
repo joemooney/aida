@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:22:32.343565248Z
-modified_at: 2026-09-21T01:02:17.532404683Z
+modified_at: 2026-09-21T01:08:46.739569132Z
 req_type: Bug
 tags:
 - auto-bump
@@ -78,4 +78,10 @@ comments:
   created_at: 2026-09-20T18:15:24.889029853Z
   modified_at: 2026-09-20T18:15:24.889029853Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c182-2413-72e3-8392-1fdaa17ef4c4
+  author: joe
+  content: 'Investigation result (2026-09-20): a manual Completed → Done correction is NOT durable under the old behavior; error: "reconcile-status must run on the default branch (main). Currently on `bug-1454-work`. Switch with `git checkout main` first." replays the already-landed trailer and completes it again. The implementation therefore guards both pull-time auto-bump and reconcile-status: a candidate stays Done while an open GitHub PR references its spec ID, and an unavailable lookup defaults to preserving Done. During implementation, known PRs #1979 (TASK-1295) and #1991 (BUG-1279) merged at 17:51Z and 17:46Z respectively, so both known specs are now correctly Completed rather than requiring reopening. Sweep of current open PR title/body references found 9 Completed-spec candidates: BUG-1268, BUG-1432, BUG-1445, BUG-1447, STORY-1354, TASK-1-152, TASK-1283, TASK-1291, TASK-168. These are candidates because body references can include context/related work and need triage before status changes.'
+  created_at: 2026-09-21T01:08:46.739569132Z
+  modified_at: 2026-09-21T01:08:46.739569132Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
