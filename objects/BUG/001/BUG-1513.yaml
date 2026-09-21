@@ -34,7 +34,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:17:02.797763307Z
-modified_at: 2026-09-21T02:17:22.588491500Z
+modified_at: 2026-09-21T02:21:55.214485216Z
 req_type: Bug
 tags:
 - batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
@@ -43,3 +43,32 @@ relationships:
   target_id: 01a0c1a8-f8f0-72d3-bb2c-a68a4e55125d
   created_at: 2026-09-21T02:17:22.588485684Z
   created_by: joe
+comments:
+- id: 01a0c1c5-1a8e-7261-bcc1-6cdc0fe023ee
+  author: joe
+  content: |-
+    [reviewer] CONFIRMED, AND MY "CANNOT REPRODUCE" WAS WRONG — it was a queue-identity artifact, not evidence against the bug. Reproduced exactly under the right identity, plus one property that decides who can ever notice this.
+
+    I told the advisor I could not reproduce 23 rows and suggested the baseline be pinned to the declared count. That was measured from the wrong queue. The queue is keyed off the shell's user identity (BUG-89), and the two seats do not share one:
+
+        AIDA_USER=claude-reviewer-1   (the reviewer seat)
+            count: 23 -> NO.  count: 22, 22 rows, all for_role=reviewer, zero BUG- rows
+
+        --user joe                    (the advisor's identity)
+            count: 23, 23 rows, 22 reviewer + 1 implementer
+            the leak: BUG-1420, in-progress, implementer
+
+    So the advisor's number and diagnosis were both right and mine was measured against a queue that does not contain the leaked row at all.
+
+    THE PROPERTY THAT MATTERS MORE THAN THE CONFIRMATION. The 22 reviewer rows are visible under BOTH identities, so they are role-routed. The leaked BUG-1420 row is visible only under joe, so it is user-keyed. The defect is therefore that `--for reviewer` does not exclude the REQUESTING USER's own non-reviewer entries — it filters role-routed rows correctly and passes the caller's own rows through regardless of role.
+
+    Which means: THE REVIEWER SEAT CANNOT SEE THIS BUG. A reviewer running `aida queue list --for reviewer` gets a clean 22 with every row correctly role-tagged. The only person who sees the leak is the one who owns the leaked row — and to them it does not read as a leak, because it is a spec they are already working, in a list they asked to be filtered by a role they are not in.
+
+    So the seat with the standing to call it a reviewer-queue defect is the seat that gets a correct answer, and the seat that gets the wrong answer has every contextual reason to read it as right. That is why it survived a night in which both seats were actively auditing this exact surface.
+
+    AND IT DEFEATS RE-MEASUREMENT IN A NEW WAY. The advisor already noted that re-measuring confirms this count rather than breaking it, because what needed checking was the meaning of the set rather than the number. This is a step worse: re-measuring FROM A DIFFERENT SEAT returns a different number, both are correct for their caller, and neither caller has any signal that the other would see something else. Two people running the same command against the same store and comparing results is normally the strongest available check; here it produces a disagreement that looks like one of them mis-counted.
+
+    SUGGESTED, advisory: whatever fixes the filter should also make the identity visible. `aida queue list` printing the resolved user id alongside the count would have collapsed this entire exchange into one line, and would generalise to every queue-identity confusion BUG-89 describes — the failure mode there is also two people seeing different queues and not knowing it.
+  created_at: 2026-09-21T02:21:55.214485216Z
+  modified_at: 2026-09-21T02:21:55.214485216Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
