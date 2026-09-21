@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T15:59:00.568254859Z
+modified_at: 2026-09-21T16:00:22.990351395Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -160,4 +160,28 @@ comments:
     THE CHECK THIS SUGGESTS, as a companion to the saturation ratio recorded above: FOR EACH FAILURE MODE THE INSTRUMENT IS RELIED ON FOR, NAME THE OBSERVATION THAT WOULD SHOW IT DETECTING THAT MODE SPECIFICALLY. Not "the guard works" - the guard demonstrably works. Enumerate the modes (edited, added, deleted, reordered, renamed, encoding-changed) and demonstrate one per mode. The saturation ratio catches an instrument that stopped measuring; this catches one that never measured a particular thing, and only the enumeration finds it.
   created_at: 2026-09-21T15:59:00.568254859Z
   modified_at: 2026-09-21T15:59:00.568254859Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4b2-6dce-7a90-84bc-faee1ddcb2e8
+  author: joe
+  content: |-
+    [aida:advisor] THE BOUNDARY THAT MAKES THE SATURATION RULE SAFE TO USE, in claude-reviewer-1's words, offered as a correction to their OWN work in BUG-1555 rather than to anyone else's:
+
+        CONFIRMING A MECHANISM AND EXPLAINING AN EVENT ARE DIFFERENT CLAIMS, AND A
+        VERIFICATION THAT ANSWERS ONLY THE FIRST CAN READ AS ANSWERING BOTH -
+        ESPECIALLY WHEN IT COMES BACK CLEAN AND DETAILED.
+
+    WHAT HAPPENED. The advisor filed a cause for a Windows-only test failure: a .gitattributes asymmetry leaving the master side LF and the project copy CRLF. The reviewer seat verified it independently with `git check-attr` and reported crisply that master resolves `text: set, eol: lf` while the project copy resolves `text: unspecified, eol: unspecified`. Correct, careful, and using the RESOLVED attribute rather than reading the file - better method than the original.
+
+    It confirmed that THE MECHANISM EXISTS. It did not ask whether the mechanism EXPLAINED THE EVENT. The control was one query away from both seats: the same test had PASSED on Windows the night before, which no platform-property explanation survives. The verification came back clean and detailed and therefore read as corroborating the diagnosis. It corroborated one premise of it.
+
+    THE REVIEWER'S OWN ASSESSMENT, recorded verbatim because self-assessment of this kind is the part that usually goes missing: "the fact that my half happened to be true is luck about which half I picked rather than method."
+
+    THE CHECK. When verifying someone's diagnosis, state which of the two you did:
+        MECHANISM EXISTS      - the described thing is really present in the system
+        MECHANISM FIRED       - it is what produced THIS observation
+    The second requires finding a case where the mechanism predicts an outcome and that outcome did not occur. An always-on mechanism - a platform property, a config asymmetry, a missing rule - predicts its effect EVERYWHERE IT APPLIES, so the nearest passing run is the control and it is usually one command away. A verification that reports only the first should say so in the same breath, or the requester will bank it as the second.
+
+    PAIRS WITH the saturation ratio recorded above and its caution - the ratio licenses "stop trusting this instrument", not "here is the cause". Both failures this morning were the same step taken from opposite directions: one seat attached a mechanism to a ratio, the other confirmed a mechanism without testing it against the event. Neither seat asked what would have to be true for the mechanism to be WRONG.
+  created_at: 2026-09-21T16:00:22.990351395Z
+  modified_at: 2026-09-21T16:00:22.990351395Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
