@@ -31,12 +31,12 @@ description: |
   - NOT IN SCOPE: the trait's blindness to COST. That is recorded on BUG-1480 already — the trait guards the CALL and is provably blind to the cost, since the bug grew 7.5s to 9.9s with no call site changing. STORY-1422's real-store gate holds that dimension. This spec is only about the witness matching its own claim.
 
   Related: BUG-1480 (the guard this witness is supposed to protect), STORY-1422 (the cost-dimension instrument), TASK-1418 (instrument-failure catalogue).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:26:45.055351013Z
-modified_at: 2026-09-21T17:27:20.824470813Z
+modified_at: 2026-09-21T18:54:58.218503019Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
