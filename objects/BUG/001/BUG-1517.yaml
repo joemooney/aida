@@ -1,0 +1,24 @@
+id: 01a0c225-a401-7150-86d5-58a31db5032c
+spec_id: BUG-1517
+agreed_id: BUG-1517
+title: A read-only --resume-dry-run preview is gated behind drain-dispatch authority, so a non-dispatching seat cannot inspect a re-entry plan
+description: |-
+  aida queue work <SPEC> --auto-complete --from-pr --resume-dry-run prints the reconciled re-entry plan WITHOUT re-entering. Its help text calls it the safe way to preview a PR-only drive. It is refused for a non-advisor seat with the same error as a real dispatch: starting an autonomous drain needs the advisor role.
+
+  Nothing is started by a dry run, so the authority check is being applied to the wrong operation. The effect is that the seat most likely to need the preview -- one that must hand dispatch to another seat and wants to say WHAT it is asking for -- is the one that cannot produce it.
+
+  Observed while triaging 15 PRs holding CHANGES REQUESTED at their current head from the product seat. Forcing past the gate was available and deliberately not used.
+
+  ACCEPTANCE
+  1. --resume-dry-run succeeds regardless of seat role, for both --from-pr and --resume-drain.
+  2. The same invocation WITHOUT --resume-dry-run still refuses for a non-advisor seat, unchanged.
+  3. A test covers both halves, so a fix that drops the gate entirely fails.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:07:21.857249644Z
+modified_at: 2026-09-21T04:07:21.857249644Z
+req_type: Bug
+tags:
+- papercut authority-gate aida:queue:work
