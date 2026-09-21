@@ -249,10 +249,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T06:01:15.844826997Z
+modified_at: 2026-09-21T06:01:18.480737879Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
+relationships:
+- rel_type: References
+  target_id: 01a0c26d-62d3-7d32-8cd8-dc80bc6bfff7
+  created_at: 2026-09-21T06:01:18.480732499Z
+  created_by: joe
 comments:
 - id: 01a0c281-ff05-7891-b9b5-812a98fe28b2
   author: joe
