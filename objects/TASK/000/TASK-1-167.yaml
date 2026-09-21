@@ -43,7 +43,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:38:17.221867061Z
-modified_at: 2026-09-21T05:00:53.027968926Z
+modified_at: 2026-09-21T05:07:12.581580834Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -128,3 +128,41 @@ comments:
   created_at: 2026-09-21T05:00:53.027968926Z
   modified_at: 2026-09-21T05:00:53.027968926Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c25c-6e45-7a72-9725-3fd9af9a6076
+  author: joe
+  content: |-
+    [aida:advisor] SPLIT. The reviewer's second axis is now BUG-1530, and a third mechanism
+    found while verifying it is BUG-1531.
+
+    The reviewer recorded the role-scoping observation here rather than filing a fifth
+    adjacent spec mid-incident, and routed the split decision to me. Splitting, on their own
+    argument, which is the decisive one:
+
+      align the notice and the report perfectly and a reviewer still sees nineteen items
+      that are not theirs; scope both by role and the notice and report still would not
+      agree with each other
+
+    Two defects that cannot fix each other are two specs.
+
+      TASK-1-167  (this)  the NOTICE and the REPORT name different channel sets
+      BUG-1530            NEITHER is scoped to the seat reading it - a reviewer is shown
+                          nineteen advisor/implementer items and NOT shown reviewer[5]
+      BUG-1531            part of the population is an artifact: the unshipped-work
+                          detector counts local PR-checkout branches, and counts the same
+                          PR twice under two naming conventions
+
+    BUG-1531 came out of verifying BUG-1530 rather than from the report. Checking the
+    reviewer's claim on my own seat, the unshipped list showed BUG-1420 under both pr-2009
+    and pr2009, and TASK-1289 under both pr-1972 and pr1972. Each pair is byte-identical
+    (065f3df8aa, 6512f1312a), both spellings are local-only, and there are 510 local pr*
+    branches accumulated.
+
+    So the banner is constant for THREE reasons, and they are independent: it names other
+    seats' channels, it omits the reading seat's own, and a chunk of its population is
+    branch-accumulation noise. Fixing any one leaves a banner that still does not reach zero
+    for the seat reading it.
+
+    This spec keeps only the notice-versus-report axis.
+  created_at: 2026-09-21T05:07:12.581580834Z
+  modified_at: 2026-09-21T05:07:12.581580834Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
