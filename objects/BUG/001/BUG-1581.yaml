@@ -1,0 +1,64 @@
+id: 01a0c632-038f-7702-a4b0-dedc2e746163
+spec_id: BUG-1581
+agreed_id: BUG-1581
+title: Two reviewers recorded opposite verdicts on the same commit into two different artefacts and nothing reconciles them, so whether a PR is approved depends on which file the reader opens
+description: |-
+  TWO REVIEWERS RECORDED OPPOSITE VERDICTS ON THE SAME COMMIT, TWO MINUTES APART, INTO TWO DIFFERENT ARTEFACTS — AND NOTHING ANYWHERE NOTICES. Caught by the driver-advisor seat at merge time, by reading the artefact instead of the message that announced it.
+
+  THE TWO RECORDS, both live on disk right now:
+
+      .aida/review-verdicts/SPIKE-85.json   verdict: approve
+                                            reviewed_sha: ac772eaca9
+                                            recorded_at: 22:55:46Z
+                                            recorded_by: claude-reviewer-1 (claude reviewer seat)
+
+      .aida/review-verdicts/PR-2066.json    verdict: RequestChanges
+                                            reviewed_sha: ac772eaca9d389fa762a232156df996023bfdf7a
+                                            recorded_at: 22:58:08Z
+                                            recorded_by: aida drain reviewer
+
+  SAME SHA. TWO MINUTES AND TWENTY-TWO SECONDS APART. OPPOSITE CONCLUSIONS. DIFFERENT AUTHORS. NEITHER RECORD MENTIONS THE OTHER, AND NOTHING COMPARED THEM.
+
+  HOW CLOSE THIS CAME TO MERGING. The approving seat sent a message saying "#2066 APPROVED AT ac772eaca9", with a thorough per-criterion justification. Acting on that message alone — which is the ordinary way a merge gets authorised here — would have merged a PR whose PR-KEYED verdict, the one the orchestrator reads, says RequestChanges. The only thing that stopped it was a habit of checking the verdict FILE against the head before merging, not any mechanism.
+
+  THE DRAIN REVIEWER'S FINDINGS ARE SUBSTANTIVE, NOT NOISE, which makes the divergence worse rather than better. Spot-checked by the advisor:
+
+      scripts/check-tui-seam.sh               EXISTS, and ci.yml:128-130 invokes it as "TUI seam guard"
+      tests/test_precommit_provenance_move.sh EXISTS
+      render_burndown_status_human/json       4 matches in aida-cli-lib/src/lib.rs
+
+  So its claim — that a report inventorying decision-bearing gates omits at least two real gates and one real aggregate-status surface — is checkable and the artefacts it names are all present. A seat merging on the approval would have shipped past three verifiable omissions in a report whose entire subject is incomplete self-inventories.
+
+  THIS IS NOT BUG-1539 AND IT IS NOT BUG-1571, THOUGH IT LIVES BETWEEN THEM:
+      BUG-1539  a SECOND verdict OVERWRITES the first            -> one survives, one is lost
+      BUG-1571  the PR-keyed handshake intermittently NEVER LANDS -> one exists, one is absent
+      THIS      BOTH LAND, IN DIFFERENT FILES, AND DISAGREE       -> both exist and nothing reconciles
+
+  Nothing is lost here and nothing failed to write. The system faithfully recorded two contradictory judgements and presented neither as contradicting the other. WHICH ONE GOVERNS DEPENDS ENTIRELY ON WHICH FILE THE READER HAPPENS TO OPEN, and the two audiences differ: a human reads the mail or the spec-keyed file, the orchestrator reads the PR-keyed one.
+
+  WHY IT IS STRUCTURAL RATHER THAN A COLLISION. Two reviewers ran because this repo has both a standing reviewer seat and a drain that spawns its own reviewer per PR. That is by design and is usually a strength. THE DEFECT IS THAT THE SUBSTRATE HAS NO NOTION OF TWO REVIEWS OF ONE THING — verdicts are keyed by identity of the reviewed object, not by (object, reviewer), so two reviewers do not collide, they simply write to different addresses and never meet.
+
+  Acceptance:
+  - A second verdict on the same reviewed sha by a DIFFERENT reviewer must be detectable, and a
+    DISAGREEMENT must be surfaced where the merging seat reads. Silence is the defect; picking a
+    winner automatically is not obviously right and is not what this asks for.
+  - `aida awaiting`, the merge path, or both must refuse to present a PR as approved while a
+    contradicting verdict exists for the same sha. FAIL VISIBLY, NOT TOWARD APPROVAL.
+  - The spec-keyed and PR-keyed artefacts must be reconcilable — a reader of either must be able
+    to learn that the other exists. Today neither references the other.
+  - DEMONSTRATE IT FIRES: record two opposing verdicts on one sha and show the merge surface
+    refusing. A test asserting the happy path proves nothing about a defect whose whole nature is
+    that both writes succeed.
+
+  Filed by the driver-advisor seat from a live instance on PR #2066. Related: BUG-1539 (clobber),
+  BUG-1571 (missing handshake), BUG-1466 (verdict provenance). The three together say the verdict
+  substrate cannot currently answer "who reviewed this commit, and did they agree".
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:59:21.615803647Z
+modified_at: 2026-09-21T22:59:21.615803647Z
+req_type: Bug
+tags:
+- review-verdicts orchestrator integrity
