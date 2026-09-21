@@ -76955,6 +76955,7 @@ fn generate_review_prompt(
                 out.push_str("_(no `## Acceptance` / `## Verify` section in description — review against the requirement title and description.)_\n\n");
             }
         }
+        append_implementer_approach(&mut out, &req.comments);
     }
 
     out.push_str(review_prompt_test_commands_section());
@@ -76988,6 +76989,61 @@ fn generate_review_prompt(
         print!("{}", out);
     }
     Ok(())
+}
+
+/// The heading the pickup skill writes and the review prompt reads.
+///
+/// ONE constant for BOTH SIDES OF A HANDSHAKE THAT SPANS A TEMPLATE AND A
+/// PARSER. The writer is `aida-core/templates/skills/aida-pickup.md`, the
+/// reader is `extract_implementer_approach` below, and nothing in the type
+/// system connects them — edit the heading in the template alone and the
+/// reader silently stops matching, leaving reviews quietly missing the
+/// approach with no error anywhere. The coupling test in
+/// `story_1350_review_approach_tests` reads the template and asserts this
+/// exact string appears in it, so the two cannot drift apart in one edit.
+// trace:STORY-1350 | ai:claude
+pub(crate) const IMPLEMENTER_APPROACH_MARKER: &str = "## Implementer approach";
+
+/// Return the newest durable implementation-intent comment. The exact first
+/// heading is the stable marker written by the pickup skill; ordinary comments
+/// that merely mention an approach must not leak into the review checklist.
+// trace:STORY-1350 | ai:codex
+fn extract_implementer_approach(comments: &[aida_core::models::Comment]) -> Option<&str> {
+    comments.iter().rev().find_map(|comment| {
+        let first_line = comment.content.trim_start().lines().next()?;
+        (first_line.trim_end() == IMPLEMENTER_APPROACH_MARKER).then_some(comment.content.trim())
+    })
+}
+
+// trace:STORY-1350 | ai:codex
+/// Emit the recorded approach, or SAY THAT THERE IS NONE.
+///
+/// Silence here is indistinguishable from "the implementer recorded nothing"
+/// and from "the section was dropped", and a reviewer reading a prompt with no
+/// approach section cannot tell which. Absent evidence has to look different
+/// from good evidence, so the absence is stated rather than left as a gap.
+// trace:STORY-1350 | ai:claude
+fn append_implementer_approach(out: &mut String, comments: &[aida_core::models::Comment]) {
+    match extract_implementer_approach(comments) {
+        Some(approach) => {
+            out.push_str("#### Recorded implementer approach\n\n");
+            out.push_str(approach);
+            out.push_str("\n\n");
+        }
+        None => {
+            out.push_str("#### Recorded implementer approach\n\n");
+            // The marker comes from the constant here too. Spelling it out
+            // again would make this the THIRD copy — the prose that TELLS a
+            // human what to write, drifting from the parser that reads it, so
+            // a rename would leave the system parsing X while instructing
+            // people to write Y. The coupling test covers this string.
+            out.push_str(&format!(
+                "_None recorded._ The implementer did not leave a comment beginning \
+                 `{IMPLEMENTER_APPROACH_MARKER}`, so this review has no stated intent \
+                 to check the diff against.\n\n"
+            ));
+        }
+    }
 }
 
 // trace:BUG-800 | ai:codex
@@ -91883,6 +91939,12 @@ mod story_698_test_plan_capture_tests;
 #[cfg(test)]
 #[path = "tests/bug_800_review_test_command_prompt_tests.rs"]
 mod bug_800_review_test_command_prompt_tests;
+
+// STORY-1350: round-one review compares the recorded implementation intent
+// with the resulting diff, using the pickup heading as a stable marker.
+#[cfg(test)]
+#[path = "tests/story_1350_review_approach_tests.rs"]
+mod story_1350_review_approach_tests;
 
 // STORY-790 review findings: drift brief then-vs-now + mail/briefs since exit.
 // trace:STORY-790 | ai:claude

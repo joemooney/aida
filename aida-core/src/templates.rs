@@ -581,6 +581,70 @@ mod tests {
         );
     }
 
+    /// STORY-1350 regression guard — every pickup must leave a durable,
+    /// reviewable statement of intent before implementation begins. The
+    /// statement is deliberately self-directed: it records criteria-as-tests,
+    /// scope, and questions without introducing an approval round trip.
+    // trace:STORY-1350 | ai:codex
+    #[test]
+    fn aida_pickup_requires_non_gating_pre_edit_approach_comment() {
+        let pickup = EMBEDDED_TEMPLATES
+            .get("skills/aida-pickup.md")
+            .expect("aida-pickup.md embedded");
+
+        let approach = pickup
+            .find("### Step 3d: Post the implementation approach before the first edit")
+            .expect("pickup must require an approach statement");
+        let implementation = pickup
+            .find("### Step 4: Do the work")
+            .expect("pickup must retain the implementation step");
+        assert!(
+            approach < implementation,
+            "the approach statement must precede implementation"
+        );
+
+        for required in [
+            "Acceptance criteria as tests",
+            "name the test layer",
+            "tested, flag that explicitly",
+            "Expected files",
+            "Ambiguities / conflicts as questions",
+            "not an approval gate",
+            "Do not wait for an advisor or operator response",
+            "aida comment add <spec_id>",
+        ] {
+            assert!(
+                pickup.contains(required),
+                "pickup approach contract is missing `{required}`"
+            );
+        }
+    }
+
+    // trace:STORY-1350 | ai:codex
+    #[test]
+    fn aida_pickup_posts_approach_when_parseable_acceptance_is_present() {
+        let pickup = EMBEDDED_TEMPLATES
+            .get("skills/aida-pickup.md")
+            .expect("aida-pickup.md embedded");
+
+        assert!(pickup.contains("**Parseable-acceptance guard:**"));
+        assert!(pickup.contains("recognized `## Acceptance` or `## Verify` heading"));
+        assert!(pickup.contains("When that parseable section is present, post exactly one"));
+    }
+
+    // trace:STORY-1350 | ai:codex
+    #[test]
+    fn aida_pickup_posts_nothing_when_parseable_acceptance_is_absent() {
+        let pickup = EMBEDDED_TEMPLATES
+            .get("skills/aida-pickup.md")
+            .expect("aida-pickup.md embedded");
+
+        assert!(pickup.contains("When it is absent or empty, **post no"));
+        assert!(pickup.contains("approach comment at all** and continue to Step 3e"));
+        assert!(pickup.contains("Do not manufacture criteria"));
+        assert!(pickup.contains("do not post a placeholder comment"));
+    }
+
     /// BUG-280 regression guard — the `/aida-review` skill template must carry
     /// the headless-mode contract that prevents the PR-150 failure mode
     /// (reviewer posted a PASS comment then called AskUserQuestion and bailed
