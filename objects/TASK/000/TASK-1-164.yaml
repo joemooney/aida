@@ -36,9 +36,10 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:02:15.338764730Z
-modified_at: 2026-09-21T21:16:43.590336280Z
+modified_at: 2026-09-21T23:06:07.709502607Z
 req_type: Task
 tags:
+- docs:impacted
 - from-advisor:general
 - kind:observation
 comments:
