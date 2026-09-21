@@ -80333,6 +80333,27 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
     }
 }
 
+/// The environment a pipelined batch child is spawned with.
+///
+/// A pure helper for the same reason `integrate::drive_args` is one: the env is
+/// load-bearing and otherwise only assertable by spawning a real drain. The
+/// borrow flag in particular is invisible in the argv, so a guardrail that only
+/// reads arguments cannot see it go missing — which is how BUG-1568 shipped.
+// trace:BUG-1568 | ai:claude
+pub(crate) fn pipelined_child_env(result_path: &std::path::Path) -> Vec<(&'static str, String)> {
+    vec![
+        ("AIDA_PIPELINED_BATCH_CHILD", "1".to_string()),
+        // The child is a `queue work --auto-complete` in its own right and
+        // takes the drain lock at its top, while the parent batch drive still
+        // holds it. Borrow rather than acquire. See the call sites.
+        ("AIDA_DRAIN_BORROW", "1".to_string()),
+        (
+            "AIDA_PIPELINED_RESULT_PATH",
+            result_path.display().to_string(),
+        ),
+    ]
+}
+
 impl RealBatchDriver<'_> {
     // trace:STORY-1091 trace:ADR-28 | ai:codex
     fn child_common_args(
@@ -80402,9 +80423,22 @@ impl auto_complete::PipelinedBatchDriver for RealBatchDriver<'_> {
             .join("pipelined-results")
             .join(format!("{}-{}.json", spec, handle.0));
         let mut cmd = std::process::Command::new(exe);
-        cmd.args(self.child_common_args(spec, auto_complete::AutoCompleteVariant::ThroughCi))
-            .env("AIDA_PIPELINED_BATCH_CHILD", "1")
-            .env("AIDA_PIPELINED_RESULT_PATH", &result_path);
+        // BUG-1568: the child takes the drain lock at its top while the parent
+        // batch drive still holds it, so it must BORROW. Without that it is
+        // refused with "a drain is already running (pid <parent>)", the batch
+        // driver reads the refusal as a phase failure of the member, and the
+        // whole batch stops having shipped nothing.
+        //
+        // This is BUG-748's defect in a second place: that fix taught the
+        // INTEGRATOR child to borrow, and the pipelined batch child never got
+        // the same treatment. It only became reachable when pipeline_depth was
+        // raised from 1 to 2 — at depth 1 no child overlaps a live parent lock.
+        // Measured after that change: 221 consecutive drains shipping nothing
+        // over 17.5 hours. trace:BUG-1568 trace:BUG-748 | ai:claude
+        cmd.args(self.child_common_args(spec, auto_complete::AutoCompleteVariant::ThroughCi));
+        for (k, v) in pipelined_child_env(&result_path) {
+            cmd.env(k, v);
+        }
         match cmd.spawn() {
             Ok(child) => {
                 self.pipelined_children.insert(handle.0, child);
@@ -82540,9 +82574,22 @@ impl auto_complete::PipelinedBatchDriver for RealNextNDriver<'_> {
             .join("pipelined-results")
             .join(format!("{}-{}.json", spec, handle.0));
         let mut cmd = std::process::Command::new(exe);
-        cmd.args(self.child_common_args(spec, auto_complete::AutoCompleteVariant::ThroughCi))
-            .env("AIDA_PIPELINED_BATCH_CHILD", "1")
-            .env("AIDA_PIPELINED_RESULT_PATH", &result_path);
+        // BUG-1568: the child takes the drain lock at its top while the parent
+        // batch drive still holds it, so it must BORROW. Without that it is
+        // refused with "a drain is already running (pid <parent>)", the batch
+        // driver reads the refusal as a phase failure of the member, and the
+        // whole batch stops having shipped nothing.
+        //
+        // This is BUG-748's defect in a second place: that fix taught the
+        // INTEGRATOR child to borrow, and the pipelined batch child never got
+        // the same treatment. It only became reachable when pipeline_depth was
+        // raised from 1 to 2 — at depth 1 no child overlaps a live parent lock.
+        // Measured after that change: 221 consecutive drains shipping nothing
+        // over 17.5 hours. trace:BUG-1568 trace:BUG-748 | ai:claude
+        cmd.args(self.child_common_args(spec, auto_complete::AutoCompleteVariant::ThroughCi));
+        for (k, v) in pipelined_child_env(&result_path) {
+            cmd.env(k, v);
+        }
         match cmd.spawn() {
             Ok(child) => {
                 self.pipelined_children.insert(handle.0, child);

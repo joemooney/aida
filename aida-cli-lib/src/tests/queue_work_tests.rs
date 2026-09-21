@@ -2916,3 +2916,40 @@ fn steal_session_end_failure_surfaces_actual_reason_not_canned_message() {
             primary
         );
 }
+
+/// BUG-1568: the pipelined batch child is itself a `queue work
+/// --auto-complete`, so it takes the drain lock at its top while the parent
+/// batch drive still holds it. Without `AIDA_DRAIN_BORROW` it is refused with
+/// "a drain is already running (pid <parent>)", and the batch driver reports
+/// that refusal as a phase failure of the member — so the drain stops, ships
+/// nothing, and blames an innocent spec. Measured before the fix: 221
+/// consecutive zero-ship drains over 17.5 hours.
+///
+/// Asserted on the ENV rather than the argv on purpose. The flag is invisible
+/// in the arguments, so the argv-shaped routing guardrails could not see it go
+/// missing — which is how this shipped.
+// trace:BUG-1568 | ai:claude
+#[test]
+fn pipelined_batch_child_borrows_the_parent_drain_lock() {
+    let env = crate::pipelined_child_env(std::path::Path::new("/w/x/result.json"));
+    let get = |key: &str| env.iter().find(|(k, _)| *k == key).map(|(_, v)| v.as_str());
+
+    assert_eq!(
+        get("AIDA_DRAIN_BORROW"),
+        Some("1"),
+        "the pipelined child must borrow the parent's drain lock rather than \
+         acquire its own; env was {env:?}"
+    );
+
+    // FORCE must NOT be set. A borrowed guard neither rewrites nor releases the
+    // parent's lock; FORCE overwrites it, which is the pre-BUG-748 behaviour
+    // that left the parent running without a live lock.
+    assert!(
+        !env.iter().any(|(k, _)| *k == "AIDA_DRAIN_FORCE"),
+        "borrow, not force — force overwrites the parent's lock: {env:?}"
+    );
+
+    // The pre-existing contract stays intact.
+    assert_eq!(get("AIDA_PIPELINED_BATCH_CHILD"), Some("1"));
+    assert_eq!(get("AIDA_PIPELINED_RESULT_PATH"), Some("/w/x/result.json"));
+}
