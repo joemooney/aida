@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:22:32.343565248Z
-modified_at: 2026-09-21T18:49:16.517027960Z
+modified_at: 2026-09-21T18:52:16.044999678Z
 req_type: Bug
 tags:
 - auto-bump
@@ -118,6 +118,42 @@ comments:
     Findings 3 and 4 were raised by nobody else. They were destroyed three minutes after being written and would have been lost silently had a sweep not happened to name the PR.
   created_at: 2026-09-21T01:37:32.329342315Z
   modified_at: 2026-09-21T01:37:32.329342315Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c54f-cb2d-7030-938c-80737b711a31
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2040 [AI:codex] fix(lifecycle): defer completion while referenced PR remains open (BUG-1454)
+    merged: 55b87a508a2c
+    verdict: APPROVE (claude-reviewer-1) at reviewed_sha 66e1187377 == the merged head
+    proxy: claude driver-advisor, session 01a0adee, on the operator's standing merge mandate
+    independent: YES — implemented by claude-product-1, reviewed by claude-reviewer-1, merged by this seat.
+
+    gates cleared, verified from this seat and written onto the marker as a MECHANICAL RELEASE CONDITION before acting, not as a reason after:
+      1. Build (ubuntu-latest) = success, read PER-SHA from check-runs at 66e118737744.
+      2. verdict APPROVED with reviewed_sha == the merged head.
+      3. NO in-spec closure criterion on this spec (grepped, 0 hits), so the trailer may stand and the merge-driven auto-complete is legitimate rather than a BUG-1551 false closure. That check is why #2033 and #2042 had their trailers stripped and this one did not — the difference is a property of the spec, not a habit.
+      4. post-merge verified: BUG-1454 completed.
+    The marker it replaced read "CHANGES REQUESTED for BUG-1454 at 64d94b045c" and was TWO HEADS STALE — the third stale-marker instance of the session, filed as BUG-1562.
+
+    WHAT THE ROUND ESTABLISHED, and the first item is the one worth keeping:
+
+    F1's FIX CORRECTS THE FINDING THAT ASKED FOR IT. The reviewer wrote that `Some(empty)` on a non-GitHub forge is a definitive answer and must not be — which implies `None` for every non-GitHub case. THE LITERAL REMEDY IS WRONG:
+        ForgeKind::GitLab   MRs exist and gh cannot read them -> genuinely UNKNOWN -> None -> preserve.
+                            THIS is the defect the finding named.
+        ForgeKind::None     pure git, no change-request concept at all, so "no open PR references
+                            this spec" is a MEASURED TRUTH -> Some(empty) is CORRECT.
+    Collapsing both into None turns TWENTY existing tests red — every one a remoteless fixture — and auto-bump would never complete a spec again on any repo without a GitHub remote.
+
+    THE IMPLEMENTER TREATED THOSE TWENTY REDS AS EVIDENCE FOR A DISTINCTION RATHER THAN AS AN OBSTACLE TO THE FIX. The reviewer's own assessment: right about the defect, wrong about its scope. Both separated those and said so rather than either complying or arguing. Recorded on TASK-1418, because the default reading of "my change turned 20 tests red" is "my change is wrong", and sometimes the reds are the suite defending a distinction the finding did not make.
+
+    F2 FIXED WITH MORE THAN WAS ASKED: the fake gh now parses --search, answers only for the spec with an open PR, and logs every argv for the test to assert against — plus an OPPOSITE-DIRECTION CONTROL the old test lacked, a second spec with the same status and the same landed trailer but NO open PR, which must still complete. Without it, "defers everything" passes. And one assertion beyond the finding: the log must contain --search for BOTH spec ids, proving every candidate is looked up rather than just the first — nothing in the finding asked about a short-circuiting loop.
+
+    F3 ANSWERED AS ASKED: three sites enumerated, an explicit decision on each INCLUDING a decision to leave one alone, with the reasoning recorded AT EACH SITE rather than only in the commit message — so the next reader finds it where the code is.
+
+    CARRIED ON THE VERDICT: a green Build does NOT reach F1's behaviour. The non-GitHub path is not exercised by this repo's GitHub-only CI, so the new tests are the evidence and the pipeline is not.
+  created_at: 2026-09-21T18:52:16.044999678Z
+  modified_at: 2026-09-21T18:52:16.044999678Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c54d-0de3-71a3-a624-8a86d8095960
