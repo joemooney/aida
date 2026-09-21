@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T03:21:15.210817661Z
+modified_at: 2026-09-21T03:23:51.142028019Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -67,4 +67,37 @@ comments:
     AND THAT IS THE SHARP POINT, raised by the reviewer: TASK-676 IS GRAMMATICAL. "(, RealPhaseDriver)" reads as a stray comma, so anyone who notices it fixes the comma - and the repair that suggests itself DESTROYS THE EVIDENCE that anything is missing. A hole that looked like a hole would be safer. This is the only defect class recorded tonight where the obvious remedy makes the damage unrecoverable, which is the argument for marking rather than tidying.
   created_at: 2026-09-21T03:21:15.210817661Z
   modified_at: 2026-09-21T03:21:15.210817661Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1fd-cde6-7c62-99ae-3730ffbbc53d
+  author: joe
+  content: |-
+    [aida:advisor] THE DETECTOR IS SETTLED. Two sub-rules, four candidate specs, two genuine holes - and the refinement that gets there is a direct application of the reviewer's own principle.
+
+    THE PRINCIPLE, which supersedes the earlier "punctuation that cannot stand alone": look for PUNCTUATION WHOSE GAP CANNOT BE EXPLAINED BY LINE WRAPPING. An article or preposition before a gap has an innocent explanation - prose wraps after "the" and "of" constantly. An open bracket immediately followed by a comma has none: nothing wraps between an opening bracket and a comma.
+
+    That predicts which sub-rules are worth having, and the measurement confirms it:
+
+        raw gap hits (2+ spaces before a lowercase letter):   2605
+        article / preposition sub-rule:                         51 specs, ALL line wraps, zero genuine
+        bracket-opens-on-comma:                                  4 specs
+        possessive-then-gap:                                     2 specs
+
+    THE 51 ARE THE POINT. Every one is a wrap landing after "the", "a", "with", "of". A gap after an article is precisely what a wrapped line looks like, so that rule cannot discriminate in principle, not merely in this corpus. It should not be implemented.
+
+    THE OPERATIONAL FORM OF THE PRINCIPLE IS A REGEX PROPERTY, not a judgement call: MATCH WITHIN A LINE, NEVER ACROSS ONE. The reviewer's possessive run returned 5 specs, of which three - BUG-802, BUG-806, STORY-68 - are wraps after a possessive. A stricter pattern requiring a literal double space on the same line returns 2 and drops all three, mechanically. So "cannot be explained by wrapping" is enforced by refusing to match across a newline rather than by inspecting each hit.
+
+    THE FINAL CANDIDATE SET, from 4172 parseable specs:
+
+        bracket-opens-on-comma   BUG-78     a regex literal in a shell snippet    legitimate
+                                 TASK-463   "multi-tool (,)" - a deliberate case  legitimate
+                                 TASK-676   "(, RealPhaseDriver)"                 GENUINE HOLE
+                                 TASK-1-171 this finding quoting TASK-676         self-reference
+        possessive-then-gap      TASK-675   "pr_ship_create_pr's  through"        GENUINE HOLE
+                                 TASK-1-171 this finding quoting TASK-675         self-reference
+
+    Four distinct specs excluding this finding's own quotations, two of them genuine. Fifty percent on a set a person reads in seconds, from a corpus of 2605 raw gaps. That is a usable detector, and it is small enough to run as a lint rather than an investigation.
+
+    ONE PROPERTY WORTH NOTING FOR WHOEVER IMPLEMENTS IT: this finding appears under both sub-rules because it quotes the damaged text. Any detector run over a store containing its own findings will match them. Exclude self-references by spec id, or accept a known constant of noise equal to the number of findings that quote holes.
+  created_at: 2026-09-21T03:23:51.142028019Z
+  modified_at: 2026-09-21T03:23:51.142028019Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
