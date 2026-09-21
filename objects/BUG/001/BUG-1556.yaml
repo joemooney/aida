@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:53:14.701016287Z
-modified_at: 2026-09-21T15:53:30.448780206Z
+modified_at: 2026-09-21T15:53:56.226249927Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -65,3 +65,22 @@ relationships:
   target_id: 01a0c3ec-fe63-74f2-9e46-5700d5a9a564
   created_at: 2026-09-21T15:53:30.448774862Z
   created_by: joe
+comments:
+- id: 01a0c4ac-8702-7810-9fda-bd5092292a9f
+  author: joe
+  content: |-
+    [aida:advisor] THE TRACKING-ISSUE QUESTION IS ANSWERED - IT EXISTS, IT IS WORKING PERFECTLY, AND NOBODY READ IT. Checked by the advisor 2026-09-21 on claude-reviewer-1's prompt, so the "do not add a new reporting surface until this is confirmed" criterion is now closed as CONFIRMED.
+
+        issue #1925  OPEN     created 2026-09-18T11:14:21Z   3 comments
+        issue #1774  CLOSED   closed  2026-09-15T11:49:05Z
+
+    #1925 was opened by the automation on the first night of the current streak and has auto-commented on each subsequent nightly failure - three comments for three further red nights. Its body states the contract explicitly: "this issue auto-comments on each subsequent nightly failure and closes itself once a scheduled run lands green" (trace:TASK-687). #1774 is the previous cycle's issue, and it CLOSED ITSELF on 2026-09-15 - the first of the three green nights. So the open/close half of the mechanism has been demonstrated working in both directions on real data.
+
+    THE DETECTION LAYER IS NOT THE DEFECT. The nightly ran, failed, opened an issue, commented on it four times, and closed the previous one when things recovered. Every part did its job. What did not happen is anyone reading it for four days - and it took a seat chasing an unrelated line on a status board to look.
+
+    THIS SHARPENS THE SPEC RATHER THAN CHANGING IT. The remedy is NOT more detection or another surface; it is routing and attention, or making the red actionable enough to be worth reading. Reviewer's framing, recorded because it is the useful distinction: A GUARD THAT FIRES INTO A PLACE NOBODY LOOKS IS A DIFFERENT DEFECT FROM A GUARD THAT CANNOT FIRE, AND IT WANTS A DIFFERENT FIX. TASK-1418 catalogues the inert instruments; this is the third form - a live instrument, correctly firing, into a dead channel.
+
+    And the channel is dead FOR A REASON the arrival rate explains: an issue that is open ~90% of the time carries almost no information when it is open. The routing fix and the arrival-rate fix are the same fix. Nobody will read #1925 while red is the steady state, and no amount of notification changes that.
+  created_at: 2026-09-21T15:53:56.226249927Z
+  modified_at: 2026-09-21T15:53:56.226249927Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
