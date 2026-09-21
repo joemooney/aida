@@ -19,12 +19,12 @@ description: |-
   - The handler threads it onto Message.subject.
   - The read_inbox response shape and its documented description include subject.
   - A test covers an MCP send-with-subject then read-inbox roundtrip that observes the subject (the existing mcp_mailbox_send_then_read_inbox_roundtrip test does not).
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:43:54.000177243Z
-modified_at: 2026-09-21T18:52:03.145988059Z
+modified_at: 2026-09-21T19:17:08.075304978Z
 req_type: Bug
 tags:
 - agent-ux mailbox mcp parity from:review-pr-1976
@@ -45,4 +45,23 @@ comments:
   created_at: 2026-09-21T18:52:03.145988059Z
   modified_at: 2026-09-21T18:52:03.145988059Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c566-8f63-76a0-8061-84b67776d542
+  author: aida-auto-bump
+  timestamp: 2026-09-21T19:17:08.067852732Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c566-8f6b-7701-b2dc-ce7081d7d0d4
+  timestamp: 2026-09-21T19:17:08.075303133Z
+  agent: aida
+  commit_sha: 4dea39e1d6abaaded6620008451527a4c3b1519b
+  summary: 'DISCLOSURE: THIS PR SHIPS TWO MEMORY FILES I WROTE. feedback_check_ignore_names_the_winner and feedback_reconstruct_provenance_by_bracketing are mine, authored in this session. I am NOT the independent party on whether my own writing is good enough to propagate into every downstream AIDA project - that judgement belongs to another seat, and I am flagging it rather than making it. What I CAN verify as their author is whether they were correctly prepared for propagation, and they were. BUG-1461 IS A CLEAN FIX OF EXACTLY THE DRIFT CLAUDE.md FORBIDS: the CLI gained `aida mailbox send --subject` in BUG-1231 and the MCP surface was never mirrored - subject was accepted by no schema property and dropped unconditionally (Message { subject: None, .. }). The fix adds the schema property with a description that points at the CLI flag it mirrors, threads it through the handler, and surfaces it in read_inbox. The omitted-not-null choice is deliberate and stated: a message without a subject omits the key rather than emitting null, which keeps the JSON shape honest for consumers that distinguish absent from empty. Covered by a send_message -> read_inbox ROUND TRIP, which is the right test - it proves the value survives the boundary rather than that a field exists. THE MEMORIES WERE GENERICISED FOR PROPAGATION AND I VERIFIED IT WITH A POSITIVE CONTROL rather than by reading: my originals contain BUG-1279 twice; the scaffolded versions contain ZERO spec ids, zero dates and zero AIDA-internal references, with the measured incident rewritten as "a status marker under a deny-by-default directory". The lesson and the falsifying method survive; the provenance that would be noise in a downstream project is gone. That matches CLAUDE.md''s rule that SPEC-IDs stay in developer artefacts - a scaffolded memory landing in someone else''s project is user-facing text. Both carry propagation: scaffolding-pack, which is the marker that actually joins the pack.'
+  review_verdict: approve
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T19:17:08.067714396Z
+  completion_sha: 4dea39e1d6abaaded6620008451527a4c3b1519b
