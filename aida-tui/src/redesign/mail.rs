@@ -16,7 +16,7 @@
 
 use std::path::{Path, PathBuf};
 
-use aida_core::mailbox::Message;
+use aida_core::mailbox::{subject_line, Message};
 
 use super::state::TargetItem;
 
@@ -29,11 +29,16 @@ use super::state::TargetItem;
 /// spec id) and `req_type` is the fixed marker `"Mail"` the Mail scope's
 /// row source is the only producer of, so a mail row is never mistaken for a
 /// spec row by anything that inspects `req_type`.
-// trace:STORY-701 | ai:claude
+// trace:STORY-701 trace:BUG-1462 | ai:codex
 pub fn mail_item(m: &Message) -> TargetItem {
+    let title = subject_line(m, 60);
     TargetItem {
         id: m.id.clone(),
-        title: mail_subject(&m.body, 60),
+        title: if title.is_empty() {
+            "(empty message)".to_string()
+        } else {
+            title
+        },
         req_type: "Mail".to_string(),
         status: mail_status(m),
         priority: if m.urgent {
@@ -52,29 +57,6 @@ pub fn mail_item(m: &Message) -> TargetItem {
 // trace:STORY-701 | ai:claude
 pub fn mail_items(unread: &[&Message]) -> Vec<TargetItem> {
     unread.iter().map(|m| mail_item(m)).collect()
-}
-
-/// First non-empty line of a message body, trimmed and truncated to `max`
-/// chars (with an ellipsis when cut) — the row's display title. Mirrors
-/// `aida_core::mailbox`'s private notice-subject projection (kept
-/// independent since that one isn't `pub`).
-// trace:STORY-701 | ai:claude
-fn mail_subject(body: &str, max: usize) -> String {
-    let first = body
-        .lines()
-        .map(str::trim)
-        .find(|l| !l.is_empty())
-        .unwrap_or("");
-    if first.is_empty() {
-        return "(empty message)".to_string();
-    }
-    let mut chars = first.chars();
-    let head: String = chars.by_ref().take(max).collect();
-    if chars.next().is_some() {
-        format!("{head}…")
-    } else {
-        head
-    }
 }
 
 /// The row's status column: sender, plus an urgent/actionable-intent flag —
@@ -242,6 +224,16 @@ mod tests {
         assert_eq!(rows[0].priority, "");
         assert_eq!(rows[1].status, "from agy · urgent");
         assert_eq!(rows[1].priority, "urgent");
+    }
+
+    #[test]
+    fn mail_item_prefers_explicit_nonblank_subject() {
+        let mut m = mail_msg("m1", "codex", "body fallback", false, 10);
+        m.subject = Some("  Review requested  ".to_string());
+        assert_eq!(mail_item(&m).title, "Review requested");
+
+        m.subject = Some("   ".to_string());
+        assert_eq!(mail_item(&m).title, "body fallback");
     }
 
     #[test]
