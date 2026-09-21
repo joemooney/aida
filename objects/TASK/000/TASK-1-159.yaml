@@ -1,0 +1,24 @@
+id: 01a0c17d-8f51-7151-95ff-295ea30594af
+spec_id: TASK-1-159
+title: Repeated description edits via the shell-argument form accumulate escape characters into the acceptance list
+description: |-
+  Repeated edits to a long description through the shell-argument form accumulate escape characters, one doubling per round, until literal backslash-quote lines sit interleaved with the acceptance criteria.
+
+  Observed once, on TASK-1303, 2026-09-20. Five corrupted lines inside the acceptance list, in a 1-3-7-15 backslash progression that is characteristic of re-escaping an already-escaped body on every write rather than a one-off quoting slip. A store-wide sweep found no second instance, which is why this is an observation and not a bug.
+
+  Mechanism: passing the body as a shell argument routes it through shell quoting on every write. The same command already offers two forms that skip that path entirely, reading the body from a file or from stdin, and a body written through either lands byte-clean.
+
+  Why it is worth capturing at one instance even so: the corrupted lines land between binding acceptance criteria, where an implementer reads them as part of the contract, and nothing in the write path reports that it happened. The practice to adopt now is that a long description is never written through the shell-argument form.
+
+  Promote if a second instance appears, or if a sweep after more editing activity finds the progression on another spec.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T01:03:46.513817918Z
+modified_at: 2026-09-21T01:03:46.513817918Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+- severity:minor
