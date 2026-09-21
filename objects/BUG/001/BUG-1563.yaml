@@ -1,0 +1,62 @@
+id: 01a0c547-d064-7531-9c74-d8f911c74b3a
+spec_id: BUG-1563
+agreed_id: BUG-1563
+title: awaiting_notice_tracks_real_lease_through_session_end fails locally and passes in CI at the same sha under the same command, so a local workspace run cannot serve as a union-green check
+description: |
+  `awaiting_notice_tracks_real_lease_through_session_end` FAILS LOCALLY AND PASSES IN CI AT THE SAME SHA, UNDER THE SAME COMMAND — SO A LOCAL WORKSPACE RUN CANNOT BE USED AS A UNION-GREEN CHECK.
+
+  Found by the advisor 2026-09-21 while discharging the combined-main obligation after a five-merge cluster.
+
+  THE TWO OBSERVATIONS, same sha 4cf2c6d600, same command:
+
+      local    cargo test --workspace --no-fail-fast
+               test awaiting_notice_tracks_real_lease_through_session_end ... FAILED
+               panicked at aida-cli/tests/task_1283_protocol_cli.rs:259
+               reproduced in isolation: 0 passed; 1 failed; 3 filtered out
+      CI       run 35637663142, head_sha 4cf2c6d600, branch main, conclusion SUCCESS
+               ci.yml:138 runs `cargo test --workspace --no-fail-fast` — the identical command
+
+  CI IS THE AUTHORITY ON THE TREE AND IT SAYS THE TREE IS FINE. The failure is about the local environment, not about the five merged PRs. That matters immediately: the whole point of building combined main is that per-PR green is not union green, and an environment-sensitive failure makes that check UNABLE TO ANSWER THE QUESTION IT EXISTS FOR — a red result cannot be distinguished from a real union break without a second investigation every time.
+
+  THE ASSERTION THAT FAILS is `text(&held).contains("protocol: bug [META-")` on the output of `aida awaiting --notice`, run against a worktree and temp HOME the test creates itself.
+
+  THE LEADING HYPOTHESIS IS CONCURRENCY, NOT THE DIRTY TREE, and it is NOT yet established:
+    - At the time of the run: 8 concurrent cargo processes and 23 agent worktrees under
+      .claude/worktrees/, several running their own builds and test suites against a shared
+      target dir and a shared git object store.
+    - claude-reviewer-1 independently reported the same class on PR #2053: a transient failure
+      of `queue_dead_target_summary_filter_includes_archived_targets_for_gc` "caused by lock
+      contention with a concurrent sibling agent's cache rebuild in a different worktree",
+      which passed in isolation and on a clean rerun.
+    - A competing hypothesis remains open: the main checkout has untracked files (`.codex/`,
+      `docs/2026-09-12-aida-llm-experience-report.md`) and the run logged
+      "error: The following untracked working tree files would be overwritten by merge" TWICE
+      around the failure. THAT SAME STRING ALSO APPEARS IN CI LOGS (09-14 macOS, 09-21 Windows)
+      WHERE THE SUITE PASSED, so it is not by itself evidence of the cause — it is a third
+      sighting of an unexplained log line, recorded rather than attributed.
+
+  WHAT MUST NOT HAPPEN: this being written off as "flaky". A test that cannot be run locally by anyone mid-session is a test whose failures nobody can act on, and "run the suite before you push" is advice this board gives constantly.
+
+  Acceptance:
+  - ESTABLISH WHICH HYPOTHESIS IS TRUE before changing anything. Run the test (a) with no other
+    cargo process and no agent worktrees active, (b) on a clean tree with the untracked files
+    moved aside, (c) both. One of those distinguishes contention from tree state; guessing does not.
+  - IF IT IS CONTENTION: make the test robust to a shared target dir and concurrent git activity,
+    or mark it as requiring isolation IN A WAY THE RUNNER ENFORCES rather than in a comment.
+  - IF IT IS THE UNTRACKED FILES: that is a harder finding than it looks — it means the test's
+    git operations run against the real repository rather than a fixture, and the fix is to
+    isolate it, not to clean the tree.
+  - EITHER WAY, RECORD THE ANSWER IN THE TEST so the next person who hits it does not repeat
+    this investigation. The third sighting of the untracked-files log line goes in too, with
+    the note that it appears in PASSING CI runs and is therefore not the cause on its own.
+  - NOT IN SCOPE: the five merges in the cluster. CI is green on all of them and on combined
+    main at 4cf2c6d600.
+
+  Related: BUG-1556 (cross-platform signal quality — a check that cannot distinguish its own failure modes is the same problem one layer over).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T18:43:33.092866010Z
+modified_at: 2026-09-21T18:43:33.092866010Z
+req_type: Bug
