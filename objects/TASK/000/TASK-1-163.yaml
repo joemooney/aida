@@ -38,7 +38,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:36:35.887655718Z
-modified_at: 2026-09-21T21:25:43.282539146Z
+modified_at: 2026-09-21T21:26:00.657476171Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -49,4 +49,21 @@ comments:
   content: 'Promoted by joe 2026-09-21: PROMOTED. Three instances were cited; there is now a FOURTH, added as a comment, and it is the worst shape yet — it fooled the advisor AND the reviewer simultaneously from one shared stale binary, and produced a HIGH-priority bug (BUG-1558) filed against code that was already correct. Two seats agreeing looked like corroboration and was one observation counted twice, because a shared artefact silently removes independence without removing its appearance. The information is available (aida dev status, and binary_sha on every usage.jsonl row) and is simply not AT THE POINT OF USE, which is the whole defect.'
   created_at: 2026-09-21T21:25:43.282539146Z
   modified_at: 2026-09-21T21:25:43.282539146Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5dc-8cd1-7811-b768-bdbef1f6ac5f
+  author: joe
+  content: |-
+    [aida:advisor] A FOURTH INSTANCE, AND IT IS THE WORST SHAPE THIS DEFECT HAS PRODUCED SO FAR: IT FOOLED TWO SEATS AT ONCE AND PRODUCED A FILED HIGH-PRIORITY BUG AGAINST ALREADY-CORRECT CODE.
+
+    2026-09-21. The advisor measured `aida show`'s relationship rendering with a binary reporting sha 1460a0168a+dirty while HEAD was nine hours ahead. Every typed relationship appeared to collapse to a generic label. BUG-1558 was filed at HIGH with a store-wide tally attached. The renderers (`relationship_phrase` at lib.rs:12544, `rel_type_label` at :71590) were ALREADY CORRECT at HEAD and had been for hours. The spec had to be retitled, rescoped to a much narrower `--json` gap, and dropped to medium.
+
+    THE PART THAT MAKES IT A FOURTH INSTANCE RATHER THAN A REPEAT: claude-reviewer-1 had independently made THE SAME MEASUREMENT FROM THE SAME STALE BINARY and reached the same wrong conclusion. Two seats agreeing looked like corroboration and was not — it was ONE OBSERVATION COUNTED TWICE, because the thing both seats trusted was a single shared artefact neither had checked the provenance of. Agreement between observers is only evidence when the observers are independent, and a shared stale binary silently removes that independence without removing the appearance of it.
+
+    WHY THE EXISTING SURFACES DID NOT HELP. `aida dev status` WILL report the active binary's sha, HEAD, and the match verdict — but it is a command someone has to think to run, and the moment you need it is precisely the moment you have no reason to suspect anything. Nothing in `aida show`'s own output names the binary that produced it. The defect is not that the information is unavailable; it is that it is not AT THE POINT OF USE.
+
+    WHAT I NOW DO BY HAND, EVERY TIME, and which is the shape of the fix I would want: before any measurement that will become evidence, run `aida --version` and `git rev-parse HEAD`, then `git merge-base --is-ancestor <fix-sha> <binary-sha>` to establish that the code under test is actually IN the binary under test. I used exactly that sequence twice today — once to confirm #2033 was in the binary before timing `aida show`, and once to partition a usage population by `binary_sha` — and in both cases it changed the conclusion. It is three commands and it is currently entirely a matter of remembering.
+
+    ONE CHEAP SURFACE THAT WOULD HAVE CAUGHT ALL FOUR: `~/.aida/usage.jsonl` ALREADY RECORDS `binary_sha` ON EVERY ROW. The provenance is being written on every single invocation and read by nobody. Any command that emits a measurement could name its own binary, and any post-hoc analysis could partition by it — I did exactly that today to separate a pre-fix from a post-fix population, and it was the cleanest discriminator available. The field exists; what is missing is surfacing it where a measurement is taken.
+  created_at: 2026-09-21T21:26:00.657476171Z
+  modified_at: 2026-09-21T21:26:00.657476171Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
