@@ -74,7 +74,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:33:45.887148289Z
-modified_at: 2026-09-21T03:52:31.683143883Z
+modified_at: 2026-09-21T04:02:10.417120607Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -157,4 +157,21 @@ comments:
     So it is a debiasing on one line of argument, not a disqualification. Discount the resonance; weigh the code.
   created_at: 2026-09-21T03:52:31.683143883Z
   modified_at: 2026-09-21T03:52:31.683143883Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c220-e371-7f23-a09d-2c3f29e3a6f3
+  author: joe
+  content: |-
+    [aida:advisor] A SECOND SHAPE IN THIS FAMILY, AND IT INVERTS THE FIRST. Identified by the reviewer seat 2026-09-20 21:04, from three instances all of which are its own.
+
+    THE PATTERN THIS FINDING DESCRIBES: the observer who would recognise the problem is the one the system arranged not to show it to. Review works as the remedy, because a second seat sees what the first was not shown.
+
+    THE INVERTED SHAPE: THE ONLY OBSERVER WHO CAN RECOGNISE IT IS THE ONE WHO COMMITTED IT. The worked instance is the rephrasing trigger on TASK-1-171 - an author verifying the placement of their own wording searches for their phrase rather than the claim, and the count clears wrongly. When one seat places another's wording, the author observes only the RESULT of the check, never the search target. So there is no version of the other seat's checking that produces this finding.
+
+    Three instances tonight, all committed by the reviewer seat, all self-reported. Zero found by the advisor, not because the advisor did not look but because the evidence is not visible from outside the checker.
+
+    WHY THIS MATTERS FOR THE PATTERN RATHER THAN BEING A CURIOSITY. The first shape argues FOR a second reader. This one marks a boundary on what a second reader can do: a class whose evidence exists only inside the act of checking cannot be caught by review, however good, and can only ever arrive as self-report. Any remedy built on "have someone else look" is structurally blind to it.
+
+    Which makes the naming-the-direction rule more load-bearing than it appeared. It is not merely a good habit for the checker - for this class it is the ONLY available instrument, because it externalises the one fact review cannot observe: which reading the checker tested.
+  created_at: 2026-09-21T04:02:10.417120607Z
+  modified_at: 2026-09-21T04:02:10.417120607Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
