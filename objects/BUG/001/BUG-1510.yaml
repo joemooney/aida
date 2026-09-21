@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:55:50.224652863Z
-modified_at: 2026-09-21T01:56:01.660278907Z
+modified_at: 2026-09-21T03:56:48.352903283Z
 req_type: Bug
 tags:
 - batch:night-0920 orchestrator integrity drain-safe from:session-0920
@@ -61,3 +61,10 @@ relationships:
   target_id: 01a0c194-809e-7111-a5c6-095faa47a23d
   created_at: 2026-09-21T01:56:01.660274155Z
   created_by: joe
+comments:
+- id: 01a0c21b-f960-7b23-a599-1c49d32bb4d1
+  author: joe
+  content: '[aida:advisor] RECURRED AFTER FILING, 2026-09-20 20:26, and the second instance is worse than the first. Comment 01a0c200-091c-78b3-abcd-0120f667d3ed was posted to STORY-1391 headed ''REVIEW FINDINGS TO ADDRESS (BUG-1420)'' - a verdict at commit 065f3df8aa with six findings about the preflight shell contract and a stale 12-commit base, closing with a contract line demanding at least one commit or an explicit punt. All of it is about BUG-1420 and TASK-1289 on PR #2009''s lineage; none of it is about STORY-1391, and 065f3df8aa is not on that spec''s branch. THE FIRST INSTANCE WAS A RECORD; THIS ONE IS AN INSTRUCTION. A misattributed verdict is dangerous because someone might brief from it. A misattributed BRIEF is addressed to an implementer, names a contract, and demands a commit - so an agent reading this spec''s comments finds something that looks exactly like the instruction it is waiting for. This arrived at 20:26, roughly fifty minutes after this bug was filed from the first instance on the same spec, and after that instance had been cleared. The mechanism is live, it has hit one spec twice, and the acceptance here should treat the brief-delivery path as the priority case rather than the verdict-recording path. The comment is NOT deleted - it is the only evidence the defect recurred post-filing - and is marked on STORY-1391 instead.'
+  created_at: 2026-09-21T03:56:48.352903283Z
+  modified_at: 2026-09-21T03:56:48.352903283Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
