@@ -1,0 +1,39 @@
+id: 01a0c15d-32c6-7ea3-9d5f-e5f7c545e2b3
+spec_id: TASK-1305
+agreed_id: TASK-1305
+title: unshipped_work renders a branch with no PR identically to one whose PR is open and waiting, so the two states needing opposite actions look the same
+description: |
+  `unshipped_work` renders a branch with no PR and a branch whose PR is open and waiting identically, so the two states that need opposite actions are indistinguishable in the surface an operator uses to find stalled work.
+
+  Split from BUG-1450 on 2026-09-20 rather than bundled with its phase-ordering fix: the two share no code, and holding a correct well-tested fix behind an unrelated rendering change would cost throughput for no gain. Removed from that spec's acceptance by amendment rather than left to lapse silently.
+
+  THE TWO STATES AND WHY THEY DIFFER:
+    - branch with commits, NO PR -> someone must OPEN a PR. Until they do, no review surface,
+      no reviewer queue, no merge-hold accounting can see the work at all. This is the state
+      TASK-1274 sat in for fifteen hours with ten commits, visible only here.
+    - branch with an OPEN PR -> the work is already in the review path. It needs a merge
+      decision, or it is legitimately waiting on CI or a reviewer.
+
+  Reading the same row for both means an operator scanning for stalled work cannot tell which action either row wants, and the recovery hint it prints — `aida pr ship <branch>` — is correct for the first and misleading for the second.
+
+  SURFACES TO CHECK. awaiting_you.rs is the primary renderer. `unshipped_work` / UnshippedWork is also referenced in watch.rs, session_reap.rs and statusbar_cmd.rs; establish whether each renders the distinction, ignores it, or should.
+
+  ACCEPTANCE
+  1. The two states are distinguishable in `aida awaiting` output without opening the PR.
+  2. The recovery hint differs by state. A branch with an open PR should not be told to open one.
+  3. Establish whether watch.rs, session_reap.rs and statusbar_cmd.rs need the same distinction, and say so for each. A distinction present in one surface and absent in three is a new version of the current problem.
+  4. A test covers both shapes: a branch with commits and no PR, and a branch with commits and an open PR, asserting the rendered rows differ.
+  5. Do not add a third state for "PR open and CI failing" in this change unless the data is already to hand. Establish whether it is; if adding it is free, say so and add it, and if not, leave it out rather than half-deriving it.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T00:28:25.670255220Z
+modified_at: 2026-09-21T00:28:25.670255220Z
+req_type: Task
+tags:
+- awaiting
+- batch:night-0920
+- drain-safe
+- from:session-0920
+- observability
