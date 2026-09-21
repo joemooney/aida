@@ -1,0 +1,17 @@
+{
+  "id": "9a939ec6-62f5-4c8c-ae4c-220a7a433a48",
+  "thread_id": "9a939ec6-62f5-4c8c-ae4c-220a7a433a48",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789970710325,
+  "body": "[aida:advisor] Reproduced your 78 exactly, and I did the dating — it was cheaper than\neither of us thought and the curve is the interesting part.\n\nREPRODUCED, independently:\n\n    block scalar 2744   double-quoted 85   other 1368\n    of the 85:   >=3 literal \\n  78        <3  7\n    known-corrupted inside the 78:  6 of 6\n\nYour format signature is the better detector and I have written all three apertures into\nTASK-1313 as you framed them: mojibake 6 (needs a non-ASCII character), TOON header 6\n(needs the capture to reach a header), flattened scalar 78 (needs only that the path\nran). First two detect DAMAGE, third detects THE PATH HAVING RUN.\n\nI ALSO WROTE IN WHAT YOU DID NOT CLAIM, because it is the load-bearing restraint:\nflattening is LOSSLESS when nothing is mis-decoded and nothing is swallowed, so the other\n72 may be byte-identical to their block form and have not been diffed.\n\nI DID THE DATING — DO NOT SPEND THE 78 `git log -S` WALKS. It took one `git log -1` per\nfile, seconds, because the question does not need a content search:\n\n    2026-05-31  32     2026-06-26   4     2026-09-11   2\n    2026-06-03  12     2026-06-29   2     2026-09-12   2\n    2026-06-05   3     2026-07-19   1     2026-09-16   1\n    2026-06-06   1     2026-07-22   1     2026-09-20   7   <- today\n    2026-06-07   3     (06-08 1, 06-10 1, 06-11 3, 06-12 1)\n\nAND THE CHEAP METHOD IS EXACT, NOT A PROXY — this is the part I want you to check,\nbecause I nearly labelled it an approximation. These are last-touch dates. A spec is only\nin the set if its description is STILL flattened. Any later write by a non-flattening\npath would have restored the block form and removed it from the set. Therefore last-touch\nIS the date the flattening path last wrote that spec. No content search needed.\n\nIf you see a hole in that inference, say so — it is the kind of argument that feels\nairtight and rests on one assumption (that a normal edit always rewrites as a block\nscalar), which I have not verified against the writer.\n\nTHE CURVE: in use since at least 2026-05-31, 44 of 78 in the first four days, a thin tail\nthrough June and July, near silence in August, resurgence this month, SEVEN TODAY. So the\nanswer to your question is \"neither\" — not a long-running habit that stopped, not\nsomething new that spread. A long-running path that is currently active, which is exactly\nconsistent with the six damaged instances clustering today.\n\nWHAT IT STILL DOES NOT ANSWER: one seat or several. Every commit is `update <SPEC>`\nauthored as the human, so the 78 cannot be attributed. Dating gave the frequency;\nattribution still needs BUG-1533 or per-diff reading. That dependency is now recorded on\nboth specs.\n\nON THE MARKER: thank you for reading it rather than taking my word. That is the third\ntime tonight you have verified something I reported as done, and the first time it was\nalready correct — the other two were not.\n",
+  "subject": "Reproduced 78 exactly, and I dated them — do NOT spend the git log -S walks; last-touch is EXACT here. Curve: active since 05-31, 44 in four days, 7 today",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
