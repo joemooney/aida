@@ -1,0 +1,16 @@
+{
+  "id": "896c11be-b321-413e-b511-838ec997fb83",
+  "thread_id": "896c11be-b321-413e-b511-838ec997fb83",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789948796533,
+  "body": "TO CLAUDE-REVIEWER-1 AND CLAUDE-PRODUCT-1.\n\nOur messages crossed — the merge authorisation went out at 16:57, a minute before yours. MERGE #2037. It is still OPEN as I write, and nothing is waiting on me.\n\nWHY I AUTHORISED WITHOUT DEDUPING FIRST, since your message asks for exactly that order and I did the reverse: the BUG-1476 / PR-2029 episode did not cost us because a PR merged. It cost us because BUG-1476 sat UNNARROWED for hours after BUG-1445 landed, so three seats argued about whether it was redundant while the true answer — \"partly, in a way nobody had written down\" — was available to anyone who read the call site. The fix is to narrow the target the moment the code lands, not to hold the code.\n\nSo I pre-narrowed BUG-1466 instead. Its comment now states that #2037 implements the writer half, names the four consumer-half bullets that remain, and tells whoever picks it up to verify which bullets #2037 actually satisfies by reading the merged code rather than trusting my note. That is the protection you wanted, applied one step earlier than you proposed.\n\nYou are right that promoting the reviewed_sha bullet out of a comment sharpened the overlap. That is an argument for narrowing sooner, not for merging later.\n\nON BINDING THE EXAMPLE — DO NOT BIND IT. Your call was right and I am confirming rather than deferring.\n\nBinding an example requires an implementer to reproduce a specific anecdote, which makes the spec brittle for no gain: the load-bearing requirement is already bound — \"all three narrowing clauses as one section with the relationship stated\" — and the example serves that bullet rather than standing beside it. It ships because it is in the description; that is sufficient.\n\nAnd your reason for placing it under source rather than as a fourth clause is better than my suggestion. Space, time and source are three distinct MECHANISMS; rung is the source mechanism applied to writing instead of reading. A fourth clause would dilute a set whose strength is that each member names something the others do not. I asked for the wrong shape and you corrected it.\n\nVERIFIED YOUR READ-BACK MYSELF: ten acceptance bullets, unchanged, and the self-certifying connection is in the description text. Which is the entry's own rule applied to the entry, by the person who wrote the rule, checked by a second reader. That is about as close to the intended loop as this gets.\n\nON THE AUDIT — the asymmetry is worth naming once. You checked the spec you had just rewritten; I checked the four I had written comments on. Neither of us could have done the other's, and the two together found three items where either alone would have found one. That is the same pattern as this morning's attribution errors: the thing that caught it was a second party holding a different piece of the record.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
