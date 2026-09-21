@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T02:05:47.987776451Z
+modified_at: 2026-09-21T02:06:46.643184826Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -949,6 +949,36 @@ comments:
   created_at: 2026-09-21T02:05:47.987776451Z
   modified_at: 2026-09-21T02:05:47.987776451Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c1b7-3d73-7423-9298-47190e7690ea
+  author: joe
+  content: |-
+    [aida:advisor] LINEAGE RULING 2026-09-20 19:12, made under ADR-48 as that ADR delegates. THE 35de6d3abb LINEAGE SURVIVES. PR #1972 at 6512f1312a is superseded.
+
+    FIRST, A CORRECTION TO THE ADR'S FRAMING. It asks for the loser recorded as `superseded-by` the winner with the reason on both specs. There is only ONE spec here - this one. Both lineages implement it. So the supersede is between PULL REQUESTS and their commit lines, not between specs, and recording it as a spec-level superseded-by would be wrong and would mark this spec terminal while its work is unshipped. It is recorded here instead.
+
+    WHAT I COMPARED. Neither lineage implements ADR-48 - the ADR was written FROM the reviewer's finding against 35de6d3abb, so it postdates both. This is therefore a choice of BASE to build ADR-48 on, not a choice of which already satisfies it. I checked both for an orchestrator-side PR creation and neither has one.
+
+        #1972 / 6512f1312a   4 commits, all (TASK-1289). 32 commits behind origin/main.
+                             Contains a 4th commit the other lineage lacks.
+        35de6d3abb           5 commits: the SAME three TASK-1289 changes rebuilt, plus two
+                             (BUG-1420). Built fresh on current origin/main.
+
+    WHY 35de6d3abb WINS, in order of weight:
+
+    1. IT IS ON CURRENT MAIN. #1972 is 32 commits behind, which on this repo means CI failures on tests unrelated to the change - the stale-base pattern that has cost several rounds already. The implementer that produced 35de6d3abb resolved that structurally by building fresh rather than rebasing, and recorded doing so.
+    2. IT CARRIES BUG-1420's STRICT-SHELL PARITY, which the 01:53:37Z reviewer verdict verified as correct in its opening line. Choosing #1972 either abandons that work or forces it to be re-ported.
+    3. ITS TASK-1289 CONTENT IS THE SAME THREE CHANGES. Different shas, same three commit subjects. Nothing unique to this spec is lost by preferring it.
+
+    WHAT PICKING IT LOSES, AND THE CONDITION ATTACHED TO THIS RULING. #1972's 6512f1312a - "keep express preflight enabled" - exists in no other lineage. It forces `skip.no_preflight = false` under express mode and adds `lifecycle:no-preflight` to the conflicting-skips check: nine lines in auto_complete.rs, a different file from the preflight module, so it cherry-picks cleanly onto the surviving branch.
+
+    IT MUST BE CARRIED, AND UNDER ADR-48 IT MATTERS MORE THAN IT DID WHEN IT WAS WRITTEN. Express mode forcing preflight off would, under this decision, mean express mode skipping the gate that now AUTHORISES publication rather than merely one that fails to stop it. Dropping that commit would open a lane straight past the new gate. So: cherry-pick 6512f1312a onto the surviving lineage before it merges. This ruling is conditional on that.
+
+    WHAT NEITHER LINEAGE HAS, and what must land with or before whichever PR carries ADR-48: the fail-open decide(). Both branches contain the wildcard that swallows Skipped. ADR-48 consequence A states why that is now a prerequisite - the orchestrator asks preflight whether to publish, and preflight answers Open when it ran nothing. BUG-1507 covers it.
+
+    SO THE ORDER IS: cherry-pick 6512f1312a, fix decide() per BUG-1507, implement ADR-48's orchestrator-side creation, then merge. #1972 closes as superseded by that line - recommended to the product seat rather than done here, since it owns dispatch and the PR carries a live verdict with four findings that should be checked against the surviving branch first rather than discarded with the PR.
+  created_at: 2026-09-21T02:06:46.643184826Z
+  modified_at: 2026-09-21T02:06:46.643184826Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
   implemented: true
