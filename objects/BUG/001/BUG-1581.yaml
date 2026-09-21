@@ -58,7 +58,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:59:21.615803647Z
-modified_at: 2026-09-21T23:04:17.542793995Z
+modified_at: 2026-09-21T23:07:55.052558692Z
 req_type: Bug
 tags:
 - review-verdicts orchestrator integrity
@@ -104,4 +104,68 @@ comments:
     THIS IS BUG-1539'S CLOBBER WITH A SECOND IDENTITY ATTACHED. BUG-1539 records a second round by the same reviewer overwriting the first. Here it is a DIFFERENT REVIEWER, which is worse in one specific way: a reviewer overwriting its own earlier round has at least seen it. A reviewer overwriting another's has not, and cannot carry forward findings it never read. claude-reviewer-1 carried the drain's findings into its reversal WITH ATTRIBUTION — deliberately, and knowing its own write was destroying the drain's file. A HABIT STANDING IN FOR A MECHANISM, THREE TIMES IN THIS ONE INCIDENT: the habit that caught the conflict before merge, the habit that preserved the findings, and the habit of verifying a handshake after writing it, which is the only reason anyone can say what was lost.
   created_at: 2026-09-21T23:04:17.542793995Z
   modified_at: 2026-09-21T23:04:17.542793995Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c639-d92c-77b3-b608-f98f9f9faf57
+  author: joe
+  content: |-
+    [aida:advisor] THE FIX IS MUCH SMALLER THAN THIS SPEC IMPLIES: THE PRESERVATION MECHANISM ALREADY EXISTS, ALREADY WORKS, AND IS SIMPLY NOT ON THE PATH THAT MATTERS. Found by claude-reviewer-1 while testing whether my new acceptance ("the FIRST verdict must still be recoverable") was satisfiable at all. Every claim below re-verified here.
+
+    THE INVERSION, FROM THIS INCIDENT'S OWN FILES:
+
+        SPIKE-85.json   rounds: 1 entry
+                          verdict approve | claude-reviewer-1 | 22:55:46Z | sha ac772eaca9
+        PR-2066.json    NO `rounds` KEY AT ALL
+
+    THE APPROVE SURVIVED. It is in the spec-keyed file's append-only `rounds` array, archived automatically on the 23:02:45 re-record. STORY-1391 built this and it worked perfectly.
+
+    THE DRAIN REVIEWER'S REQUESTCHANGES DID NOT. It existed only in the PR-keyed handshake and the 23:02:48 write destroyed it without trace. Its content survives today ONLY because a human-equivalent seat carried the findings forward with attribution and because it was quoted in mail. THE SUBSTRATE RETAINS NOTHING OF IT.
+
+    TWO DIFFERENT WRITERS, VERIFIED IN THE TREE:
+
+        review_verdict.rs:526   record_verdict (SPEC-keyed)
+                                calls archive_current_round(&mut obj, &incoming_key)
+                                -> prior round preserved
+
+        lib.rs:77338-77355      the PR-keyed handshake (trace:BUG-802)
+                                builds a FRESH serde_json::json!({...}), then
+                                std::fs::write(&handshake, ...)
+                                NO read_to_string. NO archive_current_round.
+                                -> prior verdict destroyed, unconditionally, every time
+
+    I grepped the whole handshake block for `read_to_string` and `archive_current_round` and found NEITHER — only the `fs::write`. There is exactly one `archive_current_round` call site in the codebase, at review_verdict.rs:526, and it is on the file nobody dispatches on.
+
+    THE INVERSION IS THE FINDING AND THE CODE SAYS IT OUT LOUD. The handshake's own comment is "the orchestrator reads this to proceed". SO THE AUTHORITATIVE ARTEFACT IS THE ONE THAT CAN BE SILENTLY OVERWRITTEN WITHOUT TRACE, AND THE ADVISORY ONE KEEPS THE AUDIT TRAIL.
+
+    WHAT THIS DOES TO THIS SPEC'S ACCEPTANCE: "the first verdict must still be recoverable" IS ALREADY TRUE for spec-keyed files, and SPIKE-85.json is the working example. So the fix is to route the handshake through the same read-modify-write + archive path `record_verdict` already uses, instead of constructing a fresh object. AN EXISTING, TESTED MECHANISM EXTENDED TO A SECOND CALL SITE — not versioning to be designed.
+
+    TWO CAVEATS THE LANE MUST NOT HIT BLIND, both from archive_current_round's own behaviour (verified at review_verdict.rs:419-432):
+
+      1. IT REFUSES TO ARCHIVE AN UNIDENTIFIABLE ROUND. `if round_sha(obj).is_none() { return; }` —
+         deliberately, with the comment "Unidentifiable round — refusing is the safe side", because
+         archiving blind makes a re-record its own predecessor and every finding then reads as
+         surviving. Since BUG-1466 the handshake DOES write reviewed_sha, so new writes are
+         identifiable; the historical files carrying neither key are not.
+
+      2. A ROUND KEYED BY HEAD ALONE STILL COLLAPSES THIS EXACT CASE, and this is the part that
+         matters most. ALL THREE WRITES HERE WERE AT THE SAME HEAD, ac772eaca9 — and two of them
+         were DIFFERENT REVIEWERS REACHING OPPOSITE VERDICTS. Archiving on head identity alone would
+         make the drain's RequestChanges and the approve ONE ROUND. THE ROUND IDENTITY NEEDS THE
+         REVIEWER IN IT. That is the same (object, reviewer) insight this spec applies to the
+         filename, applied one level in — to the rounds array. Routing the handshake through the
+         existing path WITHOUT this fixes the writing and not the collapsing.
+
+    AND IT SUPPLIES THE DEMONSTRATION FROM REAL DATA RATHER THAN A CONSTRUCTED CASE: three writes to
+    PR-2066.json at one head by two reviewers with opposing verdicts, of which the substrate retains
+    exactly one. A test reproducing that shape and asserting all three are recoverable is the
+    fail-visibly criterion with teeth — and asserting the second write SUCCEEDS proves nothing here,
+    because every write succeeded.
+
+    RECOVERABILITY HAS NO FALLBACK, and the reviewer checked the attribution rather than trusting the
+    tool: `git check-ignore` names `.git/info/exclude:19`, which is the BUG-1279 precedence trap — but
+    the repo's OWN `.gitignore` has `.aida/*` at line 87 with an allow-list that omits review-verdicts,
+    so these files are ignored on ANY clone. Designed and portable, not machine-local. THERE IS NO GIT
+    HISTORY TO FALL BACK ON: the `rounds` array is the only durable record, which is exactly why its
+    absence on the operative file is the whole defect.
+  created_at: 2026-09-21T23:07:55.052558692Z
+  modified_at: 2026-09-21T23:07:55.052558692Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
