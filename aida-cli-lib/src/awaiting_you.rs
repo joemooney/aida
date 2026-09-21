@@ -189,7 +189,29 @@ pub(crate) fn rework_ready_rows(
                 .map(str::trim)
                 .filter(|s| !s.is_empty())?;
             let head = c.head_sha.trim();
-            if head.is_empty() || shas_match(head, reviewed) {
+            // DECISION, recorded rather than inherited: only a POSITIVE Moved
+            // emits a row. Same and Incomparable are both silence here, and
+            // that is deliberate even though they are different states.
+            //
+            // A ROW SURFACE CANNOT CARRY A DISTINCTION IN THE ABSENCE OF A ROW.
+            // "No row" is one state however many reasons produce it, so asking
+            // Incomparable to look different from Same HERE would be asking
+            // silence to have two flavours. The governing principle — that
+            // absent evidence must be distinguishable from good evidence — is
+            // satisfied by the distinction existing somewhere a consumer can
+            // REACH, not by every surface rendering it.
+            //
+            // WHERE THE DISTINCTION LIVES: in `ShaRelation` itself. It is
+            // three-state precisely so a caller that CAN express the
+            // difference is able to. Binding on anything built later: a
+            // diagnostic or verbose view over verdict staleness MUST report
+            // Incomparable distinctly from Same. Collapsing it back to a
+            // boolean at such a surface would be the failure this shape exists
+            // to avoid — the row surface is the one place where it is correct.
+            //
+            // The immediate consequence is that an unusably short recorded sha
+            // cannot pin a row open
+            if head.is_empty() || compare_shas(head, reviewed) != ShaRelation::Moved {
                 return None;
             }
             Some(ReworkReadyItem {
@@ -202,13 +224,46 @@ pub(crate) fn rework_ready_rows(
         .collect()
 }
 
-/// Sha equality that tolerates truncation on either side — verdict writers
-/// record full or short shas depending on the path, and a short-vs-long
-/// mismatch is NOT a moved head.
-// trace:STORY-1419 | ai:claude
-fn shas_match(a: &str, b: &str) -> bool {
-    let n = a.len().min(b.len()).min(40);
-    n >= 7 && a[..n].eq_ignore_ascii_case(&b[..n])
+/// How a recorded sha relates to the current head.
+///
+/// THREE states, not two. Verdict writers record full or abbreviated shas
+/// depending on the path, so a short-vs-long PAIR IS NOT A MOVED HEAD and must
+/// be compared on the shared prefix.
+///
+/// THE POPULATION THIS FUNCTION CAN RECEIVE is only those records carrying a
+/// `reviewed_sha`; a head-only legacy record is dropped upstream and never
+/// reaches here. Of those, 37 of 107 were abbreviated when swept 2026-09-21.
+/// The predicate and the date are stated because the same corpus answers 41 of
+/// 149 under a wider predicate that includes records this code cannot see, and
+/// a bare count outlives the question it was measured to answer.
+///
+/// `Incomparable` is the state a boolean could not express, and its absence was
+/// a real defect: below the prefix floor the old predicate returned "not equal",
+/// which emitted a row that NOTHING COULD EVER CLEAR, because no push will make
+/// a 3-character string equal a 40-character one. "Too short to tell" is not
+/// "different"; it degrades to silence, exactly like absent provenance.
+// trace:BUG-1546 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+enum ShaRelation {
+    Same,
+    Moved,
+    Incomparable,
+}
+
+/// Shortest prefix worth comparing. Below this a match is coincidence rather
+/// than evidence.
+const MIN_COMPARABLE_SHA: usize = 7;
+
+fn compare_shas(head: &str, reviewed: &str) -> ShaRelation {
+    let n = head.len().min(reviewed.len()).min(40);
+    if n < MIN_COMPARABLE_SHA {
+        return ShaRelation::Incomparable;
+    }
+    if head[..n].eq_ignore_ascii_case(&reviewed[..n]) {
+        ShaRelation::Same
+    } else {
+        ShaRelation::Moved
+    }
 }
 
 /// Pending-worker-directives summary for the awaiting-you report: how many
@@ -973,6 +1028,45 @@ mod tests {
             None
         )
         .is_empty());
+    }
+
+    // The edge the abbreviated-sha corpus exposed: a sha SHORTER THAN THE
+    // COMPARISON FLOOR is unusable evidence, and the failure is asymmetric.
+    // Treating it as "different" emits a row that NO PUSH CAN EVER CLEAR — a
+    // 3-character string never becomes equal to a 40-character one — so the
+    // wrong answer here is permanent, not transient. Silence is the only
+    // output consistent with the contract the absent-provenance case sets.
+    // trace:BUG-1546 | ai:claude
+    #[test]
+    fn a_sha_too_short_to_compare_is_silence_not_a_permanent_row() {
+        let head = "293da2d0cc9404f5226ad4deef89c0bc37e97c81";
+        for short in ["2", "29", "293", "293d", "293da", "293da2"] {
+            assert!(
+                rework_ready_rows(&[candidate(2030, head, Some(short), None)], None).is_empty(),
+                "a {}-char reviewed_sha is too short to be evidence, so it must \
+                 not pin a row open forever (got one for {short:?})",
+                short.len()
+            );
+        }
+        // …and a sha that DISAGREES below the floor is equally unusable: the
+        // floor is about comparability, not about which way the bytes fall.
+        for short in ["f", "ff", "fff", "ffff", "fffff", "ffffff"] {
+            assert!(
+                rework_ready_rows(&[candidate(2030, head, Some(short), None)], None).is_empty(),
+                "a sub-floor sha must be silence whichever way its bytes fall ({short:?})"
+            );
+        }
+        // The floor is exactly 7: one more character and comparison resumes,
+        // so this pins the boundary rather than merely "short is quiet".
+        assert!(
+            rework_ready_rows(&[candidate(2030, head, Some("293da2d"), None)], None).is_empty(),
+            "7 matching chars is comparable and matching — silence"
+        );
+        assert_eq!(
+            rework_ready_rows(&[candidate(2030, head, Some("fffffff"), None)], None).len(),
+            1,
+            "7 DIFFERING chars is comparable and moved — the row must fire"
+        );
     }
 
     // BUG-1538's blast radius: no reviewed_sha means nothing to compare, so the
