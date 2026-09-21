@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:04:32.760270386Z
-modified_at: 2026-09-21T17:13:17.392757869Z
+modified_at: 2026-09-21T17:15:05.394604257Z
 req_type: Bug
 tags:
 - papercut
@@ -224,4 +224,25 @@ comments:
     DEPENDENCY RECORDED, at the reviewer's suggestion and I agree: BUG-1545 BLOCKS on this spec landing. Fix-only there is right ONLY IF THIS GATE EXISTS. One commit produced two instances in a single pass, so the rate is not low, and if this spec stalls the class has no guard at all. The edge is now on the graph rather than in mail.
   created_at: 2026-09-21T17:13:17.392757869Z
   modified_at: 2026-09-21T17:13:17.392757869Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4f6-d332-70c3-9049-aa72c4f4f2f0
+  author: joe
+  content: |-
+    [aida:advisor] IMPLEMENTATION SHAPE AND FOUR RULINGS ON IT, recorded mid-work so the acceptance is not re-derived at review time.
+
+    THE DESIGN (implementer, in progress): parse each .rs file into an ordered list of items (fn/struct/enum/trait/impl/const/static/type/mod), each tagged as having its own doc/trace header directly above it (skipping `#[...]` attributes) or being bare. Two independent structural checks per file, both asserting on the RESULTING FILE rather than a diff:
+      CHECK A, trace-marker stranding: flags a `// trace:` line followed by another `///` doc line followed by another `// trace:` line with NO item in between - two header segments spliced together. This is the tracker_cmd.rs shape (trace-github, doc-github, trace-jira, fn-jira). Measured: that exact 3-line pattern occurs exactly once in the tree, at the live site.
+      CHECK B, doc-only stranding: for each headed item, score the doc's content words against that item's identifier tokens AND against every other BARE item in the same file; flag when some other bare item scores strictly better. Aimed at both Shape A and Shape B, since it asks whether the attachment is wrong rather than how the insertion happened.
+
+    RULING 1 - CHECK A APPROVED, HARD FAILURE IS THE RIGHT CALL (trace-stealing inverts `aida why`). BUT "occurs exactly once in the tree" IS A MEASUREMENT, NOT A DEMONSTRATION. A pattern occurring once may be matching a coincidence at that site rather than the class. REQUIRED: construct a synthetic trace-stranding in a scratch file - different symbols, different file, same structure - and show Check A catches it. Firing on a constructed instance AND the live one proves it detects the shape; firing only on tracker_cmd.rs means it is a very specific grep.
+
+    RULING 2 - BINDING: CHECK B MUST NOT BE TUNED UNTIL THE TREE IS GREEN. A naive first version threw 177 hits; tightening is correct, but the STOPPING RULE must not be "the tree is quiet." A HEURISTIC GATE TUNED TO ZERO HITS ON THE CURRENT TREE IS INDISTINGUISHABLE FROM A BROKEN ONE, and the tree's quietness is the very thing the gate is supposed to establish. The stopping rule is: set the threshold from the KNOWN POSITIVES, then TRIAGE the residual - each remaining hit is a real stranding or a false positive with a stated reason - and report the residual count with a sample. Residual hits are not silenced by moving the threshold. A large noisy residual is a finding about Check B's design, not a number to tune away.
+
+    RULING 3 - CHECK B SHIPS ADVISORY, NOT HARD, while it is a content-similarity heuristic. Hard failures need determinism; a scorer that can err in both directions blocks correct commits and teaches people to bypass the gate, which is how a guard becomes a comment. A deterministic high-confidence subset MAY block if one can be identified; the choice must be stated and argued.
+
+    RULING 4 - A LIMIT TO RECORD RATHER THAN FIX: Check B scores against bare items IN THE SAME FILE. The tracker_cmd.rs family came from the SPIKE-78 extraction commit 80c7e5eb99 (#1460), where functions MOVED BETWEEN FILES and headers did not travel - so a doc-only stranding whose true owner now lives in another file is outside B's reach. Check A covers the trace-carrying case there, which is the dangerous half. The cross-file gap goes in the code comment and the PR description as a KNOWN GAP. An instrument that states its blind spot is worth more than one that implies it has none.
+
+    AND A LIVE POSITIVE CONTROL, better than the implementer framed it: the gate will fire on awaiting_you.rs, whose two instances are owned by BUG-1545/#2051 and are deliberately not being touched here. That is not merely an expected pre-existing violation - it is the gate firing on a KNOWN-TRUE INSTANCE NOBODY PLANTED, on real code rather than a fixture. It is the strongest evidence available that the check works, and the output should be quoted in the PR.
+  created_at: 2026-09-21T17:15:05.394604257Z
+  modified_at: 2026-09-21T17:15:05.394604257Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
