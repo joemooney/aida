@@ -31,7 +31,35 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:04:29.972266635Z
-modified_at: 2026-09-21T02:04:29.972266635Z
+modified_at: 2026-09-21T22:59:41.619272703Z
 req_type: Bug
 tags:
 - batch:night-0920 public-repo hygiene drain-safe from:session-0920
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    CHANGES REQUESTED AT 60973a5ac0 — one finding, and the evidence settles the decision the PR leaves open rather than merely naming it.
+
+    WHAT IS RIGHT, AND IT IS MOST OF THE CHANGE. On the confidentiality question this is clean: the tracked `.codex/config.toml` is three lines registering the aida MCP server — no paths, no hosts, no credentials — and it is the correct Codex twin of the tracked `.mcp.json`. Ignoring `.codex/hooks.json` is correct and its stated justification holds: the file embeds absolute paths carrying a username, which has no business on a public repo. Listing the root dotfiles by name rather than by glob is the right shape for the reason the diff gives — a named rule states what it protects against, and a genuinely new project dotfile still has to be decided on.
+
+    THE FINDING: `.codex/hooks/` IS LEFT IN THE ONE STATE THIS PR'S OWN TEXT CONDEMNS. The change ignores `/.codex/hooks.json` and says nothing about the `hooks/` directory that hooks.json exists to wire. The directory is empty today, so nothing is publishable at this moment and git ignores it only by accident of having no contents. The PR's own added CLAUDE.md paragraph states the rule it is violating: "Untracked-and-unignored is the one state that is neither, and it is the state `git add -A` publishes from." The change states the principle and leaves the hole at the exact path its other half is about.
+
+    AND THE DECISION IS NOT A JUDGEMENT CALL — THE ANALOGY IS EXACT, WHICH I ESTABLISHED BY SET COMPARISON RATHER THAN BY REASONING FROM RESEMBLANCE:
+
+        .claude/hooks/ tracked in git          10 files
+        scripts referenced by .codex/hooks.json 10 files
+        only in .claude/hooks/                  NONE
+        only referenced by codex                NONE
+
+    The two sets are IDENTICAL: aida-advisor-code-guard, aida-capture-prompt, aida-git-guardrails, aida-mail-notice, aida-role-context, aida-session-context, aida-subagent-start, aida-subagent-stop, aida-track-commits, aida-validate-commit. Not analogous — the same ten scripts. And every `.claude/hooks/` entry is a symlink into `aida-core/templates/hooks/`, i.e. scaffolded project content, which is why it is tracked rather than per-clone state.
+
+    SO `.codex/hooks/` SHOULD BE TRACKED, on the same grounds and by the same mechanism as `.claude/hooks/`. The machine-local half is the absolute-path wiring inside hooks.json, which this PR already ignores correctly. That split is coherent and it is the one the repo has been running under for Claude since May: portable scripts tracked, machine-specific manifest not.
+
+    REQUIRED: decide it in this change rather than leaving it. Track `.codex/hooks/` as `.claude/hooks/` is tracked, or — if the intent really is that both halves are machine-local — add `/.codex/hooks/` to `.gitignore` and say why the Codex copy differs from the Claude copy when the scripts are byte-identical scaffolding. Either is defensible and testable. What is not defensible is the current state, which the PR's own paragraph identifies as the failure mode and which will stop being harmless the moment scaffolding writes the first script.
+
+    NOTE ON SCOPE, NOT A SECOND FINDING: `.codex/skills/` is named in the diff's comment as "left trackable for the same reason" as `.claude/skills/`. That is a decision, stated, and I am not asking for more. It is the contrast that makes `hooks/` stand out — two of the three `.codex/` members were decided in this change and the third was not.
+  recovery_hint: address the review findings, move BUG-1511 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-21T22:59:41.619272703Z
