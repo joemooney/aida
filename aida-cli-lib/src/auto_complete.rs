@@ -1399,6 +1399,12 @@ pub(crate) trait PhaseDriver {
     /// Phase 2 — wait for CI to go terminal, then end the implementer session
     /// (which auto-queues the `Review PR-N` item for the reviewer).
     fn finish_ci(&mut self) -> Result<(), PhaseFailure>;
+    /// Prove phase 2's terminal result belongs to the head phase 3 would
+    /// review. This boundary hook runs before PhaseEntered(reviewer).
+    // trace:BUG-1460 | ai:codex
+    fn verify_ci_for_review(&mut self) -> Result<(), PhaseFailure> {
+        Ok(())
+    }
     /// Phase 3 — run the reviewer Claude session and read its verdict file.
     /// Returns [`ReviewerOutcome::Verdict`] on a normal review, or
     /// [`ReviewerOutcome::EscalatedToHuman`] when the reviewer wrote
@@ -3865,6 +3871,12 @@ pub(crate) fn orchestrate_with_resume(
                 }
             }
         }
+        if variant.last_phase() > 2 {
+            if let Err(f) = driver.verify_ci_for_review() {
+                durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
+                return resolve_phase_failure(driver, Phase::Ci, spec, json, &start, &f, durations);
+            }
+        }
         durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
         emit_done(Phase::Ci, spec, json, start.elapsed().as_millis());
     }
@@ -6123,6 +6135,11 @@ mod tests {
         /// TASK-975: how many times `finish_ci` fails with a red-CI
         /// `PhaseFailure` before going green (decrements per call).
         ci_red_failures: usize,
+        /// BUG-1460: reproduce phase 2 reporting PrNoChecks for one head,
+        /// followed by another push before the reviewer handoff.
+        ci_no_checks_head_advance: bool,
+        /// Observable CI/head events in the BUG-1460 ordering fixture.
+        ci_ordering_events: Vec<&'static str>,
         /// TASK-975: what `attempt_ci_fix` returns — did the fix session
         /// push a change?
         ci_fix_pushes: bool,
@@ -6218,6 +6235,8 @@ mod tests {
                 terminal: None,
                 ci_fix_budget: 0,
                 ci_red_failures: 0,
+                ci_no_checks_head_advance: false,
+                ci_ordering_events: Vec::new(),
                 ci_fix_pushes: false,
                 ci_fix_calls: Vec::new(),
                 merge_conflicts: 0,
@@ -6259,6 +6278,14 @@ mod tests {
                 ci_red_failures: reds,
                 ci_fix_budget: budget,
                 ci_fix_pushes: pushes,
+                ..Self::base()
+            }
+        }
+
+        // trace:BUG-1460 | ai:codex
+        fn no_checks_then_head_advances() -> Self {
+            Self {
+                ci_no_checks_head_advance: true,
                 ..Self::base()
             }
         }
@@ -6534,6 +6561,12 @@ mod tests {
         }
         fn finish_ci(&mut self) -> Result<(), PhaseFailure> {
             self.record(Phase::Ci)?;
+            if self.ci_no_checks_head_advance {
+                // This is the incident's first observation: phase 2 sees the
+                // pushed head before its checks have registered.
+                self.ci_ordering_events
+                    .push("ci:PrNoChecks@pre-review-head");
+            }
             // TASK-975: simulate a red terminal CI run that a pushed fix
             // (eventually) turns green.
             if self.ci_red_failures > 0 {
@@ -6541,6 +6574,20 @@ mod tests {
                 return Err(PhaseFailure::of(
                     FailureKind::CiRed,
                     "CI is red on PR-46: mock failing check",
+                ));
+            }
+            Ok(())
+        }
+        fn verify_ci_for_review(&mut self) -> Result<(), PhaseFailure> {
+            if self.ci_no_checks_head_advance {
+                // The PR advances mid-phase to the would-be reviewed commit;
+                // its checks likewise have not registered. The production
+                // boundary rejects this before PhaseEntered(reviewer).
+                self.ci_ordering_events.push("head:reviewed-head");
+                self.ci_ordering_events.push("ci:PrNoChecks@reviewed-head");
+                return Err(PhaseFailure::of(
+                    FailureKind::CiTimeout,
+                    "CI checks did not register for the current head PR-46",
                 ));
             }
             Ok(())
@@ -7524,6 +7571,39 @@ mod tests {
             driver.calls.iter().filter(|p| **p == Phase::Merge).count(),
             1,
             "policy refusal is attempted once"
+        );
+    }
+
+    /// BUG-1460: reproduce the incident ordering. Phase 2 initially sees
+    /// PrNoChecks, then the PR head advances before that head's checks start.
+    /// The drain must stop in CI and never enter/announce the reviewer phase.
+    // trace:BUG-1460 | ai:codex
+    #[test]
+    fn orchestrate_does_not_review_head_pushed_before_checks_register() {
+        let mut driver = MockPhaseDriver::no_checks_then_head_advances();
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1460",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+
+        assert_eq!(result.failed_phase, Some(Phase::Ci));
+        assert_eq!(
+            driver.ci_ordering_events,
+            vec![
+                "ci:PrNoChecks@pre-review-head",
+                "head:reviewed-head",
+                "ci:PrNoChecks@reviewed-head",
+            ],
+            "fixture must report no checks, advance the head mid-phase, then reject its unregistered checks"
+        );
+        assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
+        assert!(
+            !driver.calls.contains(&Phase::Reviewer),
+            "reviewer phase must not be entered for a head whose checks have not started"
         );
     }
 
