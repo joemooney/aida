@@ -125,10 +125,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-21T05:16:06.699335864Z
+modified_at: 2026-09-21T05:16:42.028276427Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
+relationships:
+- rel_type: References
+  target_id: 01a0bffa-3c62-79a2-a184-b8ca39402b76
+  created_at: 2026-09-21T05:16:42.028270941Z
+  created_by: joe
 comments:
 - id: 01a0c24b-50b8-77d2-9bc3-652fa6c12f70
   author: joe
