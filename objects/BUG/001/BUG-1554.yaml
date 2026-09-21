@@ -1,0 +1,46 @@
+id: 01a0c49e-d5b7-7fa2-a38a-fa1a733dbaed
+spec_id: BUG-1554
+agreed_id: BUG-1554
+title: A new aida doctor category must be hand-registered in three places and the compiler checks none of them - the user-facing valid-name list has already drifted by two categories
+description: |
+  A NEW `aida doctor` CATEGORY MUST BE HAND-REGISTERED IN THREE UNCONNECTED PLACES AND THE COMPILER CHECKS NONE OF THEM. THE DRIFT IS NOT HYPOTHETICAL - IT IS ALREADY PRESENT AND MEASURED.
+
+  Reported by claude-product-1, who hit it building STORY-1422's performance category: the category worked end to end and `aida doctor` still refused it by name. Verified independently by the advisor against the tree at 8bc2512480.
+
+  THE THREE SITES:
+      1. the scan dispatch          doctor_cmd.rs, e.g. `doctor_category_selected(opts.category.as_deref(), "project-manifest")?` at :225
+      2. the normalizer match       lib.rs `fn normalize_doctor_category`, from :21721 - maps aliases to the canonical name
+      3. a hand-typed valid list    lib.rs :21827-21835 - a string literal inside `anyhow::bail!` enumerating the legal names for the user
+
+  Nothing ties them together. Site 3 is a prose sentence; adding a category compiles cleanly without touching it.
+
+  THE MEASURED DRIFT. Diffing the normalizer's canonical outputs against the names in the error string:
+
+      canonical outputs in code   28
+      listed in the error string  26
+      IN CODE, NOT IN THE LIST    external-import-bleed, project-manifest
+      IN THE LIST, NOT IN CODE    (none)
+
+  Both omitted categories are real and dispatched - `project-manifest` at doctor_cmd.rs:225, `external-import-bleed` at doctor_cmd.rs:2343 / lib.rs:21253 - and both run:
+
+      aida doctor check project-manifest     exit 0, 7 lines (correctly scoped; a bare doctor is far longer)
+      aida doctor check nosuchcategory       error names 26 categories, neither of these among them
+
+  So a user who mistypes `project-manifest` is handed an authoritative-looking list that does not contain the name they wanted, and the natural conclusion is that the category does not exist. The error message is the only discovery surface for category names - there is no `--list-categories` - which is what makes site 3 load-bearing rather than cosmetic.
+
+  WHY THIS IS THE SAME SHAPE THE BOARD KEEPS FILING. It is an enumeration that must be kept in sync by memory, with no mechanism that fails when it is not - the same family as the reviewer's skip-fields finding and STORY-1418's into-Completed seam. The failure is silent and it is asymmetric: forget site 3 and the feature works while its documentation lies, which is the direction nobody checks.
+
+  Acceptance:
+  - The user-facing list of valid doctor categories is DERIVED from the same source the normalizer and dispatch use, not hand-typed. A new category added at one site appears in the error message with no second edit.
+  - DEMONSTRATE-IT-FIRES, binding: show that adding a category without touching any list produces a correct error message, AND that the two currently-missing names (external-import-bleed, project-manifest) are present afterwards. A green build is not the evidence; the message text is.
+  - If full unification is too large a change, the narrow acceptable form is a test that FAILS TODAY - asserting the set of canonical normalizer outputs equals the set named in the error string - fixed by adding the two names. It must be shown red before it is shown green, per TASK-1418: a test that was green the moment it was written proves nothing about the drift it claims to catch.
+  - Whichever form ships, `aida doctor check <name>` and the error message must agree for every category, checked mechanically rather than by reading.
+
+  Not in scope: BUG-1552 (bare `aida doctor` exits 0 on thousands of findings) is a separate defect in the same command and is not fixed by this.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T15:38:58.871542306Z
+modified_at: 2026-09-21T15:38:58.871542306Z
+req_type: Bug
