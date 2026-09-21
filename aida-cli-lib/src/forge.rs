@@ -3528,9 +3528,12 @@ mod tests {
                     std::thread::sleep(std::time::Duration::from_secs(1));
                 }
                 found.unwrap_or_else(|| {
+                    let stdout_prefix: String = String::from_utf8_lossy(&created.stdout)
+                        .chars()
+                        .take(200)
+                        .collect();
                     panic!(
-                        "phase=project-create: create response was not JSON ({create_parse_err}; stdout={:?}; stderr={:?}) and project {name} was not found",
-                        String::from_utf8_lossy(&created.stdout),
+                        "phase=project-create: create response was not JSON ({create_parse_err}; stdout_prefix={stdout_prefix:?}; stderr={:?}) and project {name} was not found",
                         String::from_utf8_lossy(&created.stderr)
                     )
                 })
