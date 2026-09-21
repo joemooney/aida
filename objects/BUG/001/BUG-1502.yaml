@@ -30,7 +30,7 @@ description: |
 
   Acceptance:
   1. `aida show <SPEC> --format json` emits parseable JSON, with the same fields the human view presents, including the git-linkage section when it is shown.
-  2. The BUG-1289 audit is actually produced: a checked-in list of every command accepting `--format`, stating per command whether json is honoured. It lives somewhere a consumer reads, not only in a PR description.
+  2. The BUG-1289 audit is actually produced: a checked-in list of every command accepting `--format`, stating per command whether json is honoured. It lives somewhere a consumer reads, not only in a PR description. The audit must record THREE outcomes per command, not two: json honoured, json not honoured, and COULD NOT VERIFY. Measured 2026-09-20 while scoping this bug, two of the surfaces cannot be checked by running them: bare `aida status --format json` does not return within 40 seconds although bare `aida status` returns in 0.67 (filed as its own bug), and `aida awaiting` is slow with or without the pin (BUG-1288). A sweep that runs each command under a timeout and scores a miss as a failure would record both as "json not honoured", which is a different and wrong conclusion - and one that reads as a completed audit. Absent evidence is not evidence of absence, and this audit is the exact place that distinction gets collapsed.
   3. A command that accepts `--format json` and does not implement it ERRORS rather than falling back silently. This is the clause that closes the class: a silent fallback is indistinguishable from success, so the next unconverted surface announces itself instead of waiting for a human to notice.
   4. A test enumerates the commands from the audit list and parses each one's `--format json` output, so adding a surface without json support fails the suite rather than shipping.
   5. State whether `--format json` and a dedicated `--json` flag, where both exist, are required to agree; BUG-1289 item 3 required it and the same audit should confirm it still holds.
@@ -43,7 +43,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:09:49.662292511Z
-modified_at: 2026-09-21T01:10:06.276065623Z
+modified_at: 2026-09-21T01:26:31.206393095Z
 req_type: Bug
 tags:
 - aida:show cli-conformance agent-surface drain-safe from:session-0920
