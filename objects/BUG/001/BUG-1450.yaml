@@ -3,12 +3,12 @@ spec_id: BUG-1450
 agreed_id: BUG-1450
 title: A watchdog-stopped implementer phase discards the work it already pushed, so ten committed commits stayed invisible to every PR-based surface for fifteen hours
 description: "The implementer phase watchdog ends a session at its wall-clock ceiling without surfacing the work the session already committed, so finished-and-pushed work becomes invisible to every PR-based surface and is indistinguishable from a session that produced nothing.\n\nOBSERVED on TASK-1274, stranded fifteen hours.\n\n  2026-09-19 22:17:05  PhaseEntered implementer (attempt 1)\n  2026-09-19 22:17:08  PuntFiled â\x80\x94 the implementer hit a design fork\n  2026-09-19 23:02:14  SpecRetried  cause=watchdog, attempt 2/2\n  2026-09-19 23:47:24  SpecShelved  \"the implementer phase watchdog stopped the session â\x80\x94 phase exceeded the 45m wall-clock ceiling (attempt 2/2)\"\n  2026-09-19 23:51:46  UnshippedWorkDetected  branch task-1274-work\n\nThe branch carried TEN commits, pushed, 107 insertions across four files â\x80\x94 warm mirror pipeline parallelization, runner-slot isolation, mtime and build-stamp stabilization, fixture output-mode pinning. Real work, complete enough to review. No PR was ever opened, because opening the PR happens after the work and inside the same timed phase, and the watchdog ended the phase first.\n\nWHY THAT MATTERS MORE THAN A LOST SESSION. Everything we use to see outstanding work is keyed on a PR â\x80\x94 `aida awaiting` prs, the reviewer queue, merge-hold accounting, the drain's own phase 4. A branch with no PR appears in exactly one place, `unshipped_work`, which reads as a recovery hint rather than as a claim that finished work is sitting there. So for fifteen hours the substrate's answer to \"is there anything to review\" was no, while ten reviewable commits existed.\n\nIt is the inverse of BUG-1422. There, a session that touched nothing was indistinguishable from one that finished. Here a session that did a great deal is indistinguishable from one that did nothing, and for the same underlying reason: the signal is the artifact, and the artifact is produced by a step the failure pre-empts.\n\nTHE PUNT COMPOUNDS IT. A punt was filed three seconds into attempt 1 and never answered, because the escalation that would have surfaced it also died with the session. So the design fork that likely caused the phase to run long is itself unrecorded anywhere a human would look.\n\nACCEPTANCE\n1. When the watchdog stops an implementer phase, work already committed and pushed on the branch is surfaced before the session is torn down â\x80\x94 a PR opened, or a record that names the branch and its commit count as reviewable work rather than as a recovery hint.\n2. The shelve event distinguishes a watchdog stop that left committed work from one that left none. The count of commits ahead of the default branch is the minimum; the current event says only that the ceiling was exceeded.\n3. A punt filed during a phase that the watchdog later stops is still delivered. An unanswered design fork must not be lost because the session that raised it was killed.\n4. WITHDRAWN 2026-09-20 — split to its own task. This criterion asked that `unshipped_work` distinguish a branch with no PR from one whose PR is open and waiting. It is a rendering change on a different surface (awaiting_you.rs) sharing no code with this spec's phase-ordering fix, so bundling them would hold a correct fix behind unrelated work. Removed by amendment rather than left to lapse: merging with it in place would auto-complete this spec against a criterion nobody implemented. Carried by TASK-1305.\n5. A test covers the observed shape: a phase that commits, pushes, and is then stopped by the watchdog leaves the work discoverable through the normal review path, not only through `unshipped_work`.\n\nNOT ABOUT THE CEILING ITSELF. Whether 45 minutes is the right ceiling is a separate question and not in scope. A phase that is stopped correctly should still not lose what it produced.\n\nFound by the advisor after TASK-1274 appeared in `unshipped_work` on roughly a dozen consecutive mail ticks without any surface treating it as actionable. PR #2019 opened manually to make the ten commits reviewable; held, pending review.\n\"\nexecution_mode: drain\nrelationships[4]{rel,id,title}:\n  Parent,EPIC-28,\"Dependency-aware autonomous drain: shelve failures, skip dependents, continue independents (full --auto-complete batch)\"\n  Related,BUG-1422,\"A batch whose remaining members are all ineligible relaunches forever, because a drain that touched nothing is indistinguishable from a drain that finished\"\n  Related,BUG-1422,\"A batch whose remaining members are all ineligible relaunches forever, because a drain that touched nothing is indistinguishable from a drain that finished\"\n  Related,STORY-1409,\"Review PR-2038: [AI:codex] fix(orchestrator): surface watchdog-stopped work (BUG-1450)"
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:12:42.984173284Z
-modified_at: 2026-09-21T00:29:02.287034896Z
+modified_at: 2026-09-21T00:40:30.794235212Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -67,16 +67,27 @@ comments:
   created_at: 2026-09-21T00:28:07.106772639Z
   modified_at: 2026-09-21T00:28:07.106772639Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c168-4328-7cd3-a0b4-1255cd6de641
+  author: aida-auto-bump
+  timestamp: 2026-09-21T00:40:30.760757586Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0c168-434a-76a1-8fcd-a72d48c0ec03
+  timestamp: 2026-09-21T00:40:30.794230999Z
+  agent: aida
+  commit_sha: 9d0951b53d2a821f8d0d45f39cf4de8d7333c9fb
+  summary: Block resolved by amendment, not waiver. Criterion 4 is now explicitly WITHDRAWN in BUG-1450's description with its reason and carrier named (TASK-1305, approved), so merging no longer auto-completes the spec against a criterion nobody implemented. I verified both by reading them back rather than taking the advisor's note. Approved on criteria 1, 2, 3 and 5.
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-21T00:13:19.671439862Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1450 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-21T00:28:34.530073288Z
+  completed_at: 2026-09-21T00:40:30.759500285Z
+  completion_sha: 9d0951b53d2a821f8d0d45f39cf4de8d7333c9fb
