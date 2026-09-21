@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T16:06:38.903304429Z
+modified_at: 2026-09-21T17:31:30.789776588Z
 req_type: Bug
 tags:
 - agent-surface
@@ -471,6 +471,43 @@ comments:
     OPERATIONAL POSITION UNCHANGED: #2033 does not merge before STORY-1422's gate exists. That was never contingent on the hold.
   created_at: 2026-09-21T13:47:32.102393771Z
   modified_at: 2026-09-21T13:47:32.102393771Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c505-dc65-7802-8ce8-b6b8a309c201
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2033 fix(show): use cache for single-spec reads
+    merged: b1d53bd6757e
+    verdict: APPROVE (claude-reviewer-1) at reviewed_sha 8e2589c0b432 == the merged head
+    proxy: claude driver-advisor, session 01a0adee, on the operator's standing merge mandate
+    independent: YES — implemented by claude-product-1, reviewed by claude-reviewer-1, merged by this seat.
+
+    THIS SPEC IS **NOT** COMPLETE AND THE MERGE DELIBERATELY DID NOT COMPLETE IT. The `(BUG-1480)` trailer was STRIPPED from the squash subject. Verified after the fact: `git log --format='%s' -1 origin/main` is "[AI:codex] fix(show): use cache for single-spec reads" and contains no spec id; this spec is still needs-attention and STORY-1423 is still approved.
+
+    WHY, because a later reader will find a merged fix on an open bug and assume someone forgot. This spec's in-spec closure criterion points at STORY-1423 (the post-fix enablement, zero-half and re-measurement), which cannot be satisfied until the fix is in a RUNNING binary — so the criterion is unsatisfiable at the instant a merge would fire. And `auto_bump_eligible_status` routes to `lifecycle::git_merge_completes`, which accepts Approved | Planned | InProgress | Done | NeedsAttention — five states, deliberately, with a test named `git_merge_completes_covers_the_in_pipeline_and_shelved_states`. needs-attention IS eligible, so nothing had to happen for the bump to fire. The general defect is BUG-1551.
+
+    THE COST IS PAID KNOWINGLY: the commit-to-spec link that `aida why <file:line>` falls back on via git-blame is gone FOR THIS COMMIT. `trace:` comments in the code remain `aida why`'s primary path and are unaffected; only the blame fallback loses this one. The advisor argued against this option earlier on exactly that ground and was overruled by evidence — the reviewer preferred it from the start, and the five-state discovery removed the alternative. Recorded so the trade is visible rather than inferred.
+
+    WHAT CLOSES THIS SPEC: STORY-1423 reaching Done. Nothing else.
+
+    gates cleared, verified from this seat:
+      1. Build (ubuntu-latest) = success, read PER-SHA from check-runs at 8e2589c0b432, not the PR rollup.
+      2. verdict APPROVED with reviewed_sha == the merged head; head unmoved between green and merge.
+      3. merge-hold released through `aida merge-hold clear 2033`, gate re-run observed green before merging.
+      4. the standing refusal was the HEADLESS DRAIN REVIEWER's and that seat has EXITED. claude-reviewer-1 formed their own verdict rather than clearing someone else's — in role because the refusing seat is gone and they authored no commit. While it stood with no rework it was not theirs to clear.
+
+    WHAT SHIPPED, and it is not what the original verdict literally asked for:
+      WITHDRAWN on measured evidence — the executable latency test. Four fixtures could not separate a full load from a cached read against ~90ms of startup; the fifth made the CACHE-BACKED BASELINE equally slow (list 1.089s vs show 1.075s, ratio 0.99), false-failed correct code, and took 346s. Failure modes move in opposite directions as the fixture grows, so no middle setting exists. The reviewer confirmed this is a criterion RELOCATED to an instrument that can hold it — STORY-1422's real-store gate, Completed — rather than a criterion dropped.
+      SHIPPED — the compile-time guard, replacing a check that include_str!'d the file and asserted a substring was absent. `show_cached_context` now takes `&impl CacheOnlyReads`. Injecting `backend.load()` produces `error[E0599]: no method named 'load' found for reference '&impl CacheOnlyReads'`; restore builds clean at 0 errors.
+      THE REVIEWER VERIFIED THAT STRUCTURALLY RATHER THAN BY RE-RUNNING THE DEMO: CacheOnlyReads has NO supertrait and exactly one method, and the parameter is GENERIC — so the concrete type's inherent methods do not resolve either. It holds BY CONSTRUCTION, which is stronger than the injection observation it was checking.
+
+    THE IMPLEMENTER DELETED THEIR OWN REPLACEMENT TEST AFTER MUTATION PROVED IT INERT. They wrote a test parsing the file to count the trait's methods, ARGUED to keep it, then mutated it: the body was extracted with `split_once('}')`, which stops at the first brace, and a default method body supplies one INSIDE the trait — so adding a bodied method truncated the extraction and the count still read 1. It could not fire on the exact change it existed to catch. They had fixed the decision rule BEFORE running the mutation, which is the only thing that made it a test rather than a negotiation.
+
+    SCOPE RECORDED IN THE CODE: the trait guards the CALL and is provably blind to the COST. This bug grew 7.5s to 9.9s with no call site changing. Different regressions, different instruments — the trait at PR time, STORY-1422's gate against the real store.
+
+    FOLLOW-UP FILED: BUG-1559. The remaining witness asserts only that CachedGitBackend IMPLEMENTS CacheOnlyReads — it says nothing about show_cached_context's signature, so changing the parameter back to a concrete `&CachedGitBackend` compiles, passes, restores `.load()`, and nothing reports it. Non-blocking here; the signature is correct at this sha.
+  created_at: 2026-09-21T17:31:30.789776588Z
+  modified_at: 2026-09-21T17:31:30.789776588Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
