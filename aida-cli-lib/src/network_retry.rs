@@ -190,6 +190,7 @@ impl<'a, A: RetrySink + ?Sized, B: RetrySink + ?Sized> RetrySink for DualSink<'a
 /// are skipped so an empty config entry can't accidentally classify
 /// everything as transient.
 pub(crate) fn classify_transient(stderr: &str, patterns: &[String]) -> bool {
+    // external-prose-classifier: network_retry::classify_transient
     patterns
         .iter()
         .any(|p| !p.is_empty() && stderr.contains(p.as_str()))

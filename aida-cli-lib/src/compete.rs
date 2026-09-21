@@ -192,6 +192,7 @@ impl Ran {
 /// we look for the cargo build-failure marker to attribute the failure to the
 /// build specifically (a fmt/clippy/glyph failure leaves `built = true`).
 pub fn parse_gate_result(exit_ok: bool, combined_output: &str) -> (bool, bool) {
+    // external-prose-classifier: compete::parse_gate_result
     if exit_ok {
         // A `cargo build && cargo test` that exits 0 means both built and tested.
         return (true, true);

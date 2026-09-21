@@ -450,6 +450,7 @@ pub fn merge_args(pr_number: u64, delete_branch: bool, subject: Option<&str>) ->
 /// fake-gh test harness so the two cannot drift.
 // trace:STORY-1166 | ai:claude
 pub(crate) fn classify_gh_pr_checks_registration(
+    // external-prose-classifier: pr_ship::classify_gh_pr_checks_registration
     pr: u64,
     stdout: &str,
     stderr: &str,

@@ -36989,6 +36989,7 @@ fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) -> PrLookup
 /// auth/parse failure never gets re-classified as a transient network
 /// blip. trace:BUG-257 | ai:claude
 fn gh_stderr_is_network_error(stderr: &str) -> bool {
+    // external-prose-classifier: gh_stderr_is_network_error
     aida_core::external_tool_output::contains_any_case_insensitive(
         stderr,
         aida_core::external_tool_output::GH_NETWORK_TRANSIENT,
@@ -37010,6 +37011,7 @@ fn gh_stderr_is_network_error(stderr: &str) -> bool {
 /// the first matching diagnostic line so the orchestrator's epilogue can
 /// echo what the substrate said. trace:BUG-266 | ai:claude
 fn claude_log_indicates_api_outage(content: &str) -> Option<String> {
+    // external-prose-classifier: claude_log_indicates_api_outage
     if content.is_empty() {
         return None;
     }
@@ -64987,6 +64989,7 @@ fn collect_pr_facts(project_root: &std::path::Path, branch: &str) -> PrFacts {
 }
 
 fn collect_pr_facts_uncached(project_root: &std::path::Path, branch: &str) -> PrFacts {
+    // external-prose-classifier: status_context::load_pr_facts
     // BUG-560: `gh` is GitHub-only. On a GitLab / pure-git remote it fails with
     // a raw "none of the git remotes ... point to a known GitHub host" auth
     // error that we used to surface verbatim — telling a corporate GitLab
