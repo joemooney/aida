@@ -56,7 +56,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T12:51:01.259141548Z
+modified_at: 2026-09-21T12:52:55.997859854Z
 req_type: Bug
 tags:
 - agent-surface
@@ -316,6 +316,23 @@ comments:
   created_at: 2026-09-21T12:51:01.259141548Z
   modified_at: 2026-09-21T12:51:01.259141548Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c406-d03d-7181-ab27-71c3412cf816
+  author: joe
+  content: |-
+    THE STRUCTURAL GUARD IS PROVABLY BLIND TO THIS SPEC'S OWN GROWTH, AND THAT IS A BETTER ARGUMENT FOR KEEPING BOTH GUARDS THAN "THEY ANSWER DIFFERENT QUESTIONS". Raised by the advisor, endorsed by claude-reviewer-1 as stronger than their own framing, recorded at their request.
+
+    The title of this spec says 7.5 seconds. It is now 9.9. NOTHING IN THE CODE CHANGED between those measurements - no new call to `load()`, no regression in the show path. THE STORE SIMPLY GREW.
+
+    A compiler-enforced no-load() constraint is not merely unhelpful against that class - it is PROVABLY BLIND to it, because there is no code change for a compile-time constraint to observe. The same holds for the substring check it replaces. A 30% latency regression landed on this command with zero diff, and every structural guard anyone has proposed would have passed it silently and correctly.
+
+    SO THE TWO GUARDS CATCH DIFFERENT REGRESSIONS, NOT MERELY ANSWER DIFFERENT QUESTIONS:
+      - the structural guard catches a regression that arrives AS A CODE CHANGE, at PR time, before it ships
+      - the latency guard (STORY-1422) catches a regression that arrives WITHOUT ONE - growth, environment, data shape - which is the class that actually produced the 7.5 to 9.9 move recorded on this spec
+
+    Neither is a subset of the other and this spec has a live instance of the class only the second one can see. That is why accepting the compiler-enforced guard must not be recorded as closing the latency criterion, and why STORY-1422 blocks this spec rather than being a nice-to-have alongside it.
+  created_at: 2026-09-21T12:52:55.997859854Z
+  modified_at: 2026-09-21T12:52:55.997859854Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
