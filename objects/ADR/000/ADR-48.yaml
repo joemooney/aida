@@ -1,0 +1,55 @@
+id: 01a0c1b3-524f-7c93-b9af-4d821d2d0571
+spec_id: ADR-48
+agreed_id: ADR-48
+title: 'Preflight gates PR publication structurally: the orchestrator opens the PR after guards pass, the implementer never does'
+description: |
+  CONTEXT
+
+  The drain's implementer opens its own pull request (`aida-pr/SKILL.md` step 10, `gh pr create`), and the pre-flight guards — which check the branch would survive CI — run afterwards, at `aida-cli-lib/src/lib.rs:87798-87801`. By the time a guard can object, the PR is already public: CI has started and reviewers may have been notified.
+
+  So publication is not gated. The only thing preventing a premature PR is prose in the skill telling the agent not to open one. That is a rule relying on an agent remembering, not a gate making the violation impossible — the pattern `substrate-as-bouncer` exists to reject.
+
+  The 2026-09-20 reviewer verdict on PR-2043 put it directly: "publication boundary is advisory rather than enforced… the only prevention is prose in aida-core/templates/skills/aida-pr/SKILL.md:369-378. Add a technical gate so orchestrated implementers cannot create the PR."
+
+  DECISION
+
+  The orchestrator opens the PR. The implementer commits, pushes its branch, and exits without creating one.
+
+      implementer:   commit -> push -> exit
+      orchestrator:  preflight -> PASS -> gh pr create
+                     preflight -> FAIL -> shelve; no PR exists
+
+  A failing guard leaves no open PR because none was ever created. The gate is structural rather than procedural.
+
+  CONSEQUENCES
+
+  - The implementer contract changes. `aida-pr/SKILL.md`'s PR-creation step is removed for the orchestrated path, and the `no-pr` shelve cause — which today means "the implementer forgot to run /aida-pr" — either disappears or changes meaning entirely for orchestrated runs.
+  - The non-orchestrated lane needs its own path. `aida agent new <vendor>` spawns a one-shot agent with no orchestrator above it; that lane must either keep creating its own PR or gain an equivalent guard. This is the part most likely to be missed, because it is the lane nobody is watching tonight.
+  - Recovery changes shape. Today a stranded push with no PR is recoverable by opening one by hand (as was done for BUG-1442 / PR #2027). Under this design an absent PR is the CORRECT outcome of a failed guard, so recovery tooling must distinguish "guard refused" from "orchestrator died before creating it".
+  - An end-to-end test is required and is the acceptance: a failing guard leaves no open PR.
+
+  ALTERNATIVES CONSIDERED
+
+  Draft PR promoted on pass — implementer opens `--draft`, preflight marks it ready. Keeps the implementer contract and leaves failures inspectable, but a draft PR is still public and still runs CI, so it gates REVIEW rather than publication. Rejected as a weaker gate for the same work.
+
+  Close premature PRs — leave the flow and have the orchestrator close a PR whose guard failed. Smallest change, but reactive: the PR is public, CI has started, notifications have gone out. Rejected as not a gate.
+
+  LINEAGE
+
+  Two divergent TASK-1289 implementations are in flight — PR #1972 at `6512f1312a` and the `35de6d3abb` lineage carried on #2042 and #2043. Neither contains the other. The advisor reads both against this decision and records the loser as `superseded-by` the winner, with the reason written onto both specs. It is not settled by whichever PR reaches a merge button first.
+
+  RECORDED BY
+
+  The product seat, from an operator decision taken in session 2026-09-20 via a structured design-fork prompt. This is a relay: the advisor and reviewer seats did not witness it directly.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T02:02:29.839553987Z
+modified_at: 2026-09-21T02:02:29.839553987Z
+req_type: Decision
+tags:
+- operator-decision
+- orchestrator
+- preflight
+- substrate-gate
