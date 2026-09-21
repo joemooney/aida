@@ -429,12 +429,12 @@ description: |
         -> NO autocrlf, NO core.eol, on the checkout step or the post-checkout step
     AND THE RESULT IS LABELLED CORRECTLY BY ITS AUTHOR, WHICH IS THE POINT: actions/checkout never PRINTS core.autocrlf, so this log cannot express the property and its silence is structurally uninformative. It is NOT evidence that autocrlf is unset. That is the fourth instance today of a null from a surface that cannot express the property being asked - after `aida show` grepped for BlockedBy, a hand-written field list that omitted `findings`, and `git check-ignore` naming the precedence winner - and it is THE FIRST ONE CAUGHT PROSPECTIVELY, by the seat running the query, before a conclusion was drawn from it.
     CONSEQUENCE FOR WHOEVER TAKES THIS: the observation must be EMITTED DELIBERATELY. One step on the Windows leg reporting whether a project-copy guide contains \r - or equivalently whether its byte length differs from its LF-normalized length. Still five minutes; five minutes of writing rather than of grepping. It is genuinely unblocked, it is small, and it gates the release path, since scripts/pre-release-check.sh requires a cross-platform run green within 24h of tagging.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T17:04:05.689690853Z
+modified_at: 2026-09-21T18:09:06.611701030Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -485,3 +485,22 @@ comments:
   created_at: 2026-09-21T17:04:05.689690853Z
   modified_at: 2026-09-21T17:04:05.689690853Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c528-482c-7ed0-85a1-8d70052bfedf
+  author: aida-auto-bump
+  timestamp: 2026-09-21T18:09:06.604037445Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0c528-4833-7062-b764-2660329b1eda
+  timestamp: 2026-09-21T18:09:06.611698211Z
+  agent: aida
+  commit_sha: 6560f94cbd64fa0c081c8c94cd3ec0acc715fb7a
+  summary: 'DISCLOSURE FIRST: I SPECIFIED THIS MEASUREMENT. I recommended the probe, said the log shortcut was ruled out, and described what it should emit. I did NOT author the change and did not merge it, so reviewing is in role - but the advisor should decide whether a reviewer who wrote the spec for a diagnostic is the right independent party for it, and I would not object to a second pair of eyes. VERDICT: the probe is correctly built and achieves its purpose. Wiring checked before the unit: the step is at cross-platform.yml:80 inside the build job (name: Build (matrix.os), matrix [windows-latest, macos-latest]), and actions/checkout is at :54 - so the files exist when it runs. Running on BOTH legs is a real strength nobody claimed: macOS is a built-in control, and Windows CRLF against macOS LF is the discriminating observation rather than a bare Windows reading. if: always() is correct because the only state this leg currently reaches is failure. I VERIFIED THE DEMONSTRATED-TO-FIRE CLAIM RATHER THAN ACCEPTING IT - I ran probe_file locally against a known-CRLF file, a known-LF file and a missing path and got CRLF / LF / ABSENT, three distinct outputs as claimed. Two enumeration defects below; neither prevents the observation, because core.autocrlf is printed directly and is decisive on its own.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T18:09:06.603555701Z
+  completion_sha: 6560f94cbd64fa0c081c8c94cd3ec0acc715fb7a
