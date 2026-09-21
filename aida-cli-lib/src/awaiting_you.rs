@@ -404,7 +404,7 @@ pub(crate) struct UnshippedWorkItem {
 }
 
 // trace:STORY-1043 | ai:codex
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct NightlyRedItem {
     pub summary: String,
     pub run_id: Option<u64>,

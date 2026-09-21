@@ -67184,75 +67184,6 @@ struct PrHeadStateSnapshot {
     by_branch: std::collections::HashMap<String, String>,
 }
 
-// trace:BUG-1187 | ai:codex
-// BUG-1454 F3, DECIDED AND KEPT: an empty snapshot here degrades toward
-// OVER-reporting, which is the safe direction for this consumer.
-//
-// `collect_unshipped_work_items` skips a branch only when its recorded state
-// matches `Some("open" | "merged")`. An empty map yields `None`, the skip does
-// not fire, and the branch REMAINS an unshipped-work candidate. So the failure
-// mode is surfacing a branch that did not need surfacing — never hiding one
-// that did. The sole caller also already selects the default explicitly via its
-// own `no_forge` flag, so the no-forge case is a decision made at the call
-// site, not an accident of this guard.
-// trace:BUG-1454 | ai:claude
-fn collect_pr_head_states(project_root: &std::path::Path) -> PrHeadStateSnapshot {
-    if forge::resolve_forge_kind(project_root) != forge::ForgeKind::GitHub {
-        return PrHeadStateSnapshot::default();
-    }
-    let gh_bin = match resolve_gh_binary() {
-        Some(p) => p,
-        None => return PrHeadStateSnapshot::default(),
-    };
-    let out = std::process::Command::new(&gh_bin)
-        .current_dir(project_root)
-        .args([
-            "pr",
-            "list",
-            "--state",
-            "all",
-            "--limit",
-            "1000",
-            "--json",
-            "headRefName,state",
-        ])
-        .output();
-    let Ok(out) = out else {
-        return PrHeadStateSnapshot::default();
-    };
-    if !out.status.success() {
-        return PrHeadStateSnapshot::default();
-    }
-    parse_pr_head_state_snapshot(&String::from_utf8_lossy(&out.stdout))
-}
-
-// trace:BUG-1187 | ai:codex
-fn parse_pr_head_state_snapshot(json: &str) -> PrHeadStateSnapshot {
-    let parsed: serde_json::Value = match serde_json::from_str(json.trim()) {
-        Ok(v) => v,
-        Err(_) => return PrHeadStateSnapshot::default(),
-    };
-    let mut by_branch = std::collections::HashMap::new();
-    for pr in parsed.as_array().cloned().unwrap_or_default() {
-        let Some(head) = pr.get("headRefName").and_then(|v| v.as_str()) else {
-            continue;
-        };
-        if head.is_empty() {
-            continue;
-        }
-        let state = pr
-            .get("state")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        if state.is_empty() {
-            continue;
-        }
-        by_branch.insert(head.to_string(), state);
-    }
-    PrHeadStateSnapshot { by_branch }
-}
-
 /// Roll up `statusCheckRollup` into one of `pass`, `fail`, `pending`, or
 /// `?`. Counts FAILURE/CANCELLED/TIMED_OUT/ACTION_REQUIRED as fail,
 /// IN_PROGRESS/QUEUED/PENDING as pending; SUCCESS only when every check
@@ -67517,6 +67448,18 @@ struct UnshippedBranchCandidate {
     has_local: bool,
 }
 
+// BUG-1288: a bounded candidate gate for the unshipped-work detector. Kept
+// pure so a large stale-ref population can be pinned without timing-sensitive
+// process tests. trace:BUG-1288 | ai:codex
+fn branch_belongs_to_active_work(branch: &str, active_prefixes: &[String]) -> bool {
+    active_prefixes.iter().any(|prefix| {
+        branch == prefix
+            || branch
+                .strip_prefix(prefix)
+                .is_some_and(|suffix| suffix.starts_with('-'))
+    })
+}
+
 // trace:BUG-1187 | ai:codex
 fn all_requirement_summaries(project_root: &std::path::Path) -> Vec<aida_core::RequirementSummary> {
     let Some(store_path) = detect_distributed_store_from(project_root) else {
@@ -67575,9 +67518,11 @@ fn collect_unshipped_work_items(
 
     let live = process_probe::probe_live_claude_sessions();
     let now = chrono::Utc::now();
-    let live_leases: Vec<SessionLease> = list_leases(project_root)
-        .into_iter()
+    let leases = list_leases(project_root);
+    let live_leases: Vec<SessionLease> = leases
+        .iter()
         .filter(|l| matches!(lease_state_for(l, &live, now), LeaseState::Live))
+        .cloned()
         .collect();
     let live_scopes: std::collections::HashSet<String> = live_leases
         .iter()
@@ -67590,23 +67535,59 @@ fn collect_unshipped_work_items(
     let local: std::collections::HashSet<String> =
         list_local_branches(project_root).into_iter().collect();
     let remote = collect_remote_branch_name_set(project_root);
+    // BUG-1288: only run the expensive commit/patch-equivalence probes for
+    // branches attributable to active requirement work or a recorded session.
+    // Listing refs remains two batched git calls, but stale unrelated refs no
+    // longer cause one or more subprocesses each. A requirement branch may
+    // carry a suffix (`bug-1288-work`), so prefix matching deliberately keeps
+    // those session-created variants while excluding another numeric id.
+    //
+    // PR #1999 rework: this was originally an ALLOW-list of only
+    // "inprogress"/"in-progress"/"done", which silently dropped a lease-less
+    // branch whose spec sat in NeedsAttention (shelved-but-not-abandoned),
+    // Approved, Draft, or Planned — each a status a branch can legitimately
+    // carry real unshipped commits under, before the commit/patch probe ever
+    // ran. The bound this exists for is "don't probe every stale ref in the
+    // repo" (301+ of them), not "only probe two statuses" — so the gate is
+    // an EXCLUDE-list of the terminal statuses instead: everything that
+    // isn't Completed/Rejected/Superseded is still eligible for the probe.
+    // The exclusion set intentionally mirrors the terminal-status check
+    // applied to the resolved branch spec_id further below in this
+    // function, so a branch is never filtered here for a reason that
+    // wouldn't also filter it there. trace:BUG-1288 | ai:claude
+    let active_prefixes: Vec<String> = status_by_spec
+        .iter()
+        .filter(|(_, status)| !matches!(status.as_str(), "completed" | "rejected" | "superseded"))
+        .map(|(spec, _)| spec.to_ascii_lowercase())
+        .collect();
+    let lease_branches: std::collections::HashSet<&str> =
+        leases.iter().map(|lease| lease.branch.as_str()).collect();
+    let is_candidate = |branch: &str| {
+        lease_branches.contains(branch) || branch_belongs_to_active_work(branch, &active_prefixes)
+    };
     let mut branches: Vec<(String, String, bool)> = local
         .iter()
+        .filter(|branch| is_candidate(branch))
         .map(|b| (b.clone(), b.clone(), true))
         .chain(
             remote
                 .iter()
-                .filter(|b| !local.contains(*b))
+                .filter(|b| !local.contains(*b) && is_candidate(b))
                 .map(|b| (format!("origin/{b}"), format!("origin/{b}"), false)),
         )
         .collect();
     branches.sort_by(|a, b| a.0.cmp(&b.0));
 
-    let pr_head_states = if no_forge {
-        PrHeadStateSnapshot::default()
-    } else {
-        collect_pr_head_states(project_root)
-    };
+    // Open PRs are available from the process-cached status snapshot. Merged
+    // branches are rejected by the patch-equivalence probe below, so the old
+    // all-history PR query is unnecessary on this polling path.
+    // trace:BUG-1288 | ai:codex
+    let mut pr_head_states = PrHeadStateSnapshot::default();
+    if !no_forge {
+        for branch in collect_open_prs(project_root).by_branch.into_keys() {
+            pr_head_states.by_branch.insert(branch, "open".to_string());
+        }
+    }
 
     let mut candidates = Vec::new();
     for (display_branch, refname, has_local) in branches {
@@ -67919,6 +67900,32 @@ mod story_1043_unshipped_work_tests {
         }
     }
 
+    // BUG-1288: stale refs must not enlarge the expensive probe set. This is
+    // a deterministic operation-count regression test rather than a flaky
+    // wall-clock assertion. trace:BUG-1288 | ai:codex
+    #[test]
+    fn unshipped_candidate_gate_is_constant_with_stale_branch_count() {
+        let active = vec!["bug-1288".to_string(), "story-42".to_string()];
+        let mut refs: Vec<String> = (0..10_000).map(|n| format!("old-feature-{n}")).collect();
+        refs.extend([
+            "bug-1288".to_string(),
+            "bug-1288-work".to_string(),
+            "story-42-retry".to_string(),
+            "story-420".to_string(),
+        ]);
+
+        let candidates: Vec<_> = refs
+            .iter()
+            .filter(|branch| branch_belongs_to_active_work(branch, &active))
+            .cloned()
+            .collect();
+        assert_eq!(
+            candidates,
+            ["bug-1288", "bug-1288-work", "story-42-retry"],
+            "only active spec branches reach per-branch git probes"
+        );
+    }
+
     fn write_live_lease(root: &std::path::Path, spec: &str, branch: &str) {
         let lease = SessionLease {
             id: "live1043".to_string(),
@@ -68115,6 +68122,44 @@ exit 1
             rows.iter().all(|row| row.branch != "story-1187-squash"),
             "patch-equivalent branches must not be reported as unshipped: {rows:?}"
         );
+    }
+
+    // PR #1999 rework: the reviewer's CHANGES REQUESTED finding on BUG-1288
+    // was that `active_prefixes` (the bounded-probe candidate gate) was built
+    // from only "inprogress"/"in-progress"/"done" statuses, so a branch whose
+    // spec sat in NeedsAttention, Approved, or Draft — with genuine unshipped
+    // commits and NO lease — was filtered out before the commit/patch probe
+    // ever ran, and the detector under-reported. This end-to-end fixture pins
+    // exactly that shape for all three previously-invisible statuses.
+    // trace:BUG-1288 | ai:claude
+    #[test]
+    fn detector_lists_unshipped_work_on_leaseless_nonterminal_branches() {
+        for status in ["NeedsAttention", "Approved", "Draft"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            init_repo(root);
+
+            let branch = format!("bug-9001-{}", status.to_ascii_lowercase());
+            branch_with_commit(root, &branch, "BUG-9001");
+            // Deliberately no lease and no live session: this is exactly the
+            // "shelved but has real unshipped work" shape from the finding.
+
+            let rows = collect_unshipped_work_items(
+                root,
+                &[summary("BUG-9001", status)],
+                true, // no_forge: isolate from gh entirely
+                false,
+            );
+
+            assert_eq!(
+                rows.len(),
+                1,
+                "status={status}: a lease-less {status} branch with unmerged \
+                 commits must be reported as unshipped, got: {rows:?}"
+            );
+            assert_eq!(rows[0].spec_id, "BUG-9001");
+            assert_eq!(rows[0].branch, branch);
+        }
     }
 }
 
@@ -68765,6 +68810,16 @@ fn collect_awaiting_report_inner(
     no_ci: bool,
     notice_fast: bool,
 ) -> awaiting_you::AwaitingReport {
+    // BUG-1288: the nightly channel performs independent forge reads. Start it
+    // while the PR/store/local channels are collected so network latency is
+    // paid once rather than serially on the machine-readable path.
+    // trace:BUG-1288 | ai:codex
+    let nightly_handle = if no_ci {
+        None
+    } else {
+        let root = project_root.to_path_buf();
+        Some(std::thread::spawn(move || cached_nightly_red_status(&root)))
+    };
     // Mergeable PRs — reuse the same `gh pr list` snapshot that the cleanup
     // report consumes, then filter via the awaiting-you classifier.
     let mergeable_prs = if no_ci {
@@ -68944,11 +68999,7 @@ fn collect_awaiting_report_inner(
         collect_unshipped_work_items(project_root, &summaries, no_ci, !no_ci)
     };
     // trace:STORY-1043 | ai:codex
-    let nightly_red = if no_ci {
-        None
-    } else {
-        nightly_red_status(project_root)
-    };
+    let nightly_red = nightly_handle.and_then(|handle| handle.join().ok().flatten());
 
     // STORY-1419: PRs whose rework has landed on a refusal this seat recorded.
     // Needs the PR snapshot for current heads, so it is skipped on the
@@ -70992,6 +71043,45 @@ fn nightly_red_status(project_root: &std::path::Path) -> Option<awaiting_you::Ni
             is_ancestor_commit(project_root, ancestor, descendant).unwrap_or(false)
         },
     )
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct NightlyRedCache {
+    fetched_at: chrono::DateTime<chrono::Utc>,
+    item: Option<awaiting_you::NightlyRedItem>,
+}
+
+// BUG-1288: machine consumers poll this surface. Bound the two workflow API
+// calls with a documented 30-second freshness window; a miss refreshes the
+// exact same report and subsequent polls remain network-free.
+// trace:BUG-1288 | ai:codex
+fn cached_nightly_red_status(
+    project_root: &std::path::Path,
+) -> Option<awaiting_you::NightlyRedItem> {
+    let path = project_root
+        .join(".aida")
+        .join("cache")
+        .join("awaiting-nightly-red.json");
+    let now = chrono::Utc::now();
+    if let Ok(raw) = std::fs::read_to_string(&path) {
+        if let Ok(cache) = serde_json::from_str::<NightlyRedCache>(&raw) {
+            if now.signed_duration_since(cache.fetched_at).num_seconds() < 30 {
+                return cache.item;
+            }
+        }
+    }
+    let item = nightly_red_status(project_root);
+    let cache = NightlyRedCache {
+        fetched_at: now,
+        item: item.clone(),
+    };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(raw) = serde_json::to_vec(&cache) {
+        let _ = write_atomic(&path, &raw);
+    }
+    item
 }
 
 // trace:STORY-1043 | ai:codex
