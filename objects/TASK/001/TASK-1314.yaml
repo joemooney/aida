@@ -1,0 +1,44 @@
+id: 01a0c291-e416-7db3-b416-07709a8d178d
+spec_id: TASK-1314
+agreed_id: TASK-1314
+title: Repair the 25 mis-decoded characters across six stored specs — sequenced AFTER the detector, because they are its only real fixtures
+description: |-
+  Six stored specs carry mis-decoded UTF-8 in their description text, 25 occurrences total, and no spec covers repairing them. TASK-187 covers the CAUSE (the read path that corrupts on round-trip) and TASK-1313 covers DETECTION. Neither restores what is already damaged, so a fix to both still leaves 25 corrupted strings in the canonical store.
+
+  MEASURED 2026-09-20, 4197 store objects:
+
+    spec         occurrences
+    BUG-1106      2
+    BUG-1111      2
+    BUG-1310      2
+    BUG-1450      5
+    BUG-1452      8
+    STORY-1405    6
+    TOTAL        25
+
+  Every occurrence is the same substitution: an em-dash whose UTF-8 continuation bytes were escaped as literal text. The damage is uniform, the intended character is unambiguous, and the file is valid UTF-8 -- so this is mechanical text restoration, not reconstruction.
+
+  SEQUENCING, AND IT IS THE POINT OF FILING THIS SEPARATELY: REPAIR MUST NOT LAND BEFORE TASK-1313's DETECTOR.
+
+  These six files are the only real-world fixtures the detector has. Repairing them first leaves TASK-1313 with synthetic test data and no way to prove its check finds the shape that actually occurred -- and the measured evidence is that the obvious detector finds ONE of these six, so the ability to test against the real population is exactly what that spec needs. Clean them first and the detector ships unfalsifiable against real data.
+
+  This is the same call TASK-1-171 requires for damage that cannot be safely tidied: the corruption is currently serving as evidence, and destroying evidence to improve appearance is the wrong trade.
+
+  ACCEPTANCE
+  1. TASK-1313's detector has landed and reports these six specs and 25 occurrences before any repair runs. The detector output IS the input to this work.
+  2. Repair is driven by the detector's output, not by a separately written pattern. Two patterns can disagree, and the one that already passed review is the detector's.
+  3. Each repaired spec is verified by re-running the detector: the file reports zero occurrences afterwards and the surrounding text is byte-identical apart from the substituted character.
+  4. The repair is a store write through the normal path (aida edit or equivalent), so the change is a commit on the orphan branch with an auditable diff. No direct YAML surgery.
+  5. A repaired spec is re-read through the surface that caused the corruption (TASK-187's read path) and asserted unchanged, so the repair is not immediately undone by the unfixed cause. If TASK-187 has not landed, this is recorded as a known re-corruption risk rather than assumed safe.
+  6. After repair, the store-wide count is re-measured and recorded, so a later occurrence has a baseline of zero to compare against rather than an assumption.
+
+  NOT URGENT. The corruption is cosmetic in rendering and does not affect spec identity, relationships, status or any machine consumer. It is filed so it is not forgotten once the detector makes it visible, and so nobody repairs it in passing while it is still the only fixture.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T06:05:36.150787113Z
+modified_at: 2026-09-21T06:05:36.150787113Z
+req_type: Task
+tags:
+- store-integrity mojibake follow-up:task-1313 severity:cosmetic
