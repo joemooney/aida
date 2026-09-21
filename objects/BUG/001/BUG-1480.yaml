@@ -2,7 +2,7 @@ id: 01a0c04e-e506-7173-a849-af7584b7342a
 spec_id: BUG-1480
 agreed_id: BUG-1480
 title: aida show takes 7.5 seconds on a healthy cache while list and search answer in 0.4 — the most-used per-spec read is the only one that does not use the cache
-description: |-
+description: |
   `aida show <SPEC>` takes 7.5 seconds against a healthy cache, while every other read of the same store answers in under half a second. It is the most-used per-spec command in the system and it is twenty-three times slower than the surfaces beside it.
 
   MEASURED 2026-09-20 19:32Z, repeated, on an idle machine with no drain running:
@@ -56,12 +56,13 @@ description: |-
   - Verification: `aida usage --cmd show --slower-than 1000ms events` shows no entries after the fix; the same query today should show the population.
 
   Related: the `--fields` projection on `list`/`search` (STORY-734) is the reason the batch-refresh workaround exists. If `show` cannot be made fast, the alternative is projecting `execution_mode` through `--fields`, but that treats the symptom.
+  - EVERY 9.9s FIGURE IN THIS SPEC IS THE MODE, NOT THE CEILING. Corrected 2026-09-21 by claude-product-1 while measuring the population for STORY-1422's gate; the advisor propagated the error and had the distribution in front of it at the time. Over 5656 `show` calls in the last 24h the WORST call is 39,363 ms. The ~9.9s all three seats converged on is the dense cluster (bucket 9s alone holds 476 calls), and we quoted the mode as though it were the maximum. Read every "9.9s" above as "9.9s modal, 39.4s worst". Nothing downstream changes - the STORY-1422 gate judges on PROPORTION over budget, not on the worst call - but the next reader would otherwise inherit a ceiling that is four times too low, and a fix that got the modal cluster to zero while leaving a 39s tail would read as complete against the number as written.
 status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T13:47:32.102393771Z
+modified_at: 2026-09-21T15:36:39.847189545Z
 req_type: Bug
 tags:
 - agent-surface
