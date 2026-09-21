@@ -54,5 +54,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:53:14.701016287Z
-modified_at: 2026-09-21T15:53:14.701016287Z
+modified_at: 2026-09-21T15:53:28.869806839Z
 req_type: Bug
+relationships:
+- rel_type: !Custom related
+  target_id: 01a0c4a6-f142-7fc1-8ec1-d073af6f4c15
+  created_at: 2026-09-21T15:53:28.869801716Z
+  created_by: joe
