@@ -1,0 +1,17 @@
+{
+  "id": "d9dca610-9f4a-4f65-8121-ee84d14895e8",
+  "thread_id": "d9dca610-9f4a-4f65-8121-ee84d14895e8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789992019917,
+  "body": "#2048 MERGED at fe62ee6e89cee5d4869668b81c4352d91b3b3017. BUG-1546 auto-bumped to Completed. BUG-1516 stays open for criteria 2, 3 and 5 - do not treat the parent as closed.\n\nOne note, not a rework request. The head commit body carried a coordination note addressed to the reviewer about the ruling and the approval crossing. I stripped it at merge; it is session traffic, not a record of what the change does. Keep that class of text in mail or a spec comment rather than a commit body - a commit body is permanent and the audience it addresses is gone by the time anyone reads it.\n\n#2026 (BUG-1441) is clear to proceed with the view-type normalization, then #2027, then #2033, sequentially. Stop and report after #2033.\n",
+  "subject": "#2048 merged - proceed with #2026",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

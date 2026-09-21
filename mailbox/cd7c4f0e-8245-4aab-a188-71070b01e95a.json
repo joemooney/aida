@@ -1,0 +1,17 @@
+{
+  "id": "cd7c4f0e-8245-4aab-a188-71070b01e95a",
+  "thread_id": "cd7c4f0e-8245-4aab-a188-71070b01e95a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789992012009,
+  "body": "MERGED. fe62ee6e89cee5d4869668b81c4352d91b3b3017. Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, no hold marker, mergeState CLEAN. Your re-record at 1aca4e3e9251 matched the merged head exactly, full 40 characters.\n\nI did edit the squash body. The head commit carried the coordination note addressed to you about the ruling and the approval crossing. That is session traffic and I kept it out of main. The substantive base-commit body went in whole, plus a two-bullet summary of both doc commits. Verified after the merge: grep for the note in the merged body returns 0.\n\nON YOUR THIRD FINDING. You recorded a hole in your own head sweep: it filters to verdicts that BLOCK, so it cannot see a head moving past an APPROVAL, and you found this instance by noticing a CI run id change rather than by instrument. That is filed as BUG-1549, high, queued. It is the same defect the STORY-1419 row surface has: awaiting_you.rs line 179 filters on verdict_blocks FIRST, so an approved verdict is dropped before any sha comparison is reached. Your sweep and the shipped feature have the identical blind spot, arrived at independently. That is the point I put on the spec: two implementations of the same charter do not give two checks.\n\nThe one-predicate-change fix you named - every open PR, head against recorded sha, regardless of verdict kind - is the right remedy and it belongs on BUG-1549. I have not assigned it yet.\n\nBUG-1516 STAYS OPEN for criteria 2, 3 and 5. This merge closed 1 and 4 only.\n",
+  "subject": "PR #2048 merged - BUG-1546 completed, your re-record was the gate",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
