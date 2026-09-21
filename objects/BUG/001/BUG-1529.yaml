@@ -1,0 +1,82 @@
+id: 01a0c258-2249-7c50-a0e0-366651ce8f49
+spec_id: BUG-1529
+agreed_id: BUG-1529
+title: A refused spec whose work is reworked and merged keeps request-changes as its latest verdict forever, so the corpus cannot tell outstanding refusals from shipped ones
+description: |-
+  Measured 2026-09-20 21:57 local, reviewer seat, across the full verdict corpus.
+
+  THE CORPUS CANNOT DISTINGUISH "REFUSED AND OUTSTANDING" FROM "REFUSED, REWORKED,
+  MERGED, NEVER RE-RECORDED".
+
+  A spec-keyed verdict file holds the latest verdict for that spec. Nothing writes a
+  terminal disposition when refused work is subsequently reworked and merged, so the file
+  keeps saying request-changes forever. A reader asking "does this spec carry an
+  outstanding refusal?" gets yes for work that shipped weeks ago.
+
+  MEASURED POPULATION: 53 spec-keyed verdict files, 10 with a live CHANGES REQUESTED.
+  Two of those are on Completed specs:
+
+      STORY-1033   request-changes   Completed   reviewed_sha 9d9b9a62b770   2026-09-11
+      STORY-818    request-changes   Completed   reviewed_sha a33d661e9      2026-09-07
+
+  Both are FALSE POSITIVES, verified by ancestry:
+
+      9d9b9a62b770  NOT an ancestor of origin/main; shipped as 2d30873cb4 (#1734)
+      a33d661e9     NOT an ancestor of origin/main; shipped as 22432e8432 (#1679)
+
+  In both cases the branch moved past the refused commit and a later squash merged. The
+  refusals were real and were addressed; nobody recorded an approval afterwards, and
+  nothing else closed them out.
+
+  (The same sweep established the reassuring half: NO refused commit has ever been merged.
+  That is not this spec's problem - this spec is about the records left behind.)
+
+  WHY 2 OF 53 UNDERSTATES IT.
+
+  1. A GUARD IS ABOUT TO BE BUILT ON THIS CORPUS. BUG-1522 criterion 6 now requires the
+     no-op guard to read reviewed_sha and reviewed_branch from the verdict record rather
+     than recomputing them. A guard that also reads "latest verdict is a refusal" inherits
+     these two false positives on day one, and inherits one more every time refused work
+     ships without a closing record.
+
+  2. IT ERRS TOWARD ALARM, WHICH IS THE LESS COMMON DIRECTION. Most of the absent-evidence
+     defects found tonight computed over what was present and erred toward reassurance -
+     an empty check set read as green, a missing sha read as no rework, a marker state
+     read as synced. This one errs the other way: shipped work reads as refused. That
+     makes it cheap to ignore and easy to normalise, which is its own hazard for a corpus
+     a guard is about to trust.
+
+  3. THE COUNT ONLY GROWS. Nothing removes a stale refusal, so the false-positive
+     population is monotonic in the number of refused-then-merged specs.
+
+  Acceptance
+  1. When a refused spec's work merges, something records the terminal disposition, so the
+     latest verdict for a Completed spec is not a refusal. The merge auto-bump already
+     detects the merge (it flips Done to Completed), so there is an existing place to hang
+     this.
+  2. The recorded disposition distinguishes "the refusal was addressed and the work
+     shipped" from "a fresh approving review was performed". They are different facts and
+     only the second is a review.
+  3. A query can ask "which specs carry an outstanding refusal?" and get only specs whose
+     work has NOT shipped. The two specs above must not appear.
+  4. Backfill or explicit exclusion for the existing corpus: STORY-1033 and STORY-818 are
+     resolved rather than left as permanent false positives. If backfill is judged unsafe,
+     the query in criterion 3 must exclude Completed specs and say why.
+  5. A test: record a refusal, move the branch past the reviewed sha, merge, and assert
+     the spec no longer reports an outstanding refusal.
+
+  Related: BUG-1522 (the guard that will read this corpus), BUG-1452 (a refusal leaving the
+  spec Done - the live half of the same lifecycle gap), STORY-1391 (verdict round
+  retention, which preserves history but does not close a refusal out).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T05:02:30.985302118Z
+modified_at: 2026-09-21T05:02:30.985302118Z
+req_type: Bug
+tags:
+- parent:EPIC-62
+- review-verdicts
+- reviewer-surface
+- substrate-integrity
