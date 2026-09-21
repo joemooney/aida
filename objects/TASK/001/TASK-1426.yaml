@@ -1,0 +1,50 @@
+id: 01a0c626-0212-7bc0-bf6a-65fa04797290
+spec_id: TASK-1426
+agreed_id: TASK-1426
+title: Migrate the 139 inert Custom(related) edges left in the store by BUG-1471 (orphans convert, twins delete)
+description: |
+  BUG-1471 fixed the CREATION path: `aida rel add --type related` now normalizes to the standard traversable `References` edge at the CLI boundary, and the spec card renders Custom edges under their own heading instead of hiding them. It deliberately did NOT migrate the edges already in the store. This spec is where that deferral is tracked, so "left as-is" is a recorded decision rather than silence.
+
+  MEASURED STORE CENSUS, 2026-09-21 (re-measured directly from `.aida-store/objects/**/*.yaml` with a YAML parse, not a grep):
+
+      648  !Custom implements
+      647  !Custom implemented-by
+      139  !Custom related          <-- the inert relatedness population
+       17  !Custom related-to
+       13  !Custom sprint_assignment
+       13  !Custom sprint_contains
+        1  !Custom depends-on
+        1  !Custom relates-to
+        1  !Custom duplicate-of
+      ----
+     1480  Custom edges total
+
+  The 139 exact `!Custom related` edges span 86 specs. They split into two populations that want OPPOSITE actions:
+
+      orphan (125)  -- no typed edge to the same target. Converting to References is the actual repair.
+      twin   (14)   -- a References edge to the SAME target already exists alongside the Custom one.
+                       Converting produces a duplicate edge, not a repair. The Custom must be DELETED.
+
+  The 14 twins sit on BUG-1443, BUG-1445, BUG-1450, BUG-1452, BUG-1453, BUG-1454, BUG-1461, BUG-1462, BUG-1465, STORY-1133 and TASK-1293. (The 2026-09-20 analysis on BUG-1471 counted 13 twins across 10 specs; the store has moved since, so re-measure before acting rather than trusting either number.)
+
+  WHY DEFERRED RATHER THAN DONE IN BUG-1471: migrating rewrites 86 spec objects on the shared git-canonical `aida-store` branch. That is a different risk class from a bounded CLI parsing + rendering change, it collides with every in-flight lease holding one of those specs, and a blind conversion is actively wrong for 14 of the edges. It wants its own change with its own review.
+
+  WHAT A MIGRATION MUST DO:
+  1. Re-measure first. Do not hardcode 125/14.
+  2. Orphans: convert `!Custom related` (and `related-to`, `relates-to`) to `References`.
+  3. Twins: DELETE the Custom edge; do not convert it.
+  4. Assert afterwards: no source holds two edges of the same kind to one target.
+  5. Dry-run mode, and a per-spec targeted write (never a full-store rewrite).
+
+  OPEN QUESTION WORTH ONE COMMAND FIRST, flagged on BUG-1471 and still unverified: does `aida rel remove <s> <t> --type related` actually match a stored `!Custom related` edge? If it does not, the obvious hand-repair (remove the bad edge, add the good one) silently produces a twin instead of a fix, which would explain how the 14 twins got there and would make the REPAIR path broken in the same way the creation path was. Check that before writing the migration; if it holds it is a bug in its own right.
+
+  NOT IN SCOPE: the 1295 `implements` / `implemented-by` edges. They have no typed equivalent, so unlike `related` they are not a near-miss for an existing variant. Whether trace-linkage earns a first-class edge is a taxonomy decision, not a migration.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:46:14.802500200Z
+modified_at: 2026-09-21T22:46:14.802500200Z
+req_type: Task
+tags:
+- graph substrate-as-bouncer cli migration
