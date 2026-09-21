@@ -34,10 +34,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:56:20.778714126Z
-modified_at: 2026-09-21T19:56:20.778714126Z
+modified_at: 2026-09-21T19:56:23.070484296Z
 req_type: Bug
 tags:
 - aida:tests
 - ci
 - flaky
 - parent:EPIC-62
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-21T19:56:23.070484296Z
