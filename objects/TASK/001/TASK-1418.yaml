@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T16:32:00.188238076Z
+modified_at: 2026-09-21T16:37:24.740669773Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -264,4 +264,21 @@ comments:
     AND THE COMPANION ERROR THAT MADE IT COSTLY - A TEST NAME IS NOT A TEST. The advisor's control was "the same test passed on Windows the night before". It was the same NAME; the content comparison did not exist in the body at that commit (verified: `git show 26c7f5107e:aida-core/src/templates.rs | grep -c discipline_content_mismatches` -> 0). A CONTROL MUST BE THE SAME ARTIFACT, NOT THE SAME LABEL - and when a test's pass is used as a control across two commits, the body has to be diffed, not assumed. The passing COUNT had even moved, 952 to 954, which was the signal, read as background.
   created_at: 2026-09-21T16:32:00.188238076Z
   modified_at: 2026-09-21T16:32:00.188238076Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4d4-5484-77f3-9929-ac3c0e9b5cb4
+  author: joe
+  content: |-
+    [aida:advisor] FIRST PROSPECTIVE CATCH OF THE NULL-FROM-AN-INCAPABLE-SURFACE ERROR, and it is the evidence that the rule recorded above is usable rather than only explanatory.
+
+    claude-reviewer-1 tried to close BUG-1555's open measurement read-only, by grepping an 8820-line CI job log for `autocrlf|core\.eol|git config`. It returned safe.directory, core.sshCommand, extraheader and remote.origin.url - and no autocrlf on either the checkout or post-checkout step.
+
+    THEY DID NOT REPORT "AUTOCRLF IS UNSET". They reported that actions/checkout never prints core.autocrlf, so the log CANNOT EXPRESS THE PROPERTY and its silence is structurally uninformative either way - and they said so in the same message as the result, unprompted.
+
+    THAT IS THE FOURTH INSTANCE TODAY AND THE ONLY ONE CAUGHT BEFORE A CONCLUSION WAS DRAWN. The other three were all retrospective: `aida show` grepped for `BlockedBy` (a word it emits for nothing, ever) produced a confident refutation of another seat's substrate claim; a hand-written field list that omitted `findings` produced a false BUG-1539 instance that had to be retracted from a spec; `git check-ignore` naming the precedence winner produced a wrong attribution about a machine-local rule. Each was corrected only after it had been asserted.
+
+    WHAT CHANGED BETWEEN THE THIRD AND THE FOURTH IS THE ORDER OF OPERATIONS. The rule was not new at the third instance - it had been written down. What was new by the fourth is asking "can this surface express what I am asking?" BEFORE reading the result rather than after being contradicted. That is the difference between a rule that explains errors afterwards and one that prevents them, and it is the answer to the "having the rule is not the same as running it" entry recorded above: the way a rule gets run is by attaching it to the ACT (issuing a query) rather than to the CONCLUSION (interpreting a result).
+
+    ALSO WORTH KEEPING: a negative result reported as a dead end has value. The finding here is not about autocrlf at all - it is "this shortcut does not exist, do not spend the attempt", recorded on BUG-1555's acceptance so the next seat does not walk it and then, worse, report the absence as a finding.
+  created_at: 2026-09-21T16:37:24.740669773Z
+  modified_at: 2026-09-21T16:37:24.740669773Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
