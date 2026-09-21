@@ -54,7 +54,7 @@ description: |-
 
       The first version read "three instances in one session" and sat twelve lines below a list naming FIVE with spec ids - a count written at one moment and not updated as its own list grew, in the document about surfaces that cannot be reconciled. It also offered two promotion conditions, and the SECOND HAS ALREADY FIRED: TASK-1-167 and TASK-1-168 were both found by running the proxy against surfaces chosen from the question, before any symptom was known. Left as written, a later reader would find a satisfied trigger and promote on evidence both seats judged too thin.
 
-      WHAT THE EVIDENCE ACTUALLY IS. Five instances, one session, two seats. Two of the five were found prospectively, which establishes that the proxy RANKS SURFACES BY AUDITABILITY - a real and narrower capability than finding instances of the pattern. But TASK-1-167 is a plain omission and TASK-1-168 is latency plus unstated scope; neither is the defining shape of two observers being shown DIFFERENT CORRECT ANSWERS. Only BUG-1513 is unambiguously that, with BUG-1507's banner and BUG-1514's composed exclusions close to it. So the prospective limb fired and was judged insufficient, by both seats independently, and the reviewer argued against promoting its own hit.
+      WHAT THE EVIDENCE ACTUALLY IS. Five instances, one session, two seats. Two of the five were found prospectively, which establishes that the proxy RANKS SURFACES BY AUDITABILITY - a real and narrower capability than finding instances of the pattern. But TASK-1-167 is a plain omission and TASK-1-168 is latency plus unstated scope; neither is the defining shape of two observers being shown DIFFERENT CORRECT ANSWERS. Only BUG-1513 is unambiguously that, with BUG-1507's banner and BUG-1514's composed exclusions close to it. So the prospective limb fired and was judged insufficient. The SEQUENCE matters and an earlier version of this paragraph overstated it: the reviewer seat argued first that its own hit was weaker than BUG-1513 and that the pattern should be held, and the advisor concurred. That is two seats agreeing, not two seats arriving separately - concurrence is not independence, and this session established that distinction at cost more than once. What WAS independent is the advisor's original caution: the decision not to promote, and the trigger itself, were written before either prospective hit existed. A reader should weigh this as one judgement accepted rather than two judgements converging. The reviewer arguing against promoting its own finding is still the strongest thing in the record here.
 
       THE REMAINING TRIGGER, stated so it cannot be satisfied by accident: promote when an instance of the SPECIFIC shape - one surface returning different correct answers to different observers, where the observer who would recognise the defect is not the one shown it - appears in a subsystem neither the queue, the lifecycle surfaces, nor the drain's reporting touched. Prospective discovery is no longer sufficient on its own, because it has been demonstrated and what it demonstrated was narrower than the pattern.
 
@@ -64,7 +64,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:33:45.887148289Z
-modified_at: 2026-09-21T02:55:01.053916515Z
+modified_at: 2026-09-21T02:58:03.418696508Z
 req_type: Task
 tags:
 - from-advisor:general
