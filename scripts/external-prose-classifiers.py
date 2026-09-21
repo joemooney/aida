@@ -96,11 +96,18 @@ def main() -> int:
             # produce one.
             # trace:BUG-1526 | ai:claude
             def sites(text: str) -> set[str]:
-                return {
-                    line.split("|")[1].strip().strip("`")
-                    for line in text.splitlines()
-                    if line.startswith("| `")
-                }
+                # BOTH cells. Identity is name + path, so reading only cell [1]
+                # would report a MOVED classifier as "set unchanged" — the same
+                # name-only blind spot that made the test suite miss a dropped
+                # path. trace:BUG-1526 | ai:claude
+                rows = set()
+                for line in text.splitlines():
+                    if not line.startswith("| `"):
+                        continue
+                    cells = [c.strip().strip("`") for c in line.split("|")]
+                    if len(cells) >= 3:
+                        rows.add(f"{cells[1]} ({cells[2]})")
+                return rows
 
             added = sorted(sites(rendered) - sites(current))
             removed = sorted(sites(current) - sites(rendered))
