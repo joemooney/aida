@@ -1,0 +1,41 @@
+id: 01a0c4dd-1a86-7170-b55f-fd2e415c1a5a
+spec_id: STORY-1425
+agreed_id: STORY-1425
+title: 'aida reconstitute measures absolute recall against the captured set, so it cannot report the one thing the objective claims: the delta over not using AIDA'
+description: |-
+  The objective, as the operator states it (2026-09-21): a system built with AIDA should be MUCH BETTER POSITIONED to be reconstituted from captured metadata THAN IF THEY HAD NOT USED AIDA. That is a comparative claim. The v1 probe cannot express it, for two independent reasons. Neither was rejected in ADR-44 - both are simply outside the question v1 asked.
+
+  FLAW 1 - NO CONTROL ARM, so the score is not attributable.
+  ADR-44 decision 1 fixes isolation at store-only context: the probe agent gets `show --full`, linked ADRs, [aida:sem] comments, graph context and the symbol names the spec's trace comments point at. That is a correct arm B. There is no arm A. With one arm, a high score cannot distinguish "AIDA's metadata carried the work" from "the task was guessable from the spec title, or from general knowledge of what a tool like this does." Conversely a low score cannot distinguish thin capture from an intrinsically hard target. The number is therefore not attributable to AIDA, which is exactly the attribution the objective asserts.
+
+    Proposed arm A - the counterfactual baseline: the same probe given ONLY what a non-AIDA project retains once the code is gone. Git log subjects touching the relevant paths, the README, and the file/symbol names. No spec body, no acceptance criteria, no ADRs, no relationships, no trace context. The DELTA between arms, per spec, is AIDA's measured contribution. Report the pair and the delta, never arm B alone.
+
+  FLAW 2 - THE DENOMINATOR IS THE CAPTURED SET, so the measure is blind to what was never captured.
+  ADR-44 decision 2 sets score = matched / total real TRACED tests. Only behaviour already carrying trace:SPEC.ACn is in the denominator. Untraced behaviour is invisible, so a project with thin capture can score high on the little it captured. This is precisely the operator's stated deficiency in AIDA's own corpus - "much has passed that has not been captured" - and the current score is structurally incapable of showing it.
+
+    Proposed second denominator - coverage, reported ALONGSIDE the recall score and never folded into it: what share of the real test corpus is traced at all; what share of specs carry acceptance criteria; what share of criteria have a traced test; what share of commits carry a SPEC-ID trailer. `aida criteria gap` already computes part of this. Recall answers "of what we captured, how much comes back"; coverage answers "how much did we capture." A user needs both, and either alone misleads in a different direction.
+
+  WHY THESE TWO TOGETHER. Recall without coverage flatters a thin corpus. Coverage without recall rewards volume over usefulness. The pair, plus the counterfactual delta, is the smallest honest answer to "is my project better positioned because I used AIDA."
+
+  VALIDATION SUBJECT: not this repo. AIDA predates its own capture discipline, so it is a weak test case and its numbers will understate what a disciplined project achieves. Validate on a project that used AIDA from its first commit - ~/ai/aida-hub is the existing fresh-project probe and the natural candidate. Running it here is still useful as a lower bound, and should be labelled as one.
+
+  ACCEPTANCE
+  - The probe runs both arms and reports armA, armB and the delta per spec; arm B alone is never presented as the result.
+  - Arm A's context is auditable - the report states exactly what the baseline arm was given.
+  - Coverage metrics are reported alongside recall and are not combined into a single score.
+  - The report names its validation subject and labels a run against this repo as a lower bound.
+  - The existing heuristic labelling and the harvest-candidates output from ADR-44 are preserved unchanged.
+
+  NON-GOAL: whole-system reconstitution. This story keeps the per-spec scope ADR-44 chose; it changes what is measured, not how much is attempted.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T16:46:59.718785414Z
+modified_at: 2026-09-21T16:46:59.718785414Z
+req_type: Story
+tags:
+- epic-70
+- measurement
+- north-star
+- reconstitution
