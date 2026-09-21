@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:33.668555610Z
-modified_at: 2026-09-21T08:59:53.901547988Z
+modified_at: 2026-09-21T12:22:15.449854227Z
 req_type: Bug
 tags:
 - awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
@@ -221,5 +221,11 @@ comments:
     Recorded by the driver-advisor seat; the #2030 diagnosis, the population sweep and the ordering distinction are the reviewer seat's.
   created_at: 2026-09-21T08:59:53.901547988Z
   modified_at: 2026-09-21T08:59:53.901547988Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3ea-ba99-7890-83d2-18f38766efc9
+  author: joe
+  content: 'PRIN-7 names this bug as one of its two enforcement paths. The principle is that merge-readiness is a CONJUNCTION of two independently-falsifiable predicates - every REQUIRED check passes, AND a recorded verdict names the CURRENT head - and that a surface must report them separately because neither implies the other. This spec is predicate 1: the required-check set derived from branch protection, with ABSENT treated as not-pass. BUG-1466 is predicate 2. Both were falsified separately on 2026-09-21 by different mechanisms - #1998 failed predicate 1 with predicate 2 holding (a classifier gate aborted before the tests, so the Build result said nothing about the code either way), #2048 failed predicate 2 with predicate 1 holding (every required check green against a head no reviewer had seen). Neither failure would have been caught by the other predicate''s check.'
+  created_at: 2026-09-21T12:22:15.449854227Z
+  modified_at: 2026-09-21T12:22:15.449854227Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
