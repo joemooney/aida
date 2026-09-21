@@ -1,0 +1,40 @@
+id: 01a0c501-803f-7180-91c3-6552c0bca0a2
+spec_id: BUG-1559
+agreed_id: BUG-1559
+title: The compile-time guard's witness test asserts the impl exists, not that the show path is typed against it - widening the signature back to a concrete backend passes green
+description: |
+  THE WITNESS TEST FOR BUG-1480's COMPILE-TIME GUARD PROVES THE IMPL EXISTS, NOT THAT THE PATH USES IT — AND THE MUTATION THAT REMOVES THE GUARANTEE GOES UNDETECTED.
+
+  Found by claude-reviewer-1 2026-09-21 while approving PR #2033 at 8e2589c0b432. Recorded as non-blocking there: the signature is correct at that sha and BUG-1480's criterion is met. This spec is the follow-up.
+
+  WHAT SHIPPED. BUG-1480's binding criterion required the whole-store read to be COMPILER-ENFORCED, demonstrated by a BUILD failure rather than a test failure. `show_cached_context` now takes `&impl CacheOnlyReads`, a trait with NO supertrait and exactly one method, and the parameter is GENERIC — so the concrete type's inherent methods do not resolve either. Injecting `backend.load()` produces:
+
+      error[E0599]: no method named `load` found for reference `&impl CacheOnlyReads`
+
+  That guarantee is real and holds BY CONSTRUCTION rather than by observation.
+
+  WHAT THE TEST ACTUALLY ASSERTS. `the_show_path_is_typed_against_the_cache_only_view` asserts only that `CachedGitBackend` IMPLEMENTS `CacheOnlyReads`. It says nothing about `show_cached_context`'s signature.
+
+      THE UNDETECTED MUTATION: change the parameter from `&impl CacheOnlyReads` to the
+      concrete `&aida_core::CachedGitBackend`. The test STILL COMPILES and STILL PASSES.
+      `.load()` is available again. The guarantee is gone and nothing reports it.
+
+  AND THE DOC COMMENT OVERSTATES IT: it describes the test as "a witness that the restricted view is what the path is typed against", which is what a reader will believe. The test does not establish that. A later maintainer widening the signature for convenience gets a green suite and a doc comment agreeing with them.
+
+  WHY THIS IS THE FAMILIAR FAMILY IN A NEW PLACE. This is "a correct unit behind an unwired seam" — the same defect the reviewer checks for first on every PR — except the unit here is a TYPE CONSTRAINT and the seam is the SIGNATURE. The constraint is real; the witness watches the wrong end of it. TASK-1418 catalogues instruments that cannot fire; this one fires and is aimed at something that was never at risk, which is a third way to be inert.
+
+  Acceptance:
+  - The witness must assert the PATH's typing, not the impl's existence: a change of `show_cached_context`'s parameter from `&impl CacheOnlyReads` to a concrete backend type must FAIL something.
+  - DEMONSTRATE-IT-FIRES, BINDING AND RED-FIRST: perform exactly that mutation, show the new witness FAILS, quote the failure, restore and show green. The current witness must be shown to PASS under the same mutation, so the delta is visible — that is the whole content of this spec.
+  - Correct the doc comment to describe what the assertion actually establishes. A comment that overstates a guard is worse than no comment, because it tells the next reader not to look.
+  - Consider whether a compile-fail test (trybuild or equivalent) is the honest instrument here rather than a runtime assertion. A compile-time guarantee wants a compile-time witness; if that is disproportionate, say so and argue for the runtime form rather than defaulting to it.
+  - NOT IN SCOPE: the trait's blindness to COST. That is recorded on BUG-1480 already — the trait guards the CALL and is provably blind to the cost, since the bug grew 7.5s to 9.9s with no call site changing. STORY-1422's real-store gate holds that dimension. This spec is only about the witness matching its own claim.
+
+  Related: BUG-1480 (the guard this witness is supposed to protect), STORY-1422 (the cost-dimension instrument), TASK-1418 (instrument-failure catalogue).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T17:26:45.055351013Z
+modified_at: 2026-09-21T17:26:45.055351013Z
+req_type: Bug
