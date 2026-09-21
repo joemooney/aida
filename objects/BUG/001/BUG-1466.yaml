@@ -2,13 +2,47 @@ id: 01a0bffa-3c62-79a2-a184-b8ca39402b76
 spec_id: BUG-1466
 agreed_id: BUG-1466
 title: 'aida review record --pr writes a PR handshake with no provenance: reviewed_sha, reviewed_branch, recorded_at and recorded_by are all dropped (452 of 481 files affected)'
-description: "A review verdict written with \"aida review record <SPEC> --verdict X --pr N\" produces TWO files from one invocation, and only one of them carries provenance:\n\n  .aida/review-verdicts/<SPEC>.json  -> reviewed_sha, reviewed_branch, recorded_at, recorded_by  ALL PRESENT\n  .aida/review-verdicts/PR-<N>.json  -> ALL FOUR NULL\n\nMEASURED, not estimated: 452 of 481 PR-*.json files in this repo have reviewed_sha = null. The 29 that carry it were written by the drain reviewer (recorded_by = \"aida drain reviewer\"), which uses a different writer.\n\nROOT CAUSE - aida-cli-lib/src/lib.rs, the \"if let Some(n) = pr\" block around line 76120 (BUG-802 added it). It constructs the handshake body as exactly:\n\n    { \"verdict\": kind.label(), \"summary\": ..., \"mode\": \"orchestrator-phase-3\" }\n\nplus an optional findings array. It never writes the four provenance fields - despite the same function having all of them in scope, having just written them into the spec-keyed record a few lines above. This is a writer omission, NOT user misuse: the documented flag is --pr and there is no other supported path.\n\nTHE CONSUMER DOES NOT CHECK PROVENANCE EITHER. aida-cli-lib/src/drain_cmd.rs around line 484 resolves \"reviewed\" by reading PR-<N>.json and matching ONLY on Verdict::Approved. It never compares reviewed_sha to the current head. So an APPROVED handshake authorizes a drain to proceed at ANY head, including one pushed after the review. The stale-verdict hazard is not merely invisible to humans; it is structurally unenforced in the automated path.\n\nTHE EXISTING TESTS ENCODE THE DEFECT AS THE EXPECTED SHAPE. aida-cli-lib/src/tests/bug_775_commits_ahead_tests.rs lines 493 and 528 hardcode fixtures of exactly the three-field form. There is no test anywhere asserting the handshake carries provenance. This is a gap the change own tests structurally cannot see: every fixture agrees with the writer, so a reviewer reading the tests sees a consistent contract and no defect. Fixing this is coverage work, not only code work - adding an assertion to those fixtures would not help, because they never exercise the writer at all; they hand-write the file.\n\nOBSERVED CONSEQUENCE, reported by the product seat 2026-09-20: a rework brief was built on PR #1978 verdict, which lacked reviewed_sha and recorded_at, and the findings described an earlier state of the branch. About an hour went into a brief item already fixed. The fields exist to prevent exactly that.\n\nThis is an instrument that cannot see itself: the verdict file whose entire purpose is to make a review checkable by a downstream seat is, in its PR-keyed form, not checkable.\n\n## Acceptance\n\n- The --pr handshake carries reviewed_sha, reviewed_branch, recorded_at and recorded_by, identical to the values written into the spec-keyed record by the same invocation.\n- A test exercises the real writer (not a hand-written fixture) and asserts all four fields are present and match the spec-keyed record.\n- The drain consumer compares the handshake reviewed_sha against the current head and refuses, or clearly warns, when an APPROVED verdict was recorded against a different commit.\n- A test covers approved-verdict-at-stale-sha and asserts the drain does not treat it as reviewed.\n- The bug_775_commits_ahead_tests fixtures are updated to the provenance-carrying shape so they stop encoding the old contract.\n- Backfill is NOT required for the 452 existing files; they stay as historical records.\n- Add ONE assertion to the EXISTING test rather than creating a new one: `assert_eq!(verdict.reviewed_sha.as_deref(), Some(\"abc123\"));` in pr_keyed_reviewer_verdict_arms_rework_guard. That test asserts the returned verdict's KIND and not WHICH verdict was returned. Since this spec is about reviewed_sha being unchecked, pinning identity rather than kind asserts the property the fix is about. Salvaged from PR #2029 before it closes; the rest of that branch is redundant with main.\"\nexecution_mode: drain\nrelationships[2]{rel,id,title}:\n  Related,BUG-1460,\"The drain enters the reviewer phase with no terminal CI result, against a head that postdates the CI phase â\x80\x94 so specs shelve on verdicts rendered before the build finishes, one of them 3.5 minutes bef\"\n  Related,PRIN-5,\"A coordination surface must distinguish absent evidence from good evidence, because computing a verdict over what is present always errs toward reassurance"
+description: |-
+  A review verdict written with "aida review record <SPEC> --verdict X --pr N" produces TWO files from one invocation, and only one of them carries provenance:
+
+    .aida/review-verdicts/<SPEC>.json  -> reviewed_sha, reviewed_branch, recorded_at, recorded_by  ALL PRESENT
+    .aida/review-verdicts/PR-<N>.json  -> ALL FOUR NULL
+
+  MEASURED, not estimated: 452 of 481 PR-*.json files in this repo have reviewed_sha = null. The 29 that carry it were written by the drain reviewer (recorded_by = "aida drain reviewer"), which uses a different writer.
+
+  ROOT CAUSE - aida-cli-lib/src/lib.rs, the "if let Some(n) = pr" block around line 76120 (BUG-802 added it). It constructs the handshake body as exactly:
+
+      { "verdict": kind.label(), "summary": ..., "mode": "orchestrator-phase-3" }
+
+  plus an optional findings array. It never writes the four provenance fields - despite the same function having all of them in scope, having just written them into the spec-keyed record a few lines above. This is a writer omission, NOT user misuse: the documented flag is --pr and there is no other supported path.
+
+  THE CONSUMER DOES NOT CHECK PROVENANCE EITHER. aida-cli-lib/src/drain_cmd.rs around line 484 resolves "reviewed" by reading PR-<N>.json and matching ONLY on Verdict::Approved. It never compares reviewed_sha to the current head. So an APPROVED handshake authorizes a drain to proceed at ANY head, including one pushed after the review. The stale-verdict hazard is not merely invisible to humans; it is structurally unenforced in the automated path.
+
+  THE EXISTING TESTS ENCODE THE DEFECT AS THE EXPECTED SHAPE. aida-cli-lib/src/tests/bug_775_commits_ahead_tests.rs lines 493 and 528 hardcode fixtures of exactly the three-field form. There is no test anywhere asserting the handshake carries provenance. This is a gap the change own tests structurally cannot see: every fixture agrees with the writer, so a reviewer reading the tests sees a consistent contract and no defect. Fixing this is coverage work, not only code work - adding an assertion to those fixtures would not help, because they never exercise the writer at all; they hand-write the file.
+
+  OBSERVED CONSEQUENCE, reported by the product seat 2026-09-20: a rework brief was built on PR #1978 verdict, which lacked reviewed_sha and recorded_at, and the findings described an earlier state of the branch. About an hour went into a brief item already fixed. The fields exist to prevent exactly that.
+
+  This is an instrument that cannot see itself: the verdict file whose entire purpose is to make a review checkable by a downstream seat is, in its PR-keyed form, not checkable.
+
+  ## Acceptance
+
+  - The --pr handshake carries reviewed_sha, reviewed_branch, recorded_at and recorded_by, identical to the values written into the spec-keyed record by the same invocation.
+  - A test exercises the real writer (not a hand-written fixture) and asserts all four fields are present and match the spec-keyed record.
+  - The drain consumer compares the handshake reviewed_sha against the current head and refuses, or clearly warns, when an APPROVED verdict was recorded against a different commit.
+  - A test covers approved-verdict-at-stale-sha and asserts the drain does not treat it as reviewed.
+  - The bug_775_commits_ahead_tests fixtures are updated to the provenance-carrying shape so they stop encoding the old contract.
+  - Backfill is NOT required for the 452 existing files; they stay as historical records.
+  - Add ONE assertion to the EXISTING test rather than creating a new one: `assert_eq!(verdict.reviewed_sha.as_deref(), Some("abc123"));` in pr_keyed_reviewer_verdict_arms_rework_guard. That test asserts the returned verdict's KIND and not WHICH verdict was returned. Since this spec is about reviewed_sha being unchecked, pinning identity rather than kind asserts the property the fix is about. Salvaged from PR #2029 before it closes; the rest of that branch is redundant with main."
+  execution_mode: drain
+  relationships[2]{rel,id,title}:
+    Related,BUG-1460,"The drain enters the reviewer phase with no terminal CI result, against a head that postdates the CI phase — so specs shelve on verdicts rendered before the build finishes, one of them 3.5 minutes bef"
+    Related,PRIN-5,"A coordination surface must distinguish absent evidence from good evidence, because computing a verdict over what is present always errs toward reassurance
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-21T05:16:44.121934317Z
+modified_at: 2026-09-21T05:31:03.219148478Z
 req_type: Bug
 tags:
 - batch:night-0920
