@@ -1,0 +1,44 @@
+id: 01a0c322-619c-7fc1-bb4e-aeb20b187020
+spec_id: BUG-1542
+agreed_id: BUG-1542
+title: aida edit --remove-tag silently does nothing for a colon-namespaced tag, so every tag AIDA's own conventions mandate can only be removed by the destructive --tags replace
+description: |-
+  REPRODUCED WITH A CONTROL, 2026-09-21, on TASK-1416.
+
+  `aida edit <ID> --remove-tag <TAG>` silently does nothing when TAG contains a colon. It works correctly for a flat tag. No error, no warning, exit 0 — the tag is simply still there.
+
+  THE TRANSCRIPT, control first so the failure is not confounded with the command being wrong:
+
+      tags before:  adoption-gap severity:functional tooling rebase stacked-pr papercut severity:cosmetic
+
+      aida edit TASK-1416 --add-tag zzprobe
+      tags:         ... severity:cosmetic zzprobe          <- flat tag ADDED
+      aida edit TASK-1416 --remove-tag zzprobe
+      tags:         ... severity:cosmetic                  <- flat tag REMOVED, correct
+
+      aida edit TASK-1416 --remove-tag severity:cosmetic   (run twice, once alone,
+                                                            once combined with --add-tag)
+      tags:         ... severity:cosmetic                  <- STILL PRESENT, no error
+
+  So add works for both forms, remove works only for the flat form. --help promises symmetry: "Remove a tag without touching the rest. Repeatable. Removing an absent tag is a no-op." The last clause is what makes this invisible — a silent no-op is the DOCUMENTED behaviour for an absent tag, so a caller cannot distinguish "removed nothing because it was not there" from "removed nothing because I cannot parse this".
+
+  WHY THIS IS WORSE THAN A PAPERCUT. Colon-namespaced tags are not an edge case in AIDA, they are the MANDATED convention. `.aida/discipline/tag-conventions.md` and CLAUDE.md require the colon form for subcommand-identifying tags (`aida:queue:work`) and it is the established shape for `severity:*`, `batch:*`, `parent:*`, `depends-on:*`, `lifecycle:*` and `deferred:*`. Every one of those is unremovable through the non-destructive flag.
+
+  THE ONLY REMAINING PATH IS THE DESTRUCTIVE ONE. `--tags` REPLACES the entire set, which is already a known foot-gun (BUG-1241, where CLAUDE.md's own example was destructive). So to drop one namespaced tag a caller must re-specify every other tag by hand and hope none was missed. The safe flag does not work and the working flag is unsafe; that combination is how a batch tag or a parent pointer gets silently dropped during an unrelated edit.
+
+  CONCRETE CONSEQUENCES ALREADY VISIBLE: a spec cannot leave a `batch:NAME` drain, a mis-set `severity:` cannot be corrected (this filing's own trigger — TASK-1416 currently carries BOTH severity:functional and severity:cosmetic, contradicting itself, because the wrong one could not be removed), a `deferred:*` parking tag cannot be lifted, and a `lifecycle:no-ci-wait` short-circuit cannot be withdrawn once applied.
+
+  WHAT TO FIX. --remove-tag must match the colon form. Whatever splits or normalises the argument is almost certainly treating the colon as a delimiter, the way the `aida:<subcommand>[:<verb>]` parsing does elsewhere — check for a split on ':' in the removal path that the addition path does not perform.
+
+  AND A SEPARATE CRITERION THAT OUTLIVES THIS BUG: --remove-tag should report what it did. "removed 1 tag" / "no tag matching X" turns every future instance of this class into a visible failure instead of a silent one. Right now the command's silence is indistinguishable from success, which is why this survived long enough to be found by accident during an unrelated disposition.
+
+  VERIFICATION FOR THE FIX: add then remove `severity:cosmetic`, `batch:probe` and `aida:queue:work` on a scratch spec and assert each is gone; keep the flat-tag case as the control so a regression cannot pass by breaking both.
+
+  Found by the driver-advisor seat while correcting a severity tag during disposition. Autonomous-safe.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T08:43:25.468471381Z
+modified_at: 2026-09-21T08:43:25.468471381Z
+req_type: Bug
