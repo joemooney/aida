@@ -1,0 +1,46 @@
+id: 01a0c15e-a65a-74f0-86b8-455a0e05f9d9
+spec_id: BUG-1498
+agreed_id: BUG-1498
+title: Every shelve files an empty-description draft BUG restating the event — 408 in the store, 17 of today's 30 open drafts, duplicated per recurrence, duplicating what findings list already shows better
+description: |
+  Every drain shelve files a draft BUG whose title is a restatement of the event and whose description is empty. There are 408 of them in the store, 17 filed today, and they now dominate the draft queue that the advisor triages.
+
+  THE SHAPE, from today's drafts:
+
+      BUG-1497   'auto-complete failure: phase 3 (reviewer) on BUG-1450'
+      BUG-1493   'auto-complete failure: phase 2 (ci) on BUG-1470'
+      BUG-1492   'auto-complete failure: phase 3 (reviewer) on BUG-1460'
+      BUG-1491   'auto-complete failure: phase 3 (reviewer) on BUG-1480'
+      BUG-1489   'auto-complete failure: phase 3 (reviewer) on BUG-1485'
+      ... 12 more today, 408 in the store
+
+  Reading one of them: the title is the whole content. `description` is an empty block.
+
+  TWO DUPLICATES IN TODAY'S SET ALONE. BUG-1449 and BUG-1473 are both "phase 3 (reviewer) on BUG-1297" — the same spec shelving twice in the same phase produces two indistinguishable drafts. Nothing dedupes them, so a spec that round-trips five times leaves five.
+
+  WHY THIS IS A THROUGHPUT PROBLEM AND NOT UNTIDINESS. The draft queue is what the advisor grooms, and grooming is a judgment surface — every row costs a decision. Today 17 of 30 open drafts are these, carrying no information that `aida findings list` does not already present better: that surface shows the same shelves WITH the failure kind, the detail text, and a recovery hint, grouped and current. The draft BUG has a phase number and a spec id.
+
+  So the substrate is filing a low-information duplicate of a good surface into the queue that costs the most to process, at a rate of one per shelve. On a day with 34 shelves that is 34 grooming decisions bought for nothing.
+
+  IT ALSO DISTORTS THE ONE MEASURE THE OPERATOR ASKED FOR. "All open items complete" is read off the open counts. Drafts are at 30; 17 of those are auto-filed shelve records that no human filed and that will never be implemented as written. Anyone reading the backlog — including me, twenty minutes ago — reads a number that is more than half noise. I was about to report that I had flooded the draft queue myself before I read the titles.
+
+  Acceptance:
+  - A shelve does not file a draft spec. The shelve is already durable in `.aida/events.jsonl` and surfaced by `aida findings list` with more detail than the draft carries.
+  - If a spec is genuinely wanted for a shelve, it is filed ONCE per (spec, phase, cause) and updated on recurrence rather than duplicated — BUG-1449/BUG-1473 must collapse to one.
+  - If it is filed, it carries the failure detail and recovery hint that `findings list` already has, so it is not strictly less useful than the surface it duplicates.
+  - The 408 existing ones are dispositioned in bulk rather than one at a time: they are machine-filed, uniform, and none has a human-written description.
+  - Verification: drive a spec to a shelve and assert no new draft appears; check `aida list --status draft` count is unchanged.
+
+  Filed from the product seat after a backlog audit in service of the standing "complete all open items" goal — this is the largest single distortion in that count.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T00:30:00.794024258Z
+modified_at: 2026-09-21T00:30:00.794024258Z
+req_type: Bug
+tags:
+- agent-surface
+- drain-safe
+- papercut
+- substrate-noise
