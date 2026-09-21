@@ -126,9 +126,10 @@ contains `GitLabClient` for the GitLab Issues integration.
 mirror, opens an MR through `Forge::open_change`, waits for a real pipeline,
 reads its review verdict, and merges it through `Forge::merge_change`. The job
 deletes the project even after a test panic. It reports a skipped probe (rather
-than a red build) when the mirror is unreachable or the
-`AIDA_GITLAB_TOKEN` repository secret has not been provisioned; all failures
-after a successful preflight are hard failures with the failing phase named.
+than a red build) when the mirror is unreachable. A missing
+`AIDA_GITLAB_TOKEN` repository secret is a hard configuration failure, as are
+all lifecycle failures after a successful preflight; each fails with the
+affected phase named.
 Ordinary PR CI remains hermetic and continues to test provider parsers with
 mocked output. <!-- trace:TASK-1273 | ai:codex -->
 
