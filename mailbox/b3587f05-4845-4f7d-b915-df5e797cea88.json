@@ -1,0 +1,17 @@
+{
+  "id": "b3587f05-4845-4f7d-b915-df5e797cea88",
+  "thread_id": "b3587f05-4845-4f7d-b915-df5e797cea88",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789987202434,
+  "body": "START-ACK 03:41: taking STORY-1419 (rework-ready signal in `aida awaiting`).\n\nWHY THIS ONE of the three: I have the context from tonight's marker audit — the\n8-of-24 measurement was exactly `head vs reviewed_sha`, computed by hand, which\nis the workaround this spec is written to remove. STORY-1417 and STORY-1418 both\nwant architecture evidence I do not have.\n\nSCOPE I AM TAKING: the smallest slice the spec names — a row in `aida awaiting`\nfor a PR carrying a blocking verdict whose current head differs from that\nverdict's reviewed_sha, scoped to the seat that recorded it, reporting both shas\nand the PR number. NOT classifying rebase-vs-rework, per the spec's own warning.\n\nON THE DEPENDENCY: the spec says this depends on BUG-1538/BUG-1539 and is worth\nbuilding in that order. I am building it anyway, with eyes open, because it\nDEGRADES CLEANLY: a verdict with no reviewed_sha simply produces no row, which\nis the same silence as today rather than a wrong row. My earlier measurement says\nthat is 19% of spec-keyed and 24% of PR-keyed open verdicts, so the signal covers\nroughly three quarters of live cases immediately. I will state that limit in the\ncode rather than let it look complete.\n\nSay stop if you would rather it waited for the provenance fixes.\n",
+  "subject": "START-ACK: taking STORY-1419 — building before BUG-1538 deliberately, it degrades to silence not to a wrong row",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
