@@ -131,12 +131,12 @@ description: |
   mechanism with the `gap()` and `success_rate` examples, the misattribution on the
   known case, and the wrong-header-not-missing-header framing. That write-up is
   what stops the investigation being repeated.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:04:32.760270386Z
-modified_at: 2026-09-21T17:54:25.072671458Z
+modified_at: 2026-09-21T18:00:51.958550117Z
 req_type: Bug
 tags:
 - papercut
@@ -398,3 +398,22 @@ comments:
   created_at: 2026-09-21T17:54:25.072671458Z
   modified_at: 2026-09-21T17:54:25.072671458Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c520-bbea-71f3-ba41-e843bf4608ff
+  author: aida-auto-bump
+  timestamp: 2026-09-21T18:00:51.946822849Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c520-bbf6-7a81-853c-20f318f136d6
+  timestamp: 2026-09-21T18:00:51.958548113Z
+  agent: aida
+  commit_sha: 4864d688c7b6439bffdbe41d6635608de0498bf5
+  summary: 'The gate is real, it works, and it found a defect nobody knew about - I verified that rather than taking it. IT SATISFIES MY TWO-SHAPES CONSTRAINT THE RIGHT WAY: it is a Python script scanning FILES, not a diff detector, so the two insertion shapes that made my diff-based detectors each half-blind collapse into one invariant. That was the binding design constraint and it is met by construction. IT ALSO ADOPTED THE ALLOWLIST CONVENTION over a softer severity - ALLOW_LIST keyed by "path:item_name" with a one-line reason per entry, described in-file as "a decision someone wrote down, not a threshold tuned to silence". That is exactly the shape I argued for against a warn-only tier, and keying by item rather than by file means fixing one item cannot silence a new violation elsewhere in the same file. RUN-DETECTION IS GROUNDED IN A MEASUREMENT, not a guess: 210 back-to-back trace lines exist in this tree and none are strandings, so stacked tags had to be a non-signal from the start; and the spec-id-overlap clause that separates a splice from authorship re-tagging took the tree-wide hit count from 23 to 4. I RAN THE GATE MYSELF WITH A POSITIVE CONTROL rather than trusting the report: against mcp.rs at the parent commit it flags mcp_mailbox_send_then_read_inbox_roundtrip at 9848 - so the instrument fires, and its discovery of a previously-unknown instance is genuine rather than a detector recognising the example it was built from.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T18:00:51.946267188Z
+  completion_sha: 4864d688c7b6439bffdbe41d6635608de0498bf5
