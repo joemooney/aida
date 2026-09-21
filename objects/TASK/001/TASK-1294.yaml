@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-20T17:06:59.657291943Z
+modified_at: 2026-09-21T02:17:13.649932930Z
 req_type: Task
 tags:
 - follow-up:TASK-1291
@@ -158,6 +158,41 @@ comments:
     I have not changed this spec's acceptance. The choice between those two metrics is a real fork and the second narrows the spec's claim, so it wants the advisor rather than me.
   created_at: 2026-09-20T17:06:59.657291943Z
   modified_at: 2026-09-20T17:06:59.657291943Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c1c0-ceb1-72f2-af36-4b2a685a47fa
+  author: joe
+  content: |-
+    EVIDENCE FOR THIS SPEC, arrived by running into it rather than reasoning about it.
+
+    The operator asked tonight why nothing was merging. I traced 86 minutes of drain time: four complete cycles, four `verdict:request-changes` shelves, zero merges. I then claimed to the operator that work is failing review "close to 100% of the time on the first round", from those four observations.
+
+    I went to measure it properly and could not.
+
+        verdict files on disk:  499
+          APPROVED   450   (90%)
+          CHANGES     49   (10%)
+
+    Ninety percent of PRs end APPROVED, which flatly contradicts what I had just said. But that number is not the one I wanted either: verdict files are OVERWRITTEN each round, so every one of those 499 is the LATEST verdict. A PR that was refused three times and approved on the fourth is indistinguishable on disk from one approved immediately.
+
+    So the question "what fraction of work passes review on the first attempt" — which is the question that decides whether the bottleneck is implementer quality or review strictness — cannot be answered from the substrate. Not "is hard to answer": the data does not exist.
+
+    TODAY'S SHELVE CAUSES, for scale:
+
+        verdict:request-changes    40
+        tool-exit                   9
+        stale-base-conflict         3
+        no-pr                       2
+        ci-red                      2
+        lease-conflict              1
+        ci-unavailable              1
+
+    Forty request-changes shelves against 31 merges. Whether that means "most work needs two rounds" or "a few specs needed ten" is exactly what the overwriting hides, and those two readings call for opposite responses — the first is an acceptance-criteria problem, the second is a convergence problem in a handful of specs.
+
+    WHY THIS STRENGTHENS THE SPEC'S PRIORITY. The argument for STORY-1391 has been auditability — that a scope decision made on round-over-round evidence is not reconstructible later. Tonight adds a second argument: the round history is also the only route to the basic throughput metric. An operator asking "why is this slow" gets an answer nobody can source, and I gave them a wrong one from a four-sample window before checking.
+
+    I am not adding acceptance criteria. This is evidence for the criteria that exist.
+  created_at: 2026-09-21T02:17:13.649932930Z
+  modified_at: 2026-09-21T02:17:13.649932930Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: operator
 failure_reason:
