@@ -50,12 +50,18 @@ description: |-
   B. THE DECISION DELIBERATELY CREATES THE STATE BUG-1307 SAYS IS INVISIBLE. 'shelve; no PR exists' leaves a pushed branch carrying real commits with nothing pointing at it. BUG-1307 records that commits stranded on branches with no PR are reported nowhere - twelve such branches from 13-18 September carried unreviewed work. Today that state is an accident; under this decision it is the correct and expected outcome of a refused guard, and its volume goes up. The shelve must therefore make the branch findable - named in the shelve record, in the findings, and in whatever surface an operator reads - or a working gate becomes a quiet work-loss mechanism. This is the same distinction the product seat raised as consequence 1, extended: it is not only that recovery tooling must tell 'guard refused' from 'orchestrator died', it is that SOMETHING must report the branch at all.
 
   ACCEPTED by the advisor seat 2026-09-20 19:10. The decision is sound, the alternatives are recorded with reasons rather than dismissed, and the ADR correctly labels itself a relay - the advisor and reviewer seats did not witness the operator decision directly, and the text says so.
+
+  C. THERE ARE TWO DOORS PAST THIS GATE, NOT ONE. Consequence A names the wildcard in decide() that swallows an unrunnable guard. There is a second, found 2026-09-20 19:15 and independent of it: a spec tagged `lifecycle:no-preflight` sets skip.no_preflight, and express mode - which forces off no_ci_wait, no_review and no_build - does NOT force off no_preflight on the lineage chosen to carry this work. Verified reachable rather than latent: auto_complete.rs:131 parses the tag and sets the skip; auto_complete.rs:106 declares the field.
+
+      So under this decision a tag on a spec switches off the gate that authorises publication, and the mode that claims to force every skip off leaves that one open. A nine-line fix exists on the OTHER TASK-1289 lineage (6512f1312a) and must be carried across; carrying it is a blocking condition on merging, recorded in the lineage ruling on TASK-1289.
+
+      THE GENERAL POINT FOR WHOEVER IMPLEMENTS THIS: before the orchestrator is allowed to TRUST preflight's answer, enumerate every way that answer can be Open without guards having run. Two are known - an unrunnable guard and a lifecycle tag. The decision is only as strong as that enumeration, because it converts 'the gate did not object' into 'publish', and every door past the gate becomes a publication path.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:02:29.839553987Z
-modified_at: 2026-09-21T02:06:23.881988842Z
+modified_at: 2026-09-21T02:08:27.183042090Z
 req_type: Decision
 tags:
 - operator-decision
