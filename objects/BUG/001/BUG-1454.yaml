@@ -2,7 +2,7 @@ id: 01a0bfa0-5a97-7cb3-8382-f90973400e83
 spec_id: BUG-1454
 agreed_id: BUG-1454
 title: The Done to Completed auto-bump fires on the first trailered commit, so a multi-deliverable spec is marked Completed with unmerged work in an open PR that no open-work surface will ever show again
-description: |
+description: |-
   The Done→Completed auto-bump fires on the first trailered commit to reach main, so a spec with more than one deliverable is marked Completed while its remaining work sits in an open PR — and a Completed spec is excluded from every open-work lens, so that remainder becomes permanently invisible.
 
   OBSERVED on two specs simultaneously, 2026-09-20.
@@ -34,12 +34,15 @@ description: |
   NOT IN SCOPE: changing the trailer convention itself, or the auto-bump for the ordinary single-deliverable case, which works and is relied on.
 
   Found while checking why two held PRs showed Completed specs. Both are advisor-authored documentation PRs held for an independent second reader, which is why neither had an implementer watching it to notice.
+
+
+  7. SCOPE FIXED 2026-09-20 18:35, so this spec can merge without burying a deliverable. An advisor COMMENT on this spec added two further criteria - that a pre-Done spec whose work is already on main must not be left pre-Done, and that criterion 5's sweep run in both directions. They were never in this ACCEPTANCE block. A drain implements the acceptance block, so they were invisible at the rung the implementer reads, and PR #2040 correctly implemented the six visible criteria and none of those two. They are NOT part of this spec and must not block it: they are now BUG-1506, filed, approved and queued. Criterion 5 here delivers ONE direction only - Completed specs with an open PR referencing them - and BUG-1506 delivers the other. This note exists because merging this PR auto-completes this spec, Completed is terminal and drops out of every open-work lens, and a remaining deliverable recorded only in a comment on a Completed spec is the most reliable way to lose it - which is the harm this very spec argues at length.
 status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:22:32.343565248Z
-modified_at: 2026-09-21T01:26:19.980425784Z
+modified_at: 2026-09-21T01:33:45.525241535Z
 req_type: Bug
 tags:
 - auto-bump
