@@ -1,0 +1,43 @@
+id: 01a0c4b7-b38c-7301-89cd-9b7a04a1e703
+spec_id: STORY-1423
+agreed_id: STORY-1423
+title: Enable the performance guard in this repo and close STORY-1422's three post-fix criteria - the zero half, the re-measurement, and the trigger that does not exist here
+description: |
+  STORY-1422 SHIPPED THE PERFORMANCE-GATE MECHANISM. THIS SPEC CARRIES THE THREE CRITERIA THAT CANNOT BE SATISFIED UNTIL BUG-1480'S FIX IS IN THE RUNNING BINARY, AND IT EXISTS SO THAT MERGING THE MECHANISM DOES NOT FALSELY CLOSE THEM.
+
+  WHY IT IS A SEPARATE SPEC AND NOT A NOTE ON STORY-1422. STORY-1422's PR carries the `(STORY-1422)` trailer, so the merge auto-bumps it Done -> Completed. `auto_bump_done_to_completed` reads neither the graph nor the description - verified over the whole function, zero occurrences of blocked/blocker/pickability - so it would flip STORY-1422 to Completed with three criteria open and nothing refusing. That is BUG-1551's defect applied to the spec that was written to prevent this class of thing. The honest fix is to put the remaining work where a merge cannot close it, and to repoint BUG-1480's closure criterion here.
+
+  The boundary is natural rather than convenient: everything in STORY-1422 is buildable with the regression LIVE; everything here requires the FIXED binary. That is a real before/after line, not a scope trim.
+
+  THE THREE CRITERIA, carried over verbatim in substance:
+
+  1. CRITERION 2, ZERO HALF. The gate must be shown to exit 0 against the post-fix population. The non-zero half is closed and reproducible on current main - `doctor check performance --fail-on-findings` exits 1 at 20.2% of 5656 calls in 24h against a 1000ms budget, with exit 0 without the flag, exit 0 at a loose budget, and exit 1 on a typo'd budget key. Four directions, demonstrated. The zero half needs the fixed tree and cannot exist before #2033 merges.
+
+  2. CRITERION 7, POST-FIX RE-MEASUREMENT. The 10% tolerance over a 24h window is PROVISIONAL and was ruled against a measured pre-fix population. It must be re-measured after the fix. THE NUMBER CHANGES ONLY ALONGSIDE A MEASUREMENT - NEVER TUNED UNTIL GREEN. The estimated post-fix residual is 7.1% (the 1s-4s band, 339 calls against ~4777), which is why 5% was rejected: A 5% GATE WOULD STILL TRIP AFTER THE FIX. That estimate is itself unverified and re-measuring is how it stops being an estimate. The rejected 5% is pinned in a test asserting it would have tripped post-fix, so re-tightening is a deliberate act with the consequence in front of whoever does it.
+
+  3. THE NO-TRIGGER-IN-THIS-REPOSITORY CRITERION. Both `[[schedule.jobs]]` entries land in the init scaffold COMMENTED OUT - correct, matching the session-reap convention - and `aida schedule list` in this repo reports "No scheduled jobs configured". So nothing anywhere invokes the gate. A capability with no trigger is what BUG-1480 was carved out to STORY-1422 to fix; a commented example in a template is a trigger for nobody. THIS REPO must register and enable both jobs in `.aida/config.toml` - it is the population the budget was measured against and the dogfood surface for the mechanism.
+
+  THE ENABLEMENT IS ONE ORDERED ACT, NOT THREE SEPARATE ONES, and the order is load-bearing:
+      (a) with the fix NOT yet in the running binary, enable both jobs and record the TRIP:
+          proportion, denominator, exit code;
+      (b) move to the fixed binary and record the same three against the post-fix population;
+      (c) THE PAIR IS THE EVIDENCE, not the second reading alone.
+  "IT WENT QUIET" IS COMPATIBLE WITH THE JOB NEVER HAVING RUN. Once the fix lands, a silent gate and a gate that never executed are indistinguishable from outside, and after that moment the only surviving witness that this gate COULD ever fire is a number recorded while it still could. Raised by claude-reviewer-1; it closes a hole the advisor's first version of this criterion left open.
+
+    The implementer already holds (a)'s numbers from the 2026-09-21 demonstration - 20.2% of 5656, exit 1. THEY ARE NOT TO BE RECORDED AS (a) RETROSPECTIVELY: the pair must be captured across the same enablement act, or it is two unrelated readings taken on different days under different configurations.
+
+    The sequencing is deliberate, not caution: enabling a 6h gating job while the regression is live means it trips on every tick, and a permanently-red guard nobody can silence is how a guard becomes a comment.
+
+  Acceptance: the three criteria above, plus -
+  - `aida schedule list` in this repo shows BOTH jobs enabled.
+  - The guard is observed QUIET against the post-fix population, with the pre-fix trip recorded from the same enablement act.
+  - BUG-1480 does not close until this spec does. Its in-spec closure criterion is repointed from STORY-1422 to this spec in the same change that files it, because STORY-1422 will auto-complete on merge and would otherwise satisfy that gate falsely.
+
+  Related: STORY-1422 (the mechanism, shipped), BUG-1480 (the regression this gate watches), BUG-1551 (the general form of a merge closing a spec past its own criteria), BUG-1557 (the scaffold/allowlist parity gap found by demonstrating STORY-1422's criterion 4).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T16:06:08.524538425Z
+modified_at: 2026-09-21T16:06:08.524538425Z
+req_type: Story
