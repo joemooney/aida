@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:29:09.929894136Z
-modified_at: 2026-09-21T22:00:04.975399821Z
+modified_at: 2026-09-21T22:49:18.924726649Z
 req_type: Bug
 tags:
 - awaiting
@@ -162,4 +162,36 @@ comments:
     NOTE HOW THIS COMPOUNDS WITH THE EXIT-AT-DEADLINE DEFECT ALREADY ON THIS SPEC. Work completes at ~0.437s and the process still sits until ~1.016s. A rebuild landing anywhere in that window has almost no margin to survive in, because most of the budget was already spent on a timer with nothing to measure.
   created_at: 2026-09-21T22:00:04.975399821Z
   modified_at: 2026-09-21T22:00:04.975399821Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c628-d14c-7372-a16a-3d7d153f4d61
+  author: joe
+  content: |-
+    [aida:advisor] THE DROP IS NOW TOTAL UNDER LOAD, NOT INTERMITTENT — 9 CONSECUTIVE SILENT RUNS WITH WORK GENUINELY AWAITING, AND I CAUGHT IT BY CHECKING RATHER THAN BY LUCK.
+
+    Measured 2026-09-21 15:48 MST, binary c9da874c06+dirty, with three implementer lanes and their cargo builds live (18 matching processes).
+
+        3 runs   notice line ABSENT (grep count 0, 0, 0)
+        6 runs   notice line ABSENT, totals 1.257 / 1.032 / 1.053 / 1.183 / 1.041 / 1.024 s, exit 0 every time
+        ------------------------------------------------------------------------
+        9 OF 9 SILENT.
+
+    GROUND TRUTH AT THE SAME MOMENT: `aida findings list` reports "Findings awaiting triage (3)". The notice should have said "3 in rework" — it said nothing, nine times, successfully.
+
+    THIS IS THE THIRD READING AND THE THREE TOGETHER ARE THE FINDING:
+
+        14:29   8 printed / 2 dropped  of 10   notice at ~0.437s when it printed
+        14:58   20 printed / 0 dropped of 20   quiet machine
+        15:48   0 printed / 9 dropped  of 9    three lanes + cargo builds live
+
+    SO IT IS NOT A 20% RATE, NOR A 7% RATE, NOR A FLAKE. IT IS LOAD-DETERMINED. On a quiet machine it never drops; under the load this repo generates as a matter of routine, IT NEVER SUCCEEDS. I was wrong twice about this — first quoting a burst as a rate, then correcting to 6.7% as though the population were homogeneous. IT IS TWO POPULATIONS AND THE VARIABLE IS LOAD, which is exactly what the flat sub-second timings on a quiet machine and the 1.02-1.26s timings here show.
+
+    WHY THIS IS WORSE THAN THE EARLIER READING SUGGESTED. The per-turn notice is how every seat learns what awaits it. UNDER LOAD IT REPORTS "NOTHING" TO EVERY SEAT, EVERY TURN, WITH EXIT 0 — and load is precisely the condition under which most is happening. THE SURFACE FAILS SILENTLY EXACTLY WHEN IT MATTERS MOST, and the failure is indistinguishable from an empty board.
+
+    I CAUGHT IT THIS TIME BECAUSE I CHECKED, NOT BECAUSE I NOTICED. The notice printed no line; I had written on this spec that an absent line reads as "nothing awaits"; so I ran `aida findings list` against it rather than accepting the silence. WITHOUT THAT HABIT THE READING IS INVISIBLE BY CONSTRUCTION — there is nothing to notice. That is the property that makes this defect self-concealing and it is why a drop rate was never the right thing to measure.
+
+    AND IT REFRAMES BUG-1567. That spec's test fails on a loaded runner against a wall-clock assertion. THE SAME VARIABLE IS DRIVING BOTH: under load the notice path exceeds its bound. The test is not flaky-on-CI while the product is fine — the test is REPORTING THE PRODUCT DEFECT, on the only machine that runs loaded enough to show it consistently. A green local run on a quiet workstation was never evidence about the loaded case.
+
+    NOTHING CHANGES ABOUT THE REMEDY AND EVERYTHING CHANGES ABOUT THE PRIORITY. Exit-when-done still halves the baseline; cache-backing the lookup still removes the cost. But "an advisory notice occasionally drops" and "the notice is dead whenever the machine is busy" are different specs, and this is the second.
+  created_at: 2026-09-21T22:49:18.924726649Z
+  modified_at: 2026-09-21T22:49:18.924726649Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
