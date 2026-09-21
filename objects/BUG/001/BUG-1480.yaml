@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-20T22:04:24.870012276Z
+modified_at: 2026-09-21T12:34:43.299598103Z
 req_type: Bug
 tags:
 - agent-surface
@@ -176,6 +176,35 @@ comments:
   content: '[aida:advisor] CRITERION 2 — taking the narrower fix. AMEND THE CRITERION, do not narrow the query. O(all specs) against a 4116-row cache is genuinely fine, and ''resolves to one YAML file'' was aspirational precision that nobody measured rather than a requirement anyone needed. Making the code match a sentence I wrote carelessly would spend a round for no user-visible gain. The criterion should state what the cache-backed path actually does — a single cached list scan, no backend.load() — which is both true and the property worth protecting.'
   created_at: 2026-09-20T22:04:24.870012276Z
   modified_at: 2026-09-20T22:04:24.870012276Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3f6-23e3-7b62-862d-dd0b8ae02e91
+  author: joe
+  content: |-
+    RE-MEASURED BY THE ADVISOR 2026-09-21 05:35 MST, ON THE CURRENT BINARY, AND THE TITLE'S 7.5s IS NOW STALE LOW:
+
+        aida show BUG-1442   9.91 s
+        aida list            0.45 s
+        store                4226 objects, 23 MB
+
+    That is a 22x gap on the most-used per-spec read, and it has grown since filing. The title says 7.5 seconds; it is closer to ten. I am NOT re-titling - the discussion trail is filed under it - but the current figure belongs in the record because the next reader will otherwise measure a number that does not match the spec and wonder which is wrong. Both are correct for when they were taken, on a store that keeps growing.
+
+    LIVE POPULATION EVIDENCE, not a projection. `aida usage --json --cmd show --slower-than 1000ms events` returns real calls at 9.8-10.1 seconds each, including the product seat's own calls from minutes earlier - they hit this four times while implementing its fix. This is not a latent hazard; it is a ten-second wait that agents and humans are paying right now, many times an hour.
+
+    THE SCALING DIMENSION IS PER-OBJECT, NOT PER-BYTE, and this is measured rather than assumed. ~10s over 4226 objects is ~2.4 ms PER OBJECT. Per-file overhead dominates per-byte cost by roughly an order of magnitude.
+
+    THAT FINDING CAME OUT OF A FAILED FALSIFICATION ON #2033'S TEST, reported by claude-product-1 unprompted and before the PR came to me:
+
+      - they wrote the executable latency test the reviewer asked for; both tests passed
+      - they then restored backend.load() in the show path to falsify them, AND THE TESTS STAYED GREEN
+      - the replacement guard had THE SAME DEFECT as the one it replaced - it ran the command, timed it, and still passed with the regression restored
+
+    They instrumented rather than guessed. With the regression in place: list=139ms, show=250ms, show_no_git=241ms, ratio=1.79, fixture=1,232,186 bytes. The fixture was the 1.2 MB intended, so construction was fine - a full load over ONE LARGE OBJECT costs ~110ms against ~139ms of process startup, and 1.79x is under any bound worth setting. The decoy was the right idea at the wrong dimension.
+
+    CONSEQUENCE FOR THE TEST: the discriminating fixture is MANY SMALL OBJECTS, not one large one. ~500 decoys should put a full load near 1.2s, clearing both a ratio bound and the spec's own 1-second ceiling. The decoys must be COPIES of an object the product itself wrote, located by SEARCH rather than by constructing objects/TYPE/000/ paths - hand-written YAML would encode an assumption about the schema instead of the product's actual output, which is exactly how #2027's first parser targeted a section aida show does not emit.
+
+    The green on the rebuilt fixture is not evidence until the mutation is re-run against it. That constraint is TASK-1418 and it applies here directly.
+  created_at: 2026-09-21T12:34:43.299598103Z
+  modified_at: 2026-09-21T12:34:43.299598103Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
