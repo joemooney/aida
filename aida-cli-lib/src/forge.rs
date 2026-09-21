@@ -3798,10 +3798,17 @@ mod tests {
             String::from_utf8_lossy(&deleted.stderr)
         );
         let absent = glab_api(&["api", &format!("projects/{pid}")]);
-        assert_eq!(
-            absent.status.code(),
-            Some(1),
-            "phase=project-cleanup: deleted project remains readable"
+        let cleanup_state = serde_json::from_slice::<serde_json::Value>(&absent.stdout).ok();
+        let deletion_scheduled = cleanup_state.as_ref().is_some_and(|project| {
+            project["marked_for_deletion_on"].is_string()
+                || project["name"]
+                    .as_str()
+                    .is_some_and(|name| name.contains("-deletion_scheduled-"))
+        });
+        assert!(
+            !absent.status.success() || deletion_scheduled,
+            "phase=project-cleanup: project is neither absent nor scheduled for deletion: {:?}",
+            String::from_utf8_lossy(&absent.stdout)
         );
         cleanup.armed = false;
     }
