@@ -90,7 +90,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:18:31.246345754Z
-modified_at: 2026-09-21T05:18:45.465797348Z
+modified_at: 2026-09-21T05:18:47.989210925Z
 req_type: Bug
 tags:
 - parent:EPIC-62 merge-hold pr-ship safety-gate severity:major
@@ -98,4 +98,8 @@ relationships:
 - rel_type: References
   target_id: 01a0c25c-2b28-7eb3-a52f-37f3aeb2ff46
   created_at: 2026-09-21T05:18:45.465791674Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0ba93-547f-7223-b2ba-6296e2f2cba4
+  created_at: 2026-09-21T05:18:47.989206034Z
   created_by: joe
