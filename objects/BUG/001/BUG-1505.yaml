@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:28:50.078974800Z
-modified_at: 2026-09-21T03:37:39.542927172Z
+modified_at: 2026-09-21T03:39:38.241023395Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity agent-surface from:session-0920
@@ -136,13 +136,14 @@ comments:
 - id: 01a0c20a-71d6-7d61-9085-c29865e7bfa0
   author: joe
   content: |-
+    Session: 01a0adee
     [aida:advisor] CRITERION 5's THREE-STATE CONCEPT ALREADY EXISTS IN CODE, AND THE CORPUS FIGURE THAT LOOKS ALARMING IS ALREADY HANDLED. Investigated 2026-09-20 20:40 after the reviewer seat handed over the unverifiable fields on PR-1986.
 
-    WHAT I FOUND FIRST, AND WHAT IT LOOKED LIKE. 401 of the verdict files carry an APPROVED verdict with NO sha under any key - not reviewed_sha, head, head_sha or sha. On its face that is 401 approvals that cannot be associated with any commit, which would be the largest exposure in this spec.
+    WHAT I FOUND FIRST, AND WHAT IT LOOKED LIKE. 402 of the verdict files carry an APPROVED verdict with no usable sha under any key - not reviewed_sha, head, head_sha or sha. On its face that is 401 approvals that cannot be associated with any commit, which would be the largest exposure in this spec.
 
     IT IS NOT AN EXPOSURE, because the gate already refuses them. queue_done_verdict_gate on main returns a Refuse for an approval with no reviewed_sha, naming UNVERIFIABLE and reviewed_sha in the refusal lines, and it is covered by gate_refuses_an_unverifiable_approval in aida-cli-lib/src/tests/review_verdict_tests.rs. That test is on ORIGIN/MAIN, not in PR #2045 - I checked both, and #2045's diff does not contain it.
 
-    So the 401 are a legacy corpus the current gate correctly declines to act on. The accurate statement is not "401 approvals could merge" but "401 historical approvals are unusable, and any consumer that does NOT route through queue_done_verdict_gate would act on them". That is a narrower and much less alarming claim, and it points the criterion at inventorying consumers rather than at the corpus.
+    So the 402 are a legacy corpus the current gate correctly declines to act on. The accurate statement is not "402 approvals could merge" but "402 historical approvals are unusable, and any consumer that does NOT route through queue_done_verdict_gate would act on them". That is a narrower and much less alarming claim, and it points the criterion at inventorying consumers rather than at the corpus.
 
     I am recording that I nearly wrote the alarming version. The measurement was correct and the inference from it was not, and the check that stopped it was grepping for a reader before asserting nobody reads.
 
@@ -151,6 +152,10 @@ comments:
     So it is a HAND ANNOTATION on one file, duplicating in JSON a concept the code already expresses as a gate refusal. That is useful to know in the opposite direction from how it was handed to me: criterion 5 should NOT adopt the field as prior art. It should note that the concept exists as behaviour in queue_done_verdict_gate, and that a seat felt the need to write it into the data because the behaviour is not visible from the record. Persisting the state is still worth doing - but as a decision to make the gate's conclusion durable, not as adoption of an existing convention, because there is no convention, there is one annotation.
 
     ALSO RELEVANT: lib.rs:76265 refuses at WRITE time - "no commit could be resolved for this review - pass --sha <commit>; an unstamped verdict is unverifiable". So the current write path already prevents new members of the 401. The population is closed, and its size is the migration's scope rather than an ongoing risk.
+
+    FIGURE CORRECTED 2026-09-20 20:42: 402, not 401. The difference is PR-1784.json, which carries a sha KEY that is present but EMPTY. The first count tested whether the key existed; the correct test is whether it holds a non-empty value, because an empty sha is no sha. Cause located rather than the number merely replaced - the query that produced the original tested key presence, and the fix is one predicate.
+
+    Related: the APPROVED total measures 491 here against 490 from the reviewer seat, almost certainly the same normalisation difference on the verdict string. Not chased; it does not bear on the 402 and both denominators exceed it comfortably.
   created_at: 2026-09-21T03:37:39.542927172Z
-  modified_at: 2026-09-21T03:37:39.542927172Z
+  modified_at: 2026-09-21T03:39:38.241023292Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
