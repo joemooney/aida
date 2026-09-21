@@ -3860,16 +3860,17 @@ pub(crate) fn handle_git_backend_command(
                         } else {
                             CardDensity::Balanced
                         };
-                        // Resolve each relationship target to (label,
-                        // display-id, title) so the card can name parents
-                        // and related specs, not just count edges.
-                        let mut rels: Vec<(String, String, String)> = Vec::new();
+                        // Resolve each relationship target into a `CardRel`
+                        // row so the card can name parents, related specs AND
+                        // custom edges, not just count them.
+                        // trace:BUG-1471 | ai:claude
+                        let mut rels: Vec<CardRel> = Vec::new();
                         for rel in &req.relationships {
-                            let label = card_rel_label(&rel.rel_type).to_string();
-                            match backend.get_requirement(&rel.target_id) {
-                                Ok(Some(t)) => rels.push((label, t.display_id(), t.title.clone())),
-                                _ => rels.push((label, "(unknown)".to_string(), String::new())),
-                            }
+                            let (rid, rtitle) = match backend.get_requirement(&rel.target_id) {
+                                Ok(Some(t)) => (t.display_id(), t.title.clone()),
+                                _ => ("(unknown)".to_string(), String::new()),
+                            };
+                            rels.push(CardRel::new(&rel.rel_type, rid, rtitle));
                         }
                         render_spec_card(&req, &rels, store_path, density, *no_git, *verbose);
                         let mut next = Vec::new();

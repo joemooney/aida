@@ -2329,6 +2329,111 @@ fn card_rel_label_buckets_relationships() {
     );
 }
 
+/// BUG-1471: a `Custom` edge must be RENDERED by the card — under its own
+/// heading, carrying its own name. Relabelling Custom edges without adding
+/// the matching bucket left `render_spec_card` filtering on two exact labels,
+/// so every stored Custom edge (≈ 1480 store-wide, including BUG-1471's own
+/// `implemented-by STORY-1435`) rendered nowhere at all. A wrong label was
+/// traded for no label — this spec's own defect class, reintroduced by its
+/// fix.
+// trace:BUG-1471 | ai:claude
+#[test]
+fn card_renders_custom_edges_under_their_own_bucket() {
+    let rels = vec![
+        CardRel::new(
+            &RelationshipType::Child,
+            "EPIC-9".into(),
+            "Parent epic".into(),
+        ),
+        CardRel::new(
+            &RelationshipType::References,
+            "TASK-887".into(),
+            "A reference".into(),
+        ),
+        CardRel::new(
+            &RelationshipType::Custom("implemented-by".into()),
+            "STORY-1435".into(),
+            "Review PR-2065".into(),
+        ),
+    ];
+    let sections = card_rel_sections(&rels);
+
+    let custom = sections
+        .iter()
+        .find(|(heading, _)| *heading == "Custom")
+        .map(|(_, joined)| joined.as_str())
+        .unwrap_or_else(|| panic!("the Custom edge rendered nowhere; sections were {sections:?}"));
+    assert!(
+        custom.contains("STORY-1435"),
+        "the custom edge's target must be visible on the card: {custom}"
+    );
+    assert!(
+        custom.contains("implemented-by"),
+        "the custom edge's own name must be visible on the card: {custom}"
+    );
+
+    // …and it must NOT be folded into a heading that reads like a standard
+    // relationship type — that mislabelling is where this bug came from.
+    let related = sections
+        .iter()
+        .find(|(heading, _)| *heading == "Related")
+        .map(|(_, joined)| joined.as_str())
+        .unwrap_or("");
+    assert!(
+        !related.contains("STORY-1435"),
+        "a Custom edge must not render under the Related heading: {related}"
+    );
+}
+
+/// BUG-1471: the card's completeness invariant — every relationship renders
+/// in exactly one bucket, for every `RelationshipType` variant. This is the
+/// guard that would have caught the regression: it fails the moment
+/// `card_rel_label` can return a label `CARD_REL_BUCKETS` does not list.
+///
+/// Titles are left empty so each rendered entry is a bare id and the
+/// comma-joined entries can simply be counted.
+// trace:BUG-1471 | ai:claude
+#[test]
+fn card_rel_sections_render_every_edge_exactly_once() {
+    let types = [
+        RelationshipType::Parent,
+        RelationshipType::Child,
+        RelationshipType::Duplicate,
+        RelationshipType::Verifies,
+        RelationshipType::VerifiedBy,
+        RelationshipType::References,
+        RelationshipType::BlockedBy,
+        RelationshipType::Blocks,
+        RelationshipType::SupersededBy,
+        RelationshipType::Supersedes,
+        RelationshipType::Custom("implements".into()),
+        RelationshipType::Custom("related".into()),
+    ];
+    let rels: Vec<CardRel> = types
+        .iter()
+        .enumerate()
+        .map(|(i, rt)| CardRel::new(rt, format!("SPEC-{i:02}"), String::new()))
+        .collect();
+
+    let sections = card_rel_sections(&rels);
+    let rendered: usize = sections
+        .iter()
+        .map(|(_, joined)| joined.split(", ").count())
+        .sum();
+    assert_eq!(
+        rendered,
+        rels.len(),
+        "every relationship must render in exactly one bucket; sections were {sections:?}"
+    );
+    for i in 0..types.len() {
+        let id = format!("SPEC-{i:02}");
+        assert!(
+            sections.iter().any(|(_, joined)| joined.contains(&id)),
+            "{id} rendered nowhere; sections were {sections:?}"
+        );
+    }
+}
+
 /// BUG-1442: the TOON relationship column uses canonical stored type labels,
 /// including custom names; it must not reuse the lossy card buckets.
 // trace:BUG-1442 | ai:codex

@@ -72609,20 +72609,116 @@ enum CardDensity {
     Full,
 }
 
+/// The headings the spec card renders relationships under, in render order.
+///
+/// This list is the card's completeness contract: every label
+/// [`card_rel_label`] can return MUST appear here. A label with no matching
+/// heading does not render under a rough heading — it does not render at all.
+/// That is how relabelling `Custom` edges without adding this third bucket
+/// made every stored `Custom` edge (≈ 1480 of them store-wide, including this
+/// spec's own `implemented-by`) vanish from the card: a wrong label traded for
+/// no label, which is BUG-1471's own defect class.
+// trace:BUG-1471 | ai:claude
+const CARD_REL_BUCKETS: &[&str] = &["Parent", "Related", "Custom"];
+
 /// Map a relationship type to the field label the spec card buckets it
 /// under. AIDA's `RelationshipType` reads as "I am X to the target", so a
-/// `Child` edge means the target is this spec's parent. trace:TASK-265 | ai:claude
+/// `Child` edge means the target is this spec's parent.
+///
+/// Every value returned here must be listed in [`CARD_REL_BUCKETS`].
+// trace:TASK-265 | ai:claude
 fn card_rel_label(rt: &RelationshipType) -> &'static str {
     match rt {
         // This spec is a child of the target → target is the parent.
         RelationshipType::Child => "Parent",
         // Custom edges must not be presented with a label that looks like a
         // standard type: that taught users to type `--type related`, creating
-        // graph-inert edges. trace:BUG-1471 | ai:codex
+        // graph-inert edges. They get their own bucket instead, with the
+        // edge's real name shown inline by `CardRel::render`.
+        // trace:BUG-1471 | ai:codex
         RelationshipType::Custom(_) => "Custom",
         // Standard non-parent edges share the general Related bucket.
         _ => "Related",
     }
+}
+
+/// The edge's own name, when the bucket heading does not already carry it.
+///
+/// A `Custom` edge's name is the only place its meaning lives (`implements`,
+/// `implemented-by`, `sprint_contains`, …), so the card prints that name
+/// beside the target under the neutral `Custom` heading — neither hiding it
+/// nor dressing it up as a standard type.
+// trace:BUG-1471 | ai:claude
+fn card_rel_edge_name(rt: &RelationshipType) -> Option<String> {
+    match rt {
+        RelationshipType::Custom(name) => Some(name.clone()),
+        _ => None,
+    }
+}
+
+/// One relationship as the spec card renders it: the heading it falls under,
+/// the edge's own name when that heading does not carry it, and the resolved
+/// target.
+// trace:BUG-1471 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CardRel {
+    bucket: &'static str,
+    edge: Option<String>,
+    id: String,
+    title: String,
+}
+
+impl CardRel {
+    /// Build a card row from a relationship type and its already-resolved
+    /// target id/title.
+    // trace:BUG-1471 | ai:claude
+    fn new(rt: &RelationshipType, id: String, title: String) -> Self {
+        CardRel {
+            bucket: card_rel_label(rt),
+            edge: card_rel_edge_name(rt),
+            id,
+            title,
+        }
+    }
+
+    /// One rendered entry: `[edge-name] ID — title`, with the bracketed name
+    /// present only for an edge whose heading does not name it.
+    // trace:BUG-1471 | ai:claude
+    fn render(&self) -> String {
+        let target = if self.title.is_empty() {
+            self.id.clone()
+        } else {
+            format!("{} — {}", self.id, self.title)
+        };
+        match &self.edge {
+            Some(name) => format!("[{name}] {target}"),
+            None => target,
+        }
+    }
+}
+
+/// Group a card's relationships into the headed sections it prints, in
+/// [`CARD_REL_BUCKETS`] order, skipping empty ones.
+///
+/// Rendering through this one function is what keeps the card total. The
+/// previous shape hand-rolled one filter per heading at the call site, so
+/// adding a label without adding its heading dropped those edges on the floor
+/// with nothing to notice it.
+// trace:BUG-1471 | ai:claude
+fn card_rel_sections(rels: &[CardRel]) -> Vec<(&'static str, String)> {
+    let mut sections = Vec::new();
+    for bucket in CARD_REL_BUCKETS {
+        let joined = rels
+            .iter()
+            .filter(|r| r.bucket == *bucket)
+            .map(CardRel::render)
+            .collect::<Vec<_>>()
+            .join(", ");
+        if !joined.is_empty() {
+            sections.push((*bucket, joined));
+        }
+    }
+    sections
 }
 
 /// The lead prose of a requirement description — everything before the
@@ -72751,10 +72847,11 @@ fn render_card_intent(req: &aida_core::Requirement, store_path: &std::path::Path
 /// view remains the canonical detail surface.
 ///
 /// `rels` is the requirement's relationships already resolved by the
-/// caller to (label, display-id, title) triples. trace:TASK-265 | ai:claude
+/// caller to [`CardRel`] rows.
+// trace:TASK-265 | ai:claude
 fn render_spec_card(
     req: &aida_core::Requirement,
-    rels: &[(String, String, String)],
+    rels: &[CardRel],
     store_path: &std::path::Path,
     density: CardDensity,
     no_git: bool,
@@ -72838,34 +72935,15 @@ fn render_spec_card(
         );
         printed_field = true;
     }
-    let join_rels = |bucket: &str| -> String {
-        rels.iter()
-            .filter(|(l, _, _)| l == bucket)
-            .map(|(_, rid, rtitle)| {
-                if rtitle.is_empty() {
-                    rid.clone()
-                } else {
-                    format!("{} — {}", rid, rtitle)
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-    let parent = join_rels("Parent");
-    if !parent.is_empty() {
+    // BUG-1471: render EVERY heading the card defines, from one place. A
+    // reader treats this block as the spec's relationship list, so an edge
+    // that lands in no bucket is worse than one under a rough heading — it
+    // is silently absent. trace:BUG-1471 | ai:claude
+    for (heading, joined) in card_rel_sections(rels) {
         println!(
             "  {} {}",
-            format!("{} Parent:", crate::glyph(crate::glyphs::Glyph::Arrow)).bold(),
-            parent
-        );
-        printed_field = true;
-    }
-    let related = join_rels("Related");
-    if !related.is_empty() {
-        println!(
-            "  {} {}",
-            format!("{} Related:", crate::glyph(crate::glyphs::Glyph::Arrow)).bold(),
-            related
+            format!("{} {}:", crate::glyph(crate::glyphs::Glyph::Arrow), heading).bold(),
+            joined
         );
         printed_field = true;
     }
