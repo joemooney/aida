@@ -168,24 +168,38 @@ pub(crate) fn handle_mailbox_command(
             // `--in-reply-to <id>` resolves to that target's thread so the
             // exchange chains under one `aida mailbox thread <id>`; else the
             // message starts its own thread (id == thread_id). A dangling
-            // `--in-reply-to` (target not found) warns and falls back to a new
-            // thread rather than silently mis-threading. trace:BUG-557 | ai:claude
-            let thread_id = if let Some(t) = thread.clone() {
-                t
-            } else if let Some(reply_target) = in_reply_to.as_deref() {
+            // `--in-reply-to` (target not found) is rejected: detaching a reply
+            // loses the conversation. Message-id prefixes resolve consistently
+            // across every mailbox surface. trace:BUG-557 trace:BUG-1297 | ai:codex
+            // BUG-1297 F1: the reply target is resolved WHENEVER --in-reply-to is
+            // given, independent of --thread. It used to sit in an ELSE-IF, so
+            // `--thread X --in-reply-to Y` took the thread branch, never resolved
+            // Y, and wrote the raw user string into the message — an unknown or
+            // ambiguous reply id landed unvalidated. Threading still prefers an
+            // explicit --thread; validation no longer depends on which branch
+            // wins. trace:BUG-1297 | ai:claude
+            let merged = if thread.is_some() || in_reply_to.is_some() {
                 let local = mailbox_store::read_local_messages(project_root)?;
                 let canonical = mailbox_store::read_canonical_messages(store_root)?;
-                let merged = merge_dedup(&local, &canonical);
-                resolve_mailbox_message(&merged, reply_target)
-                    .map(|m| m.thread_id.clone())
-                    .unwrap_or_else(|_| {
-                        eprintln!(
-                            "{} --in-reply-to '{}' matches no known message; starting a new thread",
-                            "warning:".yellow(),
-                            reply_target
-                        );
-                        id.clone()
-                    })
+                merge_dedup(&local, &canonical)
+            } else {
+                Vec::new()
+            };
+            let mut resolved_reply_id = None;
+            let mut reply_target_thread = None;
+            if let Some(reply_target) = in_reply_to.as_deref() {
+                let target = resolve_mailbox_message(&merged, reply_target).map_err(|error| {
+                    anyhow::anyhow!(
+                        "--in-reply-to '{reply_target}' was not resolved; reply refused: {error}"
+                    )
+                })?;
+                resolved_reply_id = Some(target.id.clone());
+                reply_target_thread = Some(target.thread_id.clone());
+            }
+            let thread_id = if let Some(t) = thread.as_deref() {
+                resolve_mailbox_thread(&merged, t, true)?
+            } else if let Some(t) = reply_target_thread {
+                t
             } else {
                 id.clone()
             };
@@ -195,7 +209,7 @@ pub(crate) fn handle_mailbox_command(
                 from: sender,
                 to: recipient,
                 timestamp: chrono::Utc::now().timestamp_millis(),
-                in_reply_to: in_reply_to.clone(),
+                in_reply_to: resolved_reply_id,
                 body,
                 subject: subject.clone(),
                 urgent: *urgent,
@@ -516,6 +530,16 @@ pub(crate) fn handle_mailbox_command(
             }
             Ok(())
         }
+        // A targeted read is deliberately non-consuming: unlike `inbox`, it
+        // never advances a watermark or writes a receipt. trace:BUG-1297 | ai:codex
+        MailboxCommand::Read { message_id } => {
+            let local = mailbox_store::read_local_messages(project_root)?;
+            let canonical = mailbox_store::read_canonical_messages(store_root)?;
+            let merged = merge_dedup(&local, &canonical);
+            let msg = resolve_mailbox_message(&merged, message_id)?;
+            print_mailbox_line(msg);
+            Ok(())
+        }
         MailboxCommand::Retract { message_id } => {
             let policy = mailbox_policy(project_root);
             if !policy.allow_retract {
@@ -633,28 +657,14 @@ pub(crate) fn handle_mailbox_command(
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
             let all = merge_dedup(&local, &canonical);
-            // Inbox prints a short message id, so accept that exact token and
-            // resolve it to the containing thread. Full thread ids still work.
-            // trace:BUG-1231 | ai:codex
-            let resolved_thread = if all.iter().any(|m| m.thread_id == *thread_id) {
-                thread_id.clone()
-            } else {
-                resolve_mailbox_message(&all, thread_id)
-                    .map(|m| m.thread_id.clone())
-                    .unwrap_or_else(|_| thread_id.clone())
-            };
+            let resolved_thread = resolve_mailbox_thread(&all, thread_id, false)?;
             let msgs = thread_view(&resolved_thread, &all);
             if msgs.is_empty() {
-                println!(
-                    "{} no messages in thread {}",
-                    crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed(),
-                    thread_id.cyan()
-                );
-                return Ok(());
+                anyhow::bail!("thread {resolved_thread} exists but has no visible messages");
             }
             println!(
                 "{} {}",
-                format!("Thread {thread_id}").bold(),
+                format!("Thread {resolved_thread}").bold(),
                 format!("({})", msgs.len()).dimmed()
             );
             for m in msgs {
@@ -686,6 +696,37 @@ pub(crate) fn handle_mailbox_command(
             );
             Ok(())
         }
+    }
+}
+
+/// Resolve either an exact thread id or a message id/prefix naming that thread.
+/// `--thread` retains support for starting a caller-named thread; the read-only
+/// thread verb instead reports an unknown reference distinctly.
+// trace:BUG-1297 | ai:codex
+fn resolve_mailbox_thread(
+    messages: &[aida_core::mailbox::Message],
+    query: &str,
+    allow_new: bool,
+) -> Result<String> {
+    if messages.iter().any(|m| m.thread_id == query) {
+        return Ok(query.to_string());
+    }
+    match resolve_mailbox_message(messages, query) {
+        Ok(message) => Ok(message.thread_id.clone()),
+        // BUG-1297: match the TYPE, not the wording. The previous
+        // `error.to_string().contains("ambiguous")` meant rewording that bail
+        // message rerouted an ambiguous prefix into the allow_new arm below,
+        // silently creating a detached thread. trace:BUG-1297 | ai:claude
+        Err(error)
+            if matches!(
+                error.downcast_ref::<crate::MailboxResolveFailure>(),
+                Some(crate::MailboxResolveFailure::AmbiguousPrefix { .. })
+            ) =>
+        {
+            Err(error)
+        }
+        Err(_) if allow_new => Ok(query.to_string()),
+        Err(_) => anyhow::bail!("no such mailbox message or thread: {query}"),
     }
 }
 
@@ -802,6 +843,291 @@ mod tests {
     use super::*;
     use crate::cli::{Cli, Command, MailboxCommand};
     use clap::Parser;
+
+    fn message(id: &str, thread_id: &str) -> aida_core::mailbox::Message {
+        aida_core::mailbox::Message {
+            id: id.into(),
+            thread_id: thread_id.into(),
+            from: "alice".into(),
+            to: aida_core::mailbox::Recipient::Agent("bob".into()),
+            timestamp: 1,
+            in_reply_to: None,
+            body: "body".into(),
+            subject: None,
+            urgent: false,
+            intent: aida_core::mailbox::Intent::Fyi,
+            retracted: false,
+            deleted: false,
+            archived: false,
+        }
+    }
+
+    // BUG-1297: an ambiguous prefix must be REFUSED by resolve_mailbox_thread,
+    // and the refusal must not depend on the wording of the error. The previous
+    // implementation branched on `to_string().contains("ambiguous")`, so this
+    // asserts the discriminant is carried by the TYPE: the message text is
+    // deliberately never inspected here.
+    // trace:BUG-1297 | ai:claude
+    #[test]
+    fn ambiguous_prefix_is_refused_by_type_not_by_message_text() {
+        let messages = vec![
+            message("0fa629d6-1111", "thread-a"),
+            message("0fa629d6-2222", "thread-b"),
+        ];
+
+        // allow_new = TRUE is the dangerous direction: under the old prose match,
+        // a reworded message fell through to this arm and silently created a
+        // detached thread from an ambiguous id.
+        let err = resolve_mailbox_thread(&messages, "0fa629d6", true)
+            .expect_err("an ambiguous prefix must never become a new thread");
+        assert!(
+            matches!(
+                err.downcast_ref::<crate::MailboxResolveFailure>(),
+                Some(crate::MailboxResolveFailure::AmbiguousPrefix { .. })
+            ),
+            "the refusal must carry the typed discriminant, got: {err}"
+        );
+
+        // and an UNKNOWN id under allow_new is still allowed through — the two
+        // failures must stay distinguishable, or this fix would just refuse
+        // everything and look correct.
+        assert_eq!(
+            resolve_mailbox_thread(&messages, "no-such-id", true).unwrap(),
+            "no-such-id"
+        );
+    }
+
+    // trace:BUG-1297 | ai:codex
+    #[test]
+    fn mailbox_message_prefix_resolves_and_ambiguity_lists_candidates() {
+        let messages = vec![
+            message("0fa629d6-1111", "thread-a"),
+            message("0fa629d6-2222", "thread-b"),
+            message("abcd1234-3333", "thread-c"),
+        ];
+
+        assert_eq!(
+            resolve_mailbox_message(&messages, "abcd1234").unwrap().id,
+            "abcd1234-3333"
+        );
+        let error = resolve_mailbox_message(&messages, "0fa629d6")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("ambiguous"), "{error}");
+        assert!(error.contains("0fa629d6-1111"), "{error}");
+        assert!(error.contains("0fa629d6-2222"), "{error}");
+    }
+
+    // trace:BUG-1297 | ai:codex
+    #[test]
+    fn mailbox_thread_accepts_message_prefix_and_rejects_unknown_reference() {
+        let messages = vec![message("abcd1234-3333", "thread-c")];
+
+        assert_eq!(
+            resolve_mailbox_thread(&messages, "abcd1234", false).unwrap(),
+            "thread-c"
+        );
+        let error = resolve_mailbox_thread(&messages, "missing", false)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(error, "no such mailbox message or thread: missing");
+        assert_eq!(
+            resolve_mailbox_thread(&messages, "new-thread", true).unwrap(),
+            "new-thread"
+        );
+    }
+
+    // trace:BUG-1297 | ai:codex
+    #[test]
+    fn mailbox_read_cli_accepts_a_message_prefix() {
+        let cli = Cli::try_parse_from(["aida", "mailbox", "read", "0fa629d6"]).unwrap();
+        match cli.command {
+            Command::Mailbox(MailboxCommand::Read { message_id }) => {
+                assert_eq!(message_id, "0fa629d6")
+            }
+            other => panic!("expected mailbox read, got {other:?}"),
+        }
+    }
+
+    // A message remains addressable after an inbox watermark has passed it;
+    // targeted reads neither consult nor mutate that watermark.
+    // trace:BUG-1297 | ai:codex
+    #[test]
+    fn mailbox_read_can_reread_seen_message_without_changing_watermark() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let msg = message("abcd1234-3333", "thread-c");
+        mailbox_store::write_message(project.path(), &msg).unwrap();
+        mailbox_store::set_watermark(project.path(), "bob", 99).unwrap();
+
+        handle_mailbox_command(
+            &MailboxCommand::Read {
+                message_id: "abcd1234".into(),
+            },
+            &store,
+        )
+        .unwrap();
+        handle_mailbox_command(
+            &MailboxCommand::Read {
+                message_id: "abcd1234".into(),
+            },
+            &store,
+        )
+        .unwrap();
+
+        assert_eq!(
+            mailbox_store::read_watermark(project.path(), "bob"),
+            Some(99)
+        );
+    }
+
+    // trace:BUG-1297 | ai:codex
+    #[test]
+    fn mailbox_reply_to_unknown_message_refuses_without_writing() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let command = MailboxCommand::Send {
+            to: Some("bob".into()),
+            broadcast: false,
+            body: Some("reply".into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: None,
+            in_reply_to: Some("missing".into()),
+            from: Some("alice".into()),
+            urgent: false,
+            intent: "fyi".into(),
+        };
+
+        let error = handle_mailbox_command(&command, &store)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("reply refused"), "{error}");
+        assert!(mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .is_empty());
+    }
+
+    // BUG-1297 F1: --thread AND --in-reply-to together used to bypass reply
+    // validation entirely. The --thread branch was taken first and the
+    // in-reply-to resolution sat in an ELSE-IF, so the raw user string was
+    // written into the message unvalidated. Both assertions matter: the unknown
+    // id must be REFUSED even though --thread is present, and nothing must be
+    // written.
+    // trace:BUG-1297 | ai:claude
+    #[test]
+    fn thread_flag_does_not_bypass_reply_id_validation() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let existing = message("abcd1234-3333", "thread-c");
+        mailbox_store::write_message(project.path(), &existing).unwrap();
+
+        let command = MailboxCommand::Send {
+            to: Some("bob".into()),
+            broadcast: false,
+            body: Some("reply".into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: Some("thread-c".into()),
+            in_reply_to: Some("definitely-not-a-real-id".into()),
+            from: Some("alice".into()),
+            urgent: false,
+            intent: "fyi".into(),
+        };
+
+        let error = handle_mailbox_command(&command, &store)
+            .expect_err("an unknown --in-reply-to must be refused even with --thread given")
+            .to_string();
+        assert!(error.contains("reply refused"), "{error}");
+        assert_eq!(
+            mailbox_store::read_local_messages(project.path())
+                .unwrap()
+                .len(),
+            1,
+            "only the pre-existing message may be present; the refused send must not write"
+        );
+    }
+
+    // BUG-1297 F1, the other direction: with BOTH flags and a VALID reply
+    // target, --thread still decides threading and the parent id is recorded in
+    // full. Without this, the fix could satisfy the refusal test by simply
+    // refusing whenever both flags appear.
+    // trace:BUG-1297 | ai:claude
+    #[test]
+    fn thread_flag_wins_threading_while_reply_id_is_still_resolved() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        mailbox_store::write_message(project.path(), &message("abcd1234-3333", "thread-c"))
+            .unwrap();
+        mailbox_store::write_message(project.path(), &message("eeee5555-7777", "thread-z"))
+            .unwrap();
+
+        let command = MailboxCommand::Send {
+            to: Some("bob".into()),
+            broadcast: false,
+            body: Some("reply".into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: Some("thread-z".into()),
+            in_reply_to: Some("abcd1234".into()),
+            from: Some("alice".into()),
+            urgent: false,
+            intent: "fyi".into(),
+        };
+        handle_mailbox_command(&command, &store).expect("valid reply target must succeed");
+
+        let sent = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "reply")
+            .expect("the reply must be written");
+        assert_eq!(
+            sent.in_reply_to.as_deref(),
+            Some("abcd1234-3333"),
+            "the PREFIX must be resolved to the full parent id, not stored raw"
+        );
+        assert_eq!(
+            sent.thread_id, "thread-z",
+            "--thread must still decide threading"
+        );
+    }
+
+    // trace:BUG-1297 | ai:codex
+    #[test]
+    fn mailbox_reply_resolves_prefix_and_records_full_parent_id() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let original = message("abcd1234-3333", "thread-c");
+        mailbox_store::write_message(project.path(), &original).unwrap();
+        let command = MailboxCommand::Send {
+            to: Some("alice".into()),
+            broadcast: false,
+            body: Some("reply".into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: None,
+            in_reply_to: Some("abcd1234".into()),
+            from: Some("bob".into()),
+            urgent: false,
+            intent: "fyi".into(),
+        };
+
+        handle_mailbox_command(&command, &store).unwrap();
+
+        let messages = mailbox_store::read_local_messages(project.path()).unwrap();
+        let reply = messages.iter().find(|m| m.body == "reply").unwrap();
+        assert_eq!(reply.thread_id, "thread-c");
+        assert_eq!(reply.in_reply_to.as_deref(), Some("abcd1234-3333"));
+    }
 
     // trace:TASK-1250 | ai:codex
     #[test]

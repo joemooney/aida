@@ -53,6 +53,7 @@ aida mailbox inbox codex
 
 # read a full conversation
 aida mailbox thread <thread-id>
+aida mailbox read <message-id-or-prefix>  # non-consuming; safe after inbox ack
 
 # withdraw a message but leave a visible tombstone
 aida mailbox retract <msg-id>

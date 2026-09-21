@@ -19267,7 +19267,40 @@ fn mailbox_policy(project_root: &std::path::Path) -> MailboxPolicy {
     policy
 }
 
-// trace:STORY-583 | ai:codex
+// trace:STORY-583 trace:BUG-1297 | ai:codex
+/// Why a mailbox id failed to resolve, as a TYPE rather than as prose.
+///
+/// `resolve_mailbox_thread` used to branch on
+/// `error.to_string().contains("ambiguous")`, so rewording either bail message
+/// silently rerouted an ambiguous prefix into the create-a-new-thread arm — the
+/// exact defect BUG-1297 exists to fix. The discriminant now travels with the
+/// error. Display text is unchanged, so user-facing output is identical; the
+/// difference is that nothing DEPENDS on that text.
+///
+/// Follows the crate's existing pattern for typed control-flow errors
+/// (`SoftSignpostShown`, `forge::MergeHoldRefusal`, `pr_rebase::RebaseFailureExit`),
+/// which keeps every `?` caller of `resolve_mailbox_message` unchanged.
+// trace:BUG-1297 | ai:claude
+#[derive(Debug)]
+pub(crate) enum MailboxResolveFailure {
+    NotFound { query: String },
+    AmbiguousPrefix { query: String, candidates: String },
+}
+
+impl std::fmt::Display for MailboxResolveFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotFound { query } => write!(f, "message not found: {query}"),
+            Self::AmbiguousPrefix { query, candidates } => write!(
+                f,
+                "message id prefix is ambiguous: {query}; candidates: {candidates}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for MailboxResolveFailure {}
+
 fn resolve_mailbox_message<'a>(
     messages: &'a [aida_core::mailbox::Message],
     query: &str,
@@ -19278,8 +19311,22 @@ fn resolve_mailbox_message<'a>(
         .collect();
     match matches.as_slice() {
         [msg] => Ok(*msg),
-        [] => anyhow::bail!("message not found: {query}"),
-        _ => anyhow::bail!("message id prefix is ambiguous: {query}"),
+        [] => Err(MailboxResolveFailure::NotFound {
+            query: query.to_string(),
+        }
+        .into()),
+        _ => {
+            let candidates = matches
+                .iter()
+                .map(|m| m.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            Err(MailboxResolveFailure::AmbiguousPrefix {
+                query: query.to_string(),
+                candidates,
+            }
+            .into())
+        }
     }
 }
 
