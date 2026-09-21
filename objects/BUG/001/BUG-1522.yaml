@@ -45,7 +45,30 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-21T04:38:43.142590781Z
+modified_at: 2026-09-21T04:48:30.904924793Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
+comments:
+- id: 01a0c24b-50b8-77d2-9bc3-652fa6c12f70
+  author: joe
+  content: |-
+    RELATED DEFECT, filed independently by the reviewer within the hour: BUG-1525 -- the generated agent-brief Setup block emits
+
+      git worktree add <path> -b <spec-id> origin/main
+
+    which forks a FRESH branch from main rather than checking out the PR branch. Source aida-cli-lib/src/lib.rs near line 13382; the branch is derived from the spec id alone with no check for an existing branch, worktree or open PR, and the live convention is <spec>-work.
+
+    The two are one loop and each alone is survivable:
+
+      BUG-1525 sends the implementer commits to a lineage the PR cannot see, so the PR head does not move.
+      BUG-1522 means the guard that exists to catch an unchanged head is not reached on that path, so the round advances anyway.
+
+    Together the failure is SILENT: CI re-runs green on the unchanged head and the reviewer is handed the exact sha it already refused.
+
+    FIX ORDER. BUG-1525 is the cure -- it puts the work on the right branch. BUG-1522 is the detector -- it does not stop the forking, it stops the forking from being invisible. Take BUG-1525 first and this one immediately after, because this one is what prevents the next defect in this class from costing a night before anyone notices.
+
+    This also explains why BUG-1476 landing changed nothing observable: that fix made the verdict RESOLVABLE (blocking_rework_verdict reads the PR-keyed identity), which arms the guard correctly -- but the armed guard is still never consulted on this path.
+  created_at: 2026-09-21T04:48:30.904924793Z
+  modified_at: 2026-09-21T04:48:30.904924793Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
