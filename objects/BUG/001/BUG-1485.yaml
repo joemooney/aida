@@ -41,12 +41,12 @@ description: |
   - A failure occurring AFTER the implementer has pushed does not leave the spec `done` with an unshipped branch: either the PR is opened, or the spec is not marked done, or the shelve names the stranded branch and the recovery is one command.
   - The error text drops the active-lease list, or explains what a reader is meant to do with it.
   - Regression fixture reproduces both positions: a mismatch at session start (BUG-1445's 25-second shape) and a mismatch after a successful push (BUG-1442's shape).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-21T05:27:06.760737184Z
+modified_at: 2026-09-21T08:50:31.346039319Z
 req_type: Bug
 tags:
 - drain-safe
@@ -353,8 +353,8 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1485 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T20:52:49.509188683Z
+  detail: 'Rework is real progress on F2 — the test now drives the extracted production path and genuinely reaches the post-push position — but it asserts branch recovery, which F1 already granted, and stops before the disputed step. F1''s production path is untouched. Separately: this head has had ZERO check-runs for ~11 hours.'
+  recovery_hint: address the review findings, move BUG-1485 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-21T08:50:31.346039319Z
 interface_changes: {}
