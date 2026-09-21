@@ -26,5 +26,43 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:44.578137790Z
-modified_at: 2026-09-21T08:18:44.578137790Z
+modified_at: 2026-09-21T08:26:19.775993329Z
 req_type: Bug
+comments:
+- id: 01a0c312-bb00-72a3-95b8-3088f0b66089
+  author: joe
+  content: |-
+    ROOT-CAUSE CORRECTION — I filed this pointing at the wrong fix site, and an implementer picking it up as written would have "fixed" something already shipped. Found by reading the code while verifying a separate correction from the reviewer seat.
+
+    THE CLI WRITE PATH ALREADY ENFORCES A SHA. aida-cli-lib/src/lib.rs:76308-76318 resolves the sha through a four-step fallback chain (explicit --sha, then the envelope PR sha, then the forge PR sha, then the branch tip, then HEAD) and if every one comes back empty it BAILS:
+
+        "no commit could be resolved for this review — pass `--sha <commit>`;
+         an unstamped verdict is unverifiable and will not be recorded"
+
+    And the PR-keyed handshake at lib.rs:76433 writes `resolved_sha.as_deref().expect("checked above")` — it cannot produce a sha-less record at all. So "make `aida review record` refuse to write a verdict without a reviewed_sha", which is what this spec's description asks for, IS ALREADY TRUE.
+
+    THE ACTUAL SOURCE OF SHA-LESS VERDICTS IS THE SKILL, NOT THE CLI. `.aida/review-verdicts/PR-N.json` is, in the common path, written by an agent following aida-core/templates/skills/aida-review.md — the docs say so in several places ("the file the `/aida-review` skill writes"). Step 6a of that skill hands the agent a literal heredoc to write:
+
+        cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
+        {
+          "verdict": "Approved",
+          "summary": "<one-line rationale>",
+          "mode": "standalone",
+          "findings": []
+        }
+        EOF
+
+    THERE IS NO reviewed_sha FIELD IN THAT SCHEMA. Not optional, not mentioned — absent. The field list that follows documents verdict, summary, mode, findings, comment_url and merge, and never names a sha. So every verdict written the documented way is sha-less BY CONSTRUCTION, and the reviewers producing them were following the instructions exactly.
+
+    That reframes the 457 records. They are not carelessness and they are not legacy drift; they are the documented schema being followed. It also explains the era curve — 0% / 1% / 31% — as the CLI path being adopted over time alongside a skill that never changed.
+
+    CORRECTED ACCEPTANCE CRITERIA, replacing the description's:
+      1. aida-core/templates/skills/aida-review.md step 6a carries `reviewed_sha` in its heredoc and in the field list, as a REQUIRED field with a stated way to obtain it. This is a master-template edit; it reaches Claude, Codex and Antigravity through `aida scaffold refresh`, so it is the cheap half.
+      2. Better still where it is feasible: the skill calls `aida review record` rather than hand-writing JSON, so the enforcement already in the CLI applies instead of being duplicated in prose. Prose that asks for a field is not a gate — substrate-as-bouncer — and this spec exists because the last piece of prose asking for a field did not produce one.
+      3. Read side: a verdict lacking reviewed_sha is treated as UNPROVEN rather than at face value, and cannot clear a gate. This is unchanged from the original filing and is the half that protects against every writer we have not thought of.
+      4. NOT WANTED, unchanged: backfilling the 457 historical records. Inventing provenance is worse than admitting its absence.
+
+    The measurement that motivated this spec stands exactly as the reviewer took it. Only the fix site moves.
+  created_at: 2026-09-21T08:26:19.775993329Z
+  modified_at: 2026-09-21T08:26:19.775993329Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
