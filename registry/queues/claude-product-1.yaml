@@ -1,12 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0bafb-5814-71a0-843f-244a570a2ef8
-  position: 14000
-  added_by: claude-product-1
-  note: auto-queued by `session end` (01a0bae1); covers 1 spec
-  added_at: 2026-09-19T18:43:57.716642901Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-product-1
   requirement_id: 01a0bb81-df10-7e03-ace5-a147928db8cb
   position: 15000
   added_by: claude-product-1
@@ -23,43 +15,11 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: claude-product-1
-  requirement_id: 01a0bc4d-273f-7911-ba49-b428d491d448
-  position: 17000
-  added_by: claude-product-1
-  note: auto-queued by `session end` (01a0bc3e); covers 1 spec
-  added_at: 2026-09-20T00:52:53.933845730Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-product-1
   requirement_id: 01a0bd44-e961-77b1-80ec-acb8e7171207
   position: 18000
   added_by: claude-product-1
   note: auto-queued by `session end` (01a0bd34); covers 1 spec
   added_at: 2026-09-20T05:23:32.275020483Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-product-1
-  requirement_id: 01a0bd5b-68f9-7c02-b4f0-e9a3a39a8686
-  position: 19000
-  added_by: claude-product-1
-  note: auto-queued by `session end` (01a0bd4a); covers 1 spec
-  added_at: 2026-09-20T05:48:09.437029318Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-product-1
-  requirement_id: 01a0bdb3-d8d0-7661-8d30-e789a690989d
-  position: 20000
-  added_by: claude-product-1
-  note: auto-queued by `session end` (01a0bda4); covers 1 spec
-  added_at: 2026-09-20T07:24:44.030423453Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-product-1
-  requirement_id: 01a0bdf1-1a9e-7143-a108-d97d887bf651
-  position: 22000
-  added_by: claude-product-1
-  note: auto-queued by `session end` (01a0bde9); covers 26 specs
-  added_at: 2026-09-20T08:32:37.935904331Z
   for_role: reviewer
   added_by_machine: imac
 - user_id: claude-product-1
@@ -108,13 +68,5 @@
   added_by: claude-product-1
   note: auto-queued by `session end` (01a0c17d); covers 1 spec
   added_at: 2026-09-21T01:22:41.377503807Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-product-1
-  requirement_id: 01a0c1a7-d90d-7de0-9a15-8fb494af554d
-  position: 30000
-  added_by: claude-product-1
-  note: auto-queued by `session end` (01a0c193); covers 2 specs
-  added_at: 2026-09-21T01:50:07.816513700Z
   for_role: reviewer
   added_by_machine: imac
