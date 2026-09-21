@@ -1,0 +1,30 @@
+id: 01a0c30b-c8e2-7ac0-968c-f0c1a6b0c8f1
+spec_id: BUG-1538
+agreed_id: BUG-1538
+title: Review verdicts are written without a reviewed_sha two times in three even in the current era, so a verdict that cannot be checked for staleness reads as an approval
+description: |-
+  MEASURED BY THE REVIEWER SEAT, 2026-09-21, over every record in .aida/review-verdicts/.
+
+      PR < 1000       111 records     0 with reviewed_sha     (0%)
+      PR 1000-1899    249 records     3 with reviewed_sha     (1%)
+      PR >= 1900      146 records    46 with reviewed_sha     (31%)
+                      506 records   457 WITHOUT a reviewed sha
+
+  The headline "90% of verdicts lack provenance" is true and useless, because the practice plainly started recently and the old records drag the number down. The figure that matters is the current era: even for PRs opened tonight, roughly TWO IN THREE verdicts cannot say which commit they examined.
+
+  WHY THIS IS A DEFECT AND NOT A STATISTIC. A verdict without a sha cannot be checked for staleness. Staleness checking is the entire mechanism by which `queue done` refuses, by which the orchestrator's phase-3 handshake knows an approval still applies, and by which an advisor can tell "approved at the head I am about to merge" from "approved at a head three commits back". A verdict lacking a sha does not fail loudly - it reads as an approval, and every consumer treats it as one. This is PRIN-5 exactly: absent evidence rendered indistinguishable from good evidence, erring toward reassurance.
+
+  The live cost was visible tonight. Five open PRs carried verdicts with no sha (#1984, #1998, #2009, #2039, #2040) and each one required a human-readable argument to establish whether the approval still applied.
+
+  WHAT TO BUILD. `aida review record` should refuse to write a verdict without a reviewed_sha, resolving it from the PR head or the branch tip when the caller omits it rather than accepting the omission. Consumers should treat a sha-less verdict as UNPROVEN rather than as its face-value verdict - it should not be able to clear a gate. The 457 historical records should be readable as legacy rather than retrofitted with a sha nobody observed; inventing provenance is worse than admitting its absence.
+
+  SCOPE NOTE. Backfilling old records is explicitly NOT wanted. The fix is the write path plus the read-side treatment of absence.
+
+  Filed by the driver-advisor seat, disposing of an observation the reviewer seat sent rather than filed, per the operator's arbitration instruction. Autonomous-safe.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T08:18:44.578137790Z
+modified_at: 2026-09-21T08:18:44.578137790Z
+req_type: Bug
