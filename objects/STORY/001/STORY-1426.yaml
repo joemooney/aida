@@ -1,0 +1,47 @@
+id: 01a0c4f2-486f-7c02-bc96-5ce36c1c1a69
+spec_id: STORY-1426
+agreed_id: STORY-1426
+title: Nothing detects a semantic contradiction in the store — every reference in the VIS-1 / CR-6 conflict resolves, and it stood for three months
+description: |-
+  THESIS THIS SERVES (operator, 2026-09-21): the metadata AIDA gathers should let an LLM coding agent identify inconsistencies, contradictions, aspirations and intent - so the agent leans on the store as a collaborator rather than treating it as a filing cabinet.
+
+  THE GAP. `aida doctor`'s checks are STRUCTURAL: validate-trace-comments (does the spec_id resolve), scrub-collisions (duplicate ids), repair-stale-blocks (orphaned id blocks). They verify that references RESOLVE. Nothing checks whether assertions AGREE. A contradiction in which every reference is valid is invisible to every check AIDA has.
+
+  VERIFIED INSTANCES, both found by hand this session and neither by any tool:
+  1. VIS-1 is the only vision in the store and is APPROVED, asserting "AIDA is your project's missing index - of intent, not just code". CR-6 and STORY-551 are both COMPLETED and their whole content is the decision to RETIRE that headline. The approved vision and the completed decision that retired it have coexisted since 2026-06-10. Every id resolves; nothing is dangling; doctor is silent.
+  2. EPIC-63's plan (docs/plans/2026-09-12-entry-memory-lane.md) closes with a Followups bullet, "Codegraph -> requirements-graph auto-population ... deferred". The epic Completed with six children, none of them that followup. CLAUDE.md documents that reaching Done OFFERS to file each Followups bullet as a child TASK; the offer was evidently declined or missed, and nothing afterwards noticed the plan promised a successor that does not exist.
+
+  WHY THIS MATTERS MORE UNDER THE AGENT THESIS THAN AS HYGIENE. An agent reading the store to orient itself cannot tell which of two conflicting records is current. In this session that produced concrete bad output: I treated VIS-1 as live positioning and had to be corrected. A contradiction the store does not flag is worse than an absent record, because the agent proceeds confidently on it - the same failure class PRIN-6 names for surfaces, applied to the corpus itself.
+
+  SLICE 1 - DETERMINISTIC, NO LLM. Computable contradiction classes, each a mechanical join:
+  - A plan under docs/plans/ whose Followups bullet has no corresponding child spec, where the plan's spec is terminal. (Instance 2 above; fully mechanical.)
+  - An ADR in `accepted` with no superseded-by, where a LATER accepted ADR carries an overlapping tag or parent. Report as a candidate, not a verdict.
+  - A spec in a terminal status whose acceptance criteria were edited AFTER it reached terminal.
+  - A VISION or PRINCIPLE in `approved` older than a COMPLETED decision or change-request that names it in its description or relationships. (Instance 1 above.)
+  - An epic Completed while a spec it Blocks remains open.
+  Each emits a candidate with both sides cited, and takes NO action. Reporting only.
+
+  SLICE 2 - LLM-JUDGED, LATER AND SEPARATE. Genuine semantic conflict between two live specs' assertions needs a language pass. Keep it strictly behind slice 1 and label its findings as heuristic, exactly as ADR-44 labels the reconstitution score. Do not let slice 2 gate anything.
+
+  DESIGN CONSTRAINTS
+  - Report candidates, never auto-resolve. Which side of a contradiction is right is a human or advisor judgement; the tool's job is to make the conflict impossible to miss, not to pick.
+  - MUST NOT land in `aida doctor` as it currently behaves: BUG-1552 records that doctor reports thousands of findings and exits 0, so a caller cannot distinguish healthy from broken. A contradiction sweep added to a surface nobody can act on is worse than nothing - it buries a small number of high-value findings in noise. Either fix the exit-code semantics first or give this its own surface with a bounded, actionable output.
+  - Every candidate cites BOTH sides with ids, so the reader can adjudicate without a search.
+
+  ACCEPTANCE
+  - Slice 1 detects both verified instances above from the current store, with both sides cited.
+  - The sweep takes no action and changes no spec.
+  - Output is bounded and actionable - a reader can work the whole list, not sample it.
+  - Clean stores produce empty output and a zero exit; a store with candidates is distinguishable by exit code from one without.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T17:10:07.727932558Z
+modified_at: 2026-09-21T17:10:07.727932558Z
+req_type: Story
+tags:
+- agent-collaboration
+- doctor
+- integrity
+- north-star
