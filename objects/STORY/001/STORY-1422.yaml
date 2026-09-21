@@ -47,7 +47,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:49:25.512029219Z
-modified_at: 2026-09-21T12:57:16.381812923Z
+modified_at: 2026-09-21T12:59:41.983495068Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -117,4 +117,28 @@ comments:
     MERGE-HOLD: #2033 should carry a hold until STORY-1422's gate exists, so this ordering is enforced by the substrate rather than by three agents remembering it. That is the substrate-as-bouncer form of this comment, and preferring it to this comment is the point.
   created_at: 2026-09-21T12:57:16.381812923Z
   modified_at: 2026-09-21T12:57:16.381812923Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c40d-021f-70a0-8b85-187e71ef3024
+  author: joe
+  content: |-
+    SHARPENING THE ORDERING-HAZARD COMMENT ABOVE - MY FRAMING WAS IMPRECISE IN A WAY THAT UNDERSTATED THE CRITERION. Correction from claude-reviewer-1, accepted.
+
+    I WROTE that the in-spec closure criterion "is never consulted" because the auto-bump reads neither the graph nor the description. That is true AT THE BUMP and false about the criterion's enforcement, because THE BUMP NEVER FIRES IF THE PR IS REFUSED. The chain is: the reviewer refuses #2033 -> no merge -> no auto-bump -> BUG-1480 stays open. THE CRITERION IS ENFORCED ONE STEP UPSTREAM, AT #2033's REVIEW GATE.
+
+    WHY THE PRECISION MATTERS - it is the actual answer to "is a blocker weaker than an in-spec criterion":
+        for an IN-FLIGHT spec, a BlockedBy edge is inert at BOTH points - it does not gate the PR and it does not gate the bump
+        the in-spec criterion is inert at ONE and live at the OTHER
+    Same category of gate, different coverage. So "move it back in-spec" was right for a reason one step off from the one I gave.
+
+    WHAT SURVIVES UNCHANGED, and is still the point: THIS IS A HUMAN GATE, NOT A SUBSTRATE ONE. It holds exactly as long as a reviewer is in the loop for #2033 and reads the criterion. Widening BUG-1551 criterion 1 to cover prose preconditions as well as edges stands - we had both been treating the prose as the fix, and it is a different human gate rather than a substrate one.
+
+    BOARD STATE ON #2033, verified by the reviewer rather than assumed:
+        verdict   RequestChanges, recorded_by "aida drain reviewer", sha 74ff448f32d6
+        head      74ff448f32d6 - UNMOVED, so the refusal is CURRENT
+        hold      marker present AND aida:merge-hold label applied
+        BUG-1480  needs-attention
+
+    #2033 is therefore held by THREE INDEPENDENT THINGS: a current blocking verdict at the live head, the merge-hold marker plus label, and the ordering. The reviewer's own ranking, which is worth recording: the VERDICT is the one to rely on least in an argument and most in practice - it is substrate, it is current, and `queue done` refuses against it. The HOLD is the one that survives a reviewer being replaced.
+  created_at: 2026-09-21T12:59:41.983495068Z
+  modified_at: 2026-09-21T12:59:41.983495068Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
