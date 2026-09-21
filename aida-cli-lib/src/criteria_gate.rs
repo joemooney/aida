@@ -23,7 +23,7 @@
 //! criteria <SPEC>` prints.
 // trace:TASK-1290 | ai:claude
 
-use crate::criteria::CriteriaReport;
+use crate::criteria::{CriteriaReport, CriterionState};
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,7 +55,7 @@ pub(crate) fn untraced_lines(report: &CriteriaReport) -> Vec<String> {
     report
         .criteria
         .iter()
-        .filter(|row| row.tests.is_empty())
+        .filter(|row| row.state == CriterionState::Untraced)
         .map(|row| format!("{} {}", row.criterion.id, row.criterion.text))
         .collect()
 }
@@ -124,22 +124,45 @@ pub(crate) fn force_override_ledger_comment(display_id: &str, lines: &[String]) 
 /// section for a clean PR.
 // trace:TASK-1290 | ai:claude
 pub(crate) fn reviewer_prompt_block(reports: &[(String, CriteriaReport)]) -> Option<String> {
-    let mut lines: Vec<String> = Vec::new();
+    let mut untraced: Vec<String> = Vec::new();
+    let mut post_deployment: Vec<String> = Vec::new();
     for (display_id, report) in reports {
         for line in untraced_lines(report) {
-            lines.push(format!("- {display_id}: {line}"));
+            untraced.push(format!("- {display_id}: {line}"));
+        }
+        for row in &report.criteria {
+            if row.state == CriterionState::PostDeployment {
+                post_deployment.push(format!(
+                    "- {display_id}: {} {}",
+                    row.criterion.id, row.criterion.text
+                ));
+            }
         }
     }
-    if lines.is_empty() {
+    if untraced.is_empty() && post_deployment.is_empty() {
         return None;
     }
-    Some(format!(
-        "\n\nUntraced acceptance criteria (from `aida criteria`, reuse — do not re-derive): \
+    let mut block = String::new();
+    if !untraced.is_empty() {
+        block.push_str(&format!(
+            "\n\nUntraced acceptance criteria (from `aida criteria`, reuse — do not re-derive): \
          the following criteria have no test tracing them. Cite this list against the diff \
          instead of rediscovering it; a criterion named here and untested in the diff is a \
          defect to report, not a surprise to find.\n{}\n",
-        lines.join("\n")
-    ))
+            untraced.join("\n")
+        ));
+    }
+    if !post_deployment.is_empty() {
+        block.push_str(&format!(
+            "\n\nPost-deployment acceptance criteria (advisory; do not block done): the \
+             following criteria cannot be verified before shipping. Recommend moving each \
+             outcome to a follow-up measurement spec blocked by the shipping spec, naming \
+             its measurement window and falsifying threshold. Do not treat these as \
+             untraced defects.\n{}\n",
+            post_deployment.join("\n")
+        ));
+    }
+    Some(block)
 }
 
 #[cfg(test)]
@@ -267,5 +290,46 @@ mod tests {
         assert!(block.contains("GATE-6: GATE-6.AC1 the widget renders"));
         assert!(block.contains("GATE-6: GATE-6.AC2 the widget saves"));
         assert!(block.contains("Untraced acceptance criteria"));
+    }
+
+    #[test]
+    fn mixed_states_only_untraced_criteria_block_done() {
+        // trace:TASK-1293.ac1c7c47 | ai:codex
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("mixed_gate.rs"),
+            "// trace:GATE-7.AC1 | ai:codex\n#[test]\nfn traced() {\n    assert!(true);\n}\n",
+        )
+        .unwrap();
+        let description = "## Acceptance\n\n- AC1: the fixture renders\n- AC2: the export saves\n- AC3: Measured on the next 20 specs: median latency falls\n";
+        let report = build_criteria_report(dir.path(), "GATE-7", description).unwrap();
+        assert_eq!(report.criteria[0].state, CriterionState::Traced);
+        assert_eq!(report.criteria[1].state, CriterionState::Untraced);
+        assert_eq!(report.criteria[2].state, CriterionState::PostDeployment);
+
+        assert_eq!(
+            evaluate(&report, EnforceMode::Refuse),
+            CriteriaGate::Refuse(vec!["GATE-7.AC2 the export saves".to_string()])
+        );
+        assert_eq!(
+            evaluate(&report, EnforceMode::Warn),
+            CriteriaGate::Warn(vec!["GATE-7.AC2 the export saves".to_string()])
+        );
+    }
+
+    #[test]
+    fn reviewer_prompt_separates_untraced_from_post_deployment_guidance() {
+        // trace:TASK-1293.ac595b58 | ai:codex
+        let dir = tempfile::tempdir().unwrap();
+        let description = "## Acceptance\n\n- AC1: the export saves\n- AC2: Measured on the next 20 specs: median latency falls\n";
+        let report = build_criteria_report(dir.path(), "GATE-8", description).unwrap();
+        let block = reviewer_prompt_block(&[("GATE-8".to_string(), report)]).unwrap();
+
+        assert!(block.contains("GATE-8: GATE-8.AC1 the export saves"));
+        assert!(!block.contains("GATE-8: GATE-8.AC2 the export saves"));
+        assert!(block.contains("Post-deployment acceptance criteria (advisory; do not block done)"));
+        assert!(block.contains("GATE-8: GATE-8.AC2 Measured on the next 20 specs"));
+        assert!(block.contains("follow-up measurement spec blocked by the shipping spec"));
+        assert!(block.contains("measurement window and falsifying threshold"));
     }
 }

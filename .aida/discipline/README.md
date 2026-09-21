@@ -22,6 +22,7 @@ How to work effectively with AIDA — habits, vocabulary, and workflow patterns 
 | [`autonomous-burndown.md`](autonomous-burndown.md) | Draining a ready backlog hands-off — the worktree-isolated implementer fan-out + integrator loop, the pickability gate, punt-and-continue, never-down-tools, and `/aida-burndown` vs the orchestrator drain |
 | [`git-sync-and-review.md`](git-sync-and-review.md) | Recovering when `aida pull` refuses (divergent branches) + the `aida review prompt` workflow — read-on-demand detail kept out of the always-in-context `AIDA.md` |
 | [`session-discipline.md`](session-discipline.md) | Per-session habits — verify before filing, pause for design input, trust the reviewer, and more |
+| [`spec-authoring.md`](spec-authoring.md) | Keep merge-time proof on the shipping spec and move post-deployment outcome measurement to a blocked follow-up spec |
 | [`skill-prompt-kinds.md`](skill-prompt-kinds.md) | Classifying `AskUserQuestion` prompts into mechanical vs design-fork kind, and their `--zen` pause behavior |
 | [`substrate-as-bouncer.md`](substrate-as-bouncer.md) | The substrate-as-bouncer principle, detailing the pre-commit gitignored check hook and reviewer PR gates |
 | [`agent-agnostic-vs-claude-specific.md`](agent-agnostic-vs-claude-specific.md) | Which discipline is universal (enforced by substrate gates, every agent) vs Claude Code-shaped convenience (`.claude/skills`, slash commands, memory pack) — so Codex/Antigravity users can tell the load-bearing from the optional |

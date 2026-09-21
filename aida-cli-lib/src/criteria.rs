@@ -24,6 +24,15 @@ pub(crate) struct TracedTest {
 pub(crate) struct CriterionRow {
     pub(crate) criterion: Criterion,
     pub(crate) tests: Vec<TracedTest>,
+    pub(crate) state: CriterionState,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum CriterionState {
+    Traced,
+    Untraced,
+    PostDeployment,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -31,6 +40,7 @@ pub(crate) struct CriteriaReport {
     pub(crate) spec: String,
     pub(crate) criteria: Vec<CriterionRow>,
     pub(crate) untested: Vec<String>,
+    pub(crate) post_deployment: Vec<String>,
     pub(crate) unanchored: Vec<TracedTest>,
 }
 
@@ -126,12 +136,28 @@ fn criteria_report_from_parts(
             let tests = tests_by_ac
                 .remove(&criterion.id.to_ascii_uppercase())
                 .unwrap_or_default();
-            CriterionRow { criterion, tests }
+            let state = if is_post_deployment_criterion(&criterion.text) {
+                CriterionState::PostDeployment
+            } else if tests.is_empty() {
+                CriterionState::Untraced
+            } else {
+                CriterionState::Traced
+            };
+            CriterionRow {
+                criterion,
+                tests,
+                state,
+            }
         })
         .collect();
     let untested = rows
         .iter()
-        .filter(|row| row.tests.is_empty())
+        .filter(|row| row.state == CriterionState::Untraced)
+        .map(|row| row.criterion.id.clone())
+        .collect();
+    let post_deployment = rows
+        .iter()
+        .filter(|row| row.state == CriterionState::PostDeployment)
         .map(|row| row.criterion.id.clone())
         .collect();
 
@@ -139,8 +165,48 @@ fn criteria_report_from_parts(
         spec: spec.to_string(),
         criteria: rows,
         untested,
+        post_deployment,
         unanchored: unanchored_by_key.into_values().collect(),
     }
+}
+
+/// Shallow, advisory detection of outcome criteria whose evidence can only
+/// exist after the shipping change has been deployed. These are deliberately
+/// excluded from the untraced/blocking set; a human should confirm and split
+/// them onto a follow-up measurement spec. trace:TASK-1293 | ai:codex
+pub(crate) fn is_post_deployment_criterion(text: &str) -> bool {
+    let normalized = text
+        .to_ascii_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let direct = [
+        "measured on the next ",
+        "measure on the next ",
+        "over the following ",
+        "after this ships",
+        "after the change ships",
+        "once deployed",
+        "after deployment, measure ",
+    ];
+    if direct.iter().any(|phrase| normalized.contains(phrase)) {
+        return true;
+    }
+
+    // Cover forms such as "after 20 specs" without pretending to understand
+    // arbitrary prose. Requiring a numeric window keeps the heuristic honest.
+    let words: Vec<&str> = normalized.split_whitespace().collect();
+    words.windows(3).any(|window| {
+        window[0] == "after"
+            && window[1]
+                .trim_matches(|c: char| !c.is_ascii_digit())
+                .parse::<u64>()
+                .is_ok()
+            && matches!(
+                window[2].trim_matches(|c: char| !c.is_alphanumeric()),
+                "spec" | "specs" | "runs" | "deployments"
+            )
+    })
 }
 
 pub(crate) fn parse_acceptance_criteria(spec: &str, description: &str) -> Vec<Criterion> {
@@ -749,8 +815,13 @@ fn print_human_report(report: &CriteriaReport) {
     for row in &report.criteria {
         println!();
         println!("{} {}", row.criterion.id.cyan().bold(), row.criterion.text);
-        if row.tests.is_empty() {
-            println!("  {} no traced tests", "untested".yellow());
+        if row.state == CriterionState::PostDeployment {
+            println!(
+                "  {} cannot be traced before this change ships; move the outcome, measurement window, and falsifying threshold to a follow-up measurement spec blocked by {}",
+                "post-deployment".yellow(), report.spec
+            );
+        } else if row.tests.is_empty() {
+            println!("  {} no traced tests", "untraced".yellow());
         } else {
             for test in &row.tests {
                 println!("  {} {}:{}", "test".green(), test.path, test.line);
@@ -759,6 +830,10 @@ fn print_human_report(report: &CriteriaReport) {
     }
     println!();
     print_gap("Untested criteria", &report.untested);
+    print_gap(
+        "Post-deployment criteria (advisory; do not block done)",
+        &report.post_deployment,
+    );
     if report.unanchored.is_empty() {
         println!("Unanchored tests: none");
     } else {
@@ -897,6 +972,75 @@ mod tests {
         assert_eq!(report.untested, vec!["STORY-1.A2"]);
         assert_eq!(report.unanchored[0].name, "unknown_ac");
         assert_eq!(report.criteria[0].tests[0].name, "covers_a1");
+        assert_eq!(report.criteria[0].state, CriterionState::Traced);
+        assert_eq!(report.criteria[1].state, CriterionState::Untraced);
+        assert!(report.post_deployment.is_empty());
+    }
+
+    #[test]
+    fn post_deployment_criteria_are_advisory_not_untraced() {
+        // trace:TASK-1293.ac1c7c47 | ai:codex
+        let criteria = vec![
+            Criterion {
+                id: "TASK-1.A1".into(),
+                label: "A1".into(),
+                text: "Measured on the next 20 specs: median rounds-to-merge drops".into(),
+            },
+            Criterion {
+                id: "TASK-1.A2".into(),
+                label: "A2".into(),
+                text: "After 12 runs the failure rate remains below 2%".into(),
+            },
+            Criterion {
+                id: "TASK-1.A3".into(),
+                label: "A3".into(),
+                text: "The fixture reports a median value".into(),
+            },
+        ];
+
+        let report = criteria_report_from_parts("TASK-1", criteria, vec![]);
+        assert_eq!(report.post_deployment, vec!["TASK-1.A1", "TASK-1.A2"]);
+        assert_eq!(report.untested, vec!["TASK-1.A3"]);
+        assert_eq!(report.criteria[0].state, CriterionState::PostDeployment);
+    }
+
+    #[test]
+    fn post_deployment_phrase_detection_is_shallow_and_case_insensitive() {
+        // trace:TASK-1293.ac1c7c47 | ai:codex
+        for text in [
+            "Once deployed, the error rate falls",
+            "OVER THE FOLLOWING ten releases, adoption rises",
+            "After this ships, measure latency",
+            "After 20 specs the median falls",
+        ] {
+            assert!(is_post_deployment_criterion(text), "missed: {text}");
+        }
+        assert!(!is_post_deployment_criterion(
+            "The fixture exposes the median and rate"
+        ));
+        for text in [
+            "The gate distinguishes post-deployment criteria from untraced criteria",
+            "A post-deployment criterion is reported with suggested split guidance",
+            "The report explains that post-deployment evidence cannot exist at merge time",
+        ] {
+            assert!(
+                !is_post_deployment_criterion(text),
+                "false positive: {text}"
+            );
+        }
+    }
+
+    #[test]
+    fn discipline_pack_documents_shipping_split_with_task_1291_example() {
+        // trace:TASK-1293.acb68aa3 | ai:codex
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../.aida/discipline/spec-authoring.md");
+        let guidance = std::fs::read_to_string(path).unwrap();
+        let normalized = guidance.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(normalized.contains("TASK-1291 originally required"));
+        assert!(normalized.contains("follow-up measurement spec"));
+        assert!(normalized.contains("blocked by the shipping spec"));
+        assert!(normalized.contains("threshold that would falsify the change"));
     }
 
     #[test]
