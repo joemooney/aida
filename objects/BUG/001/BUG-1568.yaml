@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:03:26.342175685Z
-modified_at: 2026-09-21T20:36:36.802635394Z
+modified_at: 2026-09-21T20:51:16.964839104Z
 req_type: Bug
 tags:
 - aida:queue
@@ -93,4 +93,34 @@ comments:
     WHAT IT IS NO LONGER ACCOUNTABLE FOR: the phase-2 misattribution, which is BUG-1570, approved and queued, with the innocent-spec message quoted from this spec's own evidence.
   created_at: 2026-09-21T20:36:36.802635394Z
   modified_at: 2026-09-21T20:36:36.802635394Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5bc-c164-7b01-91cf-a0bb638ba1b0
+  author: joe
+  content: |-
+    [aida:advisor] CORRECTION TO MY OWN COMMENT ABOVE, AND IT IS A FACTUAL ERROR TWO SEATS REASONED FROM: **DRAFT IS NOT IN THE ELIGIBLE SET.** A DRAFT SPEC DOES NOT AUTO-COMPLETE ON A TRAILERED MERGE.
+
+        aida-core/src/lifecycle.rs:227
+        pub fn git_merge_completes(from: State) -> bool {
+            matches!(from, State::Approved | State::Planned | State::InProgress
+                           | State::Done | State::NeedsAttention)
+        }
+        Draft: NOT LISTED. Grepped the body: zero occurrences.
+
+    I WROTE "this spec is DRAFT, which is in the five-state eligible set" IN THE COMMENT ABOVE. That is false. claude-reviewer-1's original warning said the same thing and I repeated it without checking, having verified the five-state predicate myself twice today for BUG-1480 and TASK-1289 — both of which were NEEDS-ATTENTION, which IS in the set. I generalised from two true instances to a state that is not in the list.
+
+    PROVEN EMPIRICALLY BY THIS MERGE. #2060 landed at 4368ae2317a3 with `(BUG-1568)` INTACT in the squash subject — `git log -1 origin/main` confirms it — and `aida pull` auto-bumped only BUG-1462. THIS SPEC IS STILL DRAFT. The trailer was in the subject and the bump declined it.
+
+    WHAT THIS DOES AND DOES NOT CHANGE:
+    - THE SPLIT TO BUG-1570 STANDS, AND ON ITS OWN MERITS. The test applied was BUG-1470's — is the
+      remaining work PART OF THIS DEFECT or SEPARATE WORK DISCOVERED BESIDE IT? The misattribution
+      outlives the collision fix and fails independently of it. That reasoning never depended on the
+      trailer hazard; the hazard was an additional argument and it was the one that was wrong.
+    - THE TRAILER DECISION WAS ALSO RIGHT, for a different reason than given: it could stand because
+      Draft does not bump, not because the split had removed the open item.
+    - THIS SPEC IS STILL DRAFT AND MUST BE CLOSED DELIBERATELY. The fix shipped at #2060; nothing
+      will close it automatically. That is now a manual act, not an oversight.
+
+    AND A STANDING CORRECTION FOR EVERY FUTURE TRAILER RULING ON THIS BOARD: the hazard is REAL for Approved, Planned, InProgress, Done and NeedsAttention, and DOES NOT EXIST for Draft. A Draft spec with a trailered merge is the SAFE case — and it is also the case where a spec silently stays open after its work has shipped, which is the opposite failure and worth watching for instead.
+  created_at: 2026-09-21T20:51:16.964839104Z
+  modified_at: 2026-09-21T20:51:16.964839104Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
