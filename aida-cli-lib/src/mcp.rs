@@ -2597,8 +2597,14 @@ impl<'a> McpServer<'a> {
             })?,
             None => aida_core::mailbox::Intent::default(),
         };
+        // trace:BUG-1461 | ai:claude — mirror the CLI `--subject` flag (BUG-1231),
+        // which the MCP schema/handler had never picked up.
+        let subject = args
+            .get("subject")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         let msg = Message {
-            subject: None,
+            subject,
             id: id.clone(),
             thread_id: thread_id.clone(),
             from,
@@ -2667,7 +2673,7 @@ impl<'a> McpServer<'a> {
                     Recipient::Agent(a) => a.clone(),
                     Recipient::Broadcast => "all".to_string(),
                 };
-                json!({
+                let mut entry = json!({
                     "id": m.id,
                     "thread_id": m.thread_id,
                     "from": m.from,
@@ -2677,7 +2683,13 @@ impl<'a> McpServer<'a> {
                     "body": m.body,
                     "urgent": m.urgent,
                     "intent": m.intent.as_str(),
-                })
+                });
+                // trace:BUG-1461 | ai:claude — mirror the CLI: an explicit
+                // subject is present, an unset one is omitted (not null).
+                if let Some(subject) = &m.subject {
+                    entry["subject"] = json!(subject);
+                }
+                entry
             })
             .collect();
         // Explicit ack only: record receipts for latency history, then advance
@@ -7038,6 +7050,7 @@ pub fn tool_descriptors() -> Value {
                 "type": "object",
                 "properties": {
                     "body": { "type": "string", "description": "The message body.", "example": "can you re-check the auth flow in PR-42? CI flaked once." },
+                    "subject": { "type": "string", "description": "Short subject shown by inbox and notice views (mirrors `aida mailbox send --subject`). Optional: messages without one derive their display subject from the first non-empty body line.", "example": "Review requested" },
                     "to": { "type": "string", "description": "Recipient agent id. Omit and set broadcast=true to reach all.", "example": "codex" },
                     "broadcast": { "type": "boolean", "description": "Send to every agent instead of a single recipient.", "example": true },
                     "thread": { "type": "string", "description": "Attach to an existing thread id (default: start a new thread).", "example": "0193a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" },
@@ -7064,7 +7077,7 @@ pub fn tool_descriptors() -> Value {
                 }
             },
             "outputSchema": text_envelope_output_schema(
-                "pretty-printed JSON `{agent, count, unread, messages:[{id,thread_id,from,to,timestamp,in_reply_to,body,urgent,intent}]}` where intent is one of fyi|request|handoff."
+                "pretty-printed JSON `{agent, count, unread, messages:[{id,thread_id,from,to,timestamp,in_reply_to,body,subject,urgent,intent}]}` where intent is one of fyi|request|handoff and subject is omitted when the message has none."
             )
         },
         {
@@ -9882,6 +9895,39 @@ mod tests {
         // Neither `to` nor `broadcast` is a clean error, not a panic.
         let err = server.tool_send_message(&json!({ "body": "orphan" }));
         assert!(err.is_err(), "must require to/broadcast: {err:?}");
+    }
+
+    /// send_message → read_inbox round-trip for `subject` (BUG-1461): the CLI
+    /// gained `aida mailbox send --subject` in BUG-1231, but the MCP schema and
+    /// handler were never mirrored — `subject` was accepted by no schema
+    /// property and dropped on the floor (`Message { subject: None, .. }`
+    /// unconditionally). This asserts the subject set via MCP survives into
+    /// the recipient's read_inbox view.
+    // trace:BUG-1461 | ai:claude
+    #[test]
+    fn mcp_mailbox_send_with_subject_then_read_inbox_roundtrip() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        server
+            .tool_send_message(&json!({
+                "to": "claude",
+                "body": "see the attached diff",
+                "from": "codex",
+                "subject": "Review requested",
+            }))
+            .unwrap();
+
+        let out = server
+            .tool_read_inbox(&json!({ "agent": "claude" }))
+            .unwrap();
+        let parsed: Value = serde_json::from_str(&out).unwrap();
+        let messages = parsed["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 1, "{out}");
+        assert_eq!(
+            messages[0]["subject"], "Review requested",
+            "subject must round-trip through send_message -> read_inbox: {out}"
+        );
     }
 
     // trace:STORY-585 trace:TASK-1271 | ai:claude+codex
