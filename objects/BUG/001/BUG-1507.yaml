@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-21T01:48:39.363213400Z
+modified_at: 2026-09-21T01:50:54.993301148Z
 req_type: Bug
 tags:
 - batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
@@ -67,3 +67,40 @@ relationships:
   target_id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
   created_at: 2026-09-21T01:48:39.363204884Z
   created_by: joe
+comments:
+- id: 01a0c1a8-b811-7431-8e91-f33d70cb6f8e
+  author: joe
+  content: |-
+    [reviewer] ENUMERATION CORRECTION BEFORE THIS HARDENS INTO BINDING TEXT. I undercounted at three, the advisor's mail overcounted at seven, and the cited line numbers do not exist in the file. The correct figure is SIX CONDITIONS across FOUR CONSTRUCTION SITES, and the difference is not cosmetic: this spec's own argument is that naming a class without listing its instances ships a half-fix both sides call done.
+
+    Measured at PR #1972 head 6512f1312afb359cf33eebf41cb9916bad834eec, aida-cli-lib/src/implementer_preflight.rs, which is 449 lines with the test module starting at line 320. Everything below is production code; lines 328, 351 and 396 are tests and are excluded.
+
+    RESOLUTION PHASE -- guards_from_ci returns ResolvedGuard::Skipped:
+
+         96   CI workflow missing         (file read fails)
+        102   CI workflow unreadable      (YAML parse fails)
+        127   no matching CI guard        (named guard absent from the workflow)
+
+    EXECUTION PHASE -- GuardResult::Skipped:
+
+        284   funnel: ResolvedGuard::Skipped(note) => return GuardResult::Skipped(...)
+        288   worktree binary unavailable, guard not authoritative
+        305   timed out after N seconds
+        306   could not start
+
+    So line 284 is NOT a seventh condition. It is the funnel through which 96, 102 and 127 arrive, which is why counting it alongside them double-counts. Six distinct conditions; four places the value is constructed. The advisor's cited lines 439, 443, 460 and 461 cannot be right in a 449-line file -- most likely read against a patch-relative or post-application numbering.
+
+    MY ORIGINAL THREE WAS THE WORSE ERROR and the advisor's substantive point is correct: I named only 288, 305 and 306, missing the funnel and therefore the entire resolution phase behind it. The two conditions I missed are the most severe in the set, for a reason stronger than the one in the mail.
+
+    THE PART THAT CHANGES THE SEVERITY CLASSIFICATION. guards_from_ci maps EVERY named guard to Skipped when .github/workflows/ci.yml is missing or unparseable -- not one guard, the whole set. Those Skipped values funnel through 284 into GuardResult::Skipped, decide() lets `_ => None` swallow them, failed.is_empty() is true, and the decision is Open.
+
+    So the gate does not merely fail open on an edge case. It is INERT for any project that lacks that exact file path. A downstream project scaffolded by aida init and having no .github/workflows/ci.yml at all gets: every guard skipped, nothing failed, publish. The preflight reports success by producing no failures, having run nothing, and there is no output difference between "all guards passed" and "there were no guards".
+
+    That is the purest instance of PRIN-5 in the set -- computing a verdict over what is present, where nothing is present -- and it is the one I would put first in this spec, because the other three sites degrade a working gate while this one means the gate was never on.
+
+    ON CRITERION 4, mechanical findability: I think the evidence for it is stronger than stated. Three independent authors wrote this pattern; the one who got it right chose None as a fallthrough rather than reasoning about the class. Add that I wrote the instruments-blind-to-themselves entry and still missed the funnel in the one file where it applies, and reviewed the diff twice. A pattern that its own describer misses on direct inspection is not reliably reviewable. A type change that makes the unknown case unrepresentable is the right strength; a lint would have to encode "which match arms are a gate", which is the judgement that failed.
+
+    SUGGESTED for criterion 5's trace comments: point them at the CONDITION, not just the principle -- trace:PRIN-5 plus a word naming what the unknown case is at that site (absent workflow, timeout, unparsed verdict). The principle alone tells the next reader it is a gate; the condition tells them what falls through it.
+  created_at: 2026-09-21T01:50:54.993301148Z
+  modified_at: 2026-09-21T01:50:54.993301148Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
