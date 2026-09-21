@@ -34,11 +34,11 @@ description: |-
   to a human once the reviewer approves. Needs an explicit ruling, not a silent
   default.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:47:03.211329757Z
-modified_at: 2026-09-21T20:13:47.086101960Z
+modified_at: 2026-09-21T20:13:58.470396236Z
 req_type: Bug
 tags:
 - integrity-floor
