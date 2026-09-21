@@ -26,12 +26,12 @@ description: |
   5. A test asserts the chosen behaviour by traversal — after `rel add --type related`, either `aida graph` reaches the target or the command failed. Asserting on the message is not sufficient; the message is what already exists.
 
   trace-worthy note for whoever takes it: TASK-887 is Completed and its warning works. This is not a regression of it — it is the next question, which is whether a warning was the right remedy.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-21T22:56:38.802101327Z
+modified_at: 2026-09-21T23:27:17.691067621Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -310,23 +310,28 @@ comments:
   created_at: 2026-09-21T22:56:38.802101327Z
   modified_at: 2026-09-21T22:56:38.802101327Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c64b-9698-7eb3-ad73-b47cdea1087f
+  author: aida-auto-bump
+  timestamp: 2026-09-21T23:27:17.656862193Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0c64b-96bb-7953-82ca-d67201d3c1d8
+  timestamp: 2026-09-21T23:27:17.691064171Z
+  agent: implementer
+  commit_sha: e0a211ec812c91c96d36789b2daffafb1884dfcb
+  summary: 'APPROVED AT 779cd25f03. F1 IS DISCHARGED AND FIXED AT THE SEAM. F2 AND F3 WERE FALSE FINDINGS OF MINE AND I WITHDRAW BOTH. F1 — DISCHARGED, AND BETTER THAN THE FIX I ASKED FOR. I asked for a third bucket. The lane restructured the rendering so the class cannot recur: `render_spec_card` now iterates `card_rel_sections(rels)` and renders EVERY heading the card defines from one place, rather than calling a hardcoded `join_rels` per bucket. The comment states the invariant — "an edge that lands in no bucket is worse than one under a rough heading". `card_rel_label` keeps `Custom(_) => "Custom"` (correct, and NOT reverted to "Related" as I warned against), and `card_rel_edge_name` prints the edge''s real name inline, so `implemented-by` renders as itself under a neutral heading rather than being hidden or dressed up as a standard type. The ~1480 Custom edges render again, and a future fourth bucket cannot silently vanish the way this one did. F2 — WITHDRAWN. MY FINDING WAS FACTUALLY WRONG. I wrote that BUG-1471''s comments were "entirely the advisor''s PRE-implementation analysis, which explicitly says ''I have no standing to pick''". THERE WAS AN IMPLEMENTER DECISION COMMENT, at 22:27:24Z, two minutes BEFORE the 22:29 commit, and it contains exactly what criterion 2 required: "Decision (option a): normalize the CLI spelling ''related'' to the existing standard References relationship. Rejected (b) because a new non-directional core type would expand serialization, inverse, and traversal taxonomy without a distinct semantic need; rejected (c) because this natural spelling has one unambiguous safe meaning and refusal would break callers unnecessarily." HOW I MISSED IT, because the mechanism matters more than the apology: in this YAML a comment''s `content:` PRECEDES its `created_at:`. I anchored a read on the timestamp and scanned FORWARD, which printed the following record''s metadata rather than this record''s body, and concluded from that empty window that no such comment existed. I read a bounded window from the wrong end — the same family as reading a truncated list and reporting its length. F3 — WITHDRAWN, SAME COMMENT, SAME READ ERROR. Criterion 3 required the existing edges be accounted for and their disposition stated rather than silently stranded. The 22:27:24Z comment states it: "Store audit on 2026-09-21 found 139 exact !Custom related edges across 86 spec YAML objects. They are deliberately left as-is (not silently migrated): the core parser remains lossless and explicit custom traversal remains available, while new ''rel add --type related'' writes References. Rewriting shared git-canonical history is outside this bounded CLI fix and could alter deliberately custom data." A count, a disposition, and a reason. That satisfied criterion 3 at the head I refused. WHAT THE REWORK NONETHELESS IMPROVED, and it is why this is not purely my error to absorb: the decision lived in a comment the diff did not point at, so a reader arriving at the commit had nothing leading them to it. The rework consolidates the reasoning into the PR body and files TASK-1426 — which exists, at draft, titled for the 139 edges with the orphan/twin split. That is a real improvement in discoverability over "recorded but unlinked", and the lane''s own framing is the fair one: a weaker failure than silence, but still a failure. AND IT PRODUCED ONE FACT I WOULD NOT HAVE HAD: the inert population grew from 128 to 158 while the fix sat unmerged, with the advisor contributing one edge twelve minutes after writing that the migration is what determines whether the spec fixes anything. The growth argument then cuts the OPPOSITE way from how it first reads — the faster the set grows, the more the bounded fix wants to land alone rather than behind an 86-object rewrite of the shared canonical store. Deferring is right, and the hard reason is independent of timing: 14 twins would become 14 duplicates under a blind conversion, and the `rel remove --type related` mechanism that may be manufacturing them is still unverified. Migrating on top of a possibly-broken repair path is how a migration gets re-run. ALL FIVE CRITERIA MET. MERGE CONDITION: CI green at this head. The `aida:merge-hold` is mine and needs `aida merge-hold clear 2065` from a terminal; I cannot clear it from a non-TTY seat.'
+  punted:
+  - 'punted: CI is red on PR-2065: Build (ubuntu-latest)'
+  - 'punted: CHANGES REQUESTED AT bfef2601b1. The chosen option is right and two of the five acceptance criteria are genuinely met, including the hardest one. But the fix to criterion 4 introduces a regression that is the same defect class BUG-1471 exists to fix, and two criteria that live outside the code are unmet. WHAT IS GOOD, AND I WANT IT KEPT. Option (a) is implemented cleanly: `cli_relationship_type` normalizes `related` to `References` at the CLI boundary while `RelationshipType::from_str` stays lossless, so existing `!Custom related` YAML still parses as it always did. That split is exactly right - the write path is fixed without rewriting the meaning of stored data. The duplicated match arm in git_backend_cmd.rs is now a single function, `STANDARD_REL_TYPES` gains `related` so the did-you-mean stops flagging an accepted word, and `nearest_standard_rel_type` routes through the same parser so the two cannot drift. CRITERION 5 IS MET IN SUBSTANCE, NOT JUST IN NAME, which is worth saying because it was the criterion most easily faked. `related_alias_writes_an_edge_reached_by_references_traversal` builds a store, adds the edge, runs `walk_union` and asserts `walked.nodes.contains(&target_id)`. That is a traversal assertion. The spec said "asserting on the message is not sufficient" and the test does not assert on a message at all. `core_parser_preserves_historical_custom_related_edges` is the right companion - it pins the lossless half so a later cleanup cannot quietly migrate stored data. CRITERION 1 IS MET: `--type related` now produces a References edge, which traverses.'
+  review_verdict: approve
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-21T22:30:30.175593099Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    CHANGES REQUESTED AT bfef2601b1. The chosen option is right and two of the five acceptance criteria are genuinely met, including the hardest one. But the fix to criterion 4 introduces a regression that is the same defect class BUG-1471 exists to fix, and two criteria that live outside the code are unmet.
-
-    WHAT IS GOOD, AND I WANT IT KEPT. Option (a) is implemented cleanly: `cli_relationship_type` normalizes `related` to `References` at the CLI boundary while `RelationshipType::from_str` stays lossless, so existing `!Custom related` YAML still parses as it always did. That split is exactly right - the write path is fixed without rewriting the meaning of stored data. The duplicated match arm in git_backend_cmd.rs is now a single function, `STANDARD_REL_TYPES` gains `related` so the did-you-mean stops flagging an accepted word, and `nearest_standard_rel_type` routes through the same parser so the two cannot drift.
-
-    CRITERION 5 IS MET IN SUBSTANCE, NOT JUST IN NAME, which is worth saying because it was the criterion most easily faked. `related_alias_writes_an_edge_reached_by_references_traversal` builds a store, adds the edge, runs `walk_union` and asserts `walked.nodes.contains(&target_id)`. That is a traversal assertion. The spec said "asserting on the message is not sufficient" and the test does not assert on a message at all. `core_parser_preserves_historical_custom_related_edges` is the right companion - it pins the lossless half so a later cleanup cannot quietly migrate stored data.
-
-    CRITERION 1 IS MET: `--type related` now produces a References edge, which traverses.
-  recovery_hint: address the review findings, move BUG-1471 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-09-21T22:37:41.505058025Z
+  completed_at: 2026-09-21T23:27:17.655300985Z
+  completion_sha: e0a211ec812c91c96d36789b2daffafb1884dfcb
