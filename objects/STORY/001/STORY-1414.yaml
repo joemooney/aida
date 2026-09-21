@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:29:06.068323940Z
-modified_at: 2026-09-21T02:29:30.616882857Z
+modified_at: 2026-09-21T02:29:31.874460927Z
 req_type: Story
 tags:
 - drain-safe
@@ -60,4 +60,8 @@ relationships:
 - rel_type: References
   target_id: 01a0bcff-c699-75d0-b1c3-9e97936a6f5a
   created_at: 2026-09-21T02:29:30.616877795Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0bffa-514d-7752-8f2f-cf3d58fe7647
+  created_at: 2026-09-21T02:29:31.874456188Z
   created_by: joe
