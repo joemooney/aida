@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T12:44:54.134125344Z
+modified_at: 2026-09-21T12:45:33.063391229Z
 req_type: Bug
 tags:
 - agent-surface
@@ -273,6 +273,12 @@ comments:
     WHAT THIS MEANS FOR THE AMENDED CRITERION ABOVE: the real-store guard is now the path, not the fallback. The reviewer's stated position, given in advance and on this spec: four measured negatives and the CI requirement is withdrawn without argument. There are five. The two BINDING CONDITIONS still apply in full - the acceptance must name the TRIGGER, and the guard must be DEMONSTRATED TO FIRE against the real store before it is accepted.
   created_at: 2026-09-21T12:44:54.134125344Z
   modified_at: 2026-09-21T12:44:54.134125344Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c400-0e07-70e0-9225-9894a6d2c51c
+  author: joe
+  content: 'The fixture-vs-real-store inversion recorded in the comment above is now TASK-1419, high, queued: a cache-backed aida list is 2.4x slower on a fixture smaller in both objects and bytes. It is scoped to MEASUREMENT only and its criterion 3 is the question this spec''s test design turned on - whether a tempdir fixture can EVER model real-store read latency for this codebase. Currently unanswered, and BUG-1480 should not adopt a fixture-based guard until it is.'
+  created_at: 2026-09-21T12:45:33.063391229Z
+  modified_at: 2026-09-21T12:45:33.063391229Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
