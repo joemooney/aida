@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T08:35:15.384319701Z
+modified_at: 2026-09-21T08:36:36.225378490Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1231,6 +1231,30 @@ comments:
     #2042 keeps its merge-hold marker and label.
   created_at: 2026-09-21T08:34:15.436126517Z
   modified_at: 2026-09-21T08:34:15.436126517Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c31c-2301-7210-9924-3941de0ff787
+  author: joe
+  content: |-
+    METHOD, PRESERVED FROM A NOW-CLOSED PR'S VERDICT — how to tell a pure rebase from a rework when the head has moved. Recorded by the reviewer seat as F4 on PR-1972 at c2d996334bb3; moved here because a verdict on a closed PR is a record nobody opens again (BUG-1539).
+
+    THREE STALENESS SIGNALS DISAGREED ON ONE PR, and only the third was right:
+
+      1. THE HEAD MOVED           6512f1312afb -> c2d996334bb3          reads as REWORK
+      2. git patch-id --stable    one of four commits differs,
+                                  8a92b2637b -> f21fbbdd26              reads as CONTENT CHANGED
+      3. THE ACTUAL +/- LINES     323 lines each, BYTE-IDENTICAL        PURE REBASE, zero rework
+
+    WHY PATCH-ID LIED. patch-id hashes the diff INCLUDING its context lines. When main advances underneath a branch, the context moves even though the change does not: here that commit's config hunk header went from line 42 to line 59, picking up retry_transient 1 -> 2 and pipeline_depth 2 in the surrounding context, and the lib.rs hunks shifted about 930 lines. The patch-id changed because the NEIGHBOURHOOD changed. Nothing the commit does changed.
+
+    THE RELIABLE TEST: extract only the ADDED AND REMOVED lines of the commits under comparison, with context stripped, and compare those. Equal line sets means the work is unchanged no matter what the head sha or the patch-id says.
+
+    WHY THIS MATTERS BEYOND ONE PR. A reviewer who stops at signal 1 re-reviews a PR that did not change. A reviewer who stops at signal 2 — the more sophisticated check, and the one that FEELS rigorous — reaches the same wrong conclusion with more confidence. Both waste a round; worse, a reviewer who believes a finding was "addressed" because the patch-id moved will clear a finding that still stands. The failure mode is silent and it points toward approval.
+
+    This session has already been bitten by the inverse: counting rounds from a reviewer saying "still" rather than from commits. The general rule both instances point at is that a proxy for "did the work change" is not the work changing, and the cheap proxies drift in the direction that ends inquiry.
+
+    ONE MORE THING FROM THE SAME VERDICT, worth keeping with it. The Build passed in 10m36s at that head — the first meaningful CI result the PR had produced since BUG-1526 began masking — and it moved nothing: all three blocking findings are design-level and CI cannot see any of them. A gate that fails open passes its own test suite by construction. Green CI on a PR whose findings are design-level is evidence the tree builds, and no evidence at all toward merging.
+  created_at: 2026-09-21T08:36:36.225378490Z
+  modified_at: 2026-09-21T08:36:36.225378490Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
