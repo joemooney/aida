@@ -1,0 +1,41 @@
+id: 01a0c533-7fa0-72c3-b54c-46b33d7a095a
+spec_id: BUG-1562
+agreed_id: BUG-1562
+title: A merge-hold marker's reason is frozen at placement and never re-evaluated, so a live gate carries a dead premise - two instances in one session, both misleading at the moment of reading
+description: |
+  A MERGE-HOLD MARKER RECORDS ITS REASON AT PLACEMENT TIME AND NOTHING EVER RE-EVALUATES IT, SO A LIVE GATE ROUTINELY CARRIES A DEAD PREMISE. TWO INSTANCES IN ONE SESSION.
+
+  Found by claude-reviewer-1 2026-09-21 after the second occurrence; both markers were read and cleared by the advisor seat.
+
+      .aida/merge-holds/PR-2049   "CHANGES REQUESTED for STORY-1422 at 3acf3671fd7a"
+                                  read AFTER that round had been reworked and APPROVED at cd21a1dc0a9e
+      .aida/merge-holds/PR-2001   "CHANGES REQUESTED for BUG-1291 at 64e4e5755b"
+                                  read TWO HEADS LATER, after the refusal was resolved at af49b12b83fc
+
+  In both cases the gate was still correctly ARMED — the advisor had not released it — and the REASON printed on it was false. A marker is consulted precisely by someone deciding whether a refusal still applies, which is the moment a stale reason does the most damage: it argues for a hold that no longer has grounds, or it obscures a hold that has different grounds than it states.
+
+  THIS IS THE VERDICT-CLOBBER FAMILY WITH THE POLARITY REVERSED. BUG-1539 is about an artefact being DESTROYED while its subject persists. This is an artefact PERSISTING while its premise is destroyed. Same root: a coordination record written once, read later, with nothing in between that notices the world moved. BUG-1539 covers the verdict side; the marker side has no spec.
+
+  THE REMEDY ALREADY EXISTS IN PRACTICE AND SHOULD BE MADE THE CONVENTION. On PR #2042 the advisor replaced a frozen reason with a MECHANICAL RELEASE CONDITION — numbered checks stating what must be true at merge time, each marked MET or not, plus a post-merge verification step:
+
+      1. required checks green at the approved sha   [SUCCESS at 84a7ea68a0 — MET]
+      2. reviewer verdict APPROVED at the merged head [APPROVED 84a7ea68a0 — MET]
+      3. the squash subject must name BUG-1420 and must not name TASK-1289  <- the actual gate
+      4. after merge, VERIFY: TASK-1289 still needs-attention, BUG-1420 completed
+
+  A reason describes the PAST and goes stale by default. A release condition describes a FUTURE CHECK and is evaluated when read. The same session produced direct evidence for why this matters: a condition held only in prose ("BUG-1555 does not close until the probe has reported") was forgotten at merge time by the seat that wrote it minutes earlier, while a condition written onto the #2033 and #2042 markers was executed correctly.
+
+  Acceptance:
+  - `aida merge-hold list` must distinguish a marker whose stated reason is still current from one whose premise has moved. The cheapest discriminator available: a marker that cites a sha should be flagged when the PR head no longer matches it, in the same way a merged PR is already flagged `[stale — PR merged]`.
+  - `aida merge-hold add` should accept and encourage a RELEASE CONDITION rather than only a free-text reason. If that is too large a change, the scaffolded convention and `.aida/discipline/` should say to write conditions rather than reasons, with #2042's marker as the worked example.
+  - DEMONSTRATE-IT-FIRES, RED-FIRST: construct a marker citing a sha, advance the PR head past it, and show the staleness is REPORTED. A check written against a marker that is already current proves nothing.
+  - Do NOT auto-clear a stale-looking marker. A hold is a deliberate gate and its owner releases it; the defect is that the reader cannot tell the reason is dead, not that the hold is wrong.
+
+  Related: BUG-1539 (the same root with the polarity reversed — the artefact destroyed, the subject persisting), BUG-1551 (a merge closing a spec past its own criteria — what the #2033 and #2042 release conditions were written to prevent).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T18:21:21.696012729Z
+modified_at: 2026-09-21T18:21:21.696012729Z
+req_type: Bug
