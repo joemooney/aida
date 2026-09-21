@@ -1,0 +1,26 @@
+id: 01a0c5a6-2b1a-7221-87a3-2473062cecaa
+spec_id: STORY-1431
+agreed_id: STORY-1431
+title: 'Review PR-2059: [AI:codex] fix(tui): honor explicit mail subjects (BUG-1462)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0c59f`) for branch `bug-1462-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2059>
+  - Branch: `bug-1462-work` → `main`
+
+  ## Covers
+
+  - BUG-1462
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2059` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T20:26:36.698156478Z
+modified_at: 2026-09-21T20:26:36.698156478Z
+req_type: Story
