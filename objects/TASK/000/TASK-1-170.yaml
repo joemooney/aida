@@ -1,0 +1,41 @@
+id: 01a0c1ee-defb-7cd0-b234-051939e4dcad
+spec_id: TASK-1-170
+title: aida merge-hold list's label column reports the marker file's recorded claim, not the forge - so it cannot detect the marker/label divergence it exists to surface
+description: |-
+  aida merge-hold list reports the label column from the MARKER FILE's own recorded claim, not from the forge — so the surface that exists to detect marker/label divergence is structurally unable to detect it
+
+  FOUND while verifying the two holds I placed were still armed on both layers, which is the one protective invariant this seat owns. The holds were intact. The listing was not.
+
+  THE OBSERVATION. `aida merge-hold list` renders a label column per marker:
+
+      PR #1989  advisor hold: build red — ...  [label: unknown]
+      PR #2019  TASK-1274 opened by the advisor ...  [label: synced]
+
+  #1989's label is NOT unknown. Measured directly:
+
+      gh pr view 1989 --json labels   ->  labels=[aida:merge-hold]
+      gh pr checks 1989               ->  merge-hold-gate  FAIL
+
+  The label is present and the required check is correctly failing. The hold is fully armed and the listing says its label state is unknown.
+
+  THE MECHANISM, established by inspection rather than inferred. Marker files optionally carry a literal `label: synced` line. Across the 23 markers on disk, exactly four lack it — PR-1989, PR-1998, PR-1999, PR-2006 — and those four are precisely the ones rendered `[label: unknown]`. So the column reports what the marker file SAYS about the label, recorded when the marker was written, and never re-queries the forge.
+
+  WHY THAT MATTERS MORE THAN THE FALSE "UNKNOWN". The direction found here is benign: a marker with no recorded line shows unknown while the gate is actually armed. Alarming, not dangerous.
+
+  The dangerous direction is the one the surface cannot see. A marker recording `label: synced` will keep rendering "synced" after the label is removed at the forge, because nothing checks. And that is the exact state the command's own help text exists to warn about — CLAUDE.md documents that a label applied by hand alone leaves the required check red with nothing to release, and `merge-hold add` writes both precisely so the two stay together. A listing that reports the marker's memory of the label cannot tell you the two have come apart, which is the only question worth asking of it.
+
+  WHAT I MEASURED AND WHAT I DID NOT. I cross-checked all 23 markers against the forge read-only: zero claim `synced` while the label is absent. So the divergence is currently hypothetical in this repo. I did NOT test it by removing a label — these are live gates on held PRs and manufacturing the failure is not an acceptable way to confirm it. The mechanism is established from the four-of-four correspondence between missing `label:` lines and "unknown" renderings; the consequence follows from the column never performing a forge read, which is visible in that the four "unknown" rows are unknown despite their labels being present.
+
+  SUGGESTED, advisory: the column should be computed from a forge query at list time, or renamed to something that does not claim to describe the label — "recorded: synced" rather than "label: synced". The second is nearly free and removes the false authority. The first is what the command is for.
+
+  RELATION TO TONIGHT'S PATTERN (TASK-1-166): this is the proxy's shape again. `merge-hold list` is run by whoever is auditing holds, and the state it describes lives at the forge, which that reader is not looking at simultaneously. The reader who could notice the column is wrong is the one who already went to GitHub — and having gone there, has no need of the column.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T03:07:32.475248034Z
+modified_at: 2026-09-21T03:07:32.475248034Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
