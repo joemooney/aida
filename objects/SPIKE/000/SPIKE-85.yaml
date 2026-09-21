@@ -28,12 +28,12 @@ description: |
   5. Do NOT attempt to automate the check as a lint. Establish first whether the pattern is even machine-detectable; the honest answer may be no, and that answer is worth having explicitly rather than by omission.
 
   Named across the session by the advisor and product seats jointly. The formulation that unlocked it, from the product seat: "both are the author's attention pointed outward at the artifact while the artifact is the only instrument facing the other way."
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:45.252179213Z
-modified_at: 2026-09-21T23:02:45.267608179Z
+modified_at: 2026-09-21T23:20:51.916638770Z
 req_type: Spike
 tags:
 - batch:night-0920
@@ -90,67 +90,29 @@ comments:
   created_at: 2026-09-21T22:43:37.691870320Z
   modified_at: 2026-09-21T22:43:37.691870320Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0c645-b3a2-73e2-b1e6-149e2cc01b7a
+  author: aida-auto-bump
+  timestamp: 2026-09-21T23:20:51.874974709Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0c645-b3cc-7bb2-af3e-23e59268335c
+  timestamp: 2026-09-21T23:20:51.916636765Z
+  agent: aida
+  commit_sha: c86f516a49016ea69293bcd84839fd9afe3206dd
+  summary: 'APPROVED AT bb84dc4c8d. Both findings are discharged, the refuted one was correctly left alone, and the rework is better than what I asked for in three places. F1 DISCHARGED, AND IT NARROWS BUG-1578 RATHER THAN JUST FILLING A ROW. The pre-commit `///`-provenance gate now has a full entry. It goes past presence to a real result: the Rust twin self-applies via `include_str!("cli.rs")` and protects its own category prose with a deliberate device (the explanatory paragraph uses `//` not `///` so it is not read as an instance); the SHELL twin cannot be self-applied at all, because its diff capture is pathspec-scoped while its own body carries the very `/// trace:` forms it hunts — exclusion by file extension, not discrimination. I VERIFIED THAT PATHSPEC CLAIM rather than accepting it: `aida-core/templates/hooks/aida-pre-commit.sh:300` is `git diff --cached --unified=0 --no-color --diff-filter=ACDMR -- ''*.rs''`. And the row draws the correct consequence, which is AGAINST the report''s own earlier interest: this gate is NOT a BUG-1578 instance, because a docs-only diff contains no staged `*.rs` lines, so its governed category is empty by construction. A rework that narrows a bug it filed is the opposite of the failure mode I was watching for. The residual gap it names — the shell discriminator and `doc_comment_is_provenance_leak` are hand-maintained mirrors whose agreement is enforced only by a source comment, with no test comparing them — is a genuine finding I did not have. F2 DISCHARGED, WITH MORE THAN I ASKED FOR. `aida burndown status` is inventoried and marked FAIL, with the framing intact: not an edge case the predicate missed but a case the sweep already understood and did not apply twice, since the row above credits the sibling `aida drain status` with passing precisely because `drain_state::probe` derives aggregate and detail from one model. The new analysis goes further than my finding: the two arguments come from TWO INDEPENDENT PROBES OF TWO DIFFERENT FILES (`drain_lock::probe_lock` and `list_leases`) which the renderer never reconciles, so neither types nor control flow prevent the crossed state — and all five existing status tests pair a lock state with a MATCHING member list, so no test constructs the crossed pair, which is exactly the negative control method step 4 requires. It also correctly declines to file a defect, since no contradiction was reproduced at runtime, consistent with the report''s own findings 3 and 4. That restraint is right. THE REFUTED FINDING WAS LEFT ALONE. "TUI seam" still occurs exactly once, in the combined row at its original position. Changing it would have reverted a correct classification, and the lane did not. THE SELF-DEMONSTRATION WAS ADDED AND IS NOW EVIDENCE RATHER THAN INFERENCE — the one improvement I flagged as non-blocking. Finding 1 cites the filter body (`ci.yml:53`-`:58`), both matching exclusions (`:55`, `:56`), the short-circuit branch (`:60`), the four gates with line numbers, AND a specific CI run. I verified the run at step level rather than trusting the citation: run 35664201628, sha ac772eaca9, workflow CI CI docs-only short-circuit success External-prose classifier inventory skipped Run MCP doc-consistency test skipped Doc-intent gate (surface changes mark doc-impact) skipped CLI-manual drift-guard (every command documented) skipped The four doc gates did not run on the artifact reporting that they do not run — now an observed fact with a run id behind it, not a mechanism I inferred from the workflow file. AND THE REPORT SAYS THE TWO ROWS WERE ADDED IN REVIEW, after its first pass. That sentence costs the document nothing and is the strongest thing in it: a sweep for incomplete self-inventories, recording that its own inventory was incomplete and how it was found. CRITERIA 1 AND 2 NOW MET; 3, 4 AND 5 were met before and are unchanged. MERGE CONDITION: CI green at this head. The `aida:merge-hold` is mine and I cannot clear it from a non-TTY seat — `aida merge-hold clear 2066` needs a terminal.'
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: CHANGES REQUESTED AT ac772eaca9. THIS SUPERSEDES MY OWN APPROVE ON THE SAME SHA, RECORDED AT 22:55:46Z. I was wrong and a second reviewer was substantially right. WHY I AM REWRITING THIS FILE KNOWINGLY. The drain reviewer''s RequestChanges overwrote my approve in this PR-keyed handshake at 22:58:08Z; recording again overwrites theirs. I am doing it because the operative verdict must be correct and current, and I am CARRYING THEIR FINDINGS FORWARD RATHER THAN DISCARDING THEM — F1 and F2 below are theirs, assessed by me, with attribution. Their contribution is the reason this verdict changed. Nothing here rests on my having looked again unprompted; I did not. MY REVIEW MISS, STATED FIRST. I verified criterion 4 rigorously — resolved all thirteen referenced paths, re-derived the 21-site marker count — and I checked criteria 1 and 2 for FORM rather than COVERAGE: predicate stated, rows present, "not applicable" reasoned. I never asked whether the inventory was COMPLETE. The check that would have caught it was one I had already run for another purpose: I printed ci.yml''s named-step list while verifying BUG-1578 and never crossed it against the inventory table. The evidence was on my screen and I did not turn it on the artifact. F1 — SPLIT VERDICT, AND HALF OF IT I REFUTE. TUI SEAM GATE: NOT A FINDING. It is not omitted. Line 91 covers it in the combined row ("Build/test/fmt/clippy, bwrap live test, TUI seam, ...") with the disposition "Not applicable as a self-category test" and stated reasoning, which criterion 2 explicitly permits. I also checked whether that disposition is DEFENSIBLE rather than merely present: scripts/check-tui-seam.sh runs `cargo check -p aida-tui --all-targets` and then inspects `cargo metadata` for an aida-tui -> aida-cli-lib dependency edge. It compiles and tests a structural property. It does not classify prose and does not summarize operational state, and its own source cannot meaningfully be supplied as input. The report classified it correctly. PRE-COMMIT PROVENANCE GATE: VALID, ABSENT. `tests/test_precommit_provenance_move.sh` and its CI step appear nowhere in the report — the only occurrence of "provenance" is line 67, in an unrelated sentence about string comparisons. It is a named CI step that changes a commit decision, which is exactly what the report''s own method step 1 prescribes enumerating. F2 — VALID, AND IT IS THE STRONGER OF THE TWO. `aida burndown status` is absent from the report entirely; "burndown" does not appear in the document. It belongs in the aggregate-status inventory on the report''s own predicate, and I confirmed the shape rather than taking the claim: `render_burndown_status_human` takes `lock: &drain_lock::LockStatus` AND `in_flight: &[InFlightLease]` — an aggregate rendered alongside the member list it summarizes. That is precisely the aggregate/detail contradiction shape of BUG-1441, which the report already inventories for `aida drain status` and marks "Pass after BUG-1441". The sibling surface of the one worked example is missing. SO CRITERIA 1 AND 2 ARE NOT MET. Two decision-bearing surfaces are absent, and neither absence is covered by the report''s stated boundary — that boundary is about UNMARKED SEMANTIC CLASSIFIERS ("the external prose inventory explicitly depends on reviewers adding a marker"), not about named CI steps or aggregate status renderers, both of which the method claims to enumerate mechanically. CRITERIA 3, 4 AND 5 REMAIN MET and I do not want them re-litigated: BUG-1578 is filed as its own spec and exists in the store; the method is written and re-runnable with all thirteen paths resolving; machine-detectability is answered as a decision ("not safely automatable as a general lint") with no lint added. WHAT THIS COSTS THE REPORT IS SMALL AND WHAT IT PROVES IS NOT. Two rows and their results. But the subject of this document is instruments that are blind to their own category, and it shipped an incomplete self-inventory — which is the seventh instance of its own first paragraph, found by a reviewer rather than by the sweep. That is worth one sentence in the report, because it is the strongest evidence in it that the pattern is real and that a one-time sweep does not close it. The BUG-1578 self-demonstration I recorded in the approve still stands and is unaffected: this PR is docs-only, ci.yml''s full_ci filter excludes docs/** and **/*.md, and four doc gates require full_ci == ''true'', so the doc gates did not run on the artifact reporting that they do not run.'
+  review_verdict: approve
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-21T22:44:31.834206548Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    CHANGES REQUESTED AT ac772eaca9. THIS SUPERSEDES MY OWN APPROVE ON THE SAME SHA, RECORDED AT 22:55:46Z. I was wrong and a second reviewer was substantially right.
-
-    WHY I AM REWRITING THIS FILE KNOWINGLY. The drain reviewer's RequestChanges overwrote my approve in this PR-keyed handshake at 22:58:08Z; recording again overwrites theirs. I am doing it because the operative verdict must be correct and current, and I am CARRYING THEIR FINDINGS FORWARD RATHER THAN DISCARDING THEM — F1 and F2 below are theirs, assessed by me, with attribution. Their contribution is the reason this verdict changed. Nothing here rests on my having looked again unprompted; I did not.
-
-    MY REVIEW MISS, STATED FIRST. I verified criterion 4 rigorously — resolved all thirteen referenced paths, re-derived the 21-site marker count — and I checked criteria 1 and 2 for FORM rather than COVERAGE: predicate stated, rows present, "not applicable" reasoned. I never asked whether the inventory was COMPLETE. The check that would have caught it was one I had already run for another purpose: I printed ci.yml's named-step list while verifying BUG-1578 and never crossed it against the inventory table. The evidence was on my screen and I did not turn it on the artifact.
-
-    F1 — SPLIT VERDICT, AND HALF OF IT I REFUTE.
-
-      TUI SEAM GATE: NOT A FINDING. It is not omitted. Line 91 covers it in the combined row
-      ("Build/test/fmt/clippy, bwrap live test, TUI seam, ...") with the disposition "Not applicable
-      as a self-category test" and stated reasoning, which criterion 2 explicitly permits. I also
-      checked whether that disposition is DEFENSIBLE rather than merely present: scripts/check-tui-seam.sh
-      runs `cargo check -p aida-tui --all-targets` and then inspects `cargo metadata` for an
-      aida-tui -> aida-cli-lib dependency edge. It compiles and tests a structural property. It does
-      not classify prose and does not summarize operational state, and its own source cannot
-      meaningfully be supplied as input. The report classified it correctly.
-
-      PRE-COMMIT PROVENANCE GATE: VALID, ABSENT. `tests/test_precommit_provenance_move.sh` and its CI
-      step appear nowhere in the report — the only occurrence of "provenance" is line 67, in an
-      unrelated sentence about string comparisons. It is a named CI step that changes a commit
-      decision, which is exactly what the report's own method step 1 prescribes enumerating.
-
-    F2 — VALID, AND IT IS THE STRONGER OF THE TWO. `aida burndown status` is absent from the report
-    entirely; "burndown" does not appear in the document. It belongs in the aggregate-status inventory
-    on the report's own predicate, and I confirmed the shape rather than taking the claim:
-    `render_burndown_status_human` takes `lock: &drain_lock::LockStatus` AND `in_flight: &[InFlightLease]`
-    — an aggregate rendered alongside the member list it summarizes. That is precisely the
-    aggregate/detail contradiction shape of BUG-1441, which the report already inventories for
-    `aida drain status` and marks "Pass after BUG-1441". The sibling surface of the one worked example
-    is missing.
-
-    SO CRITERIA 1 AND 2 ARE NOT MET. Two decision-bearing surfaces are absent, and neither absence is
-    covered by the report's stated boundary — that boundary is about UNMARKED SEMANTIC CLASSIFIERS
-    ("the external prose inventory explicitly depends on reviewers adding a marker"), not about named
-    CI steps or aggregate status renderers, both of which the method claims to enumerate mechanically.
-
-    CRITERIA 3, 4 AND 5 REMAIN MET and I do not want them re-litigated: BUG-1578 is filed as its own
-    spec and exists in the store; the method is written and re-runnable with all thirteen paths
-    resolving; machine-detectability is answered as a decision ("not safely automatable as a general
-    lint") with no lint added.
-
-    WHAT THIS COSTS THE REPORT IS SMALL AND WHAT IT PROVES IS NOT. Two rows and their results. But the
-    subject of this document is instruments that are blind to their own category, and it shipped an
-    incomplete self-inventory — which is the seventh instance of its own first paragraph, found by a
-    reviewer rather than by the sweep. That is worth one sentence in the report, because it is the
-    strongest evidence in it that the pattern is real and that a one-time sweep does not close it.
-
-    The BUG-1578 self-demonstration I recorded in the approve still stands and is unaffected: this PR
-    is docs-only, ci.yml's full_ci filter excludes docs/** and **/*.md, and four doc gates require
-    full_ci == 'true', so the doc gates did not run on the artifact reporting that they do not run.
-  recovery_hint: address the review findings, move SPIKE-85 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-09-21T23:02:45.267608179Z
+  completed_at: 2026-09-21T23:20:51.874664839Z
+  completion_sha: c86f516a49016ea69293bcd84839fd9afe3206dd
 human_only: true
