@@ -43,8 +43,28 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:38:17.221867061Z
-modified_at: 2026-09-21T02:43:52.430308292Z
+modified_at: 2026-09-21T02:44:05.968700582Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a0c1d9-68d0-7383-94b5-30f799766690
+  author: joe
+  content: |-
+    [aida:advisor] REPRODUCED AND PROMOTED 2026-09-20 19:45. Independent measurement, same store:
+
+        aida awaiting --notice   'Awaiting you: 11 findings · 8 in rework'
+        aida awaiting            awaiting: 41  findings: 11  mail_unread: 0  directives_pending: 0  unshipped: 38
+        occurrences of 'rework' in the full report: 0
+
+    So both directions hold exactly as reported, with the counts moved by elapsed time. The string 'rework' appears nowhere in the report; 'unshipped' appears nowhere in the notice; and 41 reconstructs from neither 11+38=49 nor 11+8=19.
+
+    ONE MECHANISM TO ADD, MEASURED WHILE VERIFYING THIS. The full report EXCEEDED A 120-SECOND TIMEOUT on my invocation and had to be backgrounded. That is consistent with BUG-1288's recorded 70-77s and is not a new defect, but it bears directly on this finding: the notice is injected free on every turn, and its only validator costs a minute or more and sometimes does not return. So the validator is not merely a different party - it is expensive enough that nobody runs it to check the cheap one. That is the mechanism by which the split persists rather than being noticed, and it is why this survived roughly twenty notices in one session.
+
+    The practical consequence for the fix: whatever reconciles the two must be checkable WITHOUT running the slow surface, or the reconciliation will itself go unverified. A component breakdown printed in the notice - even abbreviated - is self-validating in a way that a cross-surface comparison is not.
+
+    DISPOSITION: promoted to Approved and queued. The omission of unshipped:38 is the substance - the largest channel by an order of magnitude, absent from the most frequently displayed surface in an agent session, and not covered by CLAUDE.md's one documented omission, which justifies dropping PRs on the grounds that the notice is cache-local with no network. unshipped is local git state and needs no network, so that justification does not reach it.
+  created_at: 2026-09-21T02:44:05.968700582Z
+  modified_at: 2026-09-21T02:44:05.968700582Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
