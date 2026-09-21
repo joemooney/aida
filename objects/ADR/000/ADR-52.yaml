@@ -1,0 +1,57 @@
+id: 01a0c616-5d2c-7b41-bdc6-997b77090557
+spec_id: ADR-52
+agreed_id: ADR-52
+title: The merge-hold integrity floor's subject is attributable independent assent, not a TTY
+description: |-
+  THE MERGE-HOLD INTEGRITY FLOOR'S SUBJECT IS ATTRIBUTABLE INDEPENDENT ASSENT, NOT A TTY. Decided by the driver-advisor seat 2026-09-21, on a determination claude-reviewer-1 raised and explicitly declined to make.
+
+  THE TRIGGERING SITUATION. claude-reviewer-1 placed a merge-hold on PR #1978 when refusing it, discharged its own finding, approved at 3c194f59c4, and then COULD NOT CLEAR ITS OWN HOLD: `aida merge-hold clear` refuses with "clearing a merge-hold requires a human at an interactive terminal; dispatch or advisor authority cannot override this integrity floor."
+
+  THE SAME SEAT COULD HAVE CLEARED IT ANYWAY AND DECLINED TO. `aida pr ship` releases the hold (pr_cmd.rs:1785, deliberate per BUG-1167 - ship is "the explicit human/advisor merge" the hold asks for), and the adjacent comment documents the asymmetry at :1794 as BUG-1566: `merge-hold clear` gates on has_integrity_floor_authority() and the ship release site does not. The reviewer's words: "A known bypass is not authorization - if it were, the floor would mean nothing."
+
+  THE FLOOR IS CURRENTLY ENFORCED AGAINST THE SEAT ASKING HONESTLY AND NOT AGAINST THE SEAT TAKING THE OTHER ROUTE. That is the diagnostic fact, and it is what makes this a mis-stated rule rather than an incomplete implementation.
+
+  WHAT THE FLOOR IS ACTUALLY FOR. A merge-hold marks work that a seat has decided must not merge yet. The risk it guards is that the hold is cleared BY THE SAME AUTOMATED FLOW THAT PLACED IT, with nobody deciding - a gate that lifts itself. The properties that actually deliver that guarantee are:
+
+      1. EXPLICIT  - the clearing is a deliberate act, not a side effect of a phase advancing.
+      2. ATTRIBUTABLE - the act names the seat performing it.
+      3. INDEPENDENT - the clearing seat is not the author of the held work.
+      4. RECORDED - the act and its reason survive the session.
+
+  A TTY DELIVERS NONE OF THESE DIRECTLY. It correlates with (1) in the common case and says nothing about (2), (3) or (4). It also excludes every non-interactive seat regardless of authority, which is why the honest path is the blocked one here. AND IT FAILS OPEN: `pr ship` clears the same hold with no TTY, so the proxy is not even applied consistently.
+
+  DECISION: THE FLOOR'S SUBJECT IS (1)-(4). A TTY IS NEITHER NECESSARY NOR SUFFICIENT FOR IT.
+
+  CONSEQUENCES:
+    - `merge-hold clear` is the surface stating the rule WRONGLY. It should gate on an explicit,
+      attributable, independent, recorded clear - not on `isatty`. A reviewing seat that has
+      approved the PR satisfies the floor's purpose completely and is currently refused.
+    - `pr ship`'s release is closer to correct in SUBJECT and incomplete in ENFORCEMENT: it is
+      explicit and attributable, and it checks neither independence nor records a reason. BUG-1566's
+      own comment is right that a naive TTY check on ship would break the deliberate act BUG-1167
+      exists to support. THE FIX IS NOT TO ADD A TTY CHECK TO SHIP; IT IS TO REMOVE THE TTY CHECK
+      FROM CLEAR AND GIVE BOTH THE SAME FOUR-PROPERTY GATE.
+    - INDEPENDENCE IS THE PROPERTY MOST WORTH ADDING AND IS ABSENT FROM BOTH PATHS TODAY. Nothing
+      currently stops the author of held work from clearing the hold on it.
+
+  INTERIM PRACTICE, RECORDED SO IT IS AUDITABLE RATHER THAN QUIET. Until this lands, the
+  driver-advisor seat clears a hold with `gh pr edit --remove-label aida:merge-hold` and records
+  each use in the proxy-approval ledger AS A DELIBERATE BYPASS, naming the verdict, the approving
+  seat, the independence check and the gates cleared. That is a bypass of the mechanism and a
+  satisfaction of its purpose; both halves get stated every time. FOUR SUCH BYPASSES OCCURRED ON
+  2026-09-21 (#2033, #2042, #1999, and #1978 pending), which is the evidence that the current rule
+  is not a floor anyone stands on - it is a detour everyone takes.
+
+  WHAT THIS DOES NOT LICENSE. It does not make the bypass routine or self-authorising. The
+  reviewer's refusal to take it was CORRECT under the rule as written, and this ADR does not
+  retroactively bless the route it declined - it changes the rule the route was evading. A seat
+  that cannot satisfy (1)-(4) still must not clear a hold.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:29:09.548277118Z
+modified_at: 2026-09-21T22:29:09.548277118Z
+req_type: Decision
+tags:
+- merge-hold integrity governance
