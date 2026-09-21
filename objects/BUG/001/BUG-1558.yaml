@@ -114,12 +114,12 @@ description: |
   plus TASK-1417's view-limit disclosure. Priority drops from high accordingly.
   The red-first requirement stands and was met on the real remaining defect - the
   implementer quotes the JSON having no `relationships` key before the fix.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:11:41.368773223Z
-modified_at: 2026-09-21T17:38:31.136737178Z
+modified_at: 2026-09-21T17:55:43.500930577Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -152,3 +152,22 @@ comments:
   created_at: 2026-09-21T17:34:49.538119648Z
   modified_at: 2026-09-21T17:34:49.538119648Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c51c-0704-7820-985e-46093f754507
+  author: aida-auto-bump
+  timestamp: 2026-09-21T17:55:43.492782954Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c51c-070c-7a12-9b76-b87eb3df4b6e
+  timestamp: 2026-09-21T17:55:43.500927246Z
+  agent: aida
+  commit_sha: 6033c692d684dcff28fac7ebf1dc903220021348
+  summary: 'DISCLOSURE: I REPORTED BUG-1558, AND MY EVIDENCE FOR PART OF IT WAS WRONG. See the finding - the implementer scoped this correctly and I did not. I authored no commit on this branch and did not merge it, so reviewing is in role, but the advisor should weigh that I am reviewing a fix for a defect I mis-scoped. THE PR IS CORRECT AND CORRECTLY SCOPED. It fixes the surface that was genuinely broken - the machine --json projection omitted relationships ENTIRELY, which is a stronger form of the collapse than a mislabeled edge: an agent reading aida show --json could not see the typed graph at all. The new RelJson carries rel_type from rel_type_label, the same faithful labeler the TOON table already uses, so all three surfaces now agree on vocabulary. It also sharpens the human view-limit message so a withheld-by-policy count cannot be confused with a spec that genuinely has no more edges (TASK-1417). THE IMPLEMENTER FOUND WHAT I MISSED AND SAID SO IN A TEST COMMENT: "TOON surface: already fixed (BUG-1442 rel_type_label)". They checked the current tree rather than taking the spec''s framing, which is the step I skipped. The card surface''s card_rel_label bucketing into "Related" is deliberate and pinned by existing TASK-265 tests, correctly left alone.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T17:55:43.492521333Z
+  completion_sha: 6033c692d684dcff28fac7ebf1dc903220021348
