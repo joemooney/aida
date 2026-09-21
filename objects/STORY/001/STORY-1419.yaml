@@ -1,0 +1,34 @@
+id: 01a0c381-9989-7032-96c7-2a7a0d66443d
+spec_id: STORY-1419
+agreed_id: STORY-1419
+title: Nothing tells a reviewer that the rework they are blocking has landed - the head advancing past the verdict's reviewed_sha is computable and no surface reports it
+description: |-
+  OBSERVED THREE TIMES IN ONE NIGHT, 2026-09-21, and each time a human-readable workaround stood in for the missing signal.
+
+  A reviewer refuses a PR and records a verdict at `reviewed_sha`. An implementer pushes the rework. NOTHING TELLS THE REVIEWER. The PR's head has advanced past the sha their refusal names — the single fact that makes their verdict stale and the round reviewable — and no surface reports it.
+
+  THE THREE INSTANCES:
+    - #2006: the implementer pushed ad13bb0ec7 and moved straight on to the next PR without a completion report. The driver-advisor noticed only by running `git log` on the branch while checking something else, and mailed the reviewer by hand.
+    - #2014: the reviewer found the rework at f95b30853e by SWEEPING every open PR's head against its recorded verdict sha. Their own words: "I found it by sweeping heads against recorded verdict shas, not from a report."
+    - #2030: the same shape earlier, resolved by the advisor mailing the reviewer that the head had moved.
+
+  So the signal exists — it is exactly `head != reviewed_sha` on a PR carrying a blocking verdict — and every seat that needed it computed it by hand or was told by another agent.
+
+  WHY `aida awaiting` IS THE RIGHT HOME AND WHY IT DOES NOT COVER THIS. Its own help says it is "every channel where YOU are the gate, in ONE place: mergeable PRs, unacked briefs, findings awaiting triage, reviewer verdicts, NeedsAttention escalations, unread mail, AND pending worker directives." A PR whose rework has landed is precisely a channel where the reviewer is the gate, and it is the one the list does not have. "Reviewer verdicts" is the verdict awaiting the ADVISOR, not the rework awaiting the REVIEWER.
+
+  WHAT TO BUILD, smallest useful slice: a row in `aida awaiting` for every PR where a blocking verdict exists (RequestChanges / Rejected) AND the PR's current head differs from that verdict's reviewed_sha. Scoped to the seat that recorded the verdict, so it appears for the reviewer who refused rather than for everyone. Report the two shas and the PR number; the reviewer decides whether it is a rebase or a rework — deliberately NOT an attempt to classify it, because that classification is exactly what the patch-id lesson says is unreliable.
+
+  DEPENDS ON PROVENANCE BEING PRESENT. A verdict without a reviewed_sha cannot produce this row at all (BUG-1538), and one keyed to a PR number that has been superseded loses it (BUG-1539). Those two are what make this computable; this spec is what makes them pay off. Worth building in that order.
+
+  EXPLICITLY NOT WANTED: a notification that fires on every push regardless of verdict state, and any attempt to decide whether the new head "addresses" the finding. The signal is "the thing you refused has changed"; the judgement stays with the reviewer.
+
+  WHY IT MATTERS BEYOND CONVENIENCE. Tonight the gap was covered three times by another agent noticing and sending mail, which is the substrate-first anti-pattern named on this board repeatedly: a coordination step that works only because someone happened to be awake and looking. The whole point of the rework loop is that it should not need a courier.
+
+  Filed by the driver-advisor seat from three observed instances. Autonomous-safe: a read-side row computed from data that already exists.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T10:27:25.705842018Z
+modified_at: 2026-09-21T10:27:25.705842018Z
+req_type: Story
