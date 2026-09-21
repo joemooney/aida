@@ -3,12 +3,12 @@ spec_id: BUG-1473
 agreed_id: BUG-1473
 title: 'auto-complete failure: phase 3 (reviewer) on BUG-1297'
 description: "Auto-drafted by `aida queue work BUG-1297 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)\n\n## Failure\n\nHEAD is now at 5a857b7df4 [AI:codex] fix(mailbox): resolve displayed message prefixes (BUG-1297)\nAuto-merging aida-cli-lib/src/cli.rs\nAuto-merging aida-cli-lib/src/lib.rs\nAuto-merging aida-cli-lib/src/mailbox_cmd.rs\nCONFLICT (content): Merge conflict in aida-cli-lib/src/mailbox_cmd.rs\nAuto-merging docs/mailbox.md\nerror: \"rebase aborted due to conflicts\"\nPreparing worktree (checking out 'pr-2006')\nwarning: container tooling detected (Dockerfile, docker, .aida/docker-compose.yml, docker/docker-compose.yml); this linked worktree's .git file points at /home/joe/ai/aida/.git/worktrees/pr-rebase-2006. Mount that gitdir path into dev containers so git commands work inside the worktree.\nRebasing (1/1)\rerror: could not apply 5a857b7df4... [AI:codex] fix(mailbox): resolve displayed message prefixes (BUG-1297)\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: \"git add/rm <conflicted_files>\", then run \"git rebase --continue\".\nhint: You can instead skip this commit: run \"git rebase --skip\".\nhint: To abort and get back to the state before \"git rebase\", run \"git rebase --abort\".\nCould not apply 5a857b7df4... [AI:codex] fix(mailbox): resolve displayed message prefixes (BUG-1297)\n✗ rebase hit 1 conflict(s) — aborted, worktree cleaned\n    aida-cli-lib/src/mailbox_cmd.rs\n\nManual recipe:\n  gh pr checkout 2006\n  git fetch origin\n  git rebase origin/main\n  # resolve conflicts, then `git rebase --continue`\n  git push --force-with-lease\n\nManual recovery: `aida pr rebase 2006 --interactive`\n\nFailure kind: `stale-base-conflict`\n\n## Recovery hint shown to the user\n\nAddress the review feedback, then push fixups: `aida queue rework BUG-1297 --work`\n\n## Recurrence\n\nAttempts: 1\nLatest recurrence: 2026-09-20T18:23:25.906036349+00:00\n\n## Phase durations\n\n  - phase 1 (implementer): 13445 ms\n  - phase 2 (ci): 2213 ms\n  - phase 3 (reviewer): 5209 ms\n\n## Telemetry entry\n\nThe line appended to `~/.aida/auto-complete.jsonl` for this run:\n\n```json\n{\"spec_id\":\"BUG-1297\",\"started_at\":\"2026-09-20T18:23:00.943123534+00:00\",\"completed_at\":\"2026-09-20T18:23:25.906036349+00:00\",\"outcome\":\"failed\",\"variant\":\"full\",\"failed_phase\":3,\"failure_kind\":\"stale-base-conflict\",\"failure_message\":\"HEAD is now at 5a857b7df4 [AI:codex] fix(mailbox): resolve displayed message prefixes (BUG-1297)\\nAuto-merging aida-cli-lib/src/cli.rs\\nAuto-merging aida-cli-lib/src/lib.rs\\nAuto-merging aida-cli-lib/src/mailbox_cmd.rs\\nCONFLICT (content): Merge conflict in aida-cli-lib/src/mailbox_cmd.rs\\nAuto-merging docs/mailbox.md\\nerror: \\\"rebase aborted due to conflicts\\\"\\nPreparing worktree (checking out 'pr-2006')\\nwarning: container tooling detected (Dockerfile, docker, .aida/docker-compose.yml, docker/docker-compose.yml); this linked worktree's .git file points at /home/joe/ai/aida/.git/worktrees/pr-rebase-2006. Mount that gitdir path into dev containers so git commands work inside the worktree.\\nRebasing (1/1)\\rerror: could not apply 5a857b7df4... [AI:codex] fix(mailbox): resolve displayed message prefixes (BUG-1297)\\nhint: Resolve all conflicts manually, mark them as resolved with\\nhint: \\\"git add/rm <conflicted_files>\\\", then run \\\"git rebase --continue\\\".\\nhint: You can instead skip this commit: run \\\"git rebase --skip\\\".\\nhint: To abort and get back to the state before \\\"git rebase\\\", run \\\"git rebase --abort\\\".\\nCould not apply 5a857b7df4... [AI:codex] fix(mailbox): resolve displayed message prefixes (BUG-1297)\\n✗ rebase hit 1 conflict(s) — aborted, worktree cleaned\\n    aida-cli-lib/src/mailbox_cmd.rs\\n\\nManual recipe:\\n  gh pr checkout 2006\\n  git fetch origin\\n  git rebase origin/main\\n  # resolve conflicts, then `git rebase --continue`\\n  git push --force-with-lease\\n\\nManual recovery: `aida pr rebase 2006 --interactive`\",\"phase_durations\":[{\"phase\":1,\"slug\":\"implementer\",\"elapsed_ms\":13445},{\"phase\":2,\"slug\":\"ci\",\"elapsed_ms\":2213},{\"phase\":3,\"slug\":\"reviewer\",\"elapsed_ms\":5209}],\"total_ms\":22050,\"binary_sha\":\"5aee18b91d\",\"auto_rebase\":[{\"phase\":3,\"pr_number\":2006,\"outcome\":\"conflict\"}]}\n```\n\n## Recurse-fix\n\nOnce triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.\n"
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:23:26.844395747Z
-modified_at: 2026-09-20T18:23:26.844395747Z
+modified_at: 2026-09-21T10:22:56.084443349Z
 req_type: Bug
 tags:
 - auto-complete
@@ -16,3 +16,17 @@ tags:
 - failure-3
 - failure-kind:stale-base-conflict
 - reviewer
+comments:
+- id: 01a0c37d-7c54-75a0-a799-72d7b69690be
+  author: aida-auto-bump
+  content: 'Auto-resolved: BUG-1297 reached Completed via commit 8a87aa0; rejecting auto-drafted phase-failure finding BUG-1473.'
+  created_at: 2026-09-21T10:22:56.084442167Z
+  modified_at: 2026-09-21T10:22:56.084442167Z
+history:
+- id: 01a0c37d-7c54-75a0-a799-72c7b158be99
+  author: aida-auto-bump
+  timestamp: 2026-09-21T10:22:56.084440619Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
