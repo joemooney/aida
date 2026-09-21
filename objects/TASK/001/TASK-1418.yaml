@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T16:56:51.141291350Z
+modified_at: 2026-09-21T17:34:03.567116367Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -330,4 +330,25 @@ comments:
     METHOD NOTE, recorded because the labelling is now routine rather than remarkable: the reviewer confirmed all of the above BY READING - which assertions live in which function - and said so unprompted, explicitly declining to present it as an independent re-measurement. The implementer's 29-green and two reds remain the implementer's numbers. Structural confirmation of a claim and independent measurement of it are different evidence, and only the first was offered.
   created_at: 2026-09-21T16:56:51.141291350Z
   modified_at: 2026-09-21T16:56:51.141291350Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c508-312f-7a00-b6c3-81b9a17996f4
+  author: joe
+  content: |-
+    [aida:advisor] A RULE FOR WHEN RED-FIRST LOOKS IMPOSSIBLE, from claude-reviewer-1 on PR #2052, and it closes a loophole this catalogue had left open:
+
+        A TEST THAT CANNOT BE SHOWN RED BY THE OBVIOUS MUTATION IS A PROMPT TO FIND
+        THE RIGHT MUTATION, NOT EVIDENCE THAT NONE EXISTS.
+
+    THE CASE. An implementer replaced a hand-typed valid-name list with one DERIVED from the same table the normalizer uses, then skipped the red-first demonstration, reasoning that a test asserting derived output matches its own source is "trivially green by construction" and cannot be shown red without un-deriving it. The reasoning about the LOOP is correct - iterating a table and asserting each entry appears in a message built by mapping that same table is a tautology while the derivation holds.
+
+    THE CONCLUSION DOES NOT FOLLOW, TWO WAYS, AND THE SECOND IS THE EMBARRASSING ONE:
+      1. "Cannot be shown red without un-deriving it" NAMES THE MUTATION rather than excusing the demonstration. Un-deriving is precisely what the test guards against - replace the derived message with a hand-typed literal missing one name and it goes red. That IS the red-first run.
+      2. The test did not only loop. It ended with two HARD-CODED assertions that the error contains `external-import-bleed` and `project-manifest`. Those are not tautological: DELETE EITHER CATEGORY FROM THE TABLE AND THE LOOP STILL PASSES - the name is no longer in the table to check - WHILE THE LITERAL ASSERTION FAILS. A red run was available at that sha, in the author's own file, without changing a line of design.
+
+    WHY IT BELONGS HERE. Every other entry in this catalogue is about an instrument that could not fire. This is about the ARGUMENT that an instrument need not be shown to fire - which is how a green-from-birth test gets shipped with a reasoned defence attached. "Tautological by construction" is a real property and it is not a waiver; it describes the LOOP, not the TEST, and the distinction is exactly where the teeth were hiding.
+
+    THE COMPANION OBSERVATION, on the same PR, about a number nobody could pin down. The reviewer could not confirm the implementer's "29 canonical outputs" figure: FOUR EXTRACTORS RETURNED 28, 6, 5 AND 42, because rustfmt splits long entries across lines and every regex broke differently. THEY REPORTED THAT THEY COULD NOT CONFIRM IT RATHER THAN PICKING THE NUMBER THAT MATCHED.
+      Then they answered the question that actually mattered by a different method: replacing a match with a table risks SILENTLY DROPPING AN ALIAS, which would make a dispatched category unreachable. They checked by SET IDENTITY with ONE extractor applied to BOTH sides - 113 distinct names old, 113 new, nothing in old missing from new. The absolute count was never the claim; PRESERVATION was. A comparison run through one instrument is sound even when that instrument cannot produce a trustworthy absolute, and choosing the comparison over the count is the move worth copying.
+  created_at: 2026-09-21T17:34:03.567116367Z
+  modified_at: 2026-09-21T17:34:03.567116367Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
