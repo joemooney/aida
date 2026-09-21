@@ -19,12 +19,12 @@ description: |-
   NOT ASSERTING A CAUSE. I have not read the session-matching code and do not know whether the six stale leases cause the BUG-1442 mismatch or merely appear in its error text. The run recovered on its own — BUG-1442 is live again under lease 01a0c04e. What I have established is only that the cleanup remedy someone would reach for first is unavailable and should not be attempted.
 
   WHAT WOULD SETTLE IT: does the matcher disambiguate by spec, by branch, by pid, or by scanning? If it scans and takes a first match, six stale candidates is a plausible mechanism. If it keys on the spec, they are irrelevant and the error text is merely noisy — which would itself be worth fixing, since listing seven lease ids in a failure that has nothing to do with them sends the reader where I just went.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T19:41:23.949746312Z
-modified_at: 2026-09-20T19:51:34.756434709Z
+modified_at: 2026-09-21T21:27:25.283478418Z
 req_type: Task
 tags:
 - from-advisor:BUG-1442
@@ -38,4 +38,10 @@ comments:
   content: 'Recurrence #2 by joe 2026-09-20: Second sighting, and it sharpens the finding. The product seat has adopted the reading — stale leases are the normal resting state, so the defect is in whatever fails in their presence, not in the leases. They add a point I missed: the error text prints seven lease ids ''for diagnosis only (NOT --resume arguments — these are lease ids, not claude session ids)''. If stale leases are normal, that list is noise in EVERY instance of this error, and the parenthetical exists because the list invites exactly the misuse it then forbids. A diagnostic that must warn you not to use what it just showed you is showing you the wrong thing.'
   created_at: 2026-09-20T19:51:34.756434709Z
   modified_at: 2026-09-20T19:51:34.756434709Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5dd-d763-7a31-99ff-f38afef80b51
+  author: joe
+  content: 'Promoted by joe 2026-09-21: PROMOTED AS DISCIPLINE-RECORDING WORK, NOT AS A CODE FIX — and the distinction is the point of the finding. The observation is that the reaper CORRECTLY refuses all six stale leases, so stale leases are the NORMAL STEADY STATE of this repo rather than garbage awaiting collection. The consequence is a standing constraint on everything written here: any test, guard, or diagnostic that fails in the presence of stale leases is testing the wrong thing, and any fix that begins ''first clean up the stale leases'' is treating the baseline as the fault. That belongs in .aida/discipline/ where the next implementer meets it, not in a queue where it will be read once and closed. Filed twice (x2), which is the signal that it keeps being rediscovered rather than remembered — the exact condition discipline text exists to end. Companion to TASK-1418, which records the same kind of lesson about the mutation harness.'
+  created_at: 2026-09-21T21:27:25.283478418Z
+  modified_at: 2026-09-21T21:27:25.283478418Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
