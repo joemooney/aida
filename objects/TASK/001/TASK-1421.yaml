@@ -1,0 +1,32 @@
+id: 01a0c523-6a3b-7a11-869a-19c48147fde0
+spec_id: TASK-1421
+agreed_id: TASK-1421
+title: Orchestrator has no forge injection seam, so publication-boundary behaviour cannot be tested end-to-end
+description: |-
+  The orchestrator obtains its forge through forge_for(project_root), which dispatches on the remote URL and returns a Box<dyn Forge> built from the environment. There is no way for a test to supply a fake, and the only fake in the tree (FakeForge in ci_gate.rs) is unreachable from that path.
+
+  WHY THIS IS NOW BLOCKING RATHER THAN THEORETICAL. TASK-1289's reviewer asked for an end-to-end test proving that a failing publication guard leaves no open PR. The gate itself shipped in PR 2042: close_change is a first-class Forge method and a refused preflight retracts the PR. The TEST could not ship, because asserting it requires observing a forge call, and no seam exists to observe one. The rework covered what was reachable (the retraction notice text) and recorded the gap rather than faking it.
+
+  WHAT WAS DELIBERATELY NOT DONE: an env-var or global-state backdoor that swaps in a fake forge when a test sets it. That trades a real test for a real hazard, since the same switch exists in production builds.
+
+  SHAPE OF THE WORK, not prescriptive. The orchestrator already threads a resolved ForgeKind through its phases (BUG-1037) rather than re-resolving per phase, so the plumbing for passing a forge decision downward exists. The likely move is to thread the constructed forge (or a factory) the same way, so a test driver can supply one, leaving forge_for as the default production path. Worth checking whether the auto_complete driver struct is the right place to hold it.
+
+  ACCEPTANCE
+  1. A test can drive the implementer phase with a forge whose calls it observes, without setting any environment variable or global that exists in a production build.
+  2. A test exists proving that when a publication guard refuses, no open change remains: the fake records a close_change call for the right change id.
+  3. The complementary assertion is also covered: an ALREADY MERGED change is NOT closed.
+  4. forge_for remains the default path; no production caller has to pass a forge to keep working.
+
+  NOT IN SCOPE: converting existing forge call sites wholesale. Only the path the orchestrator's publication boundary uses needs the seam.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T18:03:47.643930772Z
+modified_at: 2026-09-21T18:03:47.643930772Z
+req_type: Task
+tags:
+- aida:preflight
+- orchestrator
+- parent:EPIC-62
+- testability
