@@ -1,0 +1,38 @@
+id: 01a0c23a-f4f1-7023-82d2-b6cb17a9302a
+spec_id: BUG-1521
+agreed_id: BUG-1521
+title: aida ps reports one live session under three different roles depending on the view, and its default hides every stale-but-registered session behind a running count of 1
+description: |-
+  ONE session, two invocations seconds apart, three different roles.
+
+  Session abf9f7f087dbb254e-c3a7f12a9af4d18b, pid 1320512, live, same elapsed time:
+
+    aida ps         -> role = product
+    aida ps --all   -> role = advisor
+    .aida/sessions/abf9f7f087dbb254e-c3a7f12a9af4d18b.toml -> role = general-purpose
+
+  Neither displayed value matches the stored record and the two displayed values do not match each other. The role shown appears to be derived rather than read, and derived differently per view. product happens to be the CALLING shell's AIDA_SESSION_ROLE, which suggests the default view may be attributing the caller's own role to a session that is not theirs.
+
+  SECOND PROBLEM, SAME COMMAND. Bare aida ps printed:
+
+    running: 1
+    stale_hidden: 7
+
+  aida ps --all printed running: 8. The seven hidden entries are registered sessions holding real worktrees (BUG-1145, TASK-1274, STORY-1353, TASK-1294, TASK-1279, BUG-1436, BUG-1470), each with a resume hint. Hiding stale sessions by default is defensible; labelling the remainder running: 1 is not, because the operator reads that as the count of sessions that exist.
+
+  OBSERVED HARM, first-hand. I read bare aida ps, saw running: 1 with only my own seat, and told the operator no advisor seat was running -- then asked them to start one. An advisor WAS running; the operator corrected me. The command whose purpose is answering who is working produced a confident wrong answer to exactly that question, and the correct answer was one flag away.
+
+  ACCEPTANCE
+  1. A session's role is READ from its session record, not derived, and the same value is shown by aida ps and aida ps --all.
+  2. A test asserts the two views report identical role and identity fields for the same session.
+  3. The default view's count line distinguishes live from hidden rather than presenting the live count alone as running -- e.g. running: 1 (7 stale hidden; --all to show).
+  4. A regression test covers the case where the caller's own AIDA_SESSION_ROLE differs from the role of a session being listed, asserting the listed session keeps its own role.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:30:38.833900428Z
+modified_at: 2026-09-21T04:30:38.833900428Z
+req_type: Bug
+tags:
+- aida:ps substrate-truth severity:operational papercut
