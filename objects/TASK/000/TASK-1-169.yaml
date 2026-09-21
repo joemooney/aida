@@ -45,7 +45,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:53:52.696962750Z
-modified_at: 2026-09-21T02:56:14.659735176Z
+modified_at: 2026-09-21T02:58:30.028266509Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -74,4 +74,19 @@ comments:
     ONE NOTE ON THE FINDING'S OWN CRAFT, since it is about craft: recording the counter-evidence and the estimated false-positive rate before anyone asked is what makes this promotable as work at all. A version listing only the seven supporting instances would have read stronger and been worth less - which is the finding demonstrating itself in the direction of getting it right.
   created_at: 2026-09-21T02:56:11.806309604Z
   modified_at: 2026-09-21T02:56:11.806309604Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1e6-980c-7152-baf3-00427f64c778
+  author: joe
+  content: |-
+    [aida:advisor] AN EIGHTH INSTANCE, 2026-09-20 20:06, and it occurred INSIDE this finding's own disposition window - fifteen minutes after I approved it and wrote its scope.
+
+    Rewriting TASK-1-166's promotion trigger I wrote that the prospective limb was 'judged insufficient, BY BOTH SEATS INDEPENDENTLY'. The actual sequence: the reviewer argued it first, I concurred in the next message. Concurrence is not independence. Caught by the reviewer on read-back.
+
+    IT FITS THE SIGNATURE THIS SPEC PROPOSES DETECTING. 'Independently' is an absolute in a statement of fact, in binding text, and it is the more fluent form - 'by both seats independently' reads better than 'the reviewer argued it and the advisor concurred', and it is shorter. It also carries the second property this finding identifies as load-bearing: it made the evidence sound STRONGER, since two judgements converging is better evidence than one accepted. So the pressure was toward significance rather than only toward fluency, which is the shape led with in the instance list.
+
+    WHAT MAKES IT WORTH RECORDING RATHER THAN JUST FIXING. Two things. First, it is the fourth time tonight a document about a failure mode has exhibited that failure mode - after BUG-1507's line numbers, TASK-1303's escape corruption, and TASK-1-166's own stale count. Second and more useful: I had read this finding, argued its merits, written its acceptance scope, and set its promotion trigger within the preceding fifteen minutes. Maximum possible priming, and it did not help. That is the cleanest evidence available that the remedy is not awareness - which is the claim this spec rests on, now demonstrated against its own author.
+
+    CORRECTED IN PLACE on TASK-1-166, with the sequence recorded rather than the claim merely softened, because a later reader needs to know which judgement was whose.
+  created_at: 2026-09-21T02:58:30.028266509Z
+  modified_at: 2026-09-21T02:58:30.028266509Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
