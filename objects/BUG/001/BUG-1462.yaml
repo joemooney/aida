@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:44:06.450584423Z
-modified_at: 2026-09-21T20:27:29.512442385Z
+modified_at: 2026-09-21T20:46:33.618213072Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -42,6 +42,24 @@ relationships:
   target_id: 01a0c5a6-2b1a-7221-87a3-2473062cecaa
   created_at: 2026-09-21T20:27:18.465797279Z
   created_by: joe
+comments:
+- id: 01a0c5b8-6e92-76d1-b92d-1f9e3d2f49f0
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2059
+    agent: codex
+    ran-at: 2026-09-21 13:46 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 1
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1462-drain-01a0c5b7-7f0a-7ba1-9883-4c0c42c580fd.json
+    ? AC (0.98) — A retracted message renders `[withdrawn]` as its TUI mail-row title, regardless of any explicit subject or body text.
+    ? SEM (0.91) — For a non-retracted message with neither a non-blank subject nor a non-empty body line, the shared core projection returns an empty string and the TUI alone maps that result to `(empty message)`.
+    - AC skipped (matches a deny keyword) — The TUI trims surrounding whitespace from an explicit subject and truncates the resulting row title to 60 characters, appending an ellipsis when truncated.
+  created_at: 2026-09-21T20:46:33.618213072Z
+  modified_at: 2026-09-21T20:46:33.618213072Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
