@@ -1,0 +1,37 @@
+id: 01a0c22f-0094-7ee2-9651-bbb24208d47f
+spec_id: STORY-1415
+agreed_id: STORY-1415
+title: 'Mass-change mode needs a switch, a clock and a window: config state with a recorded start, explicit on/off, and aida status showing days remaining'
+description: |
+  ADR-49 adopts a temporary mass-change mode with a split review verdict, and says nothing about how it is turned on, turned off, or observed. So today the mode would exist only as a shared understanding among whoever was present when it was decided. The operator has asked for both halves: a way to see the state, and a way to toggle it.
+
+  THE GAP IS NOT COSMETIC. ADR-49's own exit condition - the queue empties, or ONE WEEK PASSES, whichever first - is unenforceable without a start time recorded somewhere. "One week has passed" is a fact nobody is positioned to notice: there is no daily surface that counts, and the seat best placed to forget is the one operating under the mode. A temporary mode whose expiry depends on somebody remembering is the thing ADR-49 was held open to avoid.
+
+  Acceptance:
+
+  1. THE MODE IS A CONFIG STATE WITH A RECORDED START, not a flag someone passes. `[review] mass_change_mode` in .aida/config.toml, following the shape `[advisor] calibration_mode` already uses - a registered key, read at the point of use, absent by default. Turning it on records the start timestamp in the same write.
+
+  2. TURNING IT ON AND OFF IS AN EXPLICIT VERB, and the on-verb is the only place the expiry is set. Something of the form `aida review mode mass-change on` / `off` / `status`. The exact surface is the implementer's call; what matters is that it is one command, it is discoverable from `aida review --help`, and turning it ON is what stamps the clock.
+
+  3. `aida status` SHOWS IT WHEN IT IS ON, AND SHOWS THE TIME REMAINING. One line, only when active - a mode that prints nothing when off costs nothing when off. It must carry the deadline rather than only the state, because the state alone does not tell an operator whether to act. Something like: mass-change mode: ON, day 3 of 7, 12 deferred findings.
+
+  4. THE MODE EXPIRES BY ITSELF. At the one-week mark it turns off without anyone acting - verdicts return to blocking, and the next `aida status` says it expired rather than saying nothing. An expiry that requires a human to notice and run a command has the same failure mode as the warning that was ignored twice on 2026-09-20 and is recorded on STORY-1414: a control whose enforcement is a message the operator may ignore is not a control.
+
+  5. THE DEFERRED-FINDINGS BUDGET (ADR-49 clause 4) IS SURFACED WITH THE MODE. The budget stops the drain above N open deferred findings, so the count is the operator's only warning that the mode is approaching its own stop. Show it on the same line.
+
+  6. TURNING IT OFF EARLY IS SAFE AND SAYS WHAT IT LEAVES BEHIND. Off means acceptance gaps block again; it does not retroactively re-block anything already merged. The off-verb reports how many deferred findings remain open, because that population is what the mode leaves behind and ADR-49's handover-out question is still unanswered.
+
+  7. THE STATE IS READABLE WITHOUT THE SLOW SURFACE. `aida status` is sub-second and cache-backed; that is where this belongs. It must NOT require `aida awaiting`, which measured 67-68 seconds on 2026-09-20 and is the surface people stop running.
+
+  NOT IN SCOPE: the split verdict itself, the classification rules, and the budget's threshold - all ADR-49. This spec is only the switch, the clock and the window.
+
+  PROVENANCE: requested by the operator 2026-09-20 21:16, immediately after answering ADR-49's exit condition. The request is the second half of that answer - an exit condition with no mechanism to observe or enforce it is a statement of intent, and the operator asked for the mechanism unprompted.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:17:35.380363150Z
+modified_at: 2026-09-21T04:17:35.380363150Z
+req_type: Story
+tags:
+- batch:night-0920 review-gate operator-surface from:session-0920
