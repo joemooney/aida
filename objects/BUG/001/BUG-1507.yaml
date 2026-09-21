@@ -83,12 +83,22 @@ description: |-
       anyone adds. Every enumeration relied on during this investigation narrowed silently rather than
       failing - including the enumeration in the first version of THIS spec, which cited four line
       numbers of which two did not exist.
+
+  7. THE MECHANISM BEHIND INSTANCE (i), CORRECTED 2026-09-20 19:22. An earlier note on this spec said the author knew the universal form, used it in the easy case, and enumerated in the hard one. That reading is wrong and the true mechanism argues harder for the compiler fix.
+
+      THE PLAIN-EXPRESS CASE CARRIES BOTH FORMS - three field assertions AND `skip.is_empty()`. The conflicting case twenty lines below carries forward only the enumeration. And the is_empty() in the plain case is VACUOUS: from_tags([EXPRESS_TIER_TAG]) sets only `skip.express` (auto_complete.rs:142), no skip field, so is_empty() passes whether or not the `if skip.express` force-off block exists at all. Delete that block and the assertion still holds. So the file does not contain a working demonstration of the universal form testing express's clearing behaviour - it contains the helper used where it proves nothing.
+
+      THE HARD CASE WAS WRITTEN BY ADAPTING THE EASY ONE. In a copy-adapt you carry forward the lines with case-specific content to edit - the field names - and drop the line with nothing to adapt. The universal assertion is precisely the one that looks generic, which makes it the one most likely to be lost in that operation. The failure is not a judgement error about which instrument to use.
+
+      WHICH MAKES THE COMPILER FORM MANDATORY RATHER THAN PREFERRED. An assertion dropped BECAUSE IT HAS NO CASE-SPECIFIC CONTENT cannot be protected by asking authors to remember it: its forgettability is a property of its shape, not of their attention. A destructuring bind over every field is not droppable that way - it is load-bearing syntax the case cannot be written without. Adding `assert!(!skip.no_preflight)` to the conjunction buys exactly one field, and the field added after it will be lost the same way.
+
+      AND A FOURTH SURFACE STATES THE INVARIANT UNIVERSALLY. The code comment above the force-off block reads "Express overrides any `lifecycle:*` short-circuit that would otherwise downgrade the gate, so an express spec can never silently ship under a reduced gate." So the comment, the test's function name, and the test's assertion message all claim a universal; the code and the assertion body both enumerate. Three statements of the invariant, two implementations of it, and the two that could enforce it are the ones that narrowed.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-21T02:18:52.950402729Z
+modified_at: 2026-09-21T02:19:51.491949226Z
 req_type: Bug
 tags:
 - batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
