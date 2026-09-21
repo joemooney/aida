@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:33.544062298Z
-modified_at: 2026-09-21T09:11:22.972701970Z
+modified_at: 2026-09-21T09:13:14.637241252Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -241,6 +241,33 @@ comments:
     PROVENANCE. The no-seam finding is the reviewer seat's, produced by checking their own remedy before judging the implementer's departure from it. The 62-caller count and the in-memory nature of set_status_from_str were verified independently by the driver-advisor. The split disposition follows TASK-1279/TASK-1308 and BUG-1452/TASK-1307: the remaining work is a different shape needing evidence the current PR cannot produce.
   created_at: 2026-09-21T09:06:29.521049231Z
   modified_at: 2026-09-21T09:06:29.521049231Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c33d-ae8d-77a2-a485-3e762ee3f704
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1998 [AI:codex] fix(events): make spec terminality explicit (BUG-1286)
+    merged as: 1cd86378ac822c1c526419f1f150928d2fa05437 on origin/main at 2026-09-21T09:11:11Z
+    verdict: APPROVE + merged (proxy for the operator)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — the product seat authored bug-1286-work including the F1 fix 5393454ef6; the reviewer seat recorded the verdict and cleared its own hold; this advisor wrote none of the diff and executed only the merge. No seat signed its own work.
+    gates cleared:
+      - required check Build (ubuntu-latest): pass, 12m30s
+      - required check merge-hold-gate: pass — it had been FAILING while the marker was armed, and passed only after the reviewer cleared its own hold
+      - verdict record .aida/review-verdicts/PR-1998.json: APPROVED, recorded_by claude-reviewer-1, reviewed_sha 5393454ef62b, recorded_at 2026-09-21T09:10:19Z — matches the merged head 5393454ef62b81447af191769b2d36dd9a05cf57 exactly
+      - mergeStateStatus CLEAN, no aida:merge-hold label, no marker under .aida/merge-holds/
+      - auto-bump: BUG-1286 → Completed
+    timestamp: 2026-09-21 02:11 -07:00
+
+    THE HOLD WAS THE LAST BLOCKER AND IT WAS A STALE REFUSAL. After the approval landed, merge-hold-gate still FAILED because .aida/merge-holds/PR-1998 was armed with text naming the SUPERSEDED verdict: "CHANGES REQUESTED for BUG-1286 at 698dd77c7cea" — the previous head. A refusal marker outliving its refusal is the same defect this board spent the night naming in other surfaces, except this instance blocked a merge rather than merely misinforming a reader. The advisor did not clear it: under the rule settled earlier tonight (recorded on BUG-1541 and BUG-1499), a hold on a PR that CAN STILL MERGE belongs to the seat that placed it. The reviewer cleared it and the gate went green.
+
+    WHAT LANDED. emit_spec_completed had two call sites while five paths reached Completed. The three silent ones — `aida done`, the queue close path, and `aida edit --status completed` — now emit, each guarded by the EXISTING is_into_completed_transition predicate rather than a fresh test, so the rule for what counts as a transition lives in exactly one place even though the call does not.
+
+    WHAT DID NOT LAND, AND WHY THAT IS NOT A DEFECT IN THIS PR. The reviewer's F1 originally asked for emission centralized at the transition boundary, and this advisor made that binding. BOTH WERE WRONG: the reviewer went looking for the seam before criticising its absence and found there is none — the three paths genuinely differ in how they persist, and the only thing they share, Requirement::set_status_from_str, is a pure in-memory setter with 62 occurrences whose emission would fire on loads, dry-runs and tests. The requirement was withdrawn and class closure split to STORY-1418.
+
+    COVERAGE, recorded because it is the opposite of the vacuity findings open elsewhere tonight: `aida done` is TESTED and falsified RED on removal; the queue close path is structurally untestable headless (gated on IsTerminal(stdin), falling to else { false }) and the test SAYS SO — the implementer's first positive test failed with zero events and was kept as a NEGATIVE assertion pinning that property rather than deleted; the edit path is stated as unpinned. A test that documents what could not be proven is worth more than one that quietly proves the easy half.
+  created_at: 2026-09-21T09:13:14.637241252Z
+  modified_at: 2026-09-21T09:13:14.637241252Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c33b-fa55-7760-a4b3-1ed771e0020e
