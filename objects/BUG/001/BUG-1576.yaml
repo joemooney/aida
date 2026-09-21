@@ -1,0 +1,60 @@
+id: 01a0c601-ffb5-77b0-b07a-81d8ca472748
+spec_id: BUG-1576
+agreed_id: BUG-1576
+title: aida awaiting reports squash-merged branches as unshipped work and tells the reader to ship them, because every detection path it could use compares commit content that squashing destroys
+description: |-
+  THE UNSHIPPED-WORK SURFACE CANNOT DETECT SQUASH-MERGED WORK, SO IT REPORTS SHIPPED BRANCHES AS UNSHIPPED AND HANDS THE READER A RECOVERY HINT THAT WOULD OPEN A DUPLICATE PR. Squash is this repo's only merge strategy, so the blind spot covers every merge we perform.
+
+  MEASURED 2026-09-21 15:05 MST. `aida awaiting`'s unshipped_work table, ten rows, includes:
+
+      BUG-1288,bug-1288-work,2 ahead,   recovery: aida pr ship bug-1288-work
+      BUG-1288,bug-1288-rework,2 ahead, recovery: aida pr ship bug-1288-rework
+      BUG-1480,bug-1480-work,1 ahead,   recovery: aida pr ship bug-1480-work
+      BUG-1480,bug-1480-rework,1 ahead
+      BUG-1480,bug-1480-rework2,2 ahead
+
+  BOTH SPECS' WORK IS ON MAIN. Verified by subject, not inferred:
+
+      c9da874c06  [AI:codex] fix(awaiting): bound machine-readable status polling   (PR #1999, BUG-1288)
+      b1d53bd675  [AI:codex] fix(show): use cache for single-spec reads             (PR #2033, BUG-1480)
+
+  WHY NO EXISTING TEST CATCHES IT, AND WHY THE OBVIOUS FIX DOES NOT WORK. A squash merge collapses N commits into ONE NEW COMMIT WITH A NEW SHA AND A NEW PATCH-ID. So the branch is genuinely ahead by sha, and it is ALSO ahead by patch-id - `git cherry main <branch>` reports every commit as not-applied:
+
+      bug-1288-work     already-on-main(patch-id)=0   not-on-main=2
+      bug-1288-rework   already-on-main(patch-id)=0   not-on-main=2
+      bug-1480-work     already-on-main(patch-id)=0   not-on-main=1
+
+  `git cherry` is the standard answer to "is this already merged" and IT HAS THE SAME BLIND SPOT. Anyone reaching for it to fix this will reproduce the defect while believing they have fixed it. The detection has to come from somewhere else - the merged PR's head sha, the commit trailer, or the spec's own merge record - not from comparing commit contents.
+
+  THE HARM IS NOT COSMETIC, IT IS THE RECOVERY HINT. The row does not merely list a branch; it tells the reader to run `aida pr ship <branch>`, which would open a SECOND PR for work already on main. A reader trusting the surface produces duplicate PRs, and the hint is most trusted exactly when the reader does not already know the branch's history - which is the case this surface exists to serve.
+
+  A CONFIRMED MIS-DISPATCH CAUSED BY THIS SURFACE, TODAY. The advisor seat dispatched an implementer lane at PR #1978 using the branch name from this table - `pr1978-head` - because the table presented it as the spec's unshipped branch. THE PR'S ACTUAL HEAD REF IS `task-1273-work`. The local `pr1978-head` points at af2a4a6d3a, two heads behind origin/task-1273-work at 5e9e82bb6c. The lane was briefed against a branch the PR had abandoned. Found by claude-reviewer-1 when the rework did not appear where they expected it.
+
+  SCALE: THIS CHECKOUT HAS 725 LOCAL BRANCHES WITH NO UPSTREAM. Every one is a candidate for the same confusion - a local artefact that outlived its premise, with nothing comparing it to the remote it was derived from.
+
+  Acceptance:
+  - A branch whose work has landed on the default branch via squash merge must NOT appear as
+    unshipped. Detect it from the merged PR (head sha / merge commit) or the spec's merge record,
+    NOT from commit-content comparison - and say so in the code, because `git cherry` is the
+    trap here and the next reader will reach for it.
+  - Where a spec has an open PR, the surface must report THE PR'S headRefName rather than any
+    local branch that happens to match the spec. A local ref the PR abandoned must never be
+    offered as the spec's branch.
+  - The recovery hint must not be emitted for a branch whose work is already on main. A wrong
+    list entry costs attention; a wrong hint costs a duplicate PR.
+  - ENUMERATE, do not sample: report how many of the current unshipped rows are already-merged
+    once the fix is in, and how many of the 725 upstream-less local branches the surface can
+    reach.
+
+  Filed by the driver-advisor seat. Found by claude-reviewer-1 diagnosing a mis-dispatch that this
+  seat made from this table. Related: BUG-1562 (a merge-hold marker's reason frozen at placement),
+  BUG-1539 (a verdict artefact outliving its premise) - the same class, three surfaces.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:06:54.901043014Z
+modified_at: 2026-09-21T22:06:54.901043014Z
+req_type: Bug
+tags:
+- agent-surface papercut orchestrator
