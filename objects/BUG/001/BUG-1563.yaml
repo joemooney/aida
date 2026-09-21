@@ -115,10 +115,26 @@ description: |
     fourth sighting is answered where it is seen rather than in a spec.
   - NOT IN SCOPE, CONFIRMED: the five merges in the cluster. CI green on each and on combined
     main at 4cf2c6d600, by a single-tenant measurement.
+
+  - (c) HAS A SECOND MECHANISM AND IT PREDATES THE FAN-OUT BY A WEEK. Found by claude-reviewer-1 in the warning text of an ordinary `aida` call; verified and healed by the advisor.
+
+        warning: incremental cache update failed (database is locked while trying to upsert
+        cached requirement by pid=3839203 (aida awaiting --notice) held since
+        2026-09-14T07:39:13 (179h 11m ago) ... ); full rebuild
+
+    PID 3839203 IS DEAD — confirmed with `ps`. So this was never contention with anything running: A CORPSE HELD A LOCK TAKEN ON 2026-09-14 AND NEVER RELEASED, and every affected command silently fell back to a FULL CACHE REBUILD instead of an incremental upsert. `aida doctor check stale-locks` reported it as one visible finding ("cache lock-info from dead pid 3839203 ... is 179h 13m old [safe]"), and `aida doctor --heal --category stale-locks --yes` removed `.aida/cache.db.lock-info`.
+
+    WHY IT MATTERS HERE RATHER THAN AS HYGIENE: today's lock-contention symptoms were attributed to LIVE SIBLING AGENTS — the #2053 flake, and hypothesis (c) for this bug. A DEAD PROCESS'S ABANDONED LOCK PRODUCES THE SAME SYMPTOM and required nothing at all, where the sibling explanation required five lanes. "database is locked" from a stale holder and from real contention ARE INDISTINGUISHABLE AT THE POINT OF FAILURE, which is the whole problem. The fan-out attribution was made without ruling this out — by both seats, including the one that narrowed (c) to concurrent siblings.
+
+    NO CAUSAL CLAIM IS BEING MADE. There is no evidence linking this lock to either failure. What is established is that (c) had TWO candidate mechanisms and only one was in view, and that A CONFOUND WAS PRESENT IN EVERY LOCAL MEASUREMENT TAKEN ON THIS MACHINE SINCE 2026-09-14 — including, potentially, the #1999 timings.
+
+    CONSEQUENCE FOR THIS SPEC'S DISCRIMINATING RUN: it is now a cleaner question than when it was written. The lock is healed, so a repeat failure can no longer be attributed to it, and a pass no longer needs to exclude it. Re-run with the lanes quiet as already specified.
+
+    AND A SEPARATE FINDING THAT DESERVES ITS OWN SPEC IF IT RECURS: a stale lock survived SEVEN AND A HALF DAYS while `aida doctor check stale-locks` could see it the whole time, classified `[safe]` and auto-healable. Nothing ran the check. That is the substrate-first problem this board keeps recording — a detector that works, a heal that works, and no cadence invoking either.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:43:33.092866010Z
-modified_at: 2026-09-21T18:46:23.774929722Z
+modified_at: 2026-09-21T18:53:42.629231070Z
 req_type: Bug
