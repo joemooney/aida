@@ -29,12 +29,72 @@ description: |
   6. Correctness is unchanged: a branch with genuinely unshipped work is still reported.
 
   Reported by the aida-monitor project, which measured 10-25 s; independently measured here at 70-77 s, so the reported figure was optimistic rather than exaggerated.
+
+  ===============================================================================
+  THIS SPEC IS **NOT** SATISFIED BY PR #1999, AND THE REMAINING WORK IS HARDER
+  THAN WHEN THE SPEC WAS WRITTEN. Ruled 2026-09-21 by the advisor on a review
+  call from claude-reviewer-1, who was asked for it explicitly.
+  ===============================================================================
+
+  #1999 FIXED A CORRECTNESS DEFECT AND THE HEADLINE CRITERION IS UNTOUCHED. The
+  command moved from FAST AND WRONG to SLOW AND RIGHT:
+
+      unfixed   awaiting --json  7.6 / 4.4 / 5.2 s     status --full  22.2 s
+      fixed     awaiting --json  27.0 / 26.8 / 25.1 s  status --full  36.9 s
+      (1295 local / 357 remote branches; binary sha verified against HEAD before each run)
+
+  THE 5s BASELINE WAS NOT A BASELINE. `collect_unshipped_work_items` gated on an
+  ALLOW-LIST of `inprogress | in-progress | done`, so it probed ~12 of 193
+  eligible candidates. FIVE SECONDS WAS THE COST OF NOT DOING 94% OF THE WORK.
+  There is no correct-and-fast predecessor to regress from: 26s IS THE FIRST
+  MEASUREMENT OF THE CORRECT COMPUTATION, and 134 Approved-status specs' branches
+  were entirely unscanned before.
+
+  SO 5s -> 26s MUST NOT BE RECORDED AS A REGRESSION. It is the correct
+  computation being measured for the first time.
+
+  AND IT MUST NOT BE RECORDED AS SATISFYING THIS SPEC EITHER. The subject here is
+  "the machine-readable path is unpollable". 26s is not pollable; neither was 5s.
+  THE HEADLINE CRITERION IS UNMET AND THE TRAILER AT MERGE MUST NOT CLOSE IT —
+  `auto_bump_eligible_status` accepts five states including NeedsAttention, so a
+  `(BUG-1288)` trailer would complete a spec whose central criterion is open. See
+  BUG-1551; this is the case it bites.
+
+  THE MEASUREMENT THAT TELLS THE NEXT PERSON WHERE TO START, and it is the most
+  useful thing in the review: A ~16x WIDENING OF THE CANDIDATE SET COST ~5x WALL
+  CLOCK. THAT IS SUB-LINEAR. A linear result would have been ~80s. So FIXED
+  OVERHEAD DOMINATES and the performance win is in the PROBE'S SETUP, not in
+  trimming candidates. Anyone who opens this expecting to win by filtering the
+  candidate set will be optimising the term that is not the problem.
+
+  WHAT ALSO SURVIVES AND SHOULD NOT BE RE-DERIVED:
+  - THE PER-TURN NOTICE PATH IS NOT AFFECTED, verified in review: lib.rs:68554
+    gates the notice behind `notice_fast` and SKIPS collect_unshipped_work_items
+    entirely, with the latency contract stated in-code. A 5x slowdown on every
+    prompt in every session would have been a real regression that NO PR-LEVEL
+    TIMING WOULD HAVE SURFACED. The cost lands on `--json` and `status --full`
+    only.
+  - THE WIDENING IS PRINCIPLED, VERIFIED LITERALLY RATHER THAN ACCEPTED: the gate
+    now filters on `completed | rejected | superseded` and the downstream terminal
+    check on the resolved spec_id filters on `completed | rejected | superseded`.
+    BYTE-IDENTICAL. Nothing is dropped at the gate for a reason that would not
+    also drop it downstream.
+
+  REVISED ACCEPTANCE for what remains:
+  - THE CORRECT COMPUTATION must become pollable — the sub-3s target applies to
+    the 193-candidate set, not to the 12-candidate approximation.
+  - START AT THE PROBE'S SETUP, not at candidate trimming. The sub-linear scaling
+    above is the evidence; re-measure it rather than trusting it if the tree has
+    moved.
+  - ANY FUTURE NARROWING OF THE CANDIDATE SET MUST STATE WHAT IT MAKES INVISIBLE.
+    Narrowing is what caused this defect, and a narrowing justified by latency is
+    exactly how it recurs.
 status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:06:24.777604114Z
-modified_at: 2026-09-21T17:50:34.189137689Z
+modified_at: 2026-09-21T18:28:03.258123567Z
 req_type: Bug
 tags:
 - batch:followups-0918i
