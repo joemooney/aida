@@ -564,8 +564,15 @@ fn tick(
             "schedule tick: another tick is already running".to_string()
         ]);
     };
+    // BUG-1291: the full scheduler tick owns the bounded orphan-review
+    // backstop. Hook ticks stay network-free; explicit/timer ticks inspect the
+    // bounded forge list even when no user schedule registry exists.
     let Some(config) = load_registry(project_root)? else {
-        return Ok(vec![]);
+        return Ok(if hook {
+            Vec::new()
+        } else {
+            crate::sweep_orphaned_reviews(project_root)
+        });
     };
     let mut state = load_state(project_root)?;
     let now = Utc::now();
@@ -579,13 +586,18 @@ fn tick(
             )]);
         }
     }
+    let mut recovery_lines = if hook {
+        Vec::new()
+    } else {
+        crate::sweep_orphaned_reviews(project_root)
+    };
     let needs_events = config.tasks.iter().any(|t| t.enabled && !t.on.is_empty());
     let events = if needs_events {
         events::read_all(project_root)
     } else {
         Vec::new()
     };
-    tick_core(
+    recovery_lines.extend(tick_core(
         project_root,
         config,
         &mut state,
@@ -594,7 +606,8 @@ fn tick(
         run_aida_command,
         |fields| collect_snapshot(project_root, fields, backend),
         &events,
-    )
+    )?);
+    Ok(recovery_lines)
 }
 
 fn run_now(project_root: &Path, only: Option<&str>) -> Result<Vec<String>> {

@@ -38397,8 +38397,15 @@ fn parse_gh_pr_line(stdout: &str) -> PrLookup {
 /// falls through to the backing spec as an implementer pickup.
 // trace:BUG-1186 | ai:claude
 fn open_pr_review_story(project_root: &std::path::Path, pr_number: u64) -> Option<String> {
-    let aida = aida_exe_path();
-    let Ok(out) = std::process::Command::new(&aida)
+    open_pr_review_story_using(project_root, pr_number, &aida_exe_path())
+}
+
+fn open_pr_review_story_using(
+    project_root: &std::path::Path,
+    pr_number: u64,
+    aida: &std::path::Path,
+) -> Option<String> {
+    let Ok(out) = std::process::Command::new(aida)
         .current_dir(project_root)
         .args(["list", "--type", "story", "--format", "json"])
         .output()
@@ -39891,11 +39898,26 @@ fn aida_subcmd_rel_add(project_root: &std::path::Path, from: &str, to: &str, rel
     }
 }
 
-/// Best-effort `aida queue add <id> --for reviewer --no-scope --note <...>`.
-/// trace:STORY-66 | ai:claude
-fn aida_subcmd_queue_add_for_reviewer(project_root: &std::path::Path, spec_id: &str, note: &str) {
-    let aida = aida_exe_path();
-    let out = std::process::Command::new(&aida)
+/// `aida queue add <id> --for reviewer --no-scope --note <...>`.
+///
+/// The result is deliberately not best-effort: callers must not report a PR
+/// as handed off until the reviewer queue durably owns it.
+// trace:STORY-66 trace:BUG-1291 | ai:claude ai:codex
+fn aida_subcmd_queue_add_for_reviewer(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    note: &str,
+) -> anyhow::Result<()> {
+    aida_subcmd_queue_add_for_reviewer_using(project_root, spec_id, note, &aida_exe_path())
+}
+
+fn aida_subcmd_queue_add_for_reviewer_using(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    note: &str,
+    aida: &std::path::Path,
+) -> anyhow::Result<()> {
+    let out = std::process::Command::new(aida)
         .current_dir(project_root)
         .args([
             "queue",
@@ -39909,18 +39931,12 @@ fn aida_subcmd_queue_add_for_reviewer(project_root: &std::path::Path, spec_id: &
         ])
         .output();
     match out {
-        Ok(o) if o.status.success() => {}
-        Ok(o) => eprintln!(
-            "{} auto-queue: `queue add {}` failed: {}",
-            "Warning:".yellow().bold(),
-            spec_id,
+        Ok(o) if o.status.success() => Ok(()),
+        Ok(o) => anyhow::bail!(
+            "`aida queue add {spec_id}` failed: {}",
             String::from_utf8_lossy(&o.stderr).trim()
         ),
-        Err(e) => eprintln!(
-            "{} auto-queue: could not invoke `aida queue add`: {}",
-            "Warning:".yellow().bold(),
-            e
-        ),
+        Err(e) => Err(e).context("could not invoke `aida queue add`"),
     }
 }
 
@@ -40227,7 +40243,13 @@ fn try_auto_queue_pr_review(
         }
         ReviewStoryQueueDecision::Requeue(story_id) => {
             let note = format!("re-queued by auto-queue-review for PR #{}", pr.number);
-            aida_subcmd_queue_add_for_reviewer(project_root, &story_id, &note);
+            if let Err(err) = aida_subcmd_queue_add_for_reviewer(project_root, &story_id, &note) {
+                return AutoQueueOutcome::skipped_needs_attention(format!(
+                    "auto-queue: review story {story_id} exists for PR #{} but reviewer queue insertion failed: {err}; the unqueued story remains a durable retry signal",
+                    pr.number
+                ))
+                .with_pr(pr.number);
+            }
             return AutoQueueOutcome::filed(format!(
                 "re-queued existing {} → reviewer queue (PR #{})",
                 story_id, pr.number
@@ -40348,7 +40370,14 @@ fn try_auto_queue_pr_review(
         spec_ids.len(),
         if spec_ids.len() == 1 { "" } else { "s" }
     );
-    aida_subcmd_queue_add_for_reviewer(project_root, &new_id, &note);
+    if let Err(err) = aida_subcmd_queue_add_for_reviewer(project_root, &new_id, &note) {
+        return AutoQueueOutcome::skipped_needs_attention(format!(
+            "auto-queue: filed {new_id} for PR #{} but reviewer queue insertion failed: {err}; the unqueued story remains a durable retry signal",
+            pr.number
+        ))
+        .with_pr(pr.number)
+        .with_specs(spec_ids);
+    }
 
     let covers = if spec_ids.is_empty() {
         "no specs".to_string()
@@ -51683,6 +51712,22 @@ fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number: u64) -> bo
         Ok(auto_complete::ReviewerOutcome::Verdict(
             auto_complete::Verdict::Approved
         ))
+    )
+}
+
+/// BUG-1291: any valid local reviewer decision means this PR has already
+/// been reviewed. The orphan sweep must not turn RequestChanges or Rejected
+/// back into fresh reviewer work merely because GitHub has no decision.
+// trace:BUG-1291 | ai:codex
+fn pr_has_local_verdict(project_root: &std::path::Path, pr_number: u64) -> bool {
+    let path = project_root
+        .join(".aida")
+        .join("review-verdicts")
+        .join(format!("PR-{pr_number}.json"));
+    matches!(
+        read_verdict_file(&path),
+        Ok(auto_complete::ReviewerOutcome::Verdict(_))
+            | Ok(auto_complete::ReviewerOutcome::EscalatedToHuman { .. })
     )
 }
 
@@ -66629,6 +66674,204 @@ fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenPrSnapshot {
         return OpenPrSnapshot::default();
     }
     parse_open_pr_snapshot(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// BUG-1291: bounded safety net for runs killed before their normal reviewer
+/// handoff. The scheduler tick calls this once over the forge's already-bounded
+/// open-PR list. It only claims review work; it never reviews or merges.
+// trace:BUG-1291 trace:TASK-1284 | ai:codex
+pub(crate) fn sweep_orphaned_reviews(project_root: &std::path::Path) -> Vec<String> {
+    let live_branches: std::collections::HashSet<String> = list_leases(project_root)
+        .into_iter()
+        .filter(|lease| {
+            lease.active_pid.is_some_and(|pid| {
+                process_probe::process_identity_is_alive(
+                    pid,
+                    lease.active_pid_start_time.as_deref(),
+                )
+            }) || lease.creator_pid.is_some_and(|pid| {
+                process_probe::process_identity_is_alive(
+                    pid,
+                    lease.creator_pid_start_time.as_deref(),
+                )
+            })
+        })
+        .map(|lease| lease.branch)
+        .filter(|branch| !branch.is_empty())
+        .collect();
+
+    let mut lines = Vec::new();
+    for pr in collect_open_prs_uncached(project_root)
+        .by_branch
+        .into_values()
+    {
+        let clean = pr.mergeable.as_deref() == Some("MERGEABLE");
+        let green = matches!(pr.ci_rollup.as_deref(), None | Some("pass"));
+        let no_verdict =
+            pr.review_decision.is_none() && !pr_has_local_verdict(project_root, pr.number);
+        let no_hold = merge_hold::read_hold(project_root, pr.number).is_none();
+        let unowned = !live_branches.contains(&pr.head_branch);
+        if !orphaned_review_is_claimable(clean, green, no_verdict, no_hold, unowned) {
+            continue;
+        }
+
+        let outcome = try_auto_queue_pr_review(
+            project_root,
+            &pr.head_branch,
+            "orphan-sweep",
+            AutoQueueOrigin::PrSkill,
+        );
+        if matches!(
+            outcome.status,
+            AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists
+        ) {
+            // Filed now means queue insertion succeeded; AlreadyExists means
+            // reviewer_queue_story_ids verified an existing queue owner.
+            lines.push(format!(
+                "schedule tick: claimed orphaned PR #{} for reviewer",
+                pr.number
+            ));
+        } else if matches!(outcome.status, AutoQueueStatus::SkippedNeedsAttention) {
+            lines.push(format!(
+                "schedule tick: orphaned PR #{} still unclaimed: {}",
+                pr.number, outcome.summary
+            ));
+        }
+    }
+    lines
+}
+
+// trace:BUG-1291 | ai:codex
+fn orphaned_review_is_claimable(
+    clean: bool,
+    green: bool,
+    no_verdict: bool,
+    no_hold: bool,
+    unowned: bool,
+) -> bool {
+    clean && green && no_verdict && no_hold && unowned
+}
+
+#[cfg(test)]
+mod bug_1291_orphan_sweep_tests {
+    use super::*;
+
+    fn write_verdict(root: &std::path::Path, verdict: &str) {
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("PR-1970.json"),
+            format!(r#"{{"verdict":"{verdict}"}}"#),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn every_valid_local_verdict_blocks_historical_pr_1970_requeue() {
+        for verdict in ["Approved", "RequestChanges", "Rejected"] {
+            let root = tempfile::tempdir().unwrap();
+            write_verdict(root.path(), verdict);
+            assert!(
+                pr_has_local_verdict(root.path(), 1970),
+                "{verdict} must keep PR-1970 / STORY-1354 out of the orphan sweep"
+            );
+        }
+    }
+
+    #[test]
+    fn sweep_predicate_requires_no_hold_and_no_live_owner() {
+        assert!(orphaned_review_is_claimable(true, true, true, true, true));
+        assert!(!orphaned_review_is_claimable(true, true, true, false, true));
+        assert!(!orphaned_review_is_claimable(true, true, true, true, false));
+    }
+
+    #[test]
+    fn malformed_or_missing_verdict_remains_sweep_eligible() {
+        let root = tempfile::tempdir().unwrap();
+        assert!(!pr_has_local_verdict(root.path(), 1970));
+        let dir = root.path().join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("PR-1970.json"), "not-json").unwrap();
+        assert!(!pr_has_local_verdict(root.path(), 1970));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn real_phase_driver_shelve_handoff_makes_story_1354_claimable() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().unwrap();
+        let fake_aida = root.path().join("aida");
+        let script = r#"#!/bin/sh
+if [ "$1" = "list" ]; then
+  printf '%s\n' '[{"spec_id":"STORY-1354","title":"Review PR-1970: BUG-1268 stale-base recovery","status":"Approved"}]'
+  exit 0
+fi
+if [ "$1" = "queue" ] && [ "$2" = "add" ]; then
+  printf '%s\n' "$3" > .claimed-review
+  exit 0
+fi
+exit 1
+"#;
+        std::fs::write(&fake_aida, script).unwrap();
+        let mut permissions = std::fs::metadata(&fake_aida).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&fake_aida, permissions).unwrap();
+
+        let mut driver = RealPhaseDriver::new(
+            root.path().to_path_buf(),
+            "BUG-1268".into(),
+            "reviewer-test".into(),
+            None,
+            true,
+            None,
+            AutonomyMode::Default,
+            "bug-1291-test".into(),
+            false,
+            false,
+            false,
+            false,
+            auto_complete::LifecycleSkip::none(),
+            auto_complete::AutoCompleteVariant::Full,
+        );
+        driver.aida_exe = fake_aida;
+        driver.pr_number = Some(1970);
+
+        auto_complete::PhaseDriver::handoff_open_pr_after_shelve(
+            &mut driver,
+            "BUG-1268",
+            auto_complete::Phase::Reviewer,
+            &auto_complete::PhaseFailure::new("reviewer phase shelved"),
+        );
+
+        assert_eq!(
+            std::fs::read_to_string(root.path().join(".claimed-review"))
+                .unwrap()
+                .trim(),
+            "STORY-1354",
+            "the historical review story must be present in the reviewer queue after shelving"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn queue_add_failure_is_propagated() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let fake = root.path().join("failing-aida");
+        std::fs::write(&fake, "#!/bin/sh\necho queue unavailable >&2\nexit 23\n").unwrap();
+        let mut permissions = std::fs::metadata(&fake).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&fake, permissions).unwrap();
+        let err = aida_subcmd_queue_add_for_reviewer_using(
+            root.path(),
+            "STORY-1354",
+            "BUG-1291 test",
+            &fake,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("queue unavailable"), "{err}");
+    }
 }
 
 /// TASK-833: pure parse of a `gh pr list --json
@@ -90590,6 +90833,88 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &failure.reason,
             recovery_hint,
         )
+    }
+
+    // trace:BUG-1291 | ai:codex
+    fn handoff_open_pr_after_shelve(
+        &mut self,
+        spec: &str,
+        phase: auto_complete::Phase,
+        failure: &auto_complete::PhaseFailure,
+    ) {
+        let Some(pr) = self.pr_number else {
+            return;
+        };
+        let Some(story_id) =
+            open_pr_review_story_using(&self.project_root, pr as u64, &self.aida_exe)
+        else {
+            // Normally `/aida-pr` already filed the story. Re-run that
+            // idempotent path as a repair before looking it up once more.
+            if let Some(branch) = self.branch.as_deref() {
+                let _ = try_auto_queue_pr_review(
+                    &self.project_root,
+                    branch,
+                    "shelve-recovery",
+                    AutoQueueOrigin::PrSkill,
+                );
+            }
+            let Some(story_id) =
+                open_pr_review_story_using(&self.project_root, pr as u64, &self.aida_exe)
+            else {
+                eprintln!(
+                    "  {} shelved {} with PR #{} but could not resolve its review story",
+                    "Warning:".yellow().bold(),
+                    spec,
+                    pr
+                );
+                return;
+            };
+            let note = format!(
+                "BUG-1291 recovery: PR #{} handed off after shelving in phase {} ({}): {}",
+                pr,
+                phase.index(),
+                phase.slug(),
+                failure.reason
+            );
+            if let Err(err) = aida_subcmd_queue_add_for_reviewer_using(
+                &self.project_root,
+                &story_id,
+                &note,
+                &self.aida_exe,
+            ) {
+                eprintln!(
+                    "  {} shelved {} with PR #{} but reviewer handoff failed: {}; {} remains as a durable retry signal",
+                    "Warning:".yellow().bold(),
+                    spec,
+                    pr,
+                    err,
+                    story_id
+                );
+            }
+            return;
+        };
+        let note = format!(
+            "BUG-1291 recovery: PR #{} handed off after shelving in phase {} ({}): {}",
+            pr,
+            phase.index(),
+            phase.slug(),
+            failure.reason
+        );
+        if let Err(err) = aida_subcmd_queue_add_for_reviewer_using(
+            &self.project_root,
+            &story_id,
+            &note,
+            &self.aida_exe,
+        ) {
+            eprintln!(
+                "  {} shelved {} with PR #{} but reviewer handoff failed: {}; {} remains as a durable retry signal",
+                "Warning:".yellow().bold(),
+                spec,
+                pr,
+                err,
+                story_id
+            );
+        }
     }
 
     /// TASK-975: the `[drain] ci_auto_fix` budget (env override
