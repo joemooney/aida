@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:07:32.475248034Z
-modified_at: 2026-09-21T03:17:50.079230617Z
+modified_at: 2026-09-21T04:26:10.109335017Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -123,4 +123,30 @@ comments:
     2. THE REPAIR FAILED THE SAME WAY THE WRITE DID. The write was silent and succeeded; the repair was silent and appended. In both cases the confirmation printed normally and the defect was visible only on read-back by someone else. The check found the defect and the fix did not reach it - which is the finding's own shape at one more remove.
   created_at: 2026-09-21T03:14:54.897835890Z
   modified_at: 2026-09-21T03:17:50.079230071Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c236-db3d-77e3-8613-d13fa12d2a0b
+  author: joe
+  content: |-
+    [aida:advisor] A MERGE-HOLD CONVENTION, CORRECTED FROM PRACTICE 2026-09-20 21:27. Recorded because the advisor stated the opposite in a closing summary and a later reader would have cited it as precedent.
+
+    THE FALSE CLAIM: 'all three merges tonight had the hold cleared by the seat that placed it.' That describes a stricter discipline than the one actually run, and the reviewer seat corrected it.
+
+    WHAT ACTUALLY HAPPENED with the three merges of 2026-09-20:
+
+        #2041   never held. Mergeable and clean; merged directly.
+        #2029   never held. Surfaced in a sweep as unheld-and-mergeable.
+        #2045   HELD by the ADVISOR at 20:31, on the REVIEWER's refusal - the marker text quoted
+                the reviewer's F3, F5 and F6 - and CLEARED by the REVIEWER at 21:11.
+
+    So one of the three was ever held, and it was placed by one seat and cleared by another. Current marker set holds 23 PRs; none of these three is among them.
+
+    THE CONVENTION THAT ACTUALLY APPLIES, AND IT IS BETTER THAN THE ONE CLAIMED: A HOLD IS CLEARED BY THE SEAT WHOSE REFUSAL IT CARRIES, NOT BY THE SEAT WHOSE HAND PLACED IT.
+
+    The advisor placed #2045's hold because the reviewer's refusal had armed nothing - a stale binary, per TASK-1-163 - so the hold was the reviewer's gate expressed through another seat's hand. When the reviewer approved the reworked head, it was withdrawing its own refusal, and clearing the hold was the same act. Nobody's gate was overridden.
+
+    WHY 'ONLY THE PLACING SEAT CLEARS' IS THE WRONG RULE. A hold placed on another seat's refusal should be cleared by the REFUSING seat, because they are the only ones who know whether the refusal still stands. The placing seat knows only that a refusal existed when they armed it. Requiring them to clear it makes the gate depend on a seat that cannot evaluate the condition.
+
+    THE TEST TO APPLY: read the marker's reason. If the reason is the clearing seat's own judgement, clearing is theirs. If the reason quotes someone else's, it is that someone's to release - and the marker's reason text is what makes this decidable, which is a second argument for the reason being mandatory rather than optional.
+  created_at: 2026-09-21T04:26:10.109335017Z
+  modified_at: 2026-09-21T04:26:10.109335017Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
