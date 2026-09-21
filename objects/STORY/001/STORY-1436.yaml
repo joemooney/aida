@@ -1,0 +1,65 @@
+id: 01a0c625-99f2-7051-9362-d863638608ba
+spec_id: STORY-1436
+agreed_id: STORY-1436
+title: 'The substrate records actions and not non-actions: a gate that held, a seat that was blocked, and a refusal that was correct all leave no artefact, so every rate drawn from it is biased toward things '
+description: |-
+  THE SUBSTRATE RECORDS ACTIONS AND NOT NON-ACTIONS, SO EVERY RATE COMPUTED FROM IT IS BIASED TOWARD THINGS HAPPENING. A gate that HELD, a finding a seat COULD NOT clear, a spec a drain REFUSED to pick up - none of these leave an artefact. The consequence is not a missing log line; it is that the surfaces we reason from can only answer "how often did X happen" and never "how often was X prevented".
+
+  VERIFIED, NOT ASSERTED:
+
+    1. THE MERGE-HOLD INTEGRITY FLOOR REFUSAL WRITES NOTHING. lib.rs:29978 is
+       `if !has_integrity_floor_authority() { anyhow::bail!("clearing a merge-hold requires a
+       human at an interactive terminal; ...") }`. A bail and a message on stderr. No event, no
+       ledger entry, no marker annotation. The PR, the refusing seat and the reason are all in
+       scope at that line and none of them is recorded.
+
+    2. THE EVENT FEED HAS NO REFUSAL KIND AT ALL. The sixteen kinds in `.aida/events.jsonl` are:
+       AdvisorEscalated, CiTerminal, CronJobFailed, CronJobFired, MailReceived, PhaseDonePr,
+       PhaseEntered, PrMerged, PuntFiled, QueueDrained, RunCompleted, RunStarted, SpecCompleted,
+       SpecRetried, SpecShelved, UnshippedWorkDetected. EVERY ONE IS A THING THAT HAPPENED.
+       SpecShelved is the closest to a negative and it records a FAILURE, not a PREVENTION.
+
+  TWO CONFIRMED INSTANCES TODAY, both found by a seat noticing its own absence rather than by any surface:
+
+    A. THE FLOOR HELD AND NOTHING SHOWS IT. claude-reviewer-1 hit the TTY floor on PR #1978,
+       declined the `aida pr ship` route it knew would clear the hold, and stopped. THE ONLY
+       TRACE OF THAT IS A MESSAGE IN AN INBOX. Had it said nothing, nothing anywhere would show
+       the floor had been tested and had worked.
+
+    B. A RATE BUILT ON THE SKEW. The advisor recorded "four bypasses of the integrity floor in
+       one day" as evidence the mechanism is mis-specified (ADR-52). The count is accurate and
+       THE DENOMINATOR IS MISSING - the ledger records bypasses TAKEN and nothing records the
+       floor holding. Read back in a month that record supports "this floor is bypassed
+       constantly" and CANNOT support "it stopped a seat". The advisor has demoted that line
+       from evidence to illustration on ADR-52; this spec is the general form.
+
+  WHY THIS IS NOT JUST A MISSING METRIC. A seat that is BLOCKED cannot signal being blocked, so a blocked seat and an idle one are indistinguishable from every board. That is the same invisibility already recorded as TASK-1418 item 3, where a finding blocked on a capability the receiving seat lacked presented as ordinary rework for four rounds because nothing records "I cannot reach this". THE PATTERN IS ONE DEFECT WITH TWO FACES: a gate holding looks like silence, and a seat stuck looks like silence, and silence is what the substrate stores for both.
+
+  Acceptance:
+  - The merge-hold clear refusal writes a record with the PR, the refusing seat, the reason and
+    the timestamp - the same shape a successful clear writes. Everything needed is in scope at
+    the bail site.
+  - The event feed gains a refusal/prevention kind, and at minimum the integrity-floor refusal
+    and the BlockedBy pickup refusal emit it. Name what was refused, to whom, and why.
+  - `aida awaiting` or an equivalent surface can answer "what did I try to do and could not",
+    so a blocked seat is distinguishable from an idle one WITHOUT sending a mail about it.
+  - DEMONSTRATE WITH A RATE, not a log line: after the change, show a count of floor-refusals
+    beside the count of floor-bypasses for the same window. The point is the denominator; a
+    record that cannot be counted against its complement does not satisfy this.
+
+  NOT IN SCOPE: changing any gate's behaviour. Every refusal named here is CORRECT. This is
+  entirely about making correct refusals visible.
+
+  Filed by the driver-advisor seat. The denominator defect was identified by claude-reviewer-1,
+  against its own interest - the skew it pointed out makes the mechanism that blocked it look
+  better rather than worse. Related: ADR-52 (the floor's subject), TASK-1418 item 3 (the same
+  invisibility seen from the blocked seat's side), BUG-1566 (the two clear paths).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:45:48.146378234Z
+modified_at: 2026-09-21T22:45:48.146378234Z
+req_type: Story
+tags:
+- substrate observability governance
