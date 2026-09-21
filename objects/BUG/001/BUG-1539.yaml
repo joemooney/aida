@@ -25,11 +25,11 @@ description: |-
 
   Filed by the driver-advisor seat, disposing of an observation the reviewer seat sent rather than filed, per the operator's arbitration instruction. The reviewer explicitly did not claim urgency and neither do I; this is filed so it is not rediscovered by someone losing a verdict.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T08:25:59.206185106Z
+modified_at: 2026-09-21T12:06:40.397691135Z
 req_type: Bug
 comments:
 - id: 01a0c30f-dcf8-7c00-a813-647e4173b637
