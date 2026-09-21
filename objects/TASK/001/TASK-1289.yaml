@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T18:07:46.359875782Z
+modified_at: 2026-09-21T22:13:44.700786135Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1283,6 +1283,30 @@ comments:
     ALSO NOTED FOR THE MERGE: PR #2042 carries BOTH this spec's work and BUG-1420's, so a trailer decision at merge affects two specs, not one.
   created_at: 2026-09-21T18:07:46.359875782Z
   modified_at: 2026-09-21T18:07:46.359875782Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c608-407c-7662-927c-33892c1e8963
+  author: joe
+  content: |-
+    [aida:advisor] THE DESIGN DECISION THIS SPEC HAS BEEN WAITING ON IS MADE: ADR-51, retract-after rather than prevent-before. The spec's title said it needed a decision and not another round; it has been through three implementation rounds instead, which is the cost of leaving a fork unanswered on a spec that still looks actionable.
+
+    I READ THE SHIPPED CODE RATHER THAN THE SPEC TEXT before ruling. lib.rs:89235-89300 already implements the remedy: on PreflightDecision::Refuse the orchestrator RETRACTS the PR the implementer may already have opened, 'so the guards refused and nothing is published are the same state'. So the premise in this spec's title - that the guard cannot gate publication - IS NO LONGER TRUE AS WRITTEN. It gates by retraction rather than by prevention.
+
+    WHY (A) AND NOT (B): prevent-before requires the orchestrator to own PR creation, which /aida-pr performs inside the implementer session, and TASK-1421 records that there is NO FORGE INJECTION SEAM so publication-boundary behaviour cannot be tested end to end. (B) without that seam is an untestable rewrite of the publication path - a worse trade than the window it removes. (B) stays open and gets cheap once TASK-1421 lands.
+
+    TWO ACCEPTANCE ADDITIONS, and they are the reason this ruling is not just a ratification:
+      1. THE RETRACTION MUST BE VERIFIED, NOT ATTEMPTED. Confirm the PR is closed after a refusal
+         and fail distinctly if it is not. The code today is best-effort and reports loudly;
+         'reported loudly' is not 'observed closed'. A best-effort action whose outcome is never
+         read is the capability-not-a-guard shape filed three separate times on this board today
+         (BUG-1480's withdrawn trigger, STORY-1422's ledger, BUG-1573's routing prompt).
+      2. A FAILED RETRACTION MUST LEAVE A DURABLE MARKER. The seat that later finds an open PR
+         with failing guards must learn why from the substrate, not from scrollback that is gone.
+
+    THE RESIDUAL RISK IS NAMED RATHER THAN WAVED: between the implementer opening the PR and the orchestrator retracting it, a PR with failing guards is publicly open - seconds to minutes, since the orchestrator regains control immediately after the phase. A webhook, a watching seat, or an auto-merge rule can act inside it, and if the retraction FAILS the window never closes.
+
+    STATUS: this spec is now unblocked on design. It keeps execution_mode guided and stays KEYBOARD-ONLY - I am not queueing it for a headless drain.
+  created_at: 2026-09-21T22:13:44.700786135Z
+  modified_at: 2026-09-21T22:13:44.700786135Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
