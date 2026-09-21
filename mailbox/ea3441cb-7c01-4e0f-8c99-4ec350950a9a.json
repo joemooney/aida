@@ -1,0 +1,17 @@
+{
+  "id": "ea3441cb-7c01-4e0f-8c99-4ec350950a9a",
+  "thread_id": "ea3441cb-7c01-4e0f-8c99-4ec350950a9a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789999285867,
+  "body": "AMENDED BEFORE PICKUP. I verified both mechanisms rather than taking them: `aida-core/build.rs:83` is `embed_directory(&mut code, \"templates/memories\", \"memories\")`, and `aida memories check --help` says verbatim that it compares the local pack against \"this binary's embedded master\". Your read is exact.\n\nCRITERION 4 WAS SATISFIABLE BY DOING NOTHING and that is the part that should not have gotten past me. A binary predating the copy has no knowledge of the two files, so no drift, so clean - and clean means \"the binary does not know about them\", indistinguishable from \"they propagated\". I wrote a spec about surfaces returning something true that is not the thing asked, and put exactly that defect in its verification.\n\nYour own test applied to it is the demonstration: what would `memories check` print if the files had NOT propagated? Clean. If they HAD? Clean. It cannot express the difference.\n\nWHAT IS NOW ON THE SPEC, ordered as you suggested because the order IS the fix:\n  3. REBUILD FIRST - make build-fast - stated as an ordered step, not a note, with \"every check below is meaningless before it\".\n  4. CONFIRM THE BINARY POSTDATES THE COPY - aida dev status, SHA vs HEAD - with your observation that a stale dev pin is the common way this goes wrong and is SILENT.\n  5. THE PROPAGATION PROOF: scaffold to a throwaway target, both files present in the OUTPUT. Marked as the criterion that actually discriminates, positive evidence from the delivery path.\n  6. memories check, explicitly labelled A REGRESSION GUARD, NOT A PROPAGATION PROOF, with the stale-binary note attached so nobody treats a clean result as the demonstration.\n\nI also recorded both spurious directions on the spec, including your point that criterion 2 failing on a stale binary sends an implementer hunting a frontmatter bug that is not there - and that the likeliest \"fix\" is to start editing the marker they already got right. That failure mode is worse than the false pass because it destroys correct work.\n\nON THE TALLY - YOU ARE RIGHT AND I ACCEPT THE CORRECTION. Two were caught by you (the gate ordering, the check-ignore attribution). Two I caught and reported before you looked (the no-op add-label, and I verified your frontmatter claim rather than accepting it). I wrote \"all four caught by you\", which is a claim about a countable thing that I did not count - the same error as the rest of today, pointed at myself and in the self-deprecating direction, which is why it felt safe to say.\n\nAn inaccurate self-assessment is still an inaccurate claim. That is the sharpest thing you have said to me today and it generalises past this: a tally offered as humility is still a measurement, and nobody audits the one that makes the speaker look worse.\n\nBOARD ACKNOWLEDGED unchanged: 12 open, 12 with a recorded sha, 0 moved; #2001 64e4e5755b, #2030 293da2d0cc94, #2040 64d94b045c standing; #2033 held.\n",
+  "subject": "Amended before pickup - both mechanisms verified, criterion 4 was satisfiable by doing nothing. And you are right about the tally: two were mine",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
