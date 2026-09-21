@@ -32,12 +32,12 @@ description: |-
   - docs/environment-variables.md gains a row if an opt-out is added.
 
   Found by the advisor while measuring STORY-1423's pre/post pair. The partition that exposed the defect - grouping by `binary_sha` - is also the partition that produced the cleanest evidence the fix works, so the field is load-bearing in both directions and is worth reading rather than only writing.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:06:06.231730031Z
-modified_at: 2026-09-21T23:15:44.288750248Z
+modified_at: 2026-09-21T23:31:00.588519872Z
 req_type: Bug
 tags:
 - batch:perf-gate
@@ -65,3 +65,22 @@ comments:
   created_at: 2026-09-21T23:15:15.690706813Z
   modified_at: 2026-09-21T23:15:44.288750100Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c64e-fd3d-7fb0-a854-a4f47b51c11d
+  author: aida-auto-bump
+  timestamp: 2026-09-21T23:31:00.541549926Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0c64e-fd6c-75c0-a45f-c657aecb4563
+  timestamp: 2026-09-21T23:31:00.588515835Z
+  agent: aida
+  commit_sha: 0a4b6627830bb970e2d6626c1eab721f6163414b
+  summary: 'APPROVED AT b0e382d282. All four acceptance criteria hold, the three judgements flagged for a second opinion are each correct, and I measured the one that a reviewer could reasonably invert rather than arguing it. THE FAIL-OPEN CALL IS RIGHT, AND ITS CURRENT EXPOSURE IS ZERO — MEASURED, NOT REASONED. Only `ShaMatch::Unrelated` is excluded (doctor_cmd.rs:832-833); absent, short, purged and foreign shas classify `Unknown` and are counted. I classified the real population in the gate''s 24h window against HEAD: rows in window 56,734 every one carrying a FULL binary_sha rows with no binary_sha 0 rows with a short/mangled sha 0 distinct binaries 30 ancestor of HEAD 17 binaries 56,638 calls COUNTED, correct unrelated 13 binaries 107 calls EXCLUDED by this fix UNPLACEABLE 0 binaries 0 calls the fail-open path So the branch a reviewer would worry about is currently empty in both directions: nothing is being wrongly counted through it, and nothing is being wrongly dropped. The choice is defensible on its stated reasoning — dropping unplaceable rows shrinks the denominator, which is the defect being fixed — and today it changes no verdict either way. (My denominator is the whole usage log across all command shapes; the gate tallies per shape, so this is a superset of the population any single budget judges. I am reporting what I measured, not contradicting a per-shape count.) THE RESIDUAL RISK IT CREATES IS REAL AND IS ALREADY COVERED BY ADR-53, WHICH IS WHY I AM NOT RAISING IT AS A FINDING. `over_pct = over_budget * 100 / counted.len()` (:1036-1037 region), so a counted row that is UNDER budget grows the denominator and nothing else. An unplaceable binary running FAST therefore DILUTES the proportion and makes main''s gate read healthier than it is — the same perverse-denominator property ADR-53 identified, reachable through a second door. Fail-open opens that door deliberately. ADR-53''s ceiling limb closes it, because a maximum cannot be diluted by volume: one 69-second call trips a ceiling at any denominator. The two decisions compose, and they only compose because the ceiling exists — had ADR-53 gone the other way, fail-open would deserve a harder look. THE ANCESTRY REUSE IS LITERAL, NOT A REIMPLEMENTATION. `crate::current_branch_head_sha(repo)` at :812 and `crate::classify_sha_match(repo, sha, &head)` at :832, matched against `crate::ShaMatch::Unrelated` — the same pair `aida dev status` calls, through the same enum and its `classify_from_merge_base_exit` contract. The instruction was followed exactly. The consequence is correctly identified in the routing note and I agree with it: a defect in that shared classifier now reaches a GATING surface rather than only a status display, so its blast radius grew. That is the cost of reuse and it is the right trade against a second, divergent ancestry test. THE ANCHORING CHOICE IS CORRECT AND CORRECTLY DOCUMENTED. `main_worktree_root_from` at :181 and :2975, so the lineage question is asked of the MAIN worktree''s HEAD, not the calling worktree''s. In a repo that routinely runs 20-60 worktrees, the alternative gives every seat a different verdict about the same machine-global log, which would make the gate unciteable between seats. Preserved rather than changed quietly, and stated in the code — the right handling for an inherited behaviour that a reader could mistake for an oversight. CRITERIA, CHECKED INDEPENDENTLY OF THE ROUTING NOTE: scoping on by default inside a repo (:812 onward); per-binary denominator on the finding with counted and excluded both reported and no truncation; the both-directions test present at :1453 under the name `a_noisy_off_lineage_binary_does_not_trip_the_in_lineage_gate_but_a_noisy_in_lineage_one_does`, which asserts the fix does not simply suppress everything; and the `AIDA_PERF_GATE_ALL_BINARIES` row in docs/environment-variables.md IN THIS CHANGE, which is the CLAUDE.md rule most often missed. SEQUENCING, RECORDED SO THE NEXT READER DOES NOT CLOSE STORY-1423 ON THIS. This PR does NOT implement ADR-53''s ceiling and is not expected to. At this head `worst_ms` is still exactly four occurrences — declared :951, assigned :1036, rendered :1124, asserted in a test :1350 — and NEVER COMPARED. The only two "ceiling" tokens in the file (:939, :1330) are doc comments about a raised BUDGET, a different sense of the word. BUG-1572 supplies the denominator; ADR-53 supplies the threshold. STORY-1423''s criterion 1 needs both, and after this merges it is measurable against the right population with the comparison still unwritten. THE GATE STAYING RED IS CORRECT AND IS NOT A DEFECT IN THIS PR. The trip is driven by a pre-fix build on main''s own lineage, which no lineage scope can or should exclude. What this closes is the CLASS — an off-lineage build can no longer contribute — plus the readability of the population. MERGE CONDITION: Build (ubuntu-latest) green at this head. I did not author this work.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T23:31:00.540805322Z
+  completion_sha: 0a4b6627830bb970e2d6626c1eab721f6163414b
