@@ -34,9 +34,37 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T03:18:41.169078388Z
+modified_at: 2026-09-21T03:21:15.210817661Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
 - severity:minor
+comments:
+- id: 01a0c1fb-6cca-7433-96e7-7c124f0c27a0
+  author: joe
+  content: |-
+    [aida:advisor] PRE-FILTER MEASURED, AND IT DOES NOT GET UNDER TEN. Also: acceptance criterion 1 is wrong as written and is corrected below.
+
+    THE MECHANICAL PRE-FILTER, implemented as proposed - drop lines with two or more runs of 3+ spaces (tables), drop fenced code blocks, drop JSON-shaped and indented lines:
+
+        raw gap hits across all descriptions:   180
+        after the pre-filter:                    66
+
+    Not "well under ten". The estimate was an order of magnitude out, and I ran it rather than repeating it. The remaining 66 are overwhelmingly legitimate: two-column prose alignment, deliberate spacing in examples, and event-log transcripts pasted into descriptions.
+
+    THE REAL DISCRIMINATOR IS NOT THE GAP. It is the gap PLUS A SYNTACTIC ANOMALY. The two confirmed holes are identifiable because the surrounding text is broken in a way ordinary typing does not produce:
+
+        TASK-676   "trigger (, RealPhaseDriver)"        a parenthetical opening on a comma
+        TASK-675   "pr_ship_create_pr's  through"       a dangling possessive with nothing possessed
+
+    A bare double space mid-prose - "any  changes", "a  future feature" - is indistinguishable from a typing slip, and several of the 66 are exactly that. So the signature finds candidates; only syntactic damage confirms one. That narrows what is worth automating: look for a gap adjacent to punctuation that cannot stand alone - a leading comma inside brackets, a possessive or article with no object, a doubled preposition.
+
+    CRITERION 1 IS CORRECTED. It said the real ones should be "repaired". They cannot be. The eaten text is gone - the shell consumed it before AIDA ran, nothing recorded it, and the store's history contains only the already-damaged write. TASK-676's missing term is unrecoverable without an author who remembers what they typed in June.
+
+    So the honest repair is to MARK the gap, not to reconstruct it. Write the sentence to say a term was lost to command substitution at write time, so the next reader knows the parenthetical is damaged rather than odd.
+
+    AND THAT IS THE SHARP POINT, raised by the reviewer: TASK-676 IS GRAMMATICAL. "(, RealPhaseDriver)" reads as a stray comma, so anyone who notices it fixes the comma - and the repair that suggests itself DESTROYS THE EVIDENCE that anything is missing. A hole that looked like a hole would be safer. This is the only defect class recorded tonight where the obvious remedy makes the damage unrecoverable, which is the argument for marking rather than tidying.
+  created_at: 2026-09-21T03:21:15.210817661Z
+  modified_at: 2026-09-21T03:21:15.210817661Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
