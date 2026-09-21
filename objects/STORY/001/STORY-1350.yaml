@@ -19,12 +19,12 @@ description: |
   - The reviewer prompt includes the statement so round 1 can compare intent against diff.
   - Opt-in [preview] gate = advisor escalates it for drive/guided specs and waits; default is off (no round-trip).
   - Measured: of the next 20 specs, how many round-1 findings were already named as questions in the statement — recorded here.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:57.872533301Z
-modified_at: 2026-09-20T23:24:29.799224020Z
+modified_at: 2026-09-21T16:42:47.196851549Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -278,16 +278,30 @@ comments:
   created_at: 2026-09-20T22:53:45.097176452Z
   modified_at: 2026-09-20T22:53:45.097176452Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c4d9-4015-7410-88cb-d7feda527e0c
+  author: aida-auto-bump
+  timestamp: 2026-09-21T16:42:47.189387911Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0c4d9-401c-7ff0-809d-295b1804fa45
+  timestamp: 2026-09-21T16:42:47.196849777Z
+  agent: aida
+  commit_sha: 21c393f4da6a905e1c87ec8bc0314123c443cae9
+  summary: 'Round-4 finding FIXED at the seam I named. The absence prose at append_implementer_approach now interpolates IMPLEMENTER_APPROACH_MARKER via format! instead of hard-coding the literal, so a rename of the constant can no longer leave the system parsing X while instructing humans to write Y. I reviewed the follow-up commit d57bd5e579 that REMOVES the marker assertion 0beef8b58a had just added, and I accept the removal: once the prose is interpolated from the constant, assert!(absent.contains(MARKER)) cannot fail by construction, and keeping an assertion that cannot fire is the exact anti-pattern this repo catalogues on TASK-1418. Dropping it is more consistent with the discipline than keeping it. CODE VERDICT ONLY - merge-readiness is a separate predicate and is NOT satisfied: Build (ubuntu-latest) was in_progress at this sha and the merge-hold is armed (marker .aida/merge-holds/PR-1974 plus the aida:merge-hold label), so mergeStateStatus is BLOCKED. I did not author any commit on this branch and did not merge it.'
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  review_verdict: approve
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T20:59:20.452123680Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-1350 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T23:19:00.007301951Z
+  completed_at: 2026-09-21T16:42:47.188922728Z
+  completion_sha: 21c393f4da6a905e1c87ec8bc0314123c443cae9
