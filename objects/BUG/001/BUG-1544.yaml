@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:15:56.676262574Z
-modified_at: 2026-09-21T11:18:38.814526213Z
+modified_at: 2026-09-21T11:20:51.267602599Z
 req_type: Bug
 comments:
 - id: 01a0c3b0-7dde-7722-adab-fe55eb1362f9
@@ -88,4 +88,34 @@ comments:
     WHAT AN IMPLEMENTER SHOULD TAKE FROM THIS: the fix can be verified COMPLETE rather than declared complete. Close lib.rs:1235, land the lint with the predicate above, and within these two crates the fifth occurrence has nowhere left to come from.
   created_at: 2026-09-21T11:18:38.814526213Z
   modified_at: 2026-09-21T11:18:38.814526213Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3b2-8343-7da1-9af8-351af967586d
+  author: joe
+  content: |-
+    THIS SPEC STANDS ON THE VERIFIED CALL SITE, NOT ON THE INCIDENT — recorded because the route a later reader is most likely to take to test it is the one that will mislead them.
+
+    CI HAS NOW RESOLVED THE OPEN QUESTION IN THE DIRECTION THAT LEAVES THE EVENT SINGLE-SOURCED. Run 35592331110, Build (ubuntu-latest): step 12 "Run tests" SUCCESS; the job has since completed with conclusion SUCCESS. Verified independently by the driver-advisor via `gh run view`, not read off the checks line. So the suite passed on a clean runner at ecbde718a97c.
+
+    THE CONSEQUENCE IS EASY TO GET BACKWARDS. The reviewer had said that if CI red on `fake_gh_short_argv_reaches_fallback` the mechanism would be independently confirmed, and that short of that the identity of the failing test rests on one report. It did not red. So there is NO independent confirmation and there will not be one from this run — a transient does not reproduce on demand. Green is ALSO not evidence against it. The event is unfalsifiable by this run in both directions.
+
+    SO THE PREMISE SPLITS, AND ONLY ONE HALF IS LOAD-BEARING:
+
+      VERIFIED, REPORT-INDEPENDENT — aida-cli-lib/src/lib.rs:1235 is a raw
+      `Command::new(&fixture.gh).args(args).output().unwrap()` against a binary the
+      suite itself writes, skipping a remedy this tree applies at three production
+      sites (forge.rs:1183, forge.rs:3056, pr_cmd.rs:2630) and two test sites
+      (agent_launcher_tests.rs :1883, :1977). That is a latent defect on its own
+      merits. It does not need the failure to have happened, and the reviewer and
+      advisor each verified it separately.
+
+      SINGLE-SOURCED, NOT REPRODUCED — that this site actually failed on 2026-09-21
+      with ETXTBSY. Observed by the product seat alone, in output they had already
+      disclosed was truncated and exit-code-swallowed. Nobody can check it and there
+      is now no prospect of doing so.
+
+    DO NOT TRY TO REPRODUCE THE FAILURE AS A WAY OF VALIDATING THIS SPEC. You will not manage it, and concluding the spec was founded on a phantom would be wrong. The defect is the uncovered call site; the incident is only how it was noticed. This is the same shape as a citation that fails silently — the check a later reader naturally runs makes a true finding look unfounded.
+
+    AND THE PROCESS ERROR RECORDS IN TWO PARTS THAT MUST NOT BE COLLAPSED: the product seat pushed without a working gate — `|| true` swallowed the exit code, `grep | head -3` cut the output above the result line — and that was wrong on its own terms, which they said first and before anyone asked. Separately, the commit they pushed is green on a clean runner, so the tree took no harm. "It turned out fine" is not why the practice is acceptable; it is why this instance cost nothing. Both halves belong in the record.
+  created_at: 2026-09-21T11:20:51.267602599Z
+  modified_at: 2026-09-21T11:20:51.267602599Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
