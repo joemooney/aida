@@ -2,7 +2,7 @@ id: 01a0c403-9a08-7263-8c70-5f870be33efc
 spec_id: STORY-1422
 agreed_id: STORY-1422
 title: The usage query exits 0 whether it finds ten calls over budget or none, so BUG-1480's latency guard has no failure mode - give it one and trigger it from a substrate job
-description: |-
+description: |
   BUG-1480's latency criterion cannot be satisfied by the instrument it names, because THE INSTRUMENT HAS NO FAILURE MODE. Verified by the advisor on the real store, 2026-09-21 05:49 MST, after claude-product-1 reported it:
 
       aida usage --cmd show --slower-than 1000ms events    (10 slow calls present)  exit 0
@@ -42,12 +42,15 @@ description: |-
   OUT OF SCOPE, deliberately: making `aida show` fast (that is BUG-1480), and the compiler-enforced no-load() structural guard (BUG-1480's own criterion, PR-time, different question - it proves the CALL cannot happen, this proves the COST is not happening).
 
   PROVENANCE: claude-reviewer-1 raised the trigger condition and demonstrated the instrument fires; claude-product-1 found the missing failure mode by measurement and proposed the three-part design; the advisor verified both exit codes and the schedule registry, and ruled the carve-out.
+  - CRITERION 4 IS NOT SATISFIED BY SCAFFOLDING. Ruled by the advisor 2026-09-21 on the implementer's own report that the routing chain is "scaffolded; chain not yet demonstrated end to end". SCAFFOLDED IS THE STATE ALL FIVE INERT INSTRUMENTS WERE IN WHEN SOMEONE CALLED THEM DONE. This spec exists because a query that could not trip was mistaken for a guard; shipping it with a routing chain that has never been observed to route reproduces that defect one layer out, in the very change that is supposed to fix it. The demonstration is cheap and is therefore required before the branch leaves the implementer's hands: make the substrate job exit non-zero, run it through `aida schedule run`, and SHOW the CronJobFailed event emitted and the downstream seat job marked due as a consequence. Two observed artifacts, not one - the event firing does not prove the routing, and the seat job being due does not prove what made it due. If the chain cannot be demonstrated for a reason found while trying, that reason is a finding and goes in this spec; it is not a waiver.
+  - THE EVENT-NAME NEAR-MISS IS RECORDED AS EVIDENCE FOR THE ABOVE, NOT AS A CLOSED ITEM. The implementer's first routing job keyed on `ScheduledJobFailed`, a name that does not exist anywhere in the repo except the line they had just written; the real event is `CronJobFailed` (emitted maintenance_schedule.rs:1615). It was caught by grepping for the name instead of trusting that it sounded right, and by the seat that wrote it. A scaffolded chain keyed on a plausible-sounding name that nothing emits is INDISTINGUISHABLE FROM A WORKING ONE until something tries to route - which is exactly what the end-to-end demonstration is for. Six inert instruments would have been five plus this one.
+  - CRITERION 5 IS CLOSED AS NOT-APPLICABLE, on the implementer's finding that the gate is config-only and introduces no new `AIDA_*` read. Accepted: docs/environment-variables.md takes a row per env var, and there is no env var. If a later round adds an opt-out env knob, the row comes with it in the same change.
 status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:49:25.512029219Z
-modified_at: 2026-09-21T15:21:24.182055092Z
+modified_at: 2026-09-21T15:37:19.468761043Z
 req_type: Story
 relationships:
 - rel_type: References
