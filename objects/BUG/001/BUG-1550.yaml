@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:04:32.760270386Z
-modified_at: 2026-09-21T17:02:55.105824752Z
+modified_at: 2026-09-21T17:13:17.392757869Z
 req_type: Bug
 tags:
 - papercut
@@ -196,4 +196,32 @@ comments:
     SET-DIFFERENCE NOTE on the two sweeps. The reviewer reports their 32-file set DOES include tracker_cmd and does NOT include plan_cmd; my 22-file set includes both. So the two sets differ in BOTH directions - neither is a superset - which is the expected outcome of two implementations of one prose description and is the reason the FIXTURES rather than either count are what an implementation should be built against. Neither seat is chasing the difference.
   created_at: 2026-09-21T12:32:49.994141671Z
   modified_at: 2026-09-21T12:32:49.994141671Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4f5-2d50-7763-a081-5f9e8116bca0
+  author: joe
+  content: |-
+    [aida:advisor] BINDING DESIGN CONSTRAINT, found by claude-reviewer-1 BY TESTING IT rather than reasoning about it, and routed to the implementer mid-work because it would have invalidated the obvious design.
+
+    THERE ARE AT LEAST TWO STRANDING SHAPES AND A DIFF-BASED DETECTOR CATCHES ONE AT A TIME:
+
+        Shape A   the insertion brings its OWN doc comment
+                  -> the stolen doc ends up 2+ ADDED lines from the function it documented
+                  instance: short_sha_for_row / pluralize, aida-cli-lib/src/awaiting_you.rs
+        Shape B   the insertion has NO doc of its own
+                  -> the stolen doc ends up IMMEDIATELY BEFORE the inserted function
+                  instance: the candidate() test helper, same file, SAME COMMIT - the doc it
+                  stole describes operator_mail_count_goes_to_zero_when_own_inbox_is_emptied,
+                  now ~145 lines below it
+
+    THE REVIEWER WROTE A DETECTOR FOR EACH AND EACH RETURNED A CONFIDENT EMPTY RESULT FOR THE OTHER SHAPE. They only noticed because they already knew both answers; run either alone on an unknown commit and it reports "no stranded docs" and is wrong. That is this spec's own defect class - an instrument that cannot see what it was not built to look for - reproduced INSIDE the remedy for it.
+
+    THE RULE: ASSERT ON THE RESULTING FILE, NOT ON THE DIFF. One file-level invariant - every `///` block is immediately followed by the item it documents - covers both shapes and any future one. A diff-level detector must model every insertion shape and will be silently blind to the one nobody thought of. This is binding on the implementation.
+
+    RED-FIRST NOW HAS TWO CASES: construct shape A AND shape B deliberately, show the gate catches EACH, then show it green on the clean tree. A gate that catches only the shape its author had in mind is the half-blind instrument this family is about.
+
+    AND A DISTINCTION WORTH ENCODING IF THE INVARIANT CAN CARRY IT: a stranded doc that also steals a `trace:` marker is a TRACEABILITY defect - it silently inverts `aida why <file:line>` - while a stranded doc alone is cosmetic. Neither of the two known instances stole a trace (short_sha_for_row carries its own and keeps it; pluralize and candidate() have none), which is precisely why BUG-1545 ships fix-only. If the gate can report the two severities separately, the trace-stealing case deserves the harder failure.
+
+    DEPENDENCY RECORDED, at the reviewer's suggestion and I agree: BUG-1545 BLOCKS on this spec landing. Fix-only there is right ONLY IF THIS GATE EXISTS. One commit produced two instances in a single pass, so the rate is not low, and if this spec stalls the class has no guard at all. The edge is now on the graph rather than in mail.
+  created_at: 2026-09-21T17:13:17.392757869Z
+  modified_at: 2026-09-21T17:13:17.392757869Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
