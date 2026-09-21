@@ -1,0 +1,40 @@
+id: 01a0c3b7-f0ec-7322-9159-2ec8f61f53bc
+spec_id: BUG-1546
+agreed_id: BUG-1546
+title: Compare a verdict sha by commit identity with a minimum-length floor, and report cannot-determine distinctly from stale (BUG-1516 criteria 1 and 4)
+description: |-
+  NARROW SLICE OF BUG-1516 — criteria 1 and 4 only — carved out so a partial fix cannot auto-complete a five-criterion spec.
+
+  WHY THIS EXISTS AS ITS OWN SPEC. The product seat has an implementation in hand that satisfies BUG-1516's criteria 1 and 4 verbatim. Committing it with a `(BUG-1516)` trailer would auto-complete BUG-1516 on merge, closing a high-priority spec at two of five criteria and leaving 2, 3 and 5 as a record on a Completed spec that no surface reads — which is precisely the failure filed as STORY-1421 two hours earlier. This spec is the mechanism that keeps BUG-1516 open for the rest. It is not a duplicate: it is a scoped slice with its own trailer.
+
+  WHAT IT COVERS, from BUG-1516's acceptance list, unchanged in wording:
+    1. Comparison is by commit identity, not string equality. Either compare the shorter
+       prefix against the longer, or resolve both through git rev-parse before comparing.
+       Prefix comparison must require a minimum length — a 4-character prefix is not an
+       identity claim.
+    4. A gate that cannot establish identity reports CANNOT-DETERMINE distinctly from STALE.
+       They are different states with different remedies: stale means re-review,
+       cannot-determine means the record is unusable. Collapsing them is the PRIN-5 failure
+       at the point this spec is about.
+
+  WHAT IT EXPLICITLY DOES NOT COVER, and which keeps BUG-1516 open:
+    2. New verdicts record the FULL 40-character sha.
+    3. The existing abbreviated verdicts are resolved to full shas where reachable and marked
+       unresolvable where not.
+    5. A test compares an abbreviated recorded sha against a full head and asserts they are
+       recognised as the same commit.
+
+  THE IMPLEMENTATION ALREADY IN HAND (product seat; not pushed, no branch taken at filing time): the boolean becomes a three-state ShaRelation — Same / Moved / Incomparable — and only a positive Moved emits a row, so "too short to tell" joins "no provenance recorded" in silence rather than joining "moved". One boundary test: sub-floor shas are silent whichever way their bytes fall, 7 matching characters is silence, 7 DIFFERING characters still fires the row. Falsified three ways — restore the old boolean, 1 red; remove the floor, 1 red; never emit Moved, 5 red; restored, green. The third mutation is the one that proves the feature still fires; without it the other two would pass on a feature that had been silently disabled.
+
+  PRICED HONESTLY: THE FIXED CASE IS LATENT, NOT LIVE. Three independent sweeps at three different denominators agree — the reviewer over 105 sha-bearing verdicts, the product seat over the open set, the advisor over all 572 files (147 sha-bearing, lengths {8:4, 9:3, 10:19, 11:1, 12:12, 13:2, 40:106}). ZERO instances below the 7-character floor; the shortest sha anyone has recorded is 8. So this guards against a writer that does not exist yet. It is correctness, not a live defect, and the product seat said so against their own change before anyone asked.
+
+  WHAT IS LIVE, and is already handled correctly by the merged code: 5 of 14 open sha-bearing verdicts are abbreviated-but-current, and prefix comparison judges them SAME rather than stale. Those five are BUG-1516's headline symptom and this surface already gets them right.
+
+  trace:BUG-1516 — parent, remains open for criteria 2, 3 and 5.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T11:26:47.020957879Z
+modified_at: 2026-09-21T11:26:47.020957879Z
+req_type: Bug
