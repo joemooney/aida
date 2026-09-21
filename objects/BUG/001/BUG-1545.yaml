@@ -29,7 +29,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:22:23.969332952Z
-modified_at: 2026-09-21T17:53:39.822561090Z
+modified_at: 2026-09-21T17:53:50.523257150Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -78,6 +78,30 @@ comments:
     THE CLASS IS NOT GUARDED BY THIS MERGE. BUG-1550 carries the gate and is in flight. The reviewer's condition is recorded there: fix-only here is right ONLY IF that gate lands, because one commit produced two instances in a single pass, so the rate is not low. This spec is Completed; the class obligation lives on BUG-1550, not here.
   created_at: 2026-09-21T17:22:16.658406106Z
   modified_at: 2026-09-21T17:22:16.658406106Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c51a-4dbb-7ae3-ac3d-2fd3a82616b7
+  author: joe
+  content: |-
+    [aida:advisor] THE CONDITION ON THIS SPEC'S FIX-ONLY ACCEPTANCE WAS POINTED AT THE WRONG GATE. Corrected 2026-09-21 on a MEASURED finding by claude-reviewer-1, after this spec was already Completed.
+
+    THE ACCEPTANCE HERE WAS FIX-ONLY, ON CONDITION THAT BUG-1550's GATE LANDS. That condition was recorded as a graph edge at the reviewer's request. IT IS THE WRONG EDGE, and the reviewer established that by RUNNING the gate rather than reading it:
+
+        scripts/check-trace-headers.py, mcp.rs at the PARENT commit    -> 1 violation (fires)
+        the same gate, awaiting_you.rs at ad85e8ed32                   -> "no violations"
+
+    ad85e8ed32 IS THE EXACT TREE CONTAINING BOTH OF THIS SPEC'S STRANDINGS - pluralize and candidate(). THE GATE DOES NOT CATCH THEM. The mechanism is one line:
+
+        find_strandings:  if len(tp) < 2: continue     # tp = trace positions
+
+    A header that is a `///` doc with NO trace lines is skipped entirely. And NEITHER instance here had a trace - which was the DECIDING FACT for accepting fix-only in the first place ("neither stranding stole a trace, so the blast radius is doc-only"). So the very property that justified fix-only is the property that puts this class outside BUG-1550's gate.
+
+    HAD THIS STOOD, the edge would have DISCHARGED WHEN BUG-1550 CLOSED and this spec's class would have been left unguarded WHILE THE LEDGER SAID IT WAS COVERED - a condition satisfied on paper by a gate that provably does not cover it. That is the same shape as BUG-1560's sibling filters: unguarded by omission rather than by judgement.
+
+    CORRECTED: the blocking edge is REPOINTED FROM BUG-1550 TO BUG-1561, which is the doc-only class with all three known instances enumerated (doctor_cmd.rs:577, lib.rs:31199, doc_cmd.rs:9 cross-file). BUG-1550 gates the TRACE-CARRYING SUBSET and is correct at that scope; BUG-1561 is what this spec's fix-only acceptance actually depends on.
+
+    THE METHOD IS THE PART WORTH KEEPING. The gate's own claim to fire was checked by running it against a tree known to contain the defect and observing that it said "no violations" - A POSITIVE CONTROL AIMED AT THE CASE THE GATE WAS NOT BUILT FOR. Nobody would have found this by reading the PR, and the PR's summary said "this PR gates the class, not just the cited sites", which a reader would have believed.
+  created_at: 2026-09-21T17:53:50.523257150Z
+  modified_at: 2026-09-21T17:53:50.523257150Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c4f9-d2f3-74b0-a635-d0e9e0ded8a6
