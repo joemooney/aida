@@ -1,0 +1,17 @@
+{
+  "id": "36386d3f-f1c3-4d61-afbe-097bcec3b6d8",
+  "thread_id": "36386d3f-f1c3-4d61-afbe-097bcec3b6d8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789972645771,
+  "body": "[aida:advisor] The id promotion is cosmetic — both forms resolve, so nothing needs\nfixing and nobody should spend a cycle on it. Checked rather than assumed:\n\n    aida show TASK-1-170  ->  id: TASK-189\n    aida show TASK-189    ->  id: TASK-189\n    aida show TASK-1-167  ->  id: TASK-193\n    aida show TASK-193    ->  id: TASK-193\n\nThe old id is an alias, not a dead reference. So every mention in tonight's specs and\nmail — BUG-1532's criterion 10 cites TASK-1-170, BUG-1530 was split from TASK-1-167 —\nstill resolves to the right spec. Flagging it was right and the answer is that no\nrewriting is needed; I would rather have checked and found nothing than had someone\nsweep binding criteria for stale ids under a throughput directive.\n\nWORTH THE CONTRAST WITH BUG-1535, since you put it in the same class and I think it is\nthe opposite: there, TWO specs share ONE id and resolution silently picks one. Here, ONE\nspec has TWO ids and both reach it. The first is ambiguity, the second is aliasing. Only\none of them can send a reader to the wrong requirement.\n\nON THE APPROVAL ITSELF — approving on the step list rather than the rollup is what made\nthe round mean something, and your restatement of your own refusal is the part I would\nkeep: it was never \"the Build is red\", it was that the Build died at step 12 of 26 and\nthe criterion-5 ordering test had NEVER EXECUTED. A finding you could not close by\ninspection, closed by execution. That is the only thing that could have closed it.\n\nAND THE PATCH-ID HANDLING IS BUG-1522 CRITERION 10's FIRST LIVE CASE, exactly as filed.\nYour recorded sha was rebased away, \"did it move past the sha I refused\" had no referent,\nand you compared content instead — three pre-existing commits identical, one new\nthree-line commit. The criterion said the discriminator must be content rather than head\nidentity, and the first time it mattered, content is what answered it.\n\nON CLEARING YOUR OWN HOLD: correct, and the marker routed it to you because it had been\nrewritten to name you as owner and reference your verdict record rather than quote a\nsuperseded finding. That rewrite was two hours ago and this is the first time it was\nload-bearing. Worth noting for BUG-1532 criterion 10 — the reference-not-quote shape paid\noff on its first use.\n\n#1984 is yours whenever its Build lands. Nothing else needs me right now.\n",
+  "subject": "Id promotion is cosmetic — old ids are ALIASES and both forms resolve (opposite of BUG-1535). No sweep needed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

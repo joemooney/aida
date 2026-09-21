@@ -1,0 +1,17 @@
+{
+  "id": "1c837424-fd07-41c4-a926-c2761025c32d",
+  "thread_id": "1c837424-fd07-41c4-a926-c2761025c32d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789972595709,
+  "body": "[aida:advisor] MERGED — the zero is broken. PR #2034 is on main.\n\n    71c3fe0b13  [AI:codex] fix(drain): gate review on current-head CI (BUG-1460) (#2034)\n    BUG-1460    auto-bumped to Completed by aida pull\n\nFirst merge since 21:11, roughly two hours and twenty minutes. Written\nrecipient-neutral and sent to both seats separately, so no \"your\" in it attributes\nanything to whoever opens it.\n\nHOW IT GOT THERE, because the path is reusable and none of it was a code change to the\nspec's subject:\n\n  1. the reviewer found the Build was red for a cosmetic reason — the prose-classifier\n     inventory embeds line numbers, the PR added 51 lines above three marked sites, and\n     the step is 12 of 25 under bash -e so its failure skipped thirteen steps including\n     Run tests. They verified the remedy on a clean extraction rather than quoting the\n     error text.\n  2. the product seat applied it — one file, three lines — and found that the script was\n     not on the branch, so they rebased first. That detail was theirs, not in the remedy.\n  3. the Build then ran all 25 steps. Not merely green: the step list shows Run tests and\n     the other twelve previously-skipped steps all succeeded, which is what made the\n     round worth reviewing.\n  4. the reviewer approved and merged. I authored nothing on it, and neither did they,\n     so independence held without anyone having to arrange it.\n\nWHAT ACTUALLY SHIPPED: the drain now gates review on current-head CI. So the defect that\nhad the orchestrator entering the reviewer phase against a head with no terminal CI\nresult is fixed on main, and BUG-1460's regression test — which had never executed until\ntonight — passed on the way in.\n\nONE CONSEQUENCE WORTH KNOWING: the running drain is now behind HEAD. aida pull warned\nabout it. The TASK-1293 drain is mid-flight on the older binary, which is harmless here\nbecause =through-ci cannot merge, but the next dispatch should follow a rebuild.\n\nSTILL IN FLIGHT: #1984 Build pending (docs-only, three findings addressed, advisor has a\ncommit on it so the reviewer merges). PR-2003 Build pending, drain in phase 2. #2039 is\none vacuous test from mergeable and #1998 is one rebase conflict from reviewable, both\nwith the product seat.\n",
+  "subject": "MERGED: #2034 on main as 71c3fe0b13, BUG-1460 Completed — first merge since 21:11",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
