@@ -41,12 +41,12 @@ description: |
   - A failure occurring AFTER the implementer has pushed does not leave the spec `done` with an unshipped branch: either the PR is opened, or the spec is not marked done, or the shelve names the stranded branch and the recovery is one command.
   - The error text drops the active-lease list, or explains what a reader is meant to do with it.
   - Regression fixture reproduces both positions: a mismatch at session start (BUG-1445's 25-second shape) and a mismatch after a successful push (BUG-1442's shape).
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-21T19:21:33.391939819Z
+modified_at: 2026-09-21T19:30:33.891935297Z
 req_type: Bug
 tags:
 - drain-safe
@@ -369,6 +369,27 @@ comments:
   created_at: 2026-09-21T09:00:41.318849667Z
   modified_at: 2026-09-21T09:00:41.318849667Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c572-db22-75b3-aaf8-67d2798e498d
+  author: aida-auto-bump
+  timestamp: 2026-09-21T19:30:33.890844316Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c572-db23-79d1-8cdc-779abb50f5e4
+  timestamp: 2026-09-21T19:30:33.891934311Z
+  agent: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+  brief_ref: .aida/agent-briefs/codex/BUG-1485-2026-09-21T090040Z.md
+  commit_sha: 4e24c786c7e81736477cd083a833b26d2cca8bb8
+  summary: 'F1 AND F2 ARE BOTH CLOSED. F3 was already closed by the earlier rebase. F1''s DIAGNOSIS NAMES THE EXACT FAILURE FAMILY THIS BOARD HAS BEEN CATALOGUING ALL DAY, and it is worth quoting because the fix follows from it: "`ahead == 0` does NOT mean there is nothing to recover. It is also what a MISSING WORKTREE produces: `git -C <gone>` fails, the Option is None, and `unwrap_or(0)` flattens ''could not look'' into ''looked and found nothing''." That is a null from a failed measurement read as a measurement, in production code rather than in a review - the same shape as a fetch failure reported as empty, a skipped CI step reported as green, and a stale binary''s output read as the code''s behaviour. THE FIX REUSES RATHER THAN RE-DERIVES: phase 3 already solved this for its own NoPr case under BUG-895, and they call that helper instead of rewriting the logic - it verifies origin/<branch>, counts ahead between it and the origin default ref, and opens the PR from the pushed ref WITHOUT pushing again, returning None when the branch genuinely is not ahead so the no-work case falls through exactly as before. They also added the second path: when the worktree DOES exist and is ahead, a failed push or forge call now retries from the pushed branch rather than falling to the generic failure. F2 IS CLOSED PAST THE ASSERTION I SAID IT STOPPED SHORT OF. The new test, post_push_pr_recovery_completes_when_the_recorded_worktree_is_gone, models a genuinely absent worktree and ASSERTS ITS OWN PRECONDITION first - assert!(!gone.exists(), "fixture must model a MISSING worktree") - which is a positive control on the fixture rather than a comment claiming one. It then asserts recovery COMPLETES, that the ahead-count came FROM ORIGIN rather than from the worktree, and that the PR number came from the forge call. Those last two are the assertions that distinguish a real recovery from a fixture that merely returns something. I RAN MY NEW PORTABILITY CHECK ON THIS PR - the practice I committed to on #2058 - and it is CLEAN: 2030''s own four commits add exactly one platform-specific import and it is cfg-gated. Recording that the FIRST run of that check false-positived: diffing 293da2d0cc94..531be2e2fd spans the rebase and reported an ungated import that belongs to #2040 and is already fixed by #2058. Correct population is "lines this PR''s own commits added", not "lines between two shas". That is the same correction #2058 itself made about counting unix usages, applied to my check on its first outing.'
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: Rework is real progress on F2 — the test now drives the extracted production path and genuinely reaches the post-push position — but it asserts branch recovery, which F1 already granted, and stops before the disputed step. F1''s production path is untouched. Separately: this head has had ZERO check-runs for ~11 hours.'
+  - 'punted: F1 untouched, F2 real progress that asserts the undisputed half. F3 UPDATED: the missing CI is now diagnosed — the PR conflicts with main, and a commit pushed into a conflict produces no workflow run at all. Needs a rebase before it can produce any evidence.'
+  - 'punted: F3 CLOSED — the rebase resolved the conflict and the PR produced its first CI, Build green 32/1. F1 and F2 both stand, established by content: the only change in either rebased commit is an import line, and F1 re-verified against the code at the new head.'
+  review_verdict: approve
 execution_mode: drain
 implementation_info:
   implemented: true
@@ -378,4 +399,6 @@ implementation_info:
     cargo fmt --all -- --check
   implemented_at: 2026-09-20T20:38:28.859924217Z
   implemented_by: joe
+  completed_at: 2026-09-21T19:30:33.890277059Z
+  completion_sha: 4e24c786c7e81736477cd083a833b26d2cca8bb8
 interface_changes: {}
