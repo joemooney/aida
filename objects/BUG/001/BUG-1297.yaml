@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:01:41.682369432Z
-modified_at: 2026-09-21T10:22:49.800980919Z
+modified_at: 2026-09-21T10:25:11.573982814Z
 req_type: Bug
 tags:
 - agent-surface
@@ -310,6 +310,45 @@ comments:
     WORTH RECORDING FOR THE GUARD ITSELF: it cannot currently distinguish "the implementer could not do it" from "the implementer did not run". Both present as an unchanged head with a repeated verdict. Adding the patch-id / commit-count check that BUG-1445 shipped would let it say which, and the two need opposite responses — a better brief versus a different seat.
   created_at: 2026-09-20T22:50:26.940394137Z
   modified_at: 2026-09-20T22:50:26.940394137Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c37f-8d96-7431-aa8a-12cbf8b6d227
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2006 [AI:codex] fix(mailbox): resolve displayed message prefixes (BUG-1297)
+    merged as: 8a87aa09c08f89776698aa36565cdde964671ab8 on origin/main at 2026-09-21T10:22:38Z
+    verdict: APPROVE + merged (proxy for the operator)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — the product seat authored the rework ad13bb0ec7; the reviewer seat verified it and cleared its own hold; this advisor wrote none of the diff and executed only the merge. No seat signed its own work.
+    gates cleared:
+      - Build (ubuntu-latest): pass
+      - merge-hold-gate: pass, after the reviewer cleared its own hold
+      - verdict .aida/review-verdicts/PR-2006.json: APPROVED, recorded_by claude-reviewer-1, reviewed_sha ad13bb0ec7a2 — matches the merged head exactly
+      - mergeStateStatus CLEAN, no label, no marker
+      - auto-bump: BUG-1297 → Completed
+    timestamp: 2026-09-21 03:22 -07:00
+
+    WHAT THE TWO FINDINGS WERE AND WHY THIS ROUND CLOSED THEM.
+
+    F1 — combined `--thread X --in-reply-to Y` bypassed reply-id validation: the thread branch was taken first and the reply resolution sat in an ELSE-IF, so Y was written unvalidated. FIXED BY MAKING THE FLAGS ORTHOGONAL rather than by guarding the path: resolved_reply_id starts at None, the resolution runs unconditionally when in_reply_to is present, and the CANONICAL id is stored rather than the prefix. The reviewer's assessment, which is the right one: the mechanism is structurally gone rather than blocked — there is no path on which an unvalidated string reaches the write, because the variable never holds one. A rework that removes the path beats one that blocks it.
+
+      The implementer paired two tests deliberately: one asserts refusal with --thread present, the other asserts a VALID target still resolves while --thread decides threading. Without the second, the fix could have passed by refusing whenever both flags appear — a test pair that closes the over-correction as well as the defect.
+
+    F2 — control flow keyed on substring-matching our own error prose (`error.to_string().contains("ambiguous")`), so rewording the bail message would silently create a detached thread. FIXED WITH A TYPED DISCRIMINANT: MailboxResolveFailure { NotFound, AmbiguousPrefix } read via downcast_ref, following the crate's existing pattern (SoftSignpostShown, MergeHoldRefusal, RebaseFailureExit) so all eight `?` callers are unchanged. Display text is byte-identical — nothing user-facing moved; what changed is that nothing DEPENDS on it.
+
+    THE FALSIFICATION IS THE PART WORTH PRESERVING, because it runs the finding's own test rather than asserting compliance with it:
+
+        reword the bail message, TYPED match    passes
+        reword the bail message, PROSE match    RED
+        restored                                passes
+
+    THE REVIEWER CHECKED THE SHARPER FAKE, WHICH IS NOT THE ONE ANYONE WARNS ABOUT. The advisor warned that F2 could be faked by freezing the message. The reviewer instead verified BOTH ENDS of the discriminant — that the type is CONSTRUCTED at the source and consumed at the branch — on the grounds that a downcast against a type nothing constructs compiles, reads as typed, never matches, and lets ambiguous fall through silently. That would have been WORSE than the defect, because the prose match at least worked until someone reworded the message. Recorded on STORY-1417 as the purest form of the `unfalsifiable` category, and as proof the category is not limited to tests: production code can be unfalsifiable the same way, and when it is, no test can detect it.
+
+    NON-BLOCKING, RECORDED SO IT IS NOT REDISCOVERED AS A DEFECT: the F1 test asserts `error.contains("reply refused")`. That is asserting on a message a HUMAN reads, for a refusal whose mechanism is the `?`. Asserting user-facing text is legitimate; BRANCHING on it was the defect. The new tests otherwise assert on the type with an explicit comment that the message text is not the subject of the assertion — the exact inverse of the condition refused two rounds earlier, where tests asserted the same prose the code matched and therefore moved with the bug.
+
+    THE PREVIOUS HEAD WAS ALSO GREEN, which is why the refusal stood through it. Both findings were design-level and CI could not see either.
+  created_at: 2026-09-21T10:25:11.573982814Z
+  modified_at: 2026-09-21T10:25:11.573982814Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c37d-63c6-7b20-841f-701199a3e6ee
