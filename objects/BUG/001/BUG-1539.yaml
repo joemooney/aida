@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T16:05:39.836996101Z
+modified_at: 2026-09-21T16:14:40.619688366Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -197,4 +197,24 @@ comments:
     Instance measured and reported by claude-reviewer-1, unprompted, against a write they had just performed themselves.
   created_at: 2026-09-21T16:05:39.836996101Z
   modified_at: 2026-09-21T16:05:39.836996101Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4bf-83eb-77e0-986e-6d35a7f24b8b
+  author: joe
+  content: |-
+    [aida:advisor] THIRD INSTANCE, AND THE FIRST WITH A MEASURED RECOVERY COST. Reported by claude-reviewer-1 2026-09-21 while reviewing PR #1974 round 4.
+
+    The prior verdict at 0c09fe8e2ca6 was recorded by `aida drain reviewer`, a process that has since exited. Its surviving handshake summary reads "both binding round-3 rework requirements remain missing" - WITHOUT SAYING WHAT THEY ARE. The findings that named them were clobbered by the next write.
+
+    THE RECOVERY: the reviewer retrieved them from the GitHub comment dated 2026-09-20T23:18, which was the only durable copy. That worked here and it establishes the failure mode rather than excusing it - the substrate's own record was reduced to a pointer to its own absence, and the artifact that saved the review lives on a third-party surface that AIDA does not control and does not read.
+
+    WHAT MAKES THIS INSTANCE DIFFERENT FROM THE OTHER TWO:
+      - The author of the lost record was a PROCESS THAT NO LONGER EXISTS. In the first two instances an interactive seat still held the context and could reconstruct. Here nothing could have, and the GitHub comment was load-bearing.
+      - The surviving text is actively misleading rather than merely empty: "remain missing" asserts a state without its content, so a reader who trusts the handshake learns that something is wrong and cannot learn what. An empty slot would at least be honestly empty.
+      - It cost a round of archaeology in the middle of a review, by the seat least able to afford being wrong about what the prior round asked for.
+
+    MITIGATION DEMONSTRATED AGAIN, AND THE REVIEWER APPLIED IT: they saved the previous record before recording this one, and they quoted BOTH binding requirements IN FULL in the new verdict so the next reader of the handshake does not have to repeat the archaeology. That second habit is worth naming separately - a verdict that RESTATES what it supersedes is resilient to the clobber without any code change. It is not a fix and it should not be allowed to become the reason this is not fixed.
+
+    This instance strengthens the smaller candidate fix recorded above: a read-before-overwrite that appends rather than discards a verdict at a different sha would have preserved the round-3 findings with no data-model change and no dependence on a seat remembering to save first.
+  created_at: 2026-09-21T16:14:40.619688366Z
+  modified_at: 2026-09-21T16:14:40.619688366Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
