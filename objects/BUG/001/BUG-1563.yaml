@@ -131,12 +131,68 @@ description: |
     CONSEQUENCE FOR THIS SPEC'S DISCRIMINATING RUN: it is now a cleaner question than when it was written. The lock is healed, so a repeat failure can no longer be attributed to it, and a pass no longer needs to exclude it. Re-run with the lanes quiet as already specified.
 
     AND A SEPARATE FINDING THAT DESERVES ITS OWN SPEC IF IT RECURS: a stale lock survived SEVEN AND A HALF DAYS while `aida doctor check stale-locks` could see it the whole time, classified `[safe]` and auto-healable. Nothing ran the check. That is the substrate-first problem this board keeps recording — a detector that works, a heal that works, and no cadence invoking either.
+
+  ===============================================================================
+  CAUSE FOUND, AND IT IS NONE OF (a), (b) OR (c). A 1-SECOND WATCHDOG DEADLINE IN
+  PRODUCT CODE. Root-caused by a third seat on TASK-1274 by RUNNING the test;
+  both prior seats reasoned about the environment and neither asked whether the
+  test had a deadline. Verified on main by the advisor.
+  ===============================================================================
+
+      aida-cli-lib/src/lib.rs:69067
+      fn arm_notice_deadline() {
+          const NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
+          std::thread::spawn(|| { std::thread::sleep(NOTICE_DEADLINE); std::process::exit(0); });
+      }
+
+  The watchdog is BUG-1239's fail-open latency bound for the per-turn notice: a detached thread
+  that calls `process::exit(0)` after the deadline, deliberately succeeding because the notice is
+  advisory. AT ONE SECOND IT KILLS THE PROCESS BEFORE `awaiting --notice` CAN FINISH ON A REAL
+  STORE, and `awaiting_notice_tracks_real_lease_through_session_end` asserts on that output.
+
+  THE ROOT-CAUSE COMMIT (dropped from #2019's branch by a rebase — see below) raised it to 10s and
+  recorded the measurement: TASK-1274 reproduced the failure on the GitLab mirror (pipeline 308,
+  1256s) AND "a plain local `cargo test` run on this machine (REPRODUCED OUTSIDE ANY CONTAINER)",
+  and stated "this deadline at 1s made the test fail every run".
+
+  SO ALL THREE HYPOTHESES ON THIS SPEC WERE WRONG:
+      (a) union break         — correctly eliminated, and correctly
+      (b) the dirty tree      — correctly eliminated, and the elimination explained the
+                                untracked-files log line as the fixture's own worktree
+      (c) sibling contention  — WRONG. Narrowed from "environment-sensitive" to "concurrent
+                                sibling agents" on a story that fit: TEST_LOCK is in-process,
+                                five lanes were running, and a prior lock-contention flake had
+                                the same signature. Then a 179-hour dead-pid cache lock was
+                                offered as a second mechanism for (c) — a REAL confound, and
+                                also not this.
+  NEITHER SEAT ASKED WHETHER THE TEST HAD A DEADLINE. Both reasoned about the environment because
+  the symptom (intermittent, load-dependent, passes in isolation) is what contention looks like —
+  and a 1s deadline racing a real-store read produces exactly that signature.
+
+  WHY THE CONFOUNDED EXPERIMENT READ AS IT DID: the full-suite run that passed post-heal had 2
+  concurrent cargo processes instead of 8. Under a 1s deadline, load IS the variable — a quiet
+  machine finishes the notice read inside 1s and a busy one does not. So the "confounded"
+  experiment was measuring something real; it just was not measuring the lock.
+
+  THIS IS A LIVE DEFECT ON MAIN. The constant is at 1s at lib.rs:69067 right now, and the fix that
+  raised it is NOT on main — it was dropped from #2019's branch in a rebase (advisor verified:
+  `git merge-base --is-ancestor 442a63243c dbf44b0987` -> NO, and `git log --grep` finds no
+  notice-watchdog commit at the current head).
+
+  REVISED SCOPE FOR THIS SPEC:
+  - The test is not environment-sensitive in the way recorded above; it races a product deadline.
+    The local-vs-CI difference is LOAD, not tree state or lock state.
+  - WHAT MUST BE DECIDED IS THE DEADLINE ITSELF, NOT THE TEST. 1s was chosen as a fail-open bound
+    for an advisory per-turn notice. Whether 10s preserves that contract is a real question — a
+    10s watchdog on a per-turn path is a 10s worst-case turn — and it belongs to whoever owns
+    BUG-1239's latency contract.
+  - THE FIX MUST LAND SOMEWHERE THAT IS NOT A REBASED BRANCH. It is currently in no branch at all.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:43:33.092866010Z
-modified_at: 2026-09-21T19:03:30.995450066Z
+modified_at: 2026-09-21T20:45:08.356897156Z
 req_type: Bug
 comments:
 - id: 01a0c556-7edc-7f02-820a-d12318982900
