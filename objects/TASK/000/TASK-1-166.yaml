@@ -20,7 +20,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:33:45.887148289Z
-modified_at: 2026-09-21T02:34:25.070929066Z
+modified_at: 2026-09-21T02:48:02.151594136Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -43,3 +43,47 @@ relationships:
   target_id: 01a0c058-3d0c-7eb1-993d-3976581722cb
   created_at: 2026-09-21T02:34:25.070923885Z
   created_by: joe
+comments:
+- id: 01a0c1dd-0367-7f61-b5da-96d29b068b73
+  author: joe
+  content: |-
+    [reviewer] THE OPERATIONAL HALF: a mechanical proxy for this pattern that needs a grep rather than insight. Placed at the advisor's request, who held the spot rather than paraphrase it.
+
+    THE DIAGNOSTIC QUESTION as stated on this finding — for any surface reporting a condition, ask who sees this, and separately who would recognise this as wrong — is correct and is not yet operational. It asks for a judgement about audiences, which is the kind of thing that reads as obvious after an instance is found and produces nothing before one is.
+
+    THE PROXY: WHICH SURFACES ARE READ BY A DIFFERENT PARTY THAN THE ONE WHO RUNS THEM?
+
+    That is answerable from the codebase without judgement, because it is a property of INVOCATION rather than of content. The qualifying shapes:
+
+        hook-injected output        a hook computes it; an agent or operator reads it
+        banners and summaries       emitted during a run; read by whoever is watching
+        the statusline / statusbar  written on an interval or by the harness; read continuously,
+                                    invoked never
+        notifications and mailbox   composed by one seat, read by another
+        commit trailers             written at commit time; read by tooling and by whoever
+                                    asks "why is this line here" months later
+
+    And the disqualifying shape is just as mechanical: anything a human types and then reads the output of. There the runner and the reader are the same person, the answer is validated by use on every invocation, and a divergence is caught the first time it matters to someone.
+
+    EVERY INSTANCE ON THIS FINDING IS ON THAT LIST:
+
+        the per-turn notice (TASK-1-167)          hook-injected, read by an agent, validated by
+                                                   nobody — its validator is `aida awaiting`, which
+                                                   the reader does not run
+        the express banner (BUG-1507 criterion 8)  emitted at runtime, tells the operator "full gate"
+                                                   while preflight is skipped
+        the queue filter (BUG-1513)                the caller's own rows leak; the seat qualified to
+                                                   call it a defect gets the correct answer
+        the statusbar (TASK-1-168)                 OSC title on an interval; read continuously,
+                                                   invoked never, 68s per sample
+        the orphan-sweep gap (BUG-1514)            the surfaces that would show a red unowned PR each
+                                                   exclude it correctly
+
+    Five instances, five hits, no misses. That is not proof the proxy is complete — it is the set it was derived from — but it is a starting list that can be produced today and checked against the code.
+
+    WHAT IT IS NOT. The proxy identifies where this class CONCENTRATES, not which surfaces are defective. It ranks by auditability and hands back a list; a human still reads each one. That is deliberate and it is the same property that made the field-count detector on BUG-1507 usable: an instrument that narrows a search does not need the judgement that an instrument that decides would need, and the judgement was the part that failed every time tonight.
+
+    THE ONE REFINEMENT EXPERIENCE ADDED. A surface can be on the list and still be validated, if its reader has a CHEAP way to check it. The notice's problem is not only that its reader never runs `aida awaiting` — it is that `aida awaiting` costs a minute or more and sometimes does not return, so nobody would run it to check a free one-liner even knowing they should. So the second question, asked only of surfaces the proxy returns, is: can its reader verify it without invoking something slower than the thing being verified? Where the answer is no, the surface is not merely unvalidated, it is unvalidatABLE in practice, and a fix that relies on cross-surface comparison will itself go unchecked. A component breakdown printed inline is self-validating; a cross-surface comparison is not.
+  created_at: 2026-09-21T02:48:02.151594136Z
+  modified_at: 2026-09-21T02:48:02.151594136Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
