@@ -112,12 +112,42 @@ description: |-
       IT ALSO EXPLAINS WHY THE GAP NEVER SURFACED OPERATIONALLY. Had an express spec ever run with lifecycle:no-preflight, nothing the operator saw would have looked wrong - the banner said what they expected, and the only contradicting evidence was a token in a JSONL nobody reads per run. The gap was not merely unreviewed; it was UNOBSERVABLE FROM THE OPERATOR'S SEAT. That is the same property as BUG-1513, arriving at a different surface: twice in one night, the seat that would have noticed is the seat structurally prevented from seeing it.
 
       REQUIRED: the banner is DERIVED from the skip set rather than hardcoding a phase list, or the express branch falls through to the parts-building path so a residual skip is still named. A hardcoded summary string is the one form of this defect that cannot be wrong in a detectable way - there is no field for a compiler or a test to notice was omitted.
+
+  9. THE CLASS IS DETECTABLE BY A ONE-LINE GREP, AND THE SCALE IS SEVEN SITES NOT THREE. Verified 2026-09-20 19:35 against auto_complete.rs. The five skip fields are hand-enumerated in SEVEN places in production code:
+
+        128-133  from_tags match arms            5 fields  complete
+        135-137  lifecycle:trivial expansion     3 fields  narrowed - CORRECT by design
+        151-153  express force-off               3 fields  narrowed - THE BUG
+        159-163  is_empty()                      5 fields  complete
+        172-184  active_tokens()                 5 fields  complete   vocabulary A
+        196-200  RECOGNIZED_LIFECYCLE_TAGS       5 tags    complete
+        223-236  banner_summary() parts          5 fields  complete   vocabulary B
+
+      Adding a sixth field requires seven correct hand edits and the compiler checks none of them, because every site is an `if` over a bool rather than a match over a sum type.
+
+      THE DETECTOR, requiring no new tooling:
+
+        grep -oE "no_(preflight|ci_wait|review|build|harvest)" auto_complete.rs | sort | uniq -c
+          7 no_build   7 no_ci_wait   7 no_review   5 no_harvest   5 no_preflight
+
+      Unequal counts mean some enumeration omits a field. Reproduced exactly. It yields a TWO-ITEM candidate list from seven sites and a human decides: lifecycle:trivial omitting no_preflight is CORRECT (the doc at 94-96 says trivial skips only non-integrity phases, preflight is an integrity gate), express omitting it is the defect, and no_harvest is correctly omitted from both. So the detector never claims a defect - it ranks sites by disagreement and hands over the candidates. It therefore does NOT require the judgement an earlier criterion said a lint could not encode, because it makes no judgement at all.
+
+  10. THE TWO OPERATOR-FACING SURFACES USE DIFFERENT VOCABULARIES FOR THE SAME FIELDS, which is a second latent divergence under the first:
+
+        active_tokens():   no-preflight | no-ci-wait | no-review | no-build | no-harvest
+        banner_summary():  implementer preflight | CI wait | reviewer | build | harvest
+
+      This kills the obvious property test - "the banner names every skip that active_tokens reports" cannot be a substring check. Two operator-visible vocabularies for one field set, maintained by hand, independently, each able to drift without the other noticing.
+
+  11. SO THE FIX IS ONE TABLE, NOT THREE SEPARATE REPAIRS. An earlier note on this spec said the banner defect could only be made not to exist, being uncatchable by the compiler. That is a fact about the string's current SHAPE, not about the class. A single table - const SKIPS: [(accessor, token, human); N] - with is_empty(), active_tokens() and banner_summary() iterating it, plus one destructuring bind in a test so a sixth field breaks compilation at one known site, makes all three enforceable at once. The banner then cannot omit a field because it no longer names fields; the hardcoded express string becomes a prefix on a derived list rather than a replacement for one.
+
+      CONSEQUENCE: shipping the force-off fix and the test bind while deferring the banner is NOT a partial fix. It leaves the only OPERATOR-FACING surface hand-maintained, which is the one where a divergence is invisible to the person it misleads.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-21T02:32:04.584712153Z
+modified_at: 2026-09-21T02:33:08.161765248Z
 req_type: Bug
 tags:
 - batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
