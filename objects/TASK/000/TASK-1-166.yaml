@@ -75,7 +75,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:33:45.887148289Z
-modified_at: 2026-09-21T04:02:10.417120607Z
+modified_at: 2026-09-21T21:24:42.382098963Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -176,3 +176,6 @@ comments:
   created_at: 2026-09-21T04:02:10.417120607Z
   modified_at: 2026-09-21T04:02:10.417120607Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+deferred: true
+deferred_at: 2026-09-21T21:24:42.382098963Z
+deferred_until: 'An instance of the SPECIFIC shape appears in a subsystem that neither the queue, the lifecycle surfaces, nor the drain''s reporting touched: one surface returning different CORRECT answers to different observers, where the observer who would recognise the defect is not the one shown it. Prospective discovery via the proxy is explicitly NOT sufficient on its own — that limb already fired (TASK-1-167, TASK-1-168) and both seats judged what it produced narrower than the pattern.'
