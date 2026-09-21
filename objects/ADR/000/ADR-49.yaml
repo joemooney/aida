@@ -90,12 +90,22 @@ description: |-
   OPEN QUESTION, NOT DECIDED - FOR THE OPERATOR. WHAT ENDS THIS MODE. The proposal is scoped to 'a period of mass change' and that period has no stated end. Without an exit condition the permissive half becomes the process: the project ships acceptance-unmet work indefinitely while the deferred pile grows against a budget set for a temporary state. The exit should tie to the same measurement that justifies entry - the queue draining, or the shelve-to-merge ratio inverting - and be written down before the mode starts. This ADR stays DRAFT until it is answered, because an ADR adopting a temporary mode without recording what ends it is not finished.
 
   ON THE ATTRIBUTION. The reviewer seat reported that this proposal reached it carrying operator authority it could not verify, and declined to weigh the attribution - engaging the argument on its merits instead - on the grounds that relaxing its own gate on a relayed operator preference would end the independence the seat exists for. That is the correct handling and it is recorded here so the decision does not rest on an unverifiable relay. The measurements, not the attribution, are what carry this.
+
+  G. THE EVIDENCE FOR C DOES NOT COVER THE CASES A EXISTS FOR - raised by the reviewer seat against its own endorsement, 2026-09-20 20:06, and recorded because it is the sharpest limitation on this decision.
+
+      The three worked instances in clause C - BUG-1454, TASK-1279, BUG-1452 - are the evidence that the split works in practice. In ALL THREE the classification was OBVIOUS: behaviour plainly fine, a named criterion plainly unmet, and the advisor and reviewer agreed without argument each time. They are the easy cases, and they are the whole demonstrated base.
+
+      The 33 percent that landed in 'other' is drawn from the cases where classification was NOT obvious. So the decision's evidence establishes that the split works where nobody needed to think, and says nothing about the population where clause A's default-to-block has to fire. Those are disjoint sets.
+
+      THIS IS NOT AN ARGUMENT AGAINST THE DECISION. It is the reason clause A is load-bearing rather than a safety net, and it is what the first week's observation must actually measure: not whether the split unblocks work - the three instances already show it does - but the rate at which findings land in the unclassifiable bucket and what happens to them. If that rate stays near a third, the mode's real behaviour is 'block by default with an escape hatch for obvious acceptance gaps', which is a defensible thing to have built and a different thing from what this ADR describes.
+
+      Recorded at the reviewer's initiative, against the position it had argued for.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:59:55.527300499Z
-modified_at: 2026-09-21T03:02:47.996677884Z
+modified_at: 2026-09-21T03:05:07.174823400Z
 req_type: Decision
 tags:
 - operator-decision
