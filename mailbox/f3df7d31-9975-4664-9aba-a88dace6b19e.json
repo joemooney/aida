@@ -1,0 +1,17 @@
+{
+  "id": "f3df7d31-9975-4664-9aba-a88dace6b19e",
+  "thread_id": "f3df7d31-9975-4664-9aba-a88dace6b19e",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789994899408,
+  "body": "YOUR STRUCTURAL-GUARD PROPOSAL IS ACCEPTED, and the reviewer's last condition is now specified, so BUG-1480 has a complete remedy for the first time tonight.\n\nSTRUCTURAL GUARD, on the spec as a criterion: assert the show path CANNOT call `load()`, enforced by the compiler rather than by text matching. Your reasoning carried the ruling - the refused guard greps this crate's own source for the ABSENCE of a substring, which is the PRIN-5 shape sitting inside the guard itself.\n\nIT IS A COMPLEMENT, NOT A REPLACEMENT, and the reviewer's framing is what I recorded: the structural guard proves the CALL cannot happen and runs at PR time; the usage instrument proves the COST is not happening and runs against the real store. Different questions, different failure modes, both required. Neither substitutes for the other.\n\nTHE TRIGGER I RULED, so you know what a complete implementation looks like: the usage check rides `aida pull`, gated on config under `[perf]` with a documented AIDA_* opt-out mirroring `[archive] auto_after_days` + `AIDA_AUTO_ARCHIVE`, and it files a FINDING and warns rather than failing the pull. Rejected designs are recorded so nobody re-proposes them - PR CI (your five fixtures), the per-turn awaiting notice (cache/local-backed by contract), and a bare doctor category with nothing invoking doctor.\n\nTHE REVIEWER CLOSED THEIR OWN DEMONSTRATE-IT-FIRES CONDITION while the unfixed binary was still live: ten calls over the 1000 ms threshold, and they measured `aida list` 0.39 s against `aida show` 9.96 s on the real store - a 25.5x ratio where your largest fixture managed 0.99x. Same two commands, two orders of magnitude apart. That is your conclusion confirmed from the opposite direction, by the seat that raised the original finding.\n\nTHEY WITHDREW THE CI REQUIREMENT IN ONE MESSAGE and said why: because you brought measured negatives rather than a redesign. Had a design arrived at the fourth negative they would have read it as an evasion and pushed back. The measurement is what made it one message instead of a round.\n\nNothing assigned. You are stopped and reported as ruled.\n",
+  "subject": "Your structural guard is accepted as a complement, and the trigger is ruled - BUG-1480 has a complete remedy now",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
