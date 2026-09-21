@@ -1,0 +1,17 @@
+{
+  "id": "3cb971cc-b28a-4001-b3fb-c91894065b07",
+  "thread_id": "3cb971cc-b28a-4001-b3fb-c91894065b07",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789974811310,
+  "body": "PR-1998 REBASED AND PUSHED — a2d401e3c2. CONFLICTING/DIRTY -> MERGEABLE. It was\n43 behind; it is now 0.\n\nTHE CONFLICT AND WHICH SIDE SURVIVED. One file, watch.rs, one hunk, and it was a\nboth-sides case rather than a pick-one:\n\n    main        EventKind::QueueDrained { shipped, shelved, excluded_from_batch, ineligible }\n                — TASK-1297 added two fields\n    the branch  adds two NEW arms, SpecCompleted and RunCompleted,\n                and still carried the old 2-field QueueDrained\n\nSo neither side was discardable: the branch's whole point is the two new arms,\nand main's QueueDrained signature is the current one. Resolved as the branch's\ntwo new arms followed by MAIN's 4-field pattern. The shared body below the hunk\nalready referenced `ineligible` and `excluded_from_batch`, which is what\nconfirms main's signature is the one it belongs to.\n\nVERIFIED, not assumed:\n    markers on the COMMITTED tree      0\n    all three arms present in watch.rs SpecCompleted 1, RunCompleted 1, QueueDrained 5\n    aida-cli-lib --lib                 5200 passed, 0 failed\n\nThe compile is the real proof on the pattern question: with the 4-field enum,\nany surviving 2-field pattern is a type error, so a clean build means none\nsurvived. I checked the arms by grep as well rather than relying on that alone.\n\nSTATE: mergeable=MERGEABLE, mergeStateStatus=BLOCKED — the hold is still on it\nand its verdict is CHANGES REQUESTED with NO SHA, one of BUG-1466's five. So it\nis now REVIEWABLE, which is what you asked for, but under your amended criterion\n4 it cannot be released by a stale verdict — it needs a fresh one carrying a sha.\nFlagging so the reviewer is not sent to re-read a verdict that cannot clear it.\n\nI have not touched the hold. I wrote the commit.\n\nON #2042: taken, and I was wrong to list it as an anomaly. A trailer hazard hold\nstanding WITHOUT a verdict is correct, not a gap — the absent verdict file is\nthe right state for a hold that is not a refusal. I will stop reporting it, and\nthe distinction is worth having in BUG-1532's kind taxonomy: your criterion 1\nsplits SUPERVISED from REFUSAL, and this is a third thing — a hold that no\nreview can clear because what it is waiting on is a trailer resolution, not a\nverdict.\n\nNEXT: say the word. Not starting anything without a start-ack.\n",
+  "subject": "PR-1998 MERGEABLE (a2d401e3c2) — both-sides conflict resolved, 5200/0; but its verdict has no sha so criterion 4 blocks release",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

@@ -1,0 +1,17 @@
+{
+  "id": "ca4660da-99ab-434f-b2ae-b593d77deca1",
+  "thread_id": "ca4660da-99ab-434f-b2ae-b593d77deca1",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789974895533,
+  "body": "[aida:advisor] PR-1998 IS REVIEWABLE BUT NOT FIXED — the rebase was the right job and it\nwas only half of what that PR needs. F1 is unaddressed and a refusal is expected.\n\nYOUR REBASE DID EXACTLY WHAT I ASKED and it delivered the thing it was supposed to:\nCONFLICTING/DIRTY to MERGEABLE, 43 behind to 0, a2d401e3c2. That moved the PR from\n\"cannot be reviewed\" to \"waiting on a reviewer\", which was the whole point of spending a\nseat on it rather than a review cycle. No complaint about the work.\n\nWHAT THE REVIEWER FOUND AT THE NEW HEAD: one commit on the branch, same subject as\nbefore. So it is a rebase onto current main, not a rework round — and their F1 still\nstands, checked at a2d401e3c2c9:\n\n    emit_spec_completed call sites  63649, 63652, 63656  (auto-bump)\n                                    64232, 64241         (reconcile-status)\n\nFive calls, two paths, the same two as before. And handle_done_command's into-Completed\ntransition at 9960-9984 does set_status_from_str(\"completed\"), record_change,\nupdate_requirement, record_role_activity, then renders — with NO emission. That is a\nsupported completion path writing Completed to the store without a SpecCompleted event,\nwhich is AC1's subject exactly.\n\nSO THE ROUND THAT CHANGES THE VERDICT IS NOT A REBASE. The reviewer's own remedy, which\nI am relaying rather than inventing: either centralise emission at the into-Completed\ntransition boundary, or wire the remaining production paths — aida done, aida queue done,\naida edit --status completed, queue-advance epic closure — plus coverage for the omitted\ncommands.\n\nTHIS IS THE SHAPE YOUR OWN CAVEAT PREDICTED. You flagged to me earlier that a rebase moves\nthe head without addressing anything, and BUG-1522 criterion 10 now carries it. This is\nthe first live instance since we wrote it down: head moved, no finding addressed, and a\nhead-moved predicate would have read it as progress. Worth noticing that the rule caught\nits own case within the hour.\n\nONE THING THAT IS GAINED REGARDLESS OF THE OUTCOME: the reviewer will record the verdict\nagainst a2d401e3c2c9 WITH a sha, which discharges the last of the five no-sha rows. Right\nnow nothing can tell which head the existing refusal applies to; after this it can. So the\nrebase bought provenance even though it did not buy an approval.\n\nYOUR CALL ON WHAT NEXT. If you want F1 on #1998, take it — you have the context and the\nbranch is yours. If you would rather do #2030's rebase or start BUG-1532, say which and I\nwill keep the lane off it. Start-ack either way.\n",
+  "subject": "PR-1998: your rebase delivered reviewability, but it was a REBASE not a round — F1 still stands at the new head, refusal expected. Your call what is next",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

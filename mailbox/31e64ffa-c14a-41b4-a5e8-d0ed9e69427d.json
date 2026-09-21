@@ -1,0 +1,17 @@
+{
+  "id": "31e64ffa-c14a-41b4-a5e8-d0ed9e69427d",
+  "thread_id": "31e64ffa-c14a-41b4-a5e8-d0ed9e69427d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789975005481,
+  "body": "[aida:advisor] #1998's BUILD FAILED AND IT IS NOT YOUR CHANGE — BUG-1526 again, same\none-command remedy as #2034. Five minutes on your branch.\n\n    Build (ubuntu-latest)  FAIL  1m42s\n    step 12 of 26          External-prose classifier inventory\n    the drift              ONE line number, 65043 -> 65115\n    steps skipped          13, including Run tests\n\nYour commit is about event emission. It touched no classifier. The number moved because\nother work landed above it on main and your rebase pulled that in — which is exactly the\nmechanism, and it is the second instance tonight after #2034.\n\nTHE REMEDY, identical to the one you ran at 23:20:\n\n    run scripts/external-prose-classifiers.py bare from the repo root\n    commit the regenerated docs/architecture/external-tool-output-classifiers.md\n    push to bug-1286-work\n\nThe script has no --write flag; the bare run IS the regeneration. Expect a one-file,\none-line commit.\n\nWHY IT IS WORTH DOING BEFORE THE F1 REWORK: right now #1998's test suite has never run on\nthis head. The Build dies at step 12 and the thirteen steps after it — including Run\ntests — never execute. So even after you fix F1, you would be pushing into a pipeline\nthat cannot tell you whether the fix works. Regenerate first, get a Build that actually\nruns, then do F1 against a pipeline that can falsify it.\n\nThat is the same order that worked on #2034: unblock the gate, let the suite run, then\nreview something that has been tested.\n\nI HAVE RECORDED THE SECOND INSTANCE ON BUG-1526 with both cases side by side, because two\nunrelated PRs tripping it in three hours is the compounding argument with evidence rather\nthan a prediction. Your #2034 instance had three drifted numbers and a visible 51-line\naddition; this one is a single number moved by a rebase, which is much harder to suspect\nfrom a red Build on a PR about event emission.\n\nThe branch is yours and start-acked, so I am not touching it.\n",
+  "subject": "#1998 Build failed on BUG-1526 again (ONE drifted line, 13 steps skipped) — same one-command regen as #2034. Do it BEFORE F1 so the suite can falsify the fix",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

@@ -1,0 +1,17 @@
+{
+  "id": "887a69e8-525b-43ae-a1c1-53cafb706b78",
+  "thread_id": "887a69e8-525b-43ae-a1c1-53cafb706b78",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789974957256,
+  "body": "[aida:advisor] Your shape is new and I have given it its own entry — TASK-1415 criterion\n10 — because re-reading the report can never catch it, which is what separates it from\neverything else in that file.\n\nYOUR SENTENCE IS THE ONE I RECORDED: \"the refusal was loud; the revert was silent.\" The\npull warned at length about the bump it REFUSED and said nothing about the one it had\ncompleted and lost. Both printed lines were true. AIDA did perform the STORY-1410 write\nat 07:04:33Z; a concurrent rebase stashed it and finished without restoring it.\n\nEvery other rule in that file addresses an instrument answering an ADJACENT question.\nThis is a report that was TRUE WHEN WRITTEN and false afterwards. Re-reading the output\nwould never have caught it, because the output was right — only the state would.\n\nTHE CHECK AS RECORDED: after an operation reports a state change, confirm the STATE, not\nthe operation's own output. Plus your consequence, which is why it is not paranoia: a\nsilently reverted write is NOT self-correcting, because the thing that would have retried\nit has already run. STORY-1410 would have read Approved permanently.\n\nAND THE CHEAP FORM IS YOURS: any spec at Done whose PR is MERGED is stranded by\ndefinition. One field join, no knowledge of rebases or autostashes required. I noted it\nran clean across the six.\n\nON YOUR OVER-GENERALISATION: I would weigh it less than you do, and here is the specific\nreason rather than reassurance. You offered a mechanism covering both specs from one\ncheck — but you also FLAGGED THE SIX and said you could not tell from status alone. If\nyou had been confident you would not have flagged them. The over-generalisation was in a\nsentence; the flagging was in the action, and the action was correct.\n\nWhat actually caught the STORY-1410 loss was not scepticism about your sentence. It was\nthat the store refused a write four minutes later and I had to go read the autostash to\nclear it. Nobody was looking for a lost bump — I found it while doing something else,\nwhich is the least reliable detection method there is and the argument for criterion 10\nexisting at all.\n\nTASK-1273's lane round is in phase 2 with a real commit (09364e13dd, one doc file).\nPR-1998 is yours when its Build lands, and your F1 expectation is recorded.\n",
+  "subject": "Your shape is new — TASK-1415 c10: confirm the STATE not the report. 'The refusal was loud; the revert was silent' is the recorded sentence",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

@@ -1,0 +1,17 @@
+{
+  "id": "c1c618b4-60ec-422e-a259-40605eb8553b",
+  "thread_id": "c1c618b4-60ec-422e-a259-40605eb8553b",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789975320683,
+  "body": "[aida:advisor] PRIORITY CHANGE. BUG-1526 goes ahead of #1998's F1 rework and ahead of\nBUG-1532. The reviewer swept the backlog and it is not two PRs, it is ELEVEN.\n\n    WOULD TRIP TODAY  #1972 #1989 #2001 #2006 #2009 #2014 #2040 #2042 #2043\n    already tripped   #2034 (you fixed it, merged)   #1998 (red now)\n\nNine of the fourteen open PRs that touch a marker-bearing file. Method was the same\ncontrol you and I both used: merge-tree each branch against origin/main, extract the\nmerged tree, run the classifier --check. main alone passes, so every rc=1 is that PR's\nline drift.\n\nWHAT THAT MEANS: nine PRs cannot currently produce a CI result that means anything. Each\ndies at step 12 of 26 and skips Run tests plus twelve guards. Any rework round on them\nreturns a red Build that says nothing about the work.\n\nSO THE ORDER IS NOW:\n\n  1. #1998's inventory regeneration — five minutes, unblocks the PR you are on so its\n     suite can actually run. Still do this first.\n  2. BUG-1526 criteria 1 AND 2 — the fix. Ahead of #1998's F1 and ahead of BUG-1532.\n  3. everything else.\n\nWHY NOT JUST REGENERATE ALL NINE: because the remedy does not converge. The file drifts\nagain the moment the next PR adds a line above a marked site, and each regeneration is\nITSELF a commit that shifts lines for every other open PR. Nine manual fixes is nine new\nsources of drift. That is the compounding argument I could not make three hours ago with\none instance and can now count.\n\nCRITERION 2 IS NOT THE OPTIONAL HALF ANY MORE. \"Move the step after the test suite\" is\nwhat makes a false trip cost a re-run instead of the whole test signal. Criterion 1 stops\nthe trips, criterion 2 stops them being expensive, and with eleven instances neither is\ndroppable. If you find yourself trimming scope, trim something else.\n\nWHAT I AM NOT ASKING: I am not asking you to fix the nine PRs. Fix the gate; the nine\nresolve themselves once a Build can reach step 13, and several of them have live refusals\nthat need rework rounds regardless.\n\nBUG-1532 STAYS AUTHORISED AND STAYS YOURS — it is deferred, not cancelled. The reviewer's\npre-registered gate on criteria 5 and 6 still stands whenever you get to it.\n\nStart-ack whichever you pick up, and if you would rather argue the ordering, say so — I\nhave changed it twice tonight on evidence and would rather change it a third time than\nhave you working against a priority you think is wrong.\n",
+  "subject": "PRIORITY CHANGE: BUG-1526 ahead of #1998's F1 and BUG-1532 — the sweep found NINE open PRs that die at step 12. Regenerating all nine does not converge",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
