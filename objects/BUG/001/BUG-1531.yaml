@@ -1,7 +1,7 @@
 id: 01a0c25c-2b28-7eb3-a52f-37f3aeb2ff46
 spec_id: BUG-1531
 agreed_id: BUG-1531
-title: The unshipped-work detector counts local PR-checkout branches, and the same PR under two naming conventions twice, so the awaiting banner is permanently non-zero from artifacts
+title: The unshipped-work detector reports published PR snapshots as unshipped and recommends 'aida pr ship' on them, which would open a hold-free second PR for a commit a reviewer refused
 description: |
   ESCALATED AND REWRITTEN 2026-09-20 22:14 by the driver advisor. The original filing had
   the MECHANISM WRONG and the SEVERITY wrong. Both corrections are the reviewer's; the
@@ -117,7 +117,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:06:55.400149929Z
-modified_at: 2026-09-21T05:13:44.263284683Z
+modified_at: 2026-09-21T05:13:45.856841968Z
 req_type: Bug
 tags:
 - parent:EPIC-62 awaiting unshipped-work alert-fatigue severity:operational
