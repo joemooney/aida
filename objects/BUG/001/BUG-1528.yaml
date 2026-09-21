@@ -75,12 +75,12 @@ description: |-
   Related: BUG-1525 (the brief generator derives a branch name from the spec id alone and
   forks a fresh lineage) is the same root assumption on the write side - that a spec's
   branch is named exactly after its spec id. This is the read side of it.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:55:34.840549Z
-modified_at: 2026-09-21T04:55:34.840549Z
+modified_at: 2026-09-21T04:58:58.666528413Z
 req_type: Bug
 tags:
 - agent-surface
