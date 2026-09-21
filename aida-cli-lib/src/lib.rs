@@ -68377,14 +68377,14 @@ fn collect_awaiting_report_inner(
                     project_root,
                     &format!("PR-{}", pr.number),
                 )?;
-                Some(awaiting_you::ReworkCandidate {
-                    pr: pr.number,
-                    head_sha,
-                    spec: None,
-                    verdict_blocks: verdict.kind.blocks_done(),
-                    reviewed_sha: verdict.reviewed_sha.clone(),
-                    recorded_by: verdict.recorded_by.clone(),
-                })
+                Some(awaiting_you::rework_candidate_from_parts(
+                    pr.number,
+                    &head_sha,
+                    &pr.head_branch,
+                    verdict.kind.blocks_done(),
+                    verdict.reviewed_sha.as_deref(),
+                    verdict.recorded_by.as_deref(),
+                ))
             })
             .collect();
         awaiting_you::rework_ready_rows(&candidates, seat.as_deref())

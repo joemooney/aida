@@ -126,6 +126,37 @@ pub(crate) struct ReworkCandidate {
     pub recorded_by: Option<String>,
 }
 
+/// Build one candidate from the parts the caller has, deriving the spec id from
+/// the head branch.
+///
+/// STORY-1419 review: `spec` was hardcoded `None` at the single production call
+/// site, so the advertised row could never show a spec — and the test that
+/// asserted the spec renders HAND-BUILT the item and bypassed this mapping
+/// entirely. The mapping is a function now precisely so a test can reach it;
+/// inline construction at the call site is what made it untestable.
+// trace:STORY-1419 | ai:claude
+pub(crate) fn rework_candidate_from_parts(
+    pr: u64,
+    head_sha: &str,
+    head_branch: &str,
+    verdict_blocks: bool,
+    reviewed_sha: Option<&str>,
+    recorded_by: Option<&str>,
+) -> ReworkCandidate {
+    ReworkCandidate {
+        pr,
+        head_sha: head_sha.to_string(),
+        // the branch is the only place the spec reliably appears; the verdict
+        // is PR-keyed and carries no spec id of its own
+        spec: crate::pr_ship::extract_spec_ids_from_text(head_branch)
+            .into_iter()
+            .next(),
+        verdict_blocks,
+        reviewed_sha: reviewed_sha.map(str::to_string),
+        recorded_by: recorded_by.map(str::to_string),
+    }
+}
+
 /// Which PRs have moved past the refusal recorded against them.
 ///
 /// Scoped to `seat` when it is known, so the row reaches the reviewer who
@@ -1108,6 +1139,66 @@ mod tests {
         let json = r.to_json();
         assert_eq!(json["unshipped_work"][0]["spec_id"], "STORY-1043");
         assert_eq!(json["unshipped_work"][0]["commits_ahead"], 2);
+    }
+
+    // STORY-1419 review: the row advertises a spec id and the production call
+    // site hardcoded `spec: None`, so it could never appear. My plumbing test
+    // hand-built the item and bypassed the mapping — the same "a unit test
+    // cannot see its own seam" failure, committed inside the test written to
+    // prevent it.
+    //
+    // This goes through the PRODUCTION mapping: branch -> spec -> row -> render.
+    // Nothing is hand-built except the inputs the forge would supply.
+    // trace:STORY-1419 | ai:claude
+    #[test]
+    fn the_spec_reaches_the_row_through_the_production_mapping() {
+        let candidate = rework_candidate_from_parts(
+            2014,
+            "f95b30853e",
+            "task-1298-work",
+            true,
+            Some("3310400503"),
+            None,
+        );
+        assert_eq!(
+            candidate.spec.as_deref(),
+            Some("TASK-1298"),
+            "the spec must be derived from the branch, not left None"
+        );
+
+        let rows = rework_ready_rows(&[candidate], None);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].spec.as_deref(), Some("TASK-1298"));
+
+        let r = AwaitingReport {
+            rework_ready: rows,
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(
+            out.contains("TASK-1298"),
+            "the spec must survive all the way to the rendered row: {out}"
+        );
+    }
+
+    // A branch carrying no spec id must still produce a row — the PR number is
+    // the actionable part. Without this, "derive the spec" could be implemented
+    // as "drop rows with no spec" and the suite would not notice.
+    // trace:STORY-1419 | ai:claude
+    #[test]
+    fn a_branch_without_a_spec_id_still_produces_a_row() {
+        let candidate = rework_candidate_from_parts(
+            2047,
+            "58fffe27b9",
+            "some-unlabelled-branch",
+            true,
+            Some("aaaa1111"),
+            None,
+        );
+        assert_eq!(candidate.spec, None);
+        assert_eq!(rework_ready_rows(&[candidate], None).len(), 1);
     }
 
     // STORY-1419: the CLASSIFIER tests above do not pin the PLUMBING. Dropping
