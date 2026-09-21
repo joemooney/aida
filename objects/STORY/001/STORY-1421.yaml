@@ -1,0 +1,30 @@
+id: 01a0c3b4-65e8-7d02-a9d3-a0f7aad46674
+spec_id: STORY-1421
+agreed_id: STORY-1421
+title: 'A non-blocking finding recorded on an approved verdict has no successor: when the spec completes, every surface stops looking and the finding survives only as an archive entry describing live code'
+description: |-
+  A NON-BLOCKING FINDING RECORDED ON AN APPROVED VERDICT HAS NO SUCCESSOR. The moment its spec completes, every surface that would have surfaced it stops looking — the reviewer queue, `aida awaiting`, the open lens. What remains is an archive entry that happens to describe live code.
+
+  THE INSTANCE THAT EXPOSED IT, 2026-09-21. PR #2047's verdict carried F2 and F3 forward as non-blocking findings, recorded on the verdict precisely so they would not vanish. The PR merged; STORY-1419 auto-bumped to Completed; F2 is now on main (verified in the tree: awaiting_you.rs:809-817, a doc comment moved above the wrong item, filed as BUG-1545) and F3 is in the same position. Both are live-code observations whose only record is attached to a spec no surface reads any more.
+
+  THE SHAPE IS NOT ONE FINDING. Every non-blocking finding this board has recorded on an approving verdict has taken this path the moment its PR merged. The count is unknown and that is part of the defect — there is no query that answers "which findings were carried forward and never resolved", because carrying forward writes them into a record keyed to a spec that is about to close.
+
+  WHAT MAKES IT WORSE THAN A MISSING FEATURE: the practice was believed to be durable by everyone using it. The reviewer seat said twice on 2026-09-21 that it was recording findings forward "so they would not vanish", and the driver-advisor accepted that both times. Neither noticed that "carried forward in the verdict record" is a way of writing something down where nobody will read it again. A convention that is understood as preservation and functions as deletion is worse than no convention, because it stops people doing the thing that would have worked — filing.
+
+  RELATED AND ONE LAYER UP: STORY-1420 is "who inherits an exited ACTOR's gates". This is "what inherits a non-blocking FINDING when the spec it was recorded against completes". Same structural hole, different object; both are cases where a gate or an obligation has no owner after a lifecycle event. Worth solving with the same instinct — an explicit successor rather than an implicit one.
+
+  WHAT TO BUILD, smallest useful slice:
+    1. When a verdict carrying non-blocking findings is recorded APPROVED, and the spec subsequently reaches a terminal state, those findings must land somewhere still-open. The obvious candidates: auto-file each as a child spec of the parent epic, or emit them into `aida findings` where a triage surface already exists. Either gives them a home that outlives the merge.
+    2. A query that answers "non-blocking findings recorded on now-terminal specs" so the existing backlog can be recovered rather than only stopping the leak. The corpus is the verdict files; this is a sweep, not a migration.
+    3. State in the reviewer guidance what "carried forward" actually guarantees, since today it guarantees nothing after merge. If the mechanism changes, the guidance changes with it; if it does not, reviewers should be told to FILE rather than to carry forward.
+
+  EXPLICITLY NOT WANTED: blocking a merge on non-blocking findings. The grading is correct and #2047 was right to approve over F2. The defect is that approving over a finding currently means losing it.
+
+  Raised by the reviewer seat immediately after #2047 merged — "I would rather know that than keep doing it" — and filed by the driver-advisor, who had accepted the convention twice the same night without noticing it did not hold.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T11:22:54.824903811Z
+modified_at: 2026-09-21T11:22:54.824903811Z
+req_type: Story
