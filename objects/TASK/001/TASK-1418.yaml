@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T18:38:04.636882891Z
+modified_at: 2026-09-21T19:22:11.001514980Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -381,4 +381,33 @@ comments:
     THE GENERALISATION: ANY QUERY WHOSE EMPTY RESULT IS ACTIONABLE MUST DISTINGUISH "MEASURED ZERO" FROM "MEASUREMENT FAILED". A sweep, a grep, a count, a status probe — if a human or a loop will act on the empty case, the failure case must not be able to impersonate it. That is cheap to write and, on today's evidence, the only one of these six that a rule actually stopped.
   created_at: 2026-09-21T18:38:04.636882891Z
   modified_at: 2026-09-21T18:38:04.636882891Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c56b-2eb9-7f80-bd6e-5106776b2095
+  author: joe
+  content: |-
+    [aida:advisor] THE NULL-FROM-A-FAILED-MEASUREMENT FAMILY, FOUND IN SHIPPED PRODUCTION CODE. Every prior instance in this catalogue was a seat's reasoning or an instrument's report. This one was in the product, and it silently sent recovery down the wrong branch. Found by claude-product-1, verified by claude-reviewer-1 on PR #2030 (BUG-1485).
+
+        `ahead == 0` does NOT mean there is nothing to recover. It is also what a MISSING
+        WORKTREE produces: `git -C <gone>` fails, the Option is None, and `unwrap_or(0)`
+        FLATTENS "could not look" INTO "looked and found nothing".
+
+    `unwrap_or(0)` is the whole defect. A failure to measure and a measurement of zero become the same value, and every caller downstream sees the reassuring one. The consequence shipped: recovery fell through to a generic "run /aida-pr inside the session" instruction, aimed at a session that no longer existed.
+
+    THE SAME SHAPE, NOW IN FIVE PLACES TODAY, THREE OF THEM TOOLS AND TWO OF THEM CODE:
+        a `gh pr list` failure reported as "0 open PRs"          (caught by fail-loud-on-empty)
+        a SKIPPED CI step reporting green                        (caught by reading the step list)
+        a stale binary's output read as the code's behaviour     (not caught; cost a misfiling)
+        an in-flight job's 404 read as "cannot see"              (caught by naming the boundary)
+        `unwrap_or(0)` on a git command that could not run       (caught here, in production)
+    THE DEFAULT VALUE IS ALWAYS THE ONE THAT MEANS "NOTHING TO DO".
+
+    THE CHECK THIS ADDS TO THE CATALOGUE, and it is grep-able rather than a habit: ANY `unwrap_or`, `unwrap_or_default` OR `ok()` ON A RESULT THAT REPRESENTS A MEASUREMENT COLLAPSES TWO STATES INTO ONE. It is only safe when the failure case and the zero case genuinely warrant the same action. When they do not — and for a measurement they almost never do — the Option must survive to the decision point, or the failure must be handled where it happens.
+
+    Note this is the same mechanism as `discipline_content_mismatches`'s `.ok()?` recorded on BUG-1550: a missing project copy yields None and is SILENTLY SKIPPED rather than reported, so a DELETED guide reads clean. Two independent sites, same combinator, same inversion — the quiet answer wins.
+
+    THE FIX REUSED RATHER THAN RE-DERIVED, which is worth recording because the opposite is the norm: phase 3 had already solved this for its own NoPr case under BUG-895, so the fix CALLS THAT HELPER — verify origin/<branch>, count ahead against the origin default ref, open the PR from the pushed ref without pushing again, and return None when the branch genuinely is not ahead so the no-work path falls through unchanged.
+
+    AND THE TEST ASSERTS ITS OWN PRECONDITION: `assert!(!gone.exists(), "fixture must model a MISSING worktree")` — A POSITIVE CONTROL ON THE FIXTURE rather than a comment claiming one. Then it asserts the ahead-count came FROM ORIGIN and the PR number came from the forge call, which is what distinguishes a real recovery from a fixture that merely returns something.
+  created_at: 2026-09-21T19:22:11.001514980Z
+  modified_at: 2026-09-21T19:22:11.001514980Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
