@@ -93,12 +93,31 @@ description: |-
       WHICH MAKES THE COMPILER FORM MANDATORY RATHER THAN PREFERRED. An assertion dropped BECAUSE IT HAS NO CASE-SPECIFIC CONTENT cannot be protected by asking authors to remember it: its forgettability is a property of its shape, not of their attention. A destructuring bind over every field is not droppable that way - it is load-bearing syntax the case cannot be written without. Adding `assert!(!skip.no_preflight)` to the conjunction buys exactly one field, and the field added after it will be lost the same way.
 
       AND A FOURTH SURFACE STATES THE INVARIANT UNIVERSALLY. The code comment above the force-off block reads "Express overrides any `lifecycle:*` short-circuit that would otherwise downgrade the gate, so an express spec can never silently ship under a reduced gate." So the comment, the test's function name, and the test's assertion message all claim a universal; the code and the assertion body both enumerate. Three statements of the invariant, two implementations of it, and the two that could enforce it are the ones that narrowed.
+
+  8. A FIFTH SURFACE, AND IT IS THE ONLY USER-FACING ONE - IT TELLS THE OPERATOR THE OPPOSITE OF THE TRUTH. Found 2026-09-20 19:26 in auto_complete.rs banner_summary():
+
+        if self.express {
+            return Some("express tier - full gate (CI + reviewer + build)".to_string());
+        }
+        if self.is_empty() { return None; }
+        let mut parts = Vec::new();
+        if self.no_preflight { parts.push("implementer preflight"); }
+
+      The express branch returns EARLY and UNCONDITIONALLY. So for a spec tagged batch:express plus lifecycle:no-preflight, the operator is shown "full gate (CI + reviewer + build)" while no_preflight is true and the gate is reduced. The line that names the skipped phase is UNREACHABLE for any express spec.
+
+      AND TWO SURFACES OF THE SAME STRUCT CONTRADICT EACH OTHER. active_tokens() DOES include no_preflight and emits the token "no-preflight". So telemetry records the short-circuit as active while the human-readable banner says full gate - same spec, same run, same field, opposite claims. The machine-readable path is truthful; the operator-facing one is false.
+
+      THIS OUTRANKS THE OTHER FOUR SURFACES. The code comment, the test function name and the assertion message are developer-facing - wrong only to someone reading the file. This is emitted at runtime to the person deciding whether a spec shipped under a full gate, and this project holds user-facing text to a higher bar than developer artifacts precisely for this reason.
+
+      IT ALSO EXPLAINS WHY THE GAP NEVER SURFACED OPERATIONALLY. Had an express spec ever run with lifecycle:no-preflight, nothing the operator saw would have looked wrong - the banner said what they expected, and the only contradicting evidence was a token in a JSONL nobody reads per run. The gap was not merely unreviewed; it was UNOBSERVABLE FROM THE OPERATOR'S SEAT. That is the same property as BUG-1513, arriving at a different surface: twice in one night, the seat that would have noticed is the seat structurally prevented from seeing it.
+
+      REQUIRED: the banner is DERIVED from the skip set rather than hardcoding a phase list, or the express branch falls through to the parts-building path so a residual skip is still named. A hardcoded summary string is the one form of this defect that cannot be wrong in a detectable way - there is no field for a compiler or a test to notice was omitted.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-21T02:24:53.664784850Z
+modified_at: 2026-09-21T02:25:46.590761686Z
 req_type: Bug
 tags:
 - batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
