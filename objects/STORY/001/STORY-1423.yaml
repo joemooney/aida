@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-21T21:34:41.563898713Z
+modified_at: 2026-09-21T22:43:06.538561867Z
 req_type: Story
 relationships:
 - rel_type: !Custom related
@@ -140,4 +140,38 @@ comments:
     I am recording this as a correction rather than an update because a reader who saw "17.1% -> 0.0%" and stopped there would conclude the fix was total and the gate was safe to trust. Neither is established. The direction is real; the magnitude was an artefact of twenty-six samples.
   created_at: 2026-09-21T21:34:41.563898713Z
   modified_at: 2026-09-21T21:34:41.563898713Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c623-22aa-72f3-a375-9674e9e10881
+  author: joe
+  content: |-
+    [aida:advisor] RE-MEASURED AT 15:42 MST. THE POPULATION IS NOW LARGE ENOUGH TO EXCLUDE THE BUDGET, AND MY TWO EARLIER READINGS WERE BOTH WRONG - IN OPPOSITE DIRECTIONS. Same query, same binary_sha partition, ancestry re-verified against b1d53bd675.
+
+        time     n(post-fix)   over 1s   rate     what I said at the time
+        14:05         26           0      0.0%    "small-n luck, do NOT close criterion 2 on 26"
+        14:33         43           4      9.3%    "one point under a 10% tolerance, a coin flip"
+        15:42        170           5      2.9%    this reading
+
+    THE TRAJECTORY IS THE LESSON. Not a drift - the first two were SAMPLING NOISE ON A TINY DENOMINATOR, one reading far too good and the next far too bad, and I drew a confident conclusion from each. The 9.3% that made me call the gate "a coin flip" was four events; three more calls either way moved it by five points. A rate at n=43 was never worth the sentence I built on it.
+
+    WHAT 170 SUPPORTS. At 2.9% observed the 95% upper bound is roughly 5.4% - so THE POPULATION NOW EXCLUDES THE 10% TOLERANCE rather than sitting ambiguously under it. That is the first reading in this spec's history that can carry a conclusion.
+
+    CRITERION 2, ZERO HALF: NOT SATISFIABLE AS LITERALLY WORDED, AND SATISFIED IN SUBSTANCE. There are FIVE over-budget calls post-fix, so a literal "zero" will never be reached. But the criterion's actual content is that THE GATE EXITS 0 AGAINST THE POST-FIX POPULATION, and at 2.9% against a 10% tolerance it does - PROVIDED the denominator is binary-scoped, which is exactly BUG-1572's work. Unscoped, the gate still sees the whole window at 19.1% and still trips. So criterion 2 is blocked on BUG-1572 and on nothing else.
+
+    CRITERION 7, RE-MEASUREMENT: DONE, AND THE ESTIMATE WAS PESSIMISTIC. STORY-1422 predicted a 7.1% post-fix residual and used it to reject a 5% budget as "would still trip after the fix". MEASURED: 2.9% at n=170. A 5% gate would NOT have tripped. I am recording that and NOT proposing a tightening - this spec's own line is that the number changes only alongside a measurement, and one measurement at one moment on one machine is not grounds to move a budget. It is grounds to say the 7.1% estimate was wrong and to re-examine deliberately.
+
+    THE FINDING THAT MATTERS MORE THAN THE RATE - THE TAIL IS STILL CATASTROPHIC ON THE FIXED BINARY:
+
+        69240 ms  exit=0  c29022deb8  14:18:39     <- SIXTY-NINE SECONDS
+         6836 ms  exit=0  c9da874c06  14:52:35
+         1585 ms  exit=0  c29022deb8  14:21:10
+         1391 ms  exit=0  c29022deb8  14:07:28
+         1051 ms  exit=0  c29022deb8  14:08:17
+
+    A 69-SECOND `aida show` ON A POST-FIX BINARY. That is WORSE than the 39.4 s figure quoted as the pre-fix worst case, and it is on the fixed path. So the fix moved the PROPORTION decisively and did not bound the TAIL - the same shape already recorded on BUG-1569, where the notice has a tight body and an unbounded tail, and on BUG-1567, where a 2 s assertion fails on a distribution whose median is nowhere near it.
+
+    A GATE THAT JUDGES ON PROPORTION CANNOT SEE THIS. At 170 calls, one 69-second outlier is 0.6% of the population and the gate reads healthy. Whoever holds STORY-1422's budget design should decide whether a proportion gate is the right instrument at all, or whether it needs a companion that trips on a single call over some absolute ceiling. I am not ruling that here - it is a budget-design question and this spec's job was to measure, not to redesign.
+
+    NOT ESTABLISHED: what the 69 s call was doing. Exit 0, so it completed. A cache rebuild under lock contention is the obvious candidate given what was observed on BUG-1569 at 14:58, and it is a candidate and not a finding.
+  created_at: 2026-09-21T22:43:06.538561867Z
+  modified_at: 2026-09-21T22:43:06.538561867Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
