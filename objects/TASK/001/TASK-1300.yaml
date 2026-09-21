@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T14:03:07.230562710Z
-modified_at: 2026-09-21T01:58:57.237221807Z
+modified_at: 2026-09-21T02:20:07.142127997Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -46,6 +46,29 @@ relationships:
   target_id: 01a0bcb3-beba-79d1-8449-8b286527c46f
   created_at: 2026-09-20T14:03:25.865893478Z
   created_by: joe
+- rel_type: !Custom implemented-by
+  target_id: 01a0c1c0-8e7b-7131-9190-7b50b0fd3415
+  created_at: 2026-09-21T02:17:03.930471404Z
+  created_by: joe
+comments:
+- id: 01a0c1c3-7466-7ae1-b928-ad5ae99ef5d4
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2044
+    agent: codex
+    ran-at: 2026-09-20 19:20 -07:00
+    mode: propose-only (drain)
+    proposed: 4
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1300-drain-01a0c1c3-1bd8-7bf2-9136-9716487d6951.json
+    ? SEM (0.99) — The inventory predicate is declaration-based: a production classifier counts only when a Rust source line has the exact marker `// external-prose-classifier: <site>`; tests, fixtures, generated files, and unmarked string comparisons are deliberately outside the inventory.
+    ? SEM (0.93) — Enumeration scans only Rust files matching `aida-*/src/**/*.rs` and rejects duplicate classifier site names or an inventory with no markers.
+    ? AC (0.96) — Inventory checking requires the generated architecture document to byte-for-byte match regenerated output, including each classifier's source path and current line number; moving a marker without changing its name makes the check fail until the document is regenerated.
+    ? SEM (0.82) — The marker payload is restricted to ASCII letters, digits, underscores, colons, braces, and hyphens, and classifier rows are emitted in deterministic tuple order.
+  created_at: 2026-09-21T02:20:07.142127997Z
+  modified_at: 2026-09-21T02:20:07.142127997Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
