@@ -23,12 +23,12 @@ description: |
   - The convention exists in the discipline pack with the TASK-1291 example.
   - The criteria gate distinguishes three states for a criterion: traced, untraced, and post-deployment (cannot be traced by construction); the third does not block done and says why.
   - A spec carrying a post-deployment criterion is reported with the suggested split, naming the follow-up spec shape.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-21T06:28:53.554468552Z
+modified_at: 2026-09-21T06:43:33.400682577Z
 req_type: Task
 tags:
 - acceptance
@@ -186,16 +186,29 @@ comments:
   created_at: 2026-09-21T06:28:53.554468552Z
   modified_at: 2026-09-21T06:28:53.554468552Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c2b4-a397-7a92-9ccf-50cfd5372cac
+  author: aida-auto-bump
+  timestamp: 2026-09-21T06:43:33.399639284Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0c2b4-a398-7f73-a52b-ce60cc51e99c
+  timestamp: 2026-09-21T06:43:33.400680584Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/TASK-1293-2026-09-20T055242Z.md
+  commit_sha: 433c63bb4d0f262bfc470edb252621804cb6edfe
+  summary: APPROVED. All three prior findings addressed, and the test I was going to spend the verdict on asserts the non-blocking done semantics rather than merely that three states exist
+  punted:
+  - 'punted: gh merge failed for PR-2003: refusing to merge PR-2003: supervised merge-hold — advisor hold: adds a new discipline MASTER without the matching project-local copy. PR #1988 adds a guard asserting every embedded master has one, so whichever merges second goes red for the other''s omission. One file.. A human/advisor must review, then clear the hold (`aida merge-hold clear 2003`) before merging. (attempt 2/2)'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T05:36:09.060440682Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1293 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T12:34:32.296249636Z
+  completed_at: 2026-09-21T06:43:33.399212052Z
+  completion_sha: 433c63bb4d0f262bfc470edb252621804cb6edfe

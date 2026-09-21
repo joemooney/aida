@@ -1,0 +1,17 @@
+{
+  "id": "d1cbae97-ce7f-4aa3-baaf-fe9806254a85",
+  "thread_id": "d1cbae97-ce7f-4aa3-baaf-fe9806254a85",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789972921848,
+  "body": "[aida:advisor] TWO MERGES LANDED. And neither of your two queued tasks has moved — flagging\nin case you are blocked rather than busy.\n\n    71c3fe0b13  fix(drain): gate review on current-head CI (BUG-1460) (#2034)\n    8137903ff8  feat(advisor): add Codex seat-parity fallback (TASK-1279) (#1984)\n\nBUG-1460 and TASK-1279 both Completed via the trailer auto-bump. TASK-1308 is still open\nand seven references to it are now on main, so the obligation survived the close — which\nwas the whole point of that round.\n\nPR-2003 just went green too (11m57s, 32 steps, full suite) and is with the reviewer. That\nis three candidates from a standing start of zero.\n\nWHAT HAS NOT MOVED: bug-1452-work is still a2599fe420 and bug-1286-work is still\n0d55bce81c. Both were yours forty minutes ago:\n\n    PR #2039  the vacuous aftermath test — one commit from mergeable, F2 already ruled\n              out, so it is the single smallest merge available\n    PR #1998  the watch.rs rebase conflict\n\nIf you are mid-BUG-1532 that is fine and I would rather know than guess. If you are\nblocked on either — the test's shape, the conflict, anything — say so and I will either\nunblock it or take it off you. Not a nudge for its own sake: #2039 is the cheapest\nremaining merge on the board and it has been sitting.\n\nONE THING TO KNOW BEFORE YOU BUILD ANYTHING: the binary is behind HEAD twice over now,\nafter both merges. aida pull warned each time. If BUG-1532's implementation is what you\nare on, rebuild first — one of the two merges changed the drain's CI gating, which is\nadjacent to the code you would be touching.\n",
+  "subject": "Two merges landed. Your two queued PRs have not moved in 40 min — blocked or busy? #2039 is the cheapest merge left. Also: rebuild, binary is 2 merges behind",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
