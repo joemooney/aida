@@ -1,0 +1,51 @@
+id: 01a0c403-9a08-7263-8c70-5f870be33efc
+spec_id: STORY-1422
+agreed_id: STORY-1422
+title: The usage query exits 0 whether it finds ten calls over budget or none, so BUG-1480's latency guard has no failure mode - give it one and trigger it from a substrate job
+description: |-
+  BUG-1480's latency criterion cannot be satisfied by the instrument it names, because THE INSTRUMENT HAS NO FAILURE MODE. Verified by the advisor on the real store, 2026-09-21 05:49 MST, after claude-product-1 reported it:
+
+      aida usage --cmd show --slower-than 1000ms events    (10 slow calls present)  exit 0
+      aida usage --cmd show --slower-than 99999ms events   (no matches at all)      exit 0
+
+  It exits 0 either way. claude-reviewer-1 demonstrated the query FIRES - ten calls over the 1000 ms threshold on the live unfixed binary. Nothing makes it TRIP. Those are different properties and only the first is closed. Wiring a query with no failure mode to a cadence runs it on a tick and discards the result, which is the capability-not-a-guard defect automated rather than fixed.
+
+  SO THE ORDERING IS: until something can trip, naming a trigger is decoration. That is product's formulation and it is correct.
+
+  THIS SPEC EXISTS BECAUSE THE REMEDY IS NEW SURFACE AND DOES NOT BELONG INSIDE A BUG FIX. BUG-1480 is "aida show takes ~10 seconds". The guard below is a GENERAL performance-guard mechanism - it is not specific to show, and building it inside a bugfix hides a feature in a bugfix. It is carved out here and made a BLOCKER on BUG-1480's closure, so the slice stays honest without letting the property go untested. The reviewer's condition - BUG-1480 must not ship with a capability rather than a guard - is satisfied by the blocking relationship, not by shrinking this work into the bug.
+
+  DESIGN, proposed by claude-product-1 and ruled here. Every mechanism it uses already exists; nothing is invented.
+
+  1. GIVE THE INSTRUMENT A FAILURE MODE. A new `aida doctor check performance` category wrapping the usage query per command shape against a budget, EXITING NON-ZERO when any command exceeds it. This is the same shape as the existing categories (stale-leases, orphan-branches, stale-remote-branches, OBE-briefs) and `doctor` is already where STORY-707 moved heavy diagnostics. Budget in config so it is policy rather than a constant:
+
+         [performance]
+         show_budget_ms = 1000
+
+  2. THE TRIGGER IS A SUBSTRATE JOB, not `aida pull`. THIS SUPERSEDES THE ADVISOR'S EARLIER `aida pull` RULING ON BUG-1480, which rested on a premise that turned out false. That ruling's reasoning was "do not invent a new cadence surface that nothing already runs" - but `aida schedule` is NOT invented. Verified: `aida schedule tick` evaluates every enabled job, `run` forces one, `status` and `list` exist, and the registry is real (currently empty in this repo). The distinction that makes it the right choice is the one product named: a SUBSTRATE job EXECUTES on the tick; a SEAT job only marks work due and depends on a seat being awake to act. For a guard that difference is the whole point.
+
+         [[schedule.jobs]]
+         name = "performance-guard"
+         command = "doctor check performance"
+         every = "6h"
+         enabled = true
+
+  3. WHAT HAPPENS WHEN IT TRIPS - two existing surfaces, a named destination and a named actor. Every scheduled run is ledgered on the aida-store branch at `schedule/<job>.yaml`, so a trip is durable and auditable rather than a line in a log. Pair the substrate job with a SEAT job to the advisor so it also surfaces through `aida awaiting`'s cron channel. The substrate job detects; the seat job routes.
+
+  ACCEPTANCE:
+  1. `aida doctor check performance` exists, reads its budget from `[performance]` in config, and EXITS NON-ZERO when a command shape exceeds its budget.
+  2. DEMONSTRATE-IT-TRIPS, which is the piece nobody has done and is distinct from demonstrate-it-fires: show the gate EXITS NON-ZERO against the same population the reviewer already used (the ten 9.8-10.0 s show calls), and EXITS ZERO after the BUG-1480 fix lands. Demonstrating the query returns rows is NOT this; that is already closed and does not substitute.
+  3. A substrate `[[schedule.jobs]]` entry is scaffolded (enabled or commented, the implementer's call with a stated reason) and `aida schedule status` shows it.
+  4. A trip is ledgered at `schedule/<job>.yaml` on the aida-store branch AND reaches the advisor through `aida awaiting`'s cron channel. Both, not either.
+  5. `docs/environment-variables.md` carries any new `AIDA_*` row in the same change, per the repo rule.
+  6. The budget is per-command-shape rather than global, so adding a second guarded command does not require reshaping the config.
+
+  OUT OF SCOPE, deliberately: making `aida show` fast (that is BUG-1480), and the compiler-enforced no-load() structural guard (BUG-1480's own criterion, PR-time, different question - it proves the CALL cannot happen, this proves the COST is not happening).
+
+  PROVENANCE: claude-reviewer-1 raised the trigger condition and demonstrated the instrument fires; claude-product-1 found the missing failure mode by measurement and proposed the three-part design; the advisor verified both exit codes and the schedule registry, and ruled the carve-out.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T12:49:25.512029219Z
+modified_at: 2026-09-21T12:49:25.512029219Z
+req_type: Story
