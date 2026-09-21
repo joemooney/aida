@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T02:06:46.643184826Z
+modified_at: 2026-09-21T02:08:13.224234325Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -978,6 +978,59 @@ comments:
     SO THE ORDER IS: cherry-pick 6512f1312a, fix decide() per BUG-1507, implement ADR-48's orchestrator-side creation, then merge. #1972 closes as superseded by that line - recommended to the product seat rather than done here, since it owns dispatch and the PR carries a live verdict with four findings that should be checked against the surviving branch first rather than discarded with the PR.
   created_at: 2026-09-21T02:06:46.643184826Z
   modified_at: 2026-09-21T02:06:46.643184826Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1b8-8fa8-7901-9d6a-2f3c4f263476
+  author: joe
+  content: |-
+    [aida:advisor] LINEAGE RULING AMENDED 2026-09-20 19:15, on reviewer input. The choice of base stands; the SHAPE of the record changes, and one condition is now a hard blocker rather than a carry-forward.
+
+    1. THE THREE SHARED COMMITS ARE BYTE-IDENTICAL, verified by patch-id rather than by subject:
+
+        gate PR publication on CI preflight        9c62e0bda0 == 93d0c80671   8a92b2637b89c370
+        avoid portability fixture false positive   ad7d0ba1a7 == 0b97cc12c2   d969fbd234db378b
+        make guard execution authoritative         c12e29f20a == da8b589b58   70b4df5f1f9f47df
+
+       Same TASK-1289 base rebased onto different parents. ALL divergence is in what each side added
+       afterwards, which means the lineage question is narrower than it looked: it is not "which
+       implementation" but "which parent, and which extras".
+
+    2. NEITHER LINE IS SUPERSEDED OUTRIGHT. The UNION is required - three shared commits, plus
+       #1972's express fix, plus #2042's two BUG-1420 commits. A bare supersede in either direction
+       silently drops real work and the record would not show it. The supersede entry must therefore
+       NAME the commits carried across: "superseded after 6512f1312a was carried onto 35de6d3abb".
+       A supersede that does not name them is not an acceptable record of this decision.
+
+    3. THE EXPRESS FIX IS A LIVE GATE BYPASS, not a tidy-up, and I verified it is reachable on the
+       surviving base rather than latent:
+
+        pr2043 auto_complete.rs:131   "lifecycle:no-preflight" => skip.no_preflight = true
+        pr2043 auto_complete.rs:106   pub(crate) no_preflight: bool
+        express mode on that base forces off no_ci_wait, no_review and no_build - and NOT no_preflight
+
+       So on 35de6d3abb a spec tagged `lifecycle:no-preflight` switches off the preflight gate, and
+       express mode - which claims to force every skip off - does not close it. UNDER ADR-48 THAT IS A
+       SECOND DOOR PAST THE GATE THAT AUTHORISES PUBLICATION, alongside the wildcard door in decide()
+       that BUG-1507 covers. One is a tag anyone can set on a spec; the other is an unrunnable guard.
+
+       Carrying 6512f1312a is therefore a BLOCKING condition on merging the surviving lineage, not a
+       nice-to-have. Merging #2042 as it stands would land this spec's own gate with a bypass open.
+
+    4. NEITHER LINEAGE IMPLEMENTS ADR-48, and the supersede record must not imply otherwise. Both
+       carry the advisory design the ADR rejects - which is finding 1 of BOTH verdicts, reached
+       independently against each tree: PR-1972.json cites the launch prompt telling implementers to
+       run pr ship and exit; PR-2043.json cites preflight running after an agent-opened PR. Two
+       reviewers, two trees, same conclusion. So choosing a base does not make that base mergeable.
+
+    REVISED ORDER OF WORK, replacing the one in the previous ruling:
+        a. carry 6512f1312a onto 35de6d3abb            (closes the lifecycle-tag bypass)
+        b. fix decide() per BUG-1507                    (closes the unrunnable-guard bypass)
+        c. implement ADR-48's orchestrator-side creation (the structural gate itself)
+        d. then merge, and record the supersede naming the carried commit
+
+    Steps a and b are both prerequisites of c rather than parallel work: a gate with two open doors
+    is not a gate, and ADR-48 makes the orchestrator TRUST that gate's answer.
+  created_at: 2026-09-21T02:08:13.224234325Z
+  modified_at: 2026-09-21T02:08:13.224234325Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
