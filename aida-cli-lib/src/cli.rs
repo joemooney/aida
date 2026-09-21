@@ -3791,6 +3791,13 @@ pub enum DoctorCommand {
         /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
+
+        /// Exit non-zero when this category has any finding, so the check can
+        /// gate a scheduled job instead of only reporting. Off by default:
+        /// `doctor check` stays report-only unless a caller asks to be gated.
+        // trace:STORY-1422 | ai:claude
+        #[clap(long)]
+        fail_on_findings: bool,
     },
 
     /// Focused multi-agent drift heal for one category.

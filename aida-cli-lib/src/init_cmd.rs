@@ -2219,6 +2219,40 @@ on = ["QueueDrained"]
 prompt = "Triage newly shelved work from the completed queue run: classify the failure, write a concrete rework brief, and requeue or escalate it."
 enabled = true
 
+# The performance guard. Scaffolded DISABLED and commented, deliberately: a
+# project has nothing to guard until it declares a budget under
+# [performance.budgets], and a job that runs against an empty budget list would
+# report success forever while measuring nothing.
+#
+# --fail-on-findings is what makes this a GATE rather than a report. Without it
+# `doctor check` exits 0 even when it finds something, so the tick would run
+# the check on a cadence and discard the answer. A gating job that has never
+# been demonstrated to exit non-zero is not a guard — see the registry note in
+# the discipline pack before adding one.
+#
+# The routing job keys on CronJobFailed, which the tick emits when a SUBSTRATE
+# job exits non-zero. That is the chain end to end: --fail-on-findings makes
+# the check exit non-zero, the non-zero exit emits CronJobFailed, and the seat
+# job turns that event into a due item in `aida awaiting`. The substrate run is
+# ledgered at schedule/<job>.yaml independently, so a trip is BOTH durable and
+# noticed — either alone reproduces some version of the defect this closes.
+#
+# [performance.budgets]
+# show = 1000
+#
+# [[schedule.jobs]]
+# name = "performance-guard"
+# command = "doctor check performance --fail-on-findings"
+# every = "6h"
+# enabled = false
+#
+# [[schedule.jobs]]
+# name = "performance-guard-route"
+# seats = ["advisor"]
+# on = ["CronJobFailed"]
+# prompt = "A performance budget was breached. Read the ledger entry at schedule/performance-guard.yaml, confirm the budget in force at the time of the trip, and decide: real regression, or a budget that needs changing deliberately."
+# enabled = false
+
 # [[schedule.jobs]]
 # name = "session-reap"
 # command = "session reap"
