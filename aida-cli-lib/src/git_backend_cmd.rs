@@ -1979,6 +1979,15 @@ pub(crate) fn handle_git_backend_command(
                 }
             };
 
+            // BUG-1520: validate `--fields` BEFORE the format branch, so no
+            // format can skip the check. Previously only the human and TOON
+            // paths validated; `--format json` returned full rows with exit
+            // code 0 for a bogus field, and that is the one surface machine
+            // consumers read. One hoisted call makes the three agree by
+            // construction rather than by three copies of it.
+            // trace:BUG-1520 | ai:claude
+            let selected_fields = toon_list_fields(fields.as_deref())?;
+
             // STORY-244: internal JSON output for the TUI launcher's
             // Backlog / History panes. Hidden from --help; schema is
             // internal and may change. Emits the row set straight as
@@ -1995,6 +2004,15 @@ pub(crate) fn handle_git_backend_command(
                     spec_id: &'a str,
                     title: &'a str,
                     req_type: &'a str,
+                    // BUG-1520: `type` is what `--fields`, the human header and
+                    // the TOON header all call this, so a consumer reading the
+                    // documented key off a JSON row got null. Emitted ALONGSIDE
+                    // `req_type`, never instead of it — STORY-1352 declared this
+                    // a versioned read-only monitor contract, and a rename is
+                    // the exact silent break that contract exists to prevent.
+                    // Retiring `req_type` is a later deprecation, not this fix.
+                    // trace:BUG-1520 | ai:claude
+                    r#type: &'a str,
                     status: &'a str,
                     // STORY-1023: richer display label for stored
                     // NeedsAttention rows, e.g. "Shelved (ci-red)" or
@@ -2047,6 +2065,7 @@ pub(crate) fn handle_git_backend_command(
                                 .unwrap_or(""),
                             title: r.title.as_str(),
                             req_type: r.req_type.as_str(),
+                            r#type: r.req_type.as_str(),
                             status: r.status.as_str(),
                             status_label: parked_lens.as_ref().map(|lens| lens.label()),
                             status_lens: parked_lens.as_ref().map(|lens| lens.palette_key()),
@@ -2060,6 +2079,63 @@ pub(crate) fn handle_git_backend_command(
                         }
                     })
                     .collect();
+                // BUG-1520 criterion 2: `--fields` NARROWS the JSON payload,
+                // selecting the same field set TOON selects.
+                //
+                // Parity with TOON is about WHICH fields come back, not how
+                // they are rendered. The narrowed row reuses the full row's own
+                // values, so `--fields` can never silently change data — a
+                // consumer that narrows gets a strict SUBSET of what it would
+                // have got unnarrowed, with booleans still booleans and `tags`
+                // still an array. Rendering through TOON's display tokens
+                // instead would have lowercased `req_type` ("Task" -> "task")
+                // only when narrowed, which is a sharper version of the very
+                // defect this fixes.
+                //
+                // Fields TOON accepts that the JSON row has no key for
+                // (priority, feature, owner, heft, weight, modified_at, origin)
+                // fall back to the shared cell renderer, so a valid `--fields`
+                // entry is never silently dropped.
+                // trace:BUG-1520 | ai:claude
+                if fields.is_some() {
+                    let narrowed: Vec<serde_json::Value> = out
+                        .iter()
+                        .zip(reqs.iter())
+                        .map(|(full_row, r)| {
+                            let routing = row_routing(r);
+                            let full =
+                                serde_json::to_value(full_row).unwrap_or(serde_json::Value::Null);
+                            let mut row = serde_json::Map::new();
+                            for f in &selected_fields {
+                                // `type` is carried under both spellings so a
+                                // narrowed row's keys stay a subset of the full
+                                // row's rather than a different vocabulary.
+                                let keys: Vec<&str> = match f.as_str() {
+                                    "id" => vec!["spec_id"],
+                                    "type" => vec!["req_type", "type"],
+                                    "mode" => vec!["execution_mode"],
+                                    other => vec![other],
+                                };
+                                let mut hit = false;
+                                for key in &keys {
+                                    if let Some(v) = full.get(*key) {
+                                        row.insert((*key).to_string(), v.clone());
+                                        hit = true;
+                                    }
+                                }
+                                if !hit {
+                                    row.insert(
+                                        f.clone(),
+                                        serde_json::Value::String(toon_list_cell(r, routing, f)),
+                                    );
+                                }
+                            }
+                            serde_json::Value::Object(row)
+                        })
+                        .collect();
+                    println!("{}", serde_json::to_string_pretty(&narrowed)?);
+                    return Ok(());
+                }
                 println!("{}", serde_json::to_string_pretty(&out)?);
                 return Ok(());
             }
@@ -2072,7 +2148,8 @@ pub(crate) fn handle_git_backend_command(
             // `count: N of M` header states the bounded slice; `--fields` widens
             // the minimal id/title/status/type schema. trace:TASK-964
             if agent_output_mode() && !*tree {
-                let selected = toon_list_fields(fields.as_deref())?;
+                // trace:BUG-1520 | ai:claude — one validation, hoisted above.
+                let selected = selected_fields.clone();
                 let rows: Vec<Vec<String>> = reqs
                     .iter()
                     .map(|r| {
