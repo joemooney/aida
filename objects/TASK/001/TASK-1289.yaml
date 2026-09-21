@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T01:56:16.895992757Z
+modified_at: 2026-09-21T01:57:19.653799850Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -857,6 +857,56 @@ comments:
   created_at: 2026-09-21T01:56:16.895992757Z
   modified_at: 2026-09-21T01:56:16.895992757Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c1ae-96a5-78a1-9136-dbb8cd5a4b59
+  author: joe
+  content: |-
+    [aida:advisor] SCOPING RULING 2026-09-20 19:00 ON THE TASK-1289 TRAILERS IN PRs #2042 AND #2043. Both PRs are held on marker and label. This records the decision so neither is merged on a later reading of the same facts.
+
+    THE FACTS, verified rather than relayed:
+      #2042 (bug-1420-round2) and #2043 (story-1391-work) are the SAME commit, 35de6d3abb.
+      Five commits ahead of main: two trailered (BUG-1420), THREE trailered (TASK-1289).
+      aida-cli-lib/src/implementer_preflight.rs does NOT EXIST on origin/main. It is introduced by
+        these TASK-1289 commits.
+      35de6d3abb does not contain 6512f1312a, the head of PR #1972. The two TASK-1289 lines are
+        DIVERGENT, not sequential.
+      This spec is needs-attention, execution_mode guided, carries a live CHANGES REQUESTED, and is
+        waiting on an operator design decision outstanding since 2026-09-19 23:10.
+
+    RULING 1 - THE TRAILERS STAY. Do not rewrite these commits to drop the (TASK-1289) trailers in
+    order to make a PR mergeable. The commits genuinely ARE this spec's work: they introduce the
+    preflight module that does not exist on main. Stripping the trailer would falsify provenance to
+    get past a gate, which is the precise inverse of the problem being fixed everywhere else tonight.
+    A trailer records what the commit did; it is not a merge flag to be removed when inconvenient.
+
+    RULING 2 - BUG-1420 CANNOT BE SPLIT OUT AND MERGED ALONE. Its two commits modify the file these
+    TASK-1289 commits introduce. There is no BUG-1420-only merge that compiles. The implementer
+    discovered this independently during the cherry-pick and recorded it rather than faking a clean
+    apply. So BUG-1420 is genuinely blocked behind this spec, not merely sharing a branch with it.
+
+    RULING 3 - NEITHER PR MERGES UNTIL TWO THINGS RESOLVE, IN THIS ORDER.
+      (a) The operator design decision on this spec's boundary. It is guided; that is not a gate an
+          agent may satisfy, and merging either PR would complete this spec through the back door -
+          no decision, no rework, no reviewer round, a trailer riding along in another PR's merge.
+      (b) The five findings recorded against this spec at 01:53:37Z. Merging now completes it with
+          all five unaddressed, which is exactly the harm BUG-1452 describes.
+
+    RULING 4 - THE TWO DIVERGENT LINES NEED A DECISION, NOT A MERGE. PR #1972 at 6512f1312a and
+    35de6d3abb neither contains the other. Two implementations of this spec are in flight on separate
+    lineages. Merging both would apply overlapping work twice; merging either silently abandons the
+    other. Which line survives is a decision for whoever holds this spec, and it should be recorded as
+    one - a supersede with a reason - rather than settled by whichever PR reaches a merge button first.
+
+    WHAT WOULD CHANGE THIS RULING: the operator closing (a) and an explicit, recorded acceptance that
+    this spec completes with its five findings dispositioned. Not a rebase, not a rename, not a
+    retitled PR.
+
+    Raised by the reviewer seat, which noticed that #2042 - which the advisor had deliberately left
+    unheld as "the PR that should live" - carries the same three TASK-1289 trailers and was the live
+    exposure: no hold, no label, no verdict, mergeable. The advisor's read was wrong and the hold the
+    reviewer placed over it was correct.
+  created_at: 2026-09-21T01:57:19.653799850Z
+  modified_at: 2026-09-21T01:57:19.653799850Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
 implementation_info:
   implemented: true
