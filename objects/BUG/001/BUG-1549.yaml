@@ -1,0 +1,43 @@
+id: 01a0c3cd-8b61-7a83-adf4-85c4bf233ed4
+spec_id: BUG-1549
+agreed_id: BUG-1549
+title: Nothing detects a head that moved past an APPROVING verdict, so a stale approval can be merged - the shipped rework-ready row filters to blocking verdicts first
+description: |-
+  STORY-1419 ANSWERS "DID REWORK LAND ON A REFUSAL". NOTHING ANSWERS "DID MY APPROVAL GO STALE" — and the second is the one that guards a merge.
+
+  VERIFIED IN THE MERGED CODE, awaiting_you.rs:179:
+
+      rework_ready_rows(...)
+          .filter(|c| c.verdict_blocks)        <- the FIRST filter
+      blocks_done() = matches!(self, RequestChanges | Rejected)
+
+  An APPROVED verdict has blocks_done() == false, so verdict_blocks is false, so the candidate is dropped before seat routing or sha comparison is ever reached. The shipped feature is structurally incapable of reporting a head that moved past an approval. Not a timing gap — the case is not in its domain.
+
+  THE LIVE INSTANCE, 2026-09-21 04:46. PR #2048 was approved at 08834c6045a9. The implementer then pushed 1aca4e3e9251 — a comment-only commit implementing an advisor ruling that had crossed their push. The merger caught it by comparing the PR head against the recorded verdict sha BY HAND, immediately before merging. Had they not, a stale approval would have been merged. Nothing would have warned anyone: the row does not exist for approvals, and the reviewer's own manual head sweep had the IDENTICAL blind spot for the identical reason — it filtered to blocking verdicts because its charter was catching rework on refusals.
+
+  SO ONE CHARTER PRODUCED ONE BLIND SPOT IN TWO INDEPENDENT INSTRUMENTS. The feature and the hand-rolled sweep were built by different seats at different times and both answer the same question, so neither answers the other one. That is worth more than the instance: independent implementations of the same charter do not give independent coverage.
+
+  WHY IT MATTERS MORE THAN THE REFUSAL DIRECTION. A stale REFUSAL costs a wasted round — someone re-reviews work that did not change, or waits for rework that already landed. A stale APPROVAL can be MERGED. The failure modes are not symmetric, and the surface we built covers the cheap one.
+
+  WHAT THE MERGE PATH ALREADY HAS AND WHY IT IS NOT ENOUGH: the merger is expected to check that the verdict's reviewed_sha matches the head being merged, and tonight three seats all did it manually within the same minute. That is the practice STORY-1419 was filed to make unnecessary for refusals, still fully manual for approvals — and a practice that works because everyone happens to be paying attention is the substrate-first anti-pattern this board has named repeatedly.
+
+  WHAT TO BUILD, smallest useful slice:
+    1. A row, or a merge-time refusal, when a PR's head differs from the reviewed_sha of an
+       APPROVING verdict. Scoped to the seat that recorded the approval, same as the refusal
+       direction — the approver is the one who can say whether the new commit is covered.
+    2. Prefer the merge-time gate over the inbox row if only one is built. The inbox row helps
+       the reviewer notice; the gate stops the merge. Given the asymmetry above, stopping the
+       merge is the half worth having first.
+    3. Reuse the three-state comparison from BUG-1546 rather than string equality — the same
+       abbreviated-sha hazard applies, and Incomparable must not read as "unchanged".
+
+  NOT IN SCOPE: widening STORY-1419's row to all verdict kinds by deleting the verdict_blocks filter. That filter is correct for what that surface reports; the approval direction is a different question with a different audience and a different remedy, and hanging it on the same row would make one surface answer two questions badly.
+
+  Found by the reviewer seat after the advisor claimed the shipped feature would have caught it. It would not have, for a structural reason neither had checked; the filter was verified in the merged code before this was filed.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T11:50:22.817831771Z
+modified_at: 2026-09-21T11:50:22.817831771Z
+req_type: Bug
