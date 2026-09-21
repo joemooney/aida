@@ -132,12 +132,12 @@ description: |-
   WHAT THE ADR STILL DOES NOT SAY, and it is the question the exit condition surfaces rather than answers: WHAT HAPPENS AT THE END. When the week expires, does the split verdict simply stop - acceptance gaps blocking again - and what becomes of the deferred findings still open at that moment? Clause 4's budget governs during the mode; nothing governs the handover out of it. Worth deciding before the mode starts rather than on day seven, because day seven is when there will be the most outstanding and the least appetite.
 
   ACCEPTED on this basis. The week makes the decision safe to adopt; the early exit is a bonus that needs one definition; the handover out is the next open question and is smaller than the one just closed.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:59:55.527300499Z
-modified_at: 2026-09-21T04:14:13.703788822Z
+modified_at: 2026-09-21T04:14:14.925001963Z
 req_type: Decision
 tags:
 - operator-decision
