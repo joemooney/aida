@@ -1,0 +1,38 @@
+id: 01a0c191-942d-7411-be9b-9f418c4ce6d6
+spec_id: BUG-1503
+agreed_id: BUG-1503
+title: aida status is 0.67s but aida status --format json never returns, so the machine form of the cheapest command is the most expensive one
+description: |
+  `aida status` returns in 0.67 seconds. `aida status --format json` does not return at all - it was still running at 40 seconds and reproduced at 20 seconds twice more. `aida status --json` behaves the same. So asking the sub-second cache snapshot for its machine-readable form costs at least sixty times as much and in practice never completes.
+
+  MEASURED 2026-09-20 18:21, stdout redirected so no terminal heuristic applies:
+
+      aida status                     0.67s   returns
+      aida status --format json      40.00s   timeout, no output
+      aida status --format json      20.00s   timeout, reproduced
+      aida status --format json      20.01s   timeout, reproduced
+      aida status --json             timeout, exit 143
+      aida status <SPEC> --format json        returns valid json promptly
+
+  The per-spec form is fine. It is the BARE status whose json path hangs.
+
+  WHY THIS IS WORSE THAN A SLOW COMMAND. `aida status` is documented as the sub-second cache snapshot, and the heavy diagnostics were deliberately moved to `aida doctor` to keep it that way. The human path honours that. The machine path evidently does not take it - something on the json branch is doing the work the human branch was explicitly relieved of, or is doing network or full-store work the cache-backed path avoids. An agent reaching for the documented machine-readable form of the cheapest command gets the most expensive one.
+
+  AND IT SILENTLY DEFEATS AUDITS OF THE FORMAT LAYER ITSELF. This surfaced while auditing which commands honour the json pin for BUG-1502. A command that never returns cannot be marked "json honoured" and must not be marked "not honoured" either - it is unverified, which is a third state. Two of the surfaces in that audit behave this way: this one, and `aida awaiting`, which is slow with or without the pin and is already recorded as BUG-1288. An audit that runs each command under a timeout and records a miss as a failure would report this as "json not honoured", which is a different and wrong conclusion.
+
+  Acceptance:
+  1. `aida status --format json` and `aida status --json` return in the same order of magnitude as bare `aida status`, from the same cache-backed path. If the json form genuinely needs data the human form does not, name that data and justify it.
+  2. Establish what the json branch does that the human branch does not. The suspicion is that the machine path skips the STORY-707 rule that bare status never loads the full store, or that it reaches the network; confirm which rather than tuning a timeout.
+  3. `--format json` and `--json` agree on this command, per the standing requirement that the two spellings produce the same document where both exist.
+  4. A test asserts bare `aida status --format json` completes within a bound and parses as json, so a regression to the slow path fails the suite instead of hanging an agent.
+
+  NOT IN SCOPE: `aida awaiting` latency, which is BUG-1288, and `aida show --format json` being ignored entirely, which is BUG-1502. Those are three distinct defects in the same flag and should not be merged into one.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T01:25:38.477338107Z
+modified_at: 2026-09-21T01:25:38.477338107Z
+req_type: Bug
+tags:
+- batch:night-0920 agent-surface cli-conformance drain-safe from:session-0920
