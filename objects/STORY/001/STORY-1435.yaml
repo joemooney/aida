@@ -1,0 +1,26 @@
+id: 01a0c617-741f-7a93-85c3-4c08b65d81c9
+spec_id: STORY-1435
+agreed_id: STORY-1435
+title: 'Review PR-2065: [AI:codex] fix(rel): make related alias traversable (BUG-1471)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0c610`) for branch `bug-1471-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2065>
+  - Branch: `bug-1471-work` → `main`
+
+  ## Covers
+
+  - BUG-1471
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2065` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:30:20.959671264Z
+modified_at: 2026-09-21T22:30:20.959671264Z
+req_type: Story
