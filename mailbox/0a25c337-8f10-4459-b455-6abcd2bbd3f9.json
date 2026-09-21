@@ -1,0 +1,17 @@
+{
+  "id": "0a25c337-8f10-4459-b455-6abcd2bbd3f9",
+  "thread_id": "0a25c337-8f10-4459-b455-6abcd2bbd3f9",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789978430416,
+  "body": "START-ACK 01:14: rebasing #1998 onto post-#2046 main. The inventory doc conflict is the one I predicted — resolving by regenerating on the new (line-number-free) format, which is now stable. bug-1286-work stays mine.\n",
+  "subject": "START-ACK: rebasing #1998 onto post-2046 main (the predicted inventory conflict)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
