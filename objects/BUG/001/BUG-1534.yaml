@@ -1,0 +1,88 @@
+id: 01a0c274-c2c7-7541-9aba-d3cf9fa4c24c
+spec_id: BUG-1534
+agreed_id: BUG-1534
+title: Reasoning relayed between seats carries no provenance, so a claim is repeatedly credited to the wrong seat — three instances tonight, and the envelope identity does not prevent any of them
+description: |
+  Filed by the driver advisor 2026-09-20 22:34, after committing earlier tonight to file
+  if it happened a third time. It has.
+
+  DISTINCT FROM BUG-1533, AND THE DISTINCTION IS THE POINT. BUG-1533 is that the mailbox
+  ENVELOPE cannot identify the authoring seat for the `joe` bucket. This is that REASONING
+  RELAYED INSIDE A BODY carries no provenance at all — and it fails between seats whose
+  envelopes are perfectly good.
+
+  Measured against the mailbox store, 902 messages:
+
+      claude-reviewer-1   236      claude-product-1   207
+      joe                 340      advisor             94
+      562 of 902 carry a distinct seat identity on the envelope
+
+  Every instance below involves at least one seat with a correct envelope identity. Fixing
+  BUG-1533 would not have prevented any of the three.
+
+  THE THREE INSTANCES, enumerated rather than named as a class:
+
+    1  Brief items 1c and 5 on the BUG-1470 rework brief were credited to the product
+       seat. They were the driver advisor's. Flagged by product, corrected by the
+       reviewer.
+    2  BUG-1522 criterion 9 and BUG-1531 criterion 7 were credited to the product seat.
+       They were the driver advisor's, derived from a reviewer measurement. Flagged by
+       product, corrected by the advisor.
+    3  A mailbox tally — 902 messages, the 562/340 split, the advisor's 216/124/94 in-body
+       tag breakdown, a 197/39 figure — was credited to the driver advisor, which did not
+       produce it. Flagged by the advisor. THE NUMBERS ARE CORRECT: the advisor reproduced
+       all of them independently before replying, so the spec correction built on them
+       stands. Only the authorship is wrong.
+
+  Instances 2 and 3 have the same seat on opposite sides, which is evidence this is not
+  one seat's habit.
+
+  THE MECHANISM. A seat relays another seat's reasoning in prose — "your point about X",
+  "as you measured" — and the second-person pronoun binds to whoever is reading rather
+  than to whoever wrote it. When the relaying seat has sent similar bodies to two
+  recipients, or when a thread has three participants, the referent is ambiguous and
+  nothing in the substrate disambiguates it. The driver advisor has sent one body to two
+  seats several times tonight and is the most likely cause of instances 1 and 2.
+
+  WHY IT IS MORE THAN ETIQUETTE. The independence rule — review only what you did not
+  implement — is enforced by seats knowing who wrote what. Instance 3 shows the failure
+  reaching a SPEC: a description was corrected on the strength of a measurement attributed
+  to a seat that had not made it. That correction happens to be right. Nothing in the
+  process established that it was right; the advisor checked afterwards, voluntarily.
+
+  THIS IS THE THIRD MEMBER OF TONIGHT'S ATTRIBUTION FAMILY:
+      BUG-1485   work attributed to the wrong lease
+      BUG-1527   a spec closed on another spec's PR
+      BUG-1533   a message whose author cannot be recovered from the envelope
+      this one   reasoning attributed to the wrong seat inside a body
+
+  ## Acceptance
+  1. A claim relayed from another seat is attributable: when a seat's message reproduces
+     another seat's measurement, finding or argument, the source seat is identifiable
+     without the reader having to remember who said what.
+  2. The mechanism is not a prose convention. "Always name the author" is the weak form and
+     is what failed three times tonight; whatever is built here should make the unattributed
+     form harder to produce than the attributed one.
+  3. Second-person reference is not treated as attribution. "Your point about X" identifies
+     the recipient, not the author, and in a three-seat exchange those differ.
+  4. A seat may state what it VERIFIED versus what it RELAYED, and the distinction survives
+     into anything built on it — a spec edited on a relayed measurement should record that
+     it was relayed and by whom.
+  5. Existing records are NOT retro-corrected. The three instances above are the evidence;
+     guessing at authorship to repair them would reproduce the defect. Mark, do not repair.
+  6. The fix does not require an envelope identity to work. All three instances involved a
+     seat with a correct envelope identity, so a fix that depends on BUG-1533 landing first
+     does not address this.
+
+  NOT ESTABLISHED: whether any of the three caused a decision to go differently than it
+  would have. Instance 3's numbers were correct; instances 1 and 2 were credit only. The
+  cost measured so far is the checking each one triggered, not a wrong outcome.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T05:33:47.079434853Z
+modified_at: 2026-09-21T05:33:47.079434853Z
+req_type: Bug
+tags:
+- parent:EPIC-62 inter-agent-comms attribution provenance severity:operational
