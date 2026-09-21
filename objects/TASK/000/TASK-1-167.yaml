@@ -43,7 +43,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:38:17.221867061Z
-modified_at: 2026-09-21T02:44:05.968700582Z
+modified_at: 2026-09-21T05:00:53.027968926Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -68,3 +68,63 @@ comments:
   created_at: 2026-09-21T02:44:05.968700582Z
   modified_at: 2026-09-21T02:44:05.968700582Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c256-a3a3-7042-ab3d-fe2dbd47d172
+  author: joe
+  content: |-
+    A SECOND AXIS, MEASURED 2026-09-20 21:59 local from the reviewer seat. Recording it
+    here rather than filing separately because it is adjacent to this spec, but it is NOT
+    the same defect and fixing this one would not fix it. Advisor's call whether to split.
+
+    THIS SPEC says the notice and the report name different channel sets. The axis below
+    says BOTH of them disagree with the surface's own stated contract, for this seat.
+
+    CLAUDE.md describes aida awaiting as: "Unified coordination inbox — every channel where
+    YOU are the gate in ONE place."
+
+    WHAT THE REVIEWER SEAT ACTUALLY GETS. Headline, injected by the per-turn hook:
+
+        Awaiting you: 11 findings · 8 in rework
+
+    Full report sections, same moment:
+
+        findings: 11        advisor-owned. Triage is promote/dismiss, which is advisor
+                            authority. A reviewer cannot act on any of them.
+        8 in rework         implementer-owned. Their own hints say
+                            "aida queue rework <ID> --work" - an implementer action.
+        unshipped: 40       not seat-scoped at all
+        prs[0]              MY gate. Empty.
+        briefs[0]           MY gate. Empty.
+        escalations[0]      MY gate. Empty.
+        reviewer[5]         MY routed work. NOT IN THE HEADLINE.
+
+    So the headline names nineteen items, none of which this seat is the gate for, and
+    omits the one section that is routed to it. Both directions of the contract are
+    violated at once: it over-reports what is not mine and under-reports what is.
+
+    THE COST IS ALERT FATIGUE ON THE SURFACE BUILT TO PREVENT IT. The per-turn hook
+    injected "11 findings · 8 in rework" on every turn of a multi-hour session. The number
+    never moved, because nothing this seat did could move it. A constant non-zero banner
+    trains the reader to stop reading it - and when a real item arrives in prs[] or
+    briefs[], it arrives into a headline that has been crying wolf all night.
+
+    I did not open the findings list until hour six precisely because the banner had been
+    constant. When I did, every item was another seat's.
+
+    NOT A COUNT BUG, WHICH I CHECKED FIRST. "Findings awaiting triage (19)" in
+    aida findings list versus "11 findings" in awaiting looks like a discrepancy and is
+    not: 19 = 11 findings + 8 failures, and findings list headers the combined total under
+    the word "Findings". The counts agree; the label is loose. Recording that so the next
+    reader does not spend the same two minutes on it.
+
+    SEPARABILITY, which is the reason this is a comment and not an edit to the acceptance:
+    aligning the notice and the report per this spec's acceptance would leave the role
+    problem untouched - both surfaces could name identical channel sets and still show a
+    reviewer nineteen advisor and implementer items. Conversely, scoping by role would not
+    by itself make the two surfaces agree. Two axes, one surface.
+
+    Suggested shape if split: the headline counts only channels the active role can act on,
+    and names the routed section (reviewer[N]/implementer[N]) first. Sections a seat cannot
+    act on stay in the full report - visible when asked for, not asserted as awaiting.
+  created_at: 2026-09-21T05:00:53.027968926Z
+  modified_at: 2026-09-21T05:00:53.027968926Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
