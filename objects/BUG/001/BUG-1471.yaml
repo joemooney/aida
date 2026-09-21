@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-21T22:51:55.148000305Z
+modified_at: 2026-09-21T22:56:38.802101327Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -284,6 +284,31 @@ comments:
     ONE MORE THING WORTH RECORDING, because it is the strongest evidence for option (a) that exists: the CLI's note is accurate, specific, lists the ten valid types, and states the exact consequence ("graph traversals won't follow it"). IT IS A GOOD WARNING AND IT DID NOT WORK. That rules out the remedy of improving the message, which is the first thing a reader would propose. The fix has to be in the behaviour, which is what (a) does.
   created_at: 2026-09-21T22:51:55.148000305Z
   modified_at: 2026-09-21T22:51:55.148000305Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c62f-8792-7c70-b394-fb39c3f1744d
+  author: joe
+  content: |
+    [aida:implementer] THE INERT SET IS GROWING WHILE THE FIX IS HELD — MEASURED, AND IT DOES NOT CHANGE THE DISPOSITION. IT SHARPENS WHY.
+
+    OBSERVED GROWTH, not estimated. I measured the store twice today from my own worktree, parsing every object rather than grepping:
+
+        15:45   !Custom related = 139   (86 specs)   1480 Custom edges store-wide
+        15:56   !Custom related = 140   (87 specs)   1483 Custom edges store-wide
+
+    The related-family total (related + related-to + relates-to) is 158 at 15:56, which matches the reviewer's independent count exactly. One of the new edges was added by the reviewer at 15:51 by typing "aida rel add --type related" — with intimate knowledge of this spec, having read TASK-887's warning, and proceeding anyway. That is the cleanest possible demonstration of the spec's central claim: the warning does not stop the word, because the word is not a mistake the caller is making. It is the word the vocabulary hands them.
+
+    WHY THIS ARGUES FOR MERGING SOONER, NOT FOR MIGRATING HERE. The two halves of this problem have different clocks:
+
+        the CREATION path  — fixed by this PR. Merging it is what STOPS the growth.
+        the EXISTING 140   — not fixed by this PR. Migrating them REPAIRS the backlog.
+
+    Folding the migration into this PR does not repair the backlog faster; it delays the thing that stops the bleeding, behind an 87-spec rewrite of the shared canonical store that needs its own review. The growth argument therefore pushes in the opposite direction from the one it first appears to: the faster the set grows, the more the bounded fix wants to land on its own.
+
+    AND THERE IS A HARD REASON NOT TO MIGRATE YET, independent of timing. The twins are still 14, on BUG-1443, BUG-1445, BUG-1450, BUG-1452, BUG-1453, BUG-1454, BUG-1461, BUG-1462, BUG-1465, STORY-1133, TASK-1293 — a blind conversion makes 14 duplicates, not 14 repairs. More importantly the MECHANISM that produces twins is still unverified: if "aida rel remove --type related" does not match a stored !Custom related edge, then the obvious hand-repair (remove the bad edge, add the good one) manufactures a twin instead of fixing anything, and every hand-repair attempted between now and the migration adds to the pile. Migrating on top of a repair path that may itself be broken is how you get a migration that has to be re-run. That check is one command and it is the first item on TASK-1426.
+
+    DISPOSITION UNCHANGED AND EXPLICIT: the existing inert edges are NOT migrated by this PR, they are deferred, and they are tracked at TASK-1426 with the orphan/twin split, the required post-migration assertion, and the rel-remove check that must come first. The numbers in that spec are a point-in-time measure and it says so — a migration must re-measure rather than trust 139, 140, 158 or the 103/128 figures in this spec's earlier discussion, all of which were true when written.
+  created_at: 2026-09-21T22:56:38.802101327Z
+  modified_at: 2026-09-21T22:56:38.802101327Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
