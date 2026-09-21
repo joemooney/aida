@@ -30,12 +30,24 @@ description: |
   - The bail message already enumerates the valid commands; if that enumeration is hand-maintained separately from the match arms, derive it from them in the same change. Same shape as BUG-1554 for `aida doctor` categories - see that spec, where the hand-typed list had already drifted by two names.
   - Consider whether the allowlist should be closed at all, and record the answer rather than leaving it implicit. A closed allowlist for a SUBSTRATE runner - a command executed unattended, with no human present - is a defensible security posture and probably the right one. If it stays closed, then the scaffold parity test above is not optional, it is the only thing keeping the two halves honest.
   - Not in scope: making bare `aida doctor` exit non-zero is BUG-1552. This spec is about the allowlist and the scaffold agreeing, which is a defect even if 1552 is never fixed.
+
+  - THE PREMISE IS TESTED: THIS IS A STRUCTURAL RISK, NOT A PRESENT BREAKAGE. Checked by claude-reviewer-1 and re-verified independently by the advisor against main at 8bc2512480. All five scaffolded commands ARE allowlisted today:
+        scaffolded (init_cmd.rs :2224-2248)   session reap, doctor, queue gc, cache verify, notify check
+        allowlist (maintenance_schedule.rs)   the same five, PLUS fetch --code-only, store compact, store gc
+    So nothing on main ships a dead job right now. That matters for urgency and for how this is written up: the fix is needed BEFORE THE NEXT SCAFFOLD CHANGE, not because something is broken in the field. The original filing said today's five "happen to be allowlisted, a property of who wrote them" - that was a reasonable inference and it is now a measurement. (On PR #2049's branch both halves land together, so the branch is consistent too.)
+
+  - TRAP FOR THE IMPLEMENTER, AND IT WOULD BITE ON DAY ONE: THE RELATIONSHIP IS NOT SET EQUALITY. Found by claude-reviewer-1 before anyone started. The allowlist has eight entries and scaffolding uses five; `fetch --code-only`, `store compact` and `store gc` are allowlisted with NO scaffolded example, which is correct and intended. A check asserting the two sets MATCH fails immediately for three false reasons, and a test that is red on arrival for reasons nobody believes gets weakened or deleted - which is how this board loses guards.
+    THE ONE-DIRECTIONAL FORM IS THE CORRECT ONE AND IT IS WHAT THIS SPEC REQUIRES: EVERY SCAFFOLDED `command =` MUST PARSE. THE CONVERSE IS NOT A DEFECT. An allowlisted command with no scaffolded example is a capability nobody has written an example for; a scaffolded example with no allowlist entry is a job that errors forever. Only one direction is a bug, and the check must encode that asymmetry rather than the tidier-looking equality.
+
+  - SECOND TRAP, SAME FILE: THERE IS A SIXTH `command =` AND IT IS DOCUMENTATION. init_cmd.rs:2177 contains the literal placeholder `command = "<allow-listed aida subcommand>"` inside explanatory prose. A naive extractor picks it up and it will NEVER parse, so the first run of the new check fails on a string that is correct as written. Either scope the extraction to the `[[schedule.jobs]]` blocks or exclude the documentation example - but DO IT KNOWINGLY, as a decision recorded in the test, rather than discovering it as a failure and special-casing it under time pressure. A placeholder that looks like data is exactly the shape that turns a good check into a check with an unexplained exclusion list.
+
+  - SCOPE OF THE ABOVE CHECK, recorded as its author scoped it so it is not read as exhaustive: claude-reviewer-1 grepped init_cmd.rs ONLY, for `command *= *"`, six matches including the placeholder. Scaffolded jobs defined in another file, or written with a different key, would not have matched. The acceptance's requirement stands on the scaffolded template as a whole, not only on that grep.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:02:25.399177125Z
-modified_at: 2026-09-21T16:05:37.965432508Z
+modified_at: 2026-09-21T16:08:10.180904881Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
