@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-20T08:31:55.313669318Z
+modified_at: 2026-09-21T01:47:03.655569590Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -738,6 +738,55 @@ comments:
   created_at: 2026-09-20T06:22:49.819717041Z
   modified_at: 2026-09-20T06:22:49.819717041Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1a5-3067-7dc1-82c3-0c7d3abdc9c7
+  author: joe
+  content: |-
+    [reviewer] REVIEWING THIS AGAIN CANNOT UNBLOCK #2009, and I want that on the spec before anyone routes a second reviewer at it.
+
+    THE BRANCH HAS NOT MOVED SINCE IT WAS REFUSED:
+
+        head commit 6512f1312a            2026-09-19 23:03:31 -0700
+        CHANGES REQUESTED recorded at     2026-09-19 23:10:50 -0700, same sha
+        now                               2026-09-20 18:45
+
+    Seven minutes between the commit and the refusal, and nineteen hours forty minutes of nothing since. PR-1972.json already holds four findings against this exact head. A second verdict would review byte-identical code and, because aida review record is a blind full replace, would erase those four findings to say the same thing. So I have not recorded one.
+
+    The bottleneck here is REWORK, not review. #2009 is not waiting for a reviewer to look at #1972; it is waiting for someone to change #1972's code. Routing review capacity at it adds a verdict and moves nothing.
+
+    AND THE SPEC ITSELF ALREADY SAYS SO. Its title is "the boundary needs a design decision, not another round". It is execution_mode guided and status needs-attention, which means the rework is keyboard-only with the operator by design. So the thing standing between #2009 and progress is an operator decision, and that has been true for nineteen hours while the spec sat in a state that reads as in-flight.
+
+    I VERIFIED THE SHARPEST OF THE FOUR FINDINGS STILL HOLDS, rather than assuming a nineteen-hour-old verdict is still accurate. Finding 2, the fail-open guard, at the current head:
+
+        fn decide(results: &[GuardResult]) -> PreflightDecision {
+            let failed = results.iter().filter_map(|result| match result {
+                GuardResult::Failed { name, output } => Some(...),
+                _ => None,                     <-- swallows Skipped
+            }).collect::<Vec<_>>();
+            if failed.is_empty() { PreflightDecision::Open } else { ... Refuse ... }
+        }
+
+    and the three producers of Skipped, all in execute():
+
+        line 288   worktree binary unavailable, guard not authoritative
+        line 305   timed out after N seconds
+        line 306   could not start
+
+    So a preflight run in which EVERY guard timed out, failed to start, or could not be built returns Open -- publish the PR. The gate cannot distinguish "the guards passed" from "the guards never ran", and it treats the second as the first. Line 396's test then pins that behaviour by asserting the timeout yields Skipped, so the incorrect decision is locked in by a passing test.
+
+    THIS IS THE SAME DEFECT SHAPE AS BUG-1481, which I filed this afternoon against awaiting_you.rs:
+
+        match pr.ci_rollup.as_deref() { Some("fail") | Some("pending") => return false, _ => {} }
+
+    Identical structure: a match that enumerates the known-bad values and lets a wildcard swallow the unknown case, inside a surface whose entire job is to be a gate. It is PRIN-5 stated as code -- computing a verdict over what is PRESENT errs toward reassurance, because absent evidence falls through the wildcard and reads as consent.
+
+    That makes this worth more than a rework item. A gate that fails open when its evidence is missing is the same class as a merge gate loose-matching APPROVED, and there are now at least three instances in three different files today.
+
+    ONE MORE THING FOR WHOEVER PICKS THIS UP: the branch is 32 commits behind origin/main. Even once the design decision lands, expect CI failures that belong to the stale base rather than to this change -- rebase first, and do not chase them as code defects.
+
+    NOT RECORDING A VERDICT, deliberately. The existing refusal at this head is correct, more detailed than anything I would add, and a replace would destroy it. Same call as PR #2001 and for the same reason -- TASK-1-162.
+  created_at: 2026-09-21T01:47:03.655569590Z
+  modified_at: 2026-09-21T01:47:03.655569590Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: guided
 implementation_info:
   implemented: true
