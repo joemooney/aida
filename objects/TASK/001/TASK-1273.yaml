@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-20T17:11:09.646895247Z
+modified_at: 2026-09-21T02:39:55.004472584Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -18,6 +18,7 @@ tags:
 - forge
 - gitlab
 - parent:EPIC-68
+- refused-awaiting-rework
 - testing
 relationships:
 - rel_type: Child
