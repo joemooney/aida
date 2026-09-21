@@ -1,0 +1,68 @@
+id: 01a0c4a6-f142-7fc1-8ec1-d073af6f4c15
+spec_id: BUG-1555
+agreed_id: BUG-1555
+title: 'The cross-platform nightly has been red four nights on a false positive: the discipline-pack guard compares an LF master against a CRLF checkout, so all 23 guides mismatch on Windows and real drift ca'
+description: |
+  THE CROSS-PLATFORM NIGHTLY HAS BEEN RED FOR FOUR NIGHTS ON A FALSE POSITIVE. Windows fails one test; macOS is green; Linux PR CI is green on the same commits. The test is not detecting drift - it is comparing LF against CRLF.
+
+  Found by the advisor 2026-09-21 chasing the reviewer's board line "cross-platform nightly red since 2026-09-18". Diagnosed against run 35600363642 (main, 2026-09-21T12:34:56Z) and the tree at 8bc2512480.
+
+  WHAT FAILS:
+
+      Build (macos-latest)    success
+      Build (windows-latest)  failure   -> `-p aida-core --lib`
+
+      test result: FAILED. 954 passed; 1 failed
+      templates::tests::project_discipline_pack_matches_master
+      panicked at aida-core\src\templates.rs:1245
+
+      "project copy .aida/discipline/ has guide(s) whose content differs from
+       the embedded master: [two-seat-protocol.md, machinery-glossary.md,
+       brief-polling.md, backlog-grooming.md, integrator-role.md,
+       skill-prompt-kinds.md, glossary.yaml, rework-brief-craft.md,
+       spec-authoring.md, session-discipline.md,
+       agent-agnostic-vs-claude-specific.md, seat-recovery-playbooks.md,
+       docs-lane.md, workflow-patterns.md, skill-cli-symmetry.md,
+       advisor-role.md, reserved-paths.md, robust-project-root-resolution.md,
+       lifecycle-vocabulary.md, git-sync-and-review.md,
+       observation-discipline.md, tag-conventions.md, implementer-discipline.md]"
+
+  Everything else on that runner passes, including the 5157-test aida-cli-lib suite.
+
+  THE COUNT IS THE TELL. There are 26 masters under aida-core/templates/.aida/discipline/ and 3 are excluded as LOCALIZED_DISCIPLINE_GUIDES, leaving 23 compared. TWENTY-THREE OF TWENTY-THREE FAIL. Genuine content drift does not hit every compared file at once; a systematic difference in every file does.
+
+  THE MECHANISM, read out of the tree rather than guessed:
+
+    1. `.gitattributes` pins ONLY the master side to LF:
+           aida-core/templates/** text eol=lf
+       with a comment explaining exactly why - "so a Windows checkout (git autocrlf)
+       cannot embed CRLF". trace:BUG-244.
+
+    2. THE PROJECT COPY IS NOT PINNED. There is no rule for `.aida/discipline/**`, so a
+       Windows checkout with autocrlf writes that side with CRLF.
+
+    3. The comparison does not normalize. aida-core/src/templates.rs:1159-1172,
+       `discipline_content_mismatches`, is `local.trim_end() != *master` - trailing
+       whitespace only, interior line endings untouched.
+
+  So the embedded master is LF by fiat, the project copy is CRLF by checkout, and every interior newline in every file is a difference. Linux and macOS never produce CRLF, which is why this is invisible in PR CI - PR CI is Linux-only by design (TASK-257).
+
+  WHY THIS IS WORSE THAN A FLAKY TEST. This is the BUG-1279 instrument - the guard that keeps the shipped discipline pack honest against the master. It is currently UNABLE TO REPORT REAL DRIFT ON WINDOWS, because it reports drift unconditionally there. A real stale guide landing tomorrow would change nothing observable. AND IT HAS TRAINED THE NIGHTLY TO BE RED: four consecutive nights of a known-red signal is how a cross-platform gate stops being read, which is the failure mode the release process depends on NOT happening (scripts/pre-release-check.sh blocks a tag on a green cross-platform run within 24h - so this also blocks releases).
+
+  A NEW FAILURE FAMILY FOR TASK-1418'S CATALOGUE. The five instruments catalogued there were INERT - they could not fire. This one is the mirror image: it fires when nothing is wrong. Both destroy the instrument's information content, and the always-firing form is more dangerous because it looks like vigilance and it degrades a shared signal everyone else reads.
+
+  Acceptance:
+  - The Windows leg of cross-platform.yml goes green on a commit with no discipline-pack changes.
+  - The comparison normalizes line endings before comparing. `normalize_line_endings` already exists at aida-cli-lib/src/lib.rs:11061 but is in the wrong crate for this test - either lift it to aida-core or add the equivalent there. The .gitattributes comment already states the house position: "the load-bearing fix is parser-side line-ending normalization; defense-in-depth" is the attributes rule.
+  - `.gitattributes` ALSO pins the project copy: a rule covering `.aida/discipline/**` with `text eol=lf`, matching the existing master-side rule. Both, not either - this is the same defense-in-depth pairing BUG-244 already chose, and they fail independently.
+  - DEMONSTRATE-IT-STILL-FIRES, binding: after the fix, show the test FAILING on a deliberately edited project-copy guide. A normalization fix that silences the comparison entirely would look identical to a correct one from the nightly's point of view, and this spec is about an instrument that stopped carrying information - replacing always-red with always-green is not a fix.
+  - Check whether any OTHER content comparison in the tree has the same raw-compare shape. This one was found because it was red; a sibling that is quietly green on Linux and wrong on Windows would not announce itself.
+
+  Not in scope, but noticed in the same log and worth its own look if it recurs: the Windows run logs "error: The following untracked working tree files would be overwritten by merge:" twice during the suite, and a rustup-init cache guard message referencing BUG-103. Neither failed the run.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T15:47:50.210954180Z
+modified_at: 2026-09-21T15:47:50.210954180Z
+req_type: Bug
