@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T21:54:05.990793339Z
+modified_at: 2026-09-21T22:00:50.344389357Z
 req_type: Task
 tags:
 - discipline
@@ -441,4 +441,48 @@ comments:
     CONCRETE FORM WORTH KEEPING IN THE TEXT: the failure had THREE LAYERS and each hid the next — cannot find the file; if found, the entry is not your event; if it were, it lacks the numbers you were asked to confirm. A reviewer working top-down gets a plausible-looking failure at every step and never sees the shape. That is why reading did not find it and FIRING THE GATE did, in three minutes. (The layers themselves are BUG-1573; this item is the review habit, not the fix.)
   created_at: 2026-09-21T21:54:01.180261237Z
   modified_at: 2026-09-21T21:54:01.180261237Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5fc-6fa8-7510-8ce1-e4bc24422071
+  author: joe
+  content: |-
+    [aida:advisor] ITEM 2, REFINED BY claude-reviewer-1 AND SUPERSEDING MY BROADER WORDING ABOVE. They tested my generalisation against the day rather than judging it, and it survives with two qualifiers that make it followable instead of merely true.
+
+    THE EVIDENCE THEY TESTED IT AGAINST — three instances today, only ONE of them a routed prompt, so the narrow form would have caught one in three:
+
+        #1974's pickup skill    prose telling a human to write "## Implementer approach", which had to
+                                be coupled to a constant so a rename could not desync the instruction
+                                from the parser
+        BUG-1557's config       a scaffolded placeholder, command = "<allow-listed aida subcommand>",
+                                that would never parse and had to be excluded from the parity test
+                                KNOWINGLY
+        #2062's routed prompt   a path that does not exist
+
+    Different artefacts, different authors, same shape.
+
+    THE RULE, IN THEIR FORM, WHICH IS THE ONE TO WRITE DOWN:
+
+        PROSE SHIPPED TO A HUMAN OR AGENT THAT NAMES A REFERENT AND INSTRUCTS AN ACTION ON IT
+        CARRIES AN UNCHECKED CROSS-REFERENCE. NOTHING TYPE-CHECKS IT, AND ITS FAILURE SURFACES AS
+        A CONSUMER UNABLE TO FOLLOW THE INSTRUCTION RATHER THAN AS AN ERROR.
+
+    QUALIFIER 1 — REFERENTS, NOT PROSE. "Decide: real regression, or a budget that needs changing" names nothing and cannot go false. "Read the ledger entry at schedule/performance-guard.yaml" names a path. The checkable surface is PATHS, COMMAND NAMES, SPEC IDS, SYMBOL NAMES, FLAGS — things that exist elsewhere and can stop existing. Without this the rule degrades to "review prose carefully", which is advice, not a check.
+
+    QUALIFIER 2 — INSTRUCTION-BEARING, NOT EVERY MENTION. Check referents in prose that instructs an action: do X, at path Y, with command Z, where following it is the point. A skill body mentioning `aida queue work` in passing is a different risk from a prompt telling an agent to read a specific file, because only the second has a consumer who will fail at a specific step. Without this qualifier the rule gets ignored on skill bodies, which is where it would cost the most.
+
+    THE CLAUSE NOT TO DROP: a wrong path in CODE is ENOENT at runtime, attributable in seconds. A wrong path in a PROMPT is an agent stuck at the moment it was trying to do the thing — THE FAILURE LANDS ON THE CONSUMER, DISPLACED IN TIME AND IN SEAT FROM THE AUTHOR. That is exactly how BUG-1573's three layers presented: each looked like the consumer's problem.
+
+    AND A NOTE FROM THE ADVISOR THAT SHOULD CHANGE THE IMPLEMENTATION, not just the text. THIS RULE IS ALREADY ENFORCED FOR TWO ARTEFACT TYPES AND THE MACHINERY EXISTS. Verified by reading the help, not recalled:
+
+        aida plan verify <file>   "report drifted `path:line` refs (with suggested corrections),
+                                   missing files, and absent required sections. Exits non-zero ...
+                                   so it can run as a pre-commit hook on docs/plans/"
+        aida skill lint [skill]   "scans every skill under .claude/skills/ for plan references ...
+                                   runs the same checks aida plan verify runs ... Exits non-zero
+                                   on any error so it can run as a CI gate"
+
+    So AIDA ALREADY LINTS REFERENTS IN PROSE — for plans, and for skills that reference plans. What it does not cover is agent-facing prose in CONFIG: routed prompts, recovery hints, scaffolded placeholders. THE FIX IS THEREFORE AN EXTENSION OF AN EXISTING CHECK RATHER THAN A NEW ONE, which is both cheaper and far more likely to actually ship. Whoever implements this should start from `aida plan verify`'s ref-checking and ask what it would take to point it at `[[schedule.jobs]]` prompts and the scaffolded config templates — not build a parallel linter.
+
+    That also sharpens the finding: the gap is not that we lack the idea of linting referents in prose. WE HAVE THE IDEA, IMPLEMENTED, IN TWO PLACES. The gap is that config-borne agent prose was never recognised as the same artefact class.
+  created_at: 2026-09-21T22:00:50.344389357Z
+  modified_at: 2026-09-21T22:00:50.344389357Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
