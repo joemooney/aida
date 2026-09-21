@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-21T16:06:20.655120157Z
+modified_at: 2026-09-21T21:05:37.994070893Z
 req_type: Story
 relationships:
 - rel_type: !Custom related
@@ -54,3 +54,33 @@ relationships:
   target_id: 01a0c4b4-4bf7-7292-8b15-056642a43cb0
   created_at: 2026-09-21T16:06:20.655115072Z
   created_by: joe
+comments:
+- id: 01a0c5c9-e4ca-7cb0-ad2e-c070a9b6bc6f
+  author: joe
+  content: |-
+    [aida:advisor] RULING ON THE ORDERED ACT, PLUS THE PAIR ITSELF, MEASURED. The spec's (a)->(b) sequence is no longer performable as written: it requires enabling the jobs WHILE THE REGRESSION IS LIVE, and #2033 merged before this spec was picked up. That is not a reason to record the implementer's 2026-09-21 numbers retrospectively - the spec forbids exactly that, and rightly. IT IS A REASON TO USE A BETTER PARTITION THAN TIME.
+
+    `~/.aida/usage.jsonl` CARRIES `binary_sha` ON EVERY ROW. That partitions the population BY THE TREATMENT ITSELF rather than by a proxy for it, which is strictly stronger than the before/after enablement the spec asks for. Both halves are recoverable from ONE artefact, by ONE query, in ONE act - so they are not "two unrelated readings taken on different days under different configurations." They are one dataset cut on the variable that matters.
+
+    MEASURED BY THE ADVISOR 2026-09-21 14:05 MST, `cmd == "show"`, last 24h, grouped by binary_sha. Ancestry of each sha against b1d53bd675 (#2033) VERIFIED with `git merge-base --is-ancestor`, not assumed:
+
+        binary       ancestry     n      over-1s   pct     max          window
+        1460a0168a   pre-#2033    5126   875       17.1%   165,672 ms   01:16-13:51
+        c29022deb8   POST-#2033     26   0           0.0%      949 ms   13:51-14:04
+
+    THE PRE-FIX TRIP IS THEREFORE ON THE RECORD FROM A LIVE POPULATION - 17.1% of 5126 against a 10% budget, exit 1 - and it was recorded by the same query that reads the post-fix half. The reviewer's hole ("it went quiet is compatible with the job never having run") is closed by construction: the query that produces the quiet reading produces the trip reading from the same file in the same invocation.
+
+    NOTE THE MAX: 165,672 ms. Every "39.4s worst" figure on BUG-1480 and STORY-1422 is now itself an under-statement by more than 4x, exactly as "9.9s modal" was. THE CEILING HAS MOVED TWICE AND IN THE SAME DIRECTION BOTH TIMES. Read the tail as unbounded-in-practice rather than as any specific number; nothing downstream depends on it, because the gate judges on proportion.
+
+    TWO LIMITATIONS, BOTH BINDING ON WHOEVER PICKS THIS UP. Neither is a reason to hold the spec; both are reasons not to write "closed" against something the data does not yet support.
+
+    1. n=26 IS NOT ENOUGH TO CLOSE CRITERION 2'S ZERO HALF, AND I WILL NOT LET IT. Zero over-budget calls out of 26 is consistent, by the rule of three, with a true rate as high as ~11.5% at 95% - which is ABOVE the 10% provisional tolerance. So the post-fix reading CANNOT YET DISTINGUISH "fixed" from "sitting exactly at budget". It is directionally strong (17.1% -> 0%, and a 949 ms max against a 165,672 ms one) and it is not yet sufficient. THE ZERO HALF NEEDS A DENOMINATOR, NOT A CEREMONY: accumulate post-fix `show` calls until the population can exclude 10%, then record it. At a 10% budget that is roughly 300+ calls with zero over; state the number you actually reach and what it excludes. DO NOT close criterion 2 on 26.
+
+    2. CRITERION 7'S RE-MEASUREMENT IS NOT DUE YET, FOR THE SAME REASON. The estimated 7.1% post-fix residual cannot be confirmed or refuted against 26 calls. Re-measure when the population supports it. THE NUMBER CHANGES ONLY ALONGSIDE A MEASUREMENT - that line in this spec is the one I am enforcing, and it cuts against tightening the budget on a happy-looking small sample just as much as it cuts against loosening it on an unhappy one.
+
+    WHAT IS ACTIONABLE NOW, AND IT IS THE WHOLE OF CRITERION 3: register and enable both `[[schedule.jobs]]` entries in THIS REPO's `.aida/config.toml`, so `aida schedule list` stops reporting "No scheduled jobs configured". That is the criterion that had nothing to do with the binary, it is unblocked, and it is what turns the capability into a trigger.
+
+    A THIRD PROBLEM FOUND WHILE MEASURING, filed separately as a defect in the SHIPPED mechanism rather than in this spec: the gate's denominator is BINARY-BLIND. The same 24h window contains calls served by an agent lane's own build (`c2b3c2f0c8`, 3 calls at 14:12-14:18, one over 1s) alongside main's. A single seat running a stale worktree build keeps main's gate red indefinitely, for a regression that is not on main. Criterion 1's zero half may be unreachable in this repo for a reason that has nothing to do with BUG-1480.
+  created_at: 2026-09-21T21:05:37.994070893Z
+  modified_at: 2026-09-21T21:05:37.994070893Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
