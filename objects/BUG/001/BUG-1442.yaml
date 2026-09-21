@@ -36,12 +36,12 @@ description: |
   5. Check whether other TOON projections share the fallback. If `list` or `graph` collapse types the same way, say so; if this is the only site, say that, because a shared helper would mean fixing one place and a local mapping would mean auditing several.
 
   Found while recording a BlockedBy edge on BUG-1420: the confirmation said BlockedBy, the piped `show` said Related, and the store said BlockedBy. The disagreement is the projection.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:55:30.106400060Z
-modified_at: 2026-09-21T04:54:47.335363315Z
+modified_at: 2026-09-21T12:32:03.935991903Z
 req_type: Bug
 tags:
 - agent-surface
@@ -95,6 +95,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-21T04:46:37.206744544Z
   modified_at: 2026-09-21T04:46:37.206744544Z
+history:
+- id: 01a0c3f3-b558-70e3-8262-706e0f9313dc
+  author: aida-auto-bump
+  timestamp: 2026-09-21T12:32:03.928707378Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c3f3-b55f-7973-80e0-04906e7d7fac
+  timestamp: 2026-09-21T12:32:03.935990944Z
+  agent: aida
+  commit_sha: 8bc2512480c76b8dceeb1a8e7105de362f300c65
+  summary: 'The rework satisfies the drain reviewer''s finding at the seam it named: both projections parsed into typed edges and compared, with the expected set pinned separately so the agreement assertion cannot pass vacuously. Falsification is reported against the production emitter and labelled as theirs. One disclosed product divergence relayed but not verified by me. No BUG-1550 recurrence.'
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
@@ -103,14 +120,8 @@ implementation_info:
     cargo test -p aida-cli agent_journey_toon_list_search_queue_done_and_status -- --nocapture
   implemented_at: 2026-09-20T19:38:03.564457064Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1442 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T19:56:59.264023961Z
+  completed_at: 2026-09-21T12:32:03.928448336Z
+  completion_sha: 8bc2512480c76b8dceeb1a8e7105de362f300c65
 interface_changes:
   cli:
   - aida show --format toon now preserves canonical relationship types and exposes blocker pickup state
