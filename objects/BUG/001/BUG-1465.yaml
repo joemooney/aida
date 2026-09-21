@@ -20,12 +20,12 @@ description: |
   4. Check whether the CLI print path has other divergences from core's projection. Both findings here are the same omission, which suggests the two were written independently rather than one calling the other; if that is so, say whether they should be one function.
 
   Found during an independent third-seat review, merged as PR #1976. The reviewer's other two findings are BUG-1461 (MCP parity) and BUG-1462 (TUI mirror).
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:51:57.195181294Z
-modified_at: 2026-09-21T21:40:09.825503707Z
+modified_at: 2026-09-21T21:52:27.773341550Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -61,8 +61,25 @@ comments:
   created_at: 2026-09-21T21:38:43.083007051Z
   modified_at: 2026-09-21T21:38:43.083007051Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0c5f4-c476-70a2-a59f-11aeda57ca31
+  author: aida-auto-bump
+  timestamp: 2026-09-21T21:52:27.766033884Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0c5f4-c47d-70d2-b89f-44898213b70f
+  timestamp: 2026-09-21T21:52:27.773338827Z
+  agent: aida
+  commit_sha: 71a581bdbf83f4ea1ad3d60ee0e143d97ed7a876
+  summary: 'THREE SMALL CHANGES, ALL SOUND, AND THE SECOND IS BETTER THAN ITS SUMMARY LINE SUGGESTS. (1) A blank-or-whitespace subject is now treated as absent in the expanded CLI row, via .filter(|s| !s.trim().is_empty()). (2) The reply-target resolution switched from map_err(|error| format!(...)) to with_context(...) - THIS IS THE ONE THAT MATTERS: map_err with a format! FLATTENS a typed error into a string and destroys the not-found/ambiguous distinction; with_context preserves the source. The summary calls this "preserve typed reply-target resolution failures", which undersells it - it is the difference between a caller being able to branch on which failure occurred and a caller having only prose. (3) The ambiguous-prefix message now says "lengthen the prefix to select one of:" rather than just listing candidates - actionable rather than descriptive. THE TESTS PIN THE RIGHT THINGS. blank_subject_uses_body_in_expanded_mailbox_row covers BOTH blank forms - Some("") and Some(" \t") - so a fix that only checked is_empty() without trimming would fail it. And reply_target_ambiguity_and_not_found_remain_distinct_typed_outcomes pins exactly what change (2) preserves: without it, a future revert to map_err would silently re-flatten the two kinds and nothing would notice, which is how the distinction was lost in the first place.'
+  review_verdict: approve
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-21T21:40:09.825503707Z
   implemented_by: joe
+  completed_at: 2026-09-21T21:52:27.765844708Z
+  completion_sha: 71a581bdbf83f4ea1ad3d60ee0e143d97ed7a876
