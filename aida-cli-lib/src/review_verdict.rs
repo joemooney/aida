@@ -331,9 +331,21 @@ pub fn read_recorded_verdict_any(project_root: &Path, ids: &[&str]) -> Option<Re
 /// timestamp would make every re-record look like a new round — a reviewer
 /// correcting its own summary before the head moves would manufacture one, and
 /// `findings_surviving_round` would then report its own findings as surviving.
-/// A verdict with no `reviewed_sha` cannot be deduplicated and is archived, on
-/// the grounds that an unattributable round is better kept than silently
-/// merged into another.
+///
+/// The head is read from `reviewed_sha` OR the older `head` key. Measured over
+/// the 501 verdict files on disk: 40 carry `reviewed_sha`, 42 carry `head`, and
+/// 419 carry neither. Keying on `reviewed_sha` alone would cover 8% of them.
+///
+/// When NEITHER key is present the round is unidentifiable, and this REFUSES to
+/// archive rather than archiving blind. Archiving an unidentifiable round makes
+/// a re-record its own predecessor, so every finding reads as surviving — and a
+/// false survivor sends someone to rewrite a brief that was fine, which is the
+/// exact harm this spec exists to prevent. A missed survivor costs one wasted
+/// round; a false one corrupts the signal. The asymmetry decides it.
+///
+/// The unidentifiable case is live rather than historical: the PR-keyed
+/// handshake writer still emits verdicts with no reviewed commit recorded.
+// trace:BUG-1466 | ai:claude
 // trace:STORY-1391 | ai:claude
 fn archive_current_round(
     obj: &mut serde_json::Map<String, serde_json::Value>,
@@ -347,12 +359,17 @@ fn archive_current_round(
     }
     let sha_of = |m: &serde_json::Map<String, serde_json::Value>| {
         m.get("reviewed_sha")
+            .or_else(|| m.get("head"))
             .and_then(|v| v.as_str())
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(str::to_string)
     };
-    let existing_sha = sha_of(obj);
+    let Some(existing_sha) = sha_of(obj) else {
+        // Unidentifiable round — see the note above. Refusing is the safe side.
+        return;
+    };
+    let existing_sha = Some(existing_sha);
     let incoming = incoming_sha
         .map(str::trim)
         .filter(|s| !s.is_empty())

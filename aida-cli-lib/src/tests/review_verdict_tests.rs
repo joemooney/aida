@@ -600,3 +600,90 @@ fn a_first_round_rework_prompt_carries_no_survival_signal() {
     let prompt = rework_findings_comment("STORY-9", "PR #7", &verdict).expect("blocking verdict");
     assert!(!prompt.contains("Survived the previous round"));
 }
+
+// STORY-1391: 42 of the 501 verdict files on disk record the reviewed commit as
+// `head` rather than `reviewed_sha`. Round identity must read both, or it covers
+// 8% of the corpus and every legacy round is treated as unidentifiable.
+//
+// The fixture goes STRAIGHT from the legacy file to a new head. An earlier
+// version re-recorded the same head first, which wrote `reviewed_sha` and meant
+// the fallback was never exercised — the test passed with the fallback removed.
+// trace:STORY-1391 | ai:claude
+#[test]
+fn the_older_head_key_identifies_a_round_too() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = verdict_path(tmp.path(), "PR-8");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    // legacy shape: `head`, no `reviewed_sha`
+    std::fs::write(
+        &path,
+        r#"{"verdict":"RequestChanges","head":"aaa1111","findings":["share the marker constant"]}"#,
+    )
+    .unwrap();
+
+    // a genuinely NEW head, recorded directly against the legacy file
+    record_verdict(
+        tmp.path(),
+        "PR-8",
+        Some("RequestChanges"),
+        Some("bbb2222"),
+        Some("b"),
+        None,
+        &["share the marker constant".to_string()],
+        "reviewer",
+    )
+    .unwrap();
+
+    let body = std::fs::read_to_string(&path).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        v["rounds"].as_array().map(|a| a.len()),
+        Some(1),
+        "the head-keyed legacy round is identifiable and must be retained"
+    );
+    assert_eq!(
+        findings_surviving_round(&body),
+        vec!["share the marker constant".to_string()],
+        "so the repeated finding is reported as surviving"
+    );
+}
+
+// 419 of 501 files carry NEITHER key, and BUG-1466's handshake writer still
+// produces them. An unidentifiable round must not be archived: doing so makes a
+// re-record its own predecessor and every finding reads as surviving. A missed
+// survivor costs one wasted round; a false one corrupts the signal.
+// trace:STORY-1391 trace:BUG-1466 | ai:claude
+#[test]
+fn an_unidentifiable_round_is_not_archived_and_produces_no_false_survivor() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = verdict_path(tmp.path(), "PR-9");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        r#"{"verdict":"RequestChanges","findings":["share the marker constant"]}"#,
+    )
+    .unwrap();
+
+    record_verdict(
+        tmp.path(),
+        "PR-9",
+        Some("RequestChanges"),
+        None,
+        Some("b"),
+        None,
+        &["share the marker constant".to_string()],
+        "reviewer",
+    )
+    .unwrap();
+
+    let body = std::fs::read_to_string(&path).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(
+        v.get("rounds").is_none(),
+        "an unidentifiable round must not be archived"
+    );
+    assert!(
+        findings_surviving_round(&body).is_empty(),
+        "and must not manufacture a survivor"
+    );
+}
