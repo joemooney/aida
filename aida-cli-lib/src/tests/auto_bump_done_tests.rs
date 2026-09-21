@@ -255,10 +255,15 @@ fn init_test_project() -> (tempfile::TempDir, std::path::PathBuf, std::path::Pat
 /// commit carrying the same trailer remains on an open PR. The first landing
 /// must not hide the spec by promoting Done → Completed.
 // trace:BUG-1454 | ai:codex
+// An ignored test still has to COMPILE, so the cfg(unix) block below is
+// required regardless of this attribute; the two fix different halves.
+// trace:BUG-1565 | ai:claude
+#[cfg_attr(
+    windows,
+    ignore = "the fake gh is a shebang script; Windows cannot execute it via shebang"
+)]
 #[test]
 fn open_pr_for_same_spec_defers_auto_bump() {
-    use std::os::unix::fs::PermissionsExt;
-
     let (_tmp, project_root, store_path) = init_test_project();
     seed_spec_at(&store_path, "BUG-1454", "Done");
     // The CONTROL: same status, same trailer treatment, no open PR. Without it
@@ -301,9 +306,21 @@ fn open_pr_for_same_spec_defers_auto_bump() {
         ),
     )
     .unwrap();
-    let mut permissions = std::fs::metadata(&fake_gh).unwrap().permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&fake_gh, permissions).unwrap();
+    // `std::os::unix` does not exist on a Windows target, so an ungated import
+    // here is a COMPILE error and takes the whole test binary with it — not a
+    // failing test. Verified directly rather than assumed: a file containing
+    // only this import compiles for x86_64-unknown-linux-gnu and fails for
+    // x86_64-pc-windows-msvc with E0433 "could not find `unix` in `os`".
+    // (The workspace-wide `cargo check --target ...` guard cannot answer this
+    // question — it dies in ring's build script.)
+    // trace:BUG-1565 | ai:claude
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = std::fs::metadata(&fake_gh).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&fake_gh, permissions).unwrap();
+    }
     let _gh = crate::test_env::EnvVarGuard::set(
         "AIDA_TEST_GH_BINARY",
         fake_gh.to_string_lossy().as_ref(),
