@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:37:35.410903749Z
-modified_at: 2026-09-21T00:53:51.828801889Z
+modified_at: 2026-09-21T08:44:37.528344926Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -104,5 +104,29 @@ comments:
     DISCRIMINATOR, from claude-reviewer-1 and worth applying beyond this spec: when counting by a string, check what OTHER strings the same producer emits for the same event. The failure is not a typo in the pattern — it is that the pattern encodes one phrasing of a concept that has several.
   created_at: 2026-09-21T00:53:51.828801889Z
   modified_at: 2026-09-21T00:53:51.828801889Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c323-7b18-7b42-81cb-397470ae0339
+  author: joe
+  content: |-
+    THE POLICY THIS SWEEP SHOULD IMPLEMENT, settled 2026-09-21 between the reviewer and driver-advisor seats after both of us got it wrong in opposite directions within the same ten minutes.
+
+    THE RULE, corrected:
+
+        Do not clear another seat's hold on a PR THAT CAN STILL MERGE.
+        On a CLOSED or MERGED PR, any seat may sweep the phantom.
+
+    WHY THE OLD WORDING FAILED. The practice had been carried as "do not clear another seat's hold", full stop. Its actual rationale is that clearing a hold on an OPEN PR overrides a refusal and RELEASES SOMETHING FOR MERGE — that is the harm the gate exists to prevent. On a closed PR, clearing releases nothing; there is no judgement to override because there is no merge to enable. The rationale does not reach the case, but the WORDS do, so the rule kept binding where its purpose had stopped.
+
+    BOTH SEATS PRODUCED THE ERROR, IN OPPOSITE DIRECTIONS, WHICH IS WHY IT IS RECORDED HERE RATHER THAN AS A NOTE TO ONE OF US:
+      - The reviewer cleared their own phantom on PR-1972 reasoning "a refusal on a closed PR protects nothing", then declined PR-2009 under materially identical conditions and called it restraint. Their own account: "I was pattern-matching the rule's WORDS against a case its PURPOSE does not cover."
+      - The driver-advisor swept both closed-PR markers in one pass without checking whose hand had placed each, and cleared the reviewer's PR-2043 hold — arriving at the right outcome by not asking the question at all.
+
+    Right outcome from no reasoning and wrong outcome from careful reasoning, in the same ten minutes, over two markers in the same directory.
+
+    THE PART WORTH CARRYING PAST THIS SPEC. The reviewer had diagnosed this exact defect ninety minutes earlier — withdrawing a citation with the observation that an instance generalised into a rule "acquires cases nobody tested it against" — and then immediately applied that same over-general rule and let it stop them. Knowing how a belief went wrong does not uninstall it. A rule whose rationale has been examined is not thereby a rule that has been re-scoped, and only the re-scoping changes behaviour.
+
+    CONSEQUENCE FOR THIS SPEC'S IMPLEMENTATION: the terminal-state sweep is not merely a convenience. It is the mechanism that makes the corrected rule enforceable without anyone consulting a convention — a seat running `--stale` should not have to know whose hand placed a marker, because on a terminal PR that fact carries no weight. Substrate as bouncer: the sweep either covers closed-unmerged PRs and the question never arises, or it does not and every phantom becomes a judgement call that two competent seats have now demonstrably gotten wrong.
+  created_at: 2026-09-21T08:44:37.528344926Z
+  modified_at: 2026-09-21T08:44:37.528344926Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
