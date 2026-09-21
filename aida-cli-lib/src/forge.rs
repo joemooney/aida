@@ -824,6 +824,16 @@ pub trait Forge {
     /// `gh pr comment` / `glab mr note` / pure-git log-only.
     fn comment(&self, c: &ChangeRef, body: &str) -> Result<()>;
 
+    /// `gh pr close` / `glab mr close` / pure-git no-op.
+    ///
+    /// Retracts a change that should not be published. The orchestrator uses
+    /// this when its publication guards refuse AFTER an implementer has
+    /// already opened the PR: without it the refusal is advisory, because the
+    /// PR it refused to open is sitting open. `reason` is posted on the change
+    /// so the closure is self-explaining to whoever finds it.
+    // trace:TASK-1289 | ai:claude
+    fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()>;
+
     /// `gh pr checkout` / pure git checkout (mostly forge-agnostic).
     fn checkout_change(&self, c: &ChangeRef) -> Result<()>;
 
@@ -1639,6 +1649,20 @@ impl Forge for GitHubForge {
         Ok(())
     }
 
+    // trace:TASK-1289 | ai:claude
+    fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()> {
+        // `--comment` posts the reason as part of the close, so the closure and
+        // its explanation cannot arrive separately (or not at all).
+        let out = self.gh(&["pr", "close", &c.id.to_string(), "--comment", reason])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh pr close failed for #{}: {}",
+            c.id,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
+    }
+
     fn checkout_change(&self, c: &ChangeRef) -> Result<()> {
         let out = self.gh(&["pr", "checkout", &c.id.to_string()])?;
         anyhow::ensure!(out.status.success(), "gh pr checkout failed for #{}", c.id);
@@ -2233,6 +2257,28 @@ impl Forge for GitLabForge {
         Ok(())
     }
 
+    /// `glab mr close` has no closing-comment flag, so the reason is posted
+    /// first and the close follows. A failure to post is not allowed to block
+    /// the retraction — an open MR that should not be open is the worse of the
+    /// two outcomes — but it is surfaced.
+    // trace:TASK-1289 | ai:claude
+    fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()> {
+        if let Err(e) = self.comment(c, reason) {
+            eprintln!(
+                "  warning: could not post the close reason on !{}: {e}",
+                c.id
+            );
+        }
+        let out = self.glab(&["mr", "close", &c.id.to_string()])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab mr close failed for !{}: {}",
+            c.id,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
+    }
+
     fn checkout_change(&self, c: &ChangeRef) -> Result<()> {
         pure_git_checkout(&self.project_root, &c.branch)
     }
@@ -2478,6 +2524,14 @@ impl Forge for PureGitForge {
 
     fn comment(&self, _c: &ChangeRef, _body: &str) -> Result<()> {
         Ok(()) // pure-git: nowhere to post; callers may log.
+    }
+
+    /// Vacuously satisfied, not silently ignored: pure-git never published a
+    /// change, so the caller's "no open change remains" postcondition already
+    /// holds.
+    // trace:TASK-1289 | ai:claude
+    fn close_change(&self, _c: &ChangeRef, _reason: &str) -> Result<()> {
+        Ok(())
     }
 
     fn checkout_change(&self, c: &ChangeRef) -> Result<()> {

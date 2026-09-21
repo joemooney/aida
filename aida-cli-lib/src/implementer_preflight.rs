@@ -33,8 +33,26 @@ pub(crate) enum ResolvedGuard {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GuardResult {
     Passed(String),
-    Failed { name: String, output: String },
+    Failed {
+        name: String,
+        output: String,
+    },
+    /// A guard that was NOT RUN because nothing identified it — an unknown or
+    /// absent name. Nothing was claimed about the code, and nothing is owed.
     Skipped(String),
+    /// A guard that WAS identified and COULD NOT COMPLETE — it timed out or
+    /// failed to start.
+    ///
+    /// Distinct from `Skipped` on purpose. Collapsing them is what made this
+    /// gate fail OPEN: a configured guard that never finished was recorded the
+    /// same way as one nobody asked for, and publication proceeded as though it
+    /// had passed. "We did not look" and "we looked and could not tell" are
+    /// different states, and only the first is safe to treat as no objection.
+    // trace:TASK-1289 | ai:claude
+    Inconclusive {
+        name: String,
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,11 +63,18 @@ pub(crate) enum PreflightDecision {
 
 // trace:TASK-1289 | ai:codex
 pub(crate) fn decide(results: &[GuardResult]) -> PreflightDecision {
+    // An INCONCLUSIVE guard refuses alongside a failing one. It has not passed,
+    // and a gate that publishes on "we could not tell" is not a gate — a guard
+    // made to time out becomes a guard made to succeed.
+    // trace:TASK-1289 | ai:claude
     let failed = results
         .iter()
         .filter_map(|result| match result {
             GuardResult::Failed { name, output } => Some((name.clone(), output.clone())),
-            _ => None,
+            GuardResult::Inconclusive { name, reason } => {
+                Some((name.clone(), format!("did not complete: {reason}")))
+            }
+            GuardResult::Passed(_) | GuardResult::Skipped(_) => None,
         })
         .collect::<Vec<_>>();
     if failed.is_empty() {
@@ -57,6 +82,21 @@ pub(crate) fn decide(results: &[GuardResult]) -> PreflightDecision {
     } else {
         PreflightDecision::Refuse { failed }
     }
+}
+
+/// The comment posted on a change that is being retracted because the
+/// publication guards refused it.
+///
+/// TASK-1289: whoever finds a closed PR needs three things from it — that a
+/// machine closed it, why, and what to do next. A closure without them reads
+/// as someone else's mistake and gets reopened.
+// trace:TASK-1289 | ai:claude
+pub(crate) fn retraction_notice(detail: &str) -> String {
+    format!(
+        "Closed automatically: the publication guards refused this change before it was \
+         reviewed.\n\n{detail}\n\nThe branch is untouched — fix the guard failure and reopen, \
+         or let the drain retry."
+    )
 }
 
 pub(crate) fn configured_guard_names(project_root: &Path) -> Vec<String> {
@@ -299,13 +339,17 @@ fn build_worktree_binary(project_root: &Path, path: &Path) -> Result<String, Str
 
 fn execute(project_root: &Path, guards: Vec<ResolvedGuard>, timeout: Duration) -> Vec<GuardResult> {
     let binary_path = binary_path(project_root);
-    // Build once from this worktree before running any CI-derived command.
-    // Scripts can invoke `aida` indirectly, so PATH must never inherit a stale
-    // installation even when the YAML command itself does not name it.
-    let binary = build_worktree_binary(project_root, &binary_path);
-    let binary_label = match &binary {
-        Ok(label) | Err(label) => label.clone(),
-    };
+    // Built at most once, on the first guard that will ACTUALLY RUN.
+    //
+    // The build is not keyed on `guard_uses_aida`: a guard whose text does not
+    // name `aida` can still reach it through a script, and PATH is prepended
+    // for every executing guard, so keying the build on the textual predicate
+    // would let a stale installation answer — the BUG-1420 defect this module
+    // exists to prevent. What IS safe to skip is the case where no guard
+    // executes at all (every one resolved Skipped or Invalid): nothing runs,
+    // so nothing can consult PATH, so there is nothing to build.
+    // trace:TASK-1289 | ai:claude
+    let mut binary: Option<Result<String, String>> = None;
     let default_branch = crate::forge::default_branch_of(project_root);
     let inherited_path = std::env::var_os("PATH").unwrap_or_default();
     let path = std::env::join_paths(
@@ -319,38 +363,78 @@ fn execute(project_root: &Path, guards: Vec<ResolvedGuard>, timeout: Duration) -
     )
     .unwrap_or(inherited_path);
 
-    guards.into_iter().map(|resolved| {
+    let mut results = Vec::with_capacity(guards.len());
+    for resolved in guards {
         let guard = match resolved {
             ResolvedGuard::Found(guard) => guard,
-            ResolvedGuard::Invalid(output) => return GuardResult::Failed {
-                name: "CI shell parity".into(),
-                output,
-            },
-            ResolvedGuard::Skipped(note) => return GuardResult::Skipped(format!("{note}; binary: {binary_label}")),
+            ResolvedGuard::Invalid(output) => {
+                results.push(GuardResult::Failed {
+                    name: "CI shell parity".into(),
+                    output,
+                });
+                continue;
+            }
+            // A skipped guard runs nothing, so it must not be the reason a
+            // build happens; report the binary only if one was already built.
+            ResolvedGuard::Skipped(note) => {
+                let label = match binary.as_ref() {
+                    Some(Ok(label)) | Some(Err(label)) => label.as_str(),
+                    None => "not built (no guard required it)",
+                };
+                results.push(GuardResult::Skipped(format!("{note}; binary: {label}")));
+                continue;
+            }
+        };
+        // This guard will execute, so the worktree binary is needed now.
+        let built = binary.get_or_insert_with(|| build_worktree_binary(project_root, &binary_path));
+        let binary_label = match &*built {
+            Ok(label) | Err(label) => label.clone(),
         };
         if guard_uses_aida(&guard) {
-            if let Err(reason) = &binary {
-                return GuardResult::Skipped(format!("{}: worktree binary unavailable, so binary-dependent guard was not authoritative: {reason}; binary: {reason}", guard.name));
+            if let Err(reason) = &*built {
+                // Its own message says "not authoritative" — that is inconclusive,
+                // not skipped. Publishing on it is publishing on a guard that was
+                // asked for and never answered. trace:TASK-1289 | ai:claude
+                let reason = format!("worktree binary unavailable, so this binary-dependent guard could not be authoritative: {reason}");
+                results.push(GuardResult::Inconclusive {
+                    name: guard.name,
+                    reason,
+                });
+                continue;
             }
         }
-        let command = guard.command
+        let command = guard
+            .command
             .replace("${{ github.event_name }}", "pull_request")
             .replace("${{ github.base_ref }}", &default_branch);
         let mut child = github_actions_bash(&command);
-        child.current_dir(project_root)
+        child
+            .current_dir(project_root)
             .env("PATH", &path)
             .env("AIDA_PREFLIGHT_BINARY", &binary_path)
             .env("AIDA_PREFLIGHT_DEFAULT_BRANCH", &default_branch);
-        match run_bounded(&mut child, timeout) {
+        results.push(match run_bounded(&mut child, timeout) {
             Ok(Some(out)) if out.status.success() => GuardResult::Passed(guard.name),
             Ok(Some(out)) => GuardResult::Failed {
                 name: guard.name,
                 output: format!("binary: {binary_label}\n{}", output_text(&out)),
             },
-            Ok(None) => GuardResult::Skipped(format!("{}: timed out after {}s; binary: {binary_label}", guard.name, timeout.as_secs())),
-            Err(err) => GuardResult::Skipped(format!("{}: could not start ({err}); binary: {binary_label}", guard.name)),
-        }
-    }).collect()
+            // NOT Skipped: this guard was identified and asked to run.
+            // trace:TASK-1289 | ai:claude
+            Ok(None) => GuardResult::Inconclusive {
+                name: guard.name,
+                reason: format!(
+                    "timed out after {}s; binary: {binary_label}",
+                    timeout.as_secs()
+                ),
+            },
+            Err(err) => GuardResult::Inconclusive {
+                name: guard.name,
+                reason: format!("could not start ({err}); binary: {binary_label}"),
+            },
+        });
+    }
+    results
 }
 
 pub(crate) fn run(project_root: &Path) -> Vec<GuardResult> {
@@ -453,7 +537,14 @@ mod tests {
     }
 
     #[test]
-    fn guard_timeout_skips_instead_of_refusing() {
+    /// Was `guard_timeout_skips_instead_of_refusing`, which asserted that a
+    /// guard timing out still published. That is the defect finding 2 named:
+    /// a guard made to time out became a guard made to succeed, so any
+    /// slow-enough failure published itself. The contract is now inverted —
+    /// an identified guard that cannot finish is INCONCLUSIVE and refuses.
+    // trace:TASK-1289 | ai:claude
+    #[test]
+    fn guard_timeout_is_inconclusive_and_refuses() {
         let root = tempfile::tempdir().unwrap();
         let results = execute(
             root.path(),
@@ -463,10 +554,25 @@ mod tests {
             })],
             Duration::from_millis(50),
         );
+        let GuardResult::Inconclusive { name, reason } = &results[0] else {
+            panic!(
+                "a guard that timed out has not passed, got {:?}",
+                results[0]
+            )
+        };
+        assert_eq!(name, "Hung guard");
+        assert!(reason.contains("timed out"), "reason was: {reason}");
+        assert!(reason.contains("binary:"), "reason was: {reason}");
+        // the decision, not just the classification — this is what publishes
+        let PreflightDecision::Refuse { failed } = decide(&results) else {
+            panic!("an inconclusive guard must refuse publication")
+        };
+        assert_eq!(failed[0].0, "Hung guard");
         assert!(
-            matches!(&results[0], GuardResult::Skipped(note) if note.contains("timed out") && note.contains("binary:"))
+            failed[0].1.contains("did not complete"),
+            "the refusal must say the guard never answered: {}",
+            failed[0].1
         );
-        assert_eq!(decide(&results), PreflightDecision::Open);
     }
 
     #[test]
@@ -546,5 +652,244 @@ mod tests {
             Duration::from_secs(2),
         );
         assert_eq!(results, vec![GuardResult::Passed("Base branch".into())]);
+    }
+
+    /// Finding 3: a guard set where nothing executes must not trigger the
+    /// worktree build. The Skipped note is the observable proof — it can only
+    /// read "not built" while the build memo was never forced, so restoring an
+    /// eager build fails this test rather than merely slowing it down.
+    // trace:TASK-1289 | ai:claude
+    #[test]
+    fn clean_guard_set_runs_no_build() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join(".github/workflows")).unwrap();
+        // a VALID workflow that simply does not define the requested guard
+        std::fs::write(
+            root.path().join(".github/workflows/ci.yml"),
+            "jobs:\n  build:\n    defaults:\n      run:\n        shell: bash --noprofile --norc -e -o pipefail {0}\n    steps:\n      - name: Something else\n        run: true\n",
+        )
+        .unwrap();
+
+        let results = execute(
+            root.path(),
+            guards_from_ci(root.path(), &["absent-guard".into()]),
+            Duration::from_secs(2),
+        );
+
+        assert_eq!(results.len(), 1);
+        let GuardResult::Skipped(note) = &results[0] else {
+            panic!("an absent guard must skip, got {:?}", results[0])
+        };
+        assert!(
+            note.contains("not built (no guard required it)"),
+            "no guard executed, so no build may have run; note was: {note}"
+        );
+        // and skipping still publishes — the acceptance criterion for unknown guards
+        assert_eq!(decide(&results), PreflightDecision::Open);
+    }
+
+    /// Finding 5: the criterion has three branches, and the previous test
+    /// exercised only the missing-workflow one.
+    // trace:TASK-1289 | ai:claude
+    #[test]
+    fn guard_selection_reads_config_defaults_match_ci_and_unknown_steps_surface_a_note() {
+        // branch 1 — [preflight].guards is actually read
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+        std::fs::write(
+            root.path().join(".aida/config.toml"),
+            "[preflight]\nguards = [\"Alpha\", \"Beta\"]\n",
+        )
+        .unwrap();
+        assert_eq!(
+            configured_guard_names(root.path()),
+            vec!["Alpha".to_string(), "Beta".to_string()],
+            "configured guards must come from [preflight].guards, not the defaults"
+        );
+
+        // branch 2 — every default names a real step in THIS repo's CI
+        let repo = workspace_root();
+        if repo.join(".github/workflows/ci.yml").exists() {
+            let resolved = guards_from_ci(&repo, &configured_guard_names(&repo));
+            for (name, guard) in DEFAULT_GUARD_NAMES.iter().zip(resolved.iter()) {
+                assert!(
+                    matches!(guard, ResolvedGuard::Found(_)),
+                    "default guard `{name}` does not match a step in ci.yml — \
+                     the defaults have drifted from the CI guard set: {guard:?}"
+                );
+            }
+        }
+
+        // branch 3 — an unknown guard in a VALID workflow skips with a note
+        // that names it (distinct from the missing-workflow wording)
+        let valid = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(valid.path().join(".github/workflows")).unwrap();
+        std::fs::write(
+            valid.path().join(".github/workflows/ci.yml"),
+            "jobs:\n  build:\n    defaults:\n      run:\n        shell: bash --noprofile --norc -e -o pipefail {0}\n    steps:\n      - name: Real step\n        run: true\n",
+        )
+        .unwrap();
+        let resolved = guards_from_ci(valid.path(), &["ghost".into()]);
+        assert_eq!(
+            resolved,
+            vec![ResolvedGuard::Skipped("ghost: no matching CI guard".into())],
+            "an unknown guard in a valid workflow must surface why it skipped"
+        );
+    }
+
+    fn workspace_root() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("aida-cli-lib always has a workspace parent")
+            .to_path_buf()
+    }
+
+    /// Finding 4: the previous coverage used a synthetic `echo`/`exit 1` step,
+    /// which proves the plumbing and nothing about the guard the criterion
+    /// names. This builds a real git repository carrying THIS repo's actual
+    /// `scripts/check-portability.sh`, rules, allowlist and `ci.yml`, gives it
+    /// a real `origin/main` (the ratchet diffs against a base ref), plants a
+    /// genuine violation, and runs the real CI command through the real
+    /// preflight — then asserts publication is refused AND that the offending
+    /// file survives into the refusal, since a refusal nobody can act on is
+    /// only marginally better than no refusal.
+    // trace:TASK-1289 | ai:claude
+    #[test]
+    fn portability_ratchet_violation_refuses_with_the_real_ci_command() {
+        const GUARD: &str = "Check Rust test portability ratchet";
+        let src = workspace_root();
+        // The fixture is only meaningful against the real assets.
+        for asset in [
+            "scripts/check-portability.sh",
+            "scripts/portability-allowlist.txt",
+            "scripts/portability-rules.json",
+            ".github/workflows/ci.yml",
+        ] {
+            assert!(
+                src.join(asset).exists(),
+                "fixture needs the real {asset}; the guard cannot be exercised without it"
+            );
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        let bare = tmp.path().join("origin.git");
+        std::fs::create_dir_all(repo.join("scripts")).unwrap();
+        std::fs::create_dir_all(repo.join(".github/workflows")).unwrap();
+        std::fs::create_dir_all(repo.join("tests")).unwrap();
+
+        let mut copied_growth = false;
+        for asset in [
+            "scripts/check-portability.sh",
+            "scripts/check-portability-growth.py",
+            "scripts/portability-allowlist.txt",
+            "scripts/portability-rules.json",
+            ".github/workflows/ci.yml",
+        ] {
+            let from = src.join(asset);
+            if !from.exists() {
+                continue;
+            }
+            if asset.ends_with("growth.py") {
+                copied_growth = true;
+            }
+            std::fs::copy(&from, repo.join(asset)).unwrap();
+        }
+        let _ = copied_growth;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(
+                repo.join("scripts/check-portability.sh"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+        }
+
+        let git = |args: &[&str], cwd: &Path| {
+            let out = Command::new("git")
+                .args(args)
+                .current_dir(cwd)
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@example.invalid")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@example.invalid")
+                .output()
+                .unwrap_or_else(|e| panic!("git {args:?} could not start: {e}"));
+            assert!(
+                out.status.success(),
+                "git {args:?} failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+
+        git(
+            &["init", "--bare", "-b", "main", bare.to_str().unwrap()],
+            tmp.path(),
+        );
+        git(&["init", "-b", "main"], &repo);
+        git(&["add", "-A"], &repo);
+        git(&["commit", "-m", "base"], &repo);
+        git(&["remote", "add", "origin", bare.to_str().unwrap()], &repo);
+        git(&["push", "-u", "origin", "main"], &repo);
+
+        // The violation is a temp-dir literal in test code that is not in the
+        // allowlist. It is assembled from two fragments on purpose: this file
+        // is itself Rust test code, so writing the literal inline makes THIS
+        // file a violation and the fixture for the ratchet trips the ratchet.
+        // (Confirmed the hard way — the first version failed the real guard.)
+        let planted = format!(
+            "#[test]\nfn t() {{\n    let p = \"{}{}\";\n    assert!(!p.is_empty());\n}}\n",
+            "/t", "mp/hardcoded-path"
+        );
+        std::fs::write(repo.join("tests/planted.rs"), &planted).unwrap();
+        git(&["add", "-A"], &repo);
+        git(&["commit", "-m", "plant a portability violation"], &repo);
+
+        std::fs::create_dir_all(repo.join(".aida")).unwrap();
+        std::fs::write(
+            repo.join(".aida/config.toml"),
+            format!("[preflight]\nguards = [\"{GUARD}\"]\n"),
+        )
+        .unwrap();
+
+        let results = run(&repo);
+        let PreflightDecision::Refuse { failed } = decide(&results) else {
+            panic!("a real portability violation must refuse publication, got {results:?}")
+        };
+        assert_eq!(
+            failed[0].0, GUARD,
+            "the real guard must be the one refusing"
+        );
+        assert!(
+            failed[0].1.contains("tests/planted.rs"),
+            "the refusal must name the offending file so it can be fixed; got:\n{}",
+            failed[0].1
+        );
+    }
+
+    /// Finding 1: the retraction is only as good as what it tells the person
+    /// who finds the closed PR.
+    // trace:TASK-1289 | ai:claude
+    #[test]
+    fn retraction_notice_carries_the_guard_failure_and_the_next_step() {
+        let detail = "guard `Check formatting` failed:\nsrc/x.rs needs rustfmt";
+        let note = retraction_notice(detail);
+        assert!(
+            note.contains(detail),
+            "the guard output is the whole reason for the closure: {note}"
+        );
+        assert!(
+            note.contains("Closed automatically"),
+            "a human must not mistake this for someone closing their PR: {note}"
+        );
+        assert!(
+            note.contains("branch is untouched"),
+            "closing a PR looks like losing work unless it says otherwise: {note}"
+        );
+        assert!(
+            note.contains("reopen"),
+            "the notice must name the way forward: {note}"
+        );
     }
 }
