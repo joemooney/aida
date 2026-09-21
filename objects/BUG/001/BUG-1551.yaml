@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:55:06.171955458Z
-modified_at: 2026-09-21T16:20:45.760027416Z
+modified_at: 2026-09-21T16:22:21.208863773Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -181,4 +181,44 @@ comments:
     A NOTE ON HOW THE FIVE-STATE FACT WAS ESTABLISHED, because this spec is about closure reasoning and the near-miss is on point. The advisor first reported the gate as Done-only, having grepped a line range inside `auto_bump_done_to_completed` and found exactly one `RequirementStatus::` match - which turned out to be the gate of a SECONDARY loop (the BUG-102 review-story-by-PR-number scan), not the primary trailer-driven one thirty lines earlier. One grep hit taken for a function-wide rule. A merge disposition was then built on it and would have survived unchallenged until BUG-1480 went Completed.
   created_at: 2026-09-21T16:20:45.760027416Z
   modified_at: 2026-09-21T16:20:45.760027416Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4c6-8b18-7eb0-a305-3cd498a5f2bf
+  author: joe
+  content: |-
+    [aida:advisor] THE SCAN IS A WINDOW, NOT A MERGE INSTANT - and combined with the five-state predicate recorded above, that removes the last place a precondition could stand. Measured by claude-reviewer-1 2026-09-21 in `auto_bump_done_to_completed`, lib.rs:63314-63317:
+
+        match pre_sha {
+            Some(pre) => log_args.push(format!("{}..HEAD", pre)),   // newly-arrived commits
+            None      => { "--max-count=50", "HEAD" }               // LAST 50 OF HEAD, always
+        }
+
+    The bump runs on `aida pull`, walks a commit range for `(SPEC-ID)` trailers, and evaluates each hit against the THEN-CURRENT status. The commit is durable on main; the status is read at scan time. Two consequences:
+
+      1. THE BUG-94 FALLBACK RE-SCANS UNCONDITIONALLY. With pre_sha = None it takes the last 50
+         commits of HEAD regardless of when they arrived, so a trailered commit stays live until
+         50 more land - on this repo's recent rate, on the order of days.
+      2. "NEWLY ARRIVED" IS PER-CLONE. Any clone pulling for the first time after the merge sees
+         the commit inside its own pre..HEAD range. A seat that has not pulled since before the
+         merge carries the hazard forward.
+
+    THE WINDOW AND THE FIVE-STATE PREDICATE COMPOSE INTO SOMETHING STRONGER THAN EITHER. The reviewer derived the window while believing the predicate was Done-only, and concluded the hazard was "something flips the spec to Done inside the window" - conditional, and defensible against with a precondition. With the real predicate the conclusion inverts:
+
+        A SPEC IN Approved, Planned, InProgress, Done OR NeedsAttention IS **ALREADY** ELIGIBLE.
+        NOTHING HAS TO HAPPEN. The next pull that sees the trailered commit fires the bump.
+
+    So no merge-instant precondition can protect a spec here. The advisor had written one - "merge while BUG-1480 is not Done, verified in the same minute" - and it would have read GREEN while the hazard was certain, because it checked a property that was not the gate. That is recorded because it is the failure mode this spec describes, committed while trying to defend against this spec.
+
+    THE ONLY INTERVENTIONS THAT ACTUALLY BITE, given the above:
+      - REMOVE THE TRAILER from the merge commit subject (costs the commit-to-spec link that
+        `aida why <file:line>` falls back on via blame). In use on PR #2033 as a toll, not a fix.
+      - DETECT AND REVERT AFTER THE FACT: re-check the spec on the next pull and restore it with
+        `aida edit <ID> --status done` if the bump fired. The reviewer's framing, worth keeping:
+        "DETECTING IT ONE PULL LATER IS WORTH MORE THAN PREVENTING IT PERFECTLY, BECAUSE THE
+        DETECTION IS A COMMAND AND THE PREVENTION IS A PROMISE."
+      - THIS SPEC'S ACTUAL FIX: closure consults something. What has no expression anywhere is a
+        spec declaring "my completion is NOT merge-driven". Until that exists, every protection
+        above is a human remembering at the right moment, which is what this board keeps ruling
+        gets replaced by a gate.
+  created_at: 2026-09-21T16:22:21.208863773Z
+  modified_at: 2026-09-21T16:22:21.208863773Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
