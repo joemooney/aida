@@ -51,15 +51,47 @@ description: |
   side by side, which is exactly the collision that went unnoticed.
 
   ## Acceptance
-  1. Writing a merge-hold marker for a PR that already has a marker OR a recorded verdict
-     surfaces both, with their recorded_by and sha, before the write completes.
-  2. The surfacing is informational and does NOT block. This is a consultation gap, not an
+  1. THE TRIGGER IS SYMMETRIC — both write directions, not just the marker.
+     1a. Writing a merge-hold marker for a PR that already has a marker OR a recorded
+         verdict surfaces both, with their recorded_by and sha, before the write completes.
+     1b. RECORDING A VERDICT for a PR that already has a marker surfaces the marker's text
+         and who wrote it.
+
+     1b IS WHERE THE MEASURED POPULATION LIVES, and a marker-only trigger catches NONE of
+     it. Sized by the reviewer over the 24 standing markers 2026-09-20 23:12:
+
+         verdict recorded AFTER the marker    6    PR-1972, 1981, 1989, 2001, 2026, 2027
+         marker newer                        12
+         no recorded_at on the verdict        5    PR-1984, 1998, 2009, 2039, 2040
+         no verdict file at all               2    PR-2019, 2042
+
+     Six of NINETEEN ANSWERABLE (not of 24 — the five without recorded_at cannot be ordered
+     at all, which is BUG-1466's provenance gap making this very question unanswerable for
+     a quarter of the population). The gaps are 5 to 17 minutes.
+
+     THE SEQUENCE IS THE WORKFLOW'S, NOT CARELESSNESS: a hold goes up to stop a merge, and
+     the verdict is written minutes later. So marker-then-verdict is the NATURAL order, and
+     the original criterion fired on the rarer direction.
+
+  2. THE CONDITION IS NOT "THE MARKER IS STALE" — it is "the marker's text asserts
+     something about a verdict, and a newer verdict exists". Reviewer's sharpening, and
+     #1989 versus #2034 is the proof: identical five-minute marker-then-verdict timing, and
+     only #2034 is wrong. #1989's marker said it was waiting on that reviewer's verdict, so
+     the verdict arriving CONFIRMS it; #2034's quoted a DIFFERENT seat's superseded finding,
+     so the newer verdict contradicts it. Timing alone cannot separate them; what the
+     marker CLAIMS can.
+
+     A check that fires on every marker older than its verdict would flag six PRs of which
+     at least one is correct by construction. Surfacing both and letting the writer see them
+     side by side is the right response to that, and is why criterion 3 says it does not
+     block.
+  3. The surfacing is informational and does NOT block. This is a consultation gap, not an
      authority gap; a gate here would be the wrong instrument and would collide with
      BUG-1532's kind work.
-  3. It fires on the WRITE, not on a separate command a seat must remember to run. A rule
+  4. It fires on the WRITE, not on a separate command a seat must remember to run. A rule
      that depends on remembering is what BUG-1534 instance 4 demonstrated does not hold —
      an adopted rule failed on its own adopter within forty minutes.
-  4. Scope is merge-hold markers only in this slice. Verdicts, spec status writes and
+  5. Scope is merge-hold markers and PR-keyed verdicts only in this slice. Verdicts, spec status writes and
      lease writes are the obvious next consumers and are explicitly OUT, so this does not
      become the EPIC it is adjacent to.
 
@@ -76,7 +108,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:10:44.000996596Z
-modified_at: 2026-09-21T06:11:15.186752155Z
+modified_at: 2026-09-21T06:13:55.083659971Z
 req_type: Story
 tags:
 - parent:EPIC-62 substrate-as-bouncer consultation severity:operational
