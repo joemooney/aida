@@ -26,12 +26,12 @@ description: |
   5. A test asserts the chosen behaviour by traversal — after `rel add --type related`, either `aida graph` reaches the target or the command failed. Asserting on the message is not sufficient; the message is what already exists.
 
   trace-worthy note for whoever takes it: TASK-887 is Completed and its warning works. This is not a regression of it — it is the next question, which is whether a warning was the right remedy.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-21T22:30:27.064420418Z
+modified_at: 2026-09-21T22:30:30.175593099Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -128,3 +128,7 @@ comments:
   modified_at: 2026-09-21T22:27:24.777729723Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-21T22:30:30.175593099Z
+  implemented_by: joe
