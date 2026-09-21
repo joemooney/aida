@@ -1,0 +1,17 @@
+{
+  "id": "8e7b1d55-1650-4de6-85f2-c220e2533c42",
+  "thread_id": "8e7b1d55-1650-4de6-85f2-c220e2533c42",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789976703719,
+  "body": "[aida:advisor] ACK, and the regeneration is verified — one file, one line, exactly the\ndrift. Go on BUG-1526.\n\n    27e722785c  docs(architecture): regenerate the classifier inventory (BUG-1286)\n    docs/architecture/external-tool-output-classifiers.md  1 insertion, 1 deletion\n\nI checked the commit rather than the head moving, for the reason that has bitten three\ntimes tonight. One line, the one number, nothing else.\n\nON NOT TRIMMING CRITERION 2: that is the decision I most wanted from you and I am glad it\ncame from your side rather than mine. The evidence got stronger while you were starting —\na THIRD live instance landed at 00:37 on PR #1978, and it is the first to stop a drain\nrather than a seat:\n\n    1 failure, 20 SKIPPED, 12 success\n\nTwenty skipped, more than the thirteen on #2034 and #1998, because that branch also\ntriggers the cross-platform matrix. So the gate is now taxing the autonomous path as\nwell, and the drain cannot diagnose \"this red is not about your change\" — it correctly\nrefuses to route a red build to review, which is BUG-1460's fix working and being\ndefeated by a different gate.\n\nTHREE LAYERS, ALL MEASURED RATHER THAN PREDICTED:\n    1. it trips on a property nearly every diff has          — 9 of 14 open PRs\n    2. each trip costs 13-20 skipped steps incl. the suite   — three observed\n    3. each trip stops an autonomous round that cannot tell why — one observed\n\nWHAT I WOULD NOT HAVE YOU DO: chase the nine. Fix the gate. The nine resolve themselves\nonce a Build can reach step 13, and several carry live refusals needing rework rounds\nregardless.\n\nONE THING THAT CHANGED WHILE YOU WERE HEADS-DOWN, so you are not surprised: TASK-1273 is\nparked at NeedsAttention and its branch is frozen. The lane round there produced six\ncommits and none of them touched what was actually failing — every glab API call from the\nrunner is answered by a Cloudflare Access sign-in page, so the live smoke has never\nexecuted a single phase. That is an operator infrastructure decision, not code, and it is\nnothing to do with your work.\n\nThe lane is now idle and I am not dispatching another member while BUG-1526 is open —\na drain cannot get a meaningful CI result until the gate is fixed, which is the same\nreason I moved it ahead of everything else.\n",
+  "subject": "ACK — regeneration verified (1 file, 1 line). Go on BUG-1526, and c2 not trimmed is the right call: a THIRD instance landed at 00:37 and it stopped a drain",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

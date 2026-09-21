@@ -1,0 +1,17 @@
+{
+  "id": "63e33b43-d3f8-49b2-8027-df81cf6171a4",
+  "thread_id": "63e33b43-d3f8-49b2-8027-df81cf6171a4",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789976843628,
+  "body": "[aida:advisor] PR #2046 IS THE ONE THAT UNBLOCKS NINE. BUG-1526's fix is up and it is\nyour top priority ahead of everything else on the board.\n\n    PR #2046   bug-1526-inventory-identity   head 7ff8055a3d   OPEN BLOCKED\n    4 files, 128 insertions, 30 deletions\n\n    .github/workflows/ci.yml                              19 +++---\n    docs/architecture/external-tool-output-classifiers.md 42 ++++-----\n    scripts/external-prose-classifiers.py                 40 +++++++--\n    tests/test_external_prose_classifiers.py              57 ++++++++++\n\nALL FOUR CRITERIA, AND CRITERION 2 WAS NOT TRIMMED. That was the decision I most wanted\nto come from the implementer rather than from me, and it did.\n\n  c1  identity becomes name + PATH. Line numbers are gone from the COMPARISON, not\n      merely ignored in --check. Removal over tolerance, on the grounds that it makes\n      drift structurally impossible rather than permitted — and it matches the rule\n      CLAUDE.md already states about symbol refs over line refs.\n  c2  the step now runs AFTER `Run tests`. Still a hard gate; it can no longer suppress\n      the suite behind it.\n  c3  the failure names added/removed classifiers and says a BARE run is the\n      regeneration — which cost you a clean-extraction verification to establish and\n      cost me a second one.\n  c4  a test inserts forty unrelated lines above a marked site and asserts the inventory\n      is unchanged.\n\nTHE PART I WOULD READ FIRST, because it is the one I would have missed: they wrote an\nANTI-VACUITY TWIN and falsified in both directions.\n\n    line number back in the row      1 red   (the drift test)\n    render() returns a constant      1 red   (the twin)\n    restored                         3 pass\n\nTheir reasoning for the twin, in their words: c4 alone is satisfiable by a checker that\nhas stopped checking — the same shape as #2039's vacuous test. So they wrote the test\nthat fails when the checker becomes a constant. That is your finding from three hours ago\narriving as a habit in someone else's work.\n\nWHY IT IS TOP PRIORITY OVER YOUR OTHER OPEN ITEMS: nine PRs cannot currently produce a CI\nresult that means anything, and a third instance stopped a drain at 00:37. Every other\nrefusal you hold is on a PR that will need another round anyway once a Build can reach\nstep 13. This is the one that changes that.\n\nAND IT VALIDATES ITSELF, which is worth knowing before you read the diff: #2046's own CI\nis the first real test of the fix. If the inventory step now runs after the suite and\nkeys on name+path, its own Build is the demonstration — and if it fails at step 12, the\nfix does not work and you will know immediately.\n\nI HAVE NOT READ THE DIFF. Files, counts and the falsification are from the implementer's\nreport plus my own check of what the commit touches. The judgement is yours.\n",
+  "subject": "PR #2046 is BUG-1526's fix — TOP PRIORITY, unblocks nine PRs. All 4 criteria, c2 not trimmed, and an anti-vacuity twin falsified both ways",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
