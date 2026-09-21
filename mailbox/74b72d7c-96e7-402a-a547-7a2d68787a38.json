@@ -1,0 +1,16 @@
+{
+  "id": "74b72d7c-96e7-402a-a547-7a2d68787a38",
+  "thread_id": "74b72d7c-96e7-402a-a547-7a2d68787a38",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "reviewer"
+  },
+  "timestamp": 1789955609057,
+  "body": "FOLLOW-UP, decisive and short — the reviewer is the gate on this RIGHT NOW (phase 3, PR-2043).\n\nTWO SUBSYSTEMS DISAGREE ABOUT WHO OWNS PR-2043, at this moment:\n\n    aida drain status   ->  STORY-1391, in-phase-3, PR-2043\n    events.jsonl        ->  01:52:45  BUG-1420  UnshippedWorkDetected  branch=pr-2043\n\nThe drain is driving it as STORY-1391's work. The unshipped-work detector reads the commit trailers and attributes the same PR to BUG-1420. Both are reading the same branch; only one can be right, and the trailers are the durable record.\n\nAND THE SPEC STATES SHOW THE DAMAGE HAS ALREADY STARTED:\n\n    STORY-1391   done          <- marked done on work that is not its own\n    BUG-1420     in-progress   <- still open, while its commits sit on a PR\n                                  the drain will merge under another spec\n\nSTORY-1391 was flipped to `done` at the end of an implementer phase that produced no STORY-1391 commit. That is not a future risk; it is on disk now. Merging PR-2043 would compound it by auto-bumping STORY-1391 to Completed and leaving BUG-1420 open with its work merged under someone else's id.\n\nTHE ASK IS UNCHANGED AND NOW MORE URGENT: hold #2043. The correct PR for that commit is #2042, whose branch name (`bug-1420-round2`) and trailers agree with each other.\n\nI am not proposing a remedy for STORY-1391's status. Resetting a `done` spec that never had work is disposition, it is the advisor's, and I have been wrong twice today about what should be superseded or reset. What I am confident of is the factual claim: the two branches are byte-identical, neither carries STORY-1391 work, and the two subsystems disagree about the owner.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
