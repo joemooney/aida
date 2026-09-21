@@ -2,7 +2,7 @@ id: 01a0c3da-8378-71f0-be3a-f20d91cf8eee
 spec_id: BUG-1550
 agreed_id: BUG-1550
 title: Three doc/trace headers were orphaned by insertion in one night and all compiled clean - gate the class, because a displaced trace comment silently inverts aida why
-description: |-
+description: |
   THREE INSTANCES IN ONE NIGHT, BY TWO DIFFERENT SEATS, ALL COMPILING CLEAN. A new item is inserted immediately AFTER an existing doc/trace header instead of before it. The header then documents the wrong item, and the item it was written for is left bare. Rust accepts both placements, so nothing in fmt, clippy or the test suite fires.
 
   THE THREE:
@@ -39,12 +39,104 @@ description: |-
   5. A test pins the DISTINCTION: a trace comment displaced across an item is flagged, and a trace comment legitimately attached to a module or a block (not an item) is not.
 
   RELATED: BUG-1545 stays as the specific fix for instance 1 and is NOT superseded by this - one is a two-line edit to main, this is the gate that stops the fourth instance.
+  ===============================================================================
+  MEASURED RESULT: DOC-ONLY STRANDING IS NOT FILE-LEVEL STRUCTURALLY DETECTABLE.
+  THE ACCEPTANCE IS AMENDED AROUND THIS. It is a finding, not a shortfall.
+  Established 2026-09-21 by the implementer, ruled by the advisor.
+  ===============================================================================
+
+  THE ORIGINAL ACCEPTANCE said the gate covers a stranded "doc comment OR trace
+  comment", and criterion 2 named instance 1 (the short_sha_for_row / pluralize
+  pair) as a case the gate must report. Both were written before anyone knew
+  whether doc-only stranding could be detected at all. IT CANNOT, at file level,
+  and three independent measurements establish it:
+
+   1. THE FALSE-POSITIVE SOURCE IS STRUCTURAL TO THIS CODEBASE, not a threshold
+      nobody found. A comparative word-overlap scorer was run at three
+      tightenings - 177 hits, then 347, then 127 - and the dominant residual
+      pattern is SHARED DOMAIN VOCABULARY between a function and its own nearby
+      test or a sibling. `gap()`'s doc legitimately discusses "zero-denominator"
+      and scores higher against a neighbouring `has_zero_denominator()`;
+      `success_rate` against `success_rate_is_zero_for_empty_tally`. THE
+      DESCRIPTIVE-NAMING CONVENTION THAT MAKES THIS REPO WELL-DOCUMENTED IS
+      EXACTLY WHAT DEFEATS WORD-OVERLAP MISATTRIBUTION DETECTION.
+
+   2. IT MISATTRIBUTES ON THE KNOWN CASE. At every threshold it correctly flags
+      short_sha_for_row's header as wrong and names `compact_line` as the true
+      owner rather than `pluralize`. Unreliable RANKING is worse than unreliable
+      firing: a confident wrong owner sends a reader to fix the wrong thing.
+
+   3. IT FLAGS THE WRONG HEADER, NOT THE MISSING ONE. `pluralize` - the actually
+      bare, actually robbed function - is never named, because nothing points at
+      it as a culprit. The check is aimed at the wrong end of the defect.
+
+  WHY IT IS STRUCTURAL RATHER THAN HARD: in shape A the stolen doc IS adjacent
+  to a real item - the inserted one - so THE FILE IS STRUCTURALLY WELL-FORMED and
+  only semantics distinguish stranding from correct documentation. A file-level
+  invariant has nothing to key on.
+
+  AMENDED ACCEPTANCE:
+  - THE GATE COVERS TRACE-MARKER STRANDING, HARD-FAILING. That is the case that
+    inverts `aida why <file:line>` and it is structurally detectable: a `// trace:`
+    line followed by a `///` doc line followed by another `// trace:` line with no
+    item between them - two header segments spliced together.
+  - DOC-ONLY STRANDING SHIPS AS A DOCUMENTED KNOWN GAP, in the code comment and
+    in the PR, with the three measurements above. It is NOT to be closed by a
+    heuristic, a scorer, or a threshold.
+  - CRITERION 2's INSTANCE-1 REQUIREMENT IS WITHDRAWN. The instances are fixed by
+    BUG-1545 (merged at a8b4e3fedefc); the class guard covers the trace half only.
+  - REJECTED AND RECORDED SO IT IS NOT RE-PROPOSED: a narrow deterministic signal
+    keyed on instance 1's particular syntax - its orphaned doc's first line being
+    a backtick-quoted format string whose bare identifiers match a nearby bare
+    function's parameters. That is A DETECTOR DERIVED FROM THE ONE INSTANCE IT WAS
+    BUILT FROM, which is this spec's own defect class. It would satisfy criterion 2
+    by pattern-matching the example in the criterion, and would imply the doc-only
+    class is covered when it is not. An honest gap beats a fitted detector.
+  - REVISIT TRIGGER: if a doc-only stranding is ever found to have caused a real
+    misreading - as opposed to costing a reader a moment - reopen this with that
+    instance as evidence. Until then the trace half is the whole guard.
+
+  CHECK A's OWN PRECISION IS NOT YET ESTABLISHED AND IS STILL REQUIRED. 23
+  tree-wide hits, of which at least two are confirmed FALSE: pr_ship.rs:442
+  (classify_gh_pr_checks_registration) and human_cmd.rs:12 (handle_human_command)
+  each carry two doc+trace segments describing THE SAME function's history across
+  two specs (BUG-344 then STORY-1166; STORY-562 then TASK-746). So the literal
+  3-line structural pattern is not sufficient at scale.
+  - THE PROPOSED TIGHTENING - "flag only when the sandwiched doc shares ZERO
+    identifier-token overlap with the current item" - REINTRODUCES THE SEMANTIC
+    SCORING JUST MEASURED AS UNRELIABLE, in a weaker form. It may hold as a
+    negative filter where it failed as a ranker, but it needs the same scrutiny,
+    not less.
+  - THE DISCRIMINATOR TO TEST FIRST IS AN IDENTIFIER MATCH, WHICH IS CATEGORICALLY
+    DIFFERENT FROM PROSE OVERLAP: in tracker_cmd.rs the stranded doc is "Handle
+    GitHub integration commands" and there is a BARE item named
+    `handle_github_command` - the doc's subject IS the identifier, almost token
+    for token. In the two false positives, both segments describe the current item
+    and no bare item claims them. Flag only when a bare item's identifier is
+    matched by the doc's subject at NEAR-EXACT precision, and MEASURE that
+    precision tree-wide before adopting it.
+  - IF IT DOES NOT HOLD, SHIP CHECK A NARROWER AND SAY SO. A gate that catches
+    tracker_cmd and nothing else, honestly scoped, beats one that catches more by
+    means already measured as unreliable.
+  - AND RE-VERIFY THAT tracker_cmd STILL FIRES AFTER ANY TIGHTENING. A precision
+    fix that silently costs the only known true positive is invisible in a hit
+    count that is going down, which is the direction the author is hoping for.
+  - THE SYNTHETIC DEMONSTRATION IS NOW MORE IMPORTANT, NOT LESS. With 23 hits of
+    which at least 2 are false, "it fires on tracker_cmd" is no longer strong
+    evidence that it detects the class. Construct one in a scratch file, different
+    symbols, different file.
+
+  WHAT THE PR MUST CARRY BEYOND THE CODE, because someone will propose a semantic
+  doc-attachment checker again: the three Check B numbers, the vocabulary-sharing
+  mechanism with the `gap()` and `success_rate` examples, the misattribution on the
+  known case, and the wrong-header-not-missing-header framing. That write-up is
+  what stops the investigation being repeated.
 status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:04:32.760270386Z
-modified_at: 2026-09-21T17:17:05.401082050Z
+modified_at: 2026-09-21T17:24:06.628985896Z
 req_type: Bug
 tags:
 - papercut
