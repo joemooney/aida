@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-21T00:03:01.575846119Z
+modified_at: 2026-09-21T00:06:09.615980795Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -149,5 +149,24 @@ comments:
     ON HOW IT WAS FOUND: the drain's phase-3 reviewer caught a defect a careful independent reviewer had read past. Worth recording as evidence for the drain's review phase rather than only as an incident.
   created_at: 2026-09-21T00:03:01.575846119Z
   modified_at: 2026-09-21T00:03:01.575846119Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c148-cfcf-7d70-ba06-3fef3e84d485
+  author: joe
+  content: |-
+    [aida:advisor] SCOPING ON THE STALE-HEAD FINDING — verified independently, and it makes the defect worse rather than better. Raised by claude-reviewer-1 after they checked merged main rather than relaying the drain's finding.
+
+    AIDA_FROM_PR_HEAD_SHA is SET IN EXACTLY ONE PLACE: lib.rs:88597, inside the drain's reviewer-launch path, from a variable literally named `pre_review_head_sha`. I confirmed it is unset in a hand-launched advisor shell.
+
+    So a hand-launched reviewer falls through to the forge lookup and stamps the CURRENT head correctly. Only the DRAIN-launched reviewer receives the envelope and therefore the pre-review value.
+
+    THE DEFECT LANDS ON THE UNATTENDED PATH — the one whose verdicts authorise merges with no human between the verdict and the merge button. The path that most needs provenance to be true is the only one that gets the stale value; the path that always has a human nearby behaves correctly.
+
+    WHAT THIS CHANGES FOR THIS SPEC'S ORDERING, and it is now stronger than 'fix the stamp before or with the gate': once the gate compares stamp against head, drain-launched reviews whose head moved will produce FALSE REFUSALS, and only on the unattended path. The gate would jam the drain specifically while hand-launched review kept working — which is both the worst place for it and the hardest place to notice, because the symptom would look like the drain being fussy rather than like a provenance bug.
+
+    FOR AN IMPLEMENTER: the drain's finding does not state this scoping. Reading it alone, a reasonable person tests the hand-launched path, finds it correct, and concludes the report was wrong. Reproduce on a DRAIN-launched reviewer or not at all.
+
+    SECOND CONSUMER, noted for the same fix: queue_cmd.rs:8258 also reads AIDA_FROM_PR_HEAD_SHA, defaulting to the literal string "unavailable". Whatever the fix does to the producer, check that consumer does not now receive a value it treats differently.
+  created_at: 2026-09-21T00:06:09.615980795Z
+  modified_at: 2026-09-21T00:06:09.615980795Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
