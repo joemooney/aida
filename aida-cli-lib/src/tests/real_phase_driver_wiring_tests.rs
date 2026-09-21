@@ -1,11 +1,13 @@
 use super::{
     agent_gate_matches_req, branch_commits_ahead_main, build_auto_punt_args,
     build_integrate_rebase_args, build_phase3_auto_rebase_args, ensure_implementer_branch_pushed,
-    find_orchestrated_lease, head_commit_message, headless_log_is_zero_bytes, list_leases,
-    orchestrated_lease_receipt_path, orchestrator_phase_child_env,
-    orchestrator_pr_title_and_body, parse_agent_gates_from_config,
-    pushed_branch_commits_ahead_default, watchdog_failure_with_committed_work,
-    AgentGateOnFail, OrchestratedLeaseReceipt, RealPhaseDriver,
+    find_orchestrated_lease, head_commit_message, headless_log_is_zero_bytes, lease_path,,
+    list_leases, orchestrated_lease_receipt_path, orchestrator_phase_child_env,,
+    orchestrator_pr_title_and_body, parse_agent_gates_from_config,,
+    prepare_orchestrated_lease_receipt, publish_orchestrated_lease_receipt_from_env,,
+    pushed_branch_commits_ahead_default, watchdog_failure_with_committed_work,,
+    AgentGateOnFail, ORCHESTRATED_LEASE_RECEIPT_ENV, OrchestratedLeaseReceipt,,
+    RealPhaseDriver, SessionLease,
 };
 use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure, PhaseReconcile};
 use aida_core::{
@@ -107,6 +109,43 @@ fn mint_lease(root: &std::path::Path, lease_id: &str, branch: &str, claude_id: O
         &manifest,
     )
     .unwrap();
+}
+
+fn fixture_lease(root: &std::path::Path, lease_id: &str) -> SessionLease {
+    toml::from_str(&std::fs::read_to_string(lease_path(root, lease_id)).unwrap()).unwrap()
+}
+
+fn publish_fixture_receipt(
+    root: &std::path::Path,
+    claude_id: &str,
+    lease: &SessionLease,
+) -> std::path::PathBuf {
+    let _guard = crate::test_env::env_lock();
+    let mut child = Command::new("true");
+    let receipt = prepare_orchestrated_lease_receipt(&mut child, root, claude_id);
+    assert!(receipt.parent().unwrap().is_dir());
+    assert!(!receipt.exists(), "preparation must remove a stale receipt");
+    let inherited = child
+        .get_envs()
+        .find_map(|(key, value)| {
+            (key == ORCHESTRATED_LEASE_RECEIPT_ENV).then(|| value.unwrap().to_os_string())
+        })
+        .expect("phase child inherits the receipt path");
+    assert_eq!(std::path::PathBuf::from(&inherited), receipt);
+
+    let previous = std::env::var_os(ORCHESTRATED_LEASE_RECEIPT_ENV);
+    std::env::set_var(ORCHESTRATED_LEASE_RECEIPT_ENV, &inherited);
+    let result = publish_orchestrated_lease_receipt_from_env(Some(claude_id), lease);
+    match previous {
+        Some(value) => std::env::set_var(ORCHESTRATED_LEASE_RECEIPT_ENV, value),
+        None => std::env::remove_var(ORCHESTRATED_LEASE_RECEIPT_ENV),
+    }
+    result.unwrap();
+    assert!(
+        receipt.is_file(),
+        "queue-work hook must publish the receipt"
+    );
+    receipt
 }
 
 /// Build a minimal interactive `RealPhaseDriver` rooted at an isolated
@@ -872,19 +911,14 @@ fn discover_lease_recovers_start_position_after_live_lease_disappears() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let claude_id = "cccccccc-3333-7000-8000-000000000000";
+    mint_lease(root, "019e3333-start", "bug-1485-start", Some(claude_id));
+    let lease = fixture_lease(root, "019e3333-start");
     let receipt_path = orchestrated_lease_receipt_path(root, claude_id);
     std::fs::create_dir_all(receipt_path.parent().unwrap()).unwrap();
-    std::fs::write(
-        &receipt_path,
-        serde_json::to_string(&OrchestratedLeaseReceipt {
-            claude_session_id: claude_id.to_string(),
-            lease_id: "019e3333-start".to_string(),
-            branch: "bug-1485-start".to_string(),
-            worktree_path: root.join("start-worktree"),
-        })
-        .unwrap(),
-    )
-    .unwrap();
+    std::fs::write(&receipt_path, "stale").unwrap();
+    publish_fixture_receipt(root, claude_id, &lease);
+    std::fs::remove_file(lease_path(root, &lease.id)).unwrap();
+    std::fs::remove_file(crate::session_manifest::manifest_path(root, &lease.id)).unwrap();
 
     let recovered = driver(root, "BUG-1485")
         .discover_orchestrated_lease(claude_id)
@@ -902,27 +936,40 @@ fn discover_lease_recovers_post_push_position_after_live_lease_disappears() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let claude_id = "dddddddd-4444-7000-8000-000000000000";
-    let worktree = root.join("pushed-worktree");
-    std::fs::create_dir_all(&worktree).unwrap();
-    std::fs::write(worktree.join("pushed.marker"), "origin/bug-1485-pushed\n").unwrap();
-    let receipt_path = orchestrated_lease_receipt_path(root, claude_id);
-    std::fs::create_dir_all(receipt_path.parent().unwrap()).unwrap();
-    std::fs::write(
-        &receipt_path,
-        serde_json::to_string(&OrchestratedLeaseReceipt {
-            claude_session_id: claude_id.to_string(),
-            lease_id: "019e4444-pushed".to_string(),
-            branch: "bug-1485-pushed".to_string(),
-            worktree_path: worktree.clone(),
-        })
-        .unwrap(),
-    )
-    .unwrap();
+    let (_tmp, worktree, remote) = git_repo_with_origin();
+    write_commit(
+        &worktree,
+        "finished.txt",
+        "done\n",
+        "fix: completed implementation",
+    );
+    ensure_implementer_branch_pushed(&worktree, "bug-878", true).unwrap();
+    assert!(
+        git(
+            remote.parent().unwrap(),
+            &[
+                "--git-dir",
+                remote.to_str().unwrap(),
+                "rev-parse",
+                "refs/heads/bug-878"
+            ]
+        )
+        .len()
+            == 40,
+        "fixture must reach the post-push position before lease release"
+    );
+
+    mint_lease(root, "019e4444-pushed", "bug-878", Some(claude_id));
+    let mut lease = fixture_lease(root, "019e4444-pushed");
+    lease.worktree_path = worktree.clone();
+    publish_fixture_receipt(root, claude_id, &lease);
+    std::fs::remove_file(lease_path(root, &lease.id)).unwrap();
+    std::fs::remove_file(crate::session_manifest::manifest_path(root, &lease.id)).unwrap();
 
     let recovered = driver(root, "BUG-1485")
         .discover_orchestrated_lease(claude_id)
         .unwrap();
-    assert_eq!(recovered.1, "bug-1485-pushed");
+    assert_eq!(recovered.1, "bug-878");
     assert_eq!(recovered.2, worktree);
 }
 

@@ -85173,6 +85173,34 @@ fn write_orchestrated_lease_receipt(
     Ok(write_atomic(path, &body)?)
 }
 
+fn publish_orchestrated_lease_receipt_from_env(
+    claude_session_id: Option<&str>,
+    lease: &SessionLease,
+) -> Result<()> {
+    if let (Ok(path), Some(claude_id)) = (
+        std::env::var(ORCHESTRATED_LEASE_RECEIPT_ENV),
+        claude_session_id,
+    ) {
+        write_orchestrated_lease_receipt(std::path::Path::new(&path), claude_id, lease)
+            .with_context(|| format!("writing orchestrator lease receipt {}", path))?;
+    }
+    Ok(())
+}
+
+fn prepare_orchestrated_lease_receipt(
+    cmd: &mut std::process::Command,
+    project_root: &std::path::Path,
+    claude_session_id: &str,
+) -> std::path::PathBuf {
+    let receipt = orchestrated_lease_receipt_path(project_root, claude_session_id);
+    if let Some(parent) = receipt.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::remove_file(&receipt);
+    cmd.env(ORCHESTRATED_LEASE_RECEIPT_ENV, &receipt);
+    receipt
+}
+
 fn read_orchestrated_lease_receipt(
     path: &std::path::Path,
     claude_session_id: &str,
@@ -88541,12 +88569,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // durable, session-keyed handoff path so phase 1 can still recover the
         // exact branch and worktree instead of inspecting unrelated leases.
         // trace:BUG-1485 | ai:codex
-        let lease_receipt = orchestrated_lease_receipt_path(&self.project_root, &session_uuid);
-        if let Some(parent) = lease_receipt.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let _ = std::fs::remove_file(&lease_receipt);
-        cmd.env(ORCHESTRATED_LEASE_RECEIPT_ENV, &lease_receipt);
+        prepare_orchestrated_lease_receipt(&mut cmd, &self.project_root, &session_uuid);
         // BUG-233: the corroboration token proves the bare auto-complete env
         // belongs to this live run. TASK-306 names the phase for statusline
         // context. BUG-742 carries the run variant so pickup prompts preserve

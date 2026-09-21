@@ -10162,13 +10162,7 @@ pub(crate) fn handle_queue_work(
     // directory, so a fast `queue done` or `pr ship` cannot erase the only
     // mapping before the orchestrator resumes after waitpid.
     // trace:BUG-1485 | ai:codex
-    if let (Ok(path), Some(claude_id)) = (
-        std::env::var(ORCHESTRATED_LEASE_RECEIPT_ENV),
-        claude_session_id.as_deref(),
-    ) {
-        write_orchestrated_lease_receipt(Path::new(&path), claude_id, &lease)
-            .with_context(|| format!("writing orchestrator lease receipt {}", path))?;
-    }
+    publish_orchestrated_lease_receipt_from_env(claude_session_id.as_deref(), &lease)?;
 
     if no_launch {
         eprintln!();
