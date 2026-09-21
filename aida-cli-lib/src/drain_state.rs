@@ -886,19 +886,30 @@ fn set_phase_inner_with_tuning(
     state.phase_started_at = Some(chrono::Utc::now().to_rfc3339());
     state.current_session_id = session_id.map(str::to_string);
     state.current_vendor = vendor.map(str::to_string);
-    if let Some(member) = state.members.iter_mut().find(|m| m.spec == spec) {
-        member
-            .started_at
-            .get_or_insert_with(|| chrono::Utc::now().to_rfc3339());
-        member.state = format!("in-phase-{phase_index}");
-        // TASK-1292: bind the PR live, the moment it's known, rather than
-        // only at the member's terminal outcome (`set_member_outcome`) — a
-        // reviewer phase's PR ownership must be visible to a concurrent
-        // `aida pr ship` call WHILE the review is in flight.
-        // trace:TASK-1292 | ai:claude
-        if pr.is_some() {
-            member.pr = pr;
-        }
+    // A batch drain re-resolves its queue head between members. Work tagged
+    // into the batch after launch was therefore absent from the initial
+    // snapshot, even though it could become `current`. Phase entry is the
+    // authoritative point at which a refreshed member joins the live drain.
+    // trace:BUG-1441 | ai:codex
+    if !state.members.iter().any(|m| m.spec == spec) {
+        state.members.push(DrainMember::queued(spec));
+    }
+    let member = state
+        .members
+        .iter_mut()
+        .find(|m| m.spec == spec)
+        .expect("phase member was inserted above");
+    member
+        .started_at
+        .get_or_insert_with(|| chrono::Utc::now().to_rfc3339());
+    member.state = format!("in-phase-{phase_index}");
+    // TASK-1292: bind the PR live, the moment it's known, rather than
+    // only at the member's terminal outcome (`set_member_outcome`) — a
+    // reviewer phase's PR ownership must be visible to a concurrent
+    // `aida pr ship` call WHILE the review is in flight.
+    // trace:TASK-1292 | ai:claude
+    if pr.is_some() {
+        member.pr = pr;
     }
     let _ = state.write(project_root);
     // STORY-712: phase churn is the benign majority — emitted (so a `--all`
@@ -1415,6 +1426,44 @@ pub(crate) fn render_human(state: &DrainState, stale: bool) -> String {
     render_human_inner(state, stale, None, chrono::Utc::now())
 }
 
+/// The members a READER should see, which is not always the members the state
+/// STORES.
+///
+/// A legacy or crash-window state file can name a `current` spec that has no
+/// matching entry in `members`. Rendering `members` verbatim then claims
+/// nothing is running while the drain is actively working that spec — the
+/// defect this function exists to close.
+///
+/// THIS IS A VIEW, AND THE DISTINCTION IS LOAD-BEARING. The synthetic member
+/// is produced for DISPLAY and lives only in the returned Vec; it is never
+/// inserted into `DrainState`. That is deliberate and not stylistic: six
+/// non-test sites do `let Some(mut state) = DrainState::read(..)`, mutate, and
+/// persist with `state.write(..)`, and five of them write back through the
+/// same value. Normalising into the state itself — the obvious "fix it once"
+/// move — would let a fabricated member reach disk through any of those five
+/// and be read back later as real drain state. A row rendered wrong is a
+/// papercut; a drain acting on a member that never existed is not.
+///
+/// SO: every renderer calls this, and nothing writes its result back.
+// trace:BUG-1441 | ai:claude
+fn display_members(state: &DrainState) -> Vec<DrainMember> {
+    let mut members = state.members.clone();
+    if let Some(current) = state.current.as_deref() {
+        if !members.iter().any(|m| m.spec == current) {
+            let phase_index = state
+                .current_phase
+                .as_deref()
+                .and_then(|phase| phase.split_whitespace().next())
+                .unwrap_or("?");
+            let mut member = DrainMember::queued(current);
+            member.state = format!("in-phase-{phase_index}");
+            member.started_at = state.phase_started_at.clone();
+            members.push(member);
+        }
+    }
+    members
+}
+
 /// Render the human summary with project-local pacing context.
 // trace:STORY-948 | ai:codex
 pub(crate) fn render_human_with_context(
@@ -1485,7 +1534,11 @@ fn render_human_inner(
     out.push('\n');
 
     let quiet_warn_minutes = drain_quiet_warn_minutes(project_root);
-    for member in &state.members {
+    // The view, not `state.members` — see `display_members`. The missing-active
+    // row used to be special-cased HERE, which is why TOON and JSON never got
+    // it. trace:BUG-1441 | ai:claude
+    let members = display_members(state);
+    for member in &members {
         let line = member_line_with_pacing(member, state, project_root, quiet_warn_minutes, now);
         out.push_str(&line);
         out.push('\n');
@@ -1494,13 +1547,12 @@ fn render_human_inner(
     // STORY-1041: a pipelined drain can have more than one active member, so
     // the progress line reports merged + active counts instead of pretending
     // there is only one "spec N of M". trace:STORY-1041 trace:ADR-27 | ai:codex
-    let merged = state
-        .members
+    let merged = members
         .iter()
         .filter(|m| m.state == STATE_COMPLETED)
         .count();
-    let in_flight: Vec<&DrainMember> = state.members.iter().filter(|m| m.is_running()).collect();
-    if state.pipeline_depth > 1 && state.members.len() > 1 {
+    let in_flight: Vec<&DrainMember> = members.iter().filter(|m| m.is_running()).collect();
+    if state.pipeline_depth > 1 && members.len() > 1 {
         out.push_str(&format!(
             "\n  {merged} merged, {} in flight (pipeline depth {}).\n",
             in_flight.len(),
@@ -1508,10 +1560,10 @@ fn render_human_inner(
         ));
     } else if let Some(cur) = &state.current {
         if let Some(pos) = state.position_of(cur) {
-            if state.members.len() > 1 {
+            if members.len() > 1 {
                 out.push_str(&format!(
                     "\n  {cur} is spec {pos} of {} in this drain.\n",
-                    state.members.len()
+                    members.len()
                 ));
             }
         }
@@ -1690,8 +1742,7 @@ fn render_toon_inner(
             out.push_str(&crate::toon::table_raw(
                 "members",
                 &["spec", "state", "pr"],
-                &state
-                    .members
+                &display_members(state)
                     .iter()
                     .map(|m| {
                         vec![
@@ -1742,6 +1793,12 @@ fn render_json_inner(
                     "stale"
                 };
                 map.insert("status".to_string(), serde_json::json!(word));
+                // Serde emitted `state.members`; the reader must see the VIEW.
+                // trace:BUG-1441 | ai:claude
+                map.insert(
+                    "members".to_string(),
+                    serde_json::json!(display_members(state)),
+                );
                 map.insert("pacing".to_string(), pacing_json(state, project_root, now));
                 let next = next_hint(state, project_root, now);
                 map.insert(
@@ -1896,6 +1953,110 @@ mod tests {
             Some(
                 "▶ drain in flight: spec 2/3 STORY-285 (ci) — watch: aida drain status".to_string()
             )
+        );
+    }
+
+    // BUG-1441: even an old/in-flight state file with a top-level current
+    // spec missing from the launch snapshot must show the active row.
+    // trace:BUG-1441 | ai:codex
+    #[test]
+    fn render_human_synthesizes_missing_current_member() {
+        let mut state = batch_state();
+        state.current = Some("BUG-REFRESHED".to_string());
+        state.current_phase = Some("2 (ci)".to_string());
+        state.phase_started_at = Some("2026-05-18T23:30:00+00:00".to_string());
+
+        let rendered = render_human(&state, false);
+        assert!(rendered.contains("BUG-REFRESHED"));
+        assert!(rendered.contains("ci"));
+    }
+    /// The human renderer was the ONLY one that synthesised the missing row,
+    /// so a headless caller (TOON by default) and the documented JSON monitor
+    /// surface both still reported an empty members view for a drain that was
+    /// actively working a spec. This asserts all THREE agree, because fixing
+    /// the two cited representations and leaving the shape is how the next
+    /// renderer inherits the bug.
+    // trace:BUG-1441 | ai:claude
+    #[test]
+    fn every_representation_shows_the_missing_current_member() {
+        let mut state = batch_state();
+        state.current = Some("BUG-REFRESHED".to_string());
+        state.current_phase = Some("2 (ci)".to_string());
+        state.phase_started_at = Some("2026-05-18T23:30:00+00:00".to_string());
+        let status = DrainStatus::Active(state.clone());
+
+        assert!(
+            render_human(&state, false).contains("BUG-REFRESHED"),
+            "human"
+        );
+
+        // Parse the members TABLE rather than searching the whole document:
+        // TOON also emits `current` as a scalar, so a bare contains() passes
+        // whether or not the members table was fixed. The first revision of
+        // this test did exactly that and survived reverting the TOON change.
+        let toon = render_toon(&status);
+        let members_at = toon.find("members[").expect("a members table renders");
+        let table =
+            crate::toon::parse_table(&toon[members_at..]).expect("the members table parses");
+        let toon_specs: Vec<&str> = table
+            .rows
+            .iter()
+            .filter_map(|row| row.first().map(String::as_str))
+            .collect();
+        assert!(
+            toon_specs.contains(&"BUG-REFRESHED"),
+            "TOON is what non-TTY and headless callers get; members were {toon_specs:?}"
+        );
+
+        let json: serde_json::Value =
+            serde_json::from_str(&render_json(&status)).expect("json renders");
+        let specs: Vec<&str> = json["members"]
+            .as_array()
+            .expect("members is an array")
+            .iter()
+            .filter_map(|m| m["spec"].as_str())
+            .collect();
+        assert!(
+            specs.contains(&"BUG-REFRESHED"),
+            "JSON is the documented monitor surface; members were {specs:?}"
+        );
+    }
+
+    /// THE SAFETY PROPERTY, and the reason the synthetic lives in a view
+    /// rather than in the state.
+    ///
+    /// Five non-test sites read the state, mutate it and write it back. If
+    /// normalisation happened at the loader, any of them would persist a
+    /// member that never existed and a later read would treat it as real.
+    /// Rendering must therefore leave the persisted file untouched - this test
+    /// fails the moment someone "simplifies" the view into the state.
+    // trace:BUG-1441 | ai:claude
+    #[test]
+    fn rendering_never_persists_the_synthetic_member() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = batch_state();
+        state.current = Some("BUG-REFRESHED".to_string());
+        state.current_phase = Some("2 (ci)".to_string());
+        state.write(dir.path()).unwrap();
+
+        let status = DrainStatus::Active(state.clone());
+        let _ = render_human(&state, false);
+        let _ = render_toon(&status);
+        let _ = render_json(&status);
+
+        assert!(
+            !state.members.iter().any(|m| m.spec == "BUG-REFRESHED"),
+            "rendering must not mutate the state it was given"
+        );
+        let reloaded = DrainState::read(dir.path()).expect("state reloads");
+        assert!(
+            !reloaded.members.iter().any(|m| m.spec == "BUG-REFRESHED"),
+            "a synthetic display member must never reach the persisted file"
+        );
+        assert_eq!(
+            reloaded.members.len(),
+            3,
+            "the batch fixture has three real members and gains none"
         );
     }
 
@@ -2246,6 +2407,29 @@ mod tests {
             Some(1948),
             "the PR must be bound while the member is still running, not only at set_member_outcome"
         );
+    }
+
+    // BUG-1441 acceptance fixture: the batch snapshot is formed first, then a
+    // newly tagged/queued spec is selected by the live refresh path. Entering
+    // its phase must append the same member row launch-time work receives.
+    // trace:BUG-1441 | ai:codex
+    #[test]
+    fn phase_entry_records_member_added_after_batch_launch() {
+        let dir = tempfile::tempdir().unwrap();
+        batch_state().write(dir.path()).unwrap();
+
+        set_phase(dir.path(), "BUG-REFRESHED", 1, "implementer");
+
+        let read = DrainState::read(dir.path()).unwrap();
+        assert_eq!(read.current.as_deref(), Some("BUG-REFRESHED"));
+        assert_eq!(read.current_phase.as_deref(), Some("1 (implementer)"));
+        let refreshed = read
+            .members
+            .iter()
+            .find(|member| member.spec == "BUG-REFRESHED")
+            .expect("refresh-added work must join the members table");
+        assert_eq!(refreshed.state, "in-phase-1");
+        assert!(refreshed.started_at.is_some());
     }
 
     // TASK-1292 regression fixture (full drain_state round trip): a reviewer
