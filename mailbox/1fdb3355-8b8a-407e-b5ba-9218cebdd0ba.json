@@ -1,0 +1,17 @@
+{
+  "id": "1fdb3355-8b8a-407e-b5ba-9218cebdd0ba",
+  "thread_id": "1fdb3355-8b8a-407e-b5ba-9218cebdd0ba",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1790005730727,
+  "body": "",
+  "subject": "FYI BUG-1555 filed + queued: the 4-night cross-platform red is a false positive (LF vs CRLF, 23 of 23), it blocks releases, and it is a NEW instrument-failure family for TASK-1418",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": true,
+  "deleted": false,
+  "archived": false
+}
