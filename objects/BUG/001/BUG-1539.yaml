@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T12:06:40.397691135Z
+modified_at: 2026-09-21T12:06:47.058086745Z
 req_type: Bug
 comments:
 - id: 01a0c30f-dcf8-7c00-a813-647e4173b637
@@ -79,4 +79,27 @@ comments:
       4. The 27 existing sidecar files are folded in or explicitly declared legacy; they must not remain invisible to the phase-3 handshake without a decision saying so.
   created_at: 2026-09-21T08:25:59.206185106Z
   modified_at: 2026-09-21T08:25:59.206185106Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3dc-9012-7162-9c07-9d07527138c5
+  author: joe
+  content: |-
+    SEVERITY RAISED medium -> high ON A CONFIRMED DESTRUCTION, self-reported by claude-reviewer-1 at 05:03 on 2026-09-21. This is no longer a characterised hazard; it has destroyed evidence once, in this repo, tonight.
+
+    WHAT WAS DESTROYED. .aida/review-verdicts/PR-2026.json held the 'aida drain reviewer' actor's RequestChanges at 363bd8f9f7fb with its summary and findings. claude-reviewer-1 read it, then recorded their own verdict with 'aida review record BUG-1441 --pr 2026'. The PR-keyed handshake write at lib.rs:76429-76447 rebuilds the body from scratch and fs::write s it. The original text is gone.
+
+    TWO FACTS THAT CHANGE THE CLASSIFICATION, both checked by the reporter before reporting:
+
+    1. THE LOSS IS UNRECOVERABLE, NOT MERELY OVERWRITTEN. Neither PR-2026.json nor BUG-1441.json carries a rounds array, so STORY-1391's retention did not catch it - that path snapshots rounds on the SPEC-keyed write and this loss was on the PR-keyed one. And .aida/review-verdicts/ is gitignored under the deny-by-default .aida/* rule, so there is no commit history to restore from. Both checked, both negative.
+
+    2. IT IS TRIGGERED BY ORDINARY BEHAVIOUR, NOT BY MISUSE. A second reviewer recording on a PR another actor already refused is the normal multi-round path. Nothing unusual was done. That means every multi-round PR-keyed review in this repo has been losing the previous round's text silently, all along.
+
+    THE MEASUREMENT IS STRUCTURALLY UNAVAILABLE AND THAT IS ITSELF THE FINDING. There is no count of how many prior rounds have been lost, because the evidence of each loss is the thing that was lost. Do not let a later report quote a rate here - the population cannot be counted from the surviving corpus. What CAN be counted is how many PR-keyed verdict files exist whose spec has more than one review round recorded elsewhere; that is a lower bound, not a rate.
+
+    DOWNSTREAM CONTAMINATION, ALREADY OBSERVED. claude-product-1 attributed the destroyed finding to claude-reviewer-1 in mail, quoting it as 'YOUR FINDING'. It was the drain reviewer's. The reviewer cannot now verify the quoted sentence against the original because the original is what they deleted. So the defect does not only lose text - it silently reassigns authorship of the surviving discussion to whoever recorded last. A verdict corpus that misattributes reasoning is worse than one that is merely incomplete, because the misattribution is confident.
+
+    WHAT SURVIVED AND HOW. The reporter had printed the first ~400 characters of the summary and of finding 1 before recording, and hand-carried that back into the new verdict as F0, explicitly labelled PARTIAL and TRUNCATED-AT-READ-TIME and attributed to the drain reviewer with a statement that they destroyed the original. Anything past 400 characters is lost, and the original finding COUNT is unknown. Hand-carrying is the only mitigation available to a reviewer today; that it is the only one is part of the argument for the fix.
+
+    ACCEPTANCE ADDITION: the PR-keyed write must read the existing file and preserve prior rounds by the same mechanism the SPEC-keyed write uses, and a test must pin that a second recorder on a PR that already carries another actor's verdict does not lose the first actor's summary, findings, or recorded_by.
+  created_at: 2026-09-21T12:06:47.058086745Z
+  modified_at: 2026-09-21T12:06:47.058086745Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
