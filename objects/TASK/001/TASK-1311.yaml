@@ -31,7 +31,54 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:39:54.938488038Z
-modified_at: 2026-09-21T04:39:54.938488038Z
+modified_at: 2026-09-21T05:27:08.418289820Z
 req_type: Task
 tags:
 - parent:BUG-1470 lifecycle ownership severity:operational
+comments:
+- id: 01a0c26e-ad82-7ed0-91d9-bbfcc2d4e4f3
+  author: joe
+  content: |-
+    [aida:advisor] SECOND ENTRY POINT INTO THE SAME OWNERSHIP GAP, observed live 2026-09-20.
+    Reviewer's finding; recorded here rather than as a new spec, with the test for splitting
+    it later stated explicitly.
+
+    THIS SPEC ASKS: who moves a NeedsAttention spec back into flight. The live case tonight
+    is adjacent and the answer is the same missing owner:
+
+        NOTHING OWNS A *REWORKED* SPEC WAITING FOR RE-REVIEW WHEN THE REVIEWER THAT REFUSED
+        IT WAS A DRAIN PHASE AND THE DRAIN IS DOWN.
+
+    PR #2030 / BUG-1485. A verdict was recorded at 20:52 by "aida review record" — an
+    ephemeral drain phase. The lane was stopped at about 21:53. Some time after the refusal,
+    a real commit landed on bug-1485-work (05969aa397). So rework ARRIVED for a reviewer
+    that no longer exists. The spec is not shelved, not queued, not escalated. It sits.
+
+    A STOPPED LANE DOES NOT STOP IMPLEMENTERS. That is the part neither of us had designed
+    for: stopping the orchestrator stops the consumer, not the producer, and work continues
+    to arrive at a queue nobody is reading.
+
+    It is the live continuation of BUG-1470's original measurement — "six verdicts, zero
+    drain runs after them" — with the drain deliberately stopped rather than merely busy.
+    Same end state, different cause, which is evidence the end state does not depend on the
+    cause.
+
+    WHY HERE AND NOT A NEW SPEC. The separability test that justified splitting BUG-1530 out
+    of TASK-1-167 does not pass here: both cases need ONE answer — a named owner, and a
+    substrate-driven trigger rather than an agent noticing. Criterion 1 and criterion 2 of
+    this spec cover both as written. Filing a second spec would create two specs waiting on
+    the same decision.
+
+    WHAT WOULD JUSTIFY SPLITTING IT LATER: if the fixer finds the two TRIGGERS irreconcilable
+    — shelved-spec re-entry keying off a NeedsAttention status, reworked-spec re-review
+    keying off a commit landing after a verdict — then they are two mechanisms and should be
+    two specs. That is a finding for whoever implements it, not a judgement to make now.
+
+    ONE ADDITION TO THIS SPEC'S CRITERION 3, from this case. The enumerated must-not-
+    auto-return cases should include: a spec whose rework arrived while no reviewer existed
+    must be routed to an INDEPENDENT reviewer, not auto-approved on the grounds that the
+    refusing reviewer is gone. The absence of the refuser is not the resolution of the
+    refusal.
+  created_at: 2026-09-21T05:27:08.418289820Z
+  modified_at: 2026-09-21T05:27:08.418289820Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
