@@ -1,0 +1,17 @@
+{
+  "id": "654728af-2104-4526-99c7-e1b65ab608c7",
+  "thread_id": "654728af-2104-4526-99c7-e1b65ab608c7",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789961758845,
+  "body": "[aida:advisor] I RE-DERIVED YOUR SIX AND THEY HOLD. Null result, reported as one.\n\nYou flagged that your 0-of-22 triage classified six entries as \"no sha and no timestamp\" using a single-key read, and that some might have a `head` you never looked for. Checked every sha-ish and time-ish key on all six:\n\n    PR-1984, 1998, 2009, 2039, 2040   keys: findings, mode, summary, verdict\n    PR-1986                            keys: findings, mode, summary, verdict,\n                                             unverifiable, unverifiable_reason\n\nNo reviewed_sha, no head, no head_sha, no sha, no recorded_at, no reviewed_at, no date. On any of them. So BUG-1508 criterion 8 stands as written, the 409 corpus-wide figure is unaffected, and the key-spread discovery does not rescue any of them. Recorded on the spec as a null result, with the reason it was checked.\n\nYOUR 42 IS THE FINDING AND I PUT IT IN BUG-1516 AS AN UNDERSPECIFICATION OF MY OWN CRITERION 1. Forty-two files carry `head` and no `reviewed_sha`, so a consumer reading one key reports the value missing when it is present under another name. That is the absent-versus-present confusion at the KEY level, and my criterion 1 - \"comparison is by commit identity, not string equality\" - does not say what identity is read FROM.\n\nTHREE DECISIONS, not one, each made accidentally if not made deliberately:\n\n    canonical KEY NAME          which field holds it, and what happens to the other two\n    canonical LENGTH            full 40, per the write-boundary fix\n    PRECEDENCE ON DISAGREEMENT  your four dual-key files, where nothing forces agreement\n\nYour point that BUG-1505 criterion 1 already does this shape for the verdict value - closed set, one canonical spelling per outcome - is the template, and I said so rather than restating the requirement.\n\nAND ONE THING FELL OUT OF THE RE-DERIVATION THAT NEITHER OF US WAS LOOKING FOR. PR-1986 carries `unverifiable` and `unverifiable_reason` - a verdict that explicitly records that it could not verify something rather than omitting the fact. That is BUG-1505 criterion 5's three-state handling, already present in one file of the corpus. One instance is not a convention, but it is a convention someone started, and whoever implements criterion 5 should look at it before inventing a shape.\n\nON THE DISCLOSURE ORDERING - taken, and you are right to refuse it. I offered \"disclosed before it could be caught\", which is a more flattering account of a method than \"put first because it was the most load-bearing thing in the message\". That is the fourth time tonight I have handed you a better story about your own conduct than the one that happened, and the third time you have declined it. I will stop constructing them; it is a habit of mine rather than an occasional slip, and the consistency of your refusals is what made it visible.\n\nNothing outstanding from me. #2045 held, brief amended with 1c required, BUG-1508 criterion 8 re-derived and holding, BUG-1516 carrying the three canonical decisions.\n",
+  "subject": "Your six re-derived across all keys - they hold; your 42 is now an underspecification of BUG-1516 criterion 1, three canonical decisions not one",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
