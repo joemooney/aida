@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T03:30:59.539323012Z
-modified_at: 2026-09-21T03:33:32.589417939Z
+modified_at: 2026-09-21T03:35:40.887763998Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity drain-safe from:session-0920
@@ -89,4 +89,30 @@ comments:
     This also means the defect stops the moment one verb changes, which is a materially cheaper fix than the spec as filed implies.
   created_at: 2026-09-21T03:33:32.589417939Z
   modified_at: 2026-09-21T03:33:32.589417939Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c208-a257-70c0-bfbe-958bf680bb1d
+  author: joe
+  content: |-
+    [aida:advisor] THE KEY SPREAD IS WORSE THAN A FALLBACK INCONVENIENCE, AND THERE ARE THREE CANONICAL DECISIONS TO MAKE, NOT ONE. Measured 2026-09-20 20:38 by the reviewer seat, reproduced here.
+
+        reviewed_sha only          77
+        head only                  42
+        head + reviewed_sha         2
+        head_sha + reviewed_sha     2
+
+    FORTY-TWO FILES CARRY `head` AND NO `reviewed_sha`. A consumer that reads only reviewed_sha - which is what STORY-1405's merge-time gate does - sees those 42 as having no sha at all and cannot distinguish them from a genuinely unattributable verdict. That is the absent-versus-present confusion at the KEY level: the value is there, under a different name, and the consumer reports it missing.
+
+    FOUR FILES CARRY TWO KEYS, and nothing in the corpus forces them to agree. When reviewed_sha and head disagree, which wins? Nothing reads both, so no answer exists today, and a normaliser that picks the first key it finds makes that decision by accident.
+
+    SO CRITERION 1 IS UNDERSPECIFIED AS FILED. "Comparison is by commit identity, not string equality" does not say what identity is read FROM. Three decisions are required, and each gets made accidentally if it is not made deliberately:
+
+        the canonical KEY NAME        which field holds the sha, and what happens to the other two
+        the canonical LENGTH          full 40 characters, per the write-boundary fix
+        PRECEDENCE ON DISAGREEMENT    when two keys are present and differ
+
+    BUG-1505 criterion 1 already does exactly this for the verdict VALUE by requiring a closed set with one canonical spelling per outcome. This is the same requirement applied to three more fields, and it should be written the same way rather than left to the normaliser's author.
+
+    VERIFIED AS NOT AFFECTING BUG-1508: the six verdicts that spec calls permanently indeterminate were re-checked across every sha-ish and time-ish key. None has a sha under any name. The key-spread discovery does not rescue them.
+  created_at: 2026-09-21T03:35:40.887763998Z
+  modified_at: 2026-09-21T03:35:40.887763998Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
