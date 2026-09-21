@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:35:48.162497532Z
-modified_at: 2026-09-21T04:42:30.394890622Z
+modified_at: 2026-09-21T04:44:45.455775325Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -271,6 +271,68 @@ comments:
   content: 'Round 2: strengthened the MockPhaseDriver regression so finish_ci explicitly records PrNoChecks for the initial head, advances the head at the pre-review boundary, and records PrNoChecks for the reviewed head; verified the test fails when verify_ci_for_review is disabled. Guarded all fake-gh positional parameters and added zero/one-argument coverage. Confirmed lifecycle:no-ci-wait still skips phase 2 at the orchestrator, matching CLAUDE.md; no documentation change needed.'
   created_at: 2026-09-21T04:42:30.394890622Z
   modified_at: 2026-09-21T04:42:30.394890622Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c247-e00f-7563-a23d-f729aee50d4d
+  author: joe
+  content: |-
+    [aida:advisor] LIVE REPRODUCTION of this bug, in the drain dispatched to fix it.
+    Observed by the driver advisor 2026-09-20 21:42-21:44 -07:00, with timestamps.
+
+    This matters for criterion 5, which the reviewer blocked on: "Regression test
+    reproduces the observed ordering: reviewer phase entered before the reviewed commit's
+    checks have started." Here is that ordering, observed in production rather than
+    asserted from source order.
+
+    THE SEQUENCE, with the queries that produced each line.
+
+      04:42:38Z  implementer commits and pushes 2cb2c15c42 to bug-1460-work
+                 git log -1 --format=%cI origin/bug-1460-work
+
+      ~04:43Z    drain phase 2 asks the forge for checks and reports, verbatim, at
+                 line 92 of the run log:
+                     PR-2034 has no CI checks - nothing to gate on.
+                 then at line 114 of the same log:
+                     CI: green
+                 then:
+                     Review: routed to reviewer queue
+
+      04:44:13Z  the checks actually register - 95 seconds after the push, and AFTER
+                 the drain had already called them green and routed to review
+                 gh run list --branch bug-1460-work --json headSha,status,createdAt
+
+      04:44:20Z  confirmed still in_progress for 2cb2c15c4268, while the newest
+                 COMPLETED run on the branch is 8f4b6c85a05d from 2026-09-20T23:10:54Z
+                 - the PREVIOUS head, five hours earlier
+
+    THE DEFECT, stated precisely. "PR-2034 has no CI checks" was TRUE when the drain asked.
+    The checks had not registered yet. The defect is not a wrong observation; it is the
+    translation of a true absence into "CI: green" and proceeding on it.
+
+    That is PRIN-5 word for word: a coordination surface must distinguish absent evidence
+    from good evidence, because computing a verdict over what is present always errs
+    toward reassurance. Here the population was empty and the verdict computed over it was
+    the most reassuring one available.
+
+    WHAT THIS GIVES THE TEST. The reviewer's remedy - a MockPhaseDriver whose CI phase
+    reports PrNoChecks - is the right instrument, and this run shows the real-world trigger
+    is not exotic: a ~95 second forge registration lag, which any push can hit. The test
+    should assert the drain does NOT enter the reviewer phase on PrNoChecks, and should
+    distinguish that from an actual green. Both of those are behavioural and neither
+    depends on source order.
+
+    NOTE ON WHY THE DRAIN STILL HAS THE BUG: the fix is in this very PR, unmerged, so the
+    binary running the drain could not contain it. The round DID produce the reviewer's
+    requested test commit (2cb2c15c42, MockPhaseDriver-based, addressing the blocking
+    criterion-5 finding). So the round is good work; the routing decision after it was not.
+
+    SEPARATELY - this run also hit BUG-1524 on its first two attempts. Phase 1 refused to
+    launch because local bug-1460-work had diverged from origin, and the drain continued
+    from the CI gate anyway, reporting "CI: green / Review: routed" with the head
+    UNCHANGED at 8f4b6c85a0 and no commit at all. Realigning the branch fixed it. Those
+    are two independent paths to reviewing the wrong head, and fixing this spec does not
+    fix that one.
+  created_at: 2026-09-21T04:44:45.455775325Z
+  modified_at: 2026-09-21T04:44:45.455775325Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
