@@ -249,7 +249,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T06:01:18.480737879Z
+modified_at: 2026-09-21T06:01:51.590514179Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
@@ -350,4 +350,40 @@ comments:
     I am recording this because my earlier comment could be read as saying AIDA is blind to a share of its own store. It is not, and I had not verified that when I wrote it. The blindness is in external tooling reading the store, and the reason it matters here is that the detector this spec asks for is likely to start life as external tooling.
   created_at: 2026-09-21T05:58:11.841488270Z
   modified_at: 2026-09-21T05:58:11.841488270Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c28e-76e6-7f13-93cc-3966286757ef
+  author: joe
+  content: |-
+    BLAST RADIUS MEASURED AND REPRODUCED INDEPENDENTLY. This makes criterion 6 binding rather than advisory.
+
+      scanned                4197 store objects
+      yaml.safe_load         ok 3007  FAIL 1190  = 28 percent fail
+      (matches TASK-184 figure exactly)
+
+      corrupted spec   does safe_load parse it?
+        BUG-1106       FAILS
+        BUG-1111       FAILS
+        BUG-1310       FAILS
+        BUG-1450       FAILS
+        BUG-1452       FAILS
+        STORY-1405     parses
+
+    FIVE OF THE SIX CORRUPTED SPECS ARE IN THE UNPARSEABLE POPULATION. So the obvious parsed-layer detector -- safe_load plus a swallowed exception -- reports:
+
+      1 of 6 corrupted specs
+      6 of 25 occurrences
+
+    with no error, no warning, and a clean-looking sweep over 4197 files.
+
+    THIS IS WORSE THAN THE TWO TRAPS IT COMPOSES FROM, and the reason is the shape of the number. Trap 1 (wrong layer) returns ZERO, and a zero over 4197 files invites suspicion. This returns a SMALL NON-ZERO NUMBER, which reads as a completed scan that found a modest problem. One spec, six occurrences, sounds like a finding rather than like a failure.
+
+    That is the same tell as every other measurement error recorded tonight: the answer came out small and tidy. A truncated or blind view never looks truncated -- it looks like a clean answer.
+
+    WHY THE OVERLAP IS NOT COINCIDENCE, and this is worth stating so nobody treats it as bad luck: both properties select for the same specs. A spec with typed relationships carries the !Custom tag, and a spec long enough to accumulate em-dashes in narrative prose is the kind of spec that has typed relationships. The corruption and the parser failure are correlated through spec richness, so the detector is blind preferentially on exactly the specs most worth scanning.
+
+    CRITERION 6 IS THEREFORE THE LOAD-BEARING ONE OF 5-7 and should be stated as binding: a parse failure is reported as a FAILURE and never as zero findings, and the count of unreadable objects appears in the output beside the count of findings. A scan that cannot say how many objects it failed to read has not reported coverage, and without coverage the finding count means nothing.
+
+    Suggested verification, executable: run the check against the store and assert the output contains BOTH a findings count and an unreadable-objects count, and that the unreadable count is either zero or explicitly acknowledged. A check that prints only findings fails this criterion even when its findings are correct.
+  created_at: 2026-09-21T06:01:51.590514179Z
+  modified_at: 2026-09-21T06:01:51.590514179Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
