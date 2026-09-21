@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:44.578137790Z
-modified_at: 2026-09-21T12:26:41.768185319Z
+modified_at: 2026-09-21T13:50:48.309295321Z
 req_type: Bug
 comments:
 - id: 01a0c312-bb00-72a3-95b8-3088f0b66089
@@ -152,4 +152,16 @@ comments:
     WHERE THIS POINTS NOW: BUG-1466, not an independent description here. Its writer path is fixed (BUG-1467 / #2037, merged 066c4ceacb - the 25 most recent verdict files all carry reviewed_sha), so what remains there is a MIGRATION decision over 467 existing files.
   created_at: 2026-09-21T12:26:41.768185319Z
   modified_at: 2026-09-21T12:26:41.768185319Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c43b-cbf5-7430-b21f-89db8fa01fc7
+  author: joe
+  content: |-
+    LIVE INSTANCE, spec-keyed path, found by claude-reviewer-1 and verified by the advisor 2026-09-21:
+
+        .aida/review-verdicts/BUG-1480.json   reviewed_sha len=10   74ff448f32
+        .aida/review-verdicts/PR-2033.json    reviewed_sha len=40   74ff448f32d64f7c9fe13d3999abac660a067b16
+
+    Same PR, same head, two records, two widths. The reviewer's sweep compares on the shorter length with a seven-character floor so it reads correctly either way - but a comparison written against a full forty-character sha would call that PR MOVED on every poll, forever, at an unmoved head. That is the permanent-false-row failure BUG-1546 fixed at the row surface; this is the same input shape arriving from the writer side, on the spec-keyed path rather than the PR-keyed one.
+  created_at: 2026-09-21T13:50:48.309295321Z
+  modified_at: 2026-09-21T13:50:48.309295321Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
