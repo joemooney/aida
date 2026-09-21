@@ -1,0 +1,44 @@
+id: 01a0c442-f472-7a51-aba3-b8d151b5ef2a
+spec_id: TASK-1420
+agreed_id: TASK-1420
+title: Propagate two 2026-09-21 method memories into the scaffolding pack - check-ignore names the winner, and provenance-by-bracketing with its does-not-verify caveat
+description: |-
+  Two discipline memories written on 2026-09-21 generalize past this repo and were ruled for scaffolding propagation by the advisor. Propagation is a COMMIT to `aida-core/templates/memories/`, not a write to a local pack, so it needs an implementer.
+
+  WHY THESE TWO. Both are about a surface returning something TRUE that is not the thing asked. Neither contains AIDA-specific content; both are wrong the same way in any repo.
+
+  1. CHECK-IGNORE NAMES THE WINNER. `git check-ignore -v <path>` reports the winning rule under git's precedence order, where `.git/info/exclude` OUTRANKS `.gitignore`. It names the FIRST match - not the only one, and not the causal one. With two rules covering a path it will ALWAYS point at info/exclude, which reads as attribution and is not. Attribution requires REMOVING the candidate rule and re-testing in a scratch repo. Live mis-read: an advisor concluded a merge-hold marker was ignored "machine-local, not designed" when the repo's own deny-by-default `.aida/*` was doing it on every clone - a conclusion that made the defect look smaller than it is.
+
+  2. RECONSTRUCT PROVENANCE BY BRACKETING. Date an artifact by its OWN event, not by a remembered wall-clock or an mtime; then bracket the instant with the nearest durable records either side and read what they say. Recovered the reason for a merge-hold whose own reason lived only in a gitignored, clobbered file. CAVEAT THAT MUST SHIP WITH IT: bracketing RECOVERS a reason, it does not VERIFY one. What comes back is what the adjacent records say, not what the person acted for; the two coincided in the live case and need not. Always label the output as reconstructed, never cite it as provenance, and NAME THE BRACKETING RECORDS so a later reader can re-judge the inference - a reconstruction whose brackets are named can be re-judged; one asserted bare becomes provenance in somebody's next summary.
+
+  BODIES ARE WRITTEN AND READY TO COPY FROM:
+      ~/.claude/projects/-home-joe-ai-aida/memory/feedback_check_ignore_names_the_winner.md
+      ~/.claude/projects/-home-joe-ai-aida/memory/feedback_reconstruct_provenance_by_bracketing.md
+
+  THE GOTCHA THAT WILL BITE SILENTLY, verified by the advisor rather than taken on report. The pack is marker-driven off `aida-core/templates/memories/` - 44 files, 43 carrying `propagation: scaffolding-pack`, embedded by build.rs. The two frontmatter shapes DIFFER:
+
+      local pack                        templates/memories (masters)
+      ---                               ---
+      name: kebab-case-form             name: snake_case_matching_filename
+      description: ...                  description: "..."
+      metadata:                         type: feedback           <- TOP LEVEL, not nested
+        node_type: memory               propagation: scaffolding-pack
+        type: feedback                  originSessionId: <uuid>
+        originSessionId: <uuid>
+
+  A STRAIGHT COPY keeps `type:` nested under `metadata:` and drops the `propagation:` marker, so the file lands in the directory and NEVER JOINS THE PACK. It would look done and ship nothing - the absent-vs-good-evidence shape (PRIN-5) arriving in the delivery path rather than in a gate.
+
+  ACCEPTANCE:
+  1. Both memories exist under `aida-core/templates/memories/` with MASTER frontmatter: snake_case `name:` matching the filename, quoted `description:`, TOP-LEVEL `type: feedback`, and `propagation: scaffolding-pack`.
+  2. THE VERIFICATION IS THAT THEY APPEAR IN A SCAFFOLDED PACK, NOT THAT THEY EXIST IN THE DIRECTORY. Run the scaffolder into a throwaway target and show both files present in the output. Listing the templates directory does NOT satisfy this - that is exactly the failure the gotcha above describes.
+  3. The bracketing memory ships with its caveat paragraph intact, including the name-the-brackets clause. The caveat is load-bearing, not a closing line: without it the technique manufactures provenance.
+  4. `aida memories check` is clean afterwards.
+
+  OUT OF SCOPE: any other memory in the local pack. This is two files, chosen because they are pure method with no project content.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T13:58:37.426328724Z
+modified_at: 2026-09-21T13:58:37.426328724Z
+req_type: Task
