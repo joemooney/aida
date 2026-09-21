@@ -148,6 +148,29 @@ fn available_inodes(_path: &Path) -> std::io::Result<u64> {
     ))
 }
 
+/// TASK-1298: "cannot measure" is not "measured and it is bad".
+///
+/// Every inode error used to map to `Fail`, and on non-Unix `available_inodes`
+/// returns `ErrorKind::Unsupported` unconditionally — so readiness refused on
+/// Windows regardless of actual capacity, and every unattended launch there was
+/// blocked by a check that had never run.
+///
+/// `Unsupported` now yields `Warn`: surfaced in the report, but not blocking,
+/// because `ready()` fails only on `Fail`. A real measurement failure on a
+/// platform that DOES support inode accounting still fails, which is the
+/// distinction the check exists to make.
+///
+/// Pure and separately testable on purpose — PR CI is Linux-only, so a test
+/// that needed a Windows host could not guard this.
+// trace:TASK-1298 | ai:claude
+pub(crate) fn inode_level(result: &std::io::Result<u64>, required_inodes: u64) -> Level {
+    match result {
+        Ok(available) => decide_capacity(*available, required_inodes, false),
+        Err(error) if error.kind() == std::io::ErrorKind::Unsupported => Level::Warn,
+        Err(_) => Level::Fail,
+    }
+}
+
 fn disk_checks(root: &Path, required: u64, required_inodes: u64, hours: u64) -> Vec<Check> {
     let disks = Disks::new_with_refreshed_list();
     let paths = [
@@ -170,9 +193,7 @@ fn disk_checks(root: &Path, required: u64, required_inodes: u64, hours: u64) -> 
         let key = disk.mount_point().to_path_buf();
         let free = disk.available_space();
         let inode_result = available_inodes(&probe);
-        let inode_level = inode_result.as_ref().map_or(Level::Fail, |available| {
-            decide_capacity(*available, required_inodes, false)
-        });
+        let inode_level = inode_level(&inode_result, required_inodes);
         let level = if decide_capacity(free, required, false) == Level::Fail
             || inode_level == Level::Fail
         {
@@ -181,7 +202,13 @@ fn disk_checks(root: &Path, required: u64, required_inodes: u64, hours: u64) -> 
             Level::Pass
         };
         let inode_detail = inode_result.as_ref().map_or_else(
-            |error| format!("inode availability unavailable ({error})"),
+            |error| {
+                if error.kind() == std::io::ErrorKind::Unsupported {
+                    format!("inode accounting not supported on this platform ({error}) — skipped, not failed")
+                } else {
+                    format!("inode availability unavailable ({error})")
+                }
+            },
             |available| format!("{available} inodes free; {required_inodes} required"),
         );
         out.push(Check {
@@ -283,5 +310,42 @@ mod tests {
         assert_eq!(decide_capacity(inodes, inodes, false), Level::Pass);
         assert_eq!(decide_capacity(inodes - 1, inodes, false), Level::Fail);
         assert_eq!(decide_capacity(short.1 - 1, short.1, true), Level::Warn);
+    }
+
+    // TASK-1298: readiness hard-failed on Windows because EVERY inode error
+    // mapped to Fail, including the Unsupported that non-Unix returns
+    // unconditionally. `ready()` fails on any Fail, so an unattended launch was
+    // blocked by a check that had never run.
+    //
+    // This is deliberately a test of the pure classifier rather than of the
+    // platform: PR CI is Linux-only, so a test needing a Windows host could not
+    // guard this at all. The three arms are the whole contract.
+    // trace:TASK-1298 | ai:claude
+    #[test]
+    fn unsupported_inode_accounting_warns_rather_than_failing() {
+        let unsupported: std::io::Result<u64> = Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "inode accounting is not available on this platform",
+        ));
+        assert_eq!(
+            inode_level(&unsupported, 10_000),
+            Level::Warn,
+            "cannot-measure must be surfaced, not blocking — ready() fails only on Fail"
+        );
+
+        // a REAL failure on a platform that should support it still fails
+        let denied: std::io::Result<u64> = Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "statvfs refused",
+        ));
+        assert_eq!(
+            inode_level(&denied, 10_000),
+            Level::Fail,
+            "a measurement that failed is not the same as one that cannot be taken"
+        );
+
+        // and a genuine shortage still fails, or the fix would just stop checking
+        assert_eq!(inode_level(&Ok(9_999), 10_000), Level::Fail);
+        assert_eq!(inode_level(&Ok(10_000), 10_000), Level::Pass);
     }
 }
