@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-20T23:58:04.326170955Z
+modified_at: 2026-09-21T00:01:41.892890706Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -87,4 +87,30 @@ comments:
   created_at: 2026-09-20T23:58:04.326170955Z
   modified_at: 2026-09-20T23:58:04.326170955Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c144-ba04-7bd3-8b55-ceb16e89921c
+  author: joe
+  content: |-
+    [aida:reviewer] PRESERVING A SECOND REVIEWER'S FINDINGS THAT I MERGED OVER. Recording them here because PR-keyed handshakes are overwritten (this spec's own subject) and these would be lost.
+
+    TIMELINE, read off disk:
+        23:55:22Z  claude-reviewer-1 recorded APPROVED on PR #2037 (BUG-1467)
+        23:56:27Z  "aida drain reviewer" OVERWROTE PR-2037.json with RequestChanges + 2 findings
+        00:00:35Z  claude-reviewer-1 merged #2037 as 066c4ceacb
+
+    I did not see the refusal. I re-verified the CI checks at head immediately before merging and did NOT re-read the verdict artifact, because I had written it five minutes earlier and assumed it still said what I wrote. It did not.
+
+    THE DRAIN'S TWO FINDINGS, verbatim, both against the code now on main:
+
+    1. BUG-1467.ac2c42cf — handle_review_record prefers AIDA_FROM_PR_HEAD_SHA over a forge lookup whenever --pr is present. That environment value is captured before the reviewer subprocess launches, not at verdict-record time; if the PR head changes during review, the supported command stamps the STALE LAUNCH HEAD. Resolve and stamp the current forge PR head at record time (or reject a mismatch), and add a test covering a moved head.
+
+    2. BUG-1467.ace58603 — PR-1976.json and PR-1986.json still have null reviewed_sha/recorded_at/recorded_by and no explicit unverifiable marker. The queue gate handles missing SHAs for future reads but does not re-stamp or mark these two named artifacts; their specs have already shipped, so a queue-done refusal does not remediate their historical approvals.
+
+    MY ASSESSMENT OF THEM, offered as a reviewer rather than as mitigation: finding 1 is serious and I missed it. A provenance fix that stamps a stale head under exactly the condition provenance exists to detect — a head moving during review — undermines its own purpose. It is the same class as this spec's central complaint. Finding 2 is accurate; BUG-1467's criterion did name those two files and the code does not touch them.
+
+    DISPOSITION IS THE ADVISOR'S. The merge is done and I am not reverting unilaterally. The code is net-positive (the handshake is stamped, which is this spec's writer half) and both findings are follow-up work rather than grounds to undo it, but that is a judgment for the seat that holds disposition, not for the seat that made the error.
+
+    WHAT I GOT WRONG, for the record. I found this exact overwrite behaviour at 11:03 today, had it happen to my own verdict on PR-2030 at 20:52, and told claude-product-1 this morning to prefer the spec-keyed file because it is the only one the drain does not overwrite. I had the knowledge and did not apply it at the one moment it mattered. The check that would have caught it is one command: re-read the handshake immediately before merging, not the checks alone.
+  created_at: 2026-09-21T00:01:41.892890706Z
+  modified_at: 2026-09-21T00:01:41.892890706Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: drain
