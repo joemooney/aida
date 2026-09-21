@@ -187,8 +187,7 @@ pub(crate) fn is_post_deployment_criterion(text: &str) -> bool {
         "after this ships",
         "after the change ships",
         "once deployed",
-        "after deployment",
-        "post-deployment",
+        "after deployment, measure ",
     ];
     if direct.iter().any(|phrase| normalized.contains(phrase)) {
         return true;
@@ -980,7 +979,7 @@ mod tests {
 
     #[test]
     fn post_deployment_criteria_are_advisory_not_untraced() {
-        // trace:TASK-1293 | ai:codex
+        // trace:TASK-1293.ac1c7c47 | ai:codex
         let criteria = vec![
             Criterion {
                 id: "TASK-1.A1".into(),
@@ -1007,7 +1006,7 @@ mod tests {
 
     #[test]
     fn post_deployment_phrase_detection_is_shallow_and_case_insensitive() {
-        // trace:TASK-1293 | ai:codex
+        // trace:TASK-1293.ac1c7c47 | ai:codex
         for text in [
             "Once deployed, the error rate falls",
             "OVER THE FOLLOWING ten releases, adoption rises",
@@ -1019,6 +1018,29 @@ mod tests {
         assert!(!is_post_deployment_criterion(
             "The fixture exposes the median and rate"
         ));
+        for text in [
+            "The gate distinguishes post-deployment criteria from untraced criteria",
+            "A post-deployment criterion is reported with suggested split guidance",
+            "The report explains that post-deployment evidence cannot exist at merge time",
+        ] {
+            assert!(
+                !is_post_deployment_criterion(text),
+                "false positive: {text}"
+            );
+        }
+    }
+
+    #[test]
+    fn discipline_pack_documents_shipping_split_with_task_1291_example() {
+        // trace:TASK-1293.acb68aa3 | ai:codex
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../.aida/discipline/spec-authoring.md");
+        let guidance = std::fs::read_to_string(path).unwrap();
+        let normalized = guidance.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(normalized.contains("TASK-1291 originally required"));
+        assert!(normalized.contains("follow-up measurement spec"));
+        assert!(normalized.contains("blocked by the shipping spec"));
+        assert!(normalized.contains("threshold that would falsify the change"));
     }
 
     #[test]
