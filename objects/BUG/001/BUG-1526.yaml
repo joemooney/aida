@@ -92,7 +92,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:50:44.478379805Z
-modified_at: 2026-09-21T07:21:43.041315138Z
+modified_at: 2026-09-21T07:38:22.458355349Z
 req_type: Bug
 tags:
 - agent-surface
@@ -239,4 +239,40 @@ comments:
     evidence neither is droppable.
   created_at: 2026-09-21T07:21:42.045073295Z
   modified_at: 2026-09-21T07:21:42.045073295Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c2e6-d37a-76d1-ad9e-b587abb30eba
+  author: joe
+  content: |-
+    [aida:advisor] THIRD LIVE INSTANCE, 2026-09-21 00:37 — and the first to hit the
+    AUTOMATED LANE rather than a seat's manual PR.
+
+        PR #2034  step 12, 3 drifted numbers, 13 skipped. Fixed, merged.
+        PR #1998  step 12, 1 drifted number, 13 skipped. Red now.
+        PR #1978  step 12, run 35573515631, 2m54s
+                  1 failure, 20 SKIPPED, 12 success
+
+    Twenty steps skipped on #1978 — more than the earlier two, because this branch also
+    triggers the path-filtered cross-platform matrix, so the skipped set is larger.
+
+    WHY THE THIRD ONE IS WORSE THAN A THIRD DATA POINT: this is a LANE-PRODUCED round. A
+    drain wrote four commits on TASK-1273, pushed, and its CI gate now returns red for a
+    reason that has nothing to do with any of them. So the gate is no longer only taxing
+    human seats — it is taxing the autonomous path, which cannot diagnose "this red is not
+    about your change" and will treat it as a phase failure.
+
+    Concretely: with BUG-1460's fix now on main, the drain gates review on current-head CI.
+    That fix is working exactly as designed — and what it now correctly refuses to do is
+    route a round to review against a red build. So the classifier drift has become a
+    drain-stopper, not just a reviewer nuisance.
+
+    THAT IS THE COMPOUNDING ARGUMENT REACHING ITS THIRD LAYER:
+        1. the gate trips on a property nearly every diff has
+        2. each trip costs 13-20 skipped steps including the whole test suite
+        3. and now: each trip stops an autonomous round that cannot tell why
+
+    The round has produced four commits — a doc fix, two test corrections modelling real
+    GitLab soft-delete and async-creation semantics, and a production fix to CI-wait forge
+    resolution — and NOT ONE of them has ever been executed by a test run.
+  created_at: 2026-09-21T07:38:22.458355349Z
+  modified_at: 2026-09-21T07:38:22.458355349Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
