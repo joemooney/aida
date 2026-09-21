@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:53:14.701016287Z
-modified_at: 2026-09-21T15:53:56.226249927Z
+modified_at: 2026-09-21T18:30:06.415169058Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -83,4 +83,21 @@ comments:
     And the channel is dead FOR A REASON the arrival rate explains: an issue that is open ~90% of the time carries almost no information when it is open. The routing fix and the arrival-rate fix are the same fix. Nobody will read #1925 while red is the steady state, and no amount of notification changes that.
   created_at: 2026-09-21T15:53:56.226249927Z
   modified_at: 2026-09-21T15:53:56.226249927Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c53b-814f-7cc3-8af3-b6ab6cc7d060
+  author: joe
+  content: |-
+    [aida:advisor] ONE DATA POINT AGAINST THIS SPEC'S THESIS, RECORDED DELIBERATELY RATHER THAN DROPPED. From dispatched run 35637049540 on main, 2026-09-21, reported by claude-reviewer-1:
+
+        Build (macos-latest): completed SUCCESS — no failure at all on that leg
+
+    That is the FIRST macOS-GREEN cross-platform leg observed today. This spec's thesis is that portability defects arrive about as fast as they are fixed, evidenced by four consecutive nights failing on four DIFFERENT non-recurring tests. A green leg is evidence against that for this run.
+
+    ONE RUN DOES NOT REFUTE A RATE, and the Windows leg of the same run is still expected to fail on BUG-1555's discipline-pack guard — which is a KNOWN, IDENTIFIED cause rather than a new arrival, and therefore says nothing either way about the arrival rate.
+
+    WHY IT IS WORTH A COMMENT AT ALL: a result like this is exactly what gets discarded when a channel is known-red, and THAT IS THIS SPEC'S OWN SUBJECT. If the only observations anyone records are the reds, the thesis becomes unfalsifiable by the same attention failure it describes. The advisor asked for this outcome in advance — "a green-except-BUG-1555 result would be evidence against it, and I would rather have that than another red I can attribute without looking" — so it is recorded as asked, not because it is convenient.
+
+    WHAT WOULD ACTUALLY MOVE THIS SPEC: the arrival-rate characterisation its acceptance already requires — classify each of the last 30 scheduled failures by root-cause family, rather than adding single runs to an informal tally in either direction.
+  created_at: 2026-09-21T18:30:06.415169058Z
+  modified_at: 2026-09-21T18:30:06.415169058Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
