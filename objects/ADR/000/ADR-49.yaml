@@ -114,12 +114,30 @@ description: |-
       EVIDENCE QUALITY, stated because it is thin: one evening, two seats, an empty queue. The degradation is predicted, not observed - no mass-change period has yet run under this decision. Recorded rather than filed as a finding for that reason, and recorded here rather than only in correspondence because it bears on the exit condition the operator has not yet answered.
 
       AND A RELATED FACT THAT IS NOT AN ARGUMENT, RECORDED SO IT IS NOT MISTAKEN FOR ONE: the second-reader arrangement exists because the operator created the reviewer seat and gave it merge authority over work neither other seat authored. It was a resource decision made before any of tonight's evidence existed. Nothing in the substrate would have produced it and no amount of care by the other two seats substitutes for it. What is purchased can be unpurchased, which is the same exposure by a different route.
+
+  EXIT CONDITION - ANSWERED BY THE OPERATOR 2026-09-20 21:13, AND ACCEPTED.
+
+      THE MODE ENDS WHEN THE LIST OF OPEN ITEMS IS EMPTY, OR WHEN ONE WEEK HAS PASSED - whichever comes first.
+
+  THE WEEK IS THE CLAUSE THAT DOES THE WORK AND IT IS WHY THIS ADR CAN NOW BE ACCEPTED. It is calendar-checkable, cannot be gamed, depends on no measurement anyone can dispute, and it guarantees termination regardless of what the queue does. The objection this ADR was held on - a temporary mode with no recorded end is a permanent mode with optimistic framing - is answered by the week alone.
+
+  THE EMPTY-QUEUE HALF IS AN EARLY EXIT AND IT NEEDS A DEFINITION IT DOES NOT YET HAVE. Two problems, both surmountable, neither blocking:
+
+      1. "OPEN ITEMS" IS NOT A SINGLE NUMBER IN THIS STORE. Measured now: `aida list` reports 30 of 144 open; `aida list --status draft` reports 30 of 53; `aida list --all` reports 4174. Done counts as CLOSED in the default lens, deferred and archived are separate tiers, and the agent view caps at 30 rows. Whichever lens is chosen decides when the mode ends, and nobody has chosen one.
+
+      2. THE MODE GENERATES OPEN ITEMS BY DESIGN, WHICH MAKES THE EARLY EXIT RECEDE AS IT OPERATES. Clause 1 files a child spec for every acceptance gap and test gap. So each use of the permissive path adds one open item, and the exit condition is an empty list of open items. Operating the mode pushes its own early exit further away. That is not fatal - the week backstops it - but it means the empty-queue clause will rarely fire, and if it does fire it will be because the mode was barely used.
+
+      REQUIRED BEFORE THE EARLY EXIT CAN BE RELIED ON: name the lens, and exclude from the count the child specs this mode itself files. Counting the mode's own output against its exit is the same shape as a detector whose noise floor rises each time it is used successfully.
+
+  WHAT THE ADR STILL DOES NOT SAY, and it is the question the exit condition surfaces rather than answers: WHAT HAPPENS AT THE END. When the week expires, does the split verdict simply stop - acceptance gaps blocking again - and what becomes of the deferred findings still open at that moment? Clause 4's budget governs during the mode; nothing governs the handover out of it. Worth deciding before the mode starts rather than on day seven, because day seven is when there will be the most outstanding and the least appetite.
+
+  ACCEPTED on this basis. The week makes the decision safe to adopt; the early exit is a bonus that needs one definition; the handover out is the next open question and is smaller than the one just closed.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:59:55.527300499Z
-modified_at: 2026-09-21T04:05:42.453297427Z
+modified_at: 2026-09-21T04:14:13.703788822Z
 req_type: Decision
 tags:
 - operator-decision
