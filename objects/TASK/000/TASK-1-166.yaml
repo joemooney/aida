@@ -1,5 +1,6 @@
 id: 01a0c1cf-f29f-7bc1-bf57-14484c3f0e36
 spec_id: TASK-1-166
+agreed_id: TASK-194
 title: 'Three defects share a structure: the observer who would recognise the problem is the one the system arranged not to show it to'
 description: |-
   Three defects found on 2026-09-20, in three unrelated subsystems, share a structure that none of the existing principles names: the observer who would recognise the problem is the one the system arranged not to show it to.

@@ -1,5 +1,6 @@
 id: 01a0c1f9-1311-7003-bb9b-ad3c97222f02
 spec_id: TASK-1-171
+agreed_id: TASK-190
 title: Shell command-substitution has silently eaten text out of at least two spec descriptions, and the holes have a signature that finds them
 description: |-
   Shell command-substitution silently eats backticked text out of spec descriptions and comments before AIDA receives it, and it has already damaged at least two specs in the store. The hazard is known for description arguments; what is new is that the damage is undetected, is not limited to descriptions, and has a signature that finds it.

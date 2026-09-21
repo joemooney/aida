@@ -1,5 +1,6 @@
 id: 01a0c1d4-1685-7152-aee6-eba2a0339f08
 spec_id: TASK-1-167
+agreed_id: TASK-193
 title: 'The per-turn notice and full awaiting report name different channel sets (notice has ''rework'', report has ''unshipped: 38'') and no one party sees both'
 description: |-
   The per-turn notice and the full awaiting report name DIFFERENT channel sets, and no one party sees both — so neither can be validated against the other

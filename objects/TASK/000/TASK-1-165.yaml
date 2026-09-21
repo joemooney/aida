@@ -1,5 +1,6 @@
 id: 01a0c1cb-97e3-7962-a7e6-e941c86467b8
 spec_id: TASK-1-165
+agreed_id: TASK-192
 title: 'A Done spec with a red-CI, unrouted, unheld PR is invisible to every surface: the orphan sweep excludes red by design and awaiting never shows it (PR #2035 / BUG-1470)'
 description: |-
   A Done spec whose PR has RED CI, no reviewer, no hold and no queue entry is invisible to every surface: the orphan sweep skips it by design and `aida awaiting` never mentions it

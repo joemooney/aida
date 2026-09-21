@@ -1,5 +1,6 @@
 id: 01a0c1d8-602e-78c1-8811-661d81879583
 spec_id: TASK-1-168
+agreed_id: TASK-195
 title: aida statusbar --once takes 68s on a surface documented as cache-fast with a 15s interval, and reports unshipped:67 where awaiting reports 38
 description: |-
   aida statusbar --once takes 68 SECONDS on a surface documented as cache-fast with a 15s refresh interval, and reports unshipped:67 where awaiting reports 38

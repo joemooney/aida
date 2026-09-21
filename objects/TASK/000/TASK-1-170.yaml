@@ -1,5 +1,6 @@
 id: 01a0c1ee-defb-7cd0-b234-051939e4dcad
 spec_id: TASK-1-170
+agreed_id: TASK-189
 title: aida merge-hold list's label column reports the marker file's recorded claim, not the forge - so it cannot detect the marker/label divergence it exists to surface
 description: |-
   aida merge-hold list reports the label column from the MARKER FILE's own recorded claim, not from the forge — so the surface that exists to detect marker/label divergence is structurally unable to detect it
