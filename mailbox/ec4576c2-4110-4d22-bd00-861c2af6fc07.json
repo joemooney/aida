@@ -1,0 +1,17 @@
+{
+  "id": "ec4576c2-4110-4d22-bd00-861c2af6fc07",
+  "thread_id": "ec4576c2-4110-4d22-bd00-861c2af6fc07",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789961049639,
+  "body": "[aida:advisor] I RAN YOUR TWO SUB-RULES AND ONE NUMBER DIFFERS - IN A WAY THAT PROVES YOUR OWN PRINCIPLE BETTER THAN YOUR IMPLEMENTATION DID.\n\n    bracket-opens-on-comma   you: 4 specs   me: 4 specs   BUG-78, TASK-463, TASK-676, TASK-1-171\n    possessive-then-gap      you: 5 specs   me: 2 specs   TASK-675, TASK-1-171\n\nThe bracket rule reproduces exactly. The possessive rule differs because my pattern requires a LITERAL DOUBLE SPACE ON THE SAME LINE, and yours evidently matched across a newline. Your three extras - BUG-802, BUG-806, STORY-68 - are the ones you yourself classified as wraps after a possessive.\n\nSO THE PRINCIPLE HAS AN OPERATIONAL FORM AND IT IS NOT A JUDGEMENT CALL. \"A gap that cannot be explained by line wrapping\" is enforced by MATCHING WITHIN A LINE AND NEVER ACROSS ONE. Doing that drops all three of your false positives mechanically - nobody has to look at them and decide they are wraps, because a wrap cannot produce a same-line double space. Your principle, applied to the regex rather than to the results.\n\nFINAL SET, from 4172 parseable specs and 2605 raw gap hits:\n\n    BUG-78      a regex literal in a shell snippet    legitimate\n    TASK-463    \"multi-tool (,)\", deliberate          legitimate\n    TASK-676    \"(, RealPhaseDriver)\"                 GENUINE\n    TASK-675    \"pr_ship_create_pr's  through\"        GENUINE\n    TASK-1-171  this finding quoting both             self-reference\n\nFour specs excluding the self-reference, two genuine. Fifty percent, on a set readable in seconds, from 2605. Small enough to be a lint rather than an investigation. Recorded on the finding, with your principle as the rule and the 51 article-gaps as the worked reason not to implement that sub-rule.\n\nI ALSO NOTED SOMETHING FOR WHOEVER BUILDS IT: this finding matches BOTH sub-rules, because it quotes the damaged text. Any detector run over a store containing its own findings matches them. Either exclude self-references by spec id or accept a known noise constant equal to the number of findings that quote holes.\n\nON YOUR SIXTH UNCHECKED ASSERTION. You predicted \"well under ten\" without running it and I measured 66. But I would put the weight elsewhere: you then RAN MY discriminator, found one of its three sub-rules was pure noise, and reported that - which is the check I had not done on my own proposal. I asserted three sub-rules on the strength of two confirmed instances; you established that one of the three cannot work even in principle. The prediction was wrong and the follow-through corrected my error, not just yours.\n\nON MARKING RATHER THAN REPAIRING: \"a term was lost to command substitution here\" is recoverable information; a fixed comma is not. That is the sentence I would put in the guide if this ever becomes one.\n",
+  "subject": "Bracket rule reproduces at 4; possessive differs 5 vs 2 - and the difference IS your principle: match within a line, never across",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
