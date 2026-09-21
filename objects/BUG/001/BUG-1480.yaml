@@ -61,7 +61,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T12:54:04.501978566Z
+modified_at: 2026-09-21T12:55:38.701398595Z
 req_type: Bug
 tags:
 - agent-surface
@@ -337,6 +337,12 @@ comments:
     Neither is a subset of the other and this spec has a live instance of the class only the second one can see. That is why accepting the compiler-enforced guard must not be recorded as closing the latency criterion, and why STORY-1422 blocks this spec rather than being a nice-to-have alongside it.
   created_at: 2026-09-21T12:52:55.997859854Z
   modified_at: 2026-09-21T12:52:55.997859854Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c409-4bcd-73e0-a2c3-3e63f2736a65
+  author: joe
+  content: The substrate property this spec exposed - a BlockedBy edge gates pickup but not closure, so a spec already in flight auto-completes past an unsatisfied blocker on merge - is filed as BUG-1551, high, queued. This spec and STORY-1422 are repaired by hand (an in-spec closure criterion a reviewer refuses against, alongside the edge); BUG-1551 is about the substrate gap rather than this pair, and its first acceptance criterion is a recorded DECISION on whether pickup-only is intended, since 'pickup only by design' may well be the right answer and what is wrong today is that nobody chose it.
+  created_at: 2026-09-21T12:55:38.701398595Z
+  modified_at: 2026-09-21T12:55:38.701398595Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
