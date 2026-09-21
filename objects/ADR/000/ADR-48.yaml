@@ -55,13 +55,19 @@ description: |-
 
       So under this decision a tag on a spec switches off the gate that authorises publication, and the mode that claims to force every skip off leaves that one open. A nine-line fix exists on the OTHER TASK-1289 lineage (6512f1312a) and must be carried across; carrying it is a blocking condition on merging, recorded in the lineage ruling on TASK-1289.
 
-      THE GENERAL POINT FOR WHOEVER IMPLEMENTS THIS: before the orchestrator is allowed to TRUST preflight's answer, enumerate every way that answer can be Open without guards having run. Two are known - an unrunnable guard and a lifecycle tag. The decision is only as strong as that enumeration, because it converts 'the gate did not object' into 'publish', and every door past the gate becomes a publication path.
+      THE GENERAL POINT, CORRECTED 2026-09-20 19:18 ON REVIEWER INPUT. This paragraph previously said: enumerate every way preflight's answer can be Open without guards having run. That instruction is WRONG, and it is wrong in the way this ADR is about - an enumeration is the instrument that failed at both known doors, so requiring a better enumeration repeats the mistake at a higher level.
+
+      The evidence is a test on the surviving lineage. `lifecycle_skip_express_tier_forces_full_gate` asserts, with the message "express overrides any lifecycle:* short-circuit - full gate enforced", a body that names THREE fields: no_ci_wait, no_review, no_build. There are five skip fields; no_preflight is not named and the test's input tags never include lifecycle:no-preflight. So a test whose function name and assertion message both claim a UNIVERSAL cannot fail for the field it omits, and it reads to the next author as proof the invariant is covered. Its own first half uses the universal instrument correctly - `skip.is_empty()`, twenty lines up - so the right tool was in the same function and was not used in the case that mattered.
+
+      REQUIRED INSTEAD: exhaustiveness the compiler enforces, not a list a human maintains. The orchestrator must be unable to compile against a preflight outcome it does not handle, and the invariant tests must be unable to compile when a skip field is added - a destructuring bind over every field, or an equivalent, rather than a conjunction of the fields that existed when it was written. A list of two doors written tonight will still be a list of two doors in a month, and the third door will not announce itself.
+
+      The two known doors - an unrunnable guard, and the lifecycle:no-preflight tag - remain worth naming as the cases that must pass a test. They are examples, not the specification.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:02:29.839553987Z
-modified_at: 2026-09-21T02:08:27.183042090Z
+modified_at: 2026-09-21T02:14:18.366660941Z
 req_type: Decision
 tags:
 - operator-decision
