@@ -78,12 +78,12 @@ description: |-
   exit code 0, not JSON. So the format flag is unhonoured on aida show as well as
   being unvalidated on aida list. That is three verbs now -- aida status and
   aida ps in BUG-1289, aida list here, aida show newly.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:29:26.082009790Z
-modified_at: 2026-09-21T04:34:21.189593571Z
+modified_at: 2026-09-21T04:39:14.671710107Z
 req_type: Bug
 tags:
 - agent-surface
