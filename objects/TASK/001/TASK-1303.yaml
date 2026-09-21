@@ -57,20 +57,15 @@ description: |
   - The setext false-positive is noted, or the regex is tightened so a markdown heading underline does not match.
   - Master and project copy remain byte-identical and project_discipline_pack_matches_master still passes.
   - No SPEC-IDs appear in the guide text, since it is scaffolded downstream.
-  \\\\\\\\\\\\\\\"
-  \\\\\\\"
-  \\\"
   - The section states that severity and urgency are the two claims with no artifact behind them, always inferred rather than found, and therefore to be stated tentatively by a writer and discounted first by a reader.
-  \"
   - The section ends with a closing paragraph stating that every rule in it was broken by its own author while writing it, that no instance was caught by its author's care, and that the entry is therefore an argument for an arrangement in which a second reader holds a different piece of the record - not an argument for reading more carefully. It must also say what a reader without that arrangement should do instead.
-  "
   - The filter clause carries BOTH tests and says why the first does not cover the second: ask what a filter could have excluded, and separately ask what other strings a producer emits for the same event, because a narrow pattern suppresses nothing and so leaves nothing to notice.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:28.168866180Z
-modified_at: 2026-09-21T00:57:35.649985867Z
+modified_at: 2026-09-21T01:06:01.952650844Z
 req_type: Task
 tags:
 - batch:night-0920
