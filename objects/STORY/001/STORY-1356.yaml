@@ -17,15 +17,29 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 1972` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:43:49.396064440Z
-modified_at: 2026-09-19T18:43:53.184967122Z
+modified_at: 2026-09-21T08:47:43.216948693Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
   created_at: 2026-09-19T18:43:53.184962444Z
   created_by: joe
+comments:
+- id: 01a0c326-5232-7343-b1ce-5a65daf62c62
+  author: aida-auto-bump
+  content: 'Auto-rejected: PR #1972 closed on the forge without merging.'
+  created_at: 2026-09-21T08:47:43.666599960Z
+  modified_at: 2026-09-21T08:47:43.666599960Z
+history:
+- id: 01a0c326-5232-7343-b1ce-5a7accb39688
+  author: aida-auto-bump
+  timestamp: 2026-09-21T08:47:43.666604821Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
