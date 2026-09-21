@@ -20,7 +20,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:33:45.887148289Z
-modified_at: 2026-09-21T02:34:13.945028353Z
+modified_at: 2026-09-21T02:34:15.975221440Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -34,4 +34,8 @@ relationships:
 - rel_type: References
   target_id: 01a0c1a6-767c-74f1-b8ef-177d7dd756b5
   created_at: 2026-09-21T02:34:13.945023146Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0c1cc-e5ee-7bf3-9a2a-ebec2c1e7a46
+  created_at: 2026-09-21T02:34:15.975215815Z
   created_by: joe
