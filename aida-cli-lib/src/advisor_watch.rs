@@ -20,7 +20,7 @@ use chrono::Utc;
 
 use crate::advisor::{self, AdvisorConfig};
 use crate::presence::{self, Presence};
-use crate::session;
+use crate::session::{self, HeadlessVendor};
 
 /// The scoped instruction the forked advisor runs headless each pass. Mechanical
 /// gardening + mailbox triage + escalate-the-rest only.
@@ -192,6 +192,14 @@ fn short_uuid(uuid: &str) -> &str {
 }
 
 fn preview_fork(project_root: &Path, config: &AdvisorConfig) {
+    let vendor = session::resolve_headless_vendor(project_root);
+    if vendor != HeadlessVendor::Claude {
+        println!(
+            "  · [dry-run] would cold-boot a `{}` advisor and run the garden+triage pass",
+            vendor.as_str()
+        );
+        return;
+    }
     match advisor::plan_fork(project_root, config) {
         Some(plan) => println!(
             "  · [dry-run] would fork live advisor {} (~${:.2}) and run the garden+triage pass",
@@ -205,6 +213,10 @@ fn preview_fork(project_root: &Path, config: &AdvisorConfig) {
 }
 
 fn fork_and_run(project_root: &Path, config: &AdvisorConfig, prompt: &str) -> Result<()> {
+    let vendor = session::resolve_headless_vendor(project_root);
+    if vendor != HeadlessVendor::Claude {
+        return cold_boot_and_run(project_root, vendor, prompt);
+    }
     let Some(plan) = advisor::plan_fork(project_root, config) else {
         println!("  · no live advisor session to fork — skipping this pass");
         return Ok(());
@@ -225,6 +237,40 @@ fn fork_and_run(project_root: &Path, config: &AdvisorConfig, prompt: &str) -> Re
         &plan.fork_uuid,
         &log_path,
         project_root,
+        &tee,
+        false,
+    )?;
+    if !status.success() {
+        eprintln!(
+            "  · advisor-watch pass exited with {} (see {})",
+            status,
+            log_path.display()
+        );
+    }
+    Ok(())
+}
+
+/// Codex has no portable transcript-copy/resume contract equivalent to
+/// Claude's JSONL fork. Keep the advisor seat available by running the tick as
+/// a vendor-native cold boot, rooted in the same project substrate.
+// trace:TASK-1279 | ai:codex
+fn cold_boot_and_run(project_root: &Path, vendor: HeadlessVendor, prompt: &str) -> Result<()> {
+    let run_id = uuid::Uuid::new_v4().to_string();
+    println!(
+        "  · `{}` has no fork-from-live transport — cold-booting the advisor tick…",
+        vendor.as_str()
+    );
+    let log_path = project_root
+        .join(".aida")
+        .join("advisor-watch")
+        .join(format!("{run_id}.log"));
+    let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label("advisor-watch");
+    let status = session::spawn_vendor_headless_with_seat(
+        vendor,
+        aida_core::agents_config::AgentSeat::Advisor,
+        prompt,
+        &run_id,
+        &log_path,
         &tee,
         false,
     )?;
