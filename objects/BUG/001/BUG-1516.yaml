@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T03:30:59.539323012Z
-modified_at: 2026-09-21T03:35:40.887763998Z
+modified_at: 2026-09-21T11:27:26.696730685Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity drain-safe from:session-0920
@@ -115,4 +115,27 @@ comments:
     VERIFIED AS NOT AFFECTING BUG-1508: the six verdicts that spec calls permanently indeterminate were re-checked across every sha-ish and time-ish key. None has a sha under any name. The key-spread discovery does not rescue them.
   created_at: 2026-09-21T03:35:40.887763998Z
   modified_at: 2026-09-21T03:35:40.887763998Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3b8-8be8-7652-9a69-5da06f1d0abd
+  author: joe
+  content: |-
+    SCOPE NOTE — this spec stays OPEN after BUG-1546 merges, deliberately.
+
+    Criteria 1 and 4 have been carved out as BUG-1546 so that a partial fix cannot auto-complete this spec. The product seat had an implementation satisfying exactly those two in hand; committing it under a `(BUG-1516)` trailer would have closed a five-criterion, high-priority spec at two of five on merge, leaving criteria 2, 3 and 5 as a record on a Completed spec that no surface reads — the failure filed as STORY-1421 the same night.
+
+    WHAT REMAINS HERE after BUG-1546 lands:
+      2. New verdicts record the FULL 40-character sha. One writer already does this; the
+         abbreviated ones come from paths that pass an already-abbreviated string through.
+      3. The existing abbreviated verdicts are resolved to full shas where the commit is still
+         reachable, and marked unresolvable where it is not.
+      5. A test compares an abbreviated recorded sha against a full head and asserts they are
+         recognised as the same commit.
+
+    UPDATED MEASUREMENT for whoever takes those three. The description cites "24 existing abbreviated verdicts"; a full sweep on 2026-09-21 over all 572 files under .aida/review-verdicts found 147 carrying a sha, with lengths {8:4, 9:3, 10:19, 11:1, 12:12, 13:2, 40:106} — so 41 abbreviated, not 24, and the shortest is 8 characters. Criterion 3's population is larger than the spec states.
+
+    AND THE HEADLINE SYMPTOM IS ALREADY MITIGATED IN ONE SURFACE, which changes this spec's urgency but not its scope: the rework-ready row merged as ad85e8ed32 compares by shared prefix, so 5 of 14 open sha-bearing verdicts that are abbreviated-but-current are judged SAME rather than stale. That is this spec's symptom handled at ONE call site. Criterion 2 is what stops it recurring at the next one, and criterion 3 is what repairs the records already written — neither is done by that merge.
+
+    trace:BUG-1546 — the carved-out slice.
+  created_at: 2026-09-21T11:27:26.696730685Z
+  modified_at: 2026-09-21T11:27:26.696730685Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
