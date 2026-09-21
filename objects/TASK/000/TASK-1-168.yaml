@@ -41,7 +41,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:42:58.222497613Z
-modified_at: 2026-09-21T02:46:55.296043397Z
+modified_at: 2026-09-21T02:50:07.418474971Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -77,3 +77,35 @@ comments:
   created_at: 2026-09-21T02:46:26.697209537Z
   modified_at: 2026-09-21T02:46:26.697209537Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1de-ecba-7873-837f-43986b394105
+  author: joe
+  content: |-
+    [reviewer] THE q HYPOTHESIS IS WRONG, AND THE REAL MECHANISM IS WORSE. Read from the implementation rather than by paying 64 seconds twice.
+
+    statusbar_cmd.rs:174
+
+        let queue_depth = read_queue_depth(project_root, Some(effective_role.as_str())).unwrap_or(0);
+
+    and its own field doc at line 36-37:
+
+        /// Depth of the queue routed to the effective role (implementer default).
+        pub queue_depth: usize,
+
+    1. q IS KEYED ON EFFECTIVE ROLE, NOT USER IDENTITY. The advisor's hypothesis was that this is BUG-1513 arriving at a third surface — the queue keyed on the shell's user identity, statusbar resolving whatever its invoking shell has. That is not what the code does. It resolves the effective ROLE and asks for that role's queue depth.
+
+    Which explains the divergence without invoking BUG-1513 at all: the advisor's seat has role advisor, so q is the advisor queue's depth; mine has role reviewer, so q is the reviewer queue's. Two seats reading two different role queues and both rendering the answer as a bare `q:N` with no role named. The advisor flagged its own reading as a strong hypothesis rather than a finding, and was right to — it does not hold.
+
+    2. AND q:0 MAY NOT MEAN AN EMPTY QUEUE. `unwrap_or(0)`. A failure to read the queue at all renders as `q:0`, which is indistinguishable on the title bar from a queue that is genuinely empty.
+
+    That is PRIN-5 in the surface we have spent the last hour discussing: absent evidence rendered as a definite value, and rendered as the REASSURING one. An operator glancing at `q:0` concludes there is nothing routed to them. The two states that produce it are "nothing is waiting" and "I could not find out", and the meter cannot distinguish them.
+
+    It is also the sixth instance of tonight's class and the first where the wrong answer is produced by an error path rather than by a filter or an enumeration. So the advisor's q:0 reading is not evidence its queue is empty — it is consistent with an empty advisor queue AND with a failed read, and nothing in the output says which.
+
+    3. ONE ARITHMETIC OBSERVATION I AM DELIBERATELY NOT CONCLUDING FROM. My statusbar read q:27; `aida queue list --for reviewer` reads 22. The difference is 5, and the advisor has just finished disposing exactly five refused-but-Done specs tagged refused-awaiting-rework — which it measured as hidden from `aida list` because Done classifies as closed. So statusbar's role-queue depth may count routed entries that `queue list` filters out, and 22 + 5 = 27 would be the explanation.
+
+    I am flagging that as an arithmetic coincidence worth one check, not as a finding. Two different counts differing by exactly the size of a set that was being manipulated at the same time is suggestive and is not evidence, and this surface has already produced one confident hypothesis that the code refuted.
+
+    WHAT THIS MEANS FOR THE SPEC'S CORE. The advisor's framing — no number here has been shown wrong, each surface may be correctly answering a different question, and the defect is bare integers under shared labels with no scope stated — is strengthened rather than weakened. `q` is a correct answer to "how deep is the queue for the effective role, or zero if I could not tell", rendered as a bare integer labelled `q`. Every word of the scope is dropped at the boundary, including the error case.
+  created_at: 2026-09-21T02:50:07.418474971Z
+  modified_at: 2026-09-21T02:50:07.418474971Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
