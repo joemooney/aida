@@ -1,0 +1,76 @@
+id: 01a0c2bc-3fbc-7213-928e-16708f71a4ae
+spec_id: BUG-1536
+agreed_id: BUG-1536
+title: handle_review_record resolves its write root from AMBIENT env, so a test driving it from a seat shell writes to the real store and labels a real PR on the forge
+description: |
+  Caused, detected and cleaned by the product seat 2026-09-20 23:50 while fixing PR #2039's
+  aftermath test. Filed by the driver advisor at their deferral; the cleanup was verified
+  independently before filing.
+
+  WHAT HAPPENED. The obvious way to drive handle_review_record in a test is to point
+  AIDA_DRIVE_ROOT at a tempdir. That is NOT sufficient. The hold is written to
+  `protection_root`, which PREFERS AIDA_PROJECT_ROOT and only falls back to the resolved
+  root — and a seat shell has AIDA_PROJECT_ROOT set to the real repository.
+
+  So the test wrote into the LIVE repo and called the LIVE forge:
+
+      .aida/merge-holds/PR-1452            created
+      .aida/review-verdicts/PR-1452.json   created
+      real PR #1452 (MERGED)               labelled aida:merge-hold via gh
+
+  All three were removed by the seat that caused it. Verified independently by the driver
+  advisor at 23:52: no marker, no verdict file, and `gh pr view 1452` reports MERGED with
+  zero labels. The incident is closed; the hazard is not.
+
+  WHY IT IS MAJOR RATHER THAN A PAPERCUT. The PR number is whatever the test passes. A test
+  author picking a plausible-looking number labels a REAL pull request on the real forge,
+  silently, from a normal `cargo test` run in a seat shell. Here the number happened to
+  collide with a long-merged PR, so the blast radius was one stray label. Against an OPEN
+  PR it would have applied a merge-hold label — arming the required merge-hold-gate check
+  and blocking a PR nobody was holding.
+
+  THAT IS THE INVERSE OF BUG-1532. There, a hold exists and the client guard does not
+  honour it. Here, a hold can be applied to a PR nobody decided to hold, by a test.
+
+  THE REMEDY, already applied in the PR #2039 fix and documented in the test body: pin BOTH
+  roots at the tempdir. That also disarms the forge call for free — sync_label resolves the
+  forge from that root, finds none in a bare temp dir, and returns Ok without shelling out.
+  So correct isolation is one extra env var and it removes the network side effect as a
+  consequence rather than as a separate precaution.
+
+  A CHARITABLE READING OF THE ORIGINAL VACUOUS TEST, worth recording because it changes who
+  is at fault. The test that PR #2039 was refused over called write_hold and
+  shelve_spec_on_failure directly instead of driving the recording path. That is a vacuous
+  test and the refusal was correct. But the path it SHOULD have driven has side effects
+  that escape a tempdir unless the author knows about the second env variable — so the
+  vacuous shape is what you get when the correct shape is booby-trapped. Expect the same
+  shape in any other aftermath test.
+
+  ## Acceptance
+  1. handle_review_record's write root is derived from an explicit parameter or a single
+     resolved root, not from ambient AIDA_PROJECT_ROOT read deep in the call.
+  2. Driving the recording path with a tempdir root CANNOT write outside that root, with a
+     test that asserts it — drive it with a bogus PR number from a pinned tempdir and
+     assert the real store is untouched.
+  3. The forge call is not reachable from a test root that has no forge configured. It is
+     already unreachable by accident when both roots are pinned; make it unreachable by
+     construction.
+  4. Any remaining test that drives a recording path documents the double-pin requirement,
+     or the requirement is removed by criterion 1 and the documentation is deleted with it.
+  5. A guard rejects a label/marker write whose PR number does not correspond to the
+     repository the resolved root points at. This is the belt to criterion 1's braces and is
+     what would have stopped this instance regardless of env.
+
+  ## Not in scope
+  Auditing whether other tests have done this historically. The incident was caught because
+  the author noticed and said so, not by any detector — so a sweep would be a separate piece
+  of work and is not a precondition for fixing the hazard.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T06:51:52.124497966Z
+modified_at: 2026-09-21T06:51:52.124497966Z
+req_type: Bug
+tags:
+- parent:EPIC-62 test-isolation forge-safety severity:major
