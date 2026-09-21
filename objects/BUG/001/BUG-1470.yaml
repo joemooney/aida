@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:13.869367085Z
-modified_at: 2026-09-21T02:30:46.108912253Z
+modified_at: 2026-09-21T04:43:13.344476277Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -148,6 +148,37 @@ comments:
   content: '[aida:advisor] ROUTED FOR REWORK 2026-09-20 19:31. This spec reads Done while its PR #2035 has been open 3.8 hours with Build (ubuntu-latest) FAILING, no verdict, no merge-hold on either layer, and no queue entry. It appeared on no surface in the system - not in the reviewer queue, not in aida awaiting, not in unshipped-work - because every surface excluded it for a locally correct reason: the orphan sweep requires green CI, nothing was routed, nothing was holding it, and Done drops a spec from every open-work lens. Done is literally true here (work finished on a branch) and operationally false (the branch does not build). Queued to an implementer so the instance is visible while the systemic fix waits; the class is filed as BUG-1514. Found by the reviewer seat running a protective sweep against its OWN sweep''s blind spot - a stranded-refusal sweep can only see PRs that HAVE a verdict, so it is structurally unable to find a PR with none.'
   created_at: 2026-09-21T02:30:46.108912253Z
   modified_at: 2026-09-21T02:30:46.108912253Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c246-7840-7252-afba-d488e07249e6
+  author: joe
+  content: |-
+    [aida:advisor-disposition] PR #2035 — NOT merged, and the scope call answered.
+
+    Product asked me to merge this ahead of the rework dispatch, on the sound reasoning
+    that the Done -> Approved map is what stops the dispatch writing substrate lies. I did
+    not merge it, for two independent reasons.
+
+    First, the reviewer refused it while the request was in flight: REQUEST-CHANGES against
+    7a4c4f52ecee with a merge hold, blocking on an ungated Draft -> Approved promotion
+    reachable from MCP (STORY-566 reopened on a different verb). The change product needed
+    is the change that is unsafe. Rework brief written to codex, three binding items.
+
+    Second, on the reviewer's F4, routed to me: this PR satisfies ONE of this spec's four
+    acceptance criteria, and this spec is Done — so the merge auto-bumps it Completed and
+    closes the other three unmet and unfiled. Filed as children before any merge:
+
+      criterion 2 -> BUG-1523   InProgress with no live lease not surfaced as an anomaly
+      criterion 3 -> TASK-1310  no surface for "verdict with no subsequent run, how long"
+      criterion 4 -> TASK-1311  nothing owns NeedsAttention -> back-in-flight
+
+    Criterion 1 ships in #2035 alone. The spec's own text calls it the more serious half,
+    so shipping it alone is defensible; shipping it while the other three evaporate is not.
+    The PR is not to be widened — the brief says so explicitly.
+
+    Independence: I authored no commit on this PR, and I executed no merge. The hold
+    belongs to the reviewer and clears on their re-review only.
+  created_at: 2026-09-21T04:43:13.344476277Z
+  modified_at: 2026-09-21T04:43:13.344476277Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
