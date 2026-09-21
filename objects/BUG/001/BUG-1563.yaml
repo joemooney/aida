@@ -187,12 +187,38 @@ description: |
     10s watchdog on a per-turn path is a 10s worst-case turn — and it belongs to whoever owns
     BUG-1239's latency contract.
   - THE FIX MUST LAND SOMEWHERE THAT IS NOT A REBASED BRANCH. It is currently in no branch at all.
+
+  ===============================================================================
+  THE DEADLINE QUESTION IS SETTLED BY MEASUREMENT AND THE ANSWER IS AGAINST 10s:
+  TWO TESTS PIN OPPOSITE ENDS OF THE SAME CONSTANT. GitLab pipeline 318,
+  reported by claude-reviewer-1.
+  ===============================================================================
+
+      test awaiting_notice_does_not_read_an_open_stdin_pipe ... FAILED
+           "awaiting --notice remained alive for 3.135800526s with an open stdin pipe"
+      ...SAME RUN:
+      PASS [13.422s] awaiting_notice_tracks_real_lease_through_session_end
+
+  THE FIX WORKS FOR ITS TARGET AND BREAKS A SIBLING. The test that failed at 1s passes at 10s; a different test in the same file now fails BECAUSE the process stays alive too long.
+
+      tracks_real_lease_through_session_end   needs the deadline LONG enough to finish a
+                                              real-store read     -> FAILS AT 1s
+      does_not_read_an_open_stdin_pipe        needs it SHORT enough to exit promptly
+                                              -> FAILS AT 10s
+
+  THERE IS NO SINGLE VALUE THAT SATISFIES BOTH. The advisor had required the implementer to ARGUE the number rather than move it, on the grounds that a magic constant moving 10x needs its reasoning attached. THE MEASUREMENT ANSWERS THAT REQUIREMENT AND ANSWERS IT AGAINST 10s: raising the constant is not under-argued, IT IS NOT AVAILABLE.
+
+  THE REMEDY IS TO SEPARATE THE TEST'S NEED FROM THE PRODUCT'S BOUND. Inject the deadline rather than fixing it as a constant: the slow-store test gets a long one, the stdin-promptness test gets a short one, and the PRODUCT path keeps a bound that honours BUG-1239's fail-open contract for an ADVISORY per-turn notice. A magic constant cannot serve a 10s worst-case turn AND a promptness assertion; an injected one can.
+
+  AND THE PRODUCT'S BOUND IS STILL AN OPEN DESIGN QUESTION, not something the tests decide. BUG-1239 chose 1s deliberately because the notice is advisory and the path is per-turn. What the two tests establish is that THE TESTS CANNOT SHARE A VALUE — not what the product's value should be. Whoever takes this must state the product bound and its reasoning separately from the injected test values.
+
+  STATUS OF THE FIX ITSELF: the dropped commit was restored to #2019 at 442a63243c. The reviewer re-recorded that PR as CHANGES REQUESTED. It is now RESOLVED-AND-FAILING rather than pending — the commit fixes its target and the pipeline is red for a NEW reason the commit caused.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:43:33.092866010Z
-modified_at: 2026-09-21T20:45:08.356897156Z
+modified_at: 2026-09-21T20:57:58.606381432Z
 req_type: Bug
 comments:
 - id: 01a0c556-7edc-7f02-820a-d12318982900
