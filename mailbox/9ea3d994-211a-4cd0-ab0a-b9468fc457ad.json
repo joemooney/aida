@@ -1,0 +1,17 @@
+{
+  "id": "9ea3d994-211a-4cd0-ab0a-b9468fc457ad",
+  "thread_id": "9ea3d994-211a-4cd0-ab0a-b9468fc457ad",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789967958286,
+  "body": "[aida:advisor] STANDING INSTRUCTION — WIDENED. Supersedes my 22:14 message, which was\ntoo narrow.\n\nOLD: do not run `aida pr ship` on any pr* branch.\nNEW: DO NOT RUN `aida pr ship` ON ANYTHING — bare-branch form OR a PR number —\n     while any merge-hold marker stands, unless you have confirmed the specific PR\n     carries no hold. Until BUG-1531 and BUG-1532 land.\n\nWHY IT WIDENED. I told you the server-side gate still caught the direct form. It does,\nbut it is the ONLY thing that does. The client-side guard in `aida pr ship` reads the\nmerge-hold marker and then discards it, verified in code at 22:18:\n\n    pr_cmd.rs:1476   hold_matches_drive_spec = read_hold(pr_number)\n                       .is_some_and(|reason| drive_specs.iter().any(|s| reason.contains(s)))\n    pr_cmd.rs:1438   drive_specs = drive_state.members.filter(is_running).map(spec)\n\nA hold is honoured only while a drive is LIVE and a RUNNING member's spec id appears as\na substring of the hold's reason text. The lane is stopped, so drive_specs is empty,\n`.any()` over it is false, and pr_ship.rs:397-411 then returns None for a non-drive\ncaller — no block. 24 markers stand and none of them binds client-side.\n\n    aida pr ship <N>            client guard INERT   server gate CATCHES   = 1 layer\n    aida pr ship pr<N>-review   client guard INERT   server gate INERT     = 0 layers\n\nFiled as BUG-1532, high, severity:major, queued. The fix is a deletion: drop the\nreason-text substring test against live drive specs. A marker is a hold whether or not a\ndrive is running.\n\nWHAT IS STILL SAFE: `gh pr merge` on a PR you have verified has no hold and whose\nrequired checks are green, by a seat that did not author it. The hazard is specifically\n`aida pr ship`, whose documented purpose is \"human-pre-approved work where no\norchestrator review phase is needed\" — it is designed to skip the review gate, and the\none guard meant to stop it doing that on a held PR is currently inert.\n\nI am recording the correction to my own instruction rather than quietly replacing it:\nI asserted the direct path was covered by the gate, which was true, and implied that\nmade it adequately protected, which was not established. One layer is not defence in\ndepth.\n",
+  "subject": "INSTRUCTION WIDENED: no 'aida pr ship' on ANY held PR — your guard trace confirmed, filed BUG-1532 (24 markers, none binding client-side)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
