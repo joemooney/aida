@@ -78,12 +78,12 @@ description: |-
 
   Related: BUG-583 (the Setup block must reference the target project's location) is the
   prior fix to this same block; it corrected WHERE, this corrects WHICH BRANCH.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:45:07.028261694Z
-modified_at: 2026-09-21T04:45:11.103979181Z
+modified_at: 2026-09-21T04:51:56.385876179Z
 req_type: Bug
 tags:
 - agent-briefs
