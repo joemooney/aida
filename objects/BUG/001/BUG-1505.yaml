@@ -45,12 +45,16 @@ description: |-
   9. THE STORE IS GITIGNORED, SO IT HAS NO SAFETY NET. `.aida/` is not tracked, so an overwritten verdict has no git history to recover from and no dated sibling. State the retention answer explicitly: either the verdict store gains its own retention or append-only history, or verdicts are mirrored somewhere durable at write time. Recovery is currently possible only by accident - the PR #2040 verdict was reconstructed from a headless session log that happened to capture the full command line, which is not a mechanism anyone can rely on.
 
   10. A verdict that supersedes another records what it superseded. When the record is replaced, the prior verdict's summary, findings, recorder and sha survive somewhere queryable. Two reviewers disagreeing is precisely when the record is load-bearing and precisely when the second write currently erases the evidence of disagreement.
+
+  11. SCOPE CORRECTION 2026-09-20 18:40 - THE SHALESS WRITES ARE NOT A LIVE SOURCE DEFECT. The 86-percent no-sha measurement describes the corpus accurately and must NOT be read as a claim about the current emitter. The handshake writer was fixed at 2026-09-20 17:00:35 by commit 066c4ceacb (BUG-1467, PR #2037), which added reviewed_sha, reviewed_branch, recorded_at and recorded_by to the --pr branch at aida-cli-lib/src/lib.rs:76312. Verdicts written shaless AFTER that time - PR-2038 at 17:35, PR-2039 at 18:11, PR-2040 at 18:31 - came from processes running a binary built at 15:02:31 (sha b09197ab72), including the live drain, whose lock records that sha and a 17:03 start, three minutes after the fix merged. So this spec is a MIGRATION plus a rebuild discipline, not a writer fix. Do not write acceptance against a source defect that no longer exists, and do not treat post-17:00 shaless files as evidence the fix failed.
+
+  12. A CORPUS MEASUREMENT CANNOT DISTINGUISH A WRONG WRITER FROM A RIGHT WRITER THAT IS NOT RUNNING. The two have opposite remedies - change the code, versus rebuild and relaunch - and the artifacts are byte-identical. Establishing which required checking the running binary's sha against the commit that touched the writer; it was not derivable from the files. Any audit this spec produces must record the emitting binary's sha alongside the corpus counts, or its conclusion is unfalsifiable in exactly this way.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:28:50.078974800Z
-modified_at: 2026-09-21T01:38:01.862341164Z
+modified_at: 2026-09-21T01:39:55.301000276Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity agent-surface from:session-0920
