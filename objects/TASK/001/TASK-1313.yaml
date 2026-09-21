@@ -223,12 +223,33 @@ description: |
   `aida show --full` output, which matched to the last quote in the rendering and swallowed
   every field after it. Whether the older six share that exact mechanism or only the
   anti-pattern is unknown, and the git diffs are the place to settle it.
+
+  CORRECTION 2026-09-20 23:02 — THE PRODUCER IS LIVE, NOT HISTORICAL. An earlier line here
+  called the six instances "pre-existing", which is true relative to this session's tool
+  and reads as old damage. It is not. Dated from the orphan store's git log:
+
+      BUG-1106     2026-09-12        BUG-1450     2026-09-20 afternoon
+      BUG-1111     2026-09-12        BUG-1452     2026-09-20 afternoon
+      BUG-1310     2026-09-20        STORY-1405   2026-09-20 evening
+
+  Two on 09-12 and FOUR TODAY, the last roughly three to four hours before this session's
+  own incident. (The reviewer pinned corruption-ENTRY commits at 07:04, 16:51, 17:29 and
+  17:51; the advisor's figures are LAST-TOUCH commits and run slightly later. Both agree on
+  four today.)
+
+  That changes the disposition: this is an open investigation with an hours-old trail, not
+  a cleanup of old damage — and it makes the producer more tractable to identify, because
+  four of the commits are from today.
+
+  WHAT BLOCKS IDENTIFYING IT: all the commits carry subject `update <SPEC>` authored as the
+  human, which is BUG-1533's identity collapse. The store cannot say which seat ran them.
+  So identifying this producer DEPENDS on BUG-1533 or on reading each diff by hand.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T05:58:11.841488270Z
+modified_at: 2026-09-21T06:01:15.844826997Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
