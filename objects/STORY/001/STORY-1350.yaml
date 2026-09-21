@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:57.872533301Z
-modified_at: 2026-09-21T16:42:47.196851549Z
+modified_at: 2026-09-21T16:44:36.599082943Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -277,6 +277,31 @@ comments:
     trace-worthy for the sweep BUG-1494 proposes: the pattern to look for is not "a transition with no check" but "a guarded transition reachable in two hops through an unguarded state". Those are different searches.
   created_at: 2026-09-20T22:53:45.097176452Z
   modified_at: 2026-09-20T22:53:45.097176452Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4da-eb77-7aa1-ab3f-67b33b78b3a2
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1974 [AI:codex] feat(pickup): require pre-edit approach statement (STORY-1350)
+    merged: 21c393f4da6a at 2026-09-21T16:42:39Z
+    verdict: APPROVE (claude-reviewer-1) recorded at reviewed_sha d57bd5e579f4 — the PR head at merge time, verified unmoved
+    proxy: claude driver-advisor, session 01a0adee, acting on the operator's standing merge mandate
+    independent: YES — implemented by claude-product-1, reviewed by claude-reviewer-1, merged by this seat. No seat merged its own code.
+
+    gates cleared, each verified from this seat rather than relayed:
+      1. Build (ubuntu-latest) = success at d57bd5e579f418b6365e414f39cf0a81e09c9d59 (the required check, read per-sha from the check-runs API, not from the PR rollup)
+      2. verdict APPROVED with reviewed_sha d57bd5e579f4 == the merged head. Green checks are not approval and an approval at a stale sha is not approval of what merged; both were checked as separate facts.
+      3. head unmoved between the check turning green and the merge — the reviewer verified this before reporting green and this seat re-verified at merge.
+      4. no in-spec closure criterion on STORY-1350 (grepped the description for a closure gate; none), so the merge-driven auto-complete is legitimate here rather than a false closure of the BUG-1551 kind.
+      5. merge-hold released deliberately through `aida merge-hold clear 1974` — marker removed AND label dropped together — then the gate re-run observed green before merging. The reviewer flagged it green and explicitly declined to clear it, which is correct: clearing another seat's gate is not the reviewer's call even when the reviewer approved the code.
+
+    round history, three rounds, each closed at the seam rather than the cited site:
+      R1/R2 (binding, round 3) — the pickup writer and the review-prompt reader hard-coded "## Implementer approach" independently. Closed by IMPLEMENTER_APPROACH_MARKER plus a coupling test that include_str!s the MASTER template; both directions verified red by the reviewer.
+      R2 — append_implementer_approach emitted nothing when no marked comment existed. Closed by "_None recorded._" plus a test driving the REAL generator through a temp store, asserting both arms. That is the seam the helper-only tests could not see.
+      R3 — the absence message hard-coded the marker a commit below the constant added to prevent exactly that. Closed by interpolating the constant, NOT by asserting the prose contains it: a redundant assertion implies the constant is insufficient and invites a later reader to strengthen the wrong thing. The implementer then removed an assertion they had just added, and verified the removal did not weaken the guard — rename mutation, 3 of 4 red without it, 4 green restored — rather than complying with the ruling blind.
+      Test-file literals at story_1350_review_approach_tests.rs:11/14/26/95 were deliberately left alone: a fixture that builds its input from the constant cannot detect a change to the constant.
+  created_at: 2026-09-21T16:44:36.599082943Z
+  modified_at: 2026-09-21T16:44:36.599082943Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c4d9-4015-7410-88cb-d7feda527e0c
