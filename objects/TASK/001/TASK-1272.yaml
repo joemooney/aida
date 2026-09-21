@@ -3,12 +3,12 @@ spec_id: TASK-1272
 agreed_id: TASK-1272
 title: 'aida drain resume <SPEC>: re-drive parked work from the phase that failed, reusing an already-green pipeline'
 description: 'Observed 2026-09-18 (TASK-1254 live validation): a throwaway spec needed seven headless drain runs to get through the lifecycle on the GitLab mirror. Every re-run of aida queue work SPEC --auto-complete replayed phase 1 with the error ''SPEC is not pickable for fresh work: Done — awaiting merge; route via aida queue work --from-pr'', then recovered (''continuing from the CI gate on the PR''s branch''), then waited a full cold CI cycle even when the MR''s newest pipeline was already green, then ran the reviewer. The old --resume-drain (BUG-478 lineage) cannot replay phases 1-2 because they are lease-coupled. Proposal: one verb, aida drain resume SPEC (or aida queue work SPEC --resume), that reads the last SpecShelved event, starts at THAT phase, skips phase 1 silently when the spec is Done with an open PR, and treats an existing terminal-green pipeline on the PR head as the CI verdict instead of re-waiting. Acceptance: a spec shelved at reviewer with a green head pipeline resumes at the reviewer in seconds; a spec shelved ci-red resumes at the CI wait after a new push; the ''not pickable'' error no longer prints on a resume; unit tests on the phase-selection logic.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:02.542178535Z
-modified_at: 2026-09-21T02:40:12.873206088Z
+modified_at: 2026-09-21T17:05:45.533981108Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -73,16 +73,27 @@ comments:
   created_at: 2026-09-21T02:40:12.873206088Z
   modified_at: 2026-09-21T02:40:12.873206088Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c4ee-4835-7843-a5aa-80c21bf06d6b
+  author: aida-auto-bump
+  timestamp: 2026-09-21T17:05:45.525497890Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0c4ee-483d-7db2-9bb8-381fdb45cdf8
+  timestamp: 2026-09-21T17:05:45.533978976Z
+  agent: aida
+  commit_sha: f66887c4ff6bddc0648639b99af3a8191a07bdb0
+  summary: 'The drain-reviewer RequestChanges at f4e2cb3c67 is SATISFIED, and the fix is better than the one the finding asked for. That refusal was recorded by the headless drain reviewer, which has exited; I did not author any commit on this branch, so I reviewed the rework independently. THE DEFECT: reconciled_shelved_phase takes max(recorded, probed), so a spec shelved ci-red and pushed again computed max(Ci, Reviewer) = Reviewer and skipped finish_ci, reaching merge on a pipeline nobody validated. THE FIX: an intermediate commit (c674af1c3d) added a phase-name check (start == Reviewer -> Ci); 4a3c433d6a REPLACED it with ci_gated_start_phase(start, ci_green), keyed on the FACT rather than the phase name, and its doc comment states why the phase-name version was insufficient - recorded Ci against a probed Merge skips CI too, and no Reviewer-only check catches that. That is the half-fix-leaves-the-shape trap identified and avoided by the implementer, not by me. I VERIFIED THE WIRING rather than the helper, because a correct unit behind an unwired seam is the failure mode this repo keeps hitting: the gate is called at lib.rs:78602 in handle_from_pr, replacing the old inline check. I ALSO TRACED THE FACT IT KEYS ON, since a gate fed a stale input is the same defect one door over - facts.ci_green is a current-head forge probe on BOTH paths (drain_cmd.rs probe_resume_facts and the seeded-PR refresh at lib.rs:78536), and only CiProbe::Green counts, so a PENDING pipeline reads not-green and holds the resume at Ci. Terminal-green is therefore what is required, which is what the finding asked for. The requested integration test exists and covers the real path rather than the helper.'
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  review_verdict: approve
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T00:25:42.358606224Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1272 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T17:27:56.969303290Z
+  completed_at: 2026-09-21T17:05:45.525214283Z
+  completion_sha: f66887c4ff6bddc0648639b99af3a8191a07bdb0
