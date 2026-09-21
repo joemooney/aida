@@ -1508,34 +1508,56 @@ fn drain_mode_ready_count(project_root: &Path, backend: &aida_core::CachedGitBac
 // Allow-list runner (STORY-1047)
 // ---------------------------------------------------------------------------
 
-fn parse_scheduled_command(s: &str) -> Result<ScheduledCommand> {
-    let normalized = s.split_whitespace().collect::<Vec<_>>().join(" ");
-    let command = match normalized.as_str() {
-        "cache verify" => ScheduledCommand {
-            display: "cache verify",
-            args: &["cache", "verify"],
-            hook_allowed: true,
-        },
-        "session reap" => ScheduledCommand {
-            display: "session reap",
-            args: &["session", "reap", "--yes"],
-            hook_allowed: true,
-        },
-        "queue gc" => ScheduledCommand {
-            display: "queue gc",
-            args: &["queue", "gc"],
-            hook_allowed: true,
-        },
-        "notify check" => ScheduledCommand {
-            display: "notify check",
-            args: &["notify", "check"],
-            hook_allowed: true,
-        },
-        "doctor" => ScheduledCommand {
-            display: "doctor",
-            args: &["doctor"],
-            hook_allowed: false,
-        },
+// One entry per runnable substrate command: the input string(s) that select
+// it, plus the ScheduledCommand it maps to. This table is the SINGLE source
+// of truth for the allowlist — `parse_scheduled_command` matches against it
+// and `valid_commands` (used both in the bail message and by the scaffold
+// parity test below) is derived from it, so the enumeration cannot drift
+// from the match arms the way a hand-typed sibling list can. Same shape as
+// the fix requested for the `aida doctor` category list (BUG-1554).
+// trace:BUG-1557 | ai:claude
+fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
+    &[
+        (
+            &["cache verify"],
+            ScheduledCommand {
+                display: "cache verify",
+                args: &["cache", "verify"],
+                hook_allowed: true,
+            },
+        ),
+        (
+            &["session reap"],
+            ScheduledCommand {
+                display: "session reap",
+                args: &["session", "reap", "--yes"],
+                hook_allowed: true,
+            },
+        ),
+        (
+            &["queue gc"],
+            ScheduledCommand {
+                display: "queue gc",
+                args: &["queue", "gc"],
+                hook_allowed: true,
+            },
+        ),
+        (
+            &["notify check"],
+            ScheduledCommand {
+                display: "notify check",
+                args: &["notify", "check"],
+                hook_allowed: true,
+            },
+        ),
+        (
+            &["doctor"],
+            ScheduledCommand {
+                display: "doctor",
+                args: &["doctor"],
+                hook_allowed: false,
+            },
+        ),
         // A GATING doctor run: unlike bare `doctor`, this exits non-zero when
         // the category has findings, which is what lets a substrate job carry a
         // failure into CronJobFailed and on to a seat.
@@ -1548,42 +1570,52 @@ fn parse_scheduled_command(s: &str) -> Result<ScheduledCommand> {
         // Recorded here so the next person adding a gated category sees the
         // choice rather than just copying the line.
         // trace:STORY-1422 | ai:claude
-        "doctor check performance --fail-on-findings" => ScheduledCommand {
-            display: "doctor check performance --fail-on-findings",
-            args: &["doctor", "check", "performance", "--fail-on-findings"],
-            hook_allowed: false,
-        },
-        "fetch --code-only" => ScheduledCommand {
-            display: "fetch --code-only",
-            args: &["fetch", "--code-only", "--quiet"],
-            hook_allowed: false,
-        },
-        "store compact" | "store gc" => ScheduledCommand {
-            display: "store compact",
-            args: &["store", "compact"],
-            hook_allowed: false,
-        },
-        _ => anyhow::bail!(
-            "unknown scheduled task command '{}'; valid commands: {}",
-            s,
-            valid_commands().join(", ")
+        (
+            &["doctor check performance --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check performance --fail-on-findings",
+                args: &["doctor", "check", "performance", "--fail-on-findings"],
+                hook_allowed: false,
+            },
         ),
-    };
-    Ok(command)
+        (
+            &["fetch --code-only"],
+            ScheduledCommand {
+                display: "fetch --code-only",
+                args: &["fetch", "--code-only", "--quiet"],
+                hook_allowed: false,
+            },
+        ),
+        (
+            &["store compact", "store gc"],
+            ScheduledCommand {
+                display: "store compact",
+                args: &["store", "compact"],
+                hook_allowed: false,
+            },
+        ),
+    ]
+}
+
+fn parse_scheduled_command(s: &str) -> Result<ScheduledCommand> {
+    let normalized = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    for (matches, command) in command_table() {
+        if matches.contains(&normalized.as_str()) {
+            return Ok(command.clone());
+        }
+    }
+    anyhow::bail!(
+        "unknown scheduled task command '{}'; valid commands: {}",
+        s,
+        valid_commands().join(", ")
+    )
 }
 
 fn valid_commands() -> Vec<&'static str> {
-    vec![
-        "cache verify",
-        "session reap",
-        "queue gc",
-        "notify check",
-        "doctor",
-        "doctor check performance --fail-on-findings",
-        "fetch --code-only",
-        "store compact",
-        "store gc",
-    ]
+    command_table()
+        .iter()
+        .flat_map(|(matches, _)| matches.iter().copied())
+        .collect()
 }
 
 fn run_aida_command(project_root: &Path, command: &ScheduledCommand) -> Result<TaskOutcome> {
@@ -1897,6 +1929,96 @@ mod tests {
             .to_string();
         assert!(err.contains("unknown scheduled task command"));
         assert!(err.contains("cache verify"));
+    }
+
+    // BUG-1557: every `command = "..."` string the scaffolded config template
+    // ships (commented-out examples included — those are exactly the ones a
+    // project owner un-comments) must parse through `parse_scheduled_command`,
+    // or the job errors on every tick forever while sitting in config looking
+    // like a guard.
+    //
+    // Deliberately ONE-DIRECTIONAL: the allowlist may (and does) contain
+    // entries with no scaffolded example — `fetch --code-only`, `store
+    // compact`, `store gc` — and that is correct, not a defect. A set-equality
+    // check would fail today for those three false reasons and invite the
+    // check to be weakened or deleted. Only "scaffolded but unparseable" is a
+    // bug, so that is the only direction this test asserts.
+    //
+    // The extraction is scoped to `[[schedule.jobs]]` blocks specifically
+    // (tracking block boundaries line-by-line), NOT a blanket
+    // `command *= *"` grep. That is a deliberate exclusion, recorded here
+    // rather than discovered as a failure: the leading doc comment in
+    // `init_schedule_config_section` contains a literal placeholder,
+    // `command = "<allow-listed aida subcommand>"`, that documents the
+    // convention rather than declaring a job, and a naive extractor would
+    // pick it up and it would never parse.
+    // trace:BUG-1557 | ai:claude
+    fn scaffolded_job_commands(section: &str) -> Vec<String> {
+        let mut commands = Vec::new();
+        let mut in_job_block = false;
+        for line in section.lines() {
+            let stripped = line.trim().trim_start_matches('#').trim();
+            if stripped.starts_with("[[") {
+                in_job_block = stripped == "[[schedule.jobs]]";
+                continue;
+            }
+            if stripped.starts_with('[') {
+                in_job_block = false;
+                continue;
+            }
+            if !in_job_block {
+                continue;
+            }
+            if let Some((key, value)) = stripped.split_once('=') {
+                if key.trim() == "command" {
+                    if let Some(inner) = value
+                        .trim()
+                        .strip_prefix('"')
+                        .and_then(|s| s.strip_suffix('"'))
+                    {
+                        commands.push(inner.to_string());
+                    }
+                }
+            }
+        }
+        commands
+    }
+
+    #[test]
+    fn scaffold_extraction_excludes_the_documentation_placeholder() {
+        let section = crate::init_cmd::init_schedule_config_section();
+        assert!(
+            section.contains("<allow-listed aida subcommand>"),
+            "the doc placeholder this test guards against moved or was removed; \
+             update this test rather than deleting it silently"
+        );
+        let commands = scaffolded_job_commands(section);
+        assert!(
+            !commands.iter().any(|c| c.contains("allow-listed")),
+            "extraction picked up the documentation placeholder, not a real job: {commands:?}"
+        );
+    }
+
+    #[test]
+    fn every_scaffolded_job_command_parses() {
+        let section = crate::init_cmd::init_schedule_config_section();
+        let commands = scaffolded_job_commands(section);
+        // Sanity floor so a broken extractor (e.g. one that stops matching
+        // `[[schedule.jobs]]` blocks entirely) can't silently pass by finding
+        // zero commands.
+        assert!(
+            commands.len() >= 5,
+            "expected at least 5 scaffolded `command = ...` examples, found {}: {commands:?}",
+            commands.len()
+        );
+        for command in &commands {
+            parse_scheduled_command(command).unwrap_or_else(|e| {
+                panic!(
+                    "scaffolded example `command = \"{command}\"` does not parse \
+                     as an allowlisted scheduled command: {e}"
+                )
+            });
+        }
     }
 
     #[test]

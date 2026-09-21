@@ -2171,7 +2171,7 @@ fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Pa
     Ok(())
 }
 
-fn init_schedule_config_section() -> &'static str {
+pub(crate) fn init_schedule_config_section() -> &'static str {
     r#"
 # Per-seat job registry (`aida schedule`, alias `aida cron`). Two job kinds:
 #   substrate — `command = "<allow-listed aida subcommand>"`; no LLM; run by
