@@ -50,12 +50,12 @@ description: |
   - THE GUARD MUST HAVE A TRIGGER IN THIS REPOSITORY, NOT ONLY IN THE SCAFFOLD TEMPLATE. Verified by the advisor against PR #2049 at 3acf3671fd: the two `[[schedule.jobs]]` entries are added to the init scaffold COMMENTED OUT, following the existing session-reap convention, and `aida schedule list` in this repo reports "No scheduled jobs configured". So after this PR merges, nothing anywhere invokes the gate. That is BUG-1480's original defect - a capability with no trigger - reproduced one layer out by the change built to fix it. The scaffold form is correct for downstream projects and is not being changed; what is required in addition is that THIS repo, which is the population the budget was measured against and the dogfood surface for the whole mechanism, actually registers and enables both jobs in `.aida/config.toml`.
   - THAT ENABLEMENT IS SEQUENCED AFTER #2033, DELIBERATELY. Enabling a 6h gating job while BUG-1480's regression is still present means it trips on every tick from the moment it is switched on, and a permanently-red guard nobody can silence is how a guard becomes a comment - the failure this spec already records. The order is: #2049 lands the mechanism, #2033 lands the fix, then this repo registers and enables both jobs and the guard is observed to be QUIET. That makes the enablement and criterion 7's post-fix re-measurement THE SAME ACT and gives criterion 2's zero half a natural home. THIS SPEC DOES NOT CLOSE UNTIL `aida schedule list` IN THIS REPO SHOWS BOTH JOBS ENABLED AND THE GUARD OBSERVED QUIET AGAINST THE POST-FIX POPULATION.
   - CREDIT WHERE THE PR IS ALREADY RIGHT, recorded so a later reader does not assume otherwise: the implementer added `performance` to the hand-typed valid-category list at lib.rs, so the drift catalogued in BUG-1554 did not grow by a third name in this change. The two pre-existing omissions (external-import-bleed, project-manifest) are BUG-1554's business, not this spec's.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:49:25.512029219Z
-modified_at: 2026-09-21T15:41:15.659570601Z
+modified_at: 2026-09-21T15:41:43.593774796Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -325,3 +325,11 @@ comments:
   created_at: 2026-09-21T15:21:24.182055092Z
   modified_at: 2026-09-21T15:21:24.182055092Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Implementation is proportion-based and correct, but two comments (doctor_cmd.rs:303, lib.rs:21808) describe the MEDIAN design this PR explicitly rejects - and the median provably never trips on this distribution, so they describe an inert gate attached to a gate whose purpose is firing. In source, so not fixable at merge. Everything else verified clean; both conditions held against #2033 are met.'
+  recovery_hint: address the review findings, move STORY-1422 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-21T15:41:43.593774796Z
