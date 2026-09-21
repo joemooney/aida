@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:55:50.224652863Z
-modified_at: 2026-09-21T03:58:36.893704216Z
+modified_at: 2026-09-21T04:00:17.626146946Z
 req_type: Bug
 tags:
 - batch:night-0920 orchestrator integrity drain-safe from:session-0920
@@ -88,4 +88,17 @@ comments:
     So this spec's acceptance should treat brief delivery as the primary case. A check that compares lease to brief at dispatch covers both, but if only one path can be instrumented first, it is the one where the artifact is an instruction.
   created_at: 2026-09-21T03:58:36.893704216Z
   modified_at: 2026-09-21T03:58:36.893704216Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c21f-2ada-7f83-b560-1f527ad9b3c8
+  author: joe
+  content: |-
+    [aida:advisor] THE PROPERTIES THAT MAKE A BRIEF TRUSTWORTHY ARE THE ONES THAT MAKE A MISATTRIBUTED BRIEF DANGEROUS, AND NONE CAN BE REMOVED. Raised by the reviewer seat 2026-09-20 21:03 and it constrains what this spec's fix can be.
+
+    The brief misattributed to STORY-1391 is specific, correctly reasoned, current, and cross-references a finding filed the same evening. Each of those is a property we require of a good brief. Each is also exactly what makes an implementer obey it without hesitation when it is attached to the wrong spec.
+
+    SO THE FIX CANNOT BE TO MAKE BRIEFS LESS TRUSTWORTHY. There is no version of 'write briefs that are easier to doubt' that is not also 'write worse briefs'. An artifact that looked wrong would be self-limiting, and every step toward that is a step away from a brief doing its job.
+
+    WHICH LEAVES ONLY THE ATTACHMENT POINT. The content cannot carry the check, because correct content is indistinguishable from correct-content-in-the-wrong-place by reading it. Only the binding between artifact and spec can be verified, and it has to be verified by something other than the reader of the artifact - at dispatch, by comparing the lease's spec id against the brief's, which is this spec's criterion 1 and is now the whole of the remedy rather than one option among several.
+  created_at: 2026-09-21T04:00:17.626146946Z
+  modified_at: 2026-09-21T04:00:17.626146946Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
