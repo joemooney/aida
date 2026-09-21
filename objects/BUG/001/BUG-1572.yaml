@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:06:06.231730031Z
-modified_at: 2026-09-21T23:15:15.690706813Z
+modified_at: 2026-09-21T23:15:44.288750248Z
 req_type: Bug
 tags:
 - batch:perf-gate
@@ -50,18 +50,18 @@ comments:
 
     THE MEASUREMENT FIRST — the exposure today is zero in both directions, over the 24h window classified against HEAD:
 
-        rows in window     56,734   every one carrying a FULL binary_sha
-        no binary_sha           0       short/mangled   0
-        ancestor of HEAD   56,638 calls  COUNTED       unrelated  107 calls  EXCLUDED
-        UNPLACEABLE             0 calls  <- the fail-open path is currently untaken
+      rows in window     56,734   every one carrying a FULL binary_sha
+      no binary_sha           0       short/mangled   0
+      ancestor of HEAD   56,638 calls  COUNTED       unrelated  107 calls  EXCLUDED
+      UNPLACEABLE             0 calls  <- the fail-open path is currently untaken
 
     (That denominator is the whole usage log across all command shapes; the gate tallies per shape, so it is a superset of what any one budget judges.)
 
-    THE RESIDUAL RISK, AND IT RUNS THE OPPOSITE WAY FROM THE ONE THIS SPEC WAS FILED ABOUT. , so a counted row UNDER budget grows the denominator and nothing else. AN UNPLACEABLE BINARY RUNNING FAST THEREFORE DILUTES MAIN'S PROPORTION AND MAKES THE GATE READ HEALTHIER THAN IT IS. This spec was filed because a lane's SLOW build could hold main's gate red; fail-open opens a second door through which a lane's FAST build can make it falsely green. Same perverse-denominator property, opposite sign.
+    THE RESIDUAL RISK, AND IT RUNS THE OPPOSITE WAY FROM THE ONE THIS SPEC WAS FILED ABOUT. The proportion is over_budget * 100 / counted.len(), so a counted row UNDER budget grows the denominator and nothing else. AN UNPLACEABLE BINARY RUNNING FAST THEREFORE DILUTES MAIN'S PROPORTION AND MAKES THE GATE READ HEALTHIER THAN IT IS. This spec was filed because a lane's SLOW build could hold main's gate red; fail-open opens a second door through which a lane's FAST build can make it falsely green. Same perverse-denominator property, opposite sign.
 
     WHY IT IS NOT A DEFECT IN #2068: A CEILING CANNOT BE DILUTED. One call over 5000 ms trips it at any denominator, so the proportion limb's dilutability is covered by the limb ADR-53 added. THE TWO DECISIONS COMPOSE — and the reviewer was explicit that had ADR-53 gone the other way, it would have pushed back on fail-open here.
 
     SO THIS IS A STANDING CONSTRAINT, NOT AN OBSERVATION: IF THE CEILING LIMB IS EVER REMOVED, WEAKENED, OR NEVER BUILT, FAIL-OPEN MUST BE RE-EXAMINED IN THE SAME CHANGE. A future reader who finds fail-open odd and 'simplifies' it, or who drops the ceiling as redundant because the proportion looks healthy, breaks a pair neither half of which announces its dependence on the other. The ceiling limb is currently UNBUILT — verified at #2068's head, worst_ms is declared, assigned, rendered and asserted in a test, and never compared — so the pair is not yet closed. Until it is, fail-open's safety rests on a limb that exists only as a decision.
   created_at: 2026-09-21T23:15:15.690706813Z
-  modified_at: 2026-09-21T23:15:15.690706813Z
+  modified_at: 2026-09-21T23:15:44.288750100Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
