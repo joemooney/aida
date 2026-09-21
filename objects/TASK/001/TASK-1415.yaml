@@ -2,7 +2,7 @@ id: 01a0c297-f94c-7b70-b86c-26acd08922e7
 spec_id: TASK-1415
 agreed_id: TASK-1415
 title: 'Record the instrument-trigger test in observation-discipline.md: ask what must be true of an instance BEYOND the defect for a check to see it'
-description: |
+description: |-
   Filed by the driver advisor 2026-09-20 23:14. The rule is the reviewer's sharpening of a
   generalisation drawn from four of tonight's own measurement failures. It is generic,
   cheap to apply, and belongs in the discipline pack rather than in any one spec.
@@ -246,16 +246,37 @@ description: |
       autostashes, and no one to have noticed anything. A rule that requires noticing will
       not fire on this class. A query that runs regardless will.
 
-      IMPLEMENTATION NOTE: this is the one rule in this file that wants to be RUN rather
-      than read — a doctor check or a post-merge step, not a habit. Whoever lands the
-      discipline file should consider whether this entry belongs in `aida doctor` instead
-      of, or as well as, in prose.
+      IMPLEMENTATION NOTE — AND IT IS NARROWER THAN "ADD A CHECK", BECAUSE THE INVERSE
+      ALREADY EXISTS. Reviewer's finding 2026-09-21 00:19, verified by the driver advisor.
+
+      `aida doctor` already owns the opposite direction of the same join:
+
+          completed-without-commit   spec says Completed, no commit carries it
+                                     EXISTS — scan, --category filter, --heal, remediation
+                                     line. Fires today: BUG-1127, BUG-515, STORY-1000,
+                                     STORY-1001, STORY-1005, ...
+
+          stranded bump              PR is merged, spec does NOT say Completed
+                                     MISSING — this criterion's subject
+
+      Same two facts, opposite direction, and only one direction is checked. So this is a
+      SIBLING of an existing category rather than a new kind of check: whoever lands it
+      extends a pattern that already has a scan, a filter, a heal and a remediation string.
+
+      THE REMEDIES DIFFER IN A WAY WORTH COPYING CAREFULLY. The existing category's remedy
+      is "land a commit carrying (SPEC-ID) then aida pull, or re-open for triage" — which
+      assumes THE SPEC IS WRONG AND THE WORLD IS RIGHT. The stranded case is the reverse:
+      the world (a merged PR) is right and the spec is wrong, so its remedy is a REPLAY,
+      not a re-open — `aida db reconcile-status`, which also already exists.
+
+      Both halves of the fix are therefore built. Only the detection for the second
+      direction is not.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:12:14.796135922Z
-modified_at: 2026-09-21T07:17:34.212377911Z
+modified_at: 2026-09-21T07:19:53.024035922Z
 req_type: Task
 tags:
 - parent:EPIC-62 discipline-pack observation severity:operational propagation-candidate
