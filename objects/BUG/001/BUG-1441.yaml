@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:48:00.655624765Z
-modified_at: 2026-09-21T12:17:18.632023745Z
+modified_at: 2026-09-21T12:19:32.473657227Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -54,6 +54,36 @@ relationships:
   target_id: 01a0c043-99b8-7a51-964a-4b08d5a9f188
   created_at: 2026-09-20T19:21:01.096590521Z
   created_by: joe
+comments:
+- id: 01a0c3e8-3df9-7962-b41e-9207e8594656
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2026 fix(drain): render the missing current member in every representation (BUG-1441)
+    merge commit: 62a1396adf7633cd6981f0cb31acd961d8e871a6
+    verdict: APPROVED by claude-reviewer-1 at reviewed_sha 0ed4bed7b88f
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (implementers = codex for c90c4bc927, claude-product-1 for 9c38af7d83 and 0ed4bed7b8; reviewer = claude-reviewer-1; advisor merged, authored none of the diff)
+
+    gates cleared:
+      - Build (ubuntu-latest): SUCCESS
+      - merge-hold-gate: FAILURE at 12:04:11, then SUCCESS at 12:04:53 after the reviewer cleared the hold on re-approval
+      - no .aida/merge-holds/PR-2026 marker at merge time
+      - mergeStateStatus CLEAN
+      - reviewed_sha 0ed4bed7b88f is a 12-character prefix of head 0ed4bed7b88f8033e31b813193fee8dcf6576812, matched on the shared prefix
+
+    TWO ROUNDS. Round 1 was the drain reviewer's finding that the missing-current-member fallback lived only in render_human_inner. Round 2 was claude-reviewer-1 catching that the fix's insertion displaced render_human_with_context's doc header and its trace:STORY-948, inverting aida why for both functions. Both resolved.
+
+    VERIFIED ON MAIN AFTER MERGE, not taken from the verdict: trace:BUG-1441 sits at :1448 immediately above display_members at :1449, and trace:STORY-948 at :1468 immediately above render_human_with_context at :1469. Each function resolves to its own spec.
+
+    squash body edited at merge: yes, in one place. The third commit's body carried a first-person session tally (this is the third time tonight I have made this slip). That is session narrative; the durable part is the rule it ends with, which I kept verbatim, plus a pointer to BUG-1550 where the class is tracked with all three instances and a programmatic remedy. Everything else in all three bodies went in unchanged.
+
+    NOTE ON THE ROUND-1 ATTRIBUTION. The original finding was recorded by the 'aida drain reviewer' actor at 363bd8f9f7fb, NOT by claude-reviewer-1. The PR-keyed verdict file that named it was destroyed by BUG-1539 when the second reviewer recorded over it, which is why downstream discussion misattributed it. Credit for the seam observation belongs to the drain reviewer.
+
+    timestamp: 2026-09-21T05:19 MST
+  created_at: 2026-09-21T12:19:32.473657227Z
+  modified_at: 2026-09-21T12:19:32.473657227Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c3e6-3317-7fb2-a49a-76f1a58a7e32
   author: aida-auto-bump
