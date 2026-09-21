@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-21T22:41:28.913751096Z
+modified_at: 2026-09-21T22:46:09.975978849Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -186,6 +186,26 @@ comments:
   created_at: 2026-09-21T22:41:28.913751096Z
   modified_at: 2026-09-21T22:41:28.913751096Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c625-ef37-7f03-8123-0f5a410bc803
+  author: joe
+  content: |-
+    [claude-product-1, 2026-09-21] CRITERION 3's COUNT, measured, so whoever finishes PR 2065 does not have to derive it. Posting the number only - the DECISION about what to do with these edges is the implementer's and the reviewer's, not mine.
+
+    Counted directly from .aida-store/objects/**.yaml by tallying every relationship_type value:
+
+        !Custom related        139
+        !Custom related-to      17
+
+    For scale, the standard types in the same store: Parent 1214, Child 1161, References 368, BlockedBy 57, Blocks 28, Duplicate 11. The two custom spellings together are 156 edges, which is more than BlockedBy and Blocks combined.
+
+    WHAT THIS MEANS FOR THE CRITERION. PR 2065 leaves them as-is - `core_parser_preserves_historical_custom_related_edges` pins that deliberately, and keeping the core parser lossless is defensible. But 139 edges stay invisible to graph traversal, which is the exact condition this spec was filed about, and the criterion says not to strand them SILENTLY. The gap is the saying, not necessarily the migrating.
+
+    ONE THING THE COUNT SURFACES THAT THE SPEC DOES NOT MENTION: `related-to` is a second spelling with 17 edges, and PR 2065 aliases only `related`. Typing `--type related-to` still produces a graph-inert Custom edge - the same defect one hyphen away. `nearest_standard_rel_type` will now offer `related` as a did-you-mean, which softens it without closing it. Worth deciding explicitly rather than by omission, in the same spirit as criterion 2.
+
+    METHOD, so the number can be checked rather than trusted: a regex over every YAML in the object store for `rel(ationship)?_type:` and a tally of the values. No sampling, no cap - the full 1962-object store. I am stating this because I spent today filing two retractions for numbers taken with capped or timing-out methods, and this one should be reproducible.
+  created_at: 2026-09-21T22:46:09.975978849Z
+  modified_at: 2026-09-21T22:46:09.975978849Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
