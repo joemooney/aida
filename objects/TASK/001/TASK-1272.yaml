@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:02.542178535Z
-modified_at: 2026-09-21T17:05:45.533981108Z
+modified_at: 2026-09-21T17:08:13.692693212Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -72,6 +72,44 @@ comments:
   content: '[aida:advisor] REFUSED, NOT NEARLY-SHIPPED. Tagged refused-awaiting-rework 2026-09-20 19:42. This spec reads Done while PR #1981 carries a refusing verdict at f4e2cb3c67 and is held on both layers. Done is literally true - work finished on a branch - and operationally misleading: the drain''s ineligibility line reads ''Done - awaiting merge; route via aida queue work --from-pr or aida integrate'', and BOTH of those routes SHIP a PR. Following that hint here attempts to merge work with open findings. The spec is also absent from aida list --status needs-attention and from findings, so it appears on no surface that would route a rework round to it. NOT REQUEUED DELIBERATELY: BUG-1476 means a rework round on a spec with an existing PR may produce no commit, and three reviewer cycles were burned this afternoon proving that. The tag makes it findable now; the systemic fix is BUG-1515, which requires surfaces reading Done to read the verdict beside it rather than adding a sixth lifecycle state.'
   created_at: 2026-09-21T02:40:12.873206088Z
   modified_at: 2026-09-21T02:40:12.873206088Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c4f0-8afc-7981-b254-5393edb9f379
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1981 [AI:codex] feat(drain): resume shelved phase checkpoints (TASK-1272)
+    merged: f66887c4ff6b at 2026-09-21T17:05:36Z
+    verdict: APPROVE (claude-reviewer-1) at reviewed_sha 4a3c433d6ad6 == the merged head
+    proxy: claude driver-advisor, session 01a0adee, on the operator's standing merge mandate
+    independent: YES — implemented by claude-product-1, reviewed by claude-reviewer-1, merged by this seat.
+
+    gates cleared, each verified from this seat and not relayed:
+      1. Build (ubuntu-latest) = success, read PER-SHA from the check-runs API at 4a3c433d6ad65a1ea05c06450f2dada27c7667d3, not from the PR rollup.
+      2. verdict APPROVED with reviewed_sha == the merged head. Two independently-falsifiable predicates (PRIN-7), checked as two facts.
+      3. head unmoved between the check turning green and the merge — the reviewer re-verified and this seat re-verified.
+      4. no in-spec closure criterion on TASK-1272, so the merge-driven auto-complete is legitimate rather than a BUG-1551 false closure.
+      5. merge-hold released deliberately through `aida merge-hold clear 1981`, then the gate re-run observed green before merging.
+
+    WHAT CLEARED A STANDING REFUSAL HERE, and it is the part worth keeping: the blocking verdict was the HEADLESS DRAIN REVIEWER's, and that seat had EXITED. Nothing notified anyone that rework had landed past it. claude-reviewer-1 found it by diffing every open PR's head against its recorded verdict sha — the STORY-1419 sweep — and then formed their OWN verdict rather than clearing someone else's, which is in role precisely because the refusing seat is gone and they authored no commit on the branch. That distinction (reviewing past a refusal vs clearing one) is the same line they held on #1974 when they flagged it merge-ready and declined to clear the hold. This is one of the seat-scoped rows that reaches nobody; STORY-1420 is what closes that gap.
+
+    the fix, and why it is keyed on the fact rather than the pairing:
+      `reconciled_shelved_phase` took the LATER of recorded and probed, so a spec shelved ci-red and pushed again resolved recorded Ci against probed Reviewer to Reviewer — finish_ci never ran, and review and merge proceeded on a head whose CI had never terminated green. An intermediate commit used `start == Reviewer -> Ci`; the final one replaced it with `ci_gated_start_phase(start, ci_green)`, which holds any resume at Ci while the head is not green wherever start came from. The phase-name version was insufficient because recorded Ci against a probed MERGE skips CI too and no Reviewer-only check catches it — half-fix-leaves-the-shape spotted and avoided by the author of the remedy.
+
+    verification the reviewer performed rather than accepted:
+      WIRING first — called at lib.rs:78602 in handle_from_pr, replacing the inline check. A correct unit behind an unwired seam is this week's recurring defect.
+      THE INPUT'S PROVENANCE — facts.ci_green is a CURRENT-HEAD forge probe on both paths, and only CiProbe::Green counts, so a PENDING pipeline reads not-green and HOLDS. A gate fed a stale input is the same defect one door over.
+      THE JUSTIFYING CASE IS PINNED — test A asserts `ci_gated_start_phase(reconciled_shelved_phase(Ci, Merge), false) == Ci`, the exact recorded-Ci-against-probed-Merge pairing used to argue against the narrower remedy.
+      THE ENV OVERRIDE IS GATED — `AIDA_DRAIN_RESUME_PHASE` feeds recorded_phase, but ci_gated_start_phase runs LAST, so no env value bypasses it. BUG-1460's property is not merely preserved through the rebase conflict, it is EXTENDED: the old inline `== Reviewer` check demoted one value; the new gate covers the env path it did not.
+
+    the implementer falsified the gate in BOTH directions, which is now this board's standard:
+      gate disabled (always returns start)  -> 1 test red, the held-at-CI test
+      gate engaged  (always returns Ci)     -> 1 test red, the green-head control
+      restored                                 29 green
+    Different tests, one each. Without the green-head control, "always return Ci" satisfies every safety assertion while the drain can never leave phase 2 — safe and stuck become the same observation. Counting by TEST, not assertion: four assertions go red in the first.
+
+    recorded as NOT a defect, deliberately: the original finding's first half — "from_pr_plan never returns CI and ignores facts.ci_green" — is STILL TRUE at this head by design, and a new test pins that contract. Someone re-reading the old finding to check the fix will find the described behaviour intact and could wrongly conclude it was not addressed.
+  created_at: 2026-09-21T17:08:13.692693212Z
+  modified_at: 2026-09-21T17:08:13.692693212Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c4ee-4835-7843-a5aa-80c21bf06d6b
