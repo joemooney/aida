@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:48:22.112145500Z
-modified_at: 2026-09-21T17:12:12.293739675Z
+modified_at: 2026-09-21T17:28:17.445369874Z
 req_type: Bug
 comments:
 - id: 01a0c32a-e6b2-7533-8f1c-d46c7421a528
@@ -87,4 +87,10 @@ comments:
     WHY IT IS WORTH ATTACHING A LIVE INSTANCE RATHER THAN LEAVING THE CLASS: the complement criterion already recorded on this spec — consider every NON-TERMINAL status, expressed as "not in the terminal set", never as a list of statuses to include — is what fixes it. This row is the proof that the list-of-two form leaves something genuinely stranded rather than merely theoretically uncovered. An implementer can verify the fix against it directly: after the change, `aida pull` should resolve STORY-1362 to Completed, because #1986 merged.
   created_at: 2026-09-21T11:40:55.329802062Z
   modified_at: 2026-09-21T11:40:55.329802062Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c502-e925-72e3-981c-203eedddd852
+  author: joe
+  content: Commit ec09110fc0 references this requirement
+  created_at: 2026-09-21T17:28:17.445369874Z
+  modified_at: 2026-09-21T17:28:17.445369874Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
