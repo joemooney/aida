@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-20T16:37:31.887378105Z
+modified_at: 2026-09-21T01:42:21.569368461Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -212,6 +212,41 @@ comments:
   created_at: 2026-09-20T16:21:23.157381232Z
   modified_at: 2026-09-20T16:21:23.157381232Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c1a0-e281-7520-8196-f376afc28196
+  author: joe
+  content: |-
+    [reviewer] INDEPENDENT ROUND-3 VERIFICATION of PR #2001 at ffac5634454965a79cdef28dcad5314370caee74. I am not recording a verdict, deliberately -- see the last section.
+
+    THE THREE ROUND-2 FINDINGS ARE ALL GENUINELY MET. I checked each against the diff rather than the round-2 summary comment:
+
+    1. TEST THROUGH THE REAL PATH -- MET. real_phase_driver_shelve_handoff_makes_story_1354_claimable constructs an actual RealPhaseDriver, sets pr_number to 1970, and calls PhaseDriver::handoff_open_pr_after_shelve directly. It is not a mock hook. It asserts STORY-1354 is what reaches queue add. One caveat worth knowing rather than fixing: it asserts the argv the handoff passes to a stub aida binary, not that a real queue gained an owner, so it proves the production path invokes the right call with the right spec and stops there. Given the alternative needs a full store, I think that is the right trade and it clears the finding, which asked for the real shelve path to be driven.
+
+    2. QUEUE-ADD FAILURES PROPAGATE -- MET. queue_add_failure_is_propagated drives a stub that exits 23 and asserts the error surfaces with its stderr. The call site moved to aida_subcmd_queue_add_for_reviewer_using, so the discarded-failure path the finding named is gone.
+
+    3. SWEEP VERDICT PREDICATE -- MET, and better than the finding asked. pr_has_approved_verdict was replaced by pr_has_local_verdict, which accepts any parseable verdict plus EscalatedToHuman, and every_valid_local_verdict_blocks_historical_pr_1970_requeue covers Approved, RequestChanges and Rejected.
+
+    AND IT HANDLES THE BUG-1505 HAZARD CORRECTLY, which I want on the record because it is the good news. The advisor measured nine spellings of the verdict value in the corpus and warned that a gate matching loosely on APPROVED would ship work a reviewer explicitly withheld. Verdict::parse strips every non-alphanumeric and lowercases, so all seven canonical spellings resolve, and the two free-text values -- "APPROVED pending cross-platform green" and "CONTENT APPROVED - MERGE WITHHELD FOR INDEPENDENCE" -- normalise to no match and fall to None. None means no verdict, which makes the PR sweep-eligible, which produces another review. So this consumer fails toward more review rather than toward a false approval. It is not the loose matcher BUG-1505 warns about.
+
+    WHAT IS NOT MET, and it is the item that was marked BINDING.
+
+    The rework brief at 16:13:04Z required that the ADR stop asserting coverage that does not exist: "amend the ADR to say what is actually true -- abrupt process death is covered when a non-hook caller invokes the sweep, which no current caller does, so the gap is open until STORY-1218 or equivalent lands."
+
+    At the current head, docs/plans/2026-09-19-adr-47-orphaned-review-ownership.md line 46 still reads, unqualified:
+
+        Abrupt process death is covered at the next scheduler tick.
+
+    There is no mention of hook ticks skipping the sweep, no mention of the absent non-hook caller, and STORY-1218 appears only in the Related header, not in the consequences paragraph where the claim is made.
+
+    This is a miss rather than a sequencing artefact, and I checked that before saying so. The brief landed 16:13:04Z; the head commit ffac56344 is dated 16:33:04Z, twenty minutes later. The implementer pushed after the brief and addressed the three review findings without touching the ADR paragraph.
+
+    It also survived the 16:37:22Z drain verdict, which recorded CHANGES REQUESTED naming only trailing whitespace. So the binding item has now passed through one rework round and one reviewer round unaddressed, which is the shape the advisor described when it said an ADR that claims coverage is worse than no ADR because it stops the next person looking.
+
+    ON THE EXISTING WHITESPACE FINDING -- accurate, but its obvious remedy is wrong. git diff --check does exit 2 and does flag three lines. I verified the exit status directly rather than through a pipeline, because a pipe to head reports the pager's status and not git's. But all three flagged lines end in exactly two spaces, which is markdown hard-line-break syntax: Status, Decision owner and Linked spec are meant to render as three lines. Stripping the trailing spaces satisfies the check and collapses them into one paragraph. The fix is to change the construct -- a list, or blank lines -- not to strip. Also worth the advisor knowing when it weighs whether this deserved a round at all: git diff --check appears nowhere in .github/, scripts/ or the Makefile, so it is a local convention rather than a merge gate. Build (ubuntu-latest) passes; the only failing check is merge-hold-gate, which is the hold doing its job.
+
+    WHY THERE IS NO VERDICT FILE FROM ME. PR-2001.json already holds the drain's CHANGES REQUESTED at this exact head. aida review record is a blind full replace -- passing --finding overwrites the existing findings array outright, there is no history, .aida is gitignored, and nothing is mirrored to the forge. I destroyed a prior reviewer's verdict that way on PR #2040 forty minutes ago and could not recover it; it is filed as TASK-1-162. Recording here would have erased the whitespace finding to add mine, and the PR is already correctly refused and held, so a second verdict buys nothing and costs the first one. The binding-ADR finding belongs in the rework brief, which is the advisor's to write.
+  created_at: 2026-09-21T01:42:21.569368461Z
+  modified_at: 2026-09-21T01:42:21.569368461Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: drive
 implementation_info:
   implemented: true
