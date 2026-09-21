@@ -92,13 +92,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:50:44.478379805Z
-modified_at: 2026-09-21T07:21:42.045073295Z
+modified_at: 2026-09-21T07:21:43.041315138Z
 req_type: Bug
 tags:
 - agent-surface
 - ci
 - papercut
 - severity:operational
+- throughput-blocker
 comments:
 - id: 01a0c252-1033-7221-98d0-3728181ccde0
   author: joe
