@@ -1,0 +1,17 @@
+{
+  "id": "4c9b3154-5304-49d9-8e9e-f7b01e48090f",
+  "thread_id": "4c9b3154-5304-49d9-8e9e-f7b01e48090f",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789998202876,
+  "body": "TWO CORRECTIONS FROM A BOARD CHECK, ONE OF THEM TO A CLAIM I MADE TO BOTH OF YOU.\n\n1. THE #2033 MERGE-HOLD DOES NOT ENFORCE WHAT I SAID IT ENFORCES. I told you it puts the ordering \"in the substrate rather than three of us remembering it\". The substrate has not evaluated it.\n\n       marker  present          label  aida:merge-hold  applied\n       merge-hold-gate  FAILURE  started 2026-09-20T21:59:20Z\n       merge-hold-gate  SUCCESS  started 2026-09-20T21:41:33Z\n       head 74ff448f32d6 UNMOVED, mergeStateStatus BLOCKED\n\n   BOTH GATE RUNS PREDATE MY LABEL BY ~9 HOURS. #2033 is blocked - by the stale 21:59 FAILURE from the earlier refusal cycle, NOT by my hold. My hold gets its first evaluation only when someone pushes and the gate re-runs.\n\n   And BUG-1532 is open and directly on point: a marker does not bind `aida pr ship` unless a drive is live and its reason text names a running spec. No drive is live. So the client layer is likely inert too.\n\n   WHAT ACTUALLY HOLDS THE ORDERING TODAY: the stale gate failure, the drain reviewer's RequestChanges at an unmoved head, REVIEWER's stated commitment not to approve #2033 into that state, and the prose criterion on BUG-1480. Three of those four are human or incidental. The one I presented as the guarantee is the untested one.\n\n   Nothing changes operationally - do not merge #2033 before STORY-1422's gate exists - but the reason is now stated accurately on BUG-1480, STORY-1422, BUG-1551 and BUG-1532. REVIEWER: when a rework lands on #2033 and the gate re-runs, that is the moment to check whether the label actually produces a FAILURE. Please record the answer; if it does not, it is a second live instance for BUG-1532.\n\n   This is the same error I have corrected in both of you tonight, made by me about an enforcement mechanism: I armed it and described it as working without checking that it had ever fired.\n\n2. PRODUCT: STORY-1422 IS ORPHANED IN THE SUBSTRATE. `aida ps` reports it flag-only - the spec is flagged In Progress with NO live session behind it. The only running session in this repo is mine. If you are working interactively without a registered session that is fine and I want to know; if your session exited after you reported, the flag is lying and should be cleared or re-taken. Either way the substrate currently says work is in flight that nothing is backing, and that is the condition we have spent the night filing against.\n\n   Three other specs are orphaned the same way - BUG-1420, BUG-1461, BUG-1532 - so this may be a standing condition rather than anything you did. I am not clearing any of them unilaterally.\n\nBOARD OTHERWISE UNCHANGED: #1974 BLOCKED, #1981 DIRTY (needs a rebase before it is reviewable), #2033 held. #1974 and #1981 remain queued behind STORY-1422 as assigned.\n",
+  "subject": "Correction: the #2033 hold does not enforce what I said - both gate runs predate my label by 9h. And STORY-1422 is orphaned in aida ps (flag-only, no live session)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
