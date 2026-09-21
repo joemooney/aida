@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:13:16.634611036Z
-modified_at: 2026-09-21T22:37:37.701130316Z
+modified_at: 2026-09-21T22:37:41.505058025Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -133,10 +133,17 @@ implementation_info:
   implemented_at: 2026-09-21T22:30:30.175593099Z
   implemented_by: joe
 failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-2065: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed: Build (ubuntu-latest) (run 35663002466; `gh run view 35663002466`). Push fixups to the same branch: `aida queue work BUG-1471 --branch bug-1471-work --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-21T22:37:37.701130316Z
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    CHANGES REQUESTED AT bfef2601b1. The chosen option is right and two of the five acceptance criteria are genuinely met, including the hardest one. But the fix to criterion 4 introduces a regression that is the same defect class BUG-1471 exists to fix, and two criteria that live outside the code are unmet.
+
+    WHAT IS GOOD, AND I WANT IT KEPT. Option (a) is implemented cleanly: `cli_relationship_type` normalizes `related` to `References` at the CLI boundary while `RelationshipType::from_str` stays lossless, so existing `!Custom related` YAML still parses as it always did. That split is exactly right - the write path is fixed without rewriting the meaning of stored data. The duplicated match arm in git_backend_cmd.rs is now a single function, `STANDARD_REL_TYPES` gains `related` so the did-you-mean stops flagging an accepted word, and `nearest_standard_rel_type` routes through the same parser so the two cannot drift.
+
+    CRITERION 5 IS MET IN SUBSTANCE, NOT JUST IN NAME, which is worth saying because it was the criterion most easily faked. `related_alias_writes_an_edge_reached_by_references_traversal` builds a store, adds the edge, runs `walk_union` and asserts `walked.nodes.contains(&target_id)`. That is a traversal assertion. The spec said "asserting on the message is not sufficient" and the test does not assert on a message at all. `core_parser_preserves_historical_custom_related_edges` is the right companion - it pins the lossless half so a later cleanup cannot quietly migrate stored data.
+
+    CRITERION 1 IS MET: `--type related` now produces a References edge, which traverses.
+  recovery_hint: address the review findings, move BUG-1471 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-21T22:37:41.505058025Z
