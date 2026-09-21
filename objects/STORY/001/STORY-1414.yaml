@@ -1,0 +1,58 @@
+id: 01a0c1cb-ad94-7010-85d4-c6fff8d3a5b3
+spec_id: STORY-1414
+agreed_id: STORY-1414
+title: 'Deterministic binary-freshness gate at wave launch: require the drain''s build SHA to equal main HEAD, build and re-exec if behind, instead of warning and running stale'
+description: |
+  A drain wave pins a binary at launch and never checks whether it is current. Twice on 2026-09-20 that silently discarded merged fixes: once for five and a half hours across four orchestrator commits, and again for three hours after BUG-1467's provenance fix merged, during which every verdict the reviewer wrote was still unstamped because both it and the drain were on the older build.
+
+  Both times the gap was found by a human looking, not by the system. `aida pull` prints "your aida binary is now behind HEAD" and was ignored on both occasions — including by me, after I had written myself a rule about it.
+
+  THE MECHANISM ALREADY EXISTS AND IS POINTED AT A DIFFERENT PROCESS.
+
+  `aida-cli-lib/src/mcp.rs` does precisely this for the MCP server:
+
+      198:  fn check(&self) -> Option<McpRespawnPlan>       — query the on-disk binary identity
+      201:  mcp_binary_is_newer_or_different(&running, &on_disk)
+      213:  fn respawn(&self, plan)                          — "detected newer binary on disk; self-respawning"
+      292:  fn exec_mcp_respawn(plan)                        — command.exec()
+
+  A long-running MCP server notices a newer binary after a handled request and re-execs into it. The drain, where staleness does the most damage, has no equivalent. The drain already records `binary_sha` in `drain.lock` at wave start, so it knows what it is pinned to — nothing compares that to HEAD.
+
+  PROPOSAL: a deterministic freshness gate at WAVE LAUNCH.
+
+      aida queue work --batch X --auto-complete --require-head
+        1. resolve HEAD of the default branch
+        2. compare against the candidate binary's embedded build SHA
+        3. if equal          -> launch, pin, proceed
+        4. if binary behind  -> request a build for that HEAD, then re-exec into the
+                                new binary and launch
+        5. if build fails    -> see OPEN QUESTION
+
+  WHY WAVE LAUNCH RATHER THAN PER-IMPLEMENTER. A wave pins one binary for all members; swapping mid-wave is what `make build-fast AFTER_WAVE=1` already refuses, correctly, because members would otherwise run under different orchestration semantics within one batch. Per-implementer freshness would reintroduce exactly that. The launch boundary is the only place where re-exec is both safe and sufficient.
+
+  WHY A FLAG RATHER THAN ALWAYS. A drain deliberately pinned to an older binary is a legitimate debugging move — bisecting an orchestration regression, or reproducing a shelve on the binary that produced it. Default-on with an explicit opt-out would also be defensible; what is not defensible is the current state, where the only signal is a warning nobody reads.
+
+  OPEN QUESTION, and it wants a decision rather than an implementation guess: what happens when the build fails? Refusing to launch means a broken build halts every drain — safe, total, and it converts a compile error into a full work stoppage. Launching stale with a loud, shelve-able record means work continues on known-old orchestration. I lean refuse, because a drain running unknown-vintage code is what produced tonight's confusion twice over, but the cost is real and the call is not mine.
+
+  Acceptance:
+  - `aida queue work --auto-complete` gains a flag that requires the launching binary's build SHA to equal the default branch's HEAD.
+  - When behind, it requests a build for that HEAD and re-execs into the result before pinning the wave. It does not launch and then warn.
+  - The wave's recorded `binary_sha` equals HEAD for any wave launched under the flag, and that is assertable after the fact from `drain.lock`.
+  - The re-exec reuses the MCP path's shape (`query_aida_binary_identity`, `command.exec()`) rather than a second implementation.
+  - A deliberate pin to an older binary remains possible and is explicit.
+  - Build failure behaviour is whatever the open question above is decided to be, and the decision is recorded rather than implied by the code.
+  - Regression fixture: launch with the flag against a stale binary; assert a build is requested, the process re-execs, and the pinned `binary_sha` equals HEAD.
+
+  Related: this is the same argument STORY-1367 makes for scheduled checks, pointed at the binary instead — with the difference that here the remedy is already safe under concurrency (`AFTER_WAVE=1` exists and refuses to swap a pinned binary), so the gate needs no new concurrency reasoning.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T02:29:06.068323940Z
+modified_at: 2026-09-21T02:29:06.068323940Z
+req_type: Story
+tags:
+- drain-safe
+- operator-proposed
+- orchestrator
+- substrate-gate
