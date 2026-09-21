@@ -144,12 +144,29 @@ description: |-
       That last point is this ADR's own argument applied to its own expiry. STORY-1414 records that `aida pull`'s staleness warning was ignored twice in one day by the people who wrote the rule about it, and concluded a control whose enforcement is a message the operator may ignore is not a control. An expiry that requires a human to notice the date is the same control.
 
       NOT DELEGATED TO STORY-1415: the split verdict, the classification rules, and the budget threshold. Those stay here.
+
+  J. THE LENS IS SETTLED: `aida list`'s DEFAULT OPEN VIEW IS THE RIGHT COUNT, and it is cleaner than clause H's worry implied. Measured 2026-09-20 21:22 at the operator's question.
+
+      aida list -> 143 open, and the composition is ENTIRELY WORK ITEMS:
+          73 bug   36 story   30 task   2 spike   2 epic
+          0 decision, 0 principle, 0 term, 0 doc, 0 vision
+
+      So the open lens already excludes the reference and docs types. It is the five open statuses - Draft, Approved, Planned, InProgress, NeedsAttention - MINUS three things that are not obvious from the status list alone:
+          the DEFERRED tier (98 specs), a view flag orthogonal to status
+          the ARCHIVED tier (1548 specs), likewise
+          type-terminal rules: an accepted ADR is terminal per BUG-781, and principles are stateless
+
+      The arithmetic does not close on status alone - the five statuses sum to 165 against 143 open - and the difference is those three exclusions. Worth stating because 'open' looks like a status filter and is not one.
+
+      CONSEQUENCE FOR THE EXIT CONDITION: the operator's 'list of open items is empty' is well-defined and is the right number. Clause H's first worry - that nobody had chosen a lens - is resolved: the default lens is the lens, it counts only work, and it is what `aida list` prints with no arguments.
+
+      CLAUSE H's SECOND WORRY STANDS AND IS NOW SHARPER. Every child spec this mode files under clause 1 is a bug, task or story - exactly the types the 143 counts. So each use of the permissive path increments the number the early exit waits on. The exclusion clause H asks for is therefore specific and implementable: exclude specs created by the mode's own deferral path from the exit count, or the early exit recedes by one for every acceptance gap the mode defers.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:59:55.527300499Z
-modified_at: 2026-09-21T04:18:15.456687983Z
+modified_at: 2026-09-21T04:20:25.534409684Z
 req_type: Decision
 tags:
 - operator-decision
