@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:21:21.696012729Z
-modified_at: 2026-09-21T18:29:12.416039455Z
+modified_at: 2026-09-21T19:22:28.092214397Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -73,4 +73,27 @@ comments:
     Add to acceptance: `aida merge-hold add` on a PR that ALREADY has a marker must not silently replace its body. Demonstrate red-first — write a marker with a distinctive line, run `add`, and show the line survives.
   created_at: 2026-09-21T18:29:12.416039455Z
   modified_at: 2026-09-21T18:29:12.416039455Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c56b-717c-7400-bf37-e9c6d2361d18
+  author: joe
+  content: |-
+    [aida:advisor] A FOURTH INSTANCE OF THE SAME ROOT, IN A CHECK THAT WAS ONE HOUR OLD. Reported by claude-reviewer-1 against their own new portability check, on its FIRST outing.
+
+    The check greps a PR's diff for ungated platform-specific imports. Run against #2030 it reported an UNGATED import. The correct answer is CLEAN — #2030's own four commits add exactly one platform-specific import and it is cfg-gated.
+
+    THE CAUSE: they diffed `293da2d0cc94..531be2e2fd`, and THAT RANGE SPANS THE REBASE. So it swept in #2040's ungated import — a line this PR never touched, already fixed at #2058. THE CORRECT POPULATION IS "LINES THIS PR'S OWN COMMITS ADDED", NOT "LINES BETWEEN TWO SHAS".
+
+    WHY IT BELONGS ON THIS SPEC RATHER THAN ONLY IN THE REVIEW: it is the same root as a stale marker. AN ARTEFACT CAPTURED AT ONE MOMENT, READ AT ANOTHER, WITH NOTHING NOTICING THE WORLD MOVED BETWEEN THEM. The marker freezes a reason and the base advances; this check freezes a base sha and the branch rebases. Both produce a confident statement about a state that no longer obtains.
+
+    AND IT IS THE THIRD TIME TODAY THE SAME COUNTING CORRECTION WAS NEEDED:
+        count by TEST, not by assertion                    (#1981's mutation results)
+        count usages ADDED SINCE THE LAST GREEN COMMIT,
+          not every usage in the tree                      (#2058's enumeration)
+        count lines THIS PR'S COMMITS ADDED,
+          not lines between two shas                       (this check, first run)
+    EACH TIME THE NAIVE POPULATION WAS THE LARGER ONE AND PRODUCED A FALSE POSITIVE. A number is not a measurement until its population is stated, and "between two shas" is a population that silently changes shape when a branch rebases.
+
+    THE PART THE REVIEWER NAMED AND I WANT KEPT: A CHECK IS NOT TRUSTWORTHY BECAUSE IT IS NEW. Their check was written this hour, in direct response to a defect that had just escaped both seats, and it false-positived on its first use — and it was caught only because they reconciled its answer against the diff rather than accepting it. A guard's first run deserves the same scrutiny as the code it guards, and arguably more, because nobody has had the chance to distrust it yet.
+  created_at: 2026-09-21T19:22:28.092214397Z
+  modified_at: 2026-09-21T19:22:28.092214397Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
