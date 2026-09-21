@@ -50,13 +50,21 @@ description: |-
 
   THE ONE REFINEMENT EXPERIENCE ADDED. A surface can be on the list and still be validated, if its reader has a CHEAP way to check it. The notice's problem is not only that its reader never runs `aida awaiting` — it is that `aida awaiting` costs a minute or more and sometimes does not return, so nobody would run it to check a free one-liner even knowing they should. So the second question, asked only of surfaces the proxy returns, is: can its reader verify it without invoking something slower than the thing being verified? Where the answer is no, the surface is not merely unvalidated, it is unvalidatABLE in practice, and a fix that relies on cross-surface comparison will itself go unchecked. A component breakdown printed inline is self-validating; a cross-surface comparison is not.
 
-  NOT A PRINCIPLE YET. Three instances in one session, found by two seats, is enough to name a pattern and not enough to know its boundaries. Promote to a principle if it recurs in a subsystem neither of these touched, or if the diagnostic question above catches something prospectively rather than explaining something already found. Recorded now because the frame was produced tonight and will not survive in anyone's memory otherwise.
+  NOT A PRINCIPLE YET, AND THE TRIGGER IS REWRITTEN 2026-09-20 19:58 BECAUSE THE ORIGINAL WAS BOTH STALE AND ALREADY SATISFIED.
+
+      The first version read "three instances in one session" and sat twelve lines below a list naming FIVE with spec ids - a count written at one moment and not updated as its own list grew, in the document about surfaces that cannot be reconciled. It also offered two promotion conditions, and the SECOND HAS ALREADY FIRED: TASK-1-167 and TASK-1-168 were both found by running the proxy against surfaces chosen from the question, before any symptom was known. Left as written, a later reader would find a satisfied trigger and promote on evidence both seats judged too thin.
+
+      WHAT THE EVIDENCE ACTUALLY IS. Five instances, one session, two seats. Two of the five were found prospectively, which establishes that the proxy RANKS SURFACES BY AUDITABILITY - a real and narrower capability than finding instances of the pattern. But TASK-1-167 is a plain omission and TASK-1-168 is latency plus unstated scope; neither is the defining shape of two observers being shown DIFFERENT CORRECT ANSWERS. Only BUG-1513 is unambiguously that, with BUG-1507's banner and BUG-1514's composed exclusions close to it. So the prospective limb fired and was judged insufficient, by both seats independently, and the reviewer argued against promoting its own hit.
+
+      THE REMAINING TRIGGER, stated so it cannot be satisfied by accident: promote when an instance of the SPECIFIC shape - one surface returning different correct answers to different observers, where the observer who would recognise the defect is not the one shown it - appears in a subsystem neither the queue, the lifecycle surfaces, nor the drain's reporting touched. Prospective discovery is no longer sufficient on its own, because it has been demonstrated and what it demonstrated was narrower than the pattern.
+
+      Recorded now because the frame was produced tonight and will not survive in anyone's memory otherwise.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:33:45.887148289Z
-modified_at: 2026-09-21T02:52:20.316431470Z
+modified_at: 2026-09-21T02:55:01.053916515Z
 req_type: Task
 tags:
 - from-advisor:general
