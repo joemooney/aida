@@ -1,0 +1,79 @@
+id: 01a0c62e-c469-7e33-916c-5933bcd93f98
+spec_id: BUG-1579
+agreed_id: BUG-1579
+title: starter_role_refresh_adds_missing_prompt_and_preserves_user_prompt is nondeterministic and reds a required check on unrelated PRs — proven by a rerun at the same sha
+description: |-
+  A TEST MERGED TODAY IS NONDETERMINISTIC AND REDS CI ON UNRELATED PRS. PROVEN BY EXPERIMENT, NOT INFERRED.
+
+  THE PROOF. PR #2065's `Build (ubuntu-latest)` failed at head bfef2601b1 on
+  `scaffold_refresh::tests::starter_role_refresh_adds_missing_prompt_and_preserves_user_prompt`
+  (panic at scaffold_refresh.rs:387, "legacy role should be refreshed"; 5291 passed, 1 failed).
+  The advisor re-ran THE SAME RUN AT THE SAME SHA (run 35663002466) before the branch could move.
+  IT CAME BACK GREEN.
+
+      same commit, same code, two runs, different outcomes  ->  NONDETERMINISTIC
+
+  The experiment was only possible because the rework lane was told to FREEZE ITS PUSH. Once a head
+  moves, a green run at a new sha says nothing about the old one, and the question becomes
+  permanently unanswerable. That freeze is the reason this spec can assert rather than suspect.
+
+  IT WAS INTRODUCED TODAY. The test arrived with b54065148a (BUG-1464, "refresh starter role
+  prompts"), merged 2026-09-21 15:19. #2065's merge-base is EXACTLY that commit, and b54065148a's
+  own main CI run was GREEN — so identical test code passed on main and failed on
+  main-plus-one-unrelated-commit, then passed again on a rerun of that same failing commit.
+
+  WHAT #2065 TOUCHES: rel-type parsing in git_backend_cmd.rs and three functions in lib.rs, plus two
+  test files. NO scaffolding, NO roles, NO scaffold_refresh. The failure cannot be attributed to the
+  diff, and the rerun confirms it should not be attributed to any interaction with it either.
+
+  RULED OUT BY claude-reviewer-1 BEFORE THE RERUN, so nobody re-walks them:
+    - NOT the obvious env race. The test mutates HOME and AIDA_TEST_HOME, which are process-global,
+      and glyphs.rs holds thirteen direct `set_var("AIDA_TEST_HOME")` calls that look exactly like
+      the culprit — but every one sits inside a test calling `lock()`, which delegates to the same
+      `crate::test_env::env_lock()` the guard uses, with a BUG-697 comment saying precisely why.
+      They had this written up as a finding and killed it on the last check.
+    - NOT a stale base. The branch contains b54065148a and lacks only a7ef44862c, which touches
+      forge/drain code and no scaffolding.
+
+  THE REMAINING CANDIDATE IS NAMED IN THE GUARD'S OWN DOCUMENTATION AND IS NOT YET CONFIRMED.
+  `EnvVarsGuard` (aida-cli-lib/src/test_env.rs) states: "because the guard holds ENV_LOCK for its
+  whole lifetime it serialises against every sibling test that sets those same keys. A TEST THAT
+  MERELY READS ENV-DERIVED STATE THROUGH THE CODE UNDER TEST MUST HOLD ONE OF THESE GUARDS TOO, OR
+  IT RACES THE SETTERS." The flaky test is a SETTER and holds its guard correctly. A sibling that
+  READS HOME-derived state without taking a guard would race it, and the lock cannot help because
+  the reader never asks for it. THAT IS A HYPOTHESIS FROM THE DOC, NOT A FINDING — nobody has
+  identified such a reader.
+
+  Acceptance:
+  - The nondeterminism is eliminated, not retried-around. A `#[ignore]`, a retry wrapper, or a
+    sleep does not satisfy this.
+  - THE MECHANISM IS IDENTIFIED BEFORE THE FIX. An intermittent test has several plausible causes
+    and picking one by guess produces a change that cannot be shown to work — the fix must name
+    what races what.
+  - DEMONSTRATE IT FIRES: reproduce the failure deliberately (e.g. by forcing the suspected
+    interleaving) before fixing, so the fix has something to be measured against. A test that
+    fails one run in N is not shown fixed by one green run.
+  - If the cause is an unguarded reader, ENUMERATE every such reader rather than fixing the one
+    found — the guard's doc says any of them is sufficient to cause this.
+
+  WHY THIS MATTERS MORE THAN ONE RED CHECK. `Build (ubuntu-latest)` is one of exactly two REQUIRED
+  checks on main. A nondeterministic failure in it reds arbitrary PRs for reasons their authors
+  cannot diagnose, and the cost lands on whoever happens to be merging — which today was a PR
+  already refused on its own merits, so the noise was absorbed. On a PR that was otherwise ready it
+  would have looked like a real regression.
+
+  Filed by the driver-advisor seat. Failure observed and characterised by claude-reviewer-1, who
+  also withdrew their own stronger first reading — they initially read `gh run list` as showing a
+  success AND a failure at this sha, which would have proven nondeterminism outright, and corrected
+  it to "there is exactly ONE CI run on this branch and it failed" before anyone acted. Had that
+  first read stood, the rerun would never have been dispatched and the conclusion would have rested
+  on a misreading. Related: BUG-1464 (introduced the test), #2065.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:55:48.841488488Z
+modified_at: 2026-09-21T22:55:48.841488488Z
+req_type: Bug
+tags:
+- ci flaky test-infra
