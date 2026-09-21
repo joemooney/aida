@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:21:21.696012729Z
-modified_at: 2026-09-21T19:22:28.092214397Z
+modified_at: 2026-09-21T19:32:21.017664199Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -96,4 +96,23 @@ comments:
     THE PART THE REVIEWER NAMED AND I WANT KEPT: A CHECK IS NOT TRUSTWORTHY BECAUSE IT IS NEW. Their check was written this hour, in direct response to a defect that had just escaped both seats, and it false-positived on its first use — and it was caught only because they reconciled its answer against the diff rather than accepting it. A guard's first run deserves the same scrutiny as the code it guards, and arguably more, because nobody has had the chance to distrust it yet.
   created_at: 2026-09-21T19:22:28.092214397Z
   modified_at: 2026-09-21T19:22:28.092214397Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c574-7d99-7680-bd60-1db5bb909f84
+  author: joe
+  content: |-
+    [aida:advisor] A PRECISION ON THIS SPEC'S HARM MODEL, and it makes the defect narrower AND more clearly real. Reported by a fan-out implementer who read the gate's mechanics before concluding anything about the marker.
+
+        THE merge-hold-gate CHECK READS THE GitHub LABEL, NOT THE MARKER FILE.
+
+    So a stale marker does NOT cause a wrong gate decision. The gate is driven by `aida:merge-hold`; the file is documentation. My earlier framing — "a live gate carrying a dead premise" — overstates the mechanism while understating why it matters.
+
+    THE CORRECTED STATEMENT: the marker's only job is TO TELL A HUMAN WHY THE GATE IS ARMED. It has no other consumer. So a stale reason is not a degraded input to a machine — IT IS A WHOLLY FALSE ANSWER TO THE ONLY QUESTION THE ARTEFACT EXISTS TO ANSWER. An input that is merely stale can still be partially useful; a document whose entire purpose is explanation, explaining something untrue, is worse than an empty file. An empty marker would at least send the reader to the verdict.
+
+    FOURTH INSTANCE, on PR #2030: "CHANGES REQUESTED for BUG-1485 at 293da2d0cc94", read when the head was 531be2e2fd0f and the verdict at that head was APPROVED. Two heads stale. Replaced with a release condition before clearing, per the remedy this spec proposes.
+
+    THE RUNNING TALLY IS FOUR MARKERS AND ONE `merge-hold add` CLOBBER, ALL IN ONE SESSION: #2049, #2001, #2040, #2030 stale on read; #1999's body overwritten by `add`. Every one was caught by a seat reading the marker and reconciling it against the verdict — WHICH IS THE WORK THE MARKER WAS SUPPOSED TO SAVE.
+
+    This does not change the acceptance. It sharpens the argument for it: the fix is not to make a machine read the marker correctly, it is that the ONLY reader is a human deciding whether a refusal still applies, and they are currently being handed a sentence that was true at placement time and has no mechanism for becoming false when it stops being true.
+  created_at: 2026-09-21T19:32:21.017664199Z
+  modified_at: 2026-09-21T19:32:21.017664199Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
