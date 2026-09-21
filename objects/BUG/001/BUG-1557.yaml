@@ -42,12 +42,12 @@ description: |
   - SECOND TRAP, SAME FILE: THERE IS A SIXTH `command =` AND IT IS DOCUMENTATION. init_cmd.rs:2177 contains the literal placeholder `command = "<allow-listed aida subcommand>"` inside explanatory prose. A naive extractor picks it up and it will NEVER parse, so the first run of the new check fails on a string that is correct as written. Either scope the extraction to the `[[schedule.jobs]]` blocks or exclude the documentation example - but DO IT KNOWINGLY, as a decision recorded in the test, rather than discovering it as a failure and special-casing it under time pressure. A placeholder that looks like data is exactly the shape that turns a good check into a check with an unexplained exclusion list.
 
   - SCOPE OF THE ABOVE CHECK, recorded as its author scoped it so it is not read as exhaustive: claude-reviewer-1 grepped init_cmd.rs ONLY, for `command *= *"`, six matches including the placeholder. Scaffolded jobs defined in another file, or written with a different key, would not have matched. The acceptance's requirement stands on the scaffolded template as a whole, not only on that grep.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:02:25.399177125Z
-modified_at: 2026-09-21T17:34:24.378276475Z
+modified_at: 2026-09-21T17:45:18.138738368Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -108,3 +108,22 @@ comments:
   created_at: 2026-09-21T17:34:24.378276475Z
   modified_at: 2026-09-21T17:34:24.378276475Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c512-7c31-77e2-8148-9b3cbea88afc
+  author: aida-auto-bump
+  timestamp: 2026-09-21T17:45:18.129860650Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c512-7c3a-72d3-82b1-612fe66b6af4
+  timestamp: 2026-09-21T17:45:18.138736580Z
+  agent: aida
+  commit_sha: ff6554b194009c1a35104b180636f4dbca1365ba
+  summary: 'BOTH TRAPS I SPECIFIED ARE HANDLED, AND ONE IS HANDLED BETTER THAN I ASKED. (1) ONE-DIRECTIONAL, NOT SET EQUALITY: the test asserts only that every scaffolded command parses, and the code comment states why the other direction would be wrong - an allowlisted command with no scaffolded example (fetch --code-only, store compact, store gc) is correct, and a set-equality check would fail for three false reasons and get weakened or deleted. (2) THE DOCUMENTATION PLACEHOLDER IS EXCLUDED KNOWINGLY: extraction is scoped to [[schedule.jobs]] blocks tracked line-by-line rather than a blanket grep. BETTER THAN SPECIFIED - they added a companion test, scaffold_extraction_excludes_the_documentation_placeholder, which first asserts the placeholder STILL EXISTS and only then asserts it is not extracted. That makes the exclusion itself falsifiable and stops it going vacuous if the placeholder is ever moved or deleted; I asked for a knowing exclusion and got a guarded one. I VERIFIED THE EXTRACTOR AGAINST THE REAL TEMPLATE RATHER THAN READING IT: I re-implemented the extraction algorithm and ran it over init_schedule_config_section at this sha - 6 commands extracted (doctor check performance --fail-on-findings, session reap, doctor, queue gc, cache verify, notify check), placeholder NOT captured, and all 6 present in the allowlist. That independently reproduces their stated count of 6 and their exclusion claim. RED-FIRST IS DEMONSTRATED WITH REAL OUTPUT, not asserted: a temporary bogus scaffolded command produced a named panic quoting the parse error and the full valid-command list, then reverted to green with git diff --stat confirming only the intended one-line pub(crate) change remained. THE REFACTOR IS THE RIGHT SHAPE: command_table() becomes the single source of truth, with both the parser and valid_commands() derived from it, so the bail message can no longer drift from the match arms - the same de-duplication BUG-1554 asks for. The pub(crate) visibility change is one line and is the minimum needed for the test to reach the template. This closes a STRUCTURAL risk, not a present breakage, and the PR says so plainly.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T17:45:18.129585269Z
+  completion_sha: ff6554b194009c1a35104b180636f4dbca1365ba
