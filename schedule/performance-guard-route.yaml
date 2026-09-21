@@ -1,3 +1,8 @@
 job: performance-guard-route
-due_since: 2026-09-21T15:52:09.469576146Z
-due_reason: on CronJobFailed
+last_run: 2026-09-21T21:58:55.121830153Z
+last_by:
+  seat: advisor
+  session: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+  vendor: antigravity
+result: done
+note: 'Advisor verdict: NEITHER a real regression NOR a budget to change. The trip is CORRECT and expected; wait out the 24h window. Measured, not argued: the window holds ~7300 pre-#2033 calls at ~19.6% over a 1000ms budget, while the POST-fix population is 4 over 43 = 9.3%. Tuning the budget against a window contaminated by an already-fixed defect would be tuning-until-green, which STORY-1423''s own text forbids. NOTE: the task as assigned was NOT PERFORMABLE from the artefact the prompt names - wrong path, entry not correlated to this trip, and none of the four numbers it asks me to confirm. See BUG-1573 (raised to high), BUG-1572 (binary-blind denominator).'
