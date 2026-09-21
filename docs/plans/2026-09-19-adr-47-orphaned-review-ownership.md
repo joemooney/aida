@@ -1,8 +1,8 @@
 # ADR-47: Orphaned review ownership is recovered by handoff plus a bounded sweep
 
-**Status:** Accepted  
-**Decision owner:** advisor  
-**Linked spec:** BUG-1291  
+**Status:** Accepted<br>
+**Decision owner:** advisor<br>
+**Linked spec:** BUG-1291<br>
 **Related:** STORY-1218, TASK-1284, BUG-1268, STORY-1354
 
 ## Context
