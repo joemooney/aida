@@ -1,0 +1,27 @@
+id: 01a0c30d-e960-79e3-bd56-97ae80755e73
+spec_id: BUG-1540
+agreed_id: BUG-1540
+title: The implementer preflight maps a guard timeout or spawn error to Skipped and treats Skipped as Open, so a guard that could not run reads as a guard that passed
+description: |-
+  SPLIT OUT OF TASK-1289 so it is not blocked behind an operator design decision.
+
+  THE DEFECT. aida-cli-lib/src/implementer_preflight.rs maps a guard TIMEOUT and a guard SPAWN ERROR to Skipped. decide() treats every Skipped result as Open. So a guard that could not run reads as a guard that passed.
+
+  This is PRIN-5 in the preflight itself: absent evidence rendered indistinguishable from good evidence, erring toward reassurance. A guard that times out is the case where you know LEAST about the change, and it is currently the case that looks most like success.
+
+  WHY IT IS SEPARABLE. TASK-1289 is execution_mode guided and blocked on an operator decision about WHERE the publication boundary goes - a DecisionRequest is now pending on it with three shapes. This defect is orthogonal: whichever shape the boundary takes, a guard that fails to complete must not read as a pass. It needs no decision, only a direction, and the direction is obvious.
+
+  WHAT TO BUILD. Distinguish "guard ran and passed", "guard ran and failed", and "guard could not run" as three outcomes rather than two. A guard that could not run should not be able to clear the preflight - the conservative resolution is to treat it as a failure, or at minimum to surface it as UNPROVEN and refuse to report the preflight as clean. Skipped-by-configuration (a guard deliberately not selected) is a genuinely different case from skipped-by-timeout and should stay distinguishable from it.
+
+  A test should pin the timeout path specifically - a guard that hangs past its limit must not produce an Open decision.
+
+  PROVENANCE. Found by the drain reviewer as the second of two findings on PR #2042 (branch bug-1420-round2, head 35de6d3abb), recorded as RequestChanges. The first finding is the publication boundary, which is what TASK-1289's pending DecisionRequest covers. Filed separately by the driver-advisor seat so this half can ship while the other half waits on the operator.
+
+  Autonomous-safe. Note that #2042 itself stays held with its merge-hold marker and label - this spec is the mechanism by which the finding survives independently of that PR's fate.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T08:21:03.968494787Z
+modified_at: 2026-09-21T08:21:03.968494787Z
+req_type: Bug
