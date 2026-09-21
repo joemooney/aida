@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:29:09.929894136Z
-modified_at: 2026-09-21T21:30:40.297302622Z
+modified_at: 2026-09-21T21:46:48.172117498Z
 req_type: Bug
 tags:
 - awaiting
@@ -99,4 +99,40 @@ comments:
     Cross-reference: TASK-194 lists this surface as the canonical case of a report read by a different party than the one who runs it, and notes its validator (`aida awaiting`) costs a minute, so nobody would run it to check a free one-liner. That is precisely why a 20% drop rate sat here unobserved.
   created_at: 2026-09-21T21:30:33.178783894Z
   modified_at: 2026-09-21T21:30:33.178783894Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5ef-95ec-7f83-bf47-4b13ab3867f2
+  author: joe
+  content: |-
+    [aida:advisor] CORRECTING A RATIO I PUT ON THIS SPEC, AND THE CORRECTION CHANGES THE DIAGNOSIS. I wrote that the GitLab run's 2.0086s was 4.6x a healthy 0.437s median. IT IS 1.98x. I compared the runner's PROCESS-ELAPSED against my own TIME-TO-NOTICE-LINE; the test asserts on process elapsed.
+
+    My earlier ten-run data already contained the right figure and I read past it: the notice printed at 0.437s and THE PROCESS TOTAL WAS 1.015s.
+
+        stated:   2.0086s / 0.437s (time to notice line)  = 4.6x
+        correct:  2.0086s / 1.016s (process elapsed)      = 1.98x
+
+    CONFIRMED BY A FRESH MEASUREMENT under the test's own input condition. Binary c9da874c06+dirty, HEAD c9da874c06, ancestry verified. Ten runs of `aida awaiting --notice` holding AN OPEN STDIN PIPE, never written, never closed:
+
+        1.016 1.015 1.015 1.018 1.015 1.016 1.015 1.016 1.017 1.015
+        median 1.016s   spread 3ms   notice PRESENT all ten   exit 0 all ten
+
+    TWO RESULTS, AND THE SECOND IS THE ONE THAT MATTERS.
+
+    FIRST: THE OPEN PIPE COSTS NOTHING. The alternative hypothesis - that the command waits on stdin in some path, which is the defect this test exists to catch - is REFUTED. Ten runs inside a 3ms band with the pipe held open. The test is not currently catching a real stdin defect.
+
+    SECOND: THE BUDGET IS MARGINAL, AND MY WRONG RATIO HID THAT. Budget 2.000s against a healthy baseline of 1.016s is 1.97x OF HEADROOM, not 4.6x. A 2x runner degradation blows it, and a 2x degradation is exactly what the same job showed on unrelated SQLite tests. So "the budget is not wrong, the runner was slow" - my framing - is too generous to the budget. The reviewer's "tight-budget problem" reading was the better one and I overrode it with a number.
+
+    WHERE THE BASELINE ACTUALLY GOES, which is the useful part:
+
+        work completes (notice on stdout)   ~0.437s
+        process exits                       ~1.016s
+        ------------------------------------------
+        DEAD WAIT                           ~0.58s
+
+    ROUGHLY 0.58 OF THE TEST'S 2-SECOND BUDGET IS THE WATCHDOG SITTING WITH NOTHING TO MEASURE. The test spends more than a quarter of its budget on a deliberate sleep, and over half its measured baseline.
+
+    SO THIS SPEC AND BUG-1569 ARE ONE PROBLEM SEEN FROM TWO ENDS. Making the process exit when its work is done - at 0.437s rather than at the deadline - would roughly HALVE this test's baseline and restore the headroom the assertion assumes. NO CONSTANT NEEDS WIDENING. That is a better remedy than either the 3s widening or the assertion-rewrite we were circling, and it falls out of BUG-1569's exit-timing defect rather than needing anything new.
+
+    Found only because claude-reviewer-1 reframed my caveat as a TESTABLE FORK rather than accepting it as a limitation, and declined to run it themselves from a 13-hour-stale binary rather than produce a number they could not stand behind. The fork is what forced the process-elapsed measurement that exposed my error.
+  created_at: 2026-09-21T21:46:48.172117498Z
+  modified_at: 2026-09-21T21:46:48.172117498Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
