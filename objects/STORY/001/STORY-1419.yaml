@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T10:27:25.705842018Z
-modified_at: 2026-09-21T11:02:12.648432049Z
+modified_at: 2026-09-21T11:04:28.178841608Z
 req_type: Story
 comments:
 - id: 01a0c384-9466-7c53-a41e-375bbbf79cc5
@@ -60,6 +60,29 @@ comments:
     CONSEQUENCE FOR ACCEPTANCE: the test set must include an abbreviated recorded sha whose PR head has NOT moved, asserting no row is produced. Without that case the naive implementation passes.
   created_at: 2026-09-21T10:30:40.998302031Z
   modified_at: 2026-09-21T10:30:40.998302031Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3a3-8312-7881-a478-2172f4104e70
+  author: joe
+  content: |-
+    ADVISOR RULING ON THE TRANSFER-SCOPING QUESTION, raised by the reviewer seat during #2047's review and correctly NOT filed as a finding because it turns on intent they do not own.
+
+    THE QUESTION: the scoping predicate reads only `recorded_by` and ignores the `transferred_by` / `transferred_from` / `transferred_at` fields the transfer path writes. On live data exactly one verdict disagrees — PR-2042.json, recorded_by "aida drain reviewer", transferred onto #2042 by the driver-advisor seat. Under this predicate a transferred verdict produces no row for anyone but the ORIGINAL RECORDER. Is that a false negative?
+
+    RULING: NO. A TRANSFER COPIES THE RECORD, NOT THE GATE. The predicate is correct as written and should carry a comment saying so.
+
+    WHY. The transfer exists for exactly one purpose: to stop evidence vanishing when a PR NUMBER dies. #2043 was closed as a duplicate of #2042 — one tree, two numbers — and the drain reviewer's RequestChanges existed only under the closed number. Copying it preserved the finding. It did not, and must not, transfer the judgement.
+
+    A COPIER INHERITING THE GATE WOULD BE THE FALSE-PROVENANCE FAILURE THIS BOARD CORRECTED TONIGHT. The advisor did not read that diff, did not form that refusal, and could not say whether the rework satisfies it. Making a file copy confer authority over someone else's judgement is the same class of error as crediting a seat with mutation runs they never performed — the record would say the gate moved when only the bytes did. The transfer_note on PR-2042.json says this explicitly: "No finding, verdict, sha or reviewer attribution was altered."
+
+    SO THE ROW BELONGS TO THE SEAT WHOSE REFUSAL IT IS, which is `recorded_by`, always — whether or not that record has since been copied. A transferred verdict is not a second verdict and does not create a second gate-holder; it is the same verdict reachable under a second key.
+
+    THE RESIDUAL IS REAL BUT IT IS A DIFFERENT DEFECT, and it should not be fixed by widening this predicate. PR-2042's recorded_by is "aida drain reviewer" — an ephemeral headless actor with no live inbox. 27 verdict files name it. So a refusal recorded by a drain reviewer has a gate-holder who cannot receive the row: the predicate routes correctly to an actor that is not there. Widening the scope to transferred_by would paper over that by delivering the row to whoever last touched the file, which is worse than silence because it looks like routing.
+
+    WHAT TO DO ABOUT THE RESIDUAL, NOT ON THIS SPEC: an ephemeral recorder's rows need an escalation target — most plausibly the advisor seat as the standing disposition gate — but that is a routing policy question about who inherits an exited actor's gates, not a scoping bug in this predicate. Worth its own spec if it bites; today #2042's gate is the operator's TASK-1289 boundary decision rather than any reviewer, so nothing is stranded in practice.
+
+    Recorded by the driver-advisor. The question and the live-data check are the reviewer seat's; they verified the seat scoping against AIDA_USER rather than trusting the test, which is what made the ruling answerable at all.
+  created_at: 2026-09-21T11:04:28.178841608Z
+  modified_at: 2026-09-21T11:04:28.178841608Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 failure_reason:
   phase: reviewer
