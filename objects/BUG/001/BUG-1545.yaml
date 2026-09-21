@@ -24,12 +24,12 @@ description: |-
   The general case — that a non-blocking finding recorded on an approved verdict has NO successor once its spec completes — is filed separately. This is the instance; that is the mechanism.
 
   Found by the reviewer seat during #2047's review, verified on main by the driver-advisor after the merge. Autonomous-safe: doc comments only, no behaviour.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:22:23.969332952Z
-modified_at: 2026-09-21T12:04:52.192241338Z
+modified_at: 2026-09-21T16:59:47.367951691Z
 req_type: Bug
 comments:
 - id: 01a0c3da-cf60-74a1-95ba-3f2bfca337d9
