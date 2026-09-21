@@ -614,10 +614,12 @@ impl NoticeSummary {
 /// injection bounded; the footer points at `aida mailbox inbox` for the rest.
 pub const NOTICE_DEFAULT_CAP: usize = 5;
 
-/// First non-empty line of `body`, trimmed and truncated to `max` chars (with
-/// an ellipsis when cut). A retracted message has no readable body, so it
-/// renders as a `[withdrawn]` placeholder. trace:STORY-585 | ai:claude
-fn subject_line(m: &Message, max: usize) -> String {
+/// Explicit subject when present and non-blank, otherwise the first non-empty
+/// line of `body`, trimmed and truncated to `max` chars (with an ellipsis when
+/// cut). A retracted message has no readable body, so it renders as a
+/// `[withdrawn]` placeholder.
+// trace:STORY-585 trace:BUG-1462 | ai:codex
+pub fn subject_line(m: &Message, max: usize) -> String {
     if m.retracted {
         return "[withdrawn]".to_string();
     }
