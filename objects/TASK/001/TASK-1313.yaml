@@ -49,31 +49,68 @@ description: |
   six healthy specs and train them to ignore it.
 
   ## Acceptance
+
+  ACCEPTANCE CORRECTED 2026-09-20 22:44. The predicate first written here MISSES 6 OF THE
+  7 CORRUPTED FILES IN THIS STORE. Caught by the reviewer against their own detector;
+  re-measured by the driver advisor before correcting.
+
+  THE TWO FORMS. A mis-decoded em-dash (U+2014 = E2 80 94, read as latin-1) appears in the
+  store in two shapes:
+
+      RAW      lead char + latin-1 supplement char        (what BUG-1522 held after repair)
+      ESCAPED  lead char + literal backslash-x + 2 hex    (YAML's escape for the control
+                                                           characters inside a quoted scalar)
+
+  The strict predicate — lead char IMMEDIATELY FOLLOWED BY a latin-1 supplement character —
+  matches the raw form only. In the escaped form the next character is a backslash, so it
+  matches nothing. Measured across the object store:
+
+      files scanned         4197
+      files affected           6      raw 0, escaped 25
+      per file   BUG-1452 8, STORY-1405 6, BUG-1450 5, BUG-1106 2, BUG-1111 2, BUG-1310 2
+
+  BUG-1522 was the RARE case and was visible only because a failed repair had pushed it
+  into a second mangling layer. The common form was invisible to the strict rule.
+
   1. `aida doctor` gains a check that scans stored spec text for mojibake and reports the
      spec id, the field and the offset.
-  2. The predicate is the two-character form: a lead character in {U+00C2, U+00C3, U+00E2}
-     immediately followed by a latin-1 supplement character. The single-character form is
-     explicitly rejected in the implementation with a comment saying why, so nobody
-     "simplifies" it back.
-  3. The check reports rather than repairs. Guessing the intended character is how the
-     second corruption layer was produced here; a report names what to fix and leaves the
-     fix to whoever owns the text.
-  4. It covers the whole object store, not only descriptions — comments and acceptance
-     text are equally load-bearing.
-  5. A test asserts a known-good file with a legitimate Â/Ã/â produces no finding, and a
-     file with a mis-decoded pair produces exactly one. Criterion 5's first half is the
-     one that matters: a test with only the positive case passes in the loose form too.
+  2. THE PREDICATE IS AN ALTERNATION. A lead character in {U+00C2, U+00C3, U+00E2} followed
+     by EITHER
+         (a) a latin-1 supplement character, or
+         (b) the literal two characters backslash-x followed by two hex digits.
+     A LONE lead character is NOT a match: Â, Ã and â are ordinary letters, and requiring
+     the pair is what keeps the check from firing on healthy text. Reject the
+     single-character form IN A COMMENT saying why, and reject the (a)-only form in a
+     comment too — (a) alone is the spelling that missed 6 of 7 here.
+  3. The check REPORTS and does not repair. Guessing the intended character is how
+     BUG-1522's second corruption layer was produced.
+  4. It covers the whole object store and every text field, not only descriptions.
+  5. TESTS, and the negative cases are the load-bearing ones:
+     5a. a file with a legitimate lone Â/Ã/â produces NO finding;
+     5b. a raw-form mis-decode produces exactly one finding;
+     5c. an ESCAPED-form mis-decode produces exactly one finding.
+     A suite with only 5b passes against the (a)-only predicate, which is the defect this
+     correction exists to prevent.
 
-  RELATED, NOT THIS SPEC'S JOB: the editing method that caused it. The lesson recorded on
-  the advisor seat is that a tool built for READING a spec was never verified to return
-  what the source contained — it looked right in the terminal. The store should be parsed
-  directly rather than scraped from rendered output.
+  ## Open question, not this spec's job to answer but worth its priority
+
+  THE PRODUCER IS UNIDENTIFIED AND WAS ACTIVE BEFORE THIS SESSION'S EDITING INCIDENT. All
+  six escaped-form files were last modified between 2026-09-12 10:23 and 2026-09-20 18:29,
+  and the driver advisor's faulty edit method did not run until roughly 21:30. All six
+  carry the corruption in the `description` field. So something that writes descriptions
+  has been producing mojibake for at least eight days, independently of the incident that
+  prompted this spec.
+
+  That raises this check's value: it is not a one-off cleanup after one seat's bad tooling,
+  it is a detector for an ongoing and unattributed producer. Identifying the producer is a
+  separate investigation and should be filed separately once the check makes the instances
+  visible.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T05:37:31.950516501Z
+modified_at: 2026-09-21T05:41:59.862701800Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
