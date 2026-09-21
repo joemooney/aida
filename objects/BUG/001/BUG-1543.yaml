@@ -37,12 +37,12 @@ description: |-
   DENOMINATOR CAVEAT, inherited honestly from the reviewer seat who found the symptom: the population was found by matching the title prefix "Review PR-N:". If review stories are ever titled another way, this count is a lower bound rather than the whole set.
 
   Found by the driver-advisor seat while testing whether a reviewer-reported symptom was a new defect. It was not — the fix works; this is its edge. Autonomous-safe.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:48:22.112145500Z
-modified_at: 2026-09-21T17:28:17.445369874Z
+modified_at: 2026-09-21T17:47:23.530278885Z
 req_type: Bug
 comments:
 - id: 01a0c32a-e6b2-7533-8f1c-d46c7421a528
@@ -94,3 +94,22 @@ comments:
   created_at: 2026-09-21T17:28:17.445369874Z
   modified_at: 2026-09-21T17:28:17.445369874Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c514-6602-7a21-a579-1556da491410
+  author: aida-auto-bump
+  timestamp: 2026-09-21T17:47:23.522793273Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c514-660a-72b3-81ce-b065f6346f5f
+  timestamp: 2026-09-21T17:47:23.530276740Z
+  agent: aida
+  commit_sha: 8e6ca2f775a88a803f2bb2eb67a96180d1bd5108
+  summary: 'The fix is correct and the test discipline is the best I have reviewed today. BOTH CALL SITES WIDENED, which is the half-fix this shape invites: collect_stranded_review_pr_resolutions (the candidate filter) AND apply_stranded_review_pr_resolution (the re-check), so the apply step cannot refuse the flip it was just asked to make. Widening only the collector would have produced a silent no-op, and I checked for exactly that. RED-FIRST IS REAL AND QUOTED with the actual failure text, and there is an OPPOSITE-DIRECTION FALSIFIER - a Draft review story whose PR is still OPEN must stay Draft - which is the assertion that stops the widened sweep over-resolving. A one-directional test here would have passed for a sweep that resolved everything. An Approved control rides along as a non-regression check. That is three assertions covering the three ways this change could be wrong, and it is what I would have asked for.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T17:47:23.522585544Z
+  completion_sha: 8e6ca2f775a88a803f2bb2eb67a96180d1bd5108
