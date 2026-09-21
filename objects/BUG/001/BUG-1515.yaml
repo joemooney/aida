@@ -2,7 +2,7 @@ id: 01a0c1d2-becf-7a92-b89a-76522a210c70
 spec_id: BUG-1515
 agreed_id: BUG-1515
 title: A rejected round leaves the spec at Done, so five specs with open RequestChanges verdicts are reported as awaiting merge and are invisible in every rework surface
-description: |
+description: |-
   A spec whose round was REJECTED sits at `Done`, and every surface reads that as "finished, awaiting merge". Five specs are in that state right now, each green on CI, each held, each carrying an open RequestChanges verdict, and each reported by the drain as merge-ready.
 
   MEASURED 2026-09-21 02:30Z:
@@ -50,12 +50,34 @@ description: |
 
   Related: the last criterion is a separate irritation with the same root — two consecutive empty
   waves tonight were indistinguishable, from the outside, from waves that were working.
+
+
+  ADVISOR DISPOSITION 2026-09-20 19:44: APPROVED, and the agreement is on the fix's SHAPE as much as its existence.
+
+  NOT A NEW STATUS - CONFIRMED, AND THE REASON IS STRONGER THAN 'KEEPS STORY-86 INTACT'. `Done` plus an open refusing verdict at the PR's current head is already a complete description of the state. Adding a sixth lifecycle state would create a value that can DISAGREE with the verdict, which is the defect one level up: today one field is misread, and after a sixth state there would be two fields that can contradict each other. The information exists and is not consulted. The surfaces reading Done must read the verdict beside it.
+
+  MEASURED ADDITION, 2026-09-20 19:43 - THE INVISIBILITY IS WORSE THAN 'ABSENT FROM needs-attention'. Tagging the five and querying them returned:
+
+      aida list --tags refused-awaiting-rework
+        count: 0 of 0 open
+        note: 5 closed hidden (open lens)
+
+      `Done` is classified as CLOSED by the default open lens, so these specs are hidden from `aida list` entirely - not merely missing from a status filter. Fourteen specs currently sit at Done. Any of them carrying a refusing verdict is invisible by the same mechanism, and the count of how many is exactly what no surface reports.
+
+  THE HINT IS THE PART I WOULD FIX FIRST, ahead of the idle-spin. The drain's ineligibility line reads "Done - awaiting merge; route via `aida queue work --from-pr` or `aida integrate`". Both routes SHIP a PR. So the system's own guidance, on a spec with open findings, is an instruction to merge it. A surface that is merely silent about a condition wastes time; a surface that RECOMMENDS THE HARMFUL ACTION converts a visibility gap into an active hazard, and the product seat reports nearly following it and reading it as nearly-shipped on three separate occasions today.
+
+  ADDITIONAL ACCEPTANCE:
+  6. The ineligibility hint for a Done spec is conditional on its verdict. A spec with a refusing verdict at the current head is never told to route via a shipping verb; it is told it is refused and what the rework route is. This is the minimum fix and it is independent of the rest.
+  7. `aida list`'s open lens does not hide a Done spec that carries a refusing verdict at its PR's current head. Whether that is achieved by reclassifying those rows or by an explicit section is the implementer's call, but a spec awaiting a rework round must not be filed under the same lens rule as one awaiting a merge.
+  8. Count the population before fixing: how many of the specs currently at Done carry a refusing verdict at their PR's current head. Five are known from tonight's triage; fourteen sit at Done. The gap between those numbers is the spec's own verification.
+
+  NOT REQUEUED, AND THE ADVISOR ENDORSES THAT DECISION. The five were tagged `refused-awaiting-rework` and each carries a comment naming its PR and verdict sha, so they are findable now. They were deliberately NOT requeued: BUG-1476 means a rework round on a spec with an existing PR may produce no commit, and three reviewer cycles were burned this afternoon establishing that. Requeueing into a known-broken path to fix a visibility problem would trade a silent defect for a noisy one.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:36:49.231874688Z
-modified_at: 2026-09-21T02:36:49.231874688Z
+modified_at: 2026-09-21T02:40:56.021452594Z
 req_type: Bug
 tags:
 - agent-surface
