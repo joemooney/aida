@@ -7,15 +7,34 @@ description: |
 
   THE INSTANCES, all verified 2026-09-20. This list is the deliverable - a fix that addresses the shape without addressing each site leaves the others exactly as they are.
 
-  1. THE PREFLIGHT GATE, PR #1972 / TASK-1289, the sharpest case because it gates publication.
-     decide() collects only GuardResult::Failed and lets `_ => None` swallow everything else, then
-     returns Open when that collection is empty. GuardResult::Skipped is produced for SEVEN distinct
-     conditions, not the three first reported: CI workflow missing, CI workflow unreadable, no
-     matching CI guard, resolved-guard skipped, worktree binary unavailable, guard timed out, guard
-     could not start. So every guard skipping yields Open, and a PR publishes on the strength of
-     guards that never ran - including the case where the CI workflow file itself is missing or
-     unreadable, which is precisely when publishing on "nothing failed" is least defensible.
-     A test then pins it by asserting a timeout yields Skipped, so the suite locks the wrong decision in.
+  1. THE PREFLIGHT GATE IS INERT FOR ANY PROJECT WITHOUT .github/workflows/ci.yml. PR #1972 / TASK-1289.
+     CORRECTED ENUMERATION 2026-09-20 18:55 - the first version of this spec said seven conditions and
+     cited lines 439/443/460/461, which are PATCH-relative offsets and do not exist in a 449-line file.
+     The correct figure, measured at 6512f1312a in aida-cli-lib/src/implementer_preflight.rs:
+
+       resolution   96   CI workflow missing         -> ResolvedGuard::Skipped
+                   102   CI workflow unreadable      -> ResolvedGuard::Skipped
+                   127   no matching CI guard        -> ResolvedGuard::Skipped
+       execution   284   FUNNEL: ResolvedGuard::Skipped -> GuardResult::Skipped
+                   288   worktree binary unavailable -> GuardResult::Skipped
+                   305   timed out                   -> GuardResult::Skipped
+                   306   could not start             -> GuardResult::Skipped
+
+     SIX conditions across FOUR GuardResult::Skipped construction sites. 284 is the funnel through
+     which 96, 102 and 127 arrive, so it is not a seventh condition.
+
+     decide() collects only GuardResult::Failed, lets `_ => None` swallow everything else, and returns
+     Open when that collection is empty. A test then pins the behaviour by asserting a timeout yields
+     Skipped, so the suite locks the wrong decision in.
+
+     THE SEVERITY IS NOT "fails open on an edge case". guards_from_ci maps EVERY named guard to Skipped
+     when .github/workflows/ci.yml is missing or unparseable - the whole set, not one guard. They funnel
+     through 284, decide() swallows them, failed.is_empty() is true, the decision is Open. So for any
+     downstream project scaffolded by aida init with no ci.yml, the preflight gate was never on, and
+     there is no output difference between "all guards passed" and "there were no guards". The gate
+     reports success by producing no failures, having run nothing. That is the purest instance in this
+     spec and the reason it is listed first: the other three degrade a working gate, this one means the
+     gate does not exist for most downstream users.
 
   2. THE AWAITING GATE, BUG-1481, aida-cli-lib/src/awaiting_you.rs.
      `match pr.ci_rollup.as_deref() { Some("fail") | Some("pending") => return false, _ => {} }` -
@@ -46,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-21T01:50:54.993301148Z
+modified_at: 2026-09-21T01:53:27.598915596Z
 req_type: Bug
 tags:
 - batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
