@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-21T07:11:06.242008383Z
+modified_at: 2026-09-21T07:11:08.049231744Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -195,6 +195,19 @@ comments:
   created_at: 2026-09-21T02:39:57.802640349Z
   modified_at: 2026-09-21T02:39:57.802640349Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c2cd-e1cf-7a71-bcb5-ad4d5477dfa5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1978):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 17e27888ce09
+    Recorded: 2026-09-20T17:00:21.447723447+00:00
+    Findings:
+    1. TASK-1273 requires a green nightly live GitLab lifecycle, but head 17e27888 has no schedule/workflow_dispatch run: the GitLab live forge smoke is skipped on PR CI, and the focused local test also skips without AIDA_GITLAB_LIVE_HOST. Run the live workflow successfully at this head and provide its evidence.
+    2. docs/forge-providers.md says a missing AIDA_GITLAB_TOKEN skips the probe, but cross-platform.yml explicitly exits 1 when the token is empty. Make the documentation and implemented policy agree.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-21T07:11:07.727440633Z
+  modified_at: 2026-09-21T07:11:07.727440633Z
 execution_mode: drain
 implementation_info:
   implemented: true
