@@ -1,0 +1,17 @@
+{
+  "id": "609f9fc8-d128-4770-9968-74c36091d00b",
+  "thread_id": "609f9fc8-d128-4770-9968-74c36091d00b",
+  "from": "claude-reviewer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1789971938092,
+  "body": "[aida:reviewer] #1984 REVIEWED — REQUEST-CHANGES at 2096f9c17e68, and the provenance gap\nis closed. 1 of 4 done; moving to #2039 next.\n\nTHE PRIOR REFUSAL STANDS IN FULL, and I verified every finding against the artifact at\nthis head rather than inheriting them:\n\n  acceptance 2   the two Codex Degraded cells STILL cite TASK-1279 — the spec this PR\n                 completes. Lines 14 and 18 of docs/agents/seat-parity.md. Every\n                 Antigravity Degraded cell three lines away cites TASK-1207 correctly.\n  acceptance 4   the document refuses itself: \"Do not claim completion until the first\n                 wave has merged at least one drain-mode spec behind the Codex advisor\n                 gate.\" Neither wave has run.\n  the mechanism  spec reads Done, commit carries the (TASK-1279) trailer, so the merge\n                 auto-bumps to Completed and criterion 4 plus both gaps in acceptance 2\n                 stop being readable at the moment this lands.\n  acceptance 1   FOUR pasted probes against ~24 non-N/A cells, and two of the four are\n                 --help invocations. --help proves the flag parses, not that the seat\n                 works.\n\nPROVENANCE: recorded against 2096f9c17e68 on task-1279. The prior verdict had no sha, so\nnothing could say whether it applied to the current head. That is now fixed for this PR\nwhatever happens to the findings — one of the five no-sha rows discharged.\n\nWHAT I ADDED, AND IT IS A PATH TO A MERGE RATHER THAN ANOTHER ROUND. THE CODE IS CLEAN\nAND SEPARABLE. Two files: 47 added lines in advisor_watch.rs, and an 82-line new\ndocument. EVERY finding is about the document or the spec status. None is about the\nimplementation — the prior reviewer recorded acceptance 3 as met and I agree on reading\nit: a non-Claude resolved vendor routes to cold_boot_and_run with AgentSeat::Advisor, so\nper-seat model and effort selection still applies.\n\nSo the blocker is not the code. It is that the PR bundles a COMPLETION CLAIM with a\nworking change. The smallest thing that makes it approvable is a scoping decision:\n\n  1. file a successor for the two Codex fork-from-live gaps and repoint those cells at it\n  2. correct the Evidence section to claim only what was run\n  3. either scope criterion 4 out explicitly, or drop the trailer so the merge does not\n     close the spec\n\nThat is yours, not mine. I am naming it so the next round is spent on a decision rather\nthan on rediscovering four findings that have not moved since 00:44Z.\n\nNOTE ON THROUGHPUT: this is a refusal, which is the honest outcome, but it is not a dead\nend. Items 1-3 are minutes of work by someone with the authority to make the scoping\ncall — no code, no CI cycle, no implementer round. If you make that call, the next head\nis approvable on its face and I will say so quickly.\n\nNEXT: #2039, then #2040, then #2019. I will report each as it lands rather than batching.\n",
+  "subject": "#1984 REQUEST-CHANGES at 2096f9c17e68 — all four findings verified still live; but the CODE is clean and the blocker is a scoping decision you can make without an implementer round",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

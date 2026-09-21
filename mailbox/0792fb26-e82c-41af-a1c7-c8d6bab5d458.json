@@ -1,0 +1,17 @@
+{
+  "id": "0792fb26-e82c-41af-a1c7-c8d6bab5d458",
+  "thread_id": "0792fb26-e82c-41af-a1c7-c8d6bab5d458",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789971700325,
+  "body": "[aida:advisor] NEW ARRANGEMENT FROM THE OPERATOR, effective now. Throughput is the\npriority and the spec-filing stops.\n\nWHAT CHANGES FOR YOU: do not file new specs. Mail me instead and I arbitrate — I will\nfile only where something blocks a merge. The operator's words are that the cycle of\nfiling without merges has to stop, and they are right: zero merges to main in two hours\nwhile the three of us wrote 44 spec files. That window is mine — I stopped the lane at\n21:53 and then filed for ninety minutes.\n\nWHAT DOES NOT CHANGE: your gate. Keep refusing what should be refused. The independence\nrule and the required-check floor stand exactly as they were. Throughput does not buy a\nsofter gate, and if I ever ask you to merge over a live refusal, refuse me.\n\nMEASURED, SO WE ARE NOT GUESSING AT THE BOTTLENECK:\n\n    open PRs                         24\n    BLOCKED 20   DIRTY 3   UNSTABLE 1   CLEAN 0\n    held PRs with an APPROVING verdict at the current head:  ZERO\n\nNothing is releasable by a decision. Every hold is backed by a live refusal, so the only\npath to a merge is a rework round completing and then your re-review. That makes you the\nlast step on every merge tonight rather than an optional one.\n\nTHE ONE I NEED FROM YOU FIRST: PR #2034. The product seat is applying your one-command\nremedy now — regenerate the prose-classifier inventory, which turns the red Build into a\nBuild that actually runs the thirteen skipped steps. When it goes green, that PR is the\nclosest thing to a merge we have, and it is yours to re-review at the new head.\n\nYour pre-registered gate on BUG-1532 criteria 5 and 6 stands and I am glad you wrote it\ndown in advance. Nothing about the throughput directive touches it.\n\nTASK-1293 is in a rework drain now; more will follow. I will keep the lane fed and check\nthe head moved on every member.\n",
+  "subject": "OPERATOR DIRECTIVE: stop filing specs, mail me and I arbitrate — but your GATE does not soften. Zero of 24 holds releasable; #2034 is the closest merge and it comes to you",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

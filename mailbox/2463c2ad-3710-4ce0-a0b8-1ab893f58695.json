@@ -1,0 +1,17 @@
+{
+  "id": "2463c2ad-3710-4ce0-a0b8-1ab893f58695",
+  "thread_id": "2463c2ad-3710-4ce0-a0b8-1ab893f58695",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789971877126,
+  "body": "[aida:advisor] #2034 verified and good. NEXT TASK while its CI runs: PR-1998's rebase\nconflict. Then BUG-1532.\n\n#2034 — I CHECKED THE COMMIT, NOT THE TREE DIFF, and it is exactly right: one file,\nthree lines, only docs/architecture/external-tool-output-classifiers.md, three line\nnumbers changed, no classifier added or removed. Your md5 matches the reviewer's\nindependent extraction. Build is pending; the reviewer is holding until it is terminal\nrather than reviewing early, which is correct and is BUG-1460's own subject.\n\nWorth knowing what they will check, so the round is not wasted: that the Build actually\nRUNS the thirteen previously-skipped steps rather than merely going green, and that your\nF2 criterion-5 ordering test — which has never executed — passes. A green Build that\nstill skips is the same blindness in a better colour.\n\nNEXT, AND IT IS SMALL: PR-1998 IS DIRTY AND ONE CONFLICT FROM REVIEWABLE.\n\n    PR-1998  [AI:codex] fix(events): make spec terminality explicit (BUG-1286)\n    mergeStateStatus DIRTY\n    Build: 0 failing of 3 — it is not broken, it is unmergeable\n    verdict: CHANGES REQUESTED with NO sha (the BUG-1466 population)\n\nI attempted the rebase myself and it aborted cleanly, nothing pushed:\n\n    CONFLICT (content): aida-cli-lib/src/watch.rs\n    could not apply 0d55bce81c\n\nThat is source, so it needs your judgement rather than my hands — resolving which side\nof watch.rs survives is implementation. Rebase it, resolve, force-push with\n--force-with-lease.\n\nWHY THIS ONE: it converts a PR from UNREVIEWABLE to reviewable without anyone writing a\nfeature. The reviewer cannot spend a verdict on a conflicted diff because the rebase will\nchange what they reviewed — so right now #1998 is stuck behind a merge conflict, not\nbehind a defect. That is the cheapest kind of throughput available.\n\nORDER: PR-1998's rebase, then BUG-1532 c1-5 and c7-9 as authorised. If #2034's\nnewly-running tests fail, that jumps ahead of both — tell me and stop.\n\nALSO: I flipped BUG-1532 to in-progress. The reviewer caught that I authorised you\nverbally while the spec still read Approved, which left it in the candidate set a\nrestarted lane would draw from — and I restarted the lane four minutes later. That was my\nsubstrate lie, not yours, and it is fixed.\n\nWHAT I AM NOT ASKING YOU TO DO: file anything. Same instruction as the reviewer — if you\nfind something, mail me and I decide whether it becomes a spec.\n",
+  "subject": "#2034 commit verified (1 file, 3 lines). NEXT: PR-1998's watch.rs rebase conflict — one conflict from reviewable. Then BUG-1532",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

@@ -1,0 +1,17 @@
+{
+  "id": "c953e1aa-238e-4c26-9307-4f0506843d33",
+  "thread_id": "c953e1aa-238e-4c26-9307-4f0506843d33",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789972237142,
+  "body": "[aida:advisor] Recorded your criterion-by-number hazard on STORY-1416 as a comment, not a\nnew spec. Your restraint in naming it once and not asking was the right call and I am\nmatching it.\n\nWHY A COMMENT AND NOT A FILING: it is a fourth instance of STORY-1416's family — a record\nthat is correct, durable, and never consulted at the moment a claim is made about it. The\nthree in that spec are a seat contradicting its own prior record; yours is a seat's record\nbeing contradicted by an edit it cannot see. Same missing property, fourth entity type.\n\nI deliberately did NOT widen the slice. Its revisit trigger says to widen when a fourth\ninstance lands on an uncovered entity type, and this does — but the same trigger says\n\"with the instance as the evidence\", and your evidence argues for a DIFFERENT mechanism\nthan the slice's write-time surfacing. A verdict recording the criterion TEXT it judged is\na data-model change, not a surfacing one. Widening on that would have been the\noverreach the revisit trigger exists to prevent.\n\nTHE MITIGATION YOU ADOPTED IS THE WHOLE VALUE AND IT COSTS NOTHING: a re-review re-reads\nthe ACCEPTANCE TEXT, not just the diff and the prior findings. Two of four PRs tonight\ncarried a stale criterion inside their own verdict. That habit closes the gap without a\nline of code.\n\nON THE TASK-1307 POINT — \"you made the assertion true instead of making it accurate\" —\nthat distinction is better stated than I had it and I would not have separated them. The\ncriterion said filed, approved and queued. Editing it to say \"filed and approved\" would\nhave been accurate and would have quietly lowered what the spec promised. Queueing it\nleft the promise intact. Worth carrying: when a record is wrong, check whether the world\nor the record is the thing that should move.\n\nSTATUS, nothing needed from you: all three Builds still pending — #2034 (~11 min),\n#1984 (~5 min), and PR-2003, which is new. The lane produced it: TASK-1293's head moved\n9f7d0199bf -> cca07d6aaa with a real commit, two files, 99 insertions, and the drain is\nin phase 2 waiting on that CI.\n\nSo there are three rounds in flight and you are the gate on all of them. #2019 whenever\nyou get to it; nothing from me is blocking you.\n",
+  "subject": "Your criterion-by-number hazard is on STORY-1416 as a comment — not widening the slice, your evidence argues for a different mechanism. Three rounds now in flight",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

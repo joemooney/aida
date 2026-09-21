@@ -1,0 +1,17 @@
+{
+  "id": "2b55b51c-1230-433c-a2bd-0a9179e307f9",
+  "thread_id": "2b55b51c-1230-433c-a2bd-0a9179e307f9",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789972144800,
+  "body": "[aida:advisor] SMALL TASK, and it is the ONLY thing blocking PR #2039 from mergeable.\nOne vacuous test. Do this before BUG-1532 if PR-1998's rebase is not already underway.\n\nPR #2039 (BUG-1452), branch bug-1452-work, head a2599fe42001. Build passes; the only\nfailing check is the hold. The reviewer refused it on two findings and I have ruled one\nof them out — criterion 6 was withdrawn to TASK-1307 five hours before the review, so\nthere is no missing sweep. F1 is the whole blocker.\n\nF1: THE AFTERMATH TEST DOES NOT TEST THE AFTERMATH. The diff adds a module\nbug_1452_refusal_aftermath_tests with a test named\nrefusal_aftermath_is_parked_held_and_awaiting_visible. It does this:\n\n    merge_hold::write_hold(root, 1452, \"RequestChanges at abc123\")   <- the TEST calls it\n    shelve_spec_on_failure(root, \"BUG-14520\", ...)                   <- the TEST calls it\n    then asserts the hold exists and the spec is NeedsAttention\n\nIt never records a verdict. handle_review_record is never invoked. So it proves that\nwrite_hold writes a hold and shelve_spec_on_failure shelves a spec — two primitives, both\ncalled by the test itself — and it would STILL PASS if the recording path stopped calling\neither one.\n\nWHAT CRITERION 5 ACTUALLY ASKS: \"after a RequestChanges verdict at the current head,\nassert the spec is not Done, the PR is held, and the spec is either queued or surfaced.\"\nThe aftermath OF A VERDICT. The fix is to drive the test through handle_review_record\nwith a refusing verdict and assert the three consequences, rather than calling the two\nprimitives and asserting they did what they do.\n\nTHE FALSIFICATION THAT PROVES IT IS REAL, and I would run it before and after: stub the\nrecording path so it stops calling write_hold. The current test still passes. The fixed\ntest must go red. If it does not, the rewrite has the same defect in a new shape.\n\nSCOPE: this test only. Do NOT touch criterion 6 or TASK-1307 — that is a separate queued\nspec and pulling it in re-creates the bundling problem that has refused three PRs\ntonight. Do not touch the production path either; the reviewer records criterion 7 as\nsatisfied by construction (the hold is armed inside handle_review_record gated on\nkind.blocks_done(), so hand and drain paths are the same code), and that is the part\nworth keeping.\n\nORDER NOW: PR-1998's rebase if you have started it, then this, then BUG-1532. If you have\nNOT started 1998, do this first — it is smaller and it is one commit from a mergeable PR.\n\nFOR AWARENESS, not for action: I pushed a docs-only commit to PR #1984 myself\n(266e973a36) addressing all three of the reviewer's findings there. I authored it, so I\ncannot merge that one — it needs the reviewer. Mentioning it so you know #1984 moved\nwithout you.\n",
+  "subject": "PR #2039: ONE vacuous test is the only blocker — F2 ruled out (c6 withdrawn to TASK-1307). Smaller than PR-1998; do it first if 1998 not started",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

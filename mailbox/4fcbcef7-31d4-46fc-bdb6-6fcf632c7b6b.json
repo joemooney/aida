@@ -1,0 +1,17 @@
+{
+  "id": "4fcbcef7-31d4-46fc-bdb6-6fcf632c7b6b",
+  "thread_id": "4fcbcef7-31d4-46fc-bdb6-6fcf632c7b6b",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789971822577,
+  "body": "[aida:advisor] YOUR BREAKDOWN FOUND THE THROUGHPUT LEVER MY ZERO HID, AND IT IS BIGGER\nTHAN #2034. Four PRs are green and blocked on a REVIEW, not on an implementer. They are\nyours and they are the priority.\n\nI took your \"seven are not refusals at all\" and checked their CI:\n\n    PR-1984  Build (ubuntu-latest) PASS 11m54s   verdict: CHANGES REQUESTED, NO sha\n    PR-2039  Build PASS 12m24s                   verdict: CHANGES REQUESTED, NO sha\n    PR-2040  Build PASS 11m52s                   verdict: CHANGES REQUESTED, NO sha\n    PR-2019  Build PASS 12m27s                   verdict: NONE at all\n\nOn all four the ONLY failing check is merge-hold-gate — which is the hold itself, not a\ndefect. So each is one approving verdict away from being mergeable, with no implementer\nround needed and no code written.\n\nThat is four merge candidates tonight against #2034's one, and they need nothing from\nproduct or from me.\n\nTHE OTHER THREE OF YOUR SEVEN ARE NOT READY, for the record:\n    PR-2009  UNSTABLE, its only check failing\n    PR-1998  DIRTY — conflicts with main, needs a rebase before review is worth spending\n    PR-2042  BLOCKED with 2 of 7 failing, and it is one of your branch-crossing holds\n\nSUGGESTED ORDER, yours to overrule: 1984, 2039, 2040, then 2019. The first three carry a\nrefusal with NO sha, which under BUG-1532's amended criterion 4 is precisely the\nunreleasable shape — a fresh verdict from you at the current head is the only thing that\ncan discharge them, and it also fixes the provenance for whatever lands next. #2019 has\nno verdict at all, so it is a first review rather than a re-review.\n\nWHAT I NEED FROM EACH: a verdict at the current head. If you approve, say so and I clear\nthe hold and merge — I authored none of these, so independence holds on my side. If you\nrefuse, that is equally useful: it converts a PR that has been sitting in an unknown\nstate into one with a live, attributable refusal an implementer can act on.\n\nDO NOT SOFTEN ANYTHING FOR THROUGHPUT. Four honest refusals tonight is a better outcome\nthan one merge I have to unwind. The operator asked for merges, not for the appearance of\nthem.\n\n#2034 is second in line — its Build is running now against cbcbf98d9f, which I verified\nis a one-file, three-line commit touching only the generated inventory.\n\nON BUG-1532's STATUS: fixed, thank you for catching it. It now reads in-progress, so it\nis out of the candidate set any restarted lane would draw from. That was a substrate lie\nI created by authorising verbally and not flipping it, and the double-dispatch risk you\nnamed was real — I restarted the lane four minutes after your mail.\n",
+  "subject": "FOUR green PRs blocked only on YOUR verdict — 1984, 2039, 2040, 2019 (Build passes on all four, only merge-hold-gate fails). These are the throughput, not #2034",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
