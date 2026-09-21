@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T10:27:25.705842018Z
-modified_at: 2026-09-21T11:20:22.920771039Z
+modified_at: 2026-09-21T11:21:18.810759458Z
 req_type: Story
 comments:
 - id: 01a0c384-9466-7c53-a41e-375bbbf79cc5
@@ -108,6 +108,52 @@ comments:
     WHAT CHANGES: the residual is not hypothetical and is no longer a footnote on this spec. Filed as STORY-1420 with the measurement, the six queued instances, and three forks (inherit / surface-as-unroutable / stop recording unroutable verdicts). This spec ships correct and incomplete: it will emit rows for 8 of 15 open blocking verdicts, and STORY-1420 is what makes the other 7 reachable.
   created_at: 2026-09-21T11:08:05.373565675Z
   modified_at: 2026-09-21T11:08:05.373565675Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3b2-eeda-7dd3-b311-bc15c71e4af7
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #2047 [AI:claude] feat(awaiting): surface PRs whose rework has landed on your refusal (STORY-1419)
+    merged as: ad85e8ed32d75d2b912ddfa11a15784dfbf54357 on origin/main at 2026-09-21T11:20:05Z
+    verdict: APPROVE + merged (proxy for the operator)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes — the product seat authored it, the reviewer seat refused it, verified the rework and cleared its own hold, and this advisor wrote none of the diff and executed only the merge.
+    gates cleared:
+      - Build (ubuntu-latest): pass — verified on the run (35592331110) rather than the checks line; step 12 "Run tests" SUCCESS and the job completed SUCCESS
+      - merge-hold-gate: pass, after the reviewer cleared its own hold
+      - verdict .aida/review-verdicts/PR-2047.json: APPROVED, recorded_by claude-reviewer-1, reviewed_sha ecbde718a97cfa77b7eb28d9138959bc6d154104 — matches the merged head exactly
+      - informational matrix (windows, macos) still pending at merge; not gates under main's protection
+      - auto-bump: STORY-1419 → Completed
+    timestamp: 2026-09-21 04:20 -07:00
+
+    THE SQUASH BODY WAS CORRECTED AT MERGE TIME, DELIBERATELY. The branch commit carried a sizing sentence — "roughly a quarter of live verdicts are in that state, so this covers about three quarters of cases" — which measured the wrong population. This repo's squash carries the branch body verbatim into main (verified on 1460a0168a for #2046), so that sentence would have become permanent history.
+
+    The replacement, now in ad85e8ed32:
+        "on the population this feature actually reads — open PRs carrying a blocking
+         verdict, n=15 — reviewed_sha is present 15 of 15, so provenance costs nothing
+         here. The real limit is seat routing: 7 of those 15 were recorded by a headless
+         drain reviewer that has exited, so a seat-scoped row reaches nobody. Effective
+         coverage is 8 of 15 today; STORY-1420 is what reaches the other seven."
+
+    WHY IT WAS WORTH DOING RATHER THAN CORRECTING AFTERWARD: the old sentence named PROVENANCE as the limitation, so a reader quoting it would go looking for BUG-1538 and never find STORY-1420, which is the actual gap. The reviewer caught that the sentence was in the COMMIT MESSAGE and not only the PR body, and that the window closed at the merge button rather than at the rework. Option 2 (edit the squash message) was chosen over a force-push because it cost no CI cycle; its one weakness — "depends on the merger remembering" — was removed by writing the corrected body to disk as an artifact before Build went green, and the reviewer diffed that artifact against the real commit body to confirm one clean hunk with the rest intact.
+
+    SEQUENCING, RECORDED SO THE LATER RECORD DOES NOT IMPLY OTHERWISE: the rework was committed at 04:06:47 and the advisor's instruction to fix the sentence was timestamped 04:08. The product seat did not ship past a request; the request did not exist yet.
+
+    WHAT THE PR DOES: one row in `aida awaiting` per PR carrying a blocking verdict whose head has moved past the sha that refusal names — scoped to the seat that recorded it, reporting both shas, classifying nothing. It removes a workaround performed by hand three times in one night: twice the advisor noticed a moved head while checking something else and mailed the reviewer; once the reviewer found it by sweeping every open PR's head against its recorded verdict sha.
+
+    THREE LAYERS OF ONE DEFECT WERE CLOSED ON THIS PR, and the first two were found by the author:
+      1. six classifier unit tests all stayed GREEN when the feature was unwired from total() — a unit test cannot see its own seam. Caught by the author mutating before claiming completion.
+      2. the report-level test added to catch layer 1 HAND-BUILT its input, so it was green while the collector could never supply the field — a hand-built fixture crosses every seam except the one from the collector. Caught by the reviewer.
+      3. the shipped output therefore did not match the PR's own claimed output. Both earlier layers masked it.
+    The rework was verified through the mapping's own output and against all 15 live branches, with an unprompted guard test against the obvious wrong fix.
+
+    KNOWN INCOMPLETE, BY MEASUREMENT: the feature emits rows for 8 of 15 open blocking verdicts. The other 7 were recorded by "aida drain reviewer", an ephemeral actor that has exited, so a seat-scoped row reaches nobody; six of those seven sit in the reviewer's queue. That is STORY-1420, approved and queued. The advisor's first sizing of that gap was wrong by an order of magnitude in the reassuring direction — 27 of 572 verdict FILES (4.5%) instead of 7 of 15 OPEN BLOCKING verdicts (47%) — because the corpus is mostly closed PRs that never enter the open-PR collector.
+
+    RULING RECORDED ON STORY-1419: a transfer copies the RECORD, not the GATE. The scoping predicate reading only `recorded_by` is correct; widening it to `transferred_by` would deliver rows to whoever last touched the file, which looks like routing while being worse than silence.
+
+    F2 and F3 from the reviewer's verdict carry forward non-blocking; F2 is now a regression against origin/main:656.
+  created_at: 2026-09-21T11:21:18.810759458Z
+  modified_at: 2026-09-21T11:21:18.810759458Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c3b2-1481-7802-9332-97ee924010cf
