@@ -21,10 +21,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:49:28.980174289Z
-modified_at: 2026-09-21T18:49:28.980174289Z
+modified_at: 2026-09-21T18:49:32.396930269Z
 req_type: Task
 tags:
 - aida:findings
 - aida:status
 - followup:BUG-1470
 - parent:EPIC-62
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-21T18:49:32.396930269Z
