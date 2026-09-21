@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T03:30:59.539323012Z
-modified_at: 2026-09-21T03:31:27.748052664Z
+modified_at: 2026-09-21T03:33:32.589417939Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity drain-safe from:session-0920
@@ -56,3 +56,37 @@ relationships:
   target_id: 01a0c1ee-defb-7cd0-b234-051939e4dcad
   created_at: 2026-09-21T03:31:27.748047376Z
   created_by: joe
+comments:
+- id: 01a0c206-ad2d-7e23-9044-ead6b1df6b09
+  author: joe
+  content: |-
+    [aida:advisor] TWO CORRECTIONS, 2026-09-20 20:36. The denominator in this spec is ambiguous and must name its set; and the fix location is the WRITE boundary, not the comparison sites.
+
+    1. THE DENOMINATOR. This spec says "24 of 124 sha-bearing verdicts". The reviewer seat measured 20 of 81 and could not reproduce 124. Both are correct and they count different sets:
+
+        files in .aida/review-verdicts        552
+        non-empty reviewed_sha                 81      <- the reviewer's set
+        non-empty head                         44
+        non-empty head_sha                      2
+        any of those keys, first match        123 (+1 empty = 124)   <- this spec's set
+
+    So a verdict's sha lives under three different key names, and which denominator is right depends on whether a consumer reads one key or falls back across them. A gate that reads only reviewed_sha sees 81; one that falls back sees 123. BOTH RATIOS HOLD FOR THEIR SET - roughly one in four on reviewed_sha, roughly one in five across all keys - and the conclusion is unchanged either way.
+
+    THE THREE-KEY SPREAD IS ITSELF PART OF THE DEFECT and was not stated. A consumer must already fall back across reviewed_sha, head_sha and head before it can compare anything. Normalising sha LENGTH while leaving the sha KEY ambiguous closes half the problem.
+
+    2. THE ABBREVIATION IS A WRITE-BOUNDARY DEFECT IN ONE PATH, NOT A CORPUS-WIDE EMISSION PROBLEM. Measured by writer:
+
+        aida review record              full 22   abbreviated 17
+        aida drain reviewer             full 33   abbreviated  0
+        claude-reviewer-1 (hand)        full  0   abbreviated  2
+        advisor (proxy for operator)    full  1   abbreviated  1
+        codex / codex review / none     full  5   abbreviated  0
+
+    THE DRAIN HAS NEVER WRITTEN ONE. It passes the full head every time, across 33 verdicts. Every abbreviated sha came from a hand-driven path, and the reason is mundane: a human or seat copies a ten-character sha out of its own gh output and passes it through. The reviewer seat wrote 17 of the 20 and disclosed it unprompted; one of the remaining three is the advisor's, under the operator-proxy path.
+
+    CONSEQUENCE FOR THE FIX, and it changes criterion 2's emphasis: normalise AT THE WRITE BOUNDARY in review record - resolve whatever is passed to a full 40-character sha before persisting - rather than teaching every comparison site to handle both. The comparison-site tolerance in criterion 1 is then a MIGRATION concern for the existing 20 plus the 46 verdicts whose sha lives under a different key, not an ongoing requirement.
+
+    This also means the defect stops the moment one verb changes, which is a materially cheaper fix than the spec as filed implies.
+  created_at: 2026-09-21T03:33:32.589417939Z
+  modified_at: 2026-09-21T03:33:32.589417939Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
