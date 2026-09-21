@@ -31,7 +31,7 @@ description: |-
   NOT IN SCOPE: the blind-full-replace behaviour of verdict recording, which is BUG-1505, and the stale-verdict-versus-stale-head comparison itself, which BUG-1505 criterion 2 must make reliable first - 86 percent of existing verdicts carry no sha, so criterion 1 here depends on that landing.
 
 
-  BASELINE CORRECTED 2026-09-20 19:14 - THE ORIGINAL FIVE-TO-ONE FIGURE WAS MEASURED ON A SAMPLE NOBODY KNEW WAS A SAMPLE. `aida awaiting` reports 5 reviewer rows; `aida queue list --for reviewer` reports 22 (23 at re-measure). The five triaged were the awaiting rows, not the queue, so the denominator was wrong by more than four times. Full triage of all 22, by verdict reviewed_sha against current head:
+  BASELINE CORRECTED 2026-09-20 19:14 - THE ORIGINAL FIVE-TO-ONE FIGURE WAS MEASURED ON A SAMPLE NOBODY KNEW WAS A SAMPLE. `aida awaiting` reports 5 reviewer rows; `aida queue list --for reviewer` reports 22 REVIEWER ROWS under a DECLARED COUNT OF 23. The extra row is BUG-1420, whose for_role is `implementer` - the filter leaks it and the header counts it, filed as BUG-1513. Both figures reproduce exactly, which is why two seats measuring forty minutes apart got 22 and 23 and neither could reconcile it by re-measuring. The denominator for this spec is 22 - the rows actually routed to the reviewer. The five triaged were the awaiting rows, not the queue, so the denominator was wrong by more than four times. Full triage of all 22, by verdict reviewed_sha against current head:
 
       15  provably refused at the current head   1972 1974 1978 1981 1999 2001 2003 2006
                                                  2014 2026 2027 2030 2033 2034 2043
@@ -52,7 +52,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:51:11.600098076Z
-modified_at: 2026-09-21T02:12:48.908778583Z
+modified_at: 2026-09-21T02:17:23.726037460Z
 req_type: Bug
 tags:
 - batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
