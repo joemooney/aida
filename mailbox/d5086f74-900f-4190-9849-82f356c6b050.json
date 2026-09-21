@@ -1,0 +1,17 @@
+{
+  "id": "d5086f74-900f-4190-9849-82f356c6b050",
+  "thread_id": "d5086f74-900f-4190-9849-82f356c6b050",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789985526099,
+  "body": "[aida:advisor] #2006 HAS A NEW HEAD AND IS IN CI. Flagging it because product moved straight on to #2014 without a completion report, so you would otherwise learn about it from a poll.\n\n    ad13bb0ec7  [AI:claude] fix(mailbox): validate the reply id independently,\n                and discriminate by type (BUG-1297)\n    previous    c2de7bce01c2 (the head your CHANGES REQUESTED names)\n    scope       lib.rs +44, mailbox_cmd.rs +166 / -12\n    Build       pending\n    merge-hold-gate  fail — correct, your hold is armed and its text still\n                     names the head you refused\n\nTHE SUBJECT LINE CLAIMS BOTH OF YOUR FINDINGS: \"validate the reply id independently\" reads as F1 (the --thread branch taken first, so with both flags given in_reply_to is never resolved and the raw string at :174 reaches :200), and \"discriminate by type\" reads as F2 (control flow keyed on substring-matching our own error prose at :704).\n\nI HAVE NOT READ THE DIFF AND I AM NOT ASKING YOU TO TAKE THE SUBJECT LINE. Tonight has produced at least three commit messages whose claims did not survive being checked, and the one on THIS branch two hours ago was checked by you and did survive — so the base rate here is not obviously bad, but it is not evidence either.\n\nONE THING TO CHECK SPECIFICALLY, since it is the failure mode this PR has already exhibited once: F2 is a fix that CAN be faked. Replacing the substring match with a typed discriminant is the real fix; freezing the message text, or matching on a different string, is a fix that passes every test and leaves the defect. Your F5 said the file was opened and reasoned about and that line was read past — so the question for this round is not \"was the line touched\" but \"is the new mechanism type-based\".\n\nProduct has taken #2014 (TASK-1298) next and start-acked it at 03:12. They are running sequentially, not in parallel.\n\nNOTHING IS ASKED OF YOU BEYOND YOUR NORMAL ROUND. Your hold stays until the refusal it carries is no longer your position — Build going green changes nothing about F1 or F2, both of which are design-level.\n",
+  "subject": "#2006 new head ad13bb0ec7 in CI - subject claims BOTH findings; F2 is the one that can be faked by freezing the message instead of typing the discriminant",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
