@@ -54,7 +54,17 @@ def render(rows: list[tuple[str, str, int]]) -> str:
         "| Site | Source |",
         "|---|---|",
     ]
-    body.extend(f"| `{name}` | `{path}:{line}` |" for name, path, line in rows)
+    # BUG-1526: the row is name + PATH and deliberately omits the line number.
+    # A required gate that compares line numbers byte-for-byte fires on any edit
+    # ABOVE a marked site, with no classifier added, removed or renamed — eleven
+    # open PRs were red for that reason and each lost its whole test suite,
+    # because this step sits ahead of them and `bash -e` aborts the job.
+    # CLAUDE.md already states the rule this gate was breaking: "Symbol refs over
+    # line refs ... line refs drift fast and are often stale within hours".
+    # The line is still printed on stdout below, where it is a navigation
+    # convenience and nothing depends on it.
+    # trace:BUG-1526 | ai:claude
+    body.extend(f"| `{name}` | `{path}` |" for name, path, _line in rows)
     body.extend(["", "<!-- trace:TASK-1300 | ai:codex -->", ""])
     return "\n".join(body)
 
@@ -76,8 +86,39 @@ def main() -> int:
     rendered = render(rows)
     doc = root / DOC.relative_to(ROOT)
     if args.check:
-        if not doc.exists() or doc.read_text(encoding="utf-8") != rendered:
-            print(f"error: {doc.relative_to(root)} is stale; regenerate with {__file__}", file=sys.stderr)
+        current = doc.read_text(encoding="utf-8") if doc.exists() else ""
+        if current != rendered:
+            # BUG-1526 criterion 3: name what actually changed. The old message
+            # said only "is stale", which reads as a real inventory change and
+            # sent reviewers to re-derive a diff the checker already knows.
+            # Since criterion 1 removed line numbers from the comparison, a
+            # difference here IS a set change — drift alone can no longer
+            # produce one.
+            # trace:BUG-1526 | ai:claude
+            def sites(text: str) -> set[str]:
+                # BOTH cells. Identity is name + path, so reading only cell [1]
+                # would report a MOVED classifier as "set unchanged" — the same
+                # name-only blind spot that made the test suite miss a dropped
+                # path. trace:BUG-1526 | ai:claude
+                rows = set()
+                for line in text.splitlines():
+                    if not line.startswith("| `"):
+                        continue
+                    cells = [c.strip().strip("`") for c in line.split("|")]
+                    if len(cells) >= 3:
+                        rows.add(f"{cells[1]} ({cells[2]})")
+                return rows
+
+            added = sorted(sites(rendered) - sites(current))
+            removed = sorted(sites(current) - sites(rendered))
+            print(f"error: {doc.relative_to(root)} does not match the markers in the tree", file=sys.stderr)
+            if added:
+                print(f"  added:   {', '.join(added)}", file=sys.stderr)
+            if removed:
+                print(f"  removed: {', '.join(removed)}", file=sys.stderr)
+            if not added and not removed:
+                print("  the classifier set is unchanged; only surrounding text differs", file=sys.stderr)
+            print(f"  regenerate with a bare run: python3 {pathlib.Path(__file__).name}", file=sys.stderr)
             return 1
     else:
         doc.write_text(rendered, encoding="utf-8")

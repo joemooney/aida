@@ -126,17 +126,24 @@ jobs:
 
       # Marker enumeration makes the external-prose inventory a generated,
       # reviewable contract rather than a best-effort audit. trace:TASK-1300
-      - name: External-prose classifier inventory
-        if: steps.changes.outputs.full_ci == 'true'
-        run: |
-          python3 scripts/external-prose-classifiers.py --check
-          python3 -m unittest tests/test_external_prose_classifiers.py
-
       - name: Run tests
         if: steps.changes.outputs.full_ci == 'true'
         # --no-fail-fast: one run reports every failing test binary across
         # crates, instead of stopping at the first (BUG-1021).
         run: cargo test --workspace --no-fail-fast
+
+      # BUG-1526: this step runs AFTER the test suite deliberately. It used to sit
+      # at position 12 of 26, and `bash -e` aborts the job on failure — so a stale
+      # generated markdown file skipped `Run tests` and twelve later guards, and the
+      # reviewer saw a red Build that said nothing about the code. Eleven open PRs
+      # were in that state at once. A doc-freshness check must not be able to
+      # suppress the test signal; failing here costs a re-run, not the whole suite.
+      # trace:BUG-1526 | ai:claude
+      - name: External-prose classifier inventory
+        if: steps.changes.outputs.full_ci == 'true'
+        run: |
+          python3 scripts/external-prose-classifiers.py --check
+          python3 -m unittest tests/test_external_prose_classifiers.py
 
       # STORY-612: the LIVE OS-wrap confinement gate. The `os_wrap` bwrap wrapper
       # is a security boundary, so a real bubblewrap run must prove write-inside-OK
