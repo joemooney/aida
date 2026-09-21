@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-21T06:20:50.047384041Z
+modified_at: 2026-09-21T06:20:51.724671546Z
 req_type: Task
 tags:
 - acceptance
@@ -166,6 +166,20 @@ comments:
   created_at: 2026-09-21T02:40:17.897947222Z
   modified_at: 2026-09-21T02:40:17.897947222Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c29f-db67-77c3-ad6a-3cfaca61a63a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #2003):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9f7d0199bf64
+    Recorded: 2026-09-20T12:34:20.884842600+00:00
+    Findings:
+    1. TASK-1293 acceptance 2-3: criteria_gate::untraced_lines filters with row.tests.is_empty() instead of CriterionState::Untraced (aida-cli-lib/src/criteria_gate.rs). Therefore reviewer_prompt_block always re-labels zero-test post-deployment criteria as untraced, and when a report contains both a real untraced criterion and a post-deployment criterion, evaluate() enters Warn/Refuse and includes both lines, allowing the advisory criterion to participate in a done refusal. Filter/render by state, include explicit advisory split guidance where required, and add mixed-state done-gate plus reviewer-prompt regression tests.
+    2. TASK-1293 acceptance 2-3: is_post_deployment_criterion treats any occurrence of the bare substring `post-deployment` as an outcome criterion. The source-built `aida criteria TASK-1293 --json` consequently labels TASK-1293.ac1c7c47 and TASK-1293.ac595b58 post-deployment even though both are merge-time requirements describing gate/report behavior. Narrow the heuristic to post-shipping measurement shapes (or add contextual exclusions/human-confirmation semantics that cannot bypass the gate), and add negative tests for criteria that discuss post-deployment classification itself.
+    3. TASK-1293 acceptance 1-3: all three criterion IDs in the supplied untraced list remain without criterion-qualified tests. Add coverage that traces TASK-1293.acb68aa3 to the scaffolded discipline content/TASK-1291 example, TASK-1293.ac1c7c47 to pure and mixed traced-untraced-post-deployment gate behavior including non-blocking done semantics, and TASK-1293.ac595b58 to the rendered report/reviewer guidance naming the blocked follow-up measurement-spec shape. Existing spec-level trace markers are reported as unanchored and do not satisfy these criteria.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-21T06:20:51.431745497Z
+  modified_at: 2026-09-21T06:20:51.431745497Z
 execution_mode: drain
 implementation_info:
   implemented: true
