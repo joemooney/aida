@@ -25,7 +25,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:05:31.157400040Z
-modified_at: 2026-09-21T23:05:44.704576073Z
+modified_at: 2026-09-21T23:11:18.621637904Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -65,4 +65,37 @@ comments:
     The TASK-185 half of this lane shipped normally. trace:TASK-186 | ai:claude
   created_at: 2026-09-21T23:05:44.704576073Z
   modified_at: 2026-09-21T23:05:44.704576073Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c63c-f45d-7c13-a09f-41cdd5b0010d
+  author: joe
+  content: |-
+    [aida:advisor] RE-DISPOSITION: THIS SPEC'S PREMISE IS FALSE AND THE CHANGE IT ASKS FOR WOULD CONTRADICT A RECORDED OPERATOR DECISION. The lane dispatched to implement it refused, with evidence, rather than shipping. That was the right call and I am ruling on it rather than leaving the punt open.
+
+    VERIFIED BY ME IN THE TREE, not relayed:
+
+        heft: keys in the store              0 of 4287 objects
+        heft on the Requirement model        ABSENT (no match in aida-core/src/models.rs)
+        --heft on `aida add`                 0 hits
+        --heft on `aida edit`                0 hits
+        where heft lives                     aida-core/src/db/cache.rs:56 — `pub heft: u32`,
+                                             "Type-weighted combined heft score (inbound +
+                                             outbound). trace:STORY-632"
+
+    HEFT IS NOT A FIELD. It is DERIVED GRAPH CENTRALITY, computed from the relationship graph and materialized only in the rebuildable cache.
+
+    AND STORING IT WAS EXPLICITLY DECIDED AGAINST. STORY-632 carries the operator-resolved fork verbatim, and I read it rather than taking the lane's quotation: "materialize degree/centrality in .aida/cache.db (the rebuildable read-projection — exactly its purpose), recomputed on cache rebuild; surface on read... NEVER STORED IN THE SPEC YAML. (Same principle as stale being computed-not-stored in STORY-631.)"
+
+    SO AN `--heft` FLAG WOULD WRITE A VALUE THAT `aida cache rebuild` SILENTLY DISCARDS. Shipping it would have produced a flag that appears to work, survives until the next rebuild, and then reverts — which is worse than the gap this spec describes, because a stale number nobody can correct is at least honestly stale.
+
+    THE TRIGGERING OBSERVATION WAS A MISREADING, AND THAT IS THE ACTUAL DEFECT. This spec was filed twice — recurrence:2 — on the belief that a spec "filed at heft 2" keeps a stale filing-time sizing. It was never filed at a sizing. `TASK-1303 heft=2 in=1 out=1` is one inbound plus one outbound edge at weight 1 each; `STORY-1091 heft=5 in=2 out=1`; `TASK-185 heft=0 in=0 out=0`. It stayed at 2 because its EDGE COUNT did not change. Nothing was stale; the number was correct and meant something other than what two readers assumed.
+
+    THE REAL DEFECT IS THE NAME. `heft` reads as SIZE and means CENTRALITY. Two independent filings of the same false premise is the evidence — this is not one person misreading a label, it is a label that reliably produces the misreading.
+
+    DISPOSITION: THIS SPEC IS REJECTED AS WRITTEN, not deferred and not closed-as-done. Its acceptance ("spec heft cannot be edited, so a spec that outgrows its filing-time sizing keeps a stale one that routing reads as truth") is false in all three clauses: heft is not filing-time, it is not stale, and routing does not read it — the lane found the only consumers are the cache computation, `list --sort/--fields`, the show render, and the MCP mirror, with STORY-1050 merely PROPOSING a `max_heft` routing knob that is unbuilt.
+
+    WHAT SHOULD EXIST INSTEAD is the naming problem, and I am filing that separately rather than reshaping this spec into it — a rejected spec whose text is rewritten into a different spec loses the trail of what was believed and why, and the belief is the interesting part here.
+
+    CREDIT WHERE IT DECIDES THE OUTCOME: the brief told the lane to check heft's meaning and validation before accepting input. That check is what stopped it. A lane that had followed the literal instruction — add `--heft <N>` mirroring `--priority` — would have shipped a working-looking flag against an explicit operator decision, and nothing downstream would have caught it, because the value would have persisted until the next cache rebuild.
+  created_at: 2026-09-21T23:11:18.621637904Z
+  modified_at: 2026-09-21T23:11:18.621637904Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
