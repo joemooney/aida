@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T01:57:19.653799850Z
+modified_at: 2026-09-21T02:05:47.987776451Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -907,6 +907,48 @@ comments:
   created_at: 2026-09-21T01:57:19.653799850Z
   modified_at: 2026-09-21T01:57:19.653799850Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1b6-5853-7d61-bf82-d4c359e7079c
+  author: joe
+  content: |-
+    [reviewer] LINEAGE COMPARISON FOR RULING 4 AND ADR-48. The advisor decides the supersede; this is the verified input. Headline: "pick one and supersede the other" is the wrong shape, because each line carries unique work the other lacks — and one of the differences is a gate bypass.
+
+    THE THREE SHARED COMMITS ARE BYTE-IDENTICAL. Not "the same work" by subject — verified by patch-id, which is the check that does not care about sha or base:
+
+        feat(drain): gate PR publication on CI preflight
+            9c62e0bda0 (#1972)  ==  93d0c80671 (#2042)   patch-id 8a92b2637b89c370
+        test(preflight): avoid portability fixture false positive
+            ad7d0ba1a7 (#1972)  ==  0b97cc12c2 (#2042)   patch-id d969fbd234db378b
+        fix(preflight): make guard execution authoritative
+            c12e29f20a (#1972)  ==  da8b589b58 (#2042)   patch-id 70b4df5f1f9f47df
+
+    So the two lines are the same TASK-1289 base rebased onto different parents. The divergence is entirely in what each added afterwards.
+
+    WHAT IS UNIQUE TO EACH:
+
+        #1972 only:  6512f1312a  fix(lifecycle): keep express preflight enabled (TASK-1289)
+        #2042 only:  df7b76ba9d  fix(preflight): match GitHub Actions bash strictness (BUG-1420)
+                     35de6d3abb  fix(preflight): detect CI shell contract drift (BUG-1420)
+
+    THE ONE UNIQUE TO #1972 IS A GATE BYPASS FIX, AND THAT IS THE DECIDING FACT. It is nine lines in auto_complete.rs and it does this:
+
+        +            skip.no_preflight = false;
+        -            !conflicting.no_ci_wait && !conflicting.no_review && !conflicting.no_build,
+        +            !conflicting.no_preflight && !conflicting.no_ci_wait && ...
+
+    Express mode was forcing off three lifecycle skips and not the fourth. Without this commit, `lifecycle:no-preflight` SURVIVES express mode, so the preflight gate this whole spec exists to add can be switched off by a tag while express claims to force every skip off.
+
+    The 35de6d3abb lineage does not have it. So merging #2042 as-is lands TASK-1289's gate with a documented bypass still open — which is the same defect family as BUG-1507 and as tonight's other three gates, arriving through the lifecycle-tag door instead of the wildcard door.
+
+    CONSEQUENCE FOR RULING 4: neither line should be superseded outright. The union is required — three shared commits, plus the express fix, plus the two BUG-1420 commits. Whichever base is chosen must absorb the other's unique commits, and the supersede record should say "superseded after its unique commits were carried across", naming them, rather than implying the loser contained nothing. A bare supersede here silently drops either a gate-bypass fix or two BUG-1420 fixes depending on which way it goes.
+
+    AND THE LARGER POINT FOR ADR-48: NEITHER LINEAGE IMPLEMENTS IT. ADR-48 decides that the orchestrator opens the PR and the implementer commits, pushes and exits. Both lineages have the advisory design the ADR rejects — the implementer opens the PR and preflight runs after. That is finding 1 of BOTH independent verdicts, reached separately against each tree: PR-1972.json cites the launch prompt telling implementers to run pr ship and exit, and PR-2043.json cites preflight running before accepting an already-agent-opened PR.
+
+    So the lineage choice does not determine mergeability. Under ADR-48 both PRs need the same structural change on top of whichever base survives, and neither is close to mergeable on its own. I would not want the supersede decision recorded in a way that implies the winner is ready.
+
+    ON ADR-48 BEING "YOURS TO ACCEPT" — not mine. This project's convention is that the advisor records ADR acceptance with `aida edit ADR-N --status approved`. A reviewer reading the design and reporting whether the code matches it is in role; accepting the decision is not. I have reviewed it and have no objection to the design: it is the structural answer to finding 1 rather than a procedural one, the two rejected alternatives are rejected for the right reasons, and consequence 2 — that the non-orchestrated `aida agent new` lane has no orchestrator above it — is the gap I would watch, because it is the lane nobody is running tonight and therefore the one where an absent gate stays invisible.
+  created_at: 2026-09-21T02:05:47.987776451Z
+  modified_at: 2026-09-21T02:05:47.987776451Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: guided
 implementation_info:
   implemented: true
