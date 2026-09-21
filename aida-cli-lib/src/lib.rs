@@ -76991,6 +76991,19 @@ fn generate_review_prompt(
     Ok(())
 }
 
+/// The heading the pickup skill writes and the review prompt reads.
+///
+/// ONE constant for BOTH SIDES OF A HANDSHAKE THAT SPANS A TEMPLATE AND A
+/// PARSER. The writer is `aida-core/templates/skills/aida-pickup.md`, the
+/// reader is `extract_implementer_approach` below, and nothing in the type
+/// system connects them — edit the heading in the template alone and the
+/// reader silently stops matching, leaving reviews quietly missing the
+/// approach with no error anywhere. The coupling test in
+/// `story_1350_review_approach_tests` reads the template and asserts this
+/// exact string appears in it, so the two cannot drift apart in one edit.
+// trace:STORY-1350 | ai:claude
+pub(crate) const IMPLEMENTER_APPROACH_MARKER: &str = "## Implementer approach";
+
 /// Return the newest durable implementation-intent comment. The exact first
 /// heading is the stable marker written by the pickup skill; ordinary comments
 /// that merely mention an approach must not leak into the review checklist.
@@ -76998,16 +77011,33 @@ fn generate_review_prompt(
 fn extract_implementer_approach(comments: &[aida_core::models::Comment]) -> Option<&str> {
     comments.iter().rev().find_map(|comment| {
         let first_line = comment.content.trim_start().lines().next()?;
-        (first_line.trim_end() == "## Implementer approach").then_some(comment.content.trim())
+        (first_line.trim_end() == IMPLEMENTER_APPROACH_MARKER).then_some(comment.content.trim())
     })
 }
 
 // trace:STORY-1350 | ai:codex
+/// Emit the recorded approach, or SAY THAT THERE IS NONE.
+///
+/// Silence here is indistinguishable from "the implementer recorded nothing"
+/// and from "the section was dropped", and a reviewer reading a prompt with no
+/// approach section cannot tell which. Absent evidence has to look different
+/// from good evidence, so the absence is stated rather than left as a gap.
+// trace:STORY-1350 | ai:claude
 fn append_implementer_approach(out: &mut String, comments: &[aida_core::models::Comment]) {
-    if let Some(approach) = extract_implementer_approach(comments) {
-        out.push_str("#### Recorded implementer approach\n\n");
-        out.push_str(approach);
-        out.push_str("\n\n");
+    match extract_implementer_approach(comments) {
+        Some(approach) => {
+            out.push_str("#### Recorded implementer approach\n\n");
+            out.push_str(approach);
+            out.push_str("\n\n");
+        }
+        None => {
+            out.push_str("#### Recorded implementer approach\n\n");
+            out.push_str(
+                "_None recorded._ The implementer did not leave a comment beginning \
+                 `## Implementer approach`, so this review has no stated intent to \
+                 check the diff against.\n\n",
+            );
+        }
     }
 }
 
