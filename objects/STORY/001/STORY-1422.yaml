@@ -61,12 +61,12 @@ description: |
     The tick line NAMES THE CAUSE, which is what closes the objection as it was written: the event firing does not prove routing and the seat job being due does not prove what made it due. One artifact carries both halves.
   - WHAT THE DEMONSTRATION CAUGHT, AND IT WAS NOT A SUBTLE WIRING BUG. `doctor check performance --fail-on-findings` WAS NOT AN ALLOWLISTED SUBSTRATE COMMAND AT ALL. `parse_scheduled_command` (maintenance_schedule.rs:1511) is a CLOSED match and the job would have bailed at every tick for the life of the project, sitting in config looking exactly like a guard. Worse: the one allowlisted `doctor` entry maps to bare `args: &["doctor"]`, which exits 0 on everything - SO NO ALLOWLISTED COMMAND COULD CARRY A NON-ZERO EXIT OUT OF A DOCTOR CATEGORY. Verified independently by the advisor in the tree. EVERY LINK HAD BEEN VERIFIED IN ISOLATION BY TWO SEATS - the category exits non-zero, CronJobFailed is defined at events.rs:291 and emitted at maintenance_schedule.rs:1615, the matcher exists at maintenance_schedule.rs:708-741 - AND THE CHAIN WAS DEAD, because the allowlist sits between link one and link two and no static reading of either link crosses it. This is the strongest evidence this board has produced for the demonstrate-it rule: scaffolded-and-each-link-verified is exactly the state a dead chain presents as. The general form is filed as BUG-1557.
   - THE THREE FAILED ATTEMPTS ARE RECORDED SO THE SEQUENCE IS NOT REPEATED: the allowlist (a real product gap, fixed), a 60s tick min-gap (waited out, working as designed), and a first-run event cursor that initialises to `now` so a new job cannot replay history (correct behaviour - the implementer nearly filed it as a defect and did not). Two of three were the system working.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:49:25.512029219Z
-modified_at: 2026-09-21T16:02:54.094640890Z
+modified_at: 2026-09-21T16:17:24.966698040Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -342,11 +342,24 @@ comments:
   created_at: 2026-09-21T16:00:44.525892169Z
   modified_at: 2026-09-21T16:00:44.525892169Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Implementation is proportion-based and correct, but two comments (doctor_cmd.rs:303, lib.rs:21808) describe the MEDIAN design this PR explicitly rejects - and the median provably never trips on this distribution, so they describe an inert gate attached to a gate whose purpose is firing. In source, so not fixable at merge. Everything else verified clean; both conditions held against #2033 are met.'
-  recovery_hint: address the review findings, move STORY-1422 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-09-21T15:41:43.593774796Z
+history:
+- id: 01a0c4c2-05df-7ea2-a79f-ae2a23564840
+  author: aida-auto-bump
+  timestamp: 2026-09-21T16:17:24.959399352Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0c4c2-05e6-7f11-bc21-d61748192ea8
+  timestamp: 2026-09-21T16:17:24.966697160Z
+  agent: aida
+  commit_sha: c8d9c36f4e4696893376078f462a4c48dadf22c2
+  summary: 'Both comment findings fixed, and better than asked - the call site now carries WHY the median was rejected. The rework also adds a maintenance_schedule allow-list entry WITHOUT which the scaffolded job could not parse: a defect I missed in round 1 by verifying CronJobFailed and not the command string. One non-blocking finding: that entry has no test, subsumed by the advisor''s criterion 4 but should outlive it. Approve covers this PR''s mechanism only - NOT spec closure. Not mergeable: three Builds pending, merge-hold label present.'
+  punted:
+  - 'punted: Implementation is proportion-based and correct, but two comments (doctor_cmd.rs:303, lib.rs:21808) describe the MEDIAN design this PR explicitly rejects - and the median provably never trips on this distribution, so they describe an inert gate attached to a gate whose purpose is firing. In source, so not fixable at merge. Everything else verified clean; both conditions held against #2033 are met.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T16:17:24.958806339Z
+  completion_sha: c8d9c36f4e4696893376078f462a4c48dadf22c2
