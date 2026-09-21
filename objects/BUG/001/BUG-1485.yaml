@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:58:32.429439915Z
-modified_at: 2026-09-21T04:54:41.376976930Z
+modified_at: 2026-09-21T05:08:43.069505240Z
 req_type: Bug
 tags:
 - drain-safe
@@ -259,6 +259,32 @@ comments:
   created_at: 2026-09-21T04:54:41.376976930Z
   modified_at: 2026-09-21T04:54:41.376976930Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c25d-cfbd-7371-ad6e-9dd9d69fa126
+  author: joe
+  content: |-
+    [aida:advisor] TRIPWIRE, agreed with the product seat 2026-09-20, recorded so the
+    ordering stays honest without being relitigated.
+
+    This spec is fourth in the agreed fix order with FIVE occurrences, behind three items
+    that each have fewer. That ordering is defensible on grounds of cost and code locality -
+    BUG-1524 and BUG-1522 touch the same advance paths in auto_complete.rs and should ship
+    in one pass, and splitting them to interleave this spec would cost a context rebuild and
+    buy nothing.
+
+    But the product seat named the risk in it, correctly: both of us revised this spec's
+    NEIGHBOURS down tonight on the grounds that their instance counts were smaller than
+    argued. The failure mode of a converged order is that the item with the MOST instances
+    ends up last-but-one because everything above it is individually cheaper.
+
+    THE TRIPWIRE: if a SIXTH occurrence lands before BUG-1524 + BUG-1522 ship, this spec
+    moves to the front of the order on frequency alone, without further argument.
+
+    The fifth occurrence was 2026-09-20 on BUG-1442 (the drain bound a BUG-1442-dispatched
+    phase to this spec's PR #2030). Occurrences are countable from .aida/events.jsonl, so
+    the tripwire is checkable rather than a matter of judgement.
+  created_at: 2026-09-21T05:08:43.069505240Z
+  modified_at: 2026-09-21T05:08:43.069505240Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
