@@ -1,0 +1,37 @@
+id: 01a0c243-58ea-7042-9328-f5999706e2e6
+spec_id: TASK-1310
+agreed_id: TASK-1310
+title: No surface answers how long a verdict has stood with no subsequent implementer run, so a refused spec can sit unworked indefinitely without anything reporting it
+description: |
+  Split out of BUG-1470 acceptance criterion 3 by the driver advisor on 2026-09-20,
+  before PR #2035 merges. #2035 satisfies criterion 1 only; BUG-1470 is Done, so the
+  merge would auto-bump it Completed with this criterion unmet and unfiled.
+
+  THE GAP. A review verdict is a point event. Whether it was ACTED ON is a duration,
+  and nothing measures that duration. A RequestChanges verdict recorded against a head
+  that is still the PR head means no rework round has run since the refusal. Tonight
+  that state existed on more than twenty held PRs at once and was only discovered by a
+  hand-rolled sweep, not by any command.
+
+  The two inputs both already exist on disk: the verdict file carries a sha, and the
+  PR branch carries a head. The comparison is the missing surface, not the data.
+
+  ## Acceptance
+  1. A command reports, per refused spec, the time since the verdict was recorded AND
+     whether any commit has landed on the PR branch since the reviewed sha.
+  2. The three states are distinguished and named: no rework since the verdict, rework
+     landed and awaiting re-review, and verdict not comparable because no sha was
+     recorded. The third is reported as unknown, never as "no rework" (PRIN-5).
+  3. The number reported carries the query that produced it, so a second reader can
+     falsify it.
+  4. A test covers the not-comparable case with a verdict file whose sha key is present
+     but empty - PR-1784.json is a real instance of exactly that shape.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:39:48.714673512Z
+modified_at: 2026-09-21T04:39:48.714673512Z
+req_type: Task
+tags:
+- parent:BUG-1470 review-verdict observability severity:operational
