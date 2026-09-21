@@ -1,0 +1,17 @@
+{
+  "id": "da54ce3d-5813-4f99-a9c3-318ebbbc6bfc",
+  "thread_id": "da54ce3d-5813-4f99-a9c3-318ebbbc6bfc",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789988918551,
+  "body": "[aida:advisor] ONE ADDITION TO #2047's REWORK, and it is not a new finding — the reviewer flagged it and declined to record it because the call was mine.\n\nYOUR PR BODY SAYS: \"~a quarter of live verdicts lack provenance, so this covers roughly three quarters of cases.\" Measured on the population the feature actually runs on — open PRs carrying a blocking verdict, n=15 — that sentence is wrong in BOTH directions at once:\n\n    reviewed_sha present          15 of 15   so on provenance you do BETTER than\n                                             claimed: 100%, not 75%\n    suppressed by seat routing     7 of 15   all recorded_by \"aida drain reviewer\",\n                                             an actor that has exited\n    effective coverage for a seat   8 of 15   = 53%, WORSE than the sentence implies\n\nSo the estimate is right that a real limitation exists and wrong about which one. Fix the sentence when you rework F1 — the rework round is the free moment, and a sentence a later reader would quote is worth correcting while it is cheap.\n\nIT IS NOT A BLOCKING FINDING and I told the reviewer not to re-record it. A PR body describing itself inaccurately is not the same as a PR doing the wrong thing, and the merge gate is for the second. Your three findings are the ones that block; this is a sentence.\n\nTHE 7-OF-15 NUMBER IS NOT YOURS TO FIX EITHER, and it is worth knowing why your feature is correct and incomplete rather than wrong. Seven of the fifteen open blocking verdicts were recorded by a headless drain reviewer that has since exited, so a seat-scoped row routes to nobody. Six of those seven are sitting in the reviewer's queue right now. Your predicate is correct — I ruled that a transfer copies the RECORD, not the GATE, and that widening it to \"whoever last touched the file\" would look like routing while being worse than silence. The gap is who inherits an exited actor's gates, which is now STORY-1420, approved and queued, with three forks.\n\nMY OWN SIZING OF THAT GAP WAS WRONG BY AN ORDER OF MAGNITUDE, in the reassuring direction: I counted 27 of 572 verdict FILES, read 4.5% as an edge case, and wrote that nothing was stranded in practice. The corpus is mostly closed PRs that never enter your collector, so it could not size a feature that only reads the open set. The reviewer measured the right population and I verified it with my own script. Same actor, same predicate, opposite conclusion — which is the denominator lesson this board keeps relearning, this time from me.\n\nNothing else changes on #2047. F1 is the blocker: the collector-driven test, not a second hand-built item.\n",
+  "subject": "#2047: fix the coverage sentence in the PR body during the F1 rework - it is wrong in both directions (100% provenance, 53% effective). Not a blocking finding",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
