@@ -2953,3 +2953,169 @@ fn pipelined_batch_child_borrows_the_parent_drain_lock() {
     assert_eq!(get("AIDA_PIPELINED_BATCH_CHILD"), Some("1"));
     assert_eq!(get("AIDA_PIPELINED_RESULT_PATH"), Some("/w/x/result.json"));
 }
+
+/// BUG-1570: a pipelined child that ends without reporting a drive outcome may
+/// never have started the spec at all. Attributing that to the SPEC's CI phase
+/// is what let a drain-level lock refusal spend 17.5 hours being blamed on an
+/// innocent spec — the batch summary read "drain stopped at BUG-1462 (phase 2
+/// failed)" and every reader went to debug BUG-1462.
+// trace:BUG-1570 | ai:claude
+#[test]
+fn a_child_that_reported_nothing_is_not_blamed_on_the_spec() {
+    let result = crate::pipelined_child_reported_nothing("BUG-1462", Some(1));
+
+    let failure = result
+        .failure
+        .as_ref()
+        .expect("an unreported child exit must carry a failure explanation");
+
+    // The load-bearing assertion: this is an orchestrator fault, so it is
+    // un-shelvable and the spec is not parked for something it did not do.
+    assert_eq!(
+        failure.kind,
+        crate::auto_complete::FailureKind::Internal,
+        "an unreported child is an orchestrator-layer fault, not the spec's CI"
+    );
+
+    assert!(
+        failure.reason.contains("BUG-1462"),
+        "the operator needs to know which child: {}",
+        failure.reason
+    );
+    assert!(
+        failure.reason.contains("NOT a phase failure"),
+        "the message must actively deny the attribution that misled everyone: {}",
+        failure.reason
+    );
+    assert!(
+        failure.reason.contains("drain lock"),
+        "a refused drain lock is the case this exists for; name it: {}",
+        failure.reason
+    );
+
+    // A signal-terminated child has no code and must still explain itself.
+    let signalled = crate::pipelined_child_reported_nothing("BUG-1462", None);
+    let reason = &signalled.failure.as_ref().unwrap().reason;
+    assert!(
+        reason.contains("signal"),
+        "a child killed by a signal must say so rather than print a bare None: {reason}"
+    );
+}
+
+/// BUG-1570, the other direction. The test above proves the classifier REJECTS
+/// the old behaviour (blaming the spec's CI for a child that said nothing). On
+/// its own that is mutation-checked one way only: it stays green if the fix
+/// flattened EVERY child outcome into `Internal`, which would destroy the
+/// genuine CI-red signal and stop a batch drain dead — `Internal` is
+/// un-shelvable, so EPIC-28 could no longer continue past a red member.
+///
+/// So this pins the complementary case: a child that DID report a drive outcome
+/// — it ran the spec, CI came back red, it already shelved the spec into
+/// NeedsAttention and exited `DRIVE_EXIT_SHELVED` — still travels the shelvable
+/// path, with its shelve attributed to the spec's CI phase exactly as before.
+///
+/// Note on what crosses the process boundary: the sidecar format written by
+/// `write_pipelined_child_result_sidecar` carries `shelved: bool` and
+/// `failed_phase`, not the `FailureKind`, so the parent never sees the literal
+/// `FailureKind::CiRed` the child computed. At this seam the CI-red signal IS
+/// the ci-phase `shelved_reason` — that is the thing that must survive, and the
+/// thing an always-`Internal` regression would destroy.
+// trace:BUG-1570 | ai:claude
+#[test]
+fn a_child_that_reported_a_real_ci_failure_still_travels_the_shelvable_path() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let sidecar_path = dir.path().join("BUG-1462-7.json");
+
+    // The bytes a CI-red child leaves behind: shelved at phase 2 (CI), exiting
+    // with the phase's 1-based index. Shape mirrors
+    // `write_pipelined_child_result_sidecar`.
+    std::fs::write(
+        &sidecar_path,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "exit_code": crate::auto_complete::Phase::Ci.index(),
+            "failed_phase": crate::auto_complete::Phase::Ci.index(),
+            "punt_reason": serde_json::Value::Null,
+            "shipped_spec_id": serde_json::Value::Null,
+            "escalation": serde_json::Value::Null,
+            "inconclusive_reason": serde_json::Value::Null,
+            "shelved": true,
+            "held_reason": serde_json::Value::Null,
+        }))
+        .expect("serialize sidecar"),
+    )
+    .expect("write sidecar");
+
+    let result = crate::classify_pipelined_child_outcome(
+        "BUG-1462",
+        Some(crate::auto_complete::DRIVE_EXIT_SHELVED),
+        false,
+        || crate::read_pipelined_child_result_sidecar(&sidecar_path),
+    );
+
+    // The load-bearing assertion, and the exact inverse of the test above: this
+    // child DID report an outcome, so it must NOT be rewritten into an
+    // orchestrator-layer fault.
+    assert!(
+        !matches!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(crate::auto_complete::FailureKind::Internal)
+        ),
+        "a child that reported a real CI failure must not be relabelled an \
+         orchestrator fault: {:?}",
+        result.failure
+    );
+
+    // The spec stays parked in NeedsAttention, attributed to its CI phase — so
+    // EPIC-28 shelves this member and the batch drain carries on.
+    let shelved = result
+        .shelved_reason
+        .as_ref()
+        .expect("a real CI failure must still shelve the spec into NeedsAttention");
+    assert_eq!(
+        shelved.phase,
+        crate::auto_complete::Phase::Ci.slug(),
+        "the shelve must still be attributed to the spec's CI phase"
+    );
+    assert_eq!(
+        result.failed_phase,
+        Some(crate::auto_complete::Phase::Ci),
+        "the failed phase must survive the sidecar round trip"
+    );
+
+    // And the un-shelvable kind the sibling test asserts for really is
+    // un-shelvable, so the two situations cannot both be "keep going".
+    assert!(
+        !crate::auto_complete::FailureKind::Internal.is_shelvable(),
+        "Internal must stay un-shelvable, or the distinction is cosmetic"
+    );
+
+    // A shelved child that left NO sidecar falls back to the same shelvable
+    // path rather than to the unreported-child fault.
+    let no_sidecar = crate::classify_pipelined_child_outcome(
+        "BUG-1462",
+        Some(crate::auto_complete::DRIVE_EXIT_SHELVED),
+        false,
+        || None,
+    );
+    assert!(
+        no_sidecar.shelved_reason.is_some(),
+        "a DRIVE_EXIT_SHELVED child with no sidecar is still a shelve, not an \
+         orchestrator fault"
+    );
+
+    // Through the SAME seam, a child that reported nothing DOES get the
+    // orchestrator-fault treatment. Asserting both directions here is what
+    // makes the pair able to tell the two situations apart, rather than each
+    // test separately tolerating a classifier that labels everything alike.
+    let unreported = crate::classify_pipelined_child_outcome("BUG-1462", Some(1), false, || None);
+    assert_eq!(
+        unreported.failure.as_ref().map(|f| f.kind),
+        Some(crate::auto_complete::FailureKind::Internal),
+        "an unreported child must still be an orchestrator-layer fault: {:?}",
+        unreported.failure
+    );
+    assert!(
+        unreported.shelved_reason.is_none(),
+        "an orchestrator fault must not park the spec it may never have reached"
+    );
+}

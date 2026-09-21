@@ -80444,6 +80444,85 @@ pub(crate) fn pipelined_child_env(result_path: &std::path::Path) -> Vec<(&'stati
     ]
 }
 
+/// BUG-1570: a pipelined child that exits with an unrecognised code and leaves
+/// no result sidecar did NOT report a drive outcome for this spec — and may
+/// never have reached the spec at all. A refused drain lock, a spawn failure
+/// and a missing binary all land here identically.
+///
+/// Reporting that as the SPEC's CI phase failing is what let a drain-level lock
+/// refusal spend 17.5 hours attributed to an innocent spec: the batch summary
+/// read "drain stopped at BUG-1462 (phase 2 failed)", so every reader went to
+/// debug BUG-1462, which had nothing wrong with it.
+///
+/// `FailureKind::Internal` is deliberate. This is an orchestrator-layer fault,
+/// which makes it un-shelvable — the spec must not be parked NeedsAttention for
+/// something it did not do, and a hint that routes to AIDA rather than to the
+/// spec's CI is the correct destination.
+// trace:BUG-1570 | ai:claude
+fn pipelined_child_reported_nothing(
+    spec: &str,
+    code: Option<i32>,
+) -> auto_complete::OrchestrationResult {
+    let exit = code
+        .map(|c| format!("exit code {c}"))
+        .unwrap_or_else(|| "a signal".to_string());
+    let mut result = auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci);
+    result.failure = Some(auto_complete::PhaseFailure::of(
+        auto_complete::FailureKind::Internal,
+        format!(
+            "the pipelined child for {spec} ended with {exit} without reporting a drive \
+             outcome, so it may never have started {spec} at all — a refused drain lock, a \
+             failed spawn and a missing binary are indistinguishable here. This is an \
+             orchestrator-layer fault, NOT a phase failure of {spec}; read the child's own \
+             drain log before treating {spec} as the problem."
+        ),
+    ));
+    result
+}
+
+/// BUG-1570: decide what a finished pipelined child's exit MEANS.
+///
+/// Pure, and shared by both pipelined drivers, so the classification is pinned
+/// in BOTH directions at one seam. That pairing is the point: a child that
+/// reported NOTHING must become an orchestrator-layer `Internal` fault, and a
+/// child that DID report a drive outcome — a real CI failure it already shelved
+/// the spec for — must keep travelling the shelvable path. Fixing the first
+/// without pinning the second would flatten every genuine shelve into
+/// `Internal`, which is un-shelvable, and the batch drain would stop dead
+/// instead of continuing past a red member.
+///
+/// `sidecar` is a closure because reading the sidecar CONSUMES the file; the
+/// unreported arm must not touch it.
+// trace:BUG-1570 | ai:claude
+fn classify_pipelined_child_outcome(
+    spec: &str,
+    exit_code: Option<i32>,
+    success: bool,
+    sidecar: impl FnOnce() -> Option<auto_complete::OrchestrationResult>,
+) -> auto_complete::OrchestrationResult {
+    if success {
+        return sidecar().unwrap_or_else(auto_complete::OrchestrationResult::ok);
+    }
+    if exit_code == Some(auto_complete::DRIVE_EXIT_SHELVED) {
+        return sidecar().unwrap_or_else(|| {
+            let mut result = auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci);
+            result.shelved_reason = Some(aida_core::FailureReason {
+                phase: "ci".to_string(),
+                phase_index: 2,
+                kind: "pipelined-child-shelved".to_string(),
+                detail: "pipelined implementer/CI child parked this spec".to_string(),
+                recovery_hint: Some(
+                    "inspect the child drain output and `aida findings list`".to_string(),
+                ),
+                shelved_by: Some("orchestrator".to_string()),
+                shelved_at: chrono::Utc::now(),
+            });
+            result
+        });
+    }
+    pipelined_child_reported_nothing(spec, exit_code)
+}
+
 impl RealBatchDriver<'_> {
     // trace:STORY-1091 trace:ADR-28 | ai:codex
     fn child_common_args(
@@ -80555,32 +80634,30 @@ impl auto_complete::PipelinedBatchDriver for RealBatchDriver<'_> {
             return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
         };
         let result_path = self.pipelined_result_paths.remove(&handle.0);
+        // The sidecar is named `<spec>-<handle>.json`, and the handle is
+        // numeric, so the last `-` separates them. Spec ids contain `-`
+        // themselves (BUG-1462), which is why this splits from the RIGHT.
+        // trace:BUG-1570 | ai:claude
+        let spec_for_report = result_path
+            .as_deref()
+            .and_then(|p| p.file_stem())
+            .and_then(|s| s.to_str())
+            .and_then(|s| s.rsplit_once('-').map(|(spec, _)| spec.to_string()))
+            .unwrap_or_else(|| "the dispatched spec".to_string());
+        let read_sidecar = || {
+            result_path
+                .as_deref()
+                .and_then(read_pipelined_child_result_sidecar)
+        };
         match child.wait() {
-            Ok(status) if status.success() => result_path
-                .as_deref()
-                .and_then(read_pipelined_child_result_sidecar)
-                .unwrap_or_else(auto_complete::OrchestrationResult::ok),
-            Ok(status) if status.code() == Some(auto_complete::DRIVE_EXIT_SHELVED) => result_path
-                .as_deref()
-                .and_then(read_pipelined_child_result_sidecar)
-                .unwrap_or_else(|| {
-                    let mut result =
-                        auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci);
-                    result.shelved_reason = Some(aida_core::FailureReason {
-                        phase: "ci".to_string(),
-                        phase_index: 2,
-                        kind: "pipelined-child-shelved".to_string(),
-                        detail: "pipelined implementer/CI child parked this spec".to_string(),
-                        recovery_hint: Some(
-                            "inspect the child drain output and `aida findings list`".to_string(),
-                        ),
-                        shelved_by: Some("orchestrator".to_string()),
-                        shelved_at: chrono::Utc::now(),
-                    });
-                    result
-                }),
-            Ok(_status) => auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci),
-            Err(_) => auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci),
+            Ok(status) => classify_pipelined_child_outcome(
+                &spec_for_report,
+                status.code(),
+                status.success(),
+                read_sidecar,
+            ),
+            // `wait()` itself failed, so there is no status to read at all.
+            Err(_) => classify_pipelined_child_outcome(&spec_for_report, None, false, read_sidecar),
         }
     }
 
@@ -82706,32 +82783,30 @@ impl auto_complete::PipelinedBatchDriver for RealNextNDriver<'_> {
             return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
         };
         let result_path = self.pipelined_result_paths.remove(&handle.0);
+        // The sidecar is named `<spec>-<handle>.json`, and the handle is
+        // numeric, so the last `-` separates them. Spec ids contain `-`
+        // themselves (BUG-1462), which is why this splits from the RIGHT.
+        // trace:BUG-1570 | ai:claude
+        let spec_for_report = result_path
+            .as_deref()
+            .and_then(|p| p.file_stem())
+            .and_then(|s| s.to_str())
+            .and_then(|s| s.rsplit_once('-').map(|(spec, _)| spec.to_string()))
+            .unwrap_or_else(|| "the dispatched spec".to_string());
+        let read_sidecar = || {
+            result_path
+                .as_deref()
+                .and_then(read_pipelined_child_result_sidecar)
+        };
         match child.wait() {
-            Ok(status) if status.success() => result_path
-                .as_deref()
-                .and_then(read_pipelined_child_result_sidecar)
-                .unwrap_or_else(auto_complete::OrchestrationResult::ok),
-            Ok(status) if status.code() == Some(auto_complete::DRIVE_EXIT_SHELVED) => result_path
-                .as_deref()
-                .and_then(read_pipelined_child_result_sidecar)
-                .unwrap_or_else(|| {
-                    let mut result =
-                        auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci);
-                    result.shelved_reason = Some(aida_core::FailureReason {
-                        phase: "ci".to_string(),
-                        phase_index: 2,
-                        kind: "pipelined-child-shelved".to_string(),
-                        detail: "pipelined implementer/CI child parked this spec".to_string(),
-                        recovery_hint: Some(
-                            "inspect the child drain output and `aida findings list`".to_string(),
-                        ),
-                        shelved_by: Some("orchestrator".to_string()),
-                        shelved_at: chrono::Utc::now(),
-                    });
-                    result
-                }),
-            Ok(_status) => auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci),
-            Err(_) => auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci),
+            Ok(status) => classify_pipelined_child_outcome(
+                &spec_for_report,
+                status.code(),
+                status.success(),
+                read_sidecar,
+            ),
+            // `wait()` itself failed, so there is no status to read at all.
+            Err(_) => classify_pipelined_child_outcome(&spec_for_report, None, false, read_sidecar),
         }
     }
 
