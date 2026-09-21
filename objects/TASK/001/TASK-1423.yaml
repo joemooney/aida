@@ -1,0 +1,30 @@
+id: 01a0c54d-3e94-7b71-bcf4-e099d0125c31
+spec_id: TASK-1423
+agreed_id: TASK-1423
+title: No surface answers which specs have a review verdict with no subsequent run, and for how long - the question took a hand pass over events.jsonl and the verdict files
+description: |-
+  Split out of BUG-1470 acceptance criterion 3, which PR 2035 did not address. Filed so merging that PR does not close the criterion silently.
+
+  THE QUESTION, verbatim from the spec: which specs have a verdict with no subsequent run, and for how long? Answering it today requires a hand-written pass over .aida/events.jsonl plus the .aida/review-verdicts/ files.
+
+  WHY IT IS THE LOAD-BEARING ONE OF THE THREE. This session is direct evidence. The throughput diagnosis was not CI, not review capacity, and not batch composition - it was ten PRs already reviewed, refused, and held, with zero head movement since refusal, because the authoring agents had exited and the rework had no owner. The population was invisible because no surface reports verdict-with-no-subsequent-run. The cost of not having it is measured in days of stalled work, not in convenience.
+
+  Acceptance:
+  - One command answers it for the whole store, with the ELAPSED time since the verdict, not just the set. The duration is what separates a normal review round from a stall, so a list without it does not answer the question.
+  - It reads the verdict files and the event stream rather than asking the forge per PR - the question must stay answerable offline and fast enough for a default surface.
+  - Sorted by staleness descending, because the single most useful output is the oldest one.
+  - Prefer folding it into an existing surface over adding a new one. aida awaiting already collects the you-are-the-gate channels and is the natural home; BUG-1556 records that a guard firing into a place nobody looks is its own defect class.
+
+  Related: BUG-1452 covers a refusal leaving no queue entry, which is one of the ways a spec lands in this population. This spec is the surface that makes the population visible regardless of how it got there.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T18:49:28.980174289Z
+modified_at: 2026-09-21T18:49:28.980174289Z
+req_type: Task
+tags:
+- aida:findings
+- aida:status
+- followup:BUG-1470
+- parent:EPIC-62
