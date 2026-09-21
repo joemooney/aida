@@ -3,7 +3,8 @@ use super::{
     build_integrate_rebase_args, build_phase3_auto_rebase_args, ensure_implementer_branch_pushed,
     find_orchestrated_lease, head_commit_message, headless_log_is_zero_bytes, list_leases,
     orchestrator_phase_child_env, orchestrator_pr_title_and_body, parse_agent_gates_from_config,
-    pushed_branch_commits_ahead_default, AgentGateOnFail, RealPhaseDriver,
+    pushed_branch_commits_ahead_default, watchdog_failure_with_committed_work, AgentGateOnFail,
+    RealPhaseDriver,
 };
 use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure, PhaseReconcile};
 use aida_core::{
@@ -548,6 +549,52 @@ fn phase1_no_pr_recovery_uses_implementer_worktree_branch_state() {
         git(&remote, &["rev-parse", "bug-893"]),
         git(&implementer, &["rev-parse", "HEAD"])
     );
+}
+
+#[test]
+fn watchdog_shelve_names_reviewable_branch_and_commit_count() {
+    let (_tmp, worktree, _remote) = git_repo_with_origin();
+    git(&worktree, &["branch", "-m", "bug-1450"]);
+    write_commit(&worktree, "file.txt", "base\n", "base");
+    git(&worktree, &["branch", "main"]);
+    git(&worktree, &["push", "-q", "origin", "main"]);
+    write_commit(
+        &worktree,
+        "file.txt",
+        "base\nreviewable\n",
+        "[AI:codex] fix(orchestrator): preserve watchdog work (BUG-1450)",
+    );
+
+    let failure = PhaseFailure::of(
+        FailureKind::Watchdog,
+        "the implementer phase watchdog stopped the session — ceiling exceeded",
+    );
+    let enriched = watchdog_failure_with_committed_work(failure, &worktree, "bug-1450");
+
+    assert!(enriched.reason.contains("left 1 committed commit(s)"));
+    assert!(enriched.reason.contains("reviewable branch `bug-1450`"));
+    assert!(enriched
+        .hint_override
+        .as_deref()
+        .unwrap()
+        .contains("open or recover its PR"));
+}
+
+#[test]
+fn watchdog_shelve_explicitly_distinguishes_no_committed_work() {
+    let (_tmp, worktree, _remote) = git_repo_with_origin();
+    git(&worktree, &["branch", "-m", "bug-1450"]);
+    write_commit(&worktree, "file.txt", "base\n", "base");
+    git(&worktree, &["branch", "main"]);
+    git(&worktree, &["push", "-q", "origin", "main"]);
+
+    let failure = PhaseFailure::of(
+        FailureKind::Watchdog,
+        "the implementer phase watchdog stopped the session — ceiling exceeded",
+    );
+    let enriched = watchdog_failure_with_committed_work(failure, &worktree, "bug-1450");
+
+    assert!(enriched.reason.ends_with("left no committed work"));
 }
 
 #[cfg_attr(
