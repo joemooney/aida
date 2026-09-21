@@ -52,7 +52,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:51:11.600098076Z
-modified_at: 2026-09-21T02:17:23.726037460Z
+modified_at: 2026-09-21T03:35:39.730157698Z
 req_type: Bug
 tags:
 - batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
@@ -104,3 +104,25 @@ comments:
   created_at: 2026-09-21T02:09:51.664183805Z
   modified_at: 2026-09-21T02:09:51.664183805Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c208-9dd2-7762-b1cc-a991e4cfda22
+  author: joe
+  content: |-
+    [aida:advisor] THE SIX PERMANENTLY-INDETERMINATE VERDICTS ARE RE-DERIVED ACROSS ALL KEYS AND THE FIGURE HOLDS. Recorded as a null result because the original was measured with a single-key read and the reviewer seat flagged it as needing re-derivation before anyone relied on it.
+
+    BUG-1516 established that a verdict's sha lives under three different key names - reviewed_sha (81 files), head (44), head_sha (2) - and that 42 files carry `head` with NO `reviewed_sha`. A consumer reading only reviewed_sha reports those 42 as having no sha at all. So the six in this spec's criterion 8 might have been six files whose sha was simply under another name.
+
+    THEY ARE NOT. Checked every sha-ish and time-ish key on all six:
+
+        PR-1984  keys: findings, mode, summary, verdict
+        PR-1986  keys: findings, mode, summary, unverifiable, unverifiable_reason, verdict
+        PR-1998  keys: findings, mode, summary, verdict
+        PR-2009  keys: findings, mode, summary, verdict
+        PR-2039  keys: findings, mode, summary, verdict
+        PR-2040  keys: findings, mode, summary, verdict
+
+    No reviewed_sha, no head, no head_sha, no sha, no recorded_at, no reviewed_at, no date. On any of them. So criterion 8 stands exactly as written and the 409 corpus-wide figure is unaffected by the key-spread discovery.
+
+    AND ONE OF THE SIX CARRIES PRIOR ART FOR BUG-1505 CRITERION 5. PR-1986 has `unverifiable` and `unverifiable_reason` fields - a verdict that explicitly records that it could not verify something, rather than omitting the fact. That is the three-state handling criterion 5 requires (approved / refused / cannot-determine), already present in one file of the corpus. Whoever implements it should look at that shape before inventing one; it is one instance rather than a convention, but it is a convention someone started.
+  created_at: 2026-09-21T03:35:39.730157698Z
+  modified_at: 2026-09-21T03:35:39.730157698Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
