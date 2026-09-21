@@ -50,67 +50,95 @@ description: |
 
   ## Acceptance
 
-  ACCEPTANCE CORRECTED 2026-09-20 22:44. The predicate first written here MISSES 6 OF THE
-  7 CORRUPTED FILES IN THIS STORE. Caught by the reviewer against their own detector;
-  re-measured by the driver advisor before correcting.
+  SCOPE CORRECTED AGAIN 2026-09-20 22:48. THE PRODUCER IS IDENTIFIED AND MOJIBAKE IS THE
+  WRONG PRIMARY DETECTOR — it finds 6 of the 9 damaged specs, and which 6 depends on
+  nothing but whether the round-tripped text happened to contain a non-ASCII character.
+  Reviewer's finding; reproduced by the driver advisor.
 
-  THE TWO FORMS. A mis-decoded em-dash (U+2014 = E2 80 94, read as latin-1) appears in the
-  store in two shapes:
+  THE PRODUCER: A READ-MODIFY-WRITE THROUGH RENDERED OUTPUT. A seat reads a spec with
+  `aida show` (which emits TOON when piped), captures stdout, and writes it back through a
+  description edit. Two things happen in that round trip:
 
-      RAW      lead char + latin-1 supplement char        (what BUG-1522 held after repair)
-      ESCAPED  lead char + literal backslash-x + 2 hex    (YAML's escape for the control
-                                                           characters inside a quoted scalar)
+    1  the TOON rendering carries the NEIGHBOURING FIELDS, so the closing quote,
+       execution_mode, relationships and next blocks are swallowed into the description
+       value — the spec's description ends up containing its own rendered output;
+    2  the capture path decodes UTF-8 as latin-1, so any non-ASCII character is
+       mis-decoded. An em-dash becomes the mojibake this spec was originally about.
 
-  The strict predicate — lead char IMMEDIATELY FOLLOWED BY a latin-1 supplement character —
-  matches the raw form only. In the escaped form the next character is a backslash, so it
-  matches nothing. Measured across the object store:
+  (2) only fires when the text HAPPENED to contain a non-ASCII character. (1) fires every
+  time. So mojibake is the visible third of the damage and the swallowed block is the
+  whole of it.
 
-      files scanned         4197
-      files affected           6      raw 0, escaped 25
-      per file   BUG-1452 8, STORY-1405 6, BUG-1450 5, BUG-1106 2, BUG-1111 2, BUG-1310 2
+  Confirmed by the git log: each corruption entered in exactly one commit, and BUG-1106's
+  diff at b1b3b0aa27 (2026-09-12T10:23) shows the description converted from a YAML BLOCK
+  SCALAR to a double-quoted single-line scalar with literal escapes, mis-decoding the
+  em-dash in the conversion. The text was not born corrupted; it was re-serialised.
 
-  BUG-1522 was the RARE case and was visible only because a failed repair had pushed it
-  into a second mangling layer. The common form was invisible to the strict rule.
+  MEASURED, parsed-value scan of all 4197 store objects:
 
-  1. `aida doctor` gains a check that scans stored spec text for mojibake and reports the
-     spec id, the field and the offset.
-  2. THE PREDICATE IS AN ALTERNATION. A lead character in {U+00C2, U+00C3, U+00E2} followed
-     by EITHER
-         (a) a latin-1 supplement character, or
-         (b) the literal two characters backslash-x followed by two hex digits.
-     A LONE lead character is NOT a match: Â, Ã and â are ordinary letters, and requiring
-     the pair is what keeps the check from firing on healthy text. Reject the
-     single-character form IN A COMMENT saying why, and reject the (a)-only form in a
-     comment too — (a) alone is the spelling that missed 6 of 7 here.
-  3. The check REPORTS and does not repair. Guessing the intended character is how
-     BUG-1522's second corruption layer was produced.
-  4. It covers the whole object store and every text field, not only descriptions.
-  5. TESTS, and the negative cases are the load-bearing ones:
-     5a. a file with a legitimate lone Â/Ã/â produces NO finding;
-     5b. a raw-form mis-decode produces exactly one finding;
-     5c. an ESCAPED-form mis-decode produces exactly one finding.
-     A suite with only 5b passes against the (a)-only predicate, which is the defect this
-     correction exists to prevent.
+      descriptions containing swallowed TOON        9
+        of those, also carrying mojibake            6
+      mojibake WITHOUT swallowed TOON               0
 
-  ## Open question, not this spec's job to answer but worth its priority
+  Perfect correlation, one direction only. (A tenth match, TASK-1208, is a FALSE POSITIVE
+  on a `next[N]{` probe against ordinary prose discussing the convention — checked, not
+  counted.)
 
-  THE PRODUCER IS UNIDENTIFIED AND WAS ACTIVE BEFORE THIS SESSION'S EDITING INCIDENT. All
-  six escaped-form files were last modified between 2026-09-12 10:23 and 2026-09-20 18:29,
-  and the driver advisor's faulty edit method did not run until roughly 21:30. All six
-  carry the corruption in the `description` field. So something that writes descriptions
-  has been producing mojibake for at least eight days, independently of the incident that
-  prompted this spec.
+  THREE OF THE NINE WERE THIS SESSION'S OWN, and they are now clean: BUG-1522
+  (16331 -> 8963), BUG-1531 (9598 -> 6446), BUG-1466 (4378 -> 3928). The earlier repair
+  had fixed their em-dashes and left the swallowed blocks in place — it addressed the
+  symptom a detector could see and not the damage that produced it. Six pre-existing
+  instances remain, untouched: BUG-1106, BUG-1111, BUG-1310, BUG-1450, BUG-1452,
+  STORY-1405.
 
-  That raises this check's value: it is not a one-off cleanup after one seat's bad tooling,
-  it is a detector for an ongoing and unattributed producer. Identifying the producer is a
-  separate investigation and should be filed separately once the check makes the instances
-  visible.
+  1. `aida doctor` gains a check for round-trip artifacts in stored spec text, reporting
+     the spec id, the field and the offset.
+  2. THE PRIMARY PREDICATE IS THE CAUSE, NOT THE SYMPTOM: a description containing a TOON
+     row header — `relationships[N]{`, `next[N]{`, a bare `execution_mode:` line — is a
+     round-trip artifact. One string match, no encoding subtleties, and it catches all
+     nine including the three whose em-dashes were already repaired.
+  3. THE MOJIBAKE CHECK IS RETAINED ALONGSIDE IT, not instead of it. The two find
+     overlapping but different sets: a round trip through a path that does not emit TOON
+     would corrupt encoding without leaving a row header. Its predicate is the alternation
+     — a lead character in {U+00C2, U+00C3, U+00E2} followed by EITHER a latin-1
+     supplement character OR the literal backslash-x plus two hex digits.
+  4. THE CHECK STATES WHICH LAYER IT SCANS, and this is what made two seats disagree about
+     the same six files for an hour:
+
+         FILE TEXT      the damage reads as lead char + literal backslash-x-8-0
+         PARSED VALUE   the same damage reads as lead char + U+0080 + U+0094
+
+     because YAML's parser turns the escape into the control character. A file-text scan
+     needs the (b) alternative; a parsed-value scan catches them with (a) alone. Scan the
+     parsed value, or scan both and say so. Without this the alternation is still
+     under-specified.
+  5. The check REPORTS and does not repair. Repairing a swallowed block means
+     reconstructing what was displaced, and the pre-corruption text is in the orphan
+     branch's git history — a recoverable edit for whoever owns each spec, not a guess.
+  6. Coverage is the whole object store and every text field, not only descriptions.
+  7. TESTS, negative cases load-bearing:
+     7a. a legitimate lone Â/Ã/â produces NO mojibake finding;
+     7b. prose that merely DISCUSSES the TOON convention produces no round-trip finding —
+         TASK-1208 is the real instance that a naive `next[N]{` probe flags;
+     7c. a raw-form mis-decode produces one finding;
+     7d. an escaped-form mis-decode produces one finding;
+     7e. a swallowed TOON block with NO non-ASCII character produces one finding. This is
+         the case the original spec would have missed entirely.
+
+  ## Open question
+
+  WHICH SEAT OR TOOL RUNS THE ROUND TRIP is not established. The pattern is in use since at
+  least 2026-09-12 and produced instances as recently as 2026-09-20 18:29, from more than
+  one seat. The three from this session are accounted for — a greedy DOTALL regex over
+  `aida show --full` output, which matched to the last quote in the rendering and swallowed
+  every field after it. Whether the older six share that exact mechanism or only the
+  anti-pattern is unknown, and the git diffs are the place to settle it.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T05:48:14.469822654Z
+modified_at: 2026-09-21T05:48:22.779337676Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
