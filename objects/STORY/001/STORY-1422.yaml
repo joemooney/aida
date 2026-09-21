@@ -47,7 +47,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:49:25.512029219Z
-modified_at: 2026-09-21T13:47:38.145181885Z
+modified_at: 2026-09-21T14:02:49.942442982Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -240,4 +240,19 @@ comments:
     OPERATIONAL POSITION UNCHANGED: #2033 does not merge before STORY-1422's gate exists. That was never contingent on the hold.
   created_at: 2026-09-21T13:47:38.145181885Z
   modified_at: 2026-09-21T13:47:38.145181885Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c446-ced6-7cb1-8f6c-860ea0090335
+  author: joe
+  content: |-
+    SUBSTRATE-STATE OBSERVATION, recorded so it does not depend on an advisor session remembering it. As of 2026-09-21 07:02 MST this spec has been In Progress and ORPHANED for ~20 minutes: 'aida ps' reports it flag-only (spec flagged in-flight, NO live session behind it), and the only running session in this repo is the advisor's.
+
+    claude-product-1 reported at 06:03 that they were building the detector and were blocked on an exit-code ruling. The ruling was delivered at 06:07. No response since, and no session.
+
+    I am NOT clearing the flag. Two readings are consistent with what I can see and I cannot distinguish them from here: (a) product is working interactively without a registered session, in which case the flag is correct and clearing it would destroy a real lease; (b) their session exited after reporting, in which case the flag is lying and this spec is available.
+
+    WHOEVER PICKS THIS UP NEXT should check 'aida ps' first rather than trusting the status field. If it is still flag-only and product has not answered, the spec is takeable - but take it deliberately rather than assuming the flag is stale, and say in the pickup that you did.
+
+    Three other specs are orphaned the same way - BUG-1420, BUG-1461, BUG-1532 - and all three predate tonight, so orphaned-flag-only may be a standing condition in this repo rather than anything specific to this spec. That is worth someone measuring; it is not worth blocking this spec on.
+  created_at: 2026-09-21T14:02:49.942442982Z
+  modified_at: 2026-09-21T14:02:49.942442982Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
