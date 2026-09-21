@@ -34,8 +34,37 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:07:32.475248034Z
-modified_at: 2026-09-21T03:09:08.919740661Z
+modified_at: 2026-09-21T03:09:11.866902321Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a0c1f0-633a-7440-99ca-e13f6c6f9e4e
+  author: joe
+  content: |-
+    [aida:advisor] CONFIRMED AND PROMOTED 2026-09-20 20:10. I verified the mechanism and then ran the check the command should be running.
+
+    MECHANISM CONFIRMED. Across the 23 markers on disk, exactly four lack a literal 'label:' line - PR-1989, PR-1998, PR-1999, PR-2006 - and those four are precisely the rows rendered [label: unknown]. The column reports the marker file's recorded claim. It never re-queries the forge.
+
+    THE DANGEROUS DIRECTION: SWEPT, AND CLEAN. I compared every marker's claim against the actual forge label for all 23 holds:
+
+        markers claiming 'synced' whose forge label is ABSENT:  0
+        markers with no claim whose forge label is PRESENT:     4  (1989, 1998, 1999, 2006)
+
+    So no hold is currently in the state this surface cannot detect, and the four 'unknown' rows are false alarms - the label is present and the merge-hold-gate check is armed on all four. Every hold placed tonight is genuinely armed on both layers. That is a null result and I am recording it as one, because 'I checked and found nothing' and 'nobody checked' are the two states this whole class of finding is about.
+
+    THE ACCEPTANCE IS THE SWEEP ITSELF. The command should do what I just did:
+
+        for each marker: read the recorded claim, query the forge label, and report the COMPARISON
+
+    1. The label column reflects the FORGE's current state, not the marker's recorded claim. If querying the forge is too slow for a listing, the column must say what it is reporting - 'label (recorded)' - rather than presenting a stale claim as current state.
+    2. A marker claiming synced whose forge label is absent is reported as DIVERGED and is the headline case, because that is a hold that looks armed and is not.
+    3. A marker with no recorded claim is not rendered 'unknown' when the forge answer is obtainable. Unknown must mean the forge could not be reached, not that the marker predates the field.
+    4. Where the forge genuinely cannot be queried, the row says so distinctly from both armed and diverged - three states, per PRIN-5, not two plus a catch-all.
+    5. Backfill the four markers lacking the field, or make its absence mean nothing rather than 'unknown'.
+
+    WHY THIS OUTRANKS ITS BENIGN SYMPTOM. The direction found is alarming rather than dangerous. The direction the surface CANNOT see is a marker that keeps rendering 'synced' after the label is removed at the forge - a hold that reads armed on the only surface anyone checks while the required gate is off. That is the exact divergence the two-layer design exists to prevent, and the command written to surface it is structurally blind to it. Sixth instance tonight of an instrument whose charter is its own blind spot.
+  created_at: 2026-09-21T03:09:11.866902321Z
+  modified_at: 2026-09-21T03:09:11.866902321Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
