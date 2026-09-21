@@ -41,11 +41,16 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:42:58.222497613Z
-modified_at: 2026-09-21T02:46:26.697209537Z
+modified_at: 2026-09-21T02:46:53.189604407Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+relationships:
+- rel_type: References
+  target_id: 01a0c1c0-a44d-7ab1-8be7-8527c5e42822
+  created_at: 2026-09-21T02:46:53.189599950Z
+  created_by: joe
 comments:
 - id: 01a0c1db-8e89-74f0-b191-1b88c1ef2d41
   author: joe
