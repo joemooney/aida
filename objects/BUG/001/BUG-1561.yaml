@@ -1,0 +1,62 @@
+id: 01a0c50b-4d17-7523-8112-13ce30acaebb
+spec_id: BUG-1561
+agreed_id: BUG-1561
+title: Doc-only trace-header strandings not caught by BUG-1550's gate (three verified instances)
+description: |
+  BUG-1550's trace-header stranding gate is structural and deliberately scoped
+  to strandings where a TRACE marker is involved (a doc sandwiched between two
+  genuinely-different trace runs). It cannot see a stranding where both trace
+  markers stay correctly paired with their own doc segment even though one
+  segment's CONTENT is wrong -- the file is structurally well-formed, and only
+  reading the prose reveals the misattachment. BUG-1550's own investigation
+  found this class is not reliably lexically detectable on this codebase (see
+  its script docstring: naive word-overlap threw 177 hits tree-wide, a tighter
+  windowed comparative scorer 347/127, and even the tightened version
+  misattributed the one confirmed case it should have gotten right -- flagging
+  short_sha_for_row's header as wrong but naming compact_line instead of
+  pluralize as the true owner).
+
+  Three verified instances, found by manual reading during that investigation,
+  none fixed here and none caught by any automated gate today:
+
+  1. aida-cli-lib/src/doctor_cmd.rs:577 -- TASK-1122's "store-scrub detection"
+     doc (7 lines, correctly followed by "// trace:TASK-1122") sits directly
+     above `struct PerformanceBudget` (whose own doc + "// trace:STORY-1422"
+     immediately follow it -- PerformanceBudget's own attribution is fine).
+     The true owner of the TASK-1122 doc is `fn scan_store_scrub` at :1039,
+     which is completely bare (no doc, no trace). Introduced by c8d9c36f4e
+     ("feat(doctor): give the latency instrument a failure mode and a
+     trigger (STORY-1422)"), which is TODAY's HEAD at filing time -- this
+     class is arriving at roughly the rate this project merges, not just
+     historical debt.
+
+  2. aida-cli-lib/src/lib.rs:31199 -- STORY-714's "acquire a warm-pool
+     worktree for a new session..." doc sits above `fn
+     clear_worktree_session_leases` (whose own BUG-669 doc + trace
+     immediately follow it and are correct). The true owner is `fn
+     acquire_session_pool_worktree` at :31236, completely bare.
+
+  3. aida-cli-lib/src/doc_cmd.rs:9 -- a doc paragraph "Handle `aida node`
+     subcommands. Operates on the orphan-store worktree at `store_path`."
+     sits above `fn handle_docs_command` (whose own doc + trace:EPIC-1-052 /
+     trace:FR-1-077 stay correctly attached to it). The true owner is `fn
+     handle_node_command`, which now lives in a DIFFERENT FILE
+     (aida-cli-lib/src/node_cmd.rs:20), completely bare -- the CROSS-FILE
+     variant caused by the SPIKE-78 pure-movement extraction (commit
+     80c7e5eb99, #1460) splitting code across files without its header
+     travelling. This is independent evidence for the cross-file blind spot
+     BUG-1550's gate already documents as a known limitation (its scope is
+     per-file, so there is no bare candidate to compare against once the
+     true owner has moved to another file).
+
+  Fixing these three is a small mechanical edit each (move the doc to its
+  true owner), same as BUG-1550's tracker_cmd.rs / mcp.rs fixes -- but filing
+  this instead of silently fixing them so the instances are enumerated rather
+  than the class only named (per this project's standing brief-writing rule).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T17:37:27.319820073Z
+modified_at: 2026-09-21T17:37:27.319820073Z
+req_type: Bug
