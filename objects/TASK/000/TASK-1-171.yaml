@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T03:47:33.851025014Z
+modified_at: 2026-09-21T03:49:25.394635006Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -77,10 +77,10 @@ comments:
 
     That predicts which sub-rules are worth having, and the measurement confirms it:
 
-        raw gap hits (2+ spaces before a lowercase letter):   2605
-        article / preposition sub-rule:                         51 specs, ALL line wraps, zero genuine
-        bracket-opens-on-comma:                                  4 specs
-        possessive-then-gap:                                     2 specs
+      raw gap hits (2+ spaces before a lowercase letter):   2605
+      article / preposition sub-rule:                         51 specs, ALL line wraps, zero genuine
+      bracket-opens-on-comma:                                  4 specs
+      possessive-then-gap:                                     2 specs
 
     THE 51 ARE THE POINT. Every one is a wrap landing after "the", "a", "with", "of". A gap after an article is precisely what a wrapped line looks like, so that rule cannot discriminate in principle, not merely in this corpus. It should not be implemented.
 
@@ -88,18 +88,18 @@ comments:
 
     THE FINAL CANDIDATE SET, from 4172 parseable specs:
 
-        bracket-opens-on-comma   BUG-78     a regex literal in a shell snippet    legitimate
-                                 TASK-463   "multi-tool (,)" - a deliberate case  legitimate
-                                 TASK-676   "(, RealPhaseDriver)"                 GENUINE HOLE
-                                 TASK-1-171 this finding quoting TASK-676         self-reference
-        possessive-then-gap      TASK-675   "pr_ship_create_pr's  through"        GENUINE HOLE
-                                 TASK-1-171 this finding quoting TASK-675         self-reference
+      bracket-opens-on-comma   BUG-78     a regex literal in a shell snippet    legitimate
+                               TASK-463   "multi-tool (,)" - a deliberate case  legitimate
+                               TASK-676   "(, RealPhaseDriver)"                 GENUINE HOLE
+                               TASK-1-171 this finding quoting TASK-676         self-reference
+      possessive-then-gap      TASK-675   "pr_ship_create_pr's  through"        GENUINE HOLE
+                               TASK-1-171 this finding quoting TASK-675         self-reference
 
     Four distinct specs excluding this finding's own quotations, two of them genuine. Fifty percent on a set a person reads in seconds, from a corpus of 2605 raw gaps. That is a usable detector, and it is small enough to run as a lint rather than an investigation.
 
-    ONE PROPERTY WORTH NOTING FOR WHOEVER IMPLEMENTS IT: this finding appears under both sub-rules because it quotes the damaged text. Any detector run over a store containing its own findings will match them. Exclude self-references by spec id, or accept a known constant of noise equal to the number of findings that quote holes.
+    ONE PROPERTY WORTH NOTING FOR WHOEVER IMPLEMENTS IT: this finding appears under both sub-rules because it quotes the damaged text. Any detector run over a store containing its own findings will match them. Exclude self-references by spec id. The alternative previously offered here - accepting a known constant of noise - is WITHDRAWN 2026-09-20 20:52: the floor is not constant. It is monotone and unbounded, rising every time anyone works on this finding, because discussing the detector requires quoting an instance. Measured 8 at 20:47 and 11 at 20:50, raised by the act of recording that it was 8. There is no acceptable version.
   created_at: 2026-09-21T03:23:51.142028019Z
-  modified_at: 2026-09-21T03:23:51.142028019Z
+  modified_at: 2026-09-21T03:49:25.394634861Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 - id: 01a0c211-cd8e-7340-abe1-11100fb35487
   author: joe
