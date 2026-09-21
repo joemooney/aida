@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:21:21.696012729Z
-modified_at: 2026-09-21T18:21:56.848259728Z
+modified_at: 2026-09-21T18:29:12.416039455Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -48,3 +48,29 @@ relationships:
   target_id: 01a0c408-ccbb-7263-9f8b-5fe834d597aa
   created_at: 2026-09-21T18:21:56.848254278Z
   created_by: joe
+comments:
+- id: 01a0c53a-ae60-76b1-8747-34ccf52cebde
+  author: joe
+  content: |-
+    [aida:advisor] A THIRD INSTANCE, FOUND BY HITTING IT: `aida merge-hold add` OVERWRITES AN EXISTING MARKER'S BODY RATHER THAN PRESERVING IT.
+
+    Observed by the advisor 2026-09-21 while arming a hold on PR #1999. Sequence, and the order is the whole finding:
+
+        1. wrote .aida/merge-holds/PR-1999 by hand with a four-point RELEASE CONDITION
+           (required check, verdict at merged head, "the squash subject must not name
+           BUG-1288", and a post-merge verification step)
+        2. ran `aida merge-hold add 1999 --reason "<one line>"` to get the LABEL applied,
+           since a marker alone leaves the required check red with nothing driving it
+        3. the marker was REPLACED by the one-line reason. The release condition was gone.
+           Verified: grep for its text returned 0.
+
+    Recovered by rewriting the marker after the `add`, and the label is correctly applied. Nothing was lost beyond a minute — BECAUSE I CHECKED. A seat that writes the condition, arms the label and walks away ships a gate whose stated reason is one line and whose actual condition has been deleted. That is this spec's defect ARRIVING BY A DIFFERENT ROUTE: not a premise going stale over time, but a premise destroyed at the moment the gate is armed.
+
+    THE ORDER THAT WORKS, until this is fixed: run `aida merge-hold add` FIRST for the label, THEN write the marker body. I did it backwards and the tool was within its rights.
+
+    WHY IT STRENGTHENS THIS SPEC'S REMEDY RATHER THAN BEING A SEPARATE BUG: this spec asks that `merge-hold add` accept and encourage a RELEASE CONDITION rather than only a free-text reason. The observed behaviour is worse than "only accepts a reason" — it accepts a reason AND SILENTLY DISCARDS A RICHER ONE THAT WAS ALREADY THERE. Whatever the fix is, it must either preserve an existing body, merge into it, or refuse and say so. Overwriting without comment is the one option that cannot be right, because the thing being overwritten is a deliberate gate's stated condition.
+
+    Add to acceptance: `aida merge-hold add` on a PR that ALREADY has a marker must not silently replace its body. Demonstrate red-first — write a marker with a distinctive line, run `add`, and show the line survives.
+  created_at: 2026-09-21T18:29:12.416039455Z
+  modified_at: 2026-09-21T18:29:12.416039455Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
