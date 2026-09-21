@@ -76446,6 +76446,18 @@ mod bug_1452_refusal_aftermath_tests {
     use super::*;
     use aida_core::db::DatabaseBackend;
 
+    /// Criterion 5 asks for the aftermath OF A VERDICT, so the test drives
+    /// `handle_review_record` and asserts what the RECORDING PATH did. The
+    /// earlier version called `write_hold` and `shelve_spec_on_failure` itself
+    /// and then asserted they had run — which proved only that two primitives
+    /// work, and would have kept passing if the recording path stopped calling
+    /// either one.
+    ///
+    /// `sha` and `branch` are passed explicitly so the call does not reach the
+    /// forge for a head or the checkout for a branch: the forge lookup is
+    /// skipped when `sha` is present, and `current_branch_at` only runs when
+    /// `branch` is None.
+    // trace:BUG-1452 | ai:claude
     #[test]
     fn refusal_aftermath_is_parked_held_and_awaiting_visible() {
         let root = tempfile::tempdir().unwrap();
@@ -76469,21 +76481,55 @@ mod bug_1452_refusal_aftermath_tests {
         backend.add_requirement(req).unwrap();
         drop(backend);
 
-        merge_hold::write_hold(root.path(), 1452, "RequestChanges at abc123").unwrap();
-        let shelved = shelve_spec_on_failure(
-            root.path(),
-            "BUG-14520",
-            "reviewer",
-            3,
-            "verdict:request-changes",
-            "fix the regression",
-            "resume after addressing review findings",
-        )
-        .unwrap()
-        .expect("Done review refusal must be shelvable");
-        assert_eq!(shelved.kind, "verdict:request-changes");
-        assert!(merge_hold::read_hold(root.path(), 1452).is_some());
+        // BOTH roots must point at the tempdir, and this is not belt-and-braces.
+        // The hold is written to `protection_root`, which prefers
+        // AIDA_PROJECT_ROOT and only falls back to the resolved project root.
+        // A seat shell has AIDA_PROJECT_ROOT set to the REAL repository, so
+        // setting AIDA_DRIVE_ROOT alone sends the hold, the verdict and a
+        // `gh` label call into the live repo and a live PR. Verified the hard
+        // way: an earlier version of this test wrote .aida/merge-holds/PR-1452
+        // and labelled the real merged PR #1452.
+        //
+        // Pointing AIDA_PROJECT_ROOT at the tempdir also disarms the forge
+        // call for free — `sync_label` resolves the forge from that root, finds
+        // none in a bare temp directory, and returns Ok without shelling out.
+        //
+        // EnvVarsGuard, not two EnvVarGuards: each holds the process-global
+        // ENV_LOCK for its lifetime and the lock is not reentrant, so a second
+        // one deadlocks. The multi-key guard takes the lock once.
+        let root_str = root.path().to_str().expect("tempdir path is utf-8");
+        let _roots = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_DRIVE_ROOT", root_str),
+            ("AIDA_PROJECT_ROOT", root_str),
+        ]);
 
+        handle_review_record(
+            "BUG-14520",
+            "request-changes",
+            Some("abc123"),
+            Some("bug-14520-work"),
+            Some("the regression is still open"),
+            &["fix the regression".to_string()],
+            Some(1452),
+        )
+        .expect("recording a refusing verdict must succeed");
+
+        // 1. the PR is HELD — written by the recording path, not by this test
+        assert!(
+            merge_hold::read_hold(root.path(), 1452).is_some(),
+            "a refusing verdict must leave a merge-hold on the PR"
+        );
+
+        // 2. the verdict is recorded and blocks done
+        let recorded = review_verdict::read_recorded_verdict(root.path(), "PR-1452")
+            .or_else(|| review_verdict::read_recorded_verdict(root.path(), "BUG-14520"))
+            .expect("the verdict must be readable after recording");
+        assert!(
+            recorded.kind.blocks_done(),
+            "a request-changes verdict must block done"
+        );
+
+        // 3. the spec is PARKED, not Done, and visible to `aida awaiting`
         let backend = aida_core::CachedGitBackend::open(
             &store,
             &aida_core::CachedGitBackend::default_cache_path(&store),
@@ -76493,10 +76539,15 @@ mod bug_1452_refusal_aftermath_tests {
             .get_requirement_by_spec_id("BUG-14520")
             .unwrap()
             .unwrap();
+        assert_ne!(
+            parked.status,
+            aida_core::RequirementStatus::Done,
+            "a refused spec must not remain Done — that is the defect this spec is about"
+        );
         assert_eq!(parked.status, aida_core::RequirementStatus::NeedsAttention);
         assert!(
             parked.failure_reason.is_some(),
-            "failure_reason-backed NeedsAttention is counted by `aida awaiting` as shelved work"
+            "failure_reason-backed NeedsAttention is what `aida awaiting` counts as shelved work"
         );
     }
 }
