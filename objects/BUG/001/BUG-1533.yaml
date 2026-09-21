@@ -33,12 +33,32 @@ description: |-
   3. `aida mailbox inbox` displays the authoring seat for every message, so a reader never has to infer it from body prose.
   4. A test asserts two seats sending from the same shell user produce records distinguishable in the envelope.
   5. Existing records are left as they are. They are the evidence for this bug and a backfill would guess at authorship -- the same mark-do-not-repair call TASK-1-171 requires.
+
+  CORRECTION 2026-09-20, after the reviewer reproduced this and produced the tally I had not. My framing above -- "the envelope carries nothing" and "a recipient cannot tell which agent wrote a message" -- is TOO BROAD and should not be implemented against. Full sender tally, 902 messages, verified independently:
+
+    joe                340     claude-reviewer-1  236
+    claude-product-1   207     advisor             94
+    product             15     codex 2, aida-session-reap 1, agy 1
+
+  So 562 of 902 messages DO carry a distinct seat identity. The envelope works for most mail. My 216-of-336 measurement was correct; the sweeping sentence I attached to it was not.
+
+  THE DEFECT IS NARROWER AND, IN ONE RESPECT, WORSE THAN I WROTE:
+
+  1. ONE BUCKET IS POLLUTED. `joe` (340) mixes the human operator with at least one agent seat. 216 of those carry no role tag.
+
+  2. ONE SEAT HAS TWO ENVELOPE IDENTITIES. The advisor's mail splits across `joe` (124, tagged [aida:advisor]) and `advisor` (94, untagged). Reconciling those two sets requires ASSUMING they are the same writer -- which is precisely the assumption this bug says cannot be made. So the tagged 124 are also unattributable from the envelope; they merely carry a prose hint. This is the sharper problem and I missed it entirely.
+
+  3. THE IN-BODY TAG IS NOT A FIELD. claude-reviewer-1 splits 197 untagged / 39 tagged, and a tag can be produced by any body opening with a bracketed word -- the reviewer reports one of theirs reading "merge-hold". A prose prefix must not be treated as a seat identifier by any fix.
+
+  ACCEPTANCE CRITERIA 1-5 STAND AS WRITTEN. They were aimed at the right target; criterion 1 (authoring seat in the envelope, resolved at send time) fixes all three points above. Criterion 4 should additionally assert that ONE seat produces ONE envelope identity across a session -- the two-identity case is not covered by "two seats sharing a shell user".
+
+  METHOD NOTE, third instance tonight of the same error shape: I measured something narrow and true (216 of 336 from=joe carry no tag) and stated something broad and false (the envelope carries nothing). Same as asserting 419 files were not legacy from two live instances, and sizing a per-call guard against a corpus-wide 77 percent. The measurement was never wrong; the sentence wrapped around it was.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:25:43.763465229Z
-modified_at: 2026-09-21T05:31:49.476850717Z
+modified_at: 2026-09-21T05:32:20.286723483Z
 req_type: Bug
 tags:
 - mailbox identity attribution substrate-truth severity:operational
