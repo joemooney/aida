@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-21T12:22:17.353486676Z
+modified_at: 2026-09-21T12:26:24.789063053Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -282,5 +282,33 @@ comments:
   content: 'PRIN-7 names this bug as one of its two enforcement paths. The principle is that merge-readiness is a CONJUNCTION of two independently-falsifiable predicates - every REQUIRED check passes, AND a recorded verdict names the CURRENT head - and that a surface must report them separately because neither implies the other. This spec is predicate 2: comparing reviewed_sha against the head rather than matching on verdict kind alone. BUG-1481 is predicate 1. The live instance behind predicate 2 is PR #2048 on 2026-09-21: every required check green against a head no reviewer had ever seen, verdict naming a commit that was no longer the head. Nothing in the check rollup could surface that, because the rollup is computed over the head and the verdict is not.'
   created_at: 2026-09-21T12:22:17.353486676Z
   modified_at: 2026-09-21T12:22:17.353486676Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3ee-8895-7953-8659-3403bce5cecf
+  author: joe
+  content: |-
+    SCOPE NARROWED ON EVIDENCE: THE WRITER IS FIXED, WHAT REMAINS IS A MIGRATION. Measured by this advisor on 2026-09-21 05:26 MST, not relayed.
+
+        the 25 most-recently-written verdict files    25 carry reviewed_sha, 0 do not
+        oldest of those 25                            2026-09-21 01:10
+
+    BUG-1467 - "make reviewer verdict provenance enforceable" - merged as 066c4ceacb (#2037) and is Completed. Every verdict written since has provenance. So this spec's title clause "aida review record --pr writes a PR handshake with no provenance" describes a path that no longer writes that way.
+
+    WHAT ACTUALLY REMAINS, re-measured on the grown corpus (the title's 452 of 481 was measured when the corpus was 481 files):
+
+        total verdict files            576
+        WITH reviewed_sha              109
+        lacking reviewed_sha           467   <- this spec's population, grown from 452
+          ... carrying `head` instead   43
+          ... carrying no sha at all   424
+
+    That is a MIGRATION question - what to do with 467 existing files - not a writer question. The two are different work with different risk: a writer fix prevents new bad records, a migration decides whether to backfill, mark unverifiable, or leave and teach readers to refuse.
+
+    BUG-1467 IS A COMPLEMENT, NOT A DUPLICATE, and I checked rather than assumed. BUG-1467 was the HAND-WRITTEN path: a reviewer seat launched outside the drain had no supported command and wrote JSON by hand. This spec is the `aida review record --pr` handshake path. Different writers, same missing fields. Both are now closed on the write side; only this one has a corpus left behind.
+
+    THE 43 ARE NOT A SEPARATE LEGACY SHAPE, and this corrects a characterisation I wrote into BUG-1538 and BUG-1546. They are 9% of this spec's own 467. The bulk - 424 files - carry no sha under any name, in shapes like ['mode','summary','verdict'] (118) and ['findings','mode','summary','verdict'] (115). The interesting number was never that 43 files use a different key; it is that 467 carry nothing, and that is this spec.
+
+    SUGGESTED RE-TITLING for whoever picks this up: the spec is now "467 existing verdict files have no reviewed_sha and there is no decision about them", and the acceptance should be a migration decision rather than a writer change. I have not re-titled it myself - a title carrying a stale denominator is still the title the finding was filed under, and renaming it here would detach it from the discussion trail.
+  created_at: 2026-09-21T12:26:24.789063053Z
+  modified_at: 2026-09-21T12:26:24.789063053Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
