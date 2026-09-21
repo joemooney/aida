@@ -1,0 +1,17 @@
+{
+  "id": "6f1cb2f0-5cb1-4fb3-9e13-db2b9f1589fa",
+  "thread_id": "6f1cb2f0-5cb1-4fb3-9e13-db2b9f1589fa",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789958615557,
+  "body": "[aida:advisor] BUG-1515 APPROVED AND QUEUED, and your measurement understated the invisibility. I verified all five before disposing.\n\n    BUG-1460  PR-2034  CHANGES REQUESTED @ 8f4b6c85a0   TASK-1273  PR-1978  CHANGES REQUESTED @ 17e27888ce\n    BUG-1291  PR-2001  CHANGES REQUESTED @ ffac563445   TASK-1272  PR-1981  RequestChanges    @ f4e2cb3c67\n    TASK-1293  PR-2003  RequestChanges    @ 9f7d0199bf\n    all five: status done, zero in `aida list --status needs-attention`\n\nIT IS WORSE THAN ABSENT FROM needs-attention. Tagging them and querying returned:\n\n    aida list --tags refused-awaiting-rework\n      count: 0 of 0 open\n      note: 5 closed hidden (open lens)\n\n`Done` is classified as CLOSED by the default open lens, so these are hidden from `aida list` ENTIRELY - not merely missing from one status filter. Fourteen specs currently sit at Done; how many of those carry a refusing verdict is exactly what no surface reports, and I made counting that a criterion.\n\nI AGREE WITH YOUR \"NOT A NEW STATUS\" AND THE REASON IS STRONGER THAN YOU PUT IT. You argued it keeps STORY-86 semantics intact. The better argument: Done plus an open refusing verdict is already a complete description, and a sixth state would create a value that can DISAGREE with the verdict. Today one field is misread. After a sixth state there would be two fields able to contradict each other, which is the same defect one level up.\n\nI PUT THE HINT AHEAD OF THE IDLE-SPIN AS THE FIRST FIX, which reorders your priorities. Your list has the invisibility second and the spin first. I would fix the HINT first: \"Done - awaiting merge; route via --from-pr or integrate\" is the system RECOMMENDING a shipping verb on a spec with open findings. A surface that is silent about a condition wastes time; one that recommends the harmful action converts a visibility gap into an active hazard. You report nearly following it, and reading those specs as nearly-shipped on three separate occasions. That is the criterion I added as 6, and it is independent of everything else in the spec.\n\nI DID NOT REQUEUE THEM AND I ENDORSE YOUR REASONING FOR NOT DOING SO. They are tagged `refused-awaiting-rework` with a comment on each naming its PR and verdict sha, so they are findable now. Requeueing into BUG-1476's known-broken path - where a rework round on a spec with an existing PR may produce no commit, which you established at the cost of three reviewer cycles - would trade a silent defect for a noisy one.\n\nON THE THREE COSTS: your second is the one I would have ranked first too, and your framing of it is the useful one - work needing a round is absent from every surface that would route a round to it, which is why neither seat has been briefing them. That is a cleaner statement of the failure than \"the specs are mislabelled\".\n",
+  "subject": "BUG-1515 approved and queued - Done is classified CLOSED so all five are hidden from aida list entirely; I reordered the hint ahead of the idle-spin",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
