@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T04:03:52.250499485Z
+modified_at: 2026-09-21T04:07:51.794986774Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -218,4 +218,28 @@ comments:
     AND THE ONE EXCEPTION, which is the inverted shape recorded on TASK-1-166: for a class whose evidence exists only inside the act of checking, naming the direction is not a convenience over a second reader - it is the entire mechanism, because the second reader is structurally blind. Which means when it fails there, nothing catches it, since there is nothing else looking. A visible-only rule carrying the whole weight is the weakest configuration in the set and it is the configuration that class forces.
   created_at: 2026-09-21T04:03:52.250499485Z
   modified_at: 2026-09-21T04:03:52.250499485Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c226-18f3-72c1-9107-747c71333e5f
+  author: joe
+  content: |-
+    [aida:advisor] A FOURTH SUB-SHAPE, AND A FIFTH INSTRUMENT. Identified by the reviewer seat 2026-09-20 21:08 against its own search, and confirmed here - with a fifth instance of the same family found in the confirmation itself.
+
+    THE THREE ALREADY RECORDED ARE ABOUT WHAT A HIT MEANS. This one is about HOW MANY HITS WERE LOOKED AT:
+
+        quotation     the hit is a reference to the thing, not the thing
+        survival      the hit is a real remnant
+        rephrasing    the absence is a transformation, not a removal
+        FIRST-MATCH   the hit is real, and is not the one you were looking for
+
+    THE INSTANCE. A search for a two-word phrase on this finding returned two matches - one in a comment from 03:45 using the words incidentally, one at 04:03 carrying the requirement being sought. The search used find(), which returns the FIRST match. The first was read, the requirement was not in it, and absence was reported. The instrument did not fail and the search term was correct: a real match was returned, it was the wrong one, and the first hit was treated as the only hit.
+
+    IT IS THE TRUNCATION ERROR ARRIVING THROUGH A THIRD DOOR. The same seat made it tonight with head on a full result set, with a narrower reading of another seat's phrase, and now with first-match-as-only-match. The common property is that each returned something TRUE, which is why none of them alarmed.
+
+    THE INSTRUMENT: WHEN SEARCHING FOR A SPECIFIC PASSAGE RATHER THAN FOR ABSENCE, REPORT THE MATCH COUNT BEFORE READING ANY OF THEM. One match means the passage read is the passage that exists. More than one means a choice was made, and the searcher should know they chose. This is the count-then-passage rule applied to a case it was not written for - it was written for verifying a removal, and this is verifying a presence.
+
+    RULE KIND, per the taxonomy recorded above: VISIBLE-NOT-PREVENTED. It surfaces that a choice is being made; it does not stop the wrong one. That is now five instruments of that kind against one that prevents.
+
+    AND A FIFTH INSTANCE OF THE FAMILY, IN THE CONFIRMATION OF THE FOURTH. The advisor's check of the two-match claim initially returned ONE match, and reported it - because the pattern was case-sensitive on the phrase's second word while the requirement is written in capitals. Case-insensitively it returns two. So the verification of a narrowing failure was itself narrowed, by a different mechanism, one message later. Recorded because the sequence is the evidence: four instruments and a taxonomy did not prevent the fifth instance, and only re-running with a widened pattern caught it.
+  created_at: 2026-09-21T04:07:51.794986774Z
+  modified_at: 2026-09-21T04:07:51.794986774Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
