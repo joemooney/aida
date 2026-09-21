@@ -115,8 +115,72 @@ pub(crate) fn refresh_agent_packs(
     if let Some(prompts) = codex_prompts_refresh(codex_prompts_dest) {
         packs.push(prompts);
     }
+    if let Some(roles) = starter_roles_refresh() {
+        packs.push(roles);
+    }
     packs.retain(|p| p.report != RefreshReport::default());
     packs
+}
+
+/// Add newly shipped guidance to an already-installed starter role without
+/// rewriting anything the operator owns. Role files predate scaffold checksum
+/// markers, so the safe migration is deliberately narrower than `refresh_file`:
+/// append only an absent `system_prompt`; an existing value wins, and all other
+/// bytes (including comments and custom purpose text) remain untouched.
+// trace:BUG-1464 | ai:codex
+fn starter_roles_refresh() -> Option<PackRefresh> {
+    let roles_dir = crate::global_roles_dir()?;
+    let mut report = RefreshReport::default();
+
+    for (name, _, shipped_prompt) in crate::STARTER_ROLES {
+        let Some(shipped_prompt) = shipped_prompt else {
+            continue;
+        };
+        let path = roles_dir.join(format!("{name}.toml"));
+        if path
+            .symlink_metadata()
+            .map(|m| m.file_type().is_symlink())
+            .unwrap_or(false)
+        {
+            report
+                .skipped_symlink
+                .push(PathBuf::from(format!("{name}.toml")));
+            continue;
+        }
+        let Ok(existing) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(role) = toml::from_str::<crate::RoleState>(&existing) else {
+            report
+                .kept_unmarked
+                .push(PathBuf::from(format!("{name}.toml")));
+            continue;
+        };
+        if role.system_prompt.is_some() {
+            continue;
+        }
+
+        let encoded = toml::Value::String((*shipped_prompt).to_string()).to_string();
+        let separator = if existing.ends_with('\n') { "" } else { "\n" };
+        let updated = format!("{existing}{separator}system_prompt = {encoded}\n");
+        if let Err(error) = crate::write_atomic(&path, &updated) {
+            eprintln!(
+                "  {} could not refresh starter role {}: {}",
+                "Warning:".yellow(),
+                path.display(),
+                error
+            );
+            continue;
+        }
+        report.refreshed.push(PathBuf::from(format!("{name}.toml")));
+    }
+
+    (report.changed() > 0 || !report.kept_unmarked.is_empty() || !report.skipped_symlink.is_empty())
+        .then(|| PackRefresh {
+            label: "Starter roles".to_string(),
+            location: roles_dir.display().to_string(),
+            report,
+        })
 }
 
 /// `[scaffold] agents_md_block` in `.aida/config.toml` — the opt-out for
@@ -298,6 +362,51 @@ pub(crate) fn print_refresh_summary(packs: &[PackRefresh]) {
 mod tests {
     use super::*;
     use aida_core::scaffolding::wrap_with_aida_header;
+
+    #[test]
+    fn starter_role_refresh_adds_missing_prompt_and_preserves_user_prompt() {
+        let tmp = tempfile::tempdir().unwrap();
+        let roles = tmp.path().join(".aida/roles");
+        std::fs::create_dir_all(&roles).unwrap();
+        let advisor = roles.join("advisor.toml");
+        let legacy = r#"# operator comment
+name = "advisor"
+purpose = "My edited purpose"
+created_at = "2026-09-01T00:00:00Z"
+last_active_at = "2026-09-01T00:00:00Z"
+global = true
+"#;
+        std::fs::write(&advisor, legacy).unwrap();
+        let home = tmp.path().to_str().unwrap();
+        let _env = crate::test_env::EnvVarsGuard::set(&[("HOME", home), ("AIDA_TEST_HOME", home)]);
+
+        let packs = refresh_agent_packs(tmp.path(), Some(&tmp.path().join("no-prompts")));
+        let role_pack = packs
+            .iter()
+            .find(|pack| pack.label == "Starter roles")
+            .expect("legacy role should be refreshed");
+        assert_eq!(
+            role_pack.report.refreshed,
+            vec![PathBuf::from("advisor.toml")]
+        );
+        let refreshed = std::fs::read_to_string(&advisor).unwrap();
+        assert!(refreshed.starts_with(legacy), "existing role bytes changed");
+        assert!(refreshed.contains("system_prompt ="));
+        assert!(refreshed.contains("rework-brief-craft.md"));
+
+        let prompt_line = refreshed
+            .lines()
+            .find(|line| line.starts_with("system_prompt ="))
+            .unwrap();
+        let custom = refreshed.replace(
+            prompt_line,
+            "system_prompt = \"My custom operating instructions\"",
+        );
+        std::fs::write(&advisor, &custom).unwrap();
+        let packs = refresh_agent_packs(tmp.path(), Some(&tmp.path().join("no-prompts")));
+        assert!(packs.iter().all(|pack| pack.label != "Starter roles"));
+        assert_eq!(std::fs::read_to_string(&advisor).unwrap(), custom);
+    }
 
     /// A refresh over a project with an installed, pristine-but-stale Claude
     /// skill overlays it; an edited sibling and a symlinked sibling survive.
