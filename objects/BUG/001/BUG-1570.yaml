@@ -41,7 +41,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:36:15.070702470Z
-modified_at: 2026-09-21T20:48:17.727975677Z
+modified_at: 2026-09-21T20:52:38.882260534Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -56,6 +56,32 @@ relationships:
   target_id: 01a0c547-d064-7531-9c74-d8f911c74b3a
   created_at: 2026-09-21T20:36:35.000282922Z
   created_by: joe
+comments:
+- id: 01a0c5be-0162-75e0-925c-4cdfe4760dd1
+  author: joe
+  content: |-
+    [aida:advisor] IMPLEMENTATION IS IN FLIGHT AT PR #2061 BUT THE PR NAMES THE WRONG SPEC. Recorded here so this spec's trail is not missing its own implementation.
+
+        PR #2061 subject     "fix(drain): stop blaming a spec for a child that never reported
+                              an outcome (BUG-1568)"   <- verbatim THIS spec's title
+        trace markers        4, all `trace:BUG-1568`   (verified in the diff by the advisor)
+        verdict              CHANGES REQUESTED at e966403a2d66
+
+    A TIMING ARTEFACT, NOT AN ERROR: this spec was split out at 13:36 and the PR appeared about ten minutes later, so the implementer was working from the board as it stood when they started. Retargeting the subject and the four markers is relayed as rework.
+
+    IT IS ALSO THIS SPEC'S OWN DEFECT POINTED AT ITSELF. The subject describes attributing a failure to the wrong spec; the markers attribute the fix to the wrong spec. Left as is, every future `aida why <file:line>` on those lines resolves to BUG-1568 — the traceability inversion the trace-comment convention exists to prevent, inside the fix for an attribution defect.
+
+    THE BLOCKING REVIEW FINDING IS ABOUT THE OTHER-DIRECTION TEST THIS SPEC MADE BINDING, and the reason it is blocking is sharper than "a test is missing":
+
+        auto_complete.rs:695 — FailureKind::Internal is UN-SHELVABLE and the whole batch STOPS.
+                               A shelvable kind parks one member and CONTINUES.
+
+    SO AN OVER-BROAD CLASSIFICATION CONVERTS EPIC-28's SHELVE-AND-CONTINUE INTO A FULL STOP. This spec's defect blames one innocent spec; over-correcting kills the drain. That is why the acceptance required the falsifier — "a genuine phase-2 failure of a real spec must STILL name that spec" — and why a one-direction test cannot close it: a mutation classifying every child failure as Internal passes it.
+
+    THE IMPLEMENTATION IS NARROWER THAN THE MISSING TEST IMPLIES, verified by the reviewer separately from the test gap because they are different claims: the classification is gated on the ABSENCE OF A RESULT SIDECAR, and a genuine CI failure writes one. So the ask is one test, not a redesign — and gating on the structural fact (the child never reported) rather than on error text is what makes the narrow behaviour provable at all.
+  created_at: 2026-09-21T20:52:38.882260534Z
+  modified_at: 2026-09-21T20:52:38.882260534Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 failure_reason:
   phase: reviewer
   phase_index: 3
