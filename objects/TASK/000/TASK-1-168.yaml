@@ -41,7 +41,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:42:58.222497613Z
-modified_at: 2026-09-21T02:50:07.418474971Z
+modified_at: 2026-09-21T02:51:44.224505604Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -109,3 +109,35 @@ comments:
   created_at: 2026-09-21T02:50:07.418474971Z
   modified_at: 2026-09-21T02:50:07.418474971Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c1e0-66e0-7412-a5af-234f4665877f
+  author: joe
+  content: |-
+    [aida:advisor] BOTH READINGS OF q WERE PARTIAL. Read lib.rs:43656 read_queue_depth and the queue files 2026-09-20 19:53.
+
+    WHAT IS ACTUALLY THERE. q is keyed on BOTH user AND role, not one or the other:
+
+        lib.rs:43665  let user = resolve_queue_user(&store_path, &current_user_id(None));
+        lib.rs:43668  queue_path = registry/queues/<user>.yaml
+        lib.rs:43682  entries.filter(|e| e.for_role == want)
+
+    So it reads ONE file - the caller's own - and filters it by the caller's effective role. The reading that it is role-keyed and not user-keyed is incomplete; so was the reading that it is the user-keyed BUG-1513 mechanism. It is both, composed, and neither surface says so.
+
+    MY q:0 WAS CORRECT, NOT A FAILED READ. AIDA_SESSION_ROLE=advisor; joe.yaml holds 3 entries, all for_role=implementer; advisor depth is therefore 0. The meter was right and the hypothesis that it might be an error was wrong.
+
+    THE unwrap_or(0) CONCERN IS REAL BUT NARROWER AND SHARPER THAN STATED. The function deliberately distinguishes the two cases, with a comment saying so (trace:BUG-774): a MISSING queue file returns Vec::new() - documented as 'absent own-queue file is zero own items, NOT unknown' - while a file that exists and will not parse returns None. So the author made exactly the distinction PRIN-5 requires. The call site at statusbar_cmd.rs:174 then discards it with unwrap_or(0). That is worse than an author failing to distinguish absent from unknown: the distinction was made, carried, and thrown away one frame up.
+
+    THE LARGER FINDING, WHICH NEITHER OF US HAD. q and aida queue list read DIFFERENT DATA SETS, not the same data through different filters:
+
+        registry/queues/  claude-product-1.yaml  16 reviewer
+                          codex-advisor-1.yaml    1 reviewer
+                          gitlab-smoke.yaml       1 implementer
+                          joe.mooney.yaml         4 with NO for_role AT ALL
+                          joe.yaml                3 implementer
+                          role%3Aimplementer.yaml 66  (56 implementer, 10 reviewer)
+
+    read_queue_depth reads ONE file. aida queue list --user joe returns 23 rows while joe.yaml holds 3, so it aggregates across files. The two surfaces are not differently scoped views of one set - they have different sources. No amount of labelling the scope reconciles them; that is a deeper fix than this spec currently asks for.
+
+    AND A SEPARATE DEFECT VISIBLE IN THE SAME LISTING: joe.mooney.yaml holds 4 entries with NO for_role field. Those cannot match any role filter, so they are invisible to every role-scoped read including this meter and including queue list --for X. They are also under a second identity for the same person - joe versus joe.mooney - which is TASK-845, the person-to-alias map, still open. Four queue entries currently reachable by nothing.
+  created_at: 2026-09-21T02:51:44.224505604Z
+  modified_at: 2026-09-21T02:51:44.224505604Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
