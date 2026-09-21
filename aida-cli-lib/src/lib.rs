@@ -88295,18 +88295,40 @@ fn try_open_orchestrator_pr_for_no_pr_worktree(
     // trace:BUG-893 trace:BUG-1037 | ai:codex
     let ahead = branch_commits_ahead_main(worktree, branch).unwrap_or(0);
     if ahead == 0 {
-        return None;
+        // BUG-1485: `ahead == 0` does NOT mean there is nothing to recover. It
+        // is also what a MISSING WORKTREE produces: `git -C <gone>` fails, the
+        // Option is None, and `unwrap_or(0)` flattens "could not look" into
+        // "looked and found nothing". Phase 2 may have already pushed the
+        // branch and torn the worktree down, in which case the work is safe on
+        // `origin/<branch>` and perfectly recoverable — but phase 1 asked the
+        // wrong repository and concluded there was nothing there, so recovery
+        // fell through to the generic "run /aida-pr inside the session"
+        // failure, against a session that no longer exists.
+        //
+        // Phase 3 already solved this for its own NoPr case (BUG-895). Reuse
+        // that helper rather than re-deriving the logic: it verifies
+        // `origin/<branch>` and the origin default ref, counts ahead between
+        // them, and opens the PR from the pushed ref WITHOUT pushing again.
+        // It returns None when the branch genuinely is not ahead, so the
+        // no-work case still falls through exactly as before.
+        // trace:BUG-1485 | ai:claude
+        return try_open_orchestrator_pr_for_no_pr_pushed_branch(project_root, branch, forge_kind);
     }
     match open_orchestrator_pr_for_implementer_worktree(project_root, worktree, branch, forge_kind)
     {
         Ok(pr) => Some((ahead, pr)),
         Err(e) => {
             eprintln!(
-                "  {} could not auto-open a PR for the committed work \
-                 ({e:#}) — falling back to punt/fail",
+                "  {} could not auto-open a PR from the implementer worktree \
+                 ({e:#}) — retrying from the pushed branch",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow()
             );
-            None
+            // The worktree exists and is ahead, so the failure was the push or
+            // the forge call. If the branch had already reached origin, the
+            // pushed-branch path can still succeed; if it never did, this
+            // returns None and the caller falls back to punt/fail as before.
+            // trace:BUG-1485 | ai:claude
+            try_open_orchestrator_pr_for_no_pr_pushed_branch(project_root, branch, forge_kind)
         }
     }
 }

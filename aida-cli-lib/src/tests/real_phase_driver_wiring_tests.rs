@@ -5,8 +5,9 @@ use super::{
     list_leases, orchestrated_lease_receipt_path, orchestrator_phase_child_env,
     orchestrator_pr_title_and_body, parse_agent_gates_from_config,
     prepare_orchestrated_lease_receipt, publish_orchestrated_lease_receipt_from_env,
-    pushed_branch_commits_ahead_default, watchdog_failure_with_committed_work, AgentGateOnFail,
-    RealPhaseDriver, SessionLease, ORCHESTRATED_LEASE_RECEIPT_ENV,
+    pushed_branch_commits_ahead_default, try_open_orchestrator_pr_for_no_pr_worktree,
+    watchdog_failure_with_committed_work, AgentGateOnFail, RealPhaseDriver, SessionLease,
+    ORCHESTRATED_LEASE_RECEIPT_ENV,
 };
 use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure, PhaseReconcile};
 use aida_core::{
@@ -1104,5 +1105,147 @@ exit 1
     assert!(
         list_leases(root).is_empty(),
         "released empty launch must not leave a scope-blocking lease"
+    );
+}
+
+/// Build a repo whose `origin` carries BOTH a default branch and a pushed
+/// feature branch one commit ahead of it — the exact post-push state phase 2
+/// leaves behind before it tears the implementer worktree down.
+///
+/// `git_repo_with_origin` is not reusable here: it starts directly on
+/// `bug-878` with nothing pushed, so there is no origin default ref to
+/// measure "ahead" against.
+// trace:BUG-1485 | ai:claude
+#[cfg(unix)]
+fn repo_with_pushed_branch_ahead_of_origin_default(
+) -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let remote = tmp.path().join("origin.git");
+    let work = tmp.path().join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    git(tmp.path(), &["init", "--bare", "-b", "main", "origin.git"]);
+    git(&work, &["init", "-q", "-b", "main"]);
+    git(&work, &["config", "user.email", "aida@example.invalid"]);
+    git(&work, &["config", "user.name", "AIDA Test"]);
+    git(
+        &work,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    write_commit(&work, "base.txt", "base\n", "chore: base");
+    git(&work, &["push", "-q", "-u", "origin", "main"]);
+    // `default_branch_of` shells out to a hard-coded `gh` first and only then
+    // probes origin/HEAD, so the probe has to be able to answer.
+    git(&work, &["remote", "set-head", "origin", "main"]);
+    git(&work, &["checkout", "-q", "-b", "bug-878"]);
+    write_commit(
+        &work,
+        "finished.txt",
+        "done\n",
+        "fix: completed implementation",
+    );
+    git(&work, &["push", "-q", "-u", "origin", "bug-878"]);
+    (tmp, work, remote)
+}
+
+/// A `gh` stub that answers `pr create` with a real-shaped URL, so PR recovery
+/// can run to COMPLETION instead of stopping at the forge boundary.
+#[cfg(unix)]
+fn fake_gh_that_opens_pr(dir: &std::path::Path, pr_number: u64) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let path = dir.join("fake-gh");
+    std::fs::write(
+        &path,
+        format!(
+            "#!/usr/bin/env bash\n\
+             if [ \"$1\" = \"--version\" ]; then echo 'gh version test'; exit 0; fi\n\
+             case \"$*\" in\n\
+             \t*\"pr create\"*) echo 'https://github.com/example/aida/pull/{pr_number}'; exit 0 ;;\n\
+             esac\n\
+             exit 1\n"
+        ),
+    )
+    .unwrap();
+    let mut perms = std::fs::metadata(&path).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&path, perms).unwrap();
+    path
+}
+
+/// BUG-1485 F1: post-push PR recovery must not require the recorded worktree
+/// to still exist.
+///
+/// The previous round recovered the BRANCH from the durable receipt and
+/// stopped there. That half was never in dispute. THIS is the disputed half —
+/// what recovery does next, when it proceeds against a worktree that is gone.
+/// Before the fix, `branch_commits_ahead_main` ran `git -C <missing>`, failed,
+/// and `unwrap_or(0)` flattened "could not look" into "looked and found
+/// nothing", so recovery returned None and the drain fell through to a generic
+/// "run /aida-pr inside the session" failure — against a session that no
+/// longer existed.
+// trace:BUG-1485 | ai:claude
+#[cfg(unix)]
+#[test]
+fn post_push_pr_recovery_completes_when_the_recorded_worktree_is_gone() {
+    let (_tmp, work, _remote) = repo_with_pushed_branch_ahead_of_origin_default();
+
+    // The worktree the lease recorded no longer exists — phase 2 removed it.
+    let gone = work.parent().unwrap().join("torn-down-worktree");
+    assert!(!gone.exists(), "fixture must model a MISSING worktree");
+
+    // The work itself is safe on origin, which is the whole point: there is
+    // something to recover, and the old code could not see it.
+    assert_eq!(
+        pushed_branch_commits_ahead_default(&work, "bug-878").unwrap(),
+        1,
+        "fixture must leave origin/bug-878 one commit ahead of origin default"
+    );
+    assert_eq!(
+        branch_commits_ahead_main(&gone, "bug-878"),
+        None,
+        "the old instrument must be blind here — that blindness IS the defect"
+    );
+
+    let fake_gh = fake_gh_that_opens_pr(work.parent().unwrap(), 4242);
+    let _env =
+        crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake_gh.to_str().unwrap())]);
+
+    let recovered = try_open_orchestrator_pr_for_no_pr_worktree(
+        &work,
+        &gone,
+        "bug-878",
+        crate::forge::ForgeKind::GitHub,
+    );
+
+    let (ahead, pr) = recovered.expect(
+        "recovery must complete from the pushed branch when the worktree is gone; \
+         returning None here is the BUG-1485 failure",
+    );
+    assert_eq!(ahead, 1, "the recovered ahead-count must come from origin");
+    assert_eq!(pr, 4242, "the PR number must come from the forge call");
+}
+
+/// The complement, without which the test above is satisfied by a fix that
+/// always reports success: when the branch was never pushed there is genuinely
+/// nothing to recover, and recovery must still decline rather than invent a PR.
+// trace:BUG-1485 | ai:claude
+#[cfg(unix)]
+#[test]
+fn post_push_pr_recovery_declines_when_the_branch_was_never_pushed() {
+    let (_tmp, work, _remote) = repo_with_pushed_branch_ahead_of_origin_default();
+    let gone = work.parent().unwrap().join("torn-down-worktree");
+
+    let fake_gh = fake_gh_that_opens_pr(work.parent().unwrap(), 4242);
+    let _env =
+        crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake_gh.to_str().unwrap())]);
+
+    let recovered = try_open_orchestrator_pr_for_no_pr_worktree(
+        &work,
+        &gone,
+        "branch-that-was-never-pushed",
+        crate::forge::ForgeKind::GitHub,
+    );
+    assert!(
+        recovered.is_none(),
+        "no pushed branch means nothing to recover; got {recovered:?}"
     );
 }
