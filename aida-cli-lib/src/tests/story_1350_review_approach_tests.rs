@@ -110,4 +110,13 @@ fn generate_review_prompt_carries_the_approach_and_says_so_when_absent() {
     );
     assert!(absent.contains("_None recorded._"), "{absent}");
     assert!(!absent.contains("widget.rs"), "{absent}");
+    // The absence PROSE must name the same marker the parser matches. It is
+    // the string that tells a human what to write; if it drifts from the
+    // constant, the system parses one heading while instructing people to
+    // write another — and that instruction is the only place most readers
+    // ever learn the heading.
+    assert!(
+        absent.contains(IMPLEMENTER_APPROACH_MARKER),
+        "the none-recorded note must name the marker the reader matches: {absent}"
+    );
 }

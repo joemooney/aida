@@ -77032,11 +77032,16 @@ fn append_implementer_approach(out: &mut String, comments: &[aida_core::models::
         }
         None => {
             out.push_str("#### Recorded implementer approach\n\n");
-            out.push_str(
+            // The marker comes from the constant here too. Spelling it out
+            // again would make this the THIRD copy — the prose that TELLS a
+            // human what to write, drifting from the parser that reads it, so
+            // a rename would leave the system parsing X while instructing
+            // people to write Y. The coupling test covers this string.
+            out.push_str(&format!(
                 "_None recorded._ The implementer did not leave a comment beginning \
-                 `## Implementer approach`, so this review has no stated intent to \
-                 check the diff against.\n\n",
-            );
+                 `{IMPLEMENTER_APPROACH_MARKER}`, so this review has no stated intent \
+                 to check the diff against.\n\n"
+            ));
         }
     }
 }
