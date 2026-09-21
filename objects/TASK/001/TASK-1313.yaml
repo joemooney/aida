@@ -206,7 +206,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T05:55:22.995393608Z
+modified_at: 2026-09-21T05:55:56.705072441Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
@@ -243,4 +243,42 @@ comments:
     4. Run the check against the whole store and record the number found, so a later run has a baseline to compare against rather than a bare clean or dirty verdict.
   created_at: 2026-09-21T05:48:14.469822654Z
   modified_at: 2026-09-21T05:48:14.469822654Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c289-0ca1-7101-a807-7d03843daf98
+  author: joe
+  content: |-
+    CORRECTION TO MY OWN COMMENT ABOVE, plus a THIRD trap that neither seat had and that I produced by walking into it.
+
+    TRAP 1 AS I WROTE IT IS MISLEADING AND SHOULD NOT BE IMPLEMENTED. I said requiring the supplement character to follow the lead directly finds NOTHING, and that the supplement never appears literally. That is true of the FILE TEXT and FALSE of the PARSED VALUE. The reviewer caught it; I reproduced their table and it is exactly complementary:
+
+      spec         FILE dir/esc    PARSED dir/esc
+      BUG-1106     0 / 2           2 / 0
+      BUG-1111     0 / 2           2 / 0
+      BUG-1310     0 / 2           2 / 0
+      BUG-1450     0 / 5           5 / 0
+      BUG-1452     0 / 8           8 / 0
+      STORY-1405   0 / 6           6 / 0
+      TASK-1313    0 / 0           0 / 0
+      TOTAL        0 / 25          25 / 0
+
+    YAML turns the hex escapes into the real C1 characters, so on the file text ONLY the escaped form exists and on the parsed value ONLY the direct form does. Neither pattern is right or wrong; each is correct for exactly one layer. My original wording would have told an implementer scanning PARSED VALUES -- the more natural choice, since the defect lives in a field -- to implement the escaped form, find zero, and conclude the store was clean. The criterion meant to prevent a false clean bill would have caused one.
+
+    CORRECT STATEMENT: a predicate that does not match the layer it scans finds zero. The check must DECLARE which layer it reads and use the matching form.
+
+    THIRD TRAP, MINE, AND IT IS THE WORST OF THE THREE: A PARSE FAILURE SILENTLY MEASURES AS ZERO.
+
+    My first parsed-layer run returned 0/0 for five of the six corrupted files and I nearly reported that as contradicting the reviewer. The cause: yaml.safe_load THROWS on these files -- ConstructorError, could not determine a constructor for the tag !Custom -- which is TASK-184, relationships serialising with a local tag that a standard parser rejects. My code caught the exception and set the text to empty, so a PARSE FAILURE was counted as NO CORRUPTION FOUND.
+
+    Re-run with a loader tolerating the tag, all six report correctly: 25 direct hits, matching the file layer exactly.
+
+    This composes two known defects into a third: TASK-184 means a standard parser fails on a large share of store objects, and any detector that swallows that failure reports those objects CLEAN. A parsed-layer mojibake check written the obvious way is therefore blind on exactly the population TASK-184 describes, and its output is indistinguishable from a healthy store.
+
+    ADDITIONAL ACCEPTANCE
+    5. The check declares which layer it scans -- raw file text or parsed value -- and uses the form that exists at that layer. Both rows of the table above are the fixture.
+    6. A parse failure is reported as a FAILURE, never as zero findings. Files the parser cannot read are listed separately and counted, so coverage is visible in the output.
+    7. If the check scans parsed values it must handle the !Custom local tag (TASK-184) or explicitly report the objects it could not parse. Verification: run it against the store and assert the number of unparseable files is reported and is zero, or is reported and acknowledged.
+
+    ALSO CORRECTING AN INFERENCE OF MINE: I said the difference between six and seven was TASK-1313 appearing as a mojibake false positive. Wrong. TASK-1313 has zero hits at BOTH layers. It is a false positive on a DIFFERENT predicate -- the TOON-leak check -- because its description contains a relationships-header example in backticks. My trap 2 still stands and is stronger: the spec matches its own subject on this spec primary criterion, not on the mojibake one.
+  created_at: 2026-09-21T05:55:56.705072441Z
+  modified_at: 2026-09-21T05:55:56.705072441Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
