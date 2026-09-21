@@ -39,24 +39,51 @@ description: |-
   1. aida list --fields id,zzz --format json exits non-zero with the same
      unknown-field error the human and TOON paths emit. The validation runs before
      the format branch, so no format can skip it.
-  2. Either --fields narrows the JSON projection as it narrows TOON, or the flag
-     is explicitly rejected under --format json with a message saying so. Silently
-     accepting and ignoring it is not an acceptable third option.
-  3. The type key is reachable under the name the other two projections and the
-     --fields validator use. Renaming req_type to type, or emitting both, are both
-     acceptable; the test is that a consumer reading "type" gets the value.
+  2. --fields NARROWS the JSON projection exactly as it narrows TOON. Product
+     disposition, resolving the fork this criterion left open: the flag exists so a
+     consumer can ask for a smaller payload, and the JSON consumer benefits most --
+     this surface returns roughly 60KB unnarrowed. Rejecting the flag would make the
+     machine surface the only one unable to do the thing the flag is for. Narrowing
+     does not breach the monitor contract, because it happens only on request.
+  3. The JSON rows emit BOTH keys: req_type is RETAINED and type is added
+     alongside it with the same value. Product disposition, narrowing this
+     criterion: a straight rename is NOT acceptable. STORY-1352 declared this a
+     versioned read-only monitor contract precisely so an external dashboard cannot
+     break silently, and any consumer written against req_type today breaks on a
+     rename -- the exact failure the contract exists to prevent. Verified that
+     aida list --json and aida list --format json return an identical payload, so
+     this surface is inside that contract. Retiring req_type later is a deprecation
+     with a version bump, and is not this bug.
   4. A test covers all three formats for one bogus field and one valid narrowing,
      so a future format cannot be added that skips the check.
 
   Related: BUG-1289 (the json flag returning human text on aida status and TOON on
   aida ps) is the same family on different verbs - the format flag not meaning the
   same thing everywhere. STORY-1352 is the contract this violates.
+
+  PRODUCT DISPOSITION 2026-09-20 (product seat). Re-measured independently before
+  refining rather than taking the report as given: aida list --fields id,zzz gives
+  rc=1 on human and toon and rc=0 with full rows on json, and the row keys are
+  blocked, in_flight, queued, req_type, spec_id, status, tags, title. The
+  reviewer's measurement holds in full. My own earlier claim that the JSON surface
+  carried NO type field was wrong, which is why criterion 3 now forbids the rename
+  rather than permitting it -- the same misreading would be handed to a consumer.
+
+  NOT APPROVED BY ME: promoting Draft to Approved needs advisor authority, and the
+  gate refused. Left in Draft for advisor triage. Criteria refined, disposition
+  recorded, decision not taken.
+
+  FIFTH INSTANCE FOUND WHILE DISPOSING THIS, same family, worth folding in or
+  splitting out: aida show BUG-1520 --full --format json returns HUMAN TEXT with
+  exit code 0, not JSON. So the format flag is unhonoured on aida show as well as
+  being unvalidated on aida list. That is three verbs now -- aida status and
+  aida ps in BUG-1289, aida list here, aida show newly.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:29:26.082009790Z
-modified_at: 2026-09-21T04:29:26.082009790Z
+modified_at: 2026-09-21T04:34:21.189593571Z
 req_type: Bug
 tags:
 - agent-surface
