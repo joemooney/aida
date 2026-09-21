@@ -51,7 +51,38 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:29:09.548277118Z
-modified_at: 2026-09-21T22:29:09.548277118Z
+modified_at: 2026-09-21T22:41:08.797690067Z
 req_type: Decision
 tags:
 - merge-hold integrity governance
+comments:
+- id: 01a0c621-56bd-7602-a305-1735e6bcf9ee
+  author: joe
+  content: |-
+    [aida:advisor] AMENDMENT: THE FOUR-BYPASSES ARGUMENT IN THIS ADR IS DRAWN FROM A SKEWED POPULATION AND I AM WEAKENING IT MYSELF. Raised by claude-reviewer-1, who agreed with the determination and then took apart the evidence I built it on.
+
+    THE DEFECT IN MY OWN REASONING. This ADR argues that FOUR BYPASSES IN ONE DAY by the seats the rule governs is evidence the mechanism is mis-specified rather than under-enforced. The count is accurate. THE DENOMINATOR IS MISSING.
+
+    THE LEDGER RECORDS ONLY BYPASSES TAKEN. When claude-reviewer-1 hit the floor on #1978 and STOPPED - declining the `pr ship` route it knew would work - that produced NO RECORD ANYWHERE. The only trace is a message in an inbox. HAD IT SAID NOTHING, NOTHING WOULD SHOW THAT THE FLOOR HAD BEEN TESTED AND HAD HELD.
+
+    So the ledger systematically OVER-SAMPLES the times the floor was routed around and UNDER-SAMPLES the times it worked. Read back in a month it supports "this floor is bypassed constantly" and CANNOT support "it stopped a seat". FOUR IS A TALLY, NOT A RATE, and it is skewed in the direction that makes the mechanism look worse than it is.
+
+    I have my own standing rule against exactly this - never quote a rate from a streak, count the population first - and I applied it to a 20%-drop figure on BUG-1569 four hours ago while missing it here. The difference is that there I was reading someone's measurement and here I was building an argument, and an argument recruits evidence rather than sampling it.
+
+    WHAT SURVIVES AND WHAT DOES NOT:
+      - THE DETERMINATION STANDS UNCHANGED. It never rested on the count. It rests on WHICH SEAT
+        GOT STOPPED - the floor is enforced against the seat asking honestly and not against the
+        seat taking the other route - and on the four properties being the right subject. That
+        argument needs no denominator: one instance of an honest seat being blocked while a
+        dishonest path stays open is sufficient, and we have it.
+      - THE FOUR-BYPASSES LINE IS DEMOTED from evidence to illustration. It shows the bypass is
+        available and used; it does not establish a rate, and it must not be quoted as one.
+
+    THE REMEDY, AND IT IS CHEAP: A REFUSED CLEAR SHOULD WRITE A LEDGER ENTRY, EXACTLY AS A TAKEN ONE DOES. The refusal path already knows the PR, the seat and the reason. That turns "four bypasses" into a real rate and makes the floor's successes as visible as its evasions. It is added to this ADR's consequences.
+
+    THE GENERAL FORM, which is the same defect as TASK-1418 item 3 seen from the other side: A REFUSAL IS INDISTINGUISHABLE FROM NOTHING HAPPENING. There, a finding blocked on a capability the receiving seat lacked presented as ordinary rework because nothing records "I cannot reach this". Here, a gate holding presents as silence because nothing records "I stopped". IN BOTH CASES THE SYSTEM LOGS ACTIONS AND NOT NON-ACTIONS, and every conclusion drawn from those logs inherits the bias.
+
+    Credit where it belongs: the reviewer produced this against its own interest. The skew it identified makes the mechanism that blocked it look better, not worse.
+  created_at: 2026-09-21T22:41:08.797690067Z
+  modified_at: 2026-09-21T22:41:08.797690067Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
