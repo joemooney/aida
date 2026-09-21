@@ -1,0 +1,65 @@
+id: 01a0c239-d8c2-7f73-9fdc-3a4085b56b7d
+spec_id: BUG-1520
+agreed_id: BUG-1520
+title: aida list --fields is silently ignored AND unvalidated under --format json, and the JSON projection spells the type key req_type while every other surface spells it type
+description: |-
+  Measured 2026-09-20 21:45 on the reviewer seat, against main at 0b474a66d1.
+
+  aida list --fields behaves three different ways across the three output formats.
+  Selection and validation both work on two of them and silently do nothing on the
+  third, and the third is the one machine consumers use.
+
+    format   --fields id,type              --fields id,zzz (bogus)
+    human    applied                       rc=1, error names the valid set
+    toon     applied: specs[30]{id,type}   rc=1, error names the valid set
+    json     IGNORED: 145 rows, 8 keys     rc=0, no error, full rows returned
+
+  Exit codes captured by redirecting to a file, not through a pipe.
+
+  Second, smaller defect with the same cause: the JSON projection spells the type
+  key req_type, while --fields, the human header and the TOON header all spell it
+  type. So a consumer that asks for the documented field name and reads the
+  documented key gets nothing back, twice over: --fields id,type is ignored, and
+  reading the key "type" off each row yields null.
+
+  That double miss is not hypothetical. Two seats independently concluded this
+  evening that aida list --format json carries no type field at all. It does - it
+  is req_type, populated on all 145 rows (Bug 75, Task 30, Story 36, Spike 2,
+  Epic 2). The wrong conclusion was reached because the flag was ignored without
+  complaint and the key was not where the other two projections put it. A fix that
+  took that report at face value would have added a field that already exists.
+
+  Why it matters beyond the papercut: STORY-1352 declared a versioned read-only
+  monitor contract over the --json surfaces so an external dashboard cannot break
+  silently. This is a live instance of one of those surfaces disagreeing with its
+  siblings about both a flag and a key name, and doing so with exit code 0.
+
+  Acceptance
+
+  1. aida list --fields id,zzz --format json exits non-zero with the same
+     unknown-field error the human and TOON paths emit. The validation runs before
+     the format branch, so no format can skip it.
+  2. Either --fields narrows the JSON projection as it narrows TOON, or the flag
+     is explicitly rejected under --format json with a message saying so. Silently
+     accepting and ignoring it is not an acceptable third option.
+  3. The type key is reachable under the name the other two projections and the
+     --fields validator use. Renaming req_type to type, or emitting both, are both
+     acceptable; the test is that a consumer reading "type" gets the value.
+  4. A test covers all three formats for one bogus field and one valid narrowing,
+     so a future format cannot be added that skips the check.
+
+  Related: BUG-1289 (the json flag returning human text on aida status and TOON on
+  aida ps) is the same family on different verbs - the format flag not meaning the
+  same thing everywhere. STORY-1352 is the contract this violates.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:29:26.082009790Z
+modified_at: 2026-09-21T04:29:26.082009790Z
+req_type: Bug
+tags:
+- agent-surface
+- json-contract
+- papercut
+- severity:operational
