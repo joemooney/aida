@@ -40,9 +40,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:40:43.370422318Z
-modified_at: 2026-09-21T08:42:26.387312755Z
+modified_at: 2026-09-21T08:42:27.436912101Z
 req_type: Task
 tags:
+- adoption-gap
 - tooling rebase stacked-pr papercut severity:cosmetic
 comments:
 - id: 01a0c321-76c7-7bc0-b085-b4bdc092df39
