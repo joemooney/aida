@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:02:54.706318011Z
-modified_at: 2026-09-21T05:28:29.136940784Z
+modified_at: 2026-09-21T08:32:14.484008215Z
 req_type: Story
 tags:
 - authority
@@ -254,6 +254,54 @@ comments:
     for and is the best part of the change. Nothing here disputes the design.
   created_at: 2026-09-21T05:28:29.136940784Z
   modified_at: 2026-09-21T05:28:29.136940784Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c318-2494-7bb1-9a4e-05fa63d797aa
+  author: joe
+  content: |-
+    REWORK BRIEF FOR PR #1989 (STORY-1353, branch story-1353-work, head 20881480b8). The reviewer recorded CHANGES REQUESTED at that exact head. Five numbered items, all binding. Nothing here is advisory.
+
+    STATE YOU ARE PICKING UP: PR is OPEN, mergeStateStatus DIRTY (it needs a rebase), merge-hold marker PR-1989 and the aida:merge-hold label are both in place and STAY in place until the reviewer clears them. Do not clear them yourself.
+
+    ITEM 1 — REBASE ONTO POST-#2046 main, TAKING THEIRS ON THE INVENTORY DOC.
+    #2046 landed as 1460a0168a and made docs/architecture/external-tool-output-classifiers.md line-number-free. Your branch carries a hand-regeneration of that doc that predates the fix. Rebase onto current origin/main and resolve that file by taking THEIRS. Do not hand-regenerate it and do not merge the two versions. After the fix the doc carries no line numbers, so the conflict has no content to preserve. The same situation on #1998 resolved by `git rebase --skip` dropping the obsolete regeneration commit entirely; verify whether yours is likewise a standalone commit that should be skipped rather than resolved. If the doc is genuinely stale after taking theirs, the remedy is the bare inventory run the gate itself prints — never a manual edit.
+
+    ITEM 2 — FINISH THE HALF-DONE REMOVAL. This is the blocking finding.
+    The PR deletes BOTH production enforcement sites for permissions::GatedOp::DrainStart — lib.rs:49491 (handle_burndown_run) and queue_cmd.rs:5278 (queue work --auto-complete) — replacing each with has_dispatch_authority(). The reviewer grepped main and confirmed those are the ONLY two production consumers. What is left behind is a config key that silently does nothing.
+
+    RULING, so you do not have to choose: KEEP THE CONFIG CONSULTED. enforce_team_gate must still read [team.permissions] drain_start alongside has_dispatch_authority(). A project that set that key to permit implementers, or to restrict further, must not silently lose the setting — standing preference is configurable policy with a safe default, and integrity floors stay hard. Silent no-op is the one outcome that is not acceptable.
+
+    If you believe the key is genuinely obsolete and should go, that is allowed ONLY as a complete removal in this same change, with the reason stated in the PR body, touching ALL FIVE sites the reviewer enumerated — do not leave any of them:
+        permissions.rs:63    the GatedOp::DrainStart enum variant
+        permissions.rs:201   the config-key mapping to 'drain_start'
+        permissions.rs:313   the description
+        permissions.rs:343   the test
+        permissions.rs:365   the test
+        cli.rs:2175          --help text reading "Bypass the team RBAC guardrail ([team.permissions] drain_start)"
+    That last one is user-facing text advertising a guardrail this PR removes; see docs/user-facing-text-conventions.md.
+
+    NOT A FINDING, checked and cleared by the reviewer so you do not re-litigate it: the force parity is fine. handle_burndown_run preserves it as `if !force && !has_dispatch_authority()`, and queue_cmd.rs passed false before and gates unconditionally now.
+
+    ITEM 3 — REMOVE THE TTY-ONLY INTEGRITY FLOOR ON merge-hold clear FROM THIS PR.
+    handle_merge_hold's Clear arm now requires has_integrity_floor_authority(), which is integrity_floor_authority_from(stdin().is_terminal()) — a human at a TTY. Take that criterion OUT of #1989 and let the rest land. This is an advisor ruling on ordering, not a judgement that the floor is wrong.
+
+    WHY: BUG-1532 is open and in-progress — `aida pr ship` currently clears a merge-hold with NO TTY at all (pr_cmd.rs:1793, clear_hold + sync_label(false), deliberate under BUG-1167). So this criterion locks down the SUPPORTED release path while the BYPASS stays wide open. Until BUG-1532 lands, the net effect is that the only way for an agent seat to clear a hold is the unsafe one. Locking the front door while the back door stands open makes things worse, not better.
+
+    Second reason: an agent reviewer could no longer clear a hold it placed itself. Several standing markers carry reason text saying "clear only on my re-review". After this landed, that reviewer could re-review, approve, and still be unable to withdraw its own refusal. Any reviewer-release path has to exist before the floor goes in, or reviewer holds become permanently human-gated.
+
+    The floor is not cancelled — it is sequenced after BUG-1532. File it as its own spec, or let me file it; do not silently drop the idea.
+
+    ITEM 4 — PRESERVE THE MCP STATUS GATE THROUGH ANY CONFLICT RESOLUTION.
+    This PR adds a status gate to tool_queue_rework_inner (mcp.rs:4146-4151):
+        if let Some(new_status) = target_status {
+            if let Some(message) = mcp_status_gate_message(&current_status, new_status) { return Err(message) } }
+    PR #2035 (BUG-1470) touches the same function and is currently held. The two WILL conflict. Whichever lands second MUST preserve this gate rather than reverting it while resolving. If #2035 lands first and you hit this conflict, keep the gate. It is correct as written: gating on the COMPUTED target means it keeps working after #2035 replaces rework_smart_target with rework_target_for_mode.
+
+    ITEM 5 — SAY IN THE PR BODY WHAT YOU DID FOR EACH OF ITEMS 1-4.
+    One line each, naming the direction you took on item 2 and confirming item 3 was removed rather than reworked. The reviewer re-reads at the new head and should not have to infer which items you addressed.
+
+    WHAT YOU ARE NOT DOING: not fixing BUG-1532, not clearing the merge-hold, not touching #2035, not regenerating the inventory doc.
+  created_at: 2026-09-21T08:32:14.484008215Z
+  modified_at: 2026-09-21T08:32:14.484008215Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
