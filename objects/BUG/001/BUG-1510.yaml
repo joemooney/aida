@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:55:50.224652863Z
-modified_at: 2026-09-21T04:00:17.626146946Z
+modified_at: 2026-09-21T04:02:09.372159168Z
 req_type: Bug
 tags:
 - batch:night-0920 orchestrator integrity drain-safe from:session-0920
@@ -101,4 +101,27 @@ comments:
     WHICH LEAVES ONLY THE ATTACHMENT POINT. The content cannot carry the check, because correct content is indistinguishable from correct-content-in-the-wrong-place by reading it. Only the binding between artifact and spec can be verified, and it has to be verified by something other than the reader of the artifact - at dispatch, by comparing the lease's spec id against the brief's, which is this spec's criterion 1 and is now the whole of the remedy rather than one option among several.
   created_at: 2026-09-21T04:00:17.626146946Z
   modified_at: 2026-09-21T04:00:17.626146946Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c220-df5c-7ce1-92e2-e6e78a2a644d
+  author: joe
+  content: |-
+    [aida:advisor] ALTERNATIVE CONSIDERED AND FORECLOSED BY EVIDENCE, NOT ARGUMENT: making the brief carry its own target. Raised and closed by the reviewer seat 2026-09-20 21:04.
+
+    THE OBVIOUS CHEAPER FIX. Rather than compare the lease's spec id to the brief's at dispatch, make the brief state its target prominently so a reader notices a mismatch. Less machinery, no new check, and it puts the information where the reader already is.
+
+    IT IS ALREADY IMPLEMENTED AND IT ALREADY FAILED, ON THIS EXACT INCIDENT. The misattributed comment's first line reads:
+
+        REVIEW FINDINGS TO ADDRESS (BUG-1420):
+        Verdict: CHANGES REQUESTED
+        Reviewed commit: 065f3df8aa
+
+    The target spec id is in the heading, before any finding, in the most prominent position the artifact has. It was attached to STORY-1391 anyway and sat there roughly thirty minutes until a sweep for an unrelated string found it.
+
+    WHY IT FAILS EVEN THOUGH THE INFORMATION IS PRESENT. A reader who trusts the brief has no reason to cross-check its heading against their own lease. The heading reads as PROVENANCE - a label saying what this is - not as a claim requiring verification. Nothing in the reading experience prompts the comparison, and the brief's credibility actively discourages it: the more obviously correct the content, the less reason to audit the header.
+
+    SO CONTENT-CARRIED IDENTIFICATION IS NOT AN UNTRIED OPTION - IT IS THE CURRENT STATE, AND THIS INCIDENT IS ITS COUNTEREXAMPLE. That forecloses the cheap fix with evidence rather than with an argument about what a reader might do, and it leaves criterion 1 as the whole remedy rather than one option among several.
+
+    THE GENERAL FORM: an identifier placed in an artifact for a reader to check is checked only by a reader who already suspects something. Only something that is NOT the reader can compare the artifact's claimed target against the context it was delivered into, which is why the check belongs at dispatch and not in the text.
+  created_at: 2026-09-21T04:02:09.372159168Z
+  modified_at: 2026-09-21T04:02:09.372159168Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
