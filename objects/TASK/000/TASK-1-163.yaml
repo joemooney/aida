@@ -1,0 +1,44 @@
+id: 01a0c19b-9c2f-74c0-bdb0-9ee70bcbb0af
+spec_id: TASK-1-163
+title: A merged fix keeps producing its own defect for hours because dev-binary staleness is invisible at the point of use (3 verdicts post-#2037)
+description: |-
+  A fix can land on main and the seat it governs keeps producing the defect for hours, because a stale dev binary is invisible at the point of use
+
+  CONCRETE INSTANCE, mine, today. I merged PR #2037 (BUG-1467, "make reviewer verdict provenance enforceable") at 17:00:35 local. I then recorded three review verdicts with that fix on main and every one of them carries the defect the fix removes.
+
+  MEASURED, not inferred:
+    source, aida-cli-lib/src/lib.rs near line 76311, inside the --pr handshake branch:
+      writes verdict, summary, mode, reviewed_sha, reviewed_branch, recorded_at, recorded_by
+    git log -S on that exact line: introduced by 066c4ceacb, PR #2037, 2026-09-20 17:00:35 -0700
+    my binary: /home/joe/ai/aida/target/release/aida, built 15:02:31 from sha b09197ab72+dirty
+    git merge-base --is-ancestor 066c4ceacb b09197ab72 -> FALSE, so the binary predates the fix by about two hours
+
+    PR-keyed verdicts written after 17:00:35:
+      17:35:40  PR-2038.json  NO-SHA
+      18:11:31  PR-2039.json  NO-SHA
+      18:31:53  PR-2040.json  NO-SHA
+
+  The same three invocations wrote spec-keyed files that DO carry reviewed_sha and recorded_by, because the spec-keyed path already had provenance before the fix. So one command wrote one good file and one degraded file each time, and the degraded one is the handshake the orchestrator reads.
+
+  WHY NOTHING CAUGHT IT. The binary is honest if asked: aida --version prints the build time and sha, and aida dev status prints a match verdict against HEAD. Neither is on the path of the command being run. aida review record printed clean success naming both files. There is no staleness check at invocation on the CLI path. The MCP server does self-respawn when the on-disk binary reports a newer version or a different sha, so the mechanism exists and is simply not applied to the CLI.
+
+  THE SHAPE THAT MAKES IT WORTH FILING, rather than "rebuild your binary". The person most likely to be running a stale binary is the person who just merged the fix, because merging is what makes their build stale. And the seat whose output a fix governs is the seat least able to see that it is not yet in effect -- the output looks exactly as it did the day before. That is a general property of dogfooding a tool from a dev build, not a one-off lapse.
+
+  IT ALSO CORRUPTS A MEASUREMENT. The advisor measured 468 of 543 verdict files carrying no head sha and read it as evidence the canonical verb is still emitting shaless verdicts, which would make BUG-1505 a source fix rather than a migration. It is not. The verb was fixed at 17:00. The three shaless files produced after that point came from a binary built at 15:02. Absent the binary check, a corpus measurement cannot distinguish "the code is wrong" from "the code is right and is not running", and those have opposite remedies.
+
+  SUGGESTED SHAPE, advisory, the advisor owns the call:
+    - a staleness check on write-side verbs that produce durable artifacts (review record, queue done, merge-hold add): if the on-disk source HEAD is a descendant of the binary sha, warn naming the gap
+    - or narrower and cheaper: have review record warn when its own handshake writer is older than the last commit touching it
+    - the general form is the MCP self-respawn rule applied to the CLI, which is an existing mechanism rather than a new one
+
+  I have NOT rebuilt. A live wave pins its launcher binary and I do not know the current drain state from the reviewer seat, so that is the operator's call, not mine to take unilaterally.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T01:36:35.887655718Z
+modified_at: 2026-09-21T01:36:35.887655718Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
