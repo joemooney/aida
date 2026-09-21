@@ -34,12 +34,12 @@ description: |
   - The needs-attention → back-in-flight transition has an owner: either the drain re-drives triaged specs, or the surface that shows the rework queue makes the requeue one keystroke with the correct resulting status.
 
   Related: the verdicts here are specific and implementable — file-and-line findings, not vague ones. This is not a brief-quality problem. The rounds simply never happened.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:13.869367085Z
-modified_at: 2026-09-21T19:10:48.006898631Z
+modified_at: 2026-09-21T19:13:57.597761104Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -235,16 +235,28 @@ comments:
   created_at: 2026-09-21T19:10:48.006898631Z
   modified_at: 2026-09-21T19:10:48.006898631Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0c563-a75c-7ae3-980e-9e1d1707e209
+  author: aida-auto-bump
+  timestamp: 2026-09-21T19:13:57.596750275Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0c563-a75d-7500-af0b-0eab5714a20e
+  timestamp: 2026-09-21T19:13:57.597759492Z
+  agent: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+  brief_ref: .aida/agent-briefs/codex/BUG-1470-2026-09-21T044149Z.md
+  commit_sha: eb58e44cea6136a20dfc7ec9e74ee0258d347092
+  summary: 'ALL FOUR FINDINGS ADDRESSED, AND THREE OF THE FOUR FIXES GO BEYOND WHAT I ASKED. F1 (BLOCKING) IS CLOSED AT A BETTER SEAM THAN I NAMED: I asked for the advisor-authority check that the sibling sites apply; they placed it AT THE FLIP rather than at target selection, which also covers an explicit --status override - a side door that would have remained open once the one I cited was closed. It refuses BEFORE any side effect (no status write, no comment, no queue entry), with the reasoning that a partially-applied rework is harder to reason about than one that did not run, and the paired test asserts both halves - refused AND no queue entry left behind. F2 IS FIXED BY DERIVATION RATHER THAN BY EDITING PROSE: the nine-status table was built by reading rework_target_for_mode and rework_smart_target, not by patching the sentence I quoted. They also found that clap was REFLOWING the doc comment into unreadable prose, added verbatim_doc_comment, and VERIFIED BY RENDERING `aida queue rework --help` rather than assuming - which fixed a pre-existing rendering defect on the command sequence above it that nobody had reported. F3 IS FIXED AND MUTATION-CHECKED: the pass-through arm I named (Approved -> None, Superseded -> None, Rejected -> Approved) is now asserted, plus the --work cases, and they confirmed the mutation I described - collapsing the metadata-only block to a constant - now FAILS. Both new guards were mutation-checked, not just written. F4 IS DISPOSED OF EXPLICITLY AND THE REASONING IS THE RIGHT ONE: three specs filed for the unaddressed criteria - BUG-1564, TASK-1423, STORY-1429 - which I CONFIRMED EXIST, all Draft, children of EPIC-62, tagged followup:BUG-1470. They split rather than held on the grounds that each is a separate surface or decision and holding a tested fix to a LIVE AUTHORITY BYPASS behind three unrelated surfaces is the worse trade. I agree. Notably they anticipated the auto-bump hazard themselves - the commit states that merging completes BUG-1470 and would otherwise close four acceptance criteria having satisfied one.'
+  punted:
+  - 'punted: CI is red on PR-2035: Build (ubuntu-latest)'
+  review_verdict: approve
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-20T22:41:25.580690641Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-2035: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed: Build (ubuntu-latest) (run 35542438103; `gh run view 35542438103`). Push fixups to the same branch: `aida queue work BUG-1470 --branch bug-1470-work --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T22:47:57.090824905Z
+  completed_at: 2026-09-21T19:13:57.596335543Z
+  completion_sha: eb58e44cea6136a20dfc7ec9e74ee0258d347092
