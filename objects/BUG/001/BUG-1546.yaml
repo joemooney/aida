@@ -31,10 +31,10 @@ description: |-
   WHAT IS LIVE, and is already handled correctly by the merged code: 5 of 14 open sha-bearing verdicts are abbreviated-but-current, and prefix comparison judges them SAME rather than stale. Those five are BUG-1516's headline symptom and this surface already gets them right.
 
   trace:BUG-1516 — parent, remains open for criteria 2, 3 and 5.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:26:47.020957879Z
-modified_at: 2026-09-21T11:26:47.020957879Z
+modified_at: 2026-09-21T11:32:51.066534440Z
 req_type: Bug
