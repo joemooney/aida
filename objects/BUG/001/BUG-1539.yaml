@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T20:47:02.211475499Z
+modified_at: 2026-09-21T20:56:38.236092012Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -261,4 +261,21 @@ comments:
     IT ALSO SHARPENS THE FIX. Keying by reviewed commit — this spec's stated remedy — WOULD NOT HAVE PREVENTED THIS ONE, because both verdicts are at the same sha. What was needed is that a SECOND writer with FEWER findings does not silently replace a first with more: append, or refuse, or merge, or at minimum record that a prior verdict existed. The smaller read-before-overwrite fix already recorded on this spec covers this case where re-keying does not.
   created_at: 2026-09-21T20:47:02.211475499Z
   modified_at: 2026-09-21T20:47:02.211475499Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5c1-a85c-7ad2-a675-9cf437e492ab
+  author: joe
+  content: |-
+    [aida:advisor] THIS SPEC'S HEADLINE REMEDY DOES NOT COVER ITS OWN MEASURED INSTANCE, AND THAT NEEDS SAYING PLAINLY RATHER THAN AS A FOOTNOTE. Raised by claude-reviewer-1.
+
+    THE STATED FIX IS KEYING BY REVIEWED COMMIT. BOTH VERDICTS IN THE 13:41/13:45 CLOBBER WERE AT THE SAME SHA. So sha-keying would have produced two records under one key and THE SAME OVERWRITE. The instance that is now this spec's strongest evidence ARGUES AGAINST THE FIX THE SPEC PROPOSES.
+
+    WHAT WORKS IS THE SMALLER FIX recorded earlier: READ BEFORE OVERWRITE — refuse, append, merge, or at minimum record that a prior verdict existed. That covers the same-sha case; sha-keying covers the different-sha case; ONLY THE FIRST COVERS WHAT ACTUALLY HAPPENED. Re-keying remains worth doing for the other failure mode and should not be dropped, but it is no longer the headline.
+
+    AND A BLOCKING EDGE IS NOW ON THE GRAPH RATHER THAN IN PROSE: **BUG-1571 IS BLOCKED BY THIS SPEC.** BUG-1571's obvious remedy is to make the verdict write ATOMIC (temp file plus rename — the writer currently uses a bare `std::fs::write`, confirmed at review_verdict.rs:552). AN ATOMIC RENAME MAKES THIS SPEC'S CLOBBER MORE RELIABLE, NOT LESS, because it removes the truncate window in which a concurrent reader — or this board's sweep — can notice that something is wrong.
+
+    THE 13:45 DETECTION DEPENDED ON EXACTLY THAT WINDOW. The reviewer's sweep read `no-verdict: [2059]` because the file was briefly truncated mid-write. Ship the atomic write alone and clobbers become SILENT AND DETERMINISTIC: the record is always well-formed, always replaced, and nothing observes the transition.
+
+    The edge is recorded because a condition that lives only in prose is a condition that fires only if the person who wrote it is the person acting — which this board established today at the cost of a spec auto-completing past five open items, and again when BUG-1545's blocking edge had to be re-pointed after the gate turned out not to cover its class.
+  created_at: 2026-09-21T20:56:38.236092012Z
+  modified_at: 2026-09-21T20:56:38.236092012Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
