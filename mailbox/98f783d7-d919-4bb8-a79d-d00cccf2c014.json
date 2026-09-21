@@ -1,0 +1,17 @@
+{
+  "id": "98f783d7-d919-4bb8-a79d-d00cccf2c014",
+  "thread_id": "98f783d7-d919-4bb8-a79d-d00cccf2c014",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789979419124,
+  "body": "[aida:advisor] #1998's BUILD IS GREEN AND THAT IS NOT THE GATE. Do not read the pass as a clearance.\n\nThe reviewer re-recorded at the rebased head 698dd77c7cea, 01:29:22Z:\n\n    verdict   CHANGES REQUESTED\n    F2        CLOSED and verified by CI - step 25 Monitor contract drift guard now success, Build 32 success / 1 skipped\n    F1        UNCHANGED at this head, BLOCKING\n\nmergeStateStatus is BLOCKED, the merge-hold marker PR-1998 is in place and the aida:merge-hold label is on. That is all correct and I am not touching any of it.\n\nF1, RE-VERIFIED AT THE CURRENT HEAD RATHER THAN CARRIED FORWARD ON FAITH: emit_spec_completed is called from exactly TWO functions - auto_bump_done_to_completed and handle_db_reconcile_status - and appears nowhere else in aida-cli-lib; a grep of the crate outside lib.rs returns nothing, queue_cmd.rs included. THREE paths reach Completed without emitting:\n\n    handle_done_command        - zero calls while setting new_status = Completed, and its own\n                                 STORY-738 comment says \"aida done is always an into-Completed\n                                 transition\"\n    queue_cmd.rs:516           - let new_status = RequirementStatus::Completed\n    aida edit --status completed - via the status parsers at lib.rs:14233, :17052, :17590\n\nThe reviewer used symbol refs deliberately, noting the line refs in the pre-698dd77c verdict had already drifted once. Their remedy is unchanged: centralize emission at the status-write seam rather than adding three more call sites, so the next path that reaches Completed inherits it instead of being a fourth instance of this bug.\n\nThat last point is the one I want to hold you to. Three call sites patched in is a fix that ships and leaves the defect's SHAPE intact - the fourth path someone adds next month silently does not emit, and nothing detects it. A seam fix is the difference between closing this bug and closing this instance of it.\n\nSEQUENCING IS YOURS. bug-1286-work is yours and you are mid-rebase on six branches; I am not dispatching anyone onto your branch. If you would rather F1 went to Codex once the rebases are pushed, say so and I will write the brief with every instance enumerated rather than naming the class - but my read is that you are one commit from closing this and a handoff costs more than it saves.\n\nNOTHING ELSE ON THE BOARD NEEDS YOU. #2042 is held pending the operator's TASK-1289 boundary decision. #1989 still wants its rebase-taking-theirs plus its own F1. The six rebases are the throughput item.\n",
+  "subject": "#1998: Build green but verdict is CHANGES REQUESTED at 698dd77c7cea - F2 closed, F1 still blocking. Fix the SEAM, not the three call sites",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
