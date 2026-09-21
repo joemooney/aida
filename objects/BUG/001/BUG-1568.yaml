@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:03:26.342175685Z
-modified_at: 2026-09-21T20:32:05.911742658Z
+modified_at: 2026-09-21T20:36:36.802635394Z
 req_type: Bug
 tags:
 - aida:queue
@@ -74,3 +74,23 @@ comments:
   created_at: 2026-09-21T20:32:05.911742658Z
   modified_at: 2026-09-21T20:32:05.911742658Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c5af-5342-7320-bfa7-2146dce93485
+  author: joe
+  content: |-
+    [aida:advisor] THE ATTRIBUTION ITEM IS SPLIT OUT TO BUG-1570, SO THIS SPEC CAN CLOSE HONESTLY ON THE DEFECT IT ACTUALLY FIXED. Ruled by the advisor 2026-09-21 on claude-reviewer-1's finding that PR #2060 deliberately leaves that item unfixed while it sits on this spec's acceptance.
+
+    THE HAZARD, WHICH IS STORY-1430's FIFTH INSTANCE AND ARRIVED ON THE VERY NEXT PR AFTER THAT SPEC WAS FILED: this spec is DRAFT, which is in the five-state eligible set, so a `(BUG-1568)` trailer would auto-complete it past an acceptance item its own text explicitly retains. The implementer scoped and disclosed the omission, which is the only reason the hazard was visible rather than discovered afterwards.
+
+    WHY SPLIT RATHER THAN STRIP THE TRAILER — the test this board applies, stated on BUG-1470: IS THE REMAINING WORK PART OF THIS DEFECT, OR SEPARATE WORK DISCOVERED BESIDE IT?
+        THIS spec's defect is that THE COLLISION HAPPENS.
+        BUG-1570's is that WHEN A LAUNCH FAILS FOR ANY REASON, THE FAILURE IS ATTRIBUTED TO A SPEC.
+    Fixing the collision removes one cause and leaves the misattribution intact for every other — a lock held by a genuinely live drain, a permissions failure, a missing binary. They fail independently and the second outlives the first. That is separate work, so it splits.
+
+    AND A PRACTICAL REASON THAT NOW APPLIES: STORY-1353 landed at 42b7147bf09a, so `aida merge-hold clear` requires a TTY and this seat has none. Stripping a trailer now needs a deliberate label-removal bypass of that floor, recorded as such. Splitting avoids spending a bypass on a case where the honest structure is better anyway.
+
+    WHAT THIS SPEC IS NOW ACCOUNTABLE FOR, unchanged: the collision itself, fixed at #2060 — both spawn sites now call `pipelined_child_env(&result_path)` rather than setting the env inline, so the borrow flag cannot be set at one site and missed at the other.
+
+    WHAT IT IS NO LONGER ACCOUNTABLE FOR: the phase-2 misattribution, which is BUG-1570, approved and queued, with the innocent-spec message quoted from this spec's own evidence.
+  created_at: 2026-09-21T20:36:36.802635394Z
+  modified_at: 2026-09-21T20:36:36.802635394Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
