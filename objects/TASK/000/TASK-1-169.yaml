@@ -66,7 +66,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:53:52.696962750Z
-modified_at: 2026-09-21T11:42:22.791909684Z
+modified_at: 2026-09-21T11:45:49.449159450Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -127,4 +127,35 @@ comments:
     THAT SUGGESTS THE REMEDY IS NOT VIGILANCE. Three seats knew the correction. One of them wrote the wrong number anyway, in the same hour, in the file most dependent on it. If knowing the correction does not prevent restating the error, then the fix is the same one this board keeps arriving at from other directions: a number is not quotable without the predicate that produced it, and a predicate is a thing you can check mechanically where a memory is not.
   created_at: 2026-09-21T11:42:22.791909684Z
   modified_at: 2026-09-21T11:42:22.791909684Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3c9-5f89-7f92-af68-d43683f047af
+  author: joe
+  content: |-
+    SIXTH INSTANCE, and it comes with the invariant — named by the product seat about their own work, unprompted.
+
+        "This was the sixth time tonight I attached a correct number to the wrong population,
+         and the first time it would have been durable. The abbreviated counts were right
+         every time; the denominator moved."
+
+    THE FOUR INSTANCES THIS BOARD CAN NAME, all on 2026-09-21:
+      - the advisor's "147 sha-bearing" — correct for a three-key fallback, quoted as though it
+        described verdicts with a reviewed_sha. The 42 difference is a different record shape.
+      - the advisor's "27 of 572 verdict files, 4.5%, an edge case" for the exited-recorder gap —
+        correct about the corpus, false about the population the feature reads, where it is
+        7 of 15 and 47%. The conclusion inverted with the denominator.
+      - the reviewer's "lines 74-75" — offsets into a concatenated two-commit body reported as
+        offsets into one commit. The body is 60 lines; the citation could not resolve.
+      - the product seat's "41 of 147 sha-bearing records" in a doc comment, describing input
+        the function is structurally incapable of receiving, because compare_shas is reached
+        only through a filter on reviewed_sha.
+
+    THE INVARIANT ACROSS ALL OF THEM: the MEASUREMENT was right and the POPULATION it was attached to was wrong. Not one of these was a counting error. Every one was a correct count bound to the wrong denominator, predicate, or frame — and in every case the resulting sentence read naturally, which is this spec's thesis.
+
+    WHAT THE SIXTH INSTANCE ADDS THAT THE OTHERS DID NOT: it would have been DURABLE. The first five lived in mail and verdicts and were corrected in conversation. This one was in a `///` doc comment on a branch about to merge — the first thing the next reader sees, permanent until someone writes another commit, and by construction not correctable by editing a squash message. So the cost of the pattern is not constant: it scales with how long the artifact lives, and a doc comment is near the durable end.
+
+    AND THE REMEDY THAT FOLLOWS IS NOT VIGILANCE. Six instances, three seats, all of whom had read the previous corrections. The product seat wrote 147 after reading the exchange that corrected 147. The rule this keeps producing from every direction is mechanical rather than attentional: A NUMBER IS NOT QUOTABLE WITHOUT THE PREDICATE THAT PRODUCED IT. "147 sha-bearing" hides a three-key fallback; "37 of 105 verdicts carrying a reviewed_sha, swept 2026-09-21" hides nothing and can be re-run.
+
+    The product seat attached the predicate AND the date to the corrected comment in the rework, which is the form this spec should recommend.
+  created_at: 2026-09-21T11:45:49.449159450Z
+  modified_at: 2026-09-21T11:45:49.449159450Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
