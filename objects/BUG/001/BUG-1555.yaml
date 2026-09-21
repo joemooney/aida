@@ -5,7 +5,7 @@ title: The 2026-09-21 Windows nightly fails the discipline-pack parity test on a
 description: |
   THE CROSS-PLATFORM NIGHTLY HAS BEEN RED FOR FOUR NIGHTS ON A FALSE POSITIVE. Windows fails one test; macOS is green; Linux PR CI is green on the same commits. The test is not detecting drift - it is comparing LF against CRLF.
 
-  Found by the advisor 2026-09-21 chasing the reviewer's board line "cross-platform nightly red since 2026-09-18". Diagnosed against run 35600363642 (main, 2026-09-21T12:34:56Z) and the tree at 8bc2512480.
+  Found by the advisor 2026-09-21. PROVENANCE, CORRECTED: the trigger was the `nightly_red` field of `aida awaiting`'s own output - "cross-platform nightly red since 2026-09-18 (run 35600363642, 4 nights)" - NOT a report from any seat. The first version of this line credited the reviewer seat, because that seat's mail and the awaiting block printed in one batched shell call and the advisor attributed the tail of the output to the author of its head. A spec outlives the mail thread, so the misattribution would have left the next reader trusting a seat's instruments for a measurement that seat never made. Corrected on that seat's own objection. What the reviewer seat DID measure, after the question was raised, is the denominator below. Diagnosed against run 35600363642 (main, 2026-09-21T12:34:56Z) and the tree at 8bc2512480.
 
   WHAT FAILS:
 
@@ -153,12 +153,17 @@ description: |
   `scripts/check-portability.sh` ratchet, and a path-filtered informational Windows/macOS
   matrix. They are evidently not catching these. Filed separately as the real spec; this
   bug is narrowed to the single 09-21 failure.
+
+  - THE ONE-SIDED NORMALIZATION IS A SECOND DEFECT IN THE SAME LINE, AND IT IS A TRAP FOR THE FIX. Found by claude-reviewer-1 2026-09-21. `local.trim_end() != *master` trims the LOCAL side and compares against master RAW. It is benign today - the test passes on Linux, so the embedded master must already arrive trimmed - but it is the same shape as the suspected bug: normalize one side, compare against the other. IF THE FIX ADDS LINE-ENDING NORMALIZATION TO `local` ONLY, IT REPRODUCES THE DEFECT IN A NEW DIMENSION and Linux stays green while telling you nothing. Normalize BOTH sides, apply trim to BOTH sides, and let the demonstrate-it-still-fires case be a project copy edited with a CRLF-ONLY change - a test that must still detect a difference the normalizer is not supposed to erase.
+  - THE .gitattributes ASYMMETRY IS CONFIRMED REAL UNDER THE RESOLVER, WHICH IS NOT THE SAME AS BEING THE CAUSE. Verified independently by claude-reviewer-1 with `git check-attr` rather than by reading the file - master side resolves `text: set, eol: lf`, project side resolves `text: unspecified, eol: unspecified`. The method matters and is recorded: reading .gitattributes tells you a rule exists; check-attr tells you what a path actually GETS, the same distinction that made `git check-ignore` mislead both seats on BUG-1279. So the asymmetry is real and pinning `.aida/discipline/**` is correct on its own merits - AND the 2026-09-20 Windows pass documented above still rules it out as this failure's cause. A confirmed mechanism that cannot explain the control is not the explanation.
+  - THE COUNT INFERENCE IS THE LOAD-BEARING STEP AND IT GENERALISES. Endorsed by claude-reviewer-1 as the part worth keeping if everything else were rewritten: 23 of 23 failing simultaneously is not drift, because no plausible edit history produces it. Their generalisation, recorded for TASK-1418's catalogue: A CONTENT GUARD THAT FAILS ON 100% OF ITS COMPARISON SET IS REPORTING ABOUT ITSELF. That separates "the guard found something" from "the guard is broken" BEFORE any mechanism is known - which is exactly the step that should have stopped this spec's first diagnosis from being filed with a named cause at high priority.
+  - THE SIBLING SWEEP IS STILL OPEN AND ITS SCOPE IS RECORDED SO NOBODY CREDITS IT AS DONE. claude-reviewer-1 grepped ONLY templates.rs and ONLY for that exact comparison shape; within that file it is the single occurrence. A raw content compare written differently, or living in another module, would not have matched the pattern. They scoped their own sweep unprompted rather than letting it read as exhaustive - the acceptance bullet asking for a tree-wide sweep for the same shape remains OPEN.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T15:52:33.752366977Z
+modified_at: 2026-09-21T15:55:33.961716270Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
