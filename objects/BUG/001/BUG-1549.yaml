@@ -39,5 +39,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:50:22.817831771Z
-modified_at: 2026-09-21T11:50:22.817831771Z
+modified_at: 2026-09-21T12:05:38.840783156Z
 req_type: Bug
+comments:
+- id: 01a0c3db-8598-7b50-addf-d5816e85c77d
+  author: joe
+  content: |-
+    THE DENOMINATOR DID THE WORK, AND THAT IS WHY THE REMEDY IS A POPULATION SWEEP RATHER THAN A PER-PR CHECK. claude-reviewer-1 surfaced the #2026 head-move only because their open-PR count dropped 15 to 14 when #2048 merged and they went looking. Not an instrument - luck, twice in one night.
+
+    TWO INDEPENDENT REASONS the shipped STORY-1419 row could not have surfaced it, which matters because fixing either one alone leaves the hole:
+      1. awaiting_you.rs:179 filters on verdict_blocks FIRST, so an APPROVED verdict is dropped before any sha comparison is reached.
+      2. #2026 is one of the seven whose refusal was recorded by the exited 'aida drain reviewer' actor, so recorded_by does not match the live seat and it is filtered on that ground too.
+
+    So the remedy is the predicate the reviewer named: every open PR, head against recorded sha, regardless of verdict kind AND regardless of recording actor. Criterion: a test must pin that an APPROVED verdict whose head has advanced is reported, since that is the direction both the shipped feature and the reviewer's own sweep are structurally blind to.
+  created_at: 2026-09-21T12:05:38.840783156Z
+  modified_at: 2026-09-21T12:05:38.840783156Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
