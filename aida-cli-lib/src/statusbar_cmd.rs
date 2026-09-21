@@ -114,6 +114,10 @@ pub(crate) fn you_channels(report: &awaiting_you::AwaitingReport) -> Vec<(usize,
     if prs > 0 {
         v.push((prs, label(prs, "PR", "PRs")));
     }
+    let recusals = report.recusal_holds.len();
+    if recusals > 0 {
+        v.push((recusals, label(recusals, "recusal", "recusals")));
+    }
     let briefs = report.pending_briefs.len();
     if briefs > 0 {
         v.push((briefs, label(briefs, "brief", "briefs")));
@@ -384,6 +388,7 @@ mod tests {
                 head_branch: "b".into(),
                 ci_rollup: Some("pass".into()),
             }],
+            recusal_holds: Vec::new(),
             pending_briefs: vec![PendingBriefItem {
                 agent: "claude".into(),
                 spec_id: "".into(),

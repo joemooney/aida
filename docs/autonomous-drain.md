@@ -116,6 +116,12 @@ drain shelves `ci-red` or `pr ship` aborts:
   the CI watch, releases it at the merge step, waits (up to 180s) for the gate
   to re-run green, then merges. A red gate with **no** local marker is a
   lingering label — `aida merge-hold clear <n>` re-syncs it.
+  New markers also carry a typed reason: `recusal`, `rework`, or `decision`.
+  A recusal records the forbidden merger (`aida merge-hold add <n> --kind
+  recusal --recused <identity>`) and appears in `aida awaiting` for another
+  seat. The recused seat sees it only as awaiting another reader; if AIDA knows
+  of no available reader, the report says so explicitly. Legacy free-text
+  markers remain readable and continue to hold fail-closed.
 - **Informational checks.** A red check is ignored only when it is *not* a
   branch-protection-required check **and** matches the allow-list below.
   Everything else red is a real failure, so a repo with no branch protection

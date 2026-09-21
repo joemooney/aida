@@ -29914,7 +29914,10 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         merge_hold::LabelState::Unsynced(e) => format!("unsynced: {e}"),
                         merge_hold::LabelState::Unknown => "unknown".to_string(),
                     };
-                    format!("{{\"pr\":{pr},\"reason\":{reason:?},\"stale\":{is_stale},\"label\":{label:?}}}")
+                    let record = merge_hold::read_record(&root, pr);
+                    let kind = record.as_ref().map(|r| r.kind.as_str()).unwrap_or("legacy");
+                    let recused = record.as_ref().and_then(|r| r.recused.as_deref());
+                    format!("{{\"pr\":{pr},\"reason\":{reason:?},\"kind\":{kind:?},\"recused\":{recused:?},\"stale\":{is_stale},\"label\":{label:?}}}")
                 };
                 let mut items: Vec<String> = Vec::new();
                 for (pr, reason) in &live {
@@ -29932,6 +29935,14 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             }
             println!("Active merge-holds:");
             for (pr, reason) in &live {
+                let record = merge_hold::read_record(&root, *pr);
+                let typed = record
+                    .as_ref()
+                    .map(|record| match record.recused.as_deref() {
+                        Some(who) => format!("{}; recused: {who}", record.kind.as_str()),
+                        None => record.kind.as_str().to_string(),
+                    })
+                    .unwrap_or_else(|| "legacy".to_string());
                 let state = label_of(*pr);
                 let rendered = match &state {
                     merge_hold::LabelState::Synced => state.render().green().to_string(),
@@ -29942,7 +29953,7 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     }
                     merge_hold::LabelState::Unknown => state.render().yellow().to_string(),
                 };
-                println!("  PR #{pr}  {reason}  [{rendered}]");
+                println!("  PR #{pr}  {reason}  [{typed}; {rendered}]");
             }
             for (pr, reason) in &stale {
                 println!(
@@ -29953,14 +29964,37 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             Ok(())
         }
         // BUG-1236: the symmetric hand-hold — marker + label together.
-        crate::cli::MergeHoldAction::Add { pr, reason } => {
+        crate::cli::MergeHoldAction::Add {
+            pr,
+            reason,
+            kind,
+            recused,
+        } => {
+            use crate::cli::MergeHoldReasonKind;
+            let hold_kind = match kind {
+                MergeHoldReasonKind::Recusal => merge_hold::HoldKind::Recusal,
+                MergeHoldReasonKind::Rework => merge_hold::HoldKind::Rework,
+                MergeHoldReasonKind::Decision => merge_hold::HoldKind::Decision,
+            };
+            if matches!(kind, MergeHoldReasonKind::Recusal)
+                && recused
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .is_none()
+            {
+                anyhow::bail!("`--kind recusal` requires `--recused <identity>`");
+            }
+            if !matches!(kind, MergeHoldReasonKind::Recusal) && recused.is_some() {
+                anyhow::bail!("`--recused` is valid only with `--kind recusal`");
+            }
             let reason = reason
                 .as_deref()
                 .map(str::trim)
                 .filter(|r| !r.is_empty())
                 .unwrap_or("held by hand — merge requires human/advisor review")
                 .to_string();
-            merge_hold::write_hold(&root, *pr, &reason)?;
+            merge_hold::write_typed_hold(&root, *pr, hold_kind, recused.as_deref(), &reason)?;
             match merge_hold::sync_label(&root, *pr, true) {
                 Ok(()) => println!(
                     "Merge-hold placed on PR #{pr} (marker written, `aida:merge-hold` label applied). Release with `aida merge-hold clear {pr}`."
@@ -68857,6 +68891,31 @@ fn collect_awaiting_report_inner(
         awaiting_you::classify_open_prs(&prs)
     };
 
+    // A recusal is routing information, not merely a merge fence. Every seat
+    // consumes the same local typed marker: non-recused seats get an action;
+    // the author gets an explicit waiting/no-reader state.
+    // trace:STORY-1397 | ai:codex
+    let recusal_holds = {
+        let current = current_user_id(None);
+        let mut readers = vec![current.clone()];
+        readers.extend(ctx.agents.iter().filter_map(|agent| {
+            if agent.status == agent_registry::AgentStatus::Stale || agent.availability.is_paused()
+            {
+                None
+            } else {
+                agent
+                    .name
+                    .clone()
+                    .or_else(|| Some(agent.agent_type.clone()))
+            }
+        }));
+        awaiting_you::classify_recusal_holds(
+            &merge_hold::list_records(project_root),
+            &current,
+            &readers,
+        )
+    };
+
     // Pending briefs — prefer narrowing to the running agent so we
     // don't spam the operator with hand-offs filed for a different
     // agent. `detect_agent_type` returns "other" when no agent env is
@@ -69064,6 +69123,7 @@ fn collect_awaiting_report_inner(
 
     awaiting_you::AwaitingReport {
         mergeable_prs,
+        recusal_holds,
         rework_ready,
         pending_briefs,
         findings_total,

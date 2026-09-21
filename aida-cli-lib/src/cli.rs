@@ -197,6 +197,16 @@ pub enum MergeHoldAction {
         // trace:BUG-1294 | ai:claude
         #[clap(long, allow_hyphen_values = true)]
         reason: Option<String>,
+        /// Typed blocker: recusal needs another reader, rework needs the
+        /// author, decision needs a human call.
+        // trace:STORY-1397 | ai:codex
+        #[clap(long, value_enum, default_value_t = MergeHoldReasonKind::Decision)]
+        kind: MergeHoldReasonKind,
+        /// Identity forbidden from merging. Required for `--kind recusal` and
+        /// rejected for other kinds.
+        // trace:STORY-1397 | ai:codex
+        #[clap(long)]
+        recused: Option<String>,
     },
     /// Clear a merge-hold: remove the marker file and drop the
     /// `aida:merge-hold` label, releasing the PR for merge. Give a PR number,
@@ -209,6 +219,14 @@ pub enum MergeHoldAction {
         #[clap(long)]
         stale: bool,
     },
+}
+
+// trace:STORY-1397 | ai:codex
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MergeHoldReasonKind {
+    Recusal,
+    Rework,
+    Decision,
 }
 
 #[derive(Subcommand, Debug)]
@@ -9443,9 +9461,9 @@ pub enum Command {
     },
 
     /// The unified coordination inbox — every channel where YOU are the gate,
-    /// in ONE place: mergeable PRs, unacked briefs, findings awaiting triage,
-    /// reviewer verdicts, NeedsAttention escalations, unread mail, AND pending
-    /// worker directives. The same
+    /// in ONE place: mergeable PRs, typed recusal holds needing an independent
+    /// reader, unacked briefs, findings awaiting triage, reviewer verdicts,
+    /// NeedsAttention escalations, unread mail, AND pending worker directives. The same
     /// "Awaiting you" report that leads `aida status`, promoted to a first-class
     /// command so the whole coordination inbox is a can't-miss signal — not just
     /// mail (which had its own per-turn hook while everything else stayed

@@ -29,6 +29,10 @@ pub(crate) struct AwaitingReport {
     /// aida-chat motivating case: 5 PRs sat open for hours because the
     /// system was waiting on the human's merge button and nothing said so.
     pub mergeable_prs: Vec<MergeablePrItem>,
+    /// Typed recusal holds. These route to every non-recused seat; the recused
+    /// seat sees a labelled status row, never a misleading merge action.
+    // trace:STORY-1397 | ai:codex
+    pub recusal_holds: Vec<RecusalHoldItem>,
     /// Unacked briefs filed for the running agent (or every agent when
     /// the caller can't narrow). Each one is a hand-off the operator
     /// hasn't picked up yet.
@@ -373,6 +377,42 @@ pub(crate) struct MergeablePrItem {
     pub ci_rollup: Option<String>,
 }
 
+// trace:STORY-1397 | ai:codex
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct RecusalHoldItem {
+    pub pr: u64,
+    pub recused: String,
+    pub reason: String,
+    pub current_seat_recused: bool,
+    pub reader_available: bool,
+}
+
+// trace:STORY-1397 | ai:codex
+pub(crate) fn classify_recusal_holds(
+    holds: &[crate::merge_hold::HoldRecord],
+    current_seat: &str,
+    available_readers: &[String],
+) -> Vec<RecusalHoldItem> {
+    holds
+        .iter()
+        .filter(|hold| hold.kind == crate::merge_hold::HoldKind::Recusal)
+        .filter_map(|hold| {
+            let recused = hold.recused.as_ref()?.trim();
+            let current_seat_recused = recused.eq_ignore_ascii_case(current_seat.trim());
+            let reader_available = available_readers
+                .iter()
+                .any(|reader| !reader.eq_ignore_ascii_case(recused));
+            Some(RecusalHoldItem {
+                pr: hold.pr,
+                recused: recused.to_string(),
+                reason: hold.reason.clone(),
+                current_seat_recused,
+                reader_available,
+            })
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct PendingBriefItem {
     pub agent: String,
@@ -418,6 +458,7 @@ impl AwaitingReport {
     /// the section header and the empty-report short-circuit.
     pub fn total(&self) -> usize {
         self.mergeable_prs.len()
+            + self.recusal_holds.len()
             + self.pending_briefs.len()
             + (if self.findings_total > 0 { 1 } else { 0 })
             + (if self.mail.unread > 0 { 1 } else { 0 })
@@ -462,6 +503,30 @@ impl AwaitingReport {
 
         let mut budget = cap;
         let mut overflow = 0usize;
+
+        for hold in &self.recusal_holds {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            let state = if hold.current_seat_recused {
+                if hold.reader_available {
+                    "awaiting another reader".to_string()
+                } else {
+                    "no available reader — operator must route one".to_string()
+                }
+            } else {
+                format!("needs an independent reader ({} is recused)", hold.recused)
+            };
+            writeln!(
+                w,
+                "  🛡️ PR-{} recusal — {} · {}",
+                hold.pr.to_string().bold(),
+                state,
+                hold.reason,
+            )?;
+            budget -= 1;
+        }
 
         // Order: PRs first (most actionable — the unblocked-merge case),
         // then briefs (handoffs you owe), then findings line (a triage
@@ -722,6 +787,7 @@ impl AwaitingReport {
                 "head_branch": p.head_branch,
                 "ci_rollup": p.ci_rollup,
             })).collect::<Vec<_>>(),
+            "recusal_holds": self.recusal_holds,
             "pending_briefs": self.pending_briefs.iter().map(|b| serde_json::json!({
                 "agent": b.agent,
                 "spec_id": b.spec_id,
@@ -787,6 +853,13 @@ impl AwaitingReport {
         let mut parts: Vec<String> = Vec::new();
         if !self.mergeable_prs.is_empty() {
             parts.push(pluralize(self.mergeable_prs.len(), "PR", "PRs"));
+        }
+        if !self.recusal_holds.is_empty() {
+            parts.push(pluralize(
+                self.recusal_holds.len(),
+                "recusal hold",
+                "recusal holds",
+            ));
         }
         if !self.pending_briefs.is_empty() {
             parts.push(pluralize(self.pending_briefs.len(), "brief", "briefs"));
@@ -919,6 +992,46 @@ pub(crate) fn classify_open_prs(prs: &[OpenPrItem]) -> Vec<MergeablePrItem> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:STORY-1397 | ai:codex
+    #[test]
+    fn recusal_routes_to_other_seat_and_labels_recused_seat() {
+        let holds = vec![crate::merge_hold::HoldRecord {
+            pr: 1397,
+            reason: "needs independent review".into(),
+            kind: crate::merge_hold::HoldKind::Recusal,
+            recused: Some("author-seat".into()),
+        }];
+        let readers = vec!["author-seat".into(), "reviewer-seat".into()];
+
+        let author = classify_recusal_holds(&holds, "author-seat", &readers);
+        assert!(author[0].current_seat_recused);
+        assert!(author[0].reader_available);
+
+        let reviewer = classify_recusal_holds(&holds, "reviewer-seat", &readers);
+        assert!(!reviewer[0].current_seat_recused);
+    }
+
+    #[test]
+    fn recusal_explicitly_reports_no_available_reader() {
+        let holds = vec![crate::merge_hold::HoldRecord {
+            pr: 7,
+            reason: "author recused".into(),
+            kind: crate::merge_hold::HoldKind::Recusal,
+            recused: Some("only-seat".into()),
+        }];
+        let rows = classify_recusal_holds(&holds, "only-seat", &["only-seat".into()]);
+        assert!(!rows[0].reader_available);
+        let report = AwaitingReport {
+            recusal_holds: rows,
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        report.render(true, &mut out).unwrap();
+        assert!(String::from_utf8(out)
+            .unwrap()
+            .contains("no available reader"));
+    }
 
     fn pr(
         number: u64,

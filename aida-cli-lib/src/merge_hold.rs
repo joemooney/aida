@@ -17,6 +17,47 @@
 
 use std::path::{Path, PathBuf};
 
+/// Machine-readable reason for a merge hold. `Legacy` is only returned for
+/// markers written before typed holds existed; every newly written marker has
+/// one of the three actionable kinds.
+// trace:STORY-1397 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum HoldKind {
+    Recusal,
+    Rework,
+    Decision,
+    Legacy,
+}
+
+impl HoldKind {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Recusal => "recusal",
+            Self::Rework => "rework",
+            Self::Decision => "decision",
+            Self::Legacy => "legacy",
+        }
+    }
+
+    fn parse(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "recusal" => Self::Recusal,
+            "rework" => Self::Rework,
+            "decision" => Self::Decision,
+            _ => Self::Legacy,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct HoldRecord {
+    pub(crate) pr: u64,
+    pub(crate) reason: String,
+    pub(crate) kind: HoldKind,
+    pub(crate) recused: Option<String>,
+}
+
 fn holds_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("merge-holds")
 }
@@ -29,15 +70,56 @@ pub(crate) fn hold_path(project_root: &Path, pr: u64) -> PathBuf {
 /// Record a supervised merge-hold for `pr` with a human-readable reason.
 /// Idempotent — re-recording refreshes the reason.
 pub(crate) fn write_hold(project_root: &Path, pr: u64, reason: &str) -> std::io::Result<()> {
+    write_typed_hold(project_root, pr, HoldKind::Decision, None, reason)
+}
+
+/// Write a typed marker while keeping the first-line reason format understood
+/// by older binaries. Metadata is line-oriented so the safety chokepoint still
+/// treats even a partially written or future-version marker as held.
+// trace:STORY-1397 | ai:codex
+pub(crate) fn write_typed_hold(
+    project_root: &Path,
+    pr: u64,
+    kind: HoldKind,
+    recused: Option<&str>,
+    reason: &str,
+) -> std::io::Result<()> {
     let dir = holds_dir(project_root);
     std::fs::create_dir_all(&dir)?;
     let reason = reason.trim();
-    let body = if reason.is_empty() {
+    let reason = if reason.is_empty() {
         format!("PR-{pr} is under a supervised merge-hold\n")
     } else {
         format!("{reason}\n")
     };
+    let mut body = format!("{reason}kind: {}\n", kind.as_str());
+    if let Some(who) = recused.map(str::trim).filter(|s| !s.is_empty()) {
+        body.push_str(&format!("recused: {who}\n"));
+    }
     std::fs::write(hold_path(project_root, pr), body)
+}
+
+/// Parse the complete typed record. Unknown metadata and legacy files are
+/// tolerated; marker presence remains the only merge-blocking signal.
+// trace:STORY-1397 | ai:codex
+pub(crate) fn read_record(project_root: &Path, pr: u64) -> Option<HoldRecord> {
+    let reason = read_hold(project_root, pr)?;
+    let body = std::fs::read_to_string(hold_path(project_root, pr)).unwrap_or_default();
+    let metadata = |key: &str| {
+        body.lines().skip(1).find_map(|line| {
+            line.strip_prefix(key)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+        })
+    };
+    Some(HoldRecord {
+        pr,
+        reason,
+        kind: metadata("kind:")
+            .map(HoldKind::parse)
+            .unwrap_or(HoldKind::Legacy),
+        recused: metadata("recused:").map(str::to_string),
+    })
 }
 
 /// The hold reason if `pr` is under a supervised merge-hold, else `None`.
@@ -83,6 +165,14 @@ pub(crate) fn clear_hold(project_root: &Path, pr: u64) -> std::io::Result<()> {
 // primitive lands with the safety core.
 #[allow(dead_code)]
 pub(crate) fn list_holds(project_root: &Path) -> Vec<(u64, String)> {
+    list_records(project_root)
+        .into_iter()
+        .map(|record| (record.pr, record.reason))
+        .collect()
+}
+
+// trace:STORY-1397 | ai:codex
+pub(crate) fn list_records(project_root: &Path) -> Vec<HoldRecord> {
     let dir = holds_dir(project_root);
     let mut out = Vec::new();
     if let Ok(entries) = std::fs::read_dir(&dir) {
@@ -90,13 +180,13 @@ pub(crate) fn list_holds(project_root: &Path) -> Vec<(u64, String)> {
             let name = entry.file_name();
             let name = name.to_string_lossy();
             if let Some(n) = name.strip_prefix("PR-").and_then(|s| s.parse::<u64>().ok()) {
-                if let Some(reason) = read_hold(project_root, n) {
-                    out.push((n, reason));
+                if let Some(record) = read_record(project_root, n) {
+                    out.push(record);
                 }
             }
         }
     }
-    out.sort_by_key(|(n, _)| *n);
+    out.sort_by_key(|record| record.pr);
     out
 }
 
@@ -207,11 +297,20 @@ pub(crate) fn record_label_state(
         }
         LabelState::Unknown => String::new(),
     };
-    let out = if line.is_empty() {
-        format!("{reason}\n")
-    } else {
-        format!("{reason}\n{line}\n")
-    };
+    let metadata: Vec<&str> = body
+        .lines()
+        .skip(1)
+        .filter(|existing| !existing.trim_start().starts_with("label:"))
+        .collect();
+    let mut out = format!("{reason}\n");
+    for existing in metadata {
+        out.push_str(existing);
+        out.push('\n');
+    }
+    if !line.is_empty() {
+        out.push_str(&line);
+        out.push('\n');
+    }
     std::fs::write(path, out)
 }
 
@@ -222,7 +321,12 @@ pub(crate) fn read_label_state(project_root: &Path, pr: u64) -> LabelState {
     let Ok(body) = std::fs::read_to_string(hold_path(project_root, pr)) else {
         return LabelState::Unknown;
     };
-    match body.lines().nth(1).map(str::trim) {
+    match body
+        .lines()
+        .skip(1)
+        .map(str::trim)
+        .find(|line| line.starts_with("label:"))
+    {
         Some("label: synced") => LabelState::Synced,
         Some(l) if l.starts_with("label: unsynced:") => {
             LabelState::Unsynced(l["label: unsynced:".len()..].trim().to_string())
@@ -432,6 +536,37 @@ mod tests {
         assert!(read_hold(root, 42).is_none());
         // Clearing an absent hold is a no-op success.
         clear_hold(root, 42).unwrap();
+    }
+
+    // trace:STORY-1397 | ai:codex
+    #[test]
+    fn typed_recusal_round_trips_and_label_updates_preserve_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        write_typed_hold(
+            dir.path(),
+            1397,
+            HoldKind::Recusal,
+            Some("advisor-1"),
+            "author must not merge",
+        )
+        .unwrap();
+        record_label_state(dir.path(), 1397, &LabelState::Synced).unwrap();
+
+        let record = read_record(dir.path(), 1397).unwrap();
+        assert_eq!(record.kind, HoldKind::Recusal);
+        assert_eq!(record.recused.as_deref(), Some("advisor-1"));
+        assert_eq!(record.reason, "author must not merge");
+        assert_eq!(read_label_state(dir.path(), 1397), LabelState::Synced);
+    }
+
+    #[test]
+    fn legacy_marker_remains_fail_closed_and_queryable() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
+        std::fs::write(hold_path(dir.path(), 3), "old free-text reason\n").unwrap();
+        let record = read_record(dir.path(), 3).unwrap();
+        assert_eq!(record.kind, HoldKind::Legacy);
+        assert_eq!(record.reason, "old free-text reason");
     }
 
     #[test]
