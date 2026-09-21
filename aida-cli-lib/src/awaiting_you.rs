@@ -189,8 +189,28 @@ pub(crate) fn rework_ready_rows(
                 .map(str::trim)
                 .filter(|s| !s.is_empty())?;
             let head = c.head_sha.trim();
-            // only a POSITIVE Moved emits a row; Same and Incomparable are both
-            // silence, so an unusably short recorded sha cannot pin a row open
+            // DECISION, recorded rather than inherited: only a POSITIVE Moved
+            // emits a row. Same and Incomparable are both silence here, and
+            // that is deliberate even though they are different states.
+            //
+            // A ROW SURFACE CANNOT CARRY A DISTINCTION IN THE ABSENCE OF A ROW.
+            // "No row" is one state however many reasons produce it, so asking
+            // Incomparable to look different from Same HERE would be asking
+            // silence to have two flavours. The governing principle — that
+            // absent evidence must be distinguishable from good evidence — is
+            // satisfied by the distinction existing somewhere a consumer can
+            // REACH, not by every surface rendering it.
+            //
+            // WHERE THE DISTINCTION LIVES: in `ShaRelation` itself. It is
+            // three-state precisely so a caller that CAN express the
+            // difference is able to. Binding on anything built later: a
+            // diagnostic or verbose view over verdict staleness MUST report
+            // Incomparable distinctly from Same. Collapsing it back to a
+            // boolean at such a surface would be the failure this shape exists
+            // to avoid — the row surface is the one place where it is correct.
+            //
+            // The immediate consequence is that an unusably short recorded sha
+            // cannot pin a row open
             if head.is_empty() || compare_shas(head, reviewed) != ShaRelation::Moved {
                 return None;
             }
