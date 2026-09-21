@@ -55,7 +55,7 @@ description: |
   - A run that leaves the CI phase without a terminal CI result is itself an error: either it shelves with a cause naming the timeout, or it waits. Silently advancing is not an option.
   - A reviewer verdict records the CI conclusion it saw. A verdict whose `reviewed_sha` has no terminal CI result is not a valid basis for a shelve.
   - Regression test reproduces the observed ordering: reviewer phase entered before the reviewed commit's checks have started.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
