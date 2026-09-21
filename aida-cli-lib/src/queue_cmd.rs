@@ -5601,13 +5601,16 @@ pub(crate) fn handle_queue_command(
                 }
                 // TASK-1005 / SPIKE-70: `--sequential` NAMES + guards the existing
                 // per-member-PR batch drain as a first-class coupled-ordered mode:
-                // members run ONE AT A TIME (concurrency pinned to 1), each its own
-                // PR off freshly-pulled main, with shelve-and-continue on a member
-                // failure. It does NOT change the engine — it requires a batch and
-                // then falls through to the same `handle_auto_complete_batch[es]`
-                // dispatch below, which `drain_batch` already drives sequentially.
+                // members run in pickup order, each its own PR off freshly-pulled
+                // main, with shelve-and-continue on a member failure. It does NOT
+                // change the engine — it requires a batch and then falls through to
+                // the same `handle_auto_complete_batch[es]` dispatch below.
                 // `conflicts_with = "single_branch"` is enforced by clap.
-                // trace:TASK-1005 | ai:claude
+                // TASK-185: that dispatch honours `[drain] pipeline_depth` since
+                // STORY-1091, so this flag governs ORDER + per-member-PR shape, not
+                // concurrency — the one-at-a-time property comes from the default
+                // depth of 1, not from `--sequential`.
+                // trace:TASK-1005 trace:TASK-185 | ai:claude
                 if *sequential {
                     let has_batch = effective_batch.is_some_and(|b| !b.is_empty())
                         || effective_batches.is_some();
@@ -5620,9 +5623,11 @@ pub(crate) fn handle_queue_command(
                     }
                     if !*json {
                         eprintln!(
-                            "Sequential drain: members run one at a time (concurrency {SEQUENTIAL_DRAIN_CONCURRENCY}); \
-                             each member is its own PR off freshly-pulled main, and a member \
-                             failure shelves that member and continues with the rest."
+                            "Sequential drain: members run in pickup order, each its own PR off \
+                             freshly-pulled main, and a member failure shelves that member and \
+                             continues with the rest. Ordering only — concurrency follows \
+                             `[drain] pipeline_depth` (default {}, i.e. strictly one at a time).",
+                            crate::drain_state::default_pipeline_depth()
                         );
                     }
                     // Fall through to the batch / batches dispatch below — it IS

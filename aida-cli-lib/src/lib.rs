@@ -669,12 +669,14 @@ const ASCIINEMA_SLUG_MAX_CHARS: usize = 80;
 // behaviour). trace:EPIC-28 | ai:claude
 const DEFAULT_MAX_FAILURES: usize = 5;
 
-// SPIKE-70: `--sequential` drives a batch ONE member at a time — concurrency is
-// pinned to 1. The existing batch drain (`auto_complete::drain_batch`) is already
-// inherently one-member-at-a-time (it merges + pulls before advancing the head),
-// so `--sequential` names + guards that invariant rather than introducing a
-// parallel knob. trace:TASK-1005 | ai:claude
-pub(crate) const SEQUENTIAL_DRAIN_CONCURRENCY: usize = 1;
+// SPIKE-70: `--sequential` names + guards the ordered, per-member-PR SHAPE of the
+// batch drain (`auto_complete::drain_batch*`) rather than introducing a parallel
+// knob. TASK-185: it does NOT pin concurrency — STORY-1091 made the batch drain
+// honour `[drain] pipeline_depth`, so the one-member-at-a-time property comes from
+// `drain_state::default_pipeline_depth()` (1), not from this flag. The old
+// `SEQUENTIAL_DRAIN_CONCURRENCY` const asserted the pinned-to-1 invariant and was
+// removed with the claim; read the default depth instead.
+// trace:TASK-1005 trace:TASK-185 | ai:claude
 
 // Requester intake must remain a standalone Draft. Both the CLI and MCP gates
 // consume this list so relationship and grooming-field policy cannot drift.

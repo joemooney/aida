@@ -5582,18 +5582,24 @@ pub enum QueueCommand {
         // trace:TASK-1003, SPIKE-70 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long, requires = "autonomous")]
         single_branch: bool,
-        /// Coupled-sequential drain: with `--batch NAME --auto-complete`, drive
-        /// the batch members ONE AT A TIME, in pickup order — each member forks
-        /// off the freshly-pulled main, runs its full lifecycle, and merges as
-        /// its OWN PR before the next member starts. For coupled-but-
-        /// independently-shippable work that must land in order (each increment
-        /// stays a reviewable PR to main). A member failure SHELVES that member
-        /// and the drain continues with the rest — contrast `--single-branch`,
-        /// which accumulates every member on one branch and HALTS on a failure.
-        /// This names + guards the existing batch drain, which is already
-        /// one-member-at-a-time; concurrency is pinned to 1. Requires `--batch`
-        /// or `--batches`.
+        /// Coupled-ordered drain: with `--batch NAME --auto-complete`, drive the
+        /// batch members in pickup order — each member forks off the
+        /// freshly-pulled main, runs its full lifecycle, and merges as its OWN
+        /// PR. For coupled-but-independently-shippable work that must land in
+        /// order (each increment stays a reviewable PR to main). A member
+        /// failure SHELVES that member and the drain continues with the rest —
+        /// contrast `--single-branch`, which accumulates every member on one
+        /// branch and HALTS on a failure. This names + guards that ordered,
+        /// per-member-PR SHAPE; it does not itself pin concurrency. The batch
+        /// drain runs strictly one member at a time at the default
+        /// `[drain] pipeline_depth = 1`; raise that (max 3) and the pipelined
+        /// scheduler starts a later member's implementer/CI leg while an earlier
+        /// member waits, with merges still serialized one at a time. Requires
+        /// `--batch` or `--batches`.
         // trace:TASK-1005, SPIKE-70 | ai:claude — plain `//` keeps the marker out of `--help`.
+        // trace:TASK-185 | ai:claude — STORY-1091 made `[drain] pipeline_depth`
+        // live for the batch drain, so the old "concurrency is pinned to 1"
+        // sentence advertised a landed feature as absent.
         #[clap(long, requires = "autonomous", conflicts_with = "single_branch")]
         sequential: bool,
         /// Preview without acting. For a single spec: print the resolved
@@ -13801,11 +13807,49 @@ mod tests {
         );
     }
 
-    // trace:TASK-1005 — the sequential mode pins concurrency to 1; the named
-    // invariant the dispatch relies on.
+    // TASK-185: `--sequential` governs ORDER + per-member-PR shape, not
+    // concurrency. The one-member-at-a-time property the flag's help text
+    // promises comes from the drain's DEFAULT pipeline depth, so that is the
+    // invariant worth pinning — the old `SEQUENTIAL_DRAIN_CONCURRENCY` const
+    // asserted an engine property STORY-1091 made false.
+    // trace:TASK-1005 trace:TASK-185 | ai:claude
     #[test]
-    fn sequential_pins_concurrency_to_one() {
-        assert_eq!(crate::SEQUENTIAL_DRAIN_CONCURRENCY, 1);
+    fn sequential_drain_is_one_at_a_time_via_default_pipeline_depth() {
+        assert_eq!(crate::drain_state::default_pipeline_depth(), 1);
+    }
+
+    // TASK-185: the `--sequential` help text must not re-assert that
+    // concurrency is pinned to 1 — STORY-1091 made `[drain] pipeline_depth`
+    // live for the batch drain, so that sentence advertised a landed feature as
+    // absent. Guard the corrected claim (and its absence) at the rendered help.
+    // trace:TASK-185 | ai:claude
+    #[test]
+    fn sequential_help_does_not_claim_concurrency_is_pinned() {
+        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let help = find_subcommand_help(&mut cmd, &["queue", "work"]);
+        assert!(
+            !help.contains("pinned to 1"),
+            "`aida queue work --help` still claims concurrency is pinned to 1"
+        );
+        assert!(
+            help.contains("pipeline_depth"),
+            "`aida queue work --help` should name `[drain] pipeline_depth` as what governs concurrency; got:\n{help}"
+        );
+    }
+
+    /// Render the long help for a nested subcommand path (e.g. `queue work`).
+    // trace:TASK-185 | ai:claude
+    fn find_subcommand_help(cmd: &mut clap::Command, path: &[&str]) -> String {
+        let mut cur = cmd.clone();
+        for name in path {
+            let next = cur
+                .get_subcommands()
+                .find(|s| s.get_name() == *name)
+                .unwrap_or_else(|| panic!("subcommand `{name}` not found"))
+                .clone();
+            cur = next;
+        }
+        cur.render_long_help().to_string()
     }
 
     // trace:STORY-1028 | ai:codex
