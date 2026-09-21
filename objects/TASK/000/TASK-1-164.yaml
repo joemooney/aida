@@ -1,0 +1,42 @@
+id: 01a0c1b3-19aa-7b93-a75c-9fee6de00922
+spec_id: TASK-1-164
+title: aida queue work --help asserts batch concurrency is pinned to 1, which STORY-1091 made false -- it advertises a landed feature as absent
+description: |-
+  aida queue work --help tells an operator that batch concurrency is pinned to 1, which has been false since STORY-1091 shipped -- it advertises a landed feature as absent
+
+  FOUND while reviewing PR #2041, where the author flagged it as an open question they could not resolve: "aida queue work --help still says batch concurrency is pinned to 1, which either is stale or means the batch path ignores this."
+
+  IT IS STALE. Verified by enumerating the production wiring rather than by reading either document:
+
+      trait PipelinedBatchDriver                     auto_complete.rs:4484
+      production impls (2, both non-test):
+          RealBatchDriver                            lib.rs:79281
+          RealNextNDriver                            lib.rs:81416
+      drain_batch_pipelined_with_caps                auto_complete.rs:4596
+      production call sites (2, separate from 3 test calls):
+          lib.rs:79536
+          lib.rs:81653
+      RealBatchDriver::pipeline_depth() returns the configured value; depth <= 1
+          falls back to drain_batch_with_caps (the sequential path)
+
+  So the batch path does consume [drain] pipeline_depth, and STORY-1091 -- the concurrent scheduler that consumes STORY-1041's contract -- is status Completed.
+
+  THE HELP TEXT SAYS THE OPPOSITE: "This names + guards the existing batch drain, which is already one-member-at-a-time; concurrency is pinned to 1."
+
+  WHY THIS IS WORSE THAN AN ORDINARY STALE DOC. It does not merely omit a feature -- it actively asserts the feature is absent, in the help for the exact command whose behaviour the setting governs. An operator deciding whether to raise pipeline_depth reads this and concludes the knob does nothing for the batch drain, which is the only drain shape the project actually runs. The setting then looks like dead configuration, and the measured 475 minutes per day of sequential CI dead time stays on the table because the documentation said there was nothing to do about it.
+
+  It also cost real time in the loop it is meant to serve: the PR author could not resolve it, shipped the change with the question open in the commit message, and a reviewer had to trace six call sites to answer it. That is the documentation failing at the one moment it was consulted.
+
+  SCOPE, kept narrow deliberately: this is the --help text on aida queue work, not the code and not docs/autonomous-drain.md, which I have not checked. Someone fixing this should check whether the same "pinned to 1" claim appears in the guide and the TUI help, since a claim this specific tends to have been copied.
+
+  Worth noting the general form, which is the same shape as several findings tonight: a surface that describes the system's capabilities is a coordination surface, and this one reports absent evidence -- "no concurrency here" -- where the evidence is simply out of date. Nothing distinguishes "pinned to 1 by design" from "written before the scheduler landed".
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T02:02:15.338764730Z
+modified_at: 2026-09-21T02:02:15.338764730Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
