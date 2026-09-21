@@ -1,0 +1,41 @@
+id: 01a0c3ec-fe63-74f2-9e46-5700d5a9a564
+spec_id: TASK-1418
+agreed_id: TASK-1418
+title: 'The mutation harness is a null-result instrument that can lie: record in implementer-discipline that a green mutation is not evidence until the mutation is shown to have changed behaviour'
+description: |-
+  THE OBSERVATION, reported unprompted by claude-product-1 on 2026-09-21 while falsifying the PR #2027 test, and escalated by claude-reviewer-1 as belonging somewhere durable rather than on BUG-1442.
+
+  Falsifying a test by mutating the production emitter, TWO OF THREE MUTATIONS FIRST REPORTED GREEN AND NEITHER GREEN MEANT ANYTHING:
+
+    - one swap was applied INSIDE the row-building loop, so three relationships swapped twice and cancelled out - the emitter's output was byte-identical;
+    - the retry MISSED ITS ANCHOR: the closing brace is indented 28 columns and the edit had been hand-counted at 32, so the edit silently applied nowhere.
+
+  The implementer nearly reported the first as a genuine blind spot in their own test.
+
+  THE RULE, in their words: a mutation that produces green must be shown to have ACTUALLY CHANGED BEHAVIOUR before the green is evidence - otherwise "the test did not catch it" and "the code was never changed" are the same observation.
+
+  WHY THIS BELONGS IN THE DISCIPLINE PACK AND NOT ON THE SPEC IT SURFACED FROM. Mutation testing is the implementer's half of falsification; the reviewer falsifies claims, the implementer falsifies code, and the seam between them is where defects live. A mutation harness that silently no-ops therefore reports FULL COVERAGE OF A TEST THAT PROVES NOTHING. It fails in the safe-looking direction, and it fails inside the instrument every other check is trusted to.
+
+  That makes it a different kind from the failure modes already documented. Truncated output, a swallowed exit code and an inflated sentence all corrupt evidence someone was reading carelessly. This corrupts the instrument itself, which is why it survives a careful reader.
+
+  GENERALIZATION worth stating alongside the rule: a null result is only evidence if the instrument producing it was live. The same shape covers a grep whose pattern never matched anywhere, a guard that was never wired into the path it guards, and a test file not in the module tree. The catch is always the same move the implementer made - check the thing producing the null, not the null.
+
+  SCOPE - this is a documentation change to the tracked discipline pack, nothing executable:
+
+    - master: aida-core/templates/.aida/discipline/implementer-discipline.md (the project copy under .aida/discipline/ is the dogfood mirror; edit the MASTER per the template architecture rule)
+    - the file currently has six rules and no falsification section at all, so this is an addition rather than an edit
+    - it reaches downstream projects through aida scaffold refresh / aida init --refresh like any other template fix
+
+  ACCEPTANCE:
+  1. implementer-discipline.md carries the rule, stated as the falsifiable form: a green mutation is not evidence until the mutation is shown to have changed behaviour.
+  2. It names the concrete check - confirm the edit landed (the diff is non-empty) AND that the output actually differs - because a silent no-op edit and a successful edit look identical in a terminal.
+  3. It states the generalization (a null result is only evidence if the instrument producing it was live) and gives at least one non-mutation instance, so a reader applies it past mutation testing.
+  4. It records BOTH concrete 2026-09-21 mechanisms - the cancelled-out double swap and the missed anchor - because the two are caught by different checks and naming only one ships half the rule.
+  5. The README pointer-table entry for implementer-discipline.md still describes the file accurately after the addition.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T12:24:43.875708252Z
+modified_at: 2026-09-21T12:24:43.875708252Z
+req_type: Task
