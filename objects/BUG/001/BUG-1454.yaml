@@ -41,12 +41,12 @@ description: |-
   8. An unsupported or unqueried forge must not read as "no open PR". specs_with_open_prs returns an empty map for every non-GitHub forge, and an empty map is currently interpreted as definitively no open change, which permits completion. That directly violates criterion 3 of this spec - where the bump is ambiguous, prefer Done - because unqueried forge state is ambiguous, not negative. CORRECTED 2026-09-20 18:47: this path is NOT reachable in this repository, and the earlier claim that it was is withdrawn. resolve_forge_kind (aida-cli-lib/src/forge.rs:1023) reads [forge] from .aida/config.toml first and otherwise detects from ORIGIN; this repo has no [forge] section and origin is https://github.com/joemooney/aida.git, so it resolves to GitHub and the empty-map branch is never taken. The gitlab remote here is a secondary mirror and does not affect resolution. The defect is still real and still worth fixing: a GitLab-primary or pure-git project silently auto-completes every spec with an open change, which is this exact bug left unfixed for those forges. It is a correctness defect for other projects, not a live exposure here. The mechanism is also sharper than 'returns an empty map': it returns Some(empty), and Some is a DEFINITIVE answer meaning no spec has an open PR, so everything bumps. None is the could-not-determine value, and the same function already returns None correctly when gh is missing or the call fails, so the correct shape is already present a few lines away. Either query the configured forge, or return inconclusive and preserve Done. Raised by the codex drain reviewer on PR #2040 and recovered from the session log after the verdict was overwritten; promoted here so it is binding rather than comment-borne.
 
   9. The regression fixture in criterion 6 must be faithful to the shape it claims to test. open_pr_for_same_spec_defers_auto_bump creates only ONE local commit, and its fake gh returns PR #1979 for every invocation without validating which spec was searched or modelling a second trailered commit. A fake that answers every query identically cannot demonstrate the lookup is spec-specific, so the test passes whether or not the code is correct. Build a two-deliverable fixture - one merged commit and one on an open PR, both carrying the same trailer - and assert the lookup was performed for that spec. Same provenance as criterion 8.
-status: Done
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:22:32.343565248Z
-modified_at: 2026-09-21T01:45:39.572598119Z
+modified_at: 2026-09-21T08:38:03.529179093Z
 req_type: Bug
 tags:
 - auto-bump
@@ -128,7 +128,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1454 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-21T01:26:19.980425784Z
+  detail: 'Pure rebase, zero rework; Build now GREEN (11m5s) but neither finding is reachable by it. Both blocking findings re-verified — F1''s line moved ~53 lines in the rebase and is now cited by symbol. NEW: the same early-return shape exists at two further sites.'
+  recovery_hint: address the review findings, move BUG-1454 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-21T08:38:03.529179093Z
