@@ -47,7 +47,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:49:25.512029219Z
-modified_at: 2026-09-21T12:59:55.600834383Z
+modified_at: 2026-09-21T13:04:48.726835873Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -141,4 +141,30 @@ comments:
     #2033 is therefore held by THREE INDEPENDENT THINGS: a current blocking verdict at the live head, the merge-hold marker plus label, and the ordering. The reviewer's own ranking, which is worth recording: the VERDICT is the one to rely on least in an argument and most in practice - it is substrate, it is current, and `queue done` refuses against it. The HOLD is the one that survives a reviewer being replaced.
   created_at: 2026-09-21T12:59:41.983495068Z
   modified_at: 2026-09-21T12:59:41.983495068Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c411-b056-7f92-8520-eb9bdd83e192
+  author: joe
+  content: |-
+    RULING ON THE EXIT-CODE CONTRACT: OPTION B - a general opt-in `--fail-on-findings` flag on `doctor check <CATEGORY>`. Product found the flaw in their own proposal before building and asked for the ruling; this is it.
+
+    THE BLOCKER, re-verified by the advisor rather than taken on report:
+
+        aida doctor                      4316 lines of output    exit 0
+        aida doctor check stale-leases                           exit 0
+
+    So `doctor check performance` would have put a gate INSIDE a command that always exits 0, and the substrate job would read success on every six-hour tick while findings scrolled past. THE WRAPPER PROPOSED TO GIVE THE INSTRUMENT A FAILURE MODE HAS NO FAILURE MODE EITHER. Fifth inert instrument of the night, and the first found inside a fix for the fourth.
+
+    WHY B RATHER THAN A. Option A - make `doctor check` exit non-zero on findings for EVERY category - is arguably the more correct semantics, and product said so. It is rejected on SCOPE, not semantics: it is a contract change to a shared surface arriving as a side effect of a performance guard. That is the same anti-pattern that produced this spec's own carve-out from BUG-1480 - do not hide a change in a spec that is not about it. Ruling the other way here would contradict the ruling that created this spec. If `doctor check` should fail on findings generally, that is its own spec with its own review, and B does not foreclose it.
+
+    WHY B RATHER THAN C. C - only the new `performance` category exits non-zero - leaves two categories behaving differently under one verb. That is an inconsistency a later reader "fixes" in the wrong direction, and the wrong direction here is silence.
+
+    WHAT MAKES B MORE THAN A COMPROMISE: the flag is NAMED IN THE JOB DEFINITION, so the gate's failure mode is visible where a reader looks - in the `[[schedule.jobs]]` entry - rather than hidden inside a category's behaviour. A reader of the job can see that it is gating. A reader of a category cannot.
+
+    B'S OWN WEAKNESS, STATED RATHER THAN DISCOVERED LATER: an opt-in flag can be FORGOTTEN. A future job added without `--fail-on-findings` is silently non-gating, which is this same defect for the sixth time. THE MITIGATION IS ALREADY THIS SPEC'S CRITERION 2 AND IT IS HEREBY GENERALISED: demonstrate-it-trips applies to EVERY job added to the schedule registry whose purpose is gating, not only to this one. A gating job that has never been shown to exit non-zero is not accepted. Add that to the registry's own documentation in the same change.
+
+    BLAST RADIUS, product checked it and the advisor confirms the distinction they drew: nothing depends on `doctor check` exiting 0. `solo_cmd.rs:27,31` and `scripts/drain-loop.sh:63` are on the `doctor HEAL` path, which B does not touch.
+
+    ONE CORRECTION TO THE FRAMING, so it does not become lore: the `|| true` on `aida doctor heal stale-leases` in drain-loop.sh does NOT establish that "somebody once expected it to mean something". Defensive `|| true` on a best-effort cleanup step is ordinary scripting, and the comment above it says "Best-effort" explicitly. It is evidence of caution, not of a disappointed expectation. The doctor-exits-0 problem is real on its own measured terms and does not need that inference.
+  created_at: 2026-09-21T13:04:48.726835873Z
+  modified_at: 2026-09-21T13:04:48.726835873Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
