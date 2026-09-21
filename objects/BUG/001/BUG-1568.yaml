@@ -32,12 +32,12 @@ description: |-
   - Demonstrated by a drain that ships at least one spec from the batch, not by the absence of the error.
 
   NOT IN SCOPE: the launcher script. It is behaving correctly given what the CLI tells it - drain status reports none, so it launches. The defect is that launching then fails for a reason the tooling misattributes.
-status: Draft
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:03:26.342175685Z
-modified_at: 2026-09-21T20:51:16.964839104Z
+modified_at: 2026-09-21T20:51:39.306559935Z
 req_type: Bug
 tags:
 - aida:queue
