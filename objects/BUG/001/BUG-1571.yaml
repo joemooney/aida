@@ -1,0 +1,62 @@
+id: 01a0c5b4-cb46-7e42-8cc6-6dcc59046466
+spec_id: BUG-1571
+agreed_id: BUG-1571
+title: aida review record printed both artefact paths and only the spec-keyed one landed - the missing PR-keyed handshake is what the orchestrator reads to proceed
+description: |
+  `aida review record --pr N` REPORTED WRITING BOTH ARTEFACTS AND ONLY ONE LANDED. THE MISSING ONE IS THE HANDSHAKE THE ORCHESTRATOR READS.
+
+  Found by claude-reviewer-1 2026-09-21 via their head-vs-verdict sweep, not via any failure message. Re-verified by the advisor after the recovery.
+
+  WHAT THE COMMAND PRINTED, 13:28:
+
+      record:    .aida/review-verdicts/BUG-1462.json
+      handshake: .aida/review-verdicts/PR-2059.json
+                 (phase-3 handshake -- the orchestrator reads this to proceed)
+
+  WHAT EXISTED, 13:40:
+
+      BUG-1462.json   PRESENT, mtime 13:28   <- the spec-keyed write succeeded
+      PR-2059.json    ABSENT                  <- the handshake write did not
+
+  ONE INVOCATION, TWO WRITES, ONE LANDED, AND STDOUT CLAIMED BOTH. Re-recording at the SAME sha produced PR-2059.json (1876 bytes), so it is INTERMITTENT rather than deterministic — which is worse, because a deterministic failure would have been found the first time anyone looked.
+
+  RULED OUT BY THE REPORTER BEFORE REPORTING, and this is why the finding is a defect rather than a puzzle:
+    - NOT A CLOBBER. The head never moved (62dfb3ebd80e both times) and no second record was made.
+    - NOT A CLEANUP SWEEP. PR-2059 is OPEN, so a merged-PR sweep would not touch it.
+    - NOT A NUMBERING GAP. PR-2058.json and PR-2060.json both exist; 2059 was the ONLY hole in
+      that range, out of 520 PR-keyed records at the time (521 after recovery — advisor verified).
+
+  WHY IT MATTERS MORE THAN A MISSING FILE. THE PR-KEYED HANDSHAKE IS WHAT THE ORCHESTRATOR READS TO PROCEED. An approval whose handshake is silently absent presents to the orchestrator as an UNREVIEWED PR — it stalls, or re-reviews work that has already been reviewed — WHILE THE REVIEWER HOLDS A SUCCESS MESSAGE SAYING THE OPPOSITE. Two seats disagree about whether a review happened and NEITHER HAS A SIGNAL THAT THEY DO.
+
+  AND THE DETECTION PATH IS ACCIDENTAL. It surfaced as `no-verdict: [2059]` in a sweep run for a different purpose — finding heads that moved past a blocking verdict. WITHOUT THAT SWEEP, THE FIRST EVIDENCE WOULD HAVE BEEN THE ORCHESTRATOR BEHAVING AS THOUGH #2059 WERE UNREVIEWED, which reads as an orchestrator fault rather than a write fault. The defect would have been investigated in the wrong component.
+
+  Acceptance:
+  - THE COMMAND MUST NOT REPORT A WRITE IT DID NOT PERFORM. Either verify both files exist before
+    printing the paths, or print each path only after its own write is confirmed. Reporting a
+    planned write as a completed one is the defect; the intermittency is the symptom.
+  - ESTABLISH THE MECHANISM BEFORE FIXING IT. An intermittent single-file loss has candidates
+    worth distinguishing rather than guessing between: a partial failure in a two-write sequence
+    with no rollback, a swallowed error on the second write, or an interaction with concurrent
+    activity. `aida doctor check stale-locks` found a 179-hour dead-pid cache lock on this machine
+    today (BUG-1563), and several agents were writing concurrently — so a contention interaction
+    is a live hypothesis rather than a theoretical one. DO NOT ASSUME IT; the two writes are to
+    different files and a plain race does not obviously explain one succeeding.
+  - DEMONSTRATE-IT-FIRES, RED-FIRST: make the handshake write fail and show the command REPORT the
+    failure rather than printing the path. A test written against the success path proves nothing
+    about a defect whose whole nature is that success is reported regardless.
+  - A SWEEP THAT DETECTS THE CONDITION SHOULD NOT BE A SIDE EFFECT OF A DIFFERENT SWEEP. An
+    approved PR with no handshake is a checkable state; `aida awaiting` or the reviewer surfaces
+    should name it rather than leaving it to be noticed by someone scanning for something else.
+  - NOT IN SCOPE: BUG-1539's clobber, which is the opposite failure — an artefact DESTROYED by a
+    later write. This one is never written while success is claimed.
+
+  Related: BUG-1539 (verdict keyed by PR number so a second round overwrites the first — the
+  opposite polarity of the same handshake's fragility), BUG-1562 (a marker artefact persisting
+  past its premise), BUG-1563 (the stale cache lock and the contention hypothesis).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T20:42:35.206134427Z
+modified_at: 2026-09-21T20:42:35.206134427Z
+req_type: Bug
