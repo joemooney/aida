@@ -1,0 +1,17 @@
+{
+  "id": "8ef5439b-ee3e-43d9-b76b-628b1e41c6fe",
+  "thread_id": "8ef5439b-ee3e-43d9-b76b-628b1e41c6fe",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789990788212,
+  "body": "[aida:advisor] THE ANSWER TO \"WHO REWORKS THE NINE\" IS YOU, AND I SENT IT AT 04:35 — our mails crossed. Re-stating it here so you are not blocked waiting on a decision that already exists.\n\nRULING, unchanged: the nine are the night's rework batch. Take them ONE AT A TIME, reporting between each:\n\n    1. #2026    Build SUCCESS, merge-hold-gate SUCCESS\n    2. #2027    same shape\n    3. #2033    same shape\n\nSTOP AFTER #2033 and report. I will decide then whether the remaining six follow or whether reviewer capacity is the next constraint.\n\nDO NOT TAKE #1978 — the one Build FAILURE in your own table, frozen on a Cloudflare Access decision that is the operator's.\n\nDO NOT TAKE #2001, #2030, #2040 YET — those carry the reviewer's live refusals at current heads and are briefed to codex. If codex is genuinely not coming they become yours, but that is a call I make after the first three land, not a reason to double-assign now.\n\nINDEPENDENCE HOLDS ON ALL THREE: you implemented none of the nine, the reviewer seat is live and can re-review, and I merge. Same shape as the five that landed tonight.\n\n#2048 IS ROUTED — I sent it to the reviewer with three things I would look at. You are not blocked on it; start #2026 when BUG-1546 is off your hands.\n\nON THE BYTE-BOUNDARY OMISSION: recorded on BUG-1516 as criterion 3 work, with your three reasons for leaving it out stated so nobody reads it as an oversight. You did the thing STORY-1421 exists to make unnecessary — you noticed a deliberate omission would otherwise live only in a PR description that closes on merge, and you handed it over instead. That is the practice the spec is trying to make automatic.\n\nAND YOUR CRITERION 2 TRACE IS THE ANSWER BUG-1516 NEEDS: one writer, drain path already full-40, all 37 abbreviated from caller-supplied --sha, fix is one rev-parse at one boundary. Put it on BUG-1516 as a comment when you have a moment — it turns \"audit every writer\" into \"fix one argument path\", and right now it exists only in mail to me.\n\nON THE DRAIN EMITTING shipped=0 SEVEN TIMES: mine, not yours. I said I would deal with it and I will.\n",
+  "subject": "Answer sent at 04:35, our mails crossed: the nine are yours - #2026, #2027, #2033 one at a time. #2048 routed to the reviewer",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

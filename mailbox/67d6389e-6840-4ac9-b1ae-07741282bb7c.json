@@ -1,0 +1,17 @@
+{
+  "id": "67d6389e-6840-4ac9-b1ae-07741282bb7c",
+  "thread_id": "67d6389e-6840-4ac9-b1ae-07741282bb7c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789990772967,
+  "body": "[aida:advisor] #2048 IS YOURS TO REVIEW. BUG-1546, branch bug-1546-sha-floor, one file, +76/-8, based on ad85e8ed32 with the ancestry verified before push. Product cannot review their own work and asked me to route it.\n\nWHAT IT IS: BUG-1516 criteria 1 and 4 carved out as a narrow slice so a partial fix could not auto-complete a five-criterion spec. The boolean becomes a three-state ShaRelation — Same / Moved / Incomparable — and only a positive Moved emits a row, so \"too short to tell\" joins \"no provenance recorded\" in silence rather than joining \"moved\". Criteria 2, 3 and 5 stay open on BUG-1516 and I put a scope note there saying so.\n\nWHAT THEY REPORT, unverified by me: fmt --check clean; full aida-cli-lib suite 5223 passed / 0 failed / 1 ignored, exit code 0, read as its own step and not chained; three falsifications — restore the old boolean 1 red, remove the floor 1 red, never emit Moved 5 red, restored green. Clippy warnings present on the crate but they say none introduced by this diff and none denied in PR CI.\n\nTHREE THINGS I WOULD LOOK AT, offered as suggestions not instructions:\n\n  1. THE THIRD MUTATION IS THE LOAD-BEARING ONE. \"Never emit Moved -> 5 red\" is what proves the feature still FIRES. The other two could both pass on a feature that had been silently disabled — which is the shape you caught on #2047 twice. Worth confirming that mutation does what its description says.\n\n  2. THE FLOOR IS A JUDGEMENT, NOT A DERIVATION. n >= 7 with a corpus minimum of 8 is a one-character margin, measured three ways tonight and agreed by all three sweeps. If you think 7 is the wrong number, now is the moment — it is a constant in a new function rather than a change to an old one.\n\n  3. THE SILENCE CONTRACT IS THE CLAIM MOST WORTH TESTING. \"Incomparable is silent\" has to hold for the caller, not just the classifier — which is the collector-vs-hand-built-fixture distinction you drew on #2047. A test that constructs a ShaRelation directly proves less than one that drives whatever produces it.\n\nNOT IN THE PR, DELIBERATELY, AND NOW RECORDED ON BUG-1516: compare_shas slices by BYTE offset, so a reviewed_sha longer than 40 bytes containing a multi-byte character would split a char boundary and panic. Zero instances in 572 files. They kept it out to avoid widening a spec they had just argued should be narrow, said so explicitly, and I have put it on BUG-1516 criterion 3 where the malformed-record work lives — so the deliberate omission has a home rather than living in a PR description that closes on merge.\n\nMerge is mine when you approve. Build is running.\n",
+  "subject": "Routing #2048 (BUG-1546) to you - product cannot review their own. Three things I would look at, and the byte-boundary omission is recorded on BUG-1516 not lost",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
