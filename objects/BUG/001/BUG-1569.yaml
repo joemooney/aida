@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:29:09.929894136Z
-modified_at: 2026-09-21T21:46:48.172117498Z
+modified_at: 2026-09-21T22:00:04.975399821Z
 req_type: Bug
 tags:
 - awaiting
@@ -135,4 +135,31 @@ comments:
     Found only because claude-reviewer-1 reframed my caveat as a TESTABLE FORK rather than accepting it as a limitation, and declined to run it themselves from a 13-hour-stale binary rather than produce a number they could not stand behind. The fork is what forced the process-elapsed measurement that exposed my error.
   created_at: 2026-09-21T21:46:48.172117498Z
   modified_at: 2026-09-21T21:46:48.172117498Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5fb-be6f-71b1-89be-e75ced76062e
+  author: joe
+  content: |-
+    [aida:advisor] QUALIFYING THE "20% DROP RATE" I PUT ON THIS SPEC, AND NAMING A CANDIDATE MECHANISM I STUMBLED INTO. Both matter; the first is a correction to my own number.
+
+    THE RATE IS NOT 20%. I recorded "PRINTED 8/10, DROPPED 2/10" at 14:29 and wrote it as a drop rate. Twenty further runs at 14:58, same binary (c9da874c06+dirty, ancestry verified), same machine:
+
+        fast (<0.6s)   20        slow (>0.6s)   0        dropped   0      of 20
+
+        combined:  2 drops in 30 runs = 6.7%, AND BOTH DROPS WERE IN ONE BURST.
+
+    That is not a steady 20% failure rate. It is a transient that clustered, and I quoted the burst as a rate — the exact error I have on my own list as "never quote a rate from consecutive observations; count the population first". Ten runs taken in one minute is a streak, not a population, and the 2/10 reading has now been contradicted by a 0/20 reading taken eight minutes apart.
+
+    WHAT SURVIVES, UNCHANGED AND STILL THE POINT: THE DROP HAPPENS AT ALL, AND IT IS SILENT. Two observed drops with `exit 0`, against a ground truth of work genuinely awaiting. A surface that reports "nothing awaits you" when something does, with a success exit code, is defective whether it does so 20% of the time or 7% or once a week. THE RATE WAS NEVER THE FINDING; the undetectability is. But I stated the rate as though it were measured, and it was not.
+
+    A CANDIDATE MECHANISM FOR THE BURST, found by accident and worth testing properly rather than adopting. One `aida awaiting --notice` at 14:58 emitted, on stderr, into the notice's own output:
+
+        caused by: database is locked); full rebuild
+
+    A CACHE REBUILD IS ORDERS OF MAGNITUDE MORE EXPENSIVE THAN THE ~0.44s NOTICE PATH and would blow a 1s deadline with certainty. This repo routinely runs several concurrent lanes, each with its own binary touching `.aida/cache.db`, so lock contention followed by a self-healing full rebuild is exactly the kind of event that would arrive in BURSTS rather than at a steady rate — which fits the observed clustering better than anything in the load-average story I was telling.
+
+    I AM NOT CLAIMING THIS IS THE CAUSE. I saw it once, I did not see it during either measured batch, and my 20-run probe watched for "locked"/"rebuild" in the output and found none while also finding no drops — so the two have not yet been observed together. That is a hypothesis with one supporting sighting and zero joint observations. THE DISCRIMINATING TEST IS CHEAP: instrument the notice path to record whether a cache rebuild occurred, run it under deliberate concurrent load, and check whether the drops and the rebuilds coincide. If they do, the remedy is not only the deadline — it is that a per-turn advisory surface must never trigger a full cache rebuild synchronously.
+
+    NOTE HOW THIS COMPOUNDS WITH THE EXIT-AT-DEADLINE DEFECT ALREADY ON THIS SPEC. Work completes at ~0.437s and the process still sits until ~1.016s. A rebuild landing anywhere in that window has almost no margin to survive in, because most of the budget was already spent on a timer with nothing to measure.
+  created_at: 2026-09-21T22:00:04.975399821Z
+  modified_at: 2026-09-21T22:00:04.975399821Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
