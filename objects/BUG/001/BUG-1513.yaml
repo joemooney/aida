@@ -2,7 +2,7 @@ id: 01a0c1c0-a44d-7ab1-8be7-8527c5e42822
 spec_id: BUG-1513
 agreed_id: BUG-1513
 title: aida queue list --for reviewer returns an implementer row and counts it, so the declared count disagrees with the filter and two careful counts cannot be reconciled
-description: |
+description: |-
   `aida queue list --for reviewer` returns a row whose for_role is `implementer`. The declared count includes it, so the command's own header disagrees with its own filter, and two people counting carefully get different right answers.
 
   MEASURED 2026-09-20 19:17:
@@ -29,12 +29,30 @@ description: |
   4. A test asserts that every row returned under `--for X` has for_role X, and that the declared count matches the row count.
 
   NOT IN SCOPE: whether a routed entry should exist for a spec at all, which is BUG-1508 and BUG-1512.
+
+
+  DIAGNOSIS NARROWED 2026-09-20 19:25, AND IT IS SHARPER THAN "THE FILTER LEAKS". The leaked row is the CALLER'S OWN. Verified by querying the same store under two identities:
+
+      aida queue list --for reviewer --user joe                count: 23   22 reviewer + 1 implementer
+      aida queue list --for reviewer --user claude-reviewer-1  count: 22   22 reviewer, 0 others
+
+      The 22 reviewer rows appear under BOTH identities, so they are role-routed. BUG-1420 appears only under joe, and BUG-1420 is in joe's queue. So `--for <role>` filters role-routed rows correctly and passes the CALLER'S OWN rows through regardless of their role. The queue is keyed on the shell's user identity per BUG-89, and the two seats do not share one.
+
+  THE PROPERTY THAT MATTERS MOST: THE SEAT WITH STANDING TO REPORT THIS CANNOT SEE IT. The reviewer seat gets a clean 22 with every row correctly tagged - there is nothing to notice. The only caller who sees the leak is the one who OWNS the leaked row, and to them it does not read as a leak: it is a spec they are already working, in a list they filtered by a role they are not in. So the surface is correct for the person qualified to call it broken, and misleading for the person with every contextual reason to accept it. That is why it survived a night in which two seats audited this exact surface repeatedly.
+
+  AND IT DEFEATS CROSS-SEAT RE-MEASUREMENT, WHICH IS THE STRONGEST CHECK AVAILABLE HERE. Re-measuring from the same seat confirms the wrong number. Re-measuring from a DIFFERENT seat returns a different number, each correct for its caller, with no signal to either that the other would see something else. Two people running the same command against the same store and comparing normally settles a disagreement; here it manufactures one that looks like arithmetic error, and one seat publicly concluded the other had mis-counted.
+
+      THE RULE THIS YIELDS: a count from a filtered surface is comparable between two callers only if the filter's inputs are identical, and CALLER IDENTITY is a silent input to this one. Comparing counts across seats is not a check unless the identity is part of what is compared.
+
+  ADDITIONAL ACCEPTANCE:
+  5. Establish whether passing the caller's own rows through a role filter is deliberate. If it is - a convenience so you always see your own work - it must be labelled as a separate section and excluded from the declared count, not merged into the filtered rows.
+  6. `aida queue list` prints the RESOLVED user id alongside the count. This is cheap and it generalises past this bug: BUG-89's whole failure mode is two people seeing different queues without knowing it, and an identity printed next to the count collapses that class of confusion into one glance.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:17:02.797763307Z
-modified_at: 2026-09-21T02:21:55.214485216Z
+modified_at: 2026-09-21T02:22:54.509018799Z
 req_type: Bug
 tags:
 - batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
