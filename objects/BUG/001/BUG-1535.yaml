@@ -69,10 +69,76 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:04:54.098400831Z
-modified_at: 2026-09-21T06:06:57.202296286Z
+modified_at: 2026-09-21T06:07:08.429897340Z
 req_type: Bug
 tags:
 - aida:show
 - identity
 - severity:major
 - substrate-integrity
+comments:
+- id: 01a0c293-4c8d-7d03-b832-bd15bd264fa2
+  author: joe
+  content: |-
+    [aida:advisor-disposition] Approved, queued, HIGH. IT IS LIVE, NOT LATENT — and it is
+    already producing wrong answers on `aida why`, which is the northstar surface.
+
+    THE OPEN QUESTION IS ANSWERED. The filing said "I did not investigate whether any
+    existing trailer or trace comment actually hits one of the seven. That is the question
+    that decides whether this is latent or already live." Run 2026-09-20 23:07:
+
+        trace: comments in production code
+          aida-core/src/dispenser.rs:23, :39, :343    trace:STORY-41
+          aida-core/src/node.rs:29, :63, :230, :288, :465   trace:STORY-41
+          aida-core/src/node.rs:480                   trace:STORY-42
+          aida-core/src/oplog.rs:140                  trace:STORY-41
+
+        commit trailers on main
+          3a7aa45136 / fc021f5927  refactor(node): node ids become String  (STORY-41)
+          32ff77f749 / 2d08d31e2a  feat(node): auto-suggest free suffix    (STORY-42)
+
+    So live, in shipped code, on the two collisions where BOTH sides are real work.
+
+    AND TWO AIDA SURFACES DISAGREE ABOUT THE SAME ID:
+
+        aida show STORY-41              -> "Story 2a: Node id is String, not u32"   CORRECT
+        aida why aida-core/src/node.rs:29 -> "Review PR-11: EPIC-20 batch 11 ..."   WRONG
+
+    `why` resolves STORY-41 to STORY-2-075, the OTHER holder of that agreed id, at three
+    separate call sites (node.rs:29, dispenser.rs:23, oplog.rs:140). Meanwhile
+    `aida why node.rs:480` resolves STORY-42 CORRECTLY. So the same binary gives different
+    answers for the same spec id depending on which surface is asked, and it is not even
+    consistently wrong across the seven — it depends on the id.
+
+    WHY THAT IS THE SEVERE PART. `aida why <file:line>` is the code-to-decision surface this
+    project is built around. Its failure mode here is not an error or an ambiguity notice —
+    it confidently names a requirement that has nothing to do with the code. A reader asking
+    why node.rs exists is told it is because of a PR-review story for an unrelated batch.
+
+    ONE CORRECTION TO THE FILING'S CHARACTERISATION, and it makes the spec worse rather than
+    better. The filing says "All seven have that shape: a low-numbered `[test]` fixture in
+    Rejected status whose id was later handed out to a real spec." Only FOUR do — BUG-34,
+    TASK-31, TASK-32, TASK-33. The other three collide TWO REAL SPECS:
+
+        STORY-41   Story 2a: Node id is String (Completed)  vs  Review PR-11 batch 11 (Completed)
+        STORY-42   Story 2b: Auto-suffix id    (Completed)  vs  aida queue work one-shot (Completed)
+        TASK-34    Convention: v2/v3 follow-ups(Completed)  vs  TASK-76 follow-up retry   (Completed)
+
+    A Rejected fixture shadowing a real spec is recoverable by rejecting harder. Two
+    Completed specs sharing an id is not — neither is wrong, both are real, and any fix has
+    to choose or re-id one. The three worst cases are the ones the "all seven" framing
+    missed, and STORY-41 and STORY-42 are exactly the two with live trace comments.
+
+    ## Added acceptance
+    6. Resolution is CONSISTENT ACROSS SURFACES. `aida show <id>`, `aida why`, the auto-bump
+       and the trace resolver must not disagree about what an id means. Today `show` and
+       `why` disagree for STORY-41 and agree for STORY-42.
+    7. An ambiguous id is REPORTED, never silently resolved. Whatever the precedence rule
+       ends up being, a second candidate existing is surfaced — absent evidence of ambiguity
+       is not evidence of none (PRIN-5).
+    8. The three real-vs-real collisions are dispositioned explicitly and separately from the
+       four fixture collisions. Re-iding a Completed spec invalidates its trace comments and
+       commit trailers, so that is an operator decision, not an implementation detail.
+  created_at: 2026-09-21T06:07:08.429897340Z
+  modified_at: 2026-09-21T06:07:08.429897340Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
