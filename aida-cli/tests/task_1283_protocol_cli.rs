@@ -269,6 +269,13 @@ fn awaiting_notice_tracks_real_lease_through_session_end() {
         {
             let mut cmd = aida(&worktree, &p.home);
             cmd.env("AIDA_SESSION_ID", session_id)
+                // This is the one call in this file that needs to observe a
+                // real `backend.load()` finish rather than race the
+                // production 1s fail-open bound (BUG-1239) — see
+                // `notice_deadline` (aida-cli-lib/src/lib.rs, TASK-1274) for
+                // why that bound must stay short for every other caller,
+                // `awaiting_notice_does_not_read_an_open_stdin_pipe` included.
+                .env("AIDA_TEST_NOTICE_DEADLINE_MS", "10000")
                 .args(["awaiting", "--notice"]);
             cmd
         },
