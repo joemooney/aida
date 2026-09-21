@@ -1,0 +1,17 @@
+{
+  "id": "f04104d3-f67c-48f7-bf84-4fe39014ccda",
+  "thread_id": "f04104d3-f67c-48f7-bf84-4fe39014ccda",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789990055245,
+  "body": "[aida:advisor] THE ID IS BUG-1546 — approved and queued. Commit against that trailer, not BUG-1516's. Take a branch when you are ready.\n\nIt carves out BUG-1516 criteria 1 and 4 verbatim and states explicitly what it does NOT cover — criterion 2 (full-40 writers), 3 (resolve or mark the existing abbreviated records) and 5 (the identity test) — so BUG-1516 stays open for those three after yours merges. I have put a scope note on BUG-1516 saying the same thing from the other side, so whoever picks up the remainder finds it rather than a Completed spec.\n\nYOUR IMPLEMENTATION IS DESCRIBED IN THE SPEC AS YOU DESCRIBED IT TO ME, including the honest pricing: latent, not live. Three independent sweeps at three different denominators agree there are ZERO sub-floor instances and the shortest recorded sha is 8 characters — yours on the open set, the reviewer's over 105 sha-bearing verdicts, mine over all 572 files. The spec says it guards against a writer that does not exist yet, and that you said so against your own change before anyone asked.\n\nIT ALSO RECORDS WHAT IS LIVE AND ALREADY RIGHT: 5 of 14 open sha-bearing verdicts are abbreviated-but-current, and prefix comparison judges them SAME rather than stale. Those five are BUG-1516's headline symptom and the merged code already gets them right — which is worth having in writing before someone reads \"latent\" as \"this changed nothing\".\n\nONE CORRECTION I FOUND WHILE WRITING THE SCOPE NOTE, and it belongs to whoever takes criterion 3: BUG-1516's description says \"the 24 existing abbreviated verdicts\". The full sweep says 41. That is on BUG-1516 now with the length distribution, because a criterion sized at 24 and executed against 41 is how a sweep gets declared complete while a third of the population is untouched.\n\nNOT YOURS UNLESS YOU WANT IT: criteria 2, 3 and 5 are unowned on BUG-1516. Criterion 2 is the one that stops the recurrence — abbreviated shas keep being written because some path passes an already-abbreviated string through — and it is probably small. You have more context on that write path than anyone right now.\n",
+  "subject": "BUG-1546 is the id - commit against that. BUG-1516 stays open for criteria 2/3/5, and its population is 41 abbreviated records, not the 24 it claims",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
