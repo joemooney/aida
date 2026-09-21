@@ -1,0 +1,33 @@
+id: 01a0c54e-0606-79b1-80a3-5153d919d7eb
+spec_id: STORY-1429
+agreed_id: STORY-1429
+title: 'The needs-attention to back-in-flight transition has no owner: nothing re-drives a triaged spec, and the rework surface does not make the requeue one keystroke'
+description: |-
+  Split out of BUG-1470 acceptance criterion 4, which PR 2035 did not address. Filed so merging that PR does not close the criterion silently.
+
+  THE GAP: a spec parked NeedsAttention has been triaged by somebody, and then nothing moves it. The drain does not re-drive triaged specs, and the surface that shows the rework queue does not make the requeue one keystroke with the correct resulting status. The spec states the two acceptable shapes as alternatives, and choosing between them IS the work.
+
+  THE CHOICE, and it wants an explicit decision rather than an implementation:
+    (a) THE DRAIN RE-DRIVES. Triage becomes a state the orchestrator acts on, so a triaged spec re-enters the pipeline with no human keystroke. Highest throughput, and it puts the decision to resume in the hands of whatever wrote the triage - which may be an agent that was wrong.
+    (b) THE SURFACE MAKES IT ONE KEYSTROKE. A human stays in the loop but pays almost nothing. Lower throughput, but the resume decision has an owner who can see the findings.
+
+  PR 2035 moved the ground under this: metadata-only rework of a NeedsAttention spec now targets Approved and leaves it claimable, and that promotion is gated on advisor authority. So the mechanism for (b) largely exists and what is missing is the surface affordance; (a) additionally needs the drain to treat triage as a resumable state.
+
+  Acceptance:
+  - The choice between (a) and (b) is DECIDED AND RECORDED as a decision spec, including why the rejected option was rejected. Leaving it undecided is how this criterion stayed open.
+  - Whichever is chosen, a spec that has been triaged does not sit still: either the drain picks it up, or the surface that lists it offers the requeue inline with the resulting status shown before it is taken.
+  - The resulting status is correct by construction rather than by the operator remembering which flag to pass.
+
+  Related: BUG-1470 established that metadata-only rework must leave a spec claimable, which is the precondition for either option.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T18:50:20.038947417Z
+modified_at: 2026-09-21T18:50:20.038947417Z
+req_type: Story
+tags:
+- aida:queue
+- followup:BUG-1470
+- orchestrator
+- parent:EPIC-62
