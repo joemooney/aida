@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-21T02:40:15.222727335Z
+modified_at: 2026-09-21T02:40:17.897947222Z
 req_type: Task
 tags:
 - acceptance
@@ -160,6 +160,12 @@ comments:
   created_at: 2026-09-20T12:35:06.817499657Z
   modified_at: 2026-09-20T12:35:06.817499657Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c1d5-ede9-7001-aa73-e64267f2f6be
+  author: joe
+  content: '[aida:advisor] REFUSED, NOT NEARLY-SHIPPED. Tagged refused-awaiting-rework 2026-09-20 19:42. This spec reads Done while PR #2003 carries a refusing verdict at 9f7d0199bf and is held on both layers. Done is literally true - work finished on a branch - and operationally misleading: the drain''s ineligibility line reads ''Done - awaiting merge; route via aida queue work --from-pr or aida integrate'', and BOTH of those routes SHIP a PR. Following that hint here attempts to merge work with open findings. The spec is also absent from aida list --status needs-attention and from findings, so it appears on no surface that would route a rework round to it. NOT REQUEUED DELIBERATELY: BUG-1476 means a rework round on a spec with an existing PR may produce no commit, and three reviewer cycles were burned this afternoon proving that. The tag makes it findable now; the systemic fix is BUG-1515, which requires surfaces reading Done to read the verdict beside it rather than adding a sixth lifecycle state.'
+  created_at: 2026-09-21T02:40:17.897947222Z
+  modified_at: 2026-09-21T02:40:17.897947222Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
