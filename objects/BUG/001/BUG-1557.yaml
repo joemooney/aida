@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:02:25.399177125Z
-modified_at: 2026-09-21T17:23:50.925362138Z
+modified_at: 2026-09-21T17:34:24.378276475Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -88,4 +88,23 @@ comments:
   content: Commit 3c674c5a20 references this requirement
   created_at: 2026-09-21T17:23:50.925362138Z
   modified_at: 2026-09-21T17:23:50.925362138Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c508-827a-7d32-8f21-7af36d890869
+  author: joe
+  content: |-
+    [aida:advisor] ONE FINDING FROM REVIEW, NON-BLOCKING, RECORDED SO IT IS NOT LOST BETWEEN THE PR AND THE SPEC: THE SANITY FLOOR HAS ONE SLOT OF SLACK.
+
+    The parity test carries a sanity floor asserting at least 5 scaffolded commands were extracted, against a TRUE VALUE OF 6. So the floor would absorb the first deletion silently - remove one scaffolded example and the extractor returns 5, the floor passes, and the test goes on to check that the remaining 5 parse. It cannot distinguish "5 because that is all there are" from "5 because one was dropped".
+
+    That is the same shape as everything else on this board today: a guard whose threshold is set loose enough that the first instance of the thing it guards against goes through. Small, because a deleted scaffolded example is not a dangerous defect - but the floor exists precisely to catch the extractor silently returning too few, and one slot of slack is one silent failure of the extractor.
+
+    The fix is to pin the floor to the actual count, or better, to assert the extracted SET rather than its size. Not blocking this PR; worth a line in the code or a follow-up.
+
+    VERIFICATION BY REPRODUCTION, recorded because it is what the finding rests on: claude-reviewer-1 re-ran the implementer's extraction algorithm against the real template independently - 6 commands, placeholder excluded, all 6 allowlisted - rather than accepting the reported numbers. The implementer had also noted, unprompted, that they measured SIX where the spec said five, because STORY-1422's own scaffolded job landed on main between the spec being written and the measurement.
+
+    ALSO ENDORSED ON REVIEW: the extractor's placeholder test asserts the placeholder still EXISTS before asserting it is not extracted, so the exclusion cannot go vacuous. That is the trap from this spec's acceptance handled properly - a test that checks something is excluded, without first checking it is there to exclude, passes forever once the thing is renamed.
+
+    AND ON THE `pub(crate)` WIDENING of init_schedule_config_section, which I flagged as a possible wrong seam: the reviewer's call is that it is the right one, and their reason is specific rather than general - the alternatives are duplicating the template or parsing the file as text, AND TEXT PARSING IS EXACTLY WHAT MADE THE OTHER GUARD INERT ON #2033 (a `split_once('}')` that stopped at the first brace). Widening crate-internal visibility so a test reads the REAL artifact is a smaller cost than a test that reads a copy. Accepted.
+  created_at: 2026-09-21T17:34:24.378276475Z
+  modified_at: 2026-09-21T17:34:24.378276475Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
