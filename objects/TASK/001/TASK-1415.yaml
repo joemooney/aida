@@ -1,0 +1,67 @@
+id: 01a0c297-f94c-7b70-b86c-26acd08922e7
+spec_id: TASK-1415
+agreed_id: TASK-1415
+title: 'Record the instrument-trigger test in observation-discipline.md: ask what must be true of an instance BEYOND the defect for a check to see it'
+description: |
+  Filed by the driver advisor 2026-09-20 23:14. The rule is the reviewer's sharpening of a
+  generalisation drawn from four of tonight's own measurement failures. It is generic,
+  cheap to apply, and belongs in the discipline pack rather than in any one spec.
+
+  THE OBSERVATION. Four checks used tonight each under-counted, and they share a property:
+
+      mojibake detector    fired only if a non-ASCII character had been present
+      fixture shortcut     fired only if `[test]` appeared in the title
+      "pre-existing"       held only if the producer was the tool that prompted the check
+      TOON-header probe    fired only if the greedy capture had reached a header
+
+  IN EVERY ONE, THE INSTRUMENT'S TRIGGER IS A PROPERTY OF THE INSTANCE RATHER THAN OF THE
+  DEFECT. Each check keys on something the defect USUALLY carries instead of on the defect
+  itself, so its count is a lower bound and its misses are not random — they are precisely
+  the instances lacking the incidental feature.
+
+  The contrast case proves it is not hindsight: the flattened-scalar detector fires on the
+  producing PATH HAVING RUN, which IS the defect, and it found 78 where the others found 6.
+
+  THE RULE, phrased as an answerable question rather than a caution:
+
+      WHAT MUST BE TRUE OF AN INSTANCE, BEYOND THE DEFECT ITSELF, FOR THIS CHECK TO SEE IT?
+      If the answer is not "nothing", the count is a LOWER BOUND and must be reported as one.
+
+  WHY IT IS CHEAPER THAN THE ADJACENT RULE. The "what else does this change exclude"
+  question needs you to imagine an unnamed population. This one is answerable by READING
+  THE PREDICATE — no knowledge of the population required, no imagination, and it produces
+  a concrete disposition (report as a lower bound) rather than a prompt to think harder.
+
+  WHY IT ALSO EXPLAINS THE SEVERITY SKEW. The missed instances are the ones without the
+  incidental feature, and an incidental feature that announces itself — `[test]` in a
+  title, an em-dash in prose — is exactly what makes an instance EASY. So a
+  property-of-the-instance trigger preferentially finds the easy cases and skips the hard
+  ones. Tonight the three severe id collisions were the three that lacked `[test]`.
+
+  ## Acceptance
+  1. The rule is added to `aida-core/templates/.aida/discipline/observation-discipline.md`
+     as a named, quotable test, with the question in the form above.
+  2. At least two of the four worked examples are carried with it — the contrast between
+     the mojibake detector (6) and the flattened-scalar detector (78) is the one that makes
+     it land, because both were run against the same store on the same night.
+  3. The severity-skew consequence is stated: a property-of-the-instance trigger misses the
+     hard cases preferentially, so the misses are not a random sample.
+  4. The disposition is explicit: when the answer is not "nothing", report the count AS a
+     lower bound rather than silently qualifying it in prose.
+  5. It does NOT go in CLAUDE.md. Specialised guidance lives in the discipline pack; the
+     pack README's pointer table is updated if the file is not already listed there.
+  6. Tagged for scaffolding propagation if the pack's marker convention applies, so
+     downstream projects inherit it without a code change.
+
+  NOT IN SCOPE: changing any of tonight's specs. TASK-1313 already carries the three-
+  aperture table that motivated this; this task is about making the rule reusable, not
+  about re-litigating the instances.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T06:12:14.796135922Z
+modified_at: 2026-09-21T06:12:14.796135922Z
+req_type: Task
+tags:
+- parent:EPIC-62 discipline-pack observation severity:operational propagation-candidate
