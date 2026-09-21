@@ -31,12 +31,12 @@ description: |-
   WHAT IS LIVE, and is already handled correctly by the merged code: 5 of 14 open sha-bearing verdicts are abbreviated-but-current, and prefix comparison judges them SAME rather than stale. Those five are BUG-1516's headline symptom and this surface already gets them right.
 
   trace:BUG-1516 — parent, remains open for criteria 2, 3 and 5.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:26:47.020957879Z
-modified_at: 2026-09-21T11:46:59.878409727Z
+modified_at: 2026-09-21T11:59:30.024610536Z
 req_type: Bug
 comments:
 - id: 01a0c3c0-c0d9-7533-a34d-27badd1e1116
@@ -72,3 +72,25 @@ comments:
   created_at: 2026-09-21T11:46:59.878409727Z
   modified_at: 2026-09-21T11:46:59.878409727Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0c3d5-e4ca-76b1-a8b3-fbe827cec191
+  author: aida-auto-bump
+  timestamp: 2026-09-21T11:59:29.994675281Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c3d5-e4e8-7ae1-9bb7-96fc38978aba
+  timestamp: 2026-09-21T11:59:30.024607662Z
+  agent: aida
+  commit_sha: fe62ee6e89cee5d4869668b81c4352d91b3b3017
+  summary: 'Comment-only change verified by stripped diff; records the PRIN-5 row-surface decision and the forward constraint. Landed seconds after the ruling that it should not, so the cost is sunk and re-litigating would spend it twice. Also recording a hole in my own head sweep: filtering to blocking verdicts means it cannot see a head moving past an approval.'
+  punted:
+  - 'punted: The three-state fix is correct, the mutation table genuinely falsifies including the feature-is-dead case, the scope carve-out is exemplary, and the 5-of-14 claim verifies exactly. One durable number in the central doc comment describes a population this function cannot receive.'
+  - 'punted: The three-state fix is correct, the mutation table falsifies including the feature-is-dead case, the scope carve-out is exemplary, and the 5-of-14 claim verifies exactly. One durable number in the central doc comment describes a population this function cannot receive. F2 re-recorded to correct an overbroad panic claim of my own.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T11:59:29.993839582Z
+  completion_sha: fe62ee6e89cee5d4869668b81c4352d91b3b3017
