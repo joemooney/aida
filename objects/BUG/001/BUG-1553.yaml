@@ -40,10 +40,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:10:49.413002836Z
-modified_at: 2026-09-21T15:11:04.324902728Z
+modified_at: 2026-09-21T15:11:06.772491179Z
 req_type: Bug
 relationships:
 - rel_type: References
   target_id: 01a0c058-3d0c-7eb1-993d-3976581722cb
   created_at: 2026-09-21T15:11:04.324896946Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0c3b7-f0ec-7322-9159-2ec8f61f53bc
+  created_at: 2026-09-21T15:11:06.772485728Z
   created_by: joe
