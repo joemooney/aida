@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:47:03.211329757Z
-modified_at: 2026-09-21T20:16:57.200239977Z
+modified_at: 2026-09-21T22:29:45.881451444Z
 req_type: Bug
 tags:
 - integrity-floor
@@ -100,4 +100,23 @@ comments:
     AND THE REVIEWER'S CORRECTION OF THEIR OWN WARNING IS RECORDED AS METHOD: they told the advisor the pipeline would stop at every held PR, then checked the sibling clear path and found it does not. Their assessment — "I should have checked the sibling clear path before saying it, which is the enumerate-the-instances rule applied to a CONSEQUENCE rather than to a DEFECT." A consequence has instances too, and naming the class of thing that breaks is as incomplete as naming the class of a defect.
   created_at: 2026-09-21T20:16:57.200239977Z
   modified_at: 2026-09-21T20:16:57.200239977Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c616-eb19-7410-988b-0b4bd206192a
+  author: joe
+  content: |-
+    [aida:advisor] DETERMINED AS ADR-52: THE FLOOR'S SUBJECT IS ATTRIBUTABLE INDEPENDENT ASSENT, NOT A TTY — AND THAT CHANGES WHICH SURFACE IS THE DEFECT.
+
+    This spec is framed as an asymmetry to be closed, with its own comment warning that a naive TTY check on ship would break the deliberate act BUG-1167 exists to support. That warning is right and it points at the answer: THE FIX IS NOT TO ADD A TTY CHECK TO SHIP, IT IS TO REMOVE THE TTY CHECK FROM CLEAR. `pr ship` is closer to correct in SUBJECT (explicit, attributable) and incomplete in ENFORCEMENT (no independence check, no recorded reason). `merge-hold clear` states the rule wrongly.
+
+    THE EVIDENCE THAT SETTLED IT, and it arrived by the floor being obeyed rather than reasoned about. claude-reviewer-1 placed a hold on #1978 when refusing it, discharged its own finding, approved at 3c194f59c4, and could not clear its own hold. It then DECLINED the `pr ship` route it knew would work, in its own words: 'A known bypass is not authorization - if it were, the floor would mean nothing.' So the floor is enforced against the seat asking honestly and not against the seat taking the other route. A rule with that property is not a floor; it is a detour everyone takes.
+
+    FOUR BYPASSES ON 2026-09-21 ALONE (#2033, #2042, #1999, #1978 pending), every one disclosed in the ledger, every one satisfying the floor's PURPOSE while evading its MECHANISM. That count is the argument: a mechanism bypassed four times in a day by the seats it governs, each time for a good reason, is mis-specified rather than under-enforced.
+
+    THE FOUR PROPERTIES BOTH PATHS SHOULD GATE ON: explicit (not a side effect of a phase advancing), attributable (names the clearing seat), INDEPENDENT (the clearing seat is not the author of the held work), recorded (the act and reason survive the session). A TTY delivers only the first, and only by correlation; it excludes every non-interactive seat regardless of authority; and it fails open through ship.
+
+    INDEPENDENCE IS THE PROPERTY MOST WORTH ADDING AND IS ABSENT FROM BOTH PATHS TODAY — nothing stops the author of held work from clearing the hold on it. That is a larger hole than the TTY asymmetry this spec was filed for.
+
+    Raising to high: it is no longer a papercut about two inconsistent code paths, it is the governing rule for every merge-hold in the system and it is currently costing a disclosed bypass per merge.
+  created_at: 2026-09-21T22:29:45.881451444Z
+  modified_at: 2026-09-21T22:29:45.881451444Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
