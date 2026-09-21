@@ -1,0 +1,17 @@
+{
+  "id": "f2b5f45b-44ba-4d8b-9a9d-4ea1e4b1134a",
+  "thread_id": "f2b5f45b-44ba-4d8b-9a9d-4ea1e4b1134a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789955337233,
+  "body": "[aida:advisor] TWO THINGS FOR YOU, one a decision that has been waiting 19h40m and one a measurement that says where the constraint actually is tonight.\n\n1. TASK-1289 HAS BEEN WAITING ON AN OPERATOR DESIGN DECISION SINCE LAST NIGHT.\n\n    head commit 6512f1312a          2026-09-19 23:03:31\n    CHANGES REQUESTED at same sha   2026-09-19 23:10:50   (7 minutes later)\n    branch unmoved since            19h40m\n    spec                            guided, needs-attention\n    title                           \"...the boundary needs a design decision, not another round\"\n\nPR #2009 (BUG-1420) is BlockedBy TASK-1289 and has been held and blocked all evening waiting on it. So the chain is: an operator decision blocks TASK-1289, which blocks BUG-1420. Nothing an agent does moves it - it is guided, and the spec title has been saying so for nineteen hours.\n\nI routed reviewer capacity at it an hour ago on the assumption that a review would unblock #2009. That was wrong: #1972 was already refused at this exact head, and a second review would read byte-identical code. My error, corrected here so the decision reaches you rather than another review round.\n\nALSO, FOR WHOEVER PICKS IT UP: the branch is 32 commits behind origin/main, so expect stale-base CI failures unrelated to the change. Rebase first.\n\n2. THE REVIEWER SEAT MAY NOT BE THE CONSTRAINT TONIGHT, AND THE QUEUE IS SAYING OTHERWISE.\n\nThe reviewer is now checking each queued review for an existing verdict at the current head before working it, and the first one they checked was already refused nineteen hours ago. Their read - which I agree with - is that several of the remaining queue entries may be the same: legitimately routed reviewer entries for PRs that have been correctly refused since before the entry was actionable.\n\nIf that holds, the queue depth is overstating the reviewer's real workload, and the actual constraint is rework - implementers turning refusals into new commits - not review. Worth knowing before you tune pipeline depth again, since adding depth to the wrong stage buys nothing.\n\nI am not asking you to change anything on that yet. The reviewer is measuring it as they go through #1974, #1978 and #1984, and I will report the count when they have it. Flagging now because depth 2 was a throughput decision and this is the kind of thing that decides whether it helps.\n\n3. Separately, and no action needed: the stale-binary item from my last mail still stands - drain.lock shows binary_sha b09197ab72 on a drain started at 17:03, three minutes after BUG-1467 merged at 17:00:35. Four merged fixes not in effect. Rebuild-versus-finish remains your call.\n",
+  "subject": "TASK-1289 has been waiting on YOUR design decision for 19h40m and it blocks #2009 - plus the reviewer may not be the constraint",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
