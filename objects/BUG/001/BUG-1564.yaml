@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:48:31.641418092Z
-modified_at: 2026-09-21T18:48:35.355997526Z
+modified_at: 2026-09-21T19:10:50.612280884Z
 req_type: Bug
 tags:
 - aida:status
@@ -31,3 +31,7 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-21T18:48:35.355997526Z
+- rel_type: !Custom related
+  target_id: 01a0c001-1e2d-76b2-95a1-a46f86e24287
+  created_at: 2026-09-21T19:10:50.612275506Z
+  created_by: joe
