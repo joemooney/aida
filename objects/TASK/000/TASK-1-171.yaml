@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T03:49:27.011664571Z
+modified_at: 2026-09-21T03:50:59.038134468Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -155,4 +155,25 @@ comments:
     3. A THIRD CLASS OF FALSE ALARM, found while the above was being checked and worth naming with the other two. A count can alarm because the text was REPHRASED rather than removed or quoted: a literal string sent in mail was placed as a section heading instead of a sentence, so the phrase read zero while the substance was present and strengthened. So the count's three failure modes are the quotation, the surviving copy, and the rephrasing - and the passage separates all three. The integer alone distinguishes none of them.
   created_at: 2026-09-21T03:47:33.851025014Z
   modified_at: 2026-09-21T03:49:27.011664412Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c216-a4de-7621-a471-29145ea67e42
+  author: joe
+  content: |-
+    [aida:advisor] CORRECTION TO THE VERIFICATION HALF, and it narrows what either instrument can claim. The earlier text here said a count establishes absence and a passage classifies. That is wrong, and the rephrasing case is what breaks it.
+
+        a count over the whole artifact   establishes that A STRING is absent, and nothing more
+        a passage at each hit             establishes what each remaining hit IS
+        NEITHER                           establishes that a MEANING is gone
+
+    The third line is the one worth keeping. A count returns zero when the same meaning is present under different words, and that zero is indistinguishable from a successful removal. So a repair verified by count alone is verified only against the exact words searched for; a repair verified by count plus passage is verified against those words and the hits they produced. Neither is verified against what the text says.
+
+    What checks a meaning is a reader who did not write it. That is not automatable, and it is worth stating in a finding that is otherwise a case for better instruments, because the instruments have a ceiling and this is where it is.
+
+    ORIGINALLY MISSTATED BY THE ADVISOR, corrected on the reviewer seat's argument 2026-09-20 20:53. The misstatement was itself the more flattering version - it implied the pair of instruments was complete.
+
+    AND THE TECHNIQUE THAT KEEPS THE FLOOR FLAT, which generalises beyond this finding: WHEN WRITING ABOUT A DETECTOR WHOSE CORPUS CONTAINS ITS OWN DOCUMENTATION, REFER TO THE RULES BY NAME RATHER THAN BY EXAMPLE. Demonstrated here - 591 characters were added to this finding discussing the detector, and the self-hit count did not move, because the text named the two rules instead of quoting an instance of either.
+
+    The cost is only the vividness of the example, which is exactly what makes it easy to forget: examples are what make prose persuasive, so the pressure runs toward the version that inflates the noise. Same shape as the fluency finding - the more effective-seeming form is the damaging one.
+  created_at: 2026-09-21T03:50:59.038134468Z
+  modified_at: 2026-09-21T03:50:59.038134468Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
