@@ -29,5 +29,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:22:23.969332952Z
-modified_at: 2026-09-21T11:22:23.969332952Z
+modified_at: 2026-09-21T12:04:52.192241338Z
 req_type: Bug
+comments:
+- id: 01a0c3da-cf60-74a1-95ba-3f2bfca337d9
+  author: joe
+  content: 'SCOPE HELD DEliberately. BUG-1545 stays the two-line fix for the one site on main. The general form - a doc or trace header orphaned by an insertion, compiling clean either way - is filed separately as BUG-1550 with all three of tonight''s instances enumerated. Not superseding this: one is an edit to main, the other is the gate that stops the fourth instance. Fixing only the cited site would leave the class, which is precisely the shape BUG-1550 exists to name.'
+  created_at: 2026-09-21T12:04:52.192241338Z
+  modified_at: 2026-09-21T12:04:52.192241338Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
