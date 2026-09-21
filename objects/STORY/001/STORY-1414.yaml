@@ -2,7 +2,7 @@ id: 01a0c1cb-ad94-7010-85d4-c6fff8d3a5b3
 spec_id: STORY-1414
 agreed_id: STORY-1414
 title: 'Deterministic binary-freshness gate at wave launch: require the drain''s build SHA to equal main HEAD, build and re-exec if behind, instead of warning and running stale'
-description: |
+description: |-
   A drain wave pins a binary at launch and never checks whether it is current. Twice on 2026-09-20 that silently discarded merged fixes: once for five and a half hours across four orchestrator commits, and again for three hours after BUG-1467's provenance fix merged, during which every verdict the reviewer wrote was still unstamped because both it and the drain were on the older build.
 
   Both times the gap was found by a human looking, not by the system. `aida pull` prints "your aida binary is now behind HEAD" and was ignored on both occasions — including by me, after I had written myself a rule about it.
@@ -44,12 +44,30 @@ description: |
   - Regression fixture: launch with the flag against a stale binary; assert a build is requested, the process re-execs, and the pinned `binary_sha` equals HEAD.
 
   Related: this is the same argument STORY-1367 makes for scheduled checks, pointed at the binary instead — with the difference that here the remedy is already safe under concurrency (`AFTER_WAVE=1` exists and refuses to swap a pinned binary), so the gate needs no new concurrency reasoning.
+
+
+  OPEN QUESTION ANSWERED BY THE ADVISOR 2026-09-20 19:33: ON BUILD FAILURE, REFUSE TO LAUNCH.
+
+  AND THE STATED COST OF REFUSING DOES NOT EXIST. The question was framed as a trade: refusing converts a build break into a work stoppage, versus launching stale to keep work moving. The first half is false. `Build (ubuntu-latest)` runs `cargo build --workspace` (.github/workflows/ci.yml:121) and is a REQUIRED check on main. So if HEAD does not build, every PR the wave produces fails its required check and nothing merges. The stoppage is not caused by the gate - IT ALREADY EXISTS, caused by main being broken. The gate only relocates the discovery from "every member's CI fails, one by one, tens of minutes each" to "the wave does not start, immediately, with the reason named".
+
+      So refusing costs nothing that is not already lost, and buys the failure being visible at the point of decision instead of N members later. Launching stale, meanwhile, spends a whole wave on orchestration semantics known to be superseded - which is exactly the two incidents this spec exists to prevent.
+
+  AND THE 'LOUD RECORD' ALTERNATIVE IS THE ONE WITH DIRECT EVIDENCE AGAINST IT. `aida pull` already prints "your aida binary is now behind HEAD". It was ignored twice on 2026-09-20 - once by the seat that had written itself a rule about exactly this. A control whose enforcement is a message the operator may ignore has been tested today, twice, and failed both times. "Launch stale with a loud record" is that same control with a louder message, and this spec's own evidence section is the argument against it.
+
+  REQUIRED SHAPE OF THE REFUSAL, because a refusal that cannot be overridden becomes a different hazard:
+    - The refusal names the failing build and the HEAD sha it tried to build, so the operator does not go looking.
+    - An explicit override exists for the legitimate pinned-binary cases the spec already identifies - bisecting an orchestration regression, or reproducing a shelve on the binary that produced it. The override is a deliberate flag, not a fallback the gate takes on its own.
+    - The override records WHICH binary the wave is pinned to and that the freshness gate was bypassed, in drain.lock alongside the binary_sha already stored there, so a later audit of a wave's output can establish what it ran under without reconstructing it from build times.
+
+  WAVE LAUNCH IS THE RIGHT BOUNDARY - AGREED, AND FOR A SECOND REASON. The spec argues it from mid-wave semantic consistency, which is correct. The additional reason: per-implementer freshness would make a wave's members individually unauditable. Today `drain.lock` records one binary_sha for the wave, and that single fact is what let tonight's staleness be established at all. Per-implementer re-exec replaces one auditable fact with N, recorded nowhere, and the question "what was this wave running" stops having an answer.
+
+  ADVISOR DISPOSITION: approved. execution_mode DRIVE, not drain. This is orchestrator-reliability work of the class that ships at the keyboard rather than in an unattended headless wave - a defect here disables the freshness gate for every future wave, and it would be tested by the very mechanism it modifies.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:29:06.068323940Z
-modified_at: 2026-09-21T02:29:31.874460927Z
+modified_at: 2026-09-21T02:31:37.576723677Z
 req_type: Story
 tags:
 - drain-safe
