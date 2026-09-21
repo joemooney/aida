@@ -1,0 +1,57 @@
+id: 01a0c3c2-6f6a-76c1-9c26-4d9d35337b6b
+spec_id: BUG-1547
+agreed_id: BUG-1547
+title: 'VerdictKind::Other is non-blocking while TipRelation::Unknown refuses, so a verdict reading MERGE WITHHELD parses to a non-obstruction in the same module that says a gate which cannot answer must not '
+description: |-
+  TWO GATES IN ONE MODULE TAKE OPPOSITE DEFAULTS ON THE SAME SITUATION, and the corpus contains real strings that take the permissive branch.
+
+      review_verdict.rs:686   TipRelation::Unknown => VerdictGate::Refuse
+                              "A review gate that cannot answer must not wave work through."
+                              FAILS CLOSED.
+
+      review_verdict.rs:78    _ => VerdictKind::Other
+      review_verdict.rs:93    blocks_done() = matches!(self, RequestChanges | Rejected)
+                              so Other is FALSE.
+                              FAILS OPEN.
+
+  The tip-relation gate refuses on an unknown. The verdict-kind parser waves it through. Same file, same class of question — what to do when the record cannot be interpreted — opposite answers.
+
+  THE STRINGS ARE REAL, NOT HYPOTHETICAL. Found by the reviewer seat while auditing a legacy record shape; parse behaviour verified independently by the driver-advisor at review_verdict.rs:66-79. Two verdicts in the corpus normalize to nothing the match arm recognises:
+
+      "APPROVED pending cross-platform green"
+          -> "approved-pending-cross-platform-green" -> Other -> non-blocking
+      "CONTENT APPROVED — MERGE WITHHELD FOR INDEPENDENCE"
+          -> "content-approved-—-merge-withheld-for-independence" -> Other -> non-blocking
+
+  A HUMAN WROTE "MERGE WITHHELD" TO WITHHOLD A MERGE AND THE ENUM'S DEFAULT READS IT AS NOT AN OBSTRUCTION. The second one is the sharper case: the author was explicitly recording a refusal to merge on independence grounds, which is a stronger claim than RequestChanges, and it lands in the bucket that does not block.
+
+  BLAST RADIUS, MEASURED RATHER THAN ASSUMED. blocks_done() has six consumers — review_verdict.rs:291, :643, queue_cmd.rs:4317, :8628, :12791, lib.rs:32759. Every one treats a false result as "this verdict does not stand in the way". So an unparsed verdict is invisible to the done-gate, the stranded-refusal sweep, and the blocking-verdict filters alike.
+
+  WHAT ALREADY EXISTS AND IS NOT ENOUGH: lib.rs:76471 rejects an unrecognised verdict at WRITE time — `aida review record` bails with "unrecognised verdict ... use one of: approved, request-changes, rejected". So the CLI cannot create one today. That is why this is latent rather than live. It does not help for records already on disk, for files written by any other path, or for a future writer that skips that check. A write-side guard is not a read-side default.
+
+  AND THE CURRENT BEHAVIOUR IS PINNED BY A TEST: review_verdict_tests.rs:51 asserts `!VerdictKind::Other.blocks_done()`. So the permissive default is deliberate as written, and changing it is a decision rather than a bug fix — which is exactly why it wants a spec rather than a quiet patch.
+
+  WHAT TO DECIDE, and the fork is the work:
+
+    A. OTHER BLOCKS. An uninterpretable verdict is treated as blocking until someone
+       looks at it, matching TipRelation::Unknown's precedent in the same file. Safe
+       direction; cost is that a typo'd verdict now stops a merge until corrected.
+    B. OTHER IS ITS OWN STATE. Neither blocking nor clear — surfaced as UNINTERPRETABLE
+       wherever blocking verdicts are listed, so it cannot be silently skipped but does
+       not gate by accident. More work, closer to what PRIN-5 actually asks for.
+    C. KEEP IT PERMISSIVE AND SAY WHY, with the write-side guard named as the reason and
+       a comment at :93 pointing at the Unknown arm so the asymmetry is deliberate rather
+       than accidental.
+
+  I lean B, with A as the fallback if B is more than this is worth. C is defensible only if someone can show no path writes a verdict file except `aida review record` — and the 42 legacy records are evidence that something once did.
+
+  NOT IN SCOPE, deliberately: the 42-record legacy shape itself (keys ['findings','head','mode','pr','summary','verdict'] — no reviewed_sha, no recorded_by, no recorded_at). That is a wider question about a format nothing reads, and it should not be tangled with a default-direction decision that stands on its own.
+
+  NOT LIVE TONIGHT, stated so nobody over-prices it: all 42 are on closed PRs, #2042's blocking verdict parses correctly as RequestChanges, and nothing is being waved through right now.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T11:38:14.762548458Z
+modified_at: 2026-09-21T11:38:14.762548458Z
+req_type: Bug
