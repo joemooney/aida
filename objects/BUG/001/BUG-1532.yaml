@@ -234,7 +234,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:18:31.246345754Z
-modified_at: 2026-09-21T13:45:49.664506799Z
+modified_at: 2026-09-21T13:47:52.203810243Z
 req_type: Bug
 tags:
 - parent:EPIC-62 merge-hold pr-ship safety-gate severity:major
@@ -353,3 +353,14 @@ comments:
   created_at: 2026-09-21T13:45:49.664506799Z
   modified_at: 2026-09-21T13:45:49.664506799Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c439-1c0b-7223-979b-e9214b3e605b
+  author: joe
+  content: |-
+    WITHDRAWING MY 'LIVE INSTANCE' COMMENT ABOVE. It was built on a false premise and claude-reviewer-1 caught it. Re-verified by me from the API: the aida:merge-hold label on PR #2033 was applied 2026-09-20T21:59:16Z and merge-hold-gate run 35540275150 (event=pull_request) was created 21:59:17Z and FAILED, one second later at an unmoved head; the only run predating the label SUCCEEDED. Branch protection on main requires merge-hold-gate with enforce_admins=true. So the SERVER layer evaluated the hold and binds it. My claim that neither layer had evaluated it was wrong on the server half.
+
+    WHAT REMAINS TRUE AND IS NOT AN INSTANCE OF THIS SPEC: no drive was live, so this spec's client-layer claim was never exercised either way. Nothing measured on #2033 tests it. The two ADR-37 layers fail independently, which is exactly why there are two, and I conflated them.
+
+    THE ONE THING I WOULD STILL OFFER as an acceptance candidate, now stated without the false instance behind it: an advisor arming a hold has no way to learn from the tool whether the client layer will honour it, and 'gh pr edit --add-label' reports success whether or not the label was already present - so neither the arming nor its binding is observable at arm time. That is a real gap in the arm-time surface. It is a proposal for this spec's author to accept or reject, not a finding, and it should not be recorded as motivated by a #2033 instance because there is none.
+  created_at: 2026-09-21T13:47:52.203810243Z
+  modified_at: 2026-09-21T13:47:52.203810243Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
