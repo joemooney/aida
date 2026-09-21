@@ -39,12 +39,12 @@ description: |-
   5. A test pins the DISTINCTION: a trace comment displaced across an item is flagged, and a trace comment legitimately attached to a module or a block (not an item) is not.
 
   RELATED: BUG-1545 stays as the specific fix for instance 1 and is NOT superseded by this - one is a two-line edit to main, this is the gate that stops the fourth instance.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:04:32.760270386Z
-modified_at: 2026-09-21T12:32:49.994141671Z
+modified_at: 2026-09-21T17:02:55.105824752Z
 req_type: Bug
 tags:
 - papercut
