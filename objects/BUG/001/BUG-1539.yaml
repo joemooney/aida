@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T16:21:33.438198872Z
+modified_at: 2026-09-21T20:47:02.211475499Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -236,4 +236,29 @@ comments:
     THE ONE THING I WOULD KEEP FROM THE WITHDRAWN COMMENT, because it is true independently: a verdict that RESTATES the requirements it supersedes is resilient to the clobber with no code change, and the reviewer did that on #1974 regardless of whether anything had been lost. It is good practice and it is not evidence for this bug.
   created_at: 2026-09-21T16:21:33.438198872Z
   modified_at: 2026-09-21T16:21:33.438198872Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5b8-de43-7f31-8684-60b852146747
+  author: joe
+  content: |-
+    [aida:advisor] THE MEASURED INSTANCE THIS SPEC HAS BEEN MISSING. IT FIRED LIVE, DESTROYED A VERDICT WITH FINDINGS, AND THE ARTEFACT IS ON DISK. Found by claude-reviewer-1 within four minutes of the write; verified by the advisor from the file itself.
+
+        13:41  PR-2059.json written by claude-reviewer-1   1876 bytes, 1 finding
+        13:45  PR-2059.json is 511 bytes:
+                 recorded_by  "aida drain reviewer"
+                 recorded_at  2026-09-21T20:45:22Z
+                 findings     []
+                 summary      "All BUG-1462 acceptance criteria verified; shared subject
+                               projection and focused TUI coverage pass, with applicable CI green."
+
+    A drain reviewer recorded its own APPROVED on the same PR and the PR-keyed write clobbered the first. Verified independently: the file now names the drain reviewer, carries zero findings, and the SPEC-KEYED `BUG-1462.json` STILL HOLDS THE ORIGINAL — `recorded_by: claude-reviewer-1`, 1 finding.
+
+    THE TWO RECORDS FOR ONE REVIEW NOW DISAGREE IN CONTENT WHILE AGREEING IN VERDICT. That is why it would never have been noticed: nothing CONTRADICTS. Both say APPROVED, at the same sha. What was destroyed is the content — a de-duplication analysis, a verified claim that both pre-existing behaviours survive, a concern raised and cleared about a relocated "(empty message)" placeholder, and a portability result — replaced by one sentence and `findings: []`.
+
+    AND THE ORCHESTRATOR READS THE THINNER ONE. The PR-keyed file is the handshake the orchestrator consults to proceed, so the surviving record is the one with no findings, while the richer record sits in a file nothing in that path reads.
+
+    THIS IS THIS SPEC'S POLARITY AND BUG-1562's AT ONCE: the artefact PERSISTS and its CONTENT does not, and NOTHING COMPARES THE TWO. A clobber that replaced APPROVED with CHANGES REQUESTED would be caught by the next reader in seconds. A clobber that preserves the verdict and deletes the reasoning is invisible by construction.
+
+    IT ALSO SHARPENS THE FIX. Keying by reviewed commit — this spec's stated remedy — WOULD NOT HAVE PREVENTED THIS ONE, because both verdicts are at the same sha. What was needed is that a SECOND writer with FEWER findings does not silently replace a first with more: append, or refuse, or merge, or at minimum record that a prior verdict existed. The smaller read-before-overwrite fix already recorded on this spec covers this case where re-keying does not.
+  created_at: 2026-09-21T20:47:02.211475499Z
+  modified_at: 2026-09-21T20:47:02.211475499Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
