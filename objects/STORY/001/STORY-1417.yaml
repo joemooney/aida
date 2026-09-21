@@ -33,7 +33,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:55:21.794367525Z
-modified_at: 2026-09-21T09:25:08.361838717Z
+modified_at: 2026-09-21T09:26:26.352042978Z
 req_type: Story
 comments:
 - id: 01a0c32e-aa1a-7561-8985-cdb436caf5e8
@@ -104,4 +104,40 @@ comments:
     AND THE CATEGORY HAS A COROLLARY WORTH CAPTURING WITH IT: on a PR whose findings are design-level, a GREEN BUILD IS THE EXPECTED RESULT, not evidence against the findings. F1 is a missing production change that compiles fine without it; F2's fixture passes for the reason above. Any consumer counting `unfalsifiable` findings should expect them to co-occur with green CI rather than red, which is the opposite of the intuition that would otherwise guide a query.
   created_at: 2026-09-21T09:25:08.361838717Z
   modified_at: 2026-09-21T09:25:08.361838717Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c349-c330-7a41-9eda-b9e8b5da6731
+  author: joe
+  content: |-
+    BINDING QUERY GUIDANCE, measured rather than reasoned — and it inverts the instinct anyone building this query would start with.
+
+    MEASURED 2026-09-21 02:25 by the reviewer seat, across every live refusal they hold, at each PR's current head:
+
+        #2001  BUG-1291   CHANGES REQUESTED   Build pass
+        #2006  BUG-1297   CHANGES REQUESTED   Build pass
+        #2014  TASK-1298  CHANGES REQUESTED   Build pass
+        #2030  BUG-1485   CHANGES REQUESTED   Build pass
+        #2040  BUG-1454   CHANGES REQUESTED   Build pass
+
+    FIVE FOR FIVE. Not one live refusal sits on a red Build. #1998, the one that became an approval, was green throughout the round in which it was refused as well.
+
+    WHY THAT IS STRUCTURAL AND NOT A COINCIDENCE OF TONIGHT. If refusals correlated with red CI, the reviewer seat would be a slower duplicate of the pipeline. The correlation running the OTHER WAY is the evidence that the two instruments look at different things. What each of the five actually is:
+
+        #2001   a failing declared check whose remedy is a DECISION (markdown hard breaks),
+                not the strip the check implies
+        #2006   control flow keyed on our own error prose, with tests asserting the same prose
+                so they move with the bug
+        #2014   a Windows-path refusal that Linux-only CI structurally cannot reach
+        #2030   a fixture that passes precisely because it stops short
+        #2040   Some(empty) read as definitive, and a fake gh that answers every query
+                identically
+
+    None is reachable by a compiler or a test run. TWO OF THEM — #2006 and #2030 — are cases where THE TESTS AGREE WITH THE DEFECT: they are green because the code is wrong in the same direction the test asserts. A green Build there is not weak evidence; it is the PREDICTED observation.
+
+    THE GUIDANCE, stated as strongly as the measurement supports: for the categories `unfalsifiable`, `prose-as-contract` and `absent-as-good`, green CI is not merely COMPATIBLE with the finding — it is what you should EXPECT to see, and a RED Build on such a finding is the surprising row worth inspecting.
+
+    CONSEQUENCE FOR WHOEVER BUILDS THIS QUERY: an instinct that findings cluster on red PRs filters out the entire population. Any dashboard, report or triage view built on this field must not rank, sort or filter by CI colour as a proxy for severity, and should surface the CI state as CONTEXT rather than as corroboration.
+
+    Provenance: the five-for-five measurement and the per-finding characterisation are the reviewer seat's, taken across their own live refusals rather than a sample. The corollary it confirms was the driver-advisor's, drawn from the #2030 F2 mechanism.
+  created_at: 2026-09-21T09:26:26.352042978Z
+  modified_at: 2026-09-21T09:26:26.352042978Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
