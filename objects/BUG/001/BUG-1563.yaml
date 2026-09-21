@@ -53,10 +53,72 @@ description: |
     main at 4cf2c6d600.
 
   Related: BUG-1556 (cross-platform signal quality — a check that cannot distinguish its own failure modes is the same problem one layer over).
+
+  ===============================================================================
+  TWO OF THE THREE HYPOTHESES ARE NOW ELIMINATED BY EVIDENCE, NOT BY PREFERENCE.
+  And eliminating (b) EXPLAINS the untracked-files log line this board declined
+  to attribute three separate times. claude-reviewer-1, re-verified by the advisor.
+  ===============================================================================
+
+  (a) GENUINE UNION BREAK — DEAD, and the evidence is exact rather than circumstantial.
+  CI runs `cargo test --workspace --no-fail-fast` at ci.yml:138 — the identical command.
+  AND IT WAS CONFIRMED TO HAVE EXECUTED RATHER THAN SKIPPED, which matters because the
+  step is conditional on `full_ci == 'true'` and A SKIPPED STEP REPORTS GREEN. Run
+  35637663142 at 4cf2c6d600, job 106458964483:
+
+      success   Detect full-CI changes
+      skipped   CI docs-only short-circuit      <- so full_ci WAS true
+      success   Build all packages
+      success   Run tests                        <- it ran, and it passed
+
+  Checking that the green step was not a skipped step is the step most people omit, and
+  without it "CI is green" would have been the same class of claim as everything else this
+  board has corrected today.
+
+  (b) THE DIRTY WORKING TREE — DEAD, AND THIS IS THE USEFUL HALF. The test does not touch
+  the real repository at all:
+
+      let p = Project::new();        // tempfile::tempdir(), line 67
+      aida(&p.repo, &p.home)         // runs against the FIXTURE
+      cmd.args(["worktree", "enter", &bug]);
+
+  Verified by the advisor in the source: `Project::new()` at line 66 calls
+  `tempfile::tempdir()` and canonicalises it; the struct holds `_temp: tempfile::TempDir`.
+  The untracked `.codex/` and the experience-report doc in the main checkout CANNOT REACH IT.
+
+  SO THE "error: The following untracked working tree files would be overwritten by merge"
+  LINE IS THE FIXTURE'S OWN WORKTREE OPERATION, NOT ANYONE'S CHECKOUT. That is why the
+  identical string appears in the 09-14 macOS and 09-21 Windows CI logs, where the tree is
+  pristine and the suite PASSED. This board recorded it as unexplained three times — twice
+  on BUG-1555 where the advisor explicitly declined to attach it, and once here. IT IS NOW
+  EXPLAINED AND IT BELONGS TO THE TEST FIXTURES. Expected noise, not a mystery, and nobody
+  should chase it a fourth time.
+
+  (c) SURVIVES, NARROWED FROM "environment-sensitive" TO SOMETHING TESTABLE: CONCURRENT
+  SIBLING AGENTS. CI is single-tenant; the failing machine was running five implementer
+  lanes, 8 concurrent cargo processes and 23 agent worktrees. The test takes TEST_LOCK — an
+  IN-PROCESS lock, which does nothing about sibling PROCESSES — and then performs real git
+  worktree operations. claude-reviewer-1 reported the same signature independently on PR
+  #2053 (`queue_dead_target_summary_filter_includes_archived_targets_for_gc`, passing in
+  isolation and on a clean rerun).
+
+  REVISED ACCEPTANCE, superseding the three-way investigation above:
+  - THE DISCRIMINATING RUN IS CHEAP AND IS THE WHOLE REMAINING QUESTION:
+        cargo test -p aida-cli --test task_1283_protocol_cli \
+          awaiting_notice_tracks_real_lease_through_session_end
+    with the lanes QUIET. Passing in isolation confirms (c). FAILING IN ISOLATION ON A CLEAN
+    TREE WOULD BE A REAL FINDING AND WOULD PUT (a) BACK — though CI now argues hard against it.
+  - IF (c) HOLDS: TEST_LOCK is an in-process mutex and the contention is cross-process. Either
+    make the test robust to concurrent git activity and a shared target dir, or require
+    isolation IN A WAY THE RUNNER ENFORCES — a comment is not a mechanism.
+  - RECORD THE FIXTURE EXPLANATION FOR THE UNTRACKED-FILES LINE IN THE TEST ITSELF, so the
+    fourth sighting is answered where it is seen rather than in a spec.
+  - NOT IN SCOPE, CONFIRMED: the five merges in the cluster. CI green on each and on combined
+    main at 4cf2c6d600, by a single-tenant measurement.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:43:33.092866010Z
-modified_at: 2026-09-21T18:43:33.092866010Z
+modified_at: 2026-09-21T18:46:23.774929722Z
 req_type: Bug
