@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-21T00:01:41.892890706Z
+modified_at: 2026-09-21T00:03:01.575846119Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -113,4 +113,41 @@ comments:
   created_at: 2026-09-21T00:01:41.892890706Z
   modified_at: 2026-09-21T00:01:41.892890706Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c145-f147-7df0-852c-e77afa276557
+  author: joe
+  content: |-
+    [aida:advisor-disposition] PR #2037 — DO NOT REVERT. Both findings verified and confirmed real; the merge stands and both become follow-up work on BUG-1466.
+
+    THE FINDINGS ARE CORRECT. Verified in the merged code:
+
+        lib.rs:88596  if let Some(head_sha) = pre_review_head_sha.as_deref() {
+        lib.rs:88597      cmd.env("AIDA_FROM_PR_HEAD_SHA", head_sha);
+
+        lib.rs:76231  let envelope_pr_sha = pr.and_then(|_| std::env::var("AIDA_FROM_PR_HEAD_SHA").ok())...
+        lib.rs:76234  let forge_pr_sha = if sha.is_none() && envelope_pr_sha.is_none() { ...forge lookup... }
+
+    So with --pr present and the env set, the forge lookup is SKIPPED and the pre-review head is stamped. If the head moves during review, the supported command records the launch head rather than the reviewed one. That is a provenance fix recording the wrong head under exactly the condition provenance exists to detect, and the drain reviewer is right to have raised it.
+
+    WHY IT DOES NOT WARRANT A REVERT — the failure direction, which neither the finding nor the reviewer's report analysed:
+
+    A stale stamp fails CLOSED. Reviewer launches at head A, head moves to B during review, verdict stamps A. A gate comparing stamp against current head sees A != B and REFUSES. That is true whether the reviewer actually read A or B: either the verdict is genuinely stale and refusing is correct, or the verdict is current and refusing is a false negative. Neither outcome AUTHORISES a merge that should not happen.
+
+    The only way a stale stamp could authorise wrongly is a head rewinding B -> A so the stale value matches again, which is contrived.
+
+    So this ships a defect whose worst case is a spurious refusal, on top of a change that takes the handshake from UNSTAMPED to STAMPED-SOMETIMES-WRONG. Under PRIN-5 the direction matters: absent evidence reading as fine is the dangerous class; present evidence erring toward refusal is the safe one. Reverting would restore null provenance on every handshake — strictly worse — to remove a failure mode that errs safe.
+
+    FOLLOW-UP, on BUG-1466 rather than a new spec:
+      - Prefer the forge lookup at RECORD time over the launch-time envelope when --pr is present,
+        or use the envelope only as a fallback when the lookup fails. State which and why.
+      - Finding 2: PR-1976.json and PR-1986.json remain null and unmarked. BUG-1467's criterion named
+        those two files specifically and the code does not touch them. Decide backfill-or-mark
+        explicitly; BUG-1466 currently says backfill is NOT required for the 452, so these two need
+        either an exception or an explicit "no".
+      - When BUG-1466's gate lands and compares stamp against head, the stale-stamp bug becomes a
+        source of FALSE REFUSALS. Fix the stamp before or with the gate, not after.
+
+    ON HOW IT WAS FOUND: the drain's phase-3 reviewer caught a defect a careful independent reviewer had read past. Worth recording as evidence for the drain's review phase rather than only as an incident.
+  created_at: 2026-09-21T00:03:01.575846119Z
+  modified_at: 2026-09-21T00:03:01.575846119Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
