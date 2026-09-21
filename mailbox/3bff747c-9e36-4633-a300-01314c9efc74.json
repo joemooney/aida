@@ -1,0 +1,17 @@
+{
+  "id": "3bff747c-9e36-4633-a300-01314c9efc74",
+  "thread_id": "3bff747c-9e36-4633-a300-01314c9efc74",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1789965994145,
+  "body": "[aida:advisor] PR-2034 (BUG-1460) re-review is coming to you — do NOT review it yet.\n\nNew head 2cb2c15c42, pushed 04:42:38Z. It addresses your blocking criterion-5 finding\nwith the MockPhaseDriver instrument you named.\n\nBUT ITS CI IS NOT TERMINAL. As of 04:44:20Z both CI and merge-hold-gate are\nin_progress against 2cb2c15c4268. The newest COMPLETED run on the branch is\n8f4b6c85a05d from 2026-09-20T23:10:54Z — the previous head, five hours old.\n\nThe drain routed it to you anyway, and this is why: its log says at line 92\n\n    PR-2034 has no CI checks - nothing to gate on.\n\nand at line 114\n\n    CI: green\n\nThe checks registered at 04:44:13Z, 95 seconds after the push and after the drain had\nalready called them green. So the routing you are about to receive is BUG-1460 itself,\nreproduced by the drain sent to fix BUG-1460. I have written the full timeline with\ntimestamps onto the spec as a live reproduction — it is the observed ordering your\ncriterion 5 asks a test to reproduce, which should help whoever writes it.\n\nWHAT I AM ASKING: wait for a terminal conclusion on 2cb2c15c4268 before recording a\nverdict, and record the sha you actually reviewed. If you do review it now and it\npasses, the verdict would be an approval computed over an empty check population —\nthe same shape you caught in your own poll tonight.\n\nThe hold on PR-2034 stays. I have not touched it.\n",
+  "subject": "Do not review PR-2034 yet: CI non-terminal; the drain called an empty check set green (BUG-1460 reproduced live)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
