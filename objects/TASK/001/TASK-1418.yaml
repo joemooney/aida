@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-21T19:22:11.001514980Z
+modified_at: 2026-09-21T21:54:01.180261237Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -410,4 +410,33 @@ comments:
     AND THE TEST ASSERTS ITS OWN PRECONDITION: `assert!(!gone.exists(), "fixture must model a MISSING worktree")` — A POSITIVE CONTROL ON THE FIXTURE rather than a comment claiming one. Then it asserts the ahead-count came FROM ORIGIN and the PR number came from the forge call, which is what distinguishes a real recovery from a fixture that merely returns something.
   created_at: 2026-09-21T19:22:11.001514980Z
   modified_at: 2026-09-21T19:22:11.001514980Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c5f6-315c-7312-86de-cb884b58398d
+  author: joe
+  content: |-
+    [aida:advisor] A SECOND DISCIPLINE ITEM FOR THE SAME ROUND, because it is the same kind of lesson, lands in the same pack, and one implementer can do both without a second dispatch. Both were learned today at the cost of a real miss.
+
+    ITEM 2 — A REVIEW RULE: WHEN A CONFIG ADDS A ROUTED PROMPT, VERIFY THE ARTEFACTS THE PROMPT INSTRUCTS SOMEONE TO READ.
+
+    Authored by claude-reviewer-1 as a self-correction on PR #2062, which they approved.
+
+    WHAT HAPPENED. #2062 added two `[[schedule.jobs]]` entries. The reviewer checked the SUBSTRATE job's command against `parse_scheduled_command`'s allowlist — correctly, and for a good reason: BUG-1557 established that a config command which does not parse fails silently at EVERY tick forever. Then they looked at the ROUTED job, saw `on = ["CronJobFailed"]` with a prompt and no `command`, reasoned "the allowlist does not apply to it", and stopped.
+
+    THE PROMPT CONTAINED A PATH THAT DOES NOT EXIST. It instructs the advisor to "Read the ledger entry at schedule/performance-guard.yaml". Verified by both seats independently:
+
+        schedule/performance-guard.yaml                ENOENT
+        .aida/schedule/performance-guard.yaml          ENOENT
+        .aida-store/schedule/performance-guard.yaml    EXISTS
+
+    One `ls` against a string sitting in the diff. I was routed that job three minutes after the merge and could not perform the task it assigned me.
+
+    THE RULE, IN THE REVIEWER'S OWN FORM: they validated the field that HAD a validator and skipped the field that had NONE — which is backwards, because the unvalidated field is where a defect can survive. A PROMPT IS AN INSTRUCTION TO A FUTURE AGENT, AND A PATH INSIDE IT IS EXACTLY AS LOAD-BEARING AS A COMMAND STRING; it simply has no parser to refuse it. "No validator exists for this field" is a reason to check it BY HAND, not a reason it is out of scope.
+
+    WHY IT GENERALISES BEYOND SCHEDULE JOBS. Any config that ships prose aimed at a human or agent — routed prompts, brief templates, recovery hints, error-message remediation text, skill bodies — carries file paths, command names and spec ids that nothing type-checks. Every one of them is a claim about the world that can silently go false. The scaffolded discipline pack is the right home because it is the thing a downstream project inherits.
+
+    SUGGESTED PLACEMENT: alongside item 1 in the review/implementer discipline guides, and tagged `propagation: scaffolding-pack` so it reaches downstream projects on the next build rather than living only here.
+
+    CONCRETE FORM WORTH KEEPING IN THE TEXT: the failure had THREE LAYERS and each hid the next — cannot find the file; if found, the entry is not your event; if it were, it lacks the numbers you were asked to confirm. A reviewer working top-down gets a plausible-looking failure at every step and never sees the shape. That is why reading did not find it and FIRING THE GATE did, in three minutes. (The layers themselves are BUG-1573; this item is the review habit, not the fix.)
+  created_at: 2026-09-21T21:54:01.180261237Z
+  modified_at: 2026-09-21T21:54:01.180261237Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
