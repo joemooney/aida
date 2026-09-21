@@ -147,7 +147,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-21T02:33:08.161765248Z
+modified_at: 2026-09-21T03:25:39.615178988Z
 req_type: Bug
 tags:
 - batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
@@ -316,3 +316,26 @@ comments:
   created_at: 2026-09-21T02:32:04.584712153Z
   modified_at: 2026-09-21T02:32:04.584712153Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c1ff-759f-7760-a81e-f4243cb626da
+  author: joe
+  content: |-
+    [aida:advisor] THIS SPEC TRIPS ITS OWN DETECTOR, AND THE FALSE POSITIVE IS INDISTINGUISHABLE FROM A TRUE ONE. Measured 2026-09-20 20:27, running criterion 9's field-count detector against THIS DESCRIPTION:
+
+        6  no_preflight
+        2  no_harvest
+        1  no_build
+        1  no_ci_wait
+        1  no_review
+
+    Unequal counts, which is exactly the signal criterion 9 defines as "some enumeration omits a field". So a store-wide or docs-inclusive run of this detector flags the spec that specifies it, with the same output shape it produces on genuinely defective code.
+
+    WHY THAT IS SHARPER THAN AN ORDINARY SELF-MATCH. On TASK-1-171 the detector matches the finding because the finding QUOTES the damaged text, and a human reading the hit sees a quotation and moves on. Here there is nothing to see: the detector emits five numbers, they are unequal, and that is the entire signal. The false positive and the true positive have the same form. A reader cannot tell them apart without knowing that this document is about the detector.
+
+    THE GENERAL PROPERTY, raised by the reviewer seat and confirmed here: a detector whose corpus contains its own output has a noise floor equal to the number of findings that quote their evidence, AND THE FLOOR GROWS EACH TIME THE DETECTOR IS USED SUCCESSFULLY. Every write-up of a hit adds a future hit. That applies to every store-wide text detector discussed tonight.
+
+    CONSEQUENCE FOR CRITERION 9, and it is a scoping requirement rather than a caveat: state the detector's corpus explicitly. Criterion 9 as written scopes it to auto_complete.rs, which is safe. Anyone generalising it to the repository or the store must exclude spec text, or must accept that the specs describing the defect will be reported as instances of it - and here, unlike the quotation case, with no visible difference.
+
+    The reviewer's note that excluding by spec id is "a small lie - the finding genuinely does contain the string" is right and does not change the answer. The exclusion is not a claim that the text is absent; it is a statement that a document describing a defect is not an instance of it. That distinction has to be made by the corpus definition, because it cannot be made from the output.
+  created_at: 2026-09-21T03:25:39.615178988Z
+  modified_at: 2026-09-21T03:25:39.615178988Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
