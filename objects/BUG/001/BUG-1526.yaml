@@ -92,7 +92,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:50:44.478379805Z
-modified_at: 2026-09-21T07:16:44.484472428Z
+modified_at: 2026-09-21T07:21:42.045073295Z
 req_type: Bug
 tags:
 - agent-surface
@@ -194,4 +194,48 @@ comments:
     test signal.
   created_at: 2026-09-21T07:16:44.484472428Z
   modified_at: 2026-09-21T07:16:44.484472428Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c2d7-8f9d-7ad1-bd33-4153e456565d
+  author: joe
+  content: |-
+    [aida:advisor] BACKLOG SWEEP: NINE OPEN PRs WOULD DIE AT STEP 12 TODAY. Eleven instances
+    of a gate roughly six hours old. Reviewer's measurement 2026-09-21 00:21.
+
+    METHOD, the same control used on #2034 and #1998: git merge-tree each PR's branch against
+    origin/main — which is what CI actually checks out — extract the merged tree, run
+    scripts/external-prose-classifiers.py --check. main alone passes, so any rc=1 is that
+    PR's line drift rather than a broken main.
+
+        WOULD TRIP   #1972 #1989 #2001 #2006 #2009 #2014 #2040 #2042 #2043
+        would pass   #1974 #1978 #1981 #1999 #2030
+        tripped      #2034 (fixed, merged)   #1998 (red now)
+
+    Nine of the fourteen open PRs touching a marker-bearing file, plus the two already
+    observed. ELEVEN.
+
+    THE OPERATIONAL STATEMENT, and it is narrow on purpose: nine PRs cannot currently
+    produce a CI result that MEANS ANYTHING. Each dies at step 12 of 26 and skips Run tests
+    plus twelve guards. So a rework round on any of them yields a red Build that says nothing
+    about the work, and a reviewer reading the rollup sees a failure unrelated to the change.
+    That has now happened twice and been mis-read once by the seat that filed this.
+
+    NOT CLAIMED: that any of the nine would otherwise pass. Only the classifier step was
+    checked; several carry live refusals and several have not had CI run at all.
+
+    WHY REGENERATING NINE TIMES IS THE WRONG SHAPE, which is the argument I could not make
+    when this was filed with one instance: the file drifts again the moment the next PR adds
+    a line above a marked site, and each regeneration is ITSELF a commit that shifts lines
+    for every other open PR. Nine manual fixes is not nine fixes, it is nine new sources of
+    drift. The remedy does not converge.
+
+    THIS IS NOW THE HIGHEST-LEVERAGE FIX ON THE BOARD. Every other open item unblocks one PR.
+    This unblocks the ability of nine to produce a meaningful CI result at all. Re-prioritised
+    accordingly: ahead of the F1 rework on #1998 and ahead of BUG-1532's implementation.
+
+    CRITERION 2 IS NO LONGER THE OPTIONAL HALF. With eleven instances, "move the step after
+    the test suite" is what makes a false trip cost a re-run instead of the entire test
+    signal. Criterion 1 stops the trips; criterion 2 stops them from being expensive. On this
+    evidence neither is droppable.
+  created_at: 2026-09-21T07:21:42.045073295Z
+  modified_at: 2026-09-21T07:21:42.045073295Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
