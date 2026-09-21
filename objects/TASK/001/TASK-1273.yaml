@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-21T22:00:29.836902608Z
+modified_at: 2026-09-21T22:08:41.607903309Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -270,6 +270,39 @@ comments:
   content: 'Current-head confirmation: workflow_dispatch run 35574028945 at 3776fc15f1 completed the GitLab live forge smoke job with failure at phase=project-create. Job 106251708318 returned the Cloudflare Access sign-in page from /api/v4; this confirms the previously recorded infrastructure punt applies to the final pushed head.'
   created_at: 2026-09-21T07:43:38.121809870Z
   modified_at: 2026-09-21T07:43:38.121809870Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c603-a087-7d30-9195-075d2dc0a961
+  author: joe
+  content: |-
+    [aida:advisor] F1's RUN IS DISPATCHED AND READ. THE SMOKE TEST DID NOT SKIP - IT RAN AND FAILED, AND THE FAILURE IS INFRASTRUCTURE, NOT CODE. Run 35660569766 (`gh workflow run cross-platform.yml --ref task-1273-work`), job 106534553599.
+
+    I PREDICTED A SKIP AND WAS WRONG, WHICH IS THE GOOD OUTCOME. The preflight passed - the mirror answered - so `run=true` and the job executed. A skip would have reported SUCCESS having run nothing; instead we have a real result.
+
+    THE FAILURE, verbatim from the job log:
+
+        thread 'forge::tests::gitlab_live_mr_round_trip' panicked at aida-cli-lib/src/forge.rs:3535:21:
+        phase=project-create: create response was not JSON
+          (expected value at line 1 column 1;
+           stdout_prefix="<!DOCTYPE html>\n<html>\n  <head>\n    <title>Sign in ・ Cloudflare ...")
+
+    CLOUDFLARE ACCESS RETURNS A SIGN-IN PAGE WHERE THE GITLAB API SHOULD RETURN JSON. `AIDA_GITLAB_TOKEN` is provisioned and is not the problem: the token authenticates to GitLab, and the request never reaches GitLab. Cloudflare Access sits in front of gitlab.joemooney.com and demands its own credential, which a GitHub-hosted runner does not have.
+
+    SO THE BOARD'S LONG-STANDING "FROZEN ON CLOUDFLARE ACCESS" BELIEF IS NOW EVIDENCE RATHER THAN FOLKLORE, and it is more specific than the belief was: the perimeter is the blocker, at the project-create step, with the mirror otherwise reachable.
+
+    THIS IS NOT FIXABLE ON THE BRANCH AND NEVER WAS. Two candidate remedies, neither of them implementer work:
+      (a) provision a CLOUDFLARE ACCESS SERVICE TOKEN for the runner (CF-Access-Client-Id /
+          CF-Access-Client-Secret headers), alongside the existing GitLab token; or
+      (b) run this job on the SELF-HOSTED RUNNER that already sits behind the perimeter, rather
+          than on ubuntu-latest.
+    Both are infrastructure decisions for the operator. I am not choosing between them here.
+
+    F4 IS NOW OBSERVABLE AND IT WORKS. claude-reviewer-1 correctly declined to close F4 on inspection, because bounded diagnostics only manifest WHEN THE LIVE LOOKUPS FAIL - and no run existed. This run is that condition. The panic carries `phase=project-create` and a BOUNDED `stdout_prefix` rather than an unbounded HTML dump or an opaque serde error. That is exactly what 5e9e82bb6c was for, demonstrated under the failure it was built for.
+
+    ONE PRECISION ABOUT F1's CRITERION, STATED RATHER THAN GLOSSED. F1 as written asks for `forge-smoke phase=` markers. The log contains `phase=project-create`; it does NOT contain the literal string `forge-smoke phase=`. I am reporting what is there and NOT claiming the criterion is met - the reviewer owns that judgement, and the difference between "a phase marker exists" and "the marker the criterion names exists" is exactly the kind of gap I would refuse in someone else's report.
+
+    WHAT THIS MEANS FOR #1978 AND FOR TASK-1273. The PR cannot demonstrate a green live smoke until the perimeter question is answered, and that answer is not the implementer's to give. F3 (four cwd-resolving call sites) remains real, actionable, and independent of any of this - it should be finished on its merits. But the spec's headline acceptance is gated on infrastructure, and pretending otherwise has already cost four review rounds against a gate nobody could clear.
+  created_at: 2026-09-21T22:08:41.607903309Z
+  modified_at: 2026-09-21T22:08:41.607903309Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
