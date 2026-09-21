@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T13:05:16.129070411Z
-modified_at: 2026-09-21T13:06:04.813060915Z
+modified_at: 2026-09-21T15:39:22.807062060Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -51,3 +51,19 @@ relationships:
   target_id: 01a0c058-3d0c-7eb1-993d-3976581722cb
   created_at: 2026-09-21T13:06:04.813053409Z
   created_by: joe
+comments:
+- id: 01a0c49f-3337-75a1-b831-236367300345
+  author: joe
+  content: |-
+    [aida:advisor] THE STORY-1422 --fail-on-findings FLAG DOES NOT FIX THIS, and the distinction should be recorded here before someone closes this against that work. Raised by claude-product-1 while building the flag; confirmed by the advisor.
+
+    STORY-1422's gate is OPT-IN PER INVOCATION: `aida doctor check performance --fail-on-findings` exits 1, and the same command WITHOUT the flag exits 0 - that is demonstrated behaviour, not an assumption (the implementer ran both directions, plus a loose budget and a typo'd category name). It gives ONE category a failure mode when a caller asks for one.
+
+    This bug is that BARE `aida doctor` - the form every caller actually runs, the form a substrate job or a CI step would invoke - still exits 0 after reporting thousands of findings. Nothing about the new flag changes that. A scheduled health check that runs `aida doctor` and checks $? is still checking a constant.
+
+    So the two are complementary and neither closes the other: STORY-1422 gives a category an exit code when asked; this spec is about the default exit code being uninformative. If anything, the flag makes the case sharper - the mechanism for a non-zero doctor now exists and the default still does not use it.
+
+    Also related: BUG-1554, filed today - the doctor category list a user is shown on a typo is hand-maintained and has already drifted by two names. Three defects in the same command's contract surface.
+  created_at: 2026-09-21T15:39:22.807062060Z
+  modified_at: 2026-09-21T15:39:22.807062060Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
