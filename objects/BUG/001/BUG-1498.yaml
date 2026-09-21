@@ -1,7 +1,7 @@
 id: 01a0c15e-a65a-74f0-86b8-455a0e05f9d9
 spec_id: BUG-1498
 agreed_id: BUG-1498
-title: Every shelve files an empty-description draft BUG restating the event — 408 in the store, 17 of today's 30 open drafts, duplicated per recurrence, duplicating what findings list already shows better
+title: The advisor's draft queue is 26 of 39 machine-filed shelve records presented as if a person filed them, so grooming pays a judgment per machine row
 description: |
   The advisor's draft queue reads as mostly machine-filed: 26 of the 39 open drafts are auto-drafted shelve records. That part is real and is the cost worth fixing. Three of the premises this was filed on are not, and the correction changes what should be built.
 
@@ -19,7 +19,7 @@ description: |
 
   WHAT IS ACTUALLY WRONG IS THE VIEW, NOT THE DATA. Every row is correct and every row is presented to the advisor as if a human filed it. The grooming surface makes no distinction between a spec someone chose to write and a record the machine wrote for itself, so the advisor pays a judgment per machine row. 26 of 39 is a real tax on a real surface. The fix is a lens, not a delete.
 
-  WHAT ELSE SURVIVES: DUPLICATION, AND IT IS LARGER THAN REPORTED. Ninety distinct titles are duplicated across 216 rows store-wide. Among the 26 drafts there are two pairs, not one: BUG-1449/BUG-1473 (phase 3 on BUG-1297) and BUG-1458/BUG-1286's pair (phase 3 on BUG-1286). A spec that round-trips N times leaves N rows, as filed.
+  WHAT ELSE SURVIVES: DUPLICATION, AND IT IS LARGER THAN REPORTED. Ninety distinct titles are duplicated across 216 rows store-wide. Among the 26 drafts there are two pairs, not one: BUG-1449/BUG-1473 (phase 3 on BUG-1297) and BUG-1311/BUG-1458 (phase 3 on BUG-1286). A spec that round-trips N times leaves N rows, as filed.
 
   Acceptance:
   - The advisor's grooming surface distinguishes machine-filed shelve records from human-filed specs. `aida list --status draft` either excludes auto-drafted rows by default or groups them so the human-filed set is readable at a glance; the exact form is the implementer's call, but the test is that an advisor can see the specs a person filed without reading past the machine's.
@@ -33,7 +33,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:30:00.794024258Z
-modified_at: 2026-09-21T01:02:39.805978564Z
+modified_at: 2026-09-21T01:02:50.234443159Z
 req_type: Bug
 tags:
 - agent-surface
