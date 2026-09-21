@@ -26,11 +26,11 @@ description: |-
   3. The aida-store divergence is assessed separately and either reconciled or recorded as expected with the reason.
   4. A mirror push rejected as non-fast-forward is surfaced somewhere durable, not only as a one-line warning inside another command's output.
 status: Draft
-priority: High
+priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:26:51.735985744Z
-modified_at: 2026-09-21T04:38:03.437625606Z
+modified_at: 2026-09-21T04:38:04.562403930Z
 req_type: Bug
 tags:
 - papercut multi-hub mirror-drift severity:operational
