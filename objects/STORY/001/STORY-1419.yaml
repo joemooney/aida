@@ -30,5 +30,34 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T10:27:25.705842018Z
-modified_at: 2026-09-21T10:27:25.705842018Z
+modified_at: 2026-09-21T10:30:40.998302031Z
 req_type: Story
+comments:
+- id: 01a0c384-9466-7c53-a41e-375bbbf79cc5
+  author: joe
+  content: |-
+    BINDING IMPLEMENTATION HAZARD — the obvious predicate is wrong, and it is wrong on roughly a quarter of the corpus. Raised by the reviewer seat from having built the manual sweep, and verified independently by the driver-advisor over a wider set of files.
+
+    DO NOT STRING-COMPARE THE TWO SHAS. `head != reviewed_sha` is the natural way to express this spec and it FALSE-POSITIVES on every verdict whose recorded sha is ABBREVIATED, which is many of them.
+
+        reviewer's count, verdicts carrying a sha:        37 full-40,  13 abbreviated
+        advisor's independent count, all verdict files
+        including spec-keyed and sidecars:               104 full-40,  41 abbreviated
+
+    Different denominators because we swept different file sets; the ratio is the same and the order of magnitude is what matters — roughly one in four. Worked examples: PR-2001.json at 10 chars, PR-1989.json at 10, BUG-1231.json at 11, BUG-1297.json at 12, PR-2006-advisor.json at 8.
+
+    A naive comparison reports every one of those as MOVED on a PR whose head has not moved at all. That is a row that never clears, on exactly the PRs a reviewer is most likely to be watching, which would make the feature useless on day one. Three of the four refusals the reviewer currently holds are in that set — they passed 10-char values to `--sha`.
+
+    THE FIX EXISTS IN THE CODEBASE AND THIS SPEC SHOULD POINT AT IT RATHER THAN DESCRIBE IT. `verdict_tip_relation` (aida-cli-lib/src/lib.rs:32836-32840) resolves BOTH sides before comparing:
+
+        let reviewed = resolve_commit_sha(repo, reviewed_raw);
+        let tip = resolve_commit_sha(repo, branch.unwrap_or("HEAD")) ...
+
+    and `classify_tip_relation`'s doc comment states the contract explicitly: both arguments "must already be full, repo-resolved object names". Reuse that path. Do not reimplement the comparison — this is BUG-1539's "one call site adopting its sibling's shape", arriving BEFORE the divergence rather than after it, which is the cheap moment.
+
+    AND DO NOT LIFT THE PROTOTYPE. The reviewer's manual sweep used `head.startswith(sha)`. They named it themselves so nobody promotes it: adequate for a throwaway script, NOT adequate for the feature — wrong for abbreviations under about seven characters, wrong where two objects share a prefix, and SILENTLY RIGHT MOST OF THE TIME, which is the worst property a predicate can have. A check that is usually right is how a false-positive row becomes background noise a reviewer learns to ignore.
+
+    CONSEQUENCE FOR ACCEPTANCE: the test set must include an abbreviated recorded sha whose PR head has NOT moved, asserting no row is produced. Without that case the naive implementation passes.
+  created_at: 2026-09-21T10:30:40.998302031Z
+  modified_at: 2026-09-21T10:30:40.998302031Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
