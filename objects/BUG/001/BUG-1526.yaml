@@ -1,0 +1,101 @@
+id: 01a0c24d-5a7e-7d11-9f78-667edd63738b
+spec_id: BUG-1526
+agreed_id: BUG-1526
+title: The external-prose classifier inventory embeds line numbers and runs at step 12 of 25, so any line-shifting edit fails a required check AND skips the entire test suite behind it
+description: |-
+  Measured 2026-09-20 21:50 local, reviewer seat, on PR #2034 (BUG-1460) at head
+  2cb2c15c4268. TASK-1300 merged as a553d7e927 roughly two hours earlier, so this may be
+  the gate's first casualty.
+
+  TWO DEFECTS, ONE STEP.
+
+  DEFECT 1 - THE INVENTORY EMBEDS LINE NUMBERS, SO ANY LINE-SHIFTING EDIT TRIPS IT.
+
+  docs/architecture/external-tool-output-classifiers.md lists each classifier as
+  name + file:LINE. A required CI step compares it byte-for-byte against a fresh
+  generation. So a PR that edits any file ABOVE a marked site shifts the numbers and
+  fails the check, with no classifier added, removed or changed.
+
+  Measured on this PR:
+
+      control: origin/main alone            --check rc=0   (main is fine)
+      merge tree main + bug-1460-work       --check rc=1   (fails)
+      (tree d622af3e4ab9, via git merge-tree, which is what CI checks out)
+
+      inventory over main    21 sites
+      inventory over merged  21 sites
+      delta: THREE LINE NUMBERS, nothing else
+
+        claude_log_indicates_api_outage   lib.rs:37014 -> 37065
+        gh_stderr_is_network_error        lib.rs:36992 -> 37043
+        status_context::load_pr_facts     lib.rs:64992 -> 65043
+
+      classifier markers added or removed by the PR: 0
+
+  lib.rs alone holds three marked sites and is over 65000 lines, so a large fraction of
+  PRs that touch it will trip this for a reason unrelated to their change.
+
+  This is the anti-pattern the project already documents. CLAUDE.md, on plan citations:
+  "Symbol refs over line refs... Symbol refs survive edits; line refs drift fast and are
+  often stale within hours of generation." TASK-1300 built a REQUIRED GATE on line refs.
+
+  DEFECT 2 - THE STEP SITS AHEAD OF EVERY SUBSTANTIVE GUARD, SO COSMETIC DRIFT MASKS THEM.
+
+  The step is number 12 of 25 in the Build job, and bash -e aborts the job. Its failure
+  SKIPPED 13 steps:
+
+      13  Run tests                              skipped
+      14  Live bwrap OS-wrap confinement gate    skipped
+      15  MCP stdio compatibility tests          skipped
+      16  MCP doc-consistency test               skipped
+      17  advisor-code-guard hook test           skipped
+      18  advisor-code-gate substrate test       skipped
+      19  pre-commit provenance move-detection   skipped
+      20  distributed / sibling-store tests      skipped
+      21  Validate commit SPEC-ID refs           skipped
+      22  diff trace coverage                    skipped
+      23  Doc-intent gate                        skipped
+      24  CLI-manual drift-guard                 skipped
+      25  Monitor contract drift guard           skipped
+
+  So a line-number shift in a generated markdown file disables the entire test and guard
+  suite for that PR. The reviewer sees a red Build and cannot tell, from the rollup, that
+  the tests never ran at all. On this PR that is exactly what happened: the new
+  regression test the round was written to add has never executed.
+
+  WHY THE COMBINATION IS WORSE THAN EITHER HALF. Defect 1 makes the step fire often and
+  for cosmetic reasons; defect 2 makes each firing cost the whole suite. The failure mode
+  is a PR that is red for a reason nobody needs to care about, whose real verification
+  status is unknown rather than bad - and unknown reads as bad, so the round is spent
+  regenerating a doc instead of learning whether the code works.
+
+  Acceptance
+  1. The inventory does not embed line numbers, or the --check comparison ignores them.
+     Name + file path is the stable identity; the line is a convenience that should not
+     be load-bearing for a required gate.
+  2. The classifier-inventory step runs AFTER the test suite, or in a separate job, so a
+     stale generated doc cannot skip Run tests and the twelve guards behind it.
+  3. When the check fails only on line drift with an identical classifier SET, the error
+     says so explicitly - "inventory unchanged; line numbers drifted" - rather than the
+     undifferentiated "is stale", which reads as a real inventory change.
+  4. A test asserts that adding unrelated lines above a marked site does NOT fail
+     --check.
+
+  The remedy for an affected PR works and is one command: run
+  scripts/external-prose-classifiers.py bare from the repo root and commit the file.
+  Verified on a clean extraction of the merge tree: md5 2068ec52 -> b61217a0, and --check
+  then exits 0. The script has no --write flag; the bare run rewrites in place. Worth
+  saying in the error message, which currently says "regenerate with <path>" without
+  stating that a bare run is the regeneration.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:50:44.478379805Z
+modified_at: 2026-09-21T04:50:44.478379805Z
+req_type: Bug
+tags:
+- agent-surface
+- ci
+- papercut
+- severity:operational
