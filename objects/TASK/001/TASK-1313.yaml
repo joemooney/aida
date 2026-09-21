@@ -304,7 +304,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-21T06:04:50.518628122Z
+modified_at: 2026-09-21T06:06:02.069609384Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
@@ -441,4 +441,17 @@ comments:
     Suggested verification, executable: run the check against the store and assert the output contains BOTH a findings count and an unreadable-objects count, and that the unreadable count is either zero or explicitly acknowledged. A check that prints only findings fails this criterion even when its findings are correct.
   created_at: 2026-09-21T06:01:51.590514179Z
   modified_at: 2026-09-21T06:01:51.590514179Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c292-4955-7db3-ab43-a806ba6d1c38
+  author: joe
+  content: |-
+    FOLLOW-UP FILED: TASK-1314 covers REPAIRING the 25 occurrences across the six specs, and is deliberately sequenced AFTER this spec.
+
+    The reason is this spec own testability. These six files are the only real-world fixtures the detector has, and the measured evidence is that the obvious detector implementation finds ONE of them. Repair them first and this spec ships unfalsifiable against real data -- its check would be provable only against synthetic fixtures that its author wrote to match their own pattern, which is the failure mode that produced the 1-of-6 result in the first place.
+
+    So the order is: detector lands and reports 6 specs / 25 occurrences -> that output drives the repair -> re-run the detector to verify zero.
+
+    Flagging it here because the natural instinct on seeing corrupted text is to fix it in passing, and doing so would quietly remove this spec evidence base. Same call as TASK-1-171: damage that is currently serving as evidence should be marked, not tidied.
+  created_at: 2026-09-21T06:06:02.069609384Z
+  modified_at: 2026-09-21T06:06:02.069609384Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
