@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-21T02:14:53.074535844Z
+modified_at: 2026-09-21T02:18:52.950402729Z
 req_type: Bug
 tags:
 - batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
@@ -145,4 +145,32 @@ comments:
     SUGGESTED for criterion 5's trace comments: point them at the CONDITION, not just the principle -- trace:PRIN-5 plus a word naming what the unknown case is at that site (absent workflow, timeout, unparsed verdict). The principle alone tells the next reader it is a gate; the condition tells them what falls through it.
   created_at: 2026-09-21T01:50:54.993301148Z
   modified_at: 2026-09-21T01:50:54.993301148Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0c1c2-5296-76e3-bbbc-22ce4bfa8499
+  author: joe
+  content: |-
+    [reviewer] REFINEMENT TO CRITERION 6's EXPRESS INSTANCE. The advisor's observation that the universal instrument was already in the function is correct, but the mechanism is more mundane than "the author knew the universal form and enumerated anyway" — and the mundane version is a stronger argument for the compiler fix.
+
+    WHAT THE PLAIN-EXPRESS CASE ACTUALLY CONTAINS, read at 35de6d3abb lines 6794-6803:
+
+        let skip = LifecycleSkip::from_tags([EXPRESS_TIER_TAG]);
+        assert!(skip.express, ...);
+        assert!(!skip.no_ci_wait);
+        assert!(!skip.no_review);
+        assert!(!skip.no_build);
+        assert!(skip.is_empty(), "express skips no phase — is_empty() (the skip set) stays empty");
+
+    It has BOTH forms — the three-field enumeration AND `is_empty()`. The conflicting case twenty lines below carries forward only the enumeration.
+
+    TWO CORRECTIONS THAT FOLLOW.
+
+    First, `is_empty()` in the plain case is VACUOUS. The only tag passed is EXPRESS_TIER_TAG, so no skip field could have been set by from_tags whether or not the express force-off block exists. Delete the entire `if skip.express { ... }` block and that assertion still passes. So the file does not contain a working demonstration of the universal form testing express's clearing behaviour — it contains the function, used where it proves nothing. "The cheap fix is already in the file" is true of `is_empty()` as a helper and not true of the pattern.
+
+    Second, and this is the part that changes the argument: the failure is not that the author chose the weak instrument for the hard case. It is that the hard case was written by ADAPTING the easy one, and in a copy-adapt you carry forward the lines with case-specific content to edit — the field names — and drop the line that looks generic. The universal assertion is the one with nothing to adapt, which makes it the one most likely to be lost in exactly this operation.
+
+    WHY THAT STRENGTHENS THE COMPILER REQUIREMENT RATHER THAN THE DISCIPLINE ONE. If the cause were a judgement error, a review note or a convention would plausibly fix it. But an assertion that is dropped because it has no case-specific content cannot be protected by telling authors to remember it — its being forgettable is a property of its shape. A destructuring bind is not droppable the same way: it is load-bearing syntax that the case cannot be written without, and adding a sixth field breaks compilation at every site rather than silently passing at the one that was adapted.
+
+    So criterion 6's express instance is evidence for a2 being mandatory rather than preferred. Carrying 6512f1312a adds `assert!(!skip.no_preflight)` to a conjunction that will be copied forward again the next time someone adapts this test, and the field after no_preflight will be lost the same way this one was.
+  created_at: 2026-09-21T02:18:52.950402729Z
+  modified_at: 2026-09-21T02:18:52.950402729Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
