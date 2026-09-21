@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T03:30:59.539323012Z
-modified_at: 2026-09-21T03:31:26.776957788Z
+modified_at: 2026-09-21T03:31:27.748052664Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity drain-safe from:session-0920
@@ -51,4 +51,8 @@ relationships:
 - rel_type: References
   target_id: 01a0c194-809e-7111-a5c6-095faa47a23d
   created_at: 2026-09-21T03:31:26.776952501Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0c1ee-defb-7cd0-b234-051939e4dcad
+  created_at: 2026-09-21T03:31:27.748047376Z
   created_by: joe
