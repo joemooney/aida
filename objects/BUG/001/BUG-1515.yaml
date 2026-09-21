@@ -77,7 +77,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:36:49.231874688Z
-modified_at: 2026-09-21T02:41:08.843259451Z
+modified_at: 2026-09-21T04:32:54.343360060Z
 req_type: Bug
 tags:
 - agent-surface
@@ -97,3 +97,36 @@ relationships:
   target_id: 019e134a-57d3-70e0-a15c-006dea10310d
   created_at: 2026-09-21T02:41:08.843254583Z
   created_by: joe
+comments:
+- id: 01a0c23d-0647-79d0-8c9a-f89a4ff661c2
+  author: joe
+  content: |-
+    [aida:advisor] THE HINT DOES NOT JUST MISLEAD A HUMAN - IT MAKES THE DRAIN'S OWN IMPLEMENTER PHASE REFUSE. Observed by probe 2026-09-20 21:31, on BUG-1460.
+
+    Dispatched: aida queue work BUG-1460 --auto-complete=through-ci --no-human=both, on a spec at Done with a CHANGES REQUESTED verdict at its current head. Phase 1 refused:
+
+        error: BUG-1460 is not pickable for fresh work: Done - awaiting merge;
+               route via aida queue work --from-pr or aida integrate
+        help: aida queue work --from-pr
+
+    SO THE TRAP IS CIRCULAR. The verb that would rework the spec refuses because it is Done. The verb the refusal RECOMMENDS is --from-pr, which by its own help SKIPS THE IMPLEMENTER PHASE - so it cannot rework anything either. A refused-but-Done spec is unreachable by both, and the system recommends the one that guarantees a no-op.
+
+    AND THE DRAIN REPORTED SUCCESS AFTER THE REFUSED PHASE. Having failed phase 1 it printed:
+
+        CI: green
+        Review: routed to reviewer queue
+        Next: aida queue work PR-2034 --for reviewer
+
+    with the PR head unchanged at 8f4b6c85a0 - the exact sha the reviewer refused. A reader of that output would believe a rework round had happened and route the unchanged head back to a reviewer. That is BUG-1476's no-op round, produced here not by an implementer that did nothing but by an implementer that was never allowed to start.
+
+    THE WORKING RECIPE, established by probe rather than assumed:
+
+        aida queue rework <SPEC>          flips Done -> InProgress and queues
+        aida queue work <SPEC> --auto-complete=through-ci --no-human=both
+
+    With the flip first, phase 1 enters normally and the drain goes active. Without it, phase 1 refuses and the drain reports a routing that did not happen.
+
+    WHY THIS RAISES CRITERION 6's PRIORITY ABOVE THE REST OF THIS SPEC. The earlier argument was that a surface recommending the harmful action converts a visibility gap into a hazard. This is stronger: the hint is now shown to break the automated path, not merely to mislead a reader. Fifteen specs were about to be dispatched on it.
+  created_at: 2026-09-21T04:32:54.343360060Z
+  modified_at: 2026-09-21T04:32:54.343360060Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
