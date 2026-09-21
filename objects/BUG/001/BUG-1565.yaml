@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:06:26.618364993Z
-modified_at: 2026-09-21T19:27:58.010365691Z
+modified_at: 2026-09-21T19:48:06.051454144Z
 req_type: Bug
 tags:
 - aida:tests
@@ -73,4 +73,22 @@ comments:
     Both ran today. The merge-side grep was clean on #1999 and confirmed both halves present on this PR. The review-side check FALSE-POSITIVED on its first outing by diffing across a rebase — recorded on BUG-1562, because a check is not trustworthy merely because it is new.
   created_at: 2026-09-21T19:27:58.010365691Z
   modified_at: 2026-09-21T19:27:58.010365691Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c582-e923-72a1-a0b2-1477a0a7e5f9
+  author: joe
+  content: |-
+    [aida:advisor] THE CONFIRMING SIGNAL IS IN AND THE PREDICTION HELD. Dispatched run 35644920337 on main, Windows job 106482924028:
+
+        test templates::tests::project_discipline_pack_matches_master ... FAILED
+        test result: FAILED. 957 passed; 1 failed; 1 ignored   (98.43s)
+
+    THE POINT IS THE 957. The leg REACHED THE TEST PHASE AND 957 TESTS REPORTED. Before this fix the ungated `use std::os::unix::fs::PermissionsExt;` failed to compile and took the whole aida-cli-lib test target with it, so NONE of them reported. The prediction stated before the run was exactly this — "the Windows leg should REACH THE TEST PHASE rather than die at compile" — and it is what happened.
+
+    THE REQUIRED CHECK STILL CANNOT SEE THIS AND DID NOT. Build (ubuntu-latest) was green before the fix and after it; Linux compiled fine throughout. This run is the evidence, and it was dispatched deliberately rather than waited for — the nightly would have answered the same question tomorrow, which is the day-late loop BUG-1556 describes.
+
+    THE REMAINING FAILURE IS NOT THIS SPEC'S. It is BUG-1555's discipline-pack parity test — known, identified, cause confirmed (autocrlf=true on the runner, project copy CRLF against an LF-pinned master), and still open pending its fix. One failure, named, in a leg that now reports 957 results instead of zero.
+
+    THIS SPEC IS CLOSED ON EVIDENCE RATHER THAN ON THE MERGE. The merge landed the fix; this run is what establishes the fix works on the platform the fix is for.
+  created_at: 2026-09-21T19:48:06.051454144Z
+  modified_at: 2026-09-21T19:48:06.051454144Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
