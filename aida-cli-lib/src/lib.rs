@@ -21718,129 +21718,256 @@ fn which_binary(binary: &str) -> Option<std::path::PathBuf> {
     None
 }
 
+/// Canonical `aida doctor` categories and their accepted aliases.
+///
+/// This is the SINGLE source of truth for category names: both
+/// `normalize_doctor_category`'s alias resolution and the user-facing
+/// "valid categories" list in its unknown-category error are derived from
+/// this table. Adding a category here makes it dispatch correctly AND
+/// appear in the error message, with no second edit required — the drift
+/// this fixed (a hand-typed error-message list silently falling behind
+/// the normalizer) is structurally impossible now.
+// trace:BUG-1554 | ai:claude
+static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
+    (&["stale-lease", "stale-leases", "leases"], "stale-leases"),
+    (
+        &["abandoned-lease", "abandoned-leases", "abandoned"],
+        "abandoned-leases",
+    ),
+    (&["brief-lease", "brief-lease-drift"], "brief-lease-drift"),
+    (&["brief-spec", "brief-spec-drift"], "brief-spec-drift"),
+    (&["spec-status", "spec-status-drift"], "spec-status-drift"),
+    (
+        &["orphan-worktree", "orphan-worktrees", "worktrees"],
+        "orphan-worktrees",
+    ),
+    (
+        &["orphan-branch", "orphan-branches", "branches"],
+        "orphan-branches",
+    ),
+    // TASK-717: stale REMOTE branches (origin/*) verify-and-prune.
+    // trace:TASK-717
+    (
+        &[
+            "stale-remote-branch",
+            "stale-remote-branches",
+            "remote-branch",
+            "remote-branches",
+            "remote-branch-prune",
+        ],
+        "stale-remote-branches",
+    ),
+    // TASK-878: merged Agent-tool isolation worktrees
+    // (.claude/worktrees/agent-* on worktree-agent-* branches) that
+    // accumulate. trace:TASK-878 | ai:claude
+    (
+        &[
+            "merged-agent-worktree",
+            "merged-agent-worktrees",
+            "agent-worktree",
+            "agent-worktrees",
+            "worktree-gc",
+            "agent-worktree-gc",
+        ],
+        "merged-agent-worktrees",
+    ),
+    // STORY-781: the checked-in `.aida/project.toml`. trace:STORY-781
+    (
+        &[
+            "project-manifest",
+            "project-manifests",
+            "manifest",
+            "manifests",
+            "project-metadata",
+        ],
+        "project-manifest",
+    ),
+    (
+        &[
+            "stale-reviewer",
+            "stale-reviewer-lease",
+            "stale-reviewer-leases",
+        ],
+        "stale-reviewer-leases",
+    ),
+    (&["stale-lock", "stale-locks", "locks"], "stale-locks"),
+    (
+        &["obe-brief", "obe-briefs", "obsolete-briefs"],
+        "OBE-briefs",
+    ),
+    // TASK-570: orphan queue entries — "??? (deleted)" ghosts in
+    // `aida queue list`. trace:TASK-570 | ai:claude
+    (
+        &[
+            "orphan-queue",
+            "orphan-queue-entry",
+            "orphan-queue-entries",
+            "queue-orphans",
+        ],
+        "orphan-queue-entries",
+    ),
+    // STORY-496: dead-PID agent-registry entries (corpses under
+    // `.aida/agents/`). trace:STORY-496 | ai:claude
+    (
+        &[
+            "dead-agent",
+            "dead-agents",
+            "stale-agent",
+            "stale-agents",
+            "agents",
+        ],
+        "dead-agents",
+    ),
+    // TASK-673: Completed specs git can't corroborate. trace:TASK-673 | ai:claude
+    (
+        &[
+            "completed-without-commit",
+            "completed-without-commits",
+            "completed-no-commit",
+            "uncorroborated-completed",
+            "integrity",
+        ],
+        "completed-without-commit",
+    ),
+    // TASK-696: ancestor CLAUDE.md/AGENTS.md @-imports resolving outside the
+    // project (external-import bleed). trace:TASK-696 | ai:claude
+    (
+        &[
+            "external-import-bleed",
+            "external-imports",
+            "ancestor-claude",
+            "ancestor-bleed",
+            "bleed",
+        ],
+        "external-import-bleed",
+    ),
+    // TASK-752: tracked legacy centralized-backend artifacts
+    // (requirements*.yaml / scaffold-report.html) on a git-canonical
+    // project. trace:TASK-752 | ai:claude
+    (
+        &[
+            "legacy-store-cruft",
+            "legacy-store",
+            "store-cruft",
+            "legacy-cruft",
+            "requirements-yaml",
+        ],
+        "legacy-store-cruft",
+    ),
+    // BUG-563: per-clone runtime files (node.toml / dispenser.toml /
+    // *.lock / cache.db*) wrongly tracked on the orphan aida-store branch.
+    // trace:BUG-563 | ai:claude
+    (
+        &[
+            "store-tracked-runtime",
+            "store-runtime",
+            "tracked-runtime",
+            "store-node-toml",
+            "store-runtime-cruft",
+        ],
+        "store-tracked-runtime",
+    ),
+    // TASK-1095: shared branches (trunk + store) holding different tips
+    // across configured remotes (github vs gitlab drift).
+    // trace:TASK-1095 | ai:claude
+    (
+        &["remote-drift", "remote-sync", "drift", "remotes"],
+        "remote-drift",
+    ),
+    // trace:STORY-1043 | ai:codex
+    (
+        &[
+            "ci",
+            "cross-platform",
+            "cross-platform-ci",
+            "nightly-red",
+            "nightly",
+        ],
+        "ci",
+    ),
+    // STORY-762: a vendor this project resolves to (interactive default,
+    // headless, or configured TUI) whose CLI binary is missing from PATH.
+    // trace:STORY-762 | ai:claude
+    (
+        &["vendor-binary", "vendor-binaries", "vendor", "vendors"],
+        "vendor-binary",
+    ),
+    // STORY-1127: effective sandbox/approval posture across AIDA agent
+    // launch defaults and native Codex config.
+    // trace:STORY-1127 | ai:codex
+    (
+        &[
+            "permission-posture",
+            "permission-postures",
+            "permissions",
+            "agent-permissions",
+            "sandbox-posture",
+        ],
+        "permission-posture",
+    ),
+    (
+        &["parent-tag-drift", "parent-tags", "parent-drift"],
+        "parent-tag-drift",
+    ),
+    // A guarded command shape that exceeds its budget on too large a
+    // fraction of recent calls, or a budget watching a shape that never
+    // ran. trace:STORY-1422 | ai:claude
+    (
+        &["performance", "perf", "latency", "budgets"],
+        "performance",
+    ),
+    // TASK-1124: deployed vendor prompts/skills (project .claude/.codex +
+    // ~/.codex/prompts) drifted from the binary's embedded source templates
+    // — rule-delivery-rot. trace:TASK-1124 | ai:claude
+    (
+        &[
+            "scaffold-drift",
+            "scaffold",
+            "rule-delivery",
+            "rule-delivery-rot",
+            "delivery-rot",
+        ],
+        "scaffold-drift",
+    ),
+    // TASK-1122: raw machine identity (corporate email/hostname) already in
+    // the store despite configured redaction. trace:TASK-1122 | ai:claude
+    (
+        &["store-scrub", "scrub", "identity-leak", "store-identity"],
+        "store-scrub",
+    ),
+    // STORY-835: enabled agent profile lacks one of its required runtime
+    // wiring surfaces (instruction file or MCP registration).
+    (
+        &["agents-wiring", "agent-wiring", "wiring"],
+        "agents-wiring",
+    ),
+    // BUG-915: linked worktree `.git` file points at shared git metadata
+    // that container wrappers must mount.
+    (
+        &[
+            "worktree-container-gitdir",
+            "container-gitdir",
+            "container-worktree",
+            "devcontainer-gitdir",
+            "worktree-gitdir",
+        ],
+        "worktree-container-gitdir",
+    ),
+];
+
 fn normalize_doctor_category(raw: &str) -> Result<String> {
     let s = raw.trim().to_ascii_lowercase().replace('_', "-");
-    let normalized = match s.as_str() {
-        "stale-lease" | "stale-leases" | "leases" => "stale-leases",
-        "abandoned-lease" | "abandoned-leases" | "abandoned" => "abandoned-leases",
-        "brief-lease" | "brief-lease-drift" => "brief-lease-drift",
-        "brief-spec" | "brief-spec-drift" => "brief-spec-drift",
-        "spec-status" | "spec-status-drift" => "spec-status-drift",
-        "orphan-worktree" | "orphan-worktrees" | "worktrees" => "orphan-worktrees",
-        "orphan-branch" | "orphan-branches" | "branches" => "orphan-branches",
-        // TASK-717: stale REMOTE branches (origin/*) verify-and-prune.
-        // trace:TASK-717
-        "stale-remote-branch"
-        | "stale-remote-branches"
-        | "remote-branch"
-        | "remote-branches"
-        | "remote-branch-prune" => "stale-remote-branches",
-        // TASK-878: merged Agent-tool isolation worktrees
-        // (.claude/worktrees/agent-* on worktree-agent-* branches) that
-        // accumulate. trace:TASK-878 | ai:claude
-        "merged-agent-worktree"
-        | "merged-agent-worktrees"
-        | "agent-worktree"
-        | "agent-worktrees"
-        | "worktree-gc"
-        | "agent-worktree-gc" => "merged-agent-worktrees",
-        // STORY-781: the checked-in `.aida/project.toml`. trace:STORY-781
-        "project-manifest" | "project-manifests" | "manifest" | "manifests"
-        | "project-metadata" => "project-manifest",
-        "stale-reviewer" | "stale-reviewer-lease" | "stale-reviewer-leases" => {
-            "stale-reviewer-leases"
+    for (aliases, canonical) in DOCTOR_CATEGORY_ALIASES {
+        if aliases.contains(&s.as_str()) {
+            return Ok((*canonical).to_string());
         }
-        "stale-lock" | "stale-locks" | "locks" => "stale-locks",
-        "obe-brief" | "obe-briefs" | "obsolete-briefs" => "OBE-briefs",
-        // TASK-570: orphan queue entries — "??? (deleted)" ghosts in
-        // `aida queue list`. trace:TASK-570 | ai:claude
-        "orphan-queue" | "orphan-queue-entry" | "orphan-queue-entries" | "queue-orphans" => {
-            "orphan-queue-entries"
-        }
-        // STORY-496: dead-PID agent-registry entries (corpses under
-        // `.aida/agents/`). trace:STORY-496 | ai:claude
-        "dead-agent" | "dead-agents" | "stale-agent" | "stale-agents" | "agents" => "dead-agents",
-        // TASK-673: Completed specs git can't corroborate. trace:TASK-673 | ai:claude
-        "completed-without-commit"
-        | "completed-without-commits"
-        | "completed-no-commit"
-        | "uncorroborated-completed"
-        | "integrity" => "completed-without-commit",
-        // TASK-696: ancestor CLAUDE.md/AGENTS.md @-imports resolving outside the
-        // project (external-import bleed). trace:TASK-696 | ai:claude
-        "external-import-bleed"
-        | "external-imports"
-        | "ancestor-claude"
-        | "ancestor-bleed"
-        | "bleed" => "external-import-bleed",
-        // TASK-752: tracked legacy centralized-backend artifacts
-        // (requirements*.yaml / scaffold-report.html) on a git-canonical
-        // project. trace:TASK-752 | ai:claude
-        "legacy-store-cruft" | "legacy-store" | "store-cruft" | "legacy-cruft"
-        | "requirements-yaml" => "legacy-store-cruft",
-        // BUG-563: per-clone runtime files (node.toml / dispenser.toml /
-        // *.lock / cache.db*) wrongly tracked on the orphan aida-store branch.
-        // trace:BUG-563 | ai:claude
-        "store-tracked-runtime"
-        | "store-runtime"
-        | "tracked-runtime"
-        | "store-node-toml"
-        | "store-runtime-cruft" => "store-tracked-runtime",
-        // TASK-1095: shared branches (trunk + store) holding different tips
-        // across configured remotes (github vs gitlab drift).
-        // trace:TASK-1095 | ai:claude
-        "remote-drift" | "remote-sync" | "drift" | "remotes" => "remote-drift",
-        // trace:STORY-1043 | ai:codex
-        "ci" | "cross-platform" | "cross-platform-ci" | "nightly-red" | "nightly" => "ci",
-        // STORY-762: a vendor this project resolves to (interactive default,
-        // headless, or configured TUI) whose CLI binary is missing from PATH.
-        // trace:STORY-762 | ai:claude
-        "vendor-binary" | "vendor-binaries" | "vendor" | "vendors" => "vendor-binary",
-        // STORY-1127: effective sandbox/approval posture across AIDA agent
-        // launch defaults and native Codex config.
-        // trace:STORY-1127 | ai:codex
-        "permission-posture"
-        | "permission-postures"
-        | "permissions"
-        | "agent-permissions"
-        | "sandbox-posture" => "permission-posture",
-        "parent-tag-drift" | "parent-tags" | "parent-drift" => "parent-tag-drift",
-        // A guarded command shape that exceeds its budget on too large a
-        // fraction of recent calls, or a budget watching a shape that never
-        // ran. trace:STORY-1422 | ai:claude
-        "performance" | "perf" | "latency" | "budgets" => "performance",
-        // TASK-1124: deployed vendor prompts/skills (project .claude/.codex +
-        // ~/.codex/prompts) drifted from the binary's embedded source templates
-        // — rule-delivery-rot. trace:TASK-1124 | ai:claude
-        "scaffold-drift" | "scaffold" | "rule-delivery" | "rule-delivery-rot" | "delivery-rot" => {
-            "scaffold-drift"
-        }
-        // TASK-1122: raw machine identity (corporate email/hostname) already in
-        // the store despite configured redaction. trace:TASK-1122 | ai:claude
-        "store-scrub" | "scrub" | "identity-leak" | "store-identity" => "store-scrub",
-        // STORY-835: enabled agent profile lacks one of its required runtime
-        // wiring surfaces (instruction file or MCP registration).
-        "agents-wiring" | "agent-wiring" | "wiring" => "agents-wiring",
-        // BUG-915: linked worktree `.git` file points at shared git metadata
-        // that container wrappers must mount.
-        "worktree-container-gitdir"
-        | "container-gitdir"
-        | "container-worktree"
-        | "devcontainer-gitdir"
-        | "worktree-gitdir" => "worktree-container-gitdir",
-        other => anyhow::bail!(
-            "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
-             brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
-             orphan-branches, stale-remote-branches, merged-agent-worktrees, \
-             orphan-queue-entries, stale-reviewer-leases, stale-locks, dead-agents, \
-             OBE-briefs, completed-without-commit, legacy-store-cruft, \
-             store-tracked-runtime, remote-drift, ci, vendor-binary, permission-posture, \
-             scaffold-drift, store-scrub, agents-wiring, worktree-container-gitdir, parent-tag-drift, \
-               performance)",
-            other
-        ),
-    };
-    Ok(normalized.to_string())
+    }
+    let valid = DOCTOR_CATEGORY_ALIASES
+        .iter()
+        .map(|(_, canonical)| *canonical)
+        .collect::<Vec<_>>()
+        .join(", ");
+    anyhow::bail!("unknown doctor category `{}` (valid: {})", s, valid);
 }
 
 /// TASK-1089 (criterion 2): an explicit opt-out. A Completed spec tagged

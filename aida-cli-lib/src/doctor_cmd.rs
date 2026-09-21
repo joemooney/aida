@@ -4598,6 +4598,36 @@ hostname = "localhost"
         assert!(normalize_doctor_category("not-a-category").is_err());
     }
 
+    // BUG-1554: the user-facing "valid categories" list in the
+    // unknown-category error was a hand-typed string literal that silently
+    // fell behind the normalizer's alias table — at the tree this bug was
+    // filed against, `external-import-bleed` and `project-manifest` both
+    // dispatched and normalized correctly but were absent from the error
+    // message, so a user who mistyped one of those names got an
+    // authoritative-looking list that didn't contain the name they wanted.
+    //
+    // This asserts the two are structurally impossible to omit going
+    // forward: the error message is built by mapping over
+    // `DOCTOR_CATEGORY_ALIASES`, the same table `normalize_doctor_category`
+    // matches against, so every canonical name is guaranteed present with
+    // no second edit.
+    // trace:BUG-1554 | ai:claude
+    #[test]
+    fn unknown_doctor_category_error_lists_every_canonical_category() {
+        let err = normalize_doctor_category("not-a-real-category")
+            .unwrap_err()
+            .to_string();
+        for (_, canonical) in DOCTOR_CATEGORY_ALIASES {
+            assert!(
+                err.contains(canonical),
+                "error message missing canonical category `{canonical}`: {err}"
+            );
+        }
+        // The two categories BUG-1554 found missing at HEAD 21c393f4da.
+        assert!(err.contains("external-import-bleed"));
+        assert!(err.contains("project-manifest"));
+    }
+
     #[test]
     fn doctor_reports_worktree_container_gitdir() {
         // BUG-915
