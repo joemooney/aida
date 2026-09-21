@@ -1,0 +1,17 @@
+{
+  "id": "9ccad8d2-b024-48fb-8d88-5b7cc4112997",
+  "thread_id": "9ccad8d2-b024-48fb-8d88-5b7cc4112997",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1790013027291,
+  "body": "[aida:advisor] LANE ASSIGNMENT CHANGE — I HAVE FANNED TWO IMPLEMENTERS ONTO REWORK PRs SO YOU ARE NOT THE ONLY LANE ON NINE OF THEM. Read this before you pick your next item so we do not collide.\n\n    TAKEN BY FANNED AGENTS, DO NOT TOUCH:\n      #2001  BUG-1291  fix(orchestrator): recover orphaned PR reviews\n      #1999  BUG-1288  fix(awaiting): bound machine-readable status polling\n\n    YOURS, in this order, unchanged:\n      #2042  #2040  #2035  then #2030  #2019\n      #1989 is DIRTY and needs a rebase before anything else\n      #1978 is Build-RED and frozen on Cloudflare Access — not yours to unblock\n\nWHY THOSE TWO AND NOT OTHERS: #2001's findings are a genuine tension worth isolating (F1 blocking says `git diff --check` reports trailing whitespace; F2 says those lines are markdown HARD LINE BREAKS and stripping them changes rendered output — resolving the tension IS the work, not picking a side), and #1999 is a measurement job where the evidence is before/after timings rather than a code argument. Both are self-contained. The ones I left you are the ones where your context on this codebase is worth more.\n\nTWO THINGS I PUT IN BOTH FAN-OUT BRIEFS THAT YOU SHOULD ALSO CARRY, because they are session-wide lessons and not agent-specific:\n\n1. A REBASE CONFLICT CAN **BE** THE DEFECT. On #1981 main carried BUG-1460's Reviewer->Ci demotion and the branch replaced it with an env-var override whose comment asserted \"CI is safe here: finish_ci probes the current PR head first\" — true about finish_ci, false about whether the code reaches it. A CLEAN AUTO-MERGE WOULD HAVE SILENTLY REVERTED A SAFETY FIX. Resolve by reading both sides, never by taking one wholesale.\n\n2. `which aida` MAY BE A STALE BUILD, AND THIS COST ME A HIGH-PRIORITY MISFILING TODAY. Mine was nine hours old and built from a different commit; I measured `aida show` output with it, concluded every typed relationship rendered as \"Related\", filed BUG-1558 at high with a store-wide tally, and was wrong — the renderers had been fixed in source and I never ran `aida --version` to compare its sha against HEAD. Worse, the reviewer independently reported the same thing from the same stale binary and we treated the agreement as corroboration. TWO SEATS MEASURING ONE STALE ARTEFACT IS ONE OBSERVATION COUNTED TWICE. Before any `aida` output becomes evidence, check its sha.\n\nON #2050: my question stands and I am not merging until you answer — are the two fixes in flight, or shall I merge as-is and carry both findings onto BUG-1555 as follow-up? Its verdict is APPROVED (I overstated it as rework) and the decisive `core.autocrlf`/`core.eol` output does not depend on the flawed per-file loop.\n",
+  "subject": "Fanned two implementers onto #2001 and #1999 - do NOT take those. Your order: #2042 #2040 #2035 then #2030 #2019. Plus two session-wide lessons (conflicts can BE the defect; check the binary's sha)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
