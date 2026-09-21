@@ -1,0 +1,47 @@
+id: 01a0c194-809e-7111-a5c6-095faa47a23d
+spec_id: BUG-1505
+agreed_id: BUG-1505
+title: 'The review verdict has no schema: 45 key shapes and 9 verdict spellings across 543 files, two of which contain APPROVED while meaning do-not-merge'
+description: |
+  The review verdict is the artifact every merge gate is supposed to consult, and it has no schema. Across 543 verdict files under `.aida/review-verdicts/` there are 45 distinct key sets and 9 distinct spellings of the verdict value. Only two keys, `summary` and `verdict`, appear in every file.
+
+  MEASURED 2026-09-20.
+
+  THE VERDICT VALUE HAS NINE SPELLINGS:
+
+      286  Approved
+      169  APPROVED
+       30  approved
+       26  CHANGES REQUESTED
+       21  RequestChanges
+        7  request-changes
+        2  Approve
+        1  APPROVED pending cross-platform green
+        1  CONTENT APPROVED - MERGE WITHHELD FOR INDEPENDENCE
+
+  The last two are the dangerous ones and they are not typos. Both contain the string APPROVED and both mean the opposite of "merge it": one is conditional on a check that had not run, the other is an explicit refusal to merge on independence grounds. A gate matching on APPROVED merges both. A gate matching exactly on "Approved" misses 199 genuine approvals and fails closed, which is survivable; a gate matching loosely ships work a reviewer explicitly withheld, which is not.
+
+  86 PERCENT CARRY NO HEAD SHA. 468 of the 543 files have no `reviewed_sha`, `head_sha`, `head` or `sha` field of any kind. So for those verdicts there is nothing to compare against the PR's current head, and the question "was this verdict recorded against the code that is about to merge" is unanswerable from the artifact. This is the mechanism STORY-1405 is built on and the protection BUG-1452 arms, and on 86 percent of the corpus the input does not exist.
+
+  THE 45 SHAPES ARE NOT COSMETIC. Some carry `recorded_by`, most do not. Some carry `pr`, some `spec`, some `specs`, some neither. Some carry `findings`, some `findings_filed`, some `blocking_findings`. Two carry `unverifiable` with a reason. Any consumer must therefore try several keys for one fact and treat absence as unknown, and the field it wants most - who recorded this, against what code - is the one most often missing.
+
+  HOW THIS SURFACED, which is the argument for fixing it rather than documenting it. An advisor sweep for refused-but-unheld PRs matched the verdict value case-sensitively and required a sha field. It found 5 refusals and reported them all held. The corrected sweep found 18 refusals and TWO UNHELD - PR #2040 at the current head with no hold, and PR #2009 with no sha and no hold - both of which were mergeable at that moment. The narrow sweep did not error; it returned a smaller number that looked like an answer. Any gate written against this corpus has the same exposure, and a gate is exactly what STORY-1405 proposes to write.
+
+  Acceptance:
+  1. A verdict value is drawn from a closed set with one canonical spelling per outcome, and recording rejects anything outside it. Free-text qualification moves to a separate field - a conditional or withheld approval is NOT an approval and must not be expressible as one.
+  2. Every verdict records the head sha it was recorded against, and the recorder. A verdict that cannot name its sha records that it could not, explicitly, rather than omitting the field.
+  3. A reader helper exists and is the only supported way to consume a verdict file, so a consumer does not hand-roll key fallbacks. Every gate uses it.
+  4. The 543 existing files are migrated or classified: mapped onto the canonical set where the intent is unambiguous, and marked unreadable where it is not. The two free-text values are decided individually by a human, not pattern-matched.
+  5. A gate consuming a verdict distinguishes approved, refused, and CANNOT DETERMINE, and treats the third as refusing. Absent evidence must not read as approval - that is the whole failure mode.
+  6. A test asserts that a verdict whose value is not in the canonical set is rejected at record time, and that a gate fed a shaless legacy verdict reports cannot-determine rather than approving.
+
+  NOT IN SCOPE: what the gate then does with a refusal, which is STORY-1405 and BUG-1452. This is about the artifact those depend on being well-formed enough to consult.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T01:28:50.078974800Z
+modified_at: 2026-09-21T01:28:50.078974800Z
+req_type: Bug
+tags:
+- batch:night-0920 merge-safety integrity agent-surface from:session-0920
