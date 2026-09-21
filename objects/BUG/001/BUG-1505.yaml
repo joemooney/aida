@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:28:50.078974800Z
-modified_at: 2026-09-21T03:43:25.873722698Z
+modified_at: 2026-09-21T03:43:41.858173974Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity agent-surface from:session-0920
@@ -163,16 +163,17 @@ comments:
   author: joe
   content: |-
     Session: 01a0adee
+    Session: 01a0adee
     [aida:advisor] WORKED EXAMPLE FOR CRITERION 1, and it should replace "nine spellings" as the motivating case because the spellings invite a fix that does not work.
 
     Three defensible readings of one corpus, measured 2026-09-20 20:44:
 
-      strict - verdict normalises exactly to approved / approve / lgtm      490
-      loose  - verdict contains the substring "approve"                     492
-      divergent                                                               2
+    strict - verdict normalises exactly to approved / approve / lgtm      490
+    loose  - verdict contains the substring "approve"                     492
+    divergent                                                               2
 
-      PR-1977-advisor.json    "APPROVED pending cross-platform green"
-      PR-1979-advisor.json    "CONTENT APPROVED - MERGE WITHHELD FOR INDEPENDENCE"
+    PR-1977-advisor.json    "APPROVED pending cross-platform green"
+    PR-1979-advisor.json    "CONTENT APPROVED - MERGE WITHHELD FOR INDEPENDENCE"
 
     Both contain APPROVED. Both mean DO NOT MERGE. One is conditional on a check that had not run; the other is an explicit refusal to merge on independence grounds.
 
@@ -184,11 +185,11 @@ comments:
 
     THE CORPUS CANNOT BE COUNTED WITHOUT FIRST DECIDING A QUESTION THE DATA DOES NOT ANSWER. Five defensible predicates over the same 552 files produce five different totals, and every boundary between them is one of the two free-text verdicts:
 
-        verdict equals "approved", case-insensitive        488
-        normalised, starts with "approved"                 489
-        strict closed set: approved / approve / lgtm       490
-        normalised, starts with "approve"                  491
-        contains "approve" anywhere                        492
+      verdict equals "approved", case-insensitive        488
+      normalised, starts with "approved"                 489
+      strict closed set: approved / approve / lgtm       490
+      normalised, starts with "approve"                  491
+      contains "approve" anywhere                        492
 
     PR-1977's "APPROVED pending cross-platform green" is the file separating 490 from 491: excluded by the closed set, included by startswith-approve. PR-1979's "CONTENT APPROVED - MERGE WITHHELD FOR INDEPENDENCE" begins with "content", so it falls outside all but the loosest match and is the 491-to-492 boundary.
 
@@ -196,7 +197,7 @@ comments:
 
     CORRECTED 2026-09-20 20:46. An earlier version of this comment claimed the 490-versus-491 spread was "the only counting disagreement of the night that was not a predicate difference" and offered that as the most persuasive point. It was false - 491 is the startswith-approve predicate, identified by the reviewer seat, and it is arguably the clearest predicate difference of the five. The claim is withdrawn and replaced above rather than kept alongside, because the misled-readers framing invites the response "then be more careful with your predicate", which the five-predicate framing forecloses.
 
-    PROVENANCE: the two free-text values were first flagged by the advisor at 19:00 as the dangerous half of the nine-spelling measurement. The reviewer seat established at 20:40 that they are also the entire explanation for the 490/491/492 discrepancy between two seats counting APPROVED verdicts - so the same two files that would fool a gate also produced the only counting disagreement of the night that was not a predicate difference. Recorded because it is unusually direct evidence that the ambiguity is real rather than theoretical: it has already misled two readers who were specifically looking for it.
+    PROVENANCE: the two free-text values were first flagged by the advisor at 19:00 as the dangerous half of the nine-spelling measurement. The reviewer seat established at 20:40 that they are also the entire explanation for the spread between two seats counting APPROVED verdicts, and at 20:42 identified the advisor's figure as the startswith-approve predicate - which is what made the five-predicate table above derivable. So the same two files that would fool a gate are the boundary between every pair of reasonable counting rules anyone has written over this corpus.
   created_at: 2026-09-21T03:41:31.910062528Z
-  modified_at: 2026-09-21T03:43:25.873722392Z
+  modified_at: 2026-09-21T03:43:41.858173822Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
