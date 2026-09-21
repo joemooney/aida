@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:21:39.246217841Z
-modified_at: 2026-09-21T01:50:02.687136507Z
+modified_at: 2026-09-21T08:26:38.177131963Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -173,6 +173,27 @@ comments:
   created_at: 2026-09-21T01:33:00.793388750Z
   modified_at: 2026-09-21T01:33:00.793388750Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c313-02e1-78a3-ac34-638cbc692339
+  author: joe
+  content: |-
+    VERDICT PROVENANCE FOR PR #2042, recorded HERE because the file that holds it is about to be destroyed by normal use of the tool.
+
+    #2042 (branch bug-1420-round2) and the now-closed #2043 (branch story-1391-work) were ONE TREE: identical head sha 35de6d3abb540c6cd98537c037815b33c49ed589, five commits, opened 106 seconds apart under different titles and different spec attributions. The driver-advisor seat ruled #2042 the survivor and closed #2043, on the evidence that the five commits carry TASK-1289 and BUG-1420 trailers and that a grep for STORY-1391 across them returns zero — STORY-1391 being a separate, already-completed spec whose branch name had been reused.
+
+    THE REVIEW EXISTS ONCE. The drain reviewer recorded RequestChanges against PR-2043 at reviewed_sha 35de6d3abb, recorded_at 2026-09-21T01:53:37Z, with two findings. I copied that record verbatim to PR-2042.json at 01:17 local so the refusal would not vanish with the closed PR number, adding transferred_from / transfer_note / transferred_by fields marking it as a COPY.
+
+      THERE IS ONE REVIEW OF THIS TREE, NOT TWO. Two verdict files that agree are not two reviewers that agree. The product seat read both files and concluded independently that the tree had two verdicts and therefore no risk — a wrong conclusion, and the reassuring one.
+
+    WHY THIS IS RECORDED ON THE SPEC. The PR-keyed handshake writer (aida-cli-lib/src/lib.rs:76429-76447) rebuilds PR-N.json from scratch and std::fs::write's it, preserving nothing. The next `aida review record ... --pr 2042` — the very next thing that happens when someone addresses these findings and re-records — will silently destroy the transferred_from provenance. The workaround performed to save the verdict is erased by the next normal use of the tool that made the workaround necessary. That is BUG-1539, and this comment is the durable copy that no verdict writer can reach.
+
+    THE TWO FINDINGS, preserved verbatim in substance:
+      1. The TASK-1289 publication boundary is advisory rather than enforced: preflight runs AFTER an agent-opened PR is accepted, so the PR is already published, and the only prevention is prose in aida-core/templates/skills/aida-pr/SKILL.md. Needs a technical gate plus an end-to-end test proving a failing guard leaves no open PR. THIS ONE IS BLOCKED on an operator design decision — a DecisionRequest is pending on TASK-1289 with three shapes (retract-on-failure recommended, prevent-publication, accept-as-advisory).
+      2. Preflight FAILS OPEN when a guard cannot complete: aida-cli-lib/src/implementer_preflight.rs maps timeouts and spawn errors to Skipped, and decide() treats every Skipped result as Open, so a guard that could not run reads as a guard that passed. NOT blocked — split out as BUG-1540 so it can ship regardless of which way the boundary decision goes.
+
+    #2042 stays held; its merge-hold marker and aida:merge-hold label remain in place.
+  created_at: 2026-09-21T08:26:38.177131963Z
+  modified_at: 2026-09-21T08:26:38.177131963Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
