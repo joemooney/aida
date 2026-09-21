@@ -2,7 +2,7 @@ id: 01a0b5fe-5f73-78d3-8529-b9a0f585470e
 spec_id: TASK-1279
 agreed_id: TASK-1279
 title: 'Seat-parity audit: prove Codex can occupy every seat (product, advisor, implementer, reviewer, integrator) interactively and headless; fix the Claude-only surfaces'
-description: |
+description: |-
   Operator requirement (2026-09-18): Codex is a co-equal agent and must be able to occupy ANY seat — product, advisor, implementer, reviewer, integrator — interactively and headless. Today the implementer and reviewer seats run under Codex in every drain (vendor: codex in the events), STORY-683 made the headless vendor configurable, STORY-1033 added per-seat model/effort tuning, TASK-0421 inventoried Claude-specific surfaces and TASK-1181 ported the hooks to .codex/hooks.json. What is not proven is the two coordination seats: the last two days' product and advisor sessions were both Claude, and several surfaces those seats leaned on are Claude-shaped — the memory pack (Codex has no memory dir; AGENTS.md is the analogue), aida advisor watch's fork-from-live (a Claude session feature), the Monitor-based event supervision, and the skills catalog form (.codex/skills + ~/.codex/prompts exist but drift is only checked for Claude's pack by aida memories check).
 
   Deliverable: a seat-parity audit with a matrix and fixes for the gaps.
@@ -15,12 +15,25 @@ description: |
   - No "missing" cell remains for product/advisor/implementer/reviewer under Codex; "degraded" cells have a filed spec each.
   - CI fails when a hook is wired for one vendor and not the other.
   - The dogfood wave under a Codex advisor merges at least one drain-mode spec with the merge gated by that Codex advisor.
+
+
+  SCOPE FIXED 2026-09-20 18:52, so this spec can merge without burying its own obligation.
+
+  CRITERION 4 - the dogfood-wave proof - IS SCOPED OUT to TASK-1308, filed, approved and linked as a child. It required evidence that accrues only from running a wave, and the 06:23Z audit reports advisor-seat events 0 and product-seat events 0, so no wave has run. Holding shipped and independently verified code open until an unscheduled operational event would be wrong; completing the spec with the obligation still inside it would be worse, because merging commit 2096f9c17e carries the (TASK-1279) trailer and auto-completes this spec, and Completed is terminal and drops out of every open-work lens. Neither. Split.
+
+  REQUIRED IN THIS PR BEFORE MERGE, and it is documentation rather than code:
+    (a) The two Codex Degraded cells in docs/agents/seat-parity.md - Product cold-boot and Advisor fork-from-live - currently cite TASK-1279, which is THIS spec. A gap whose filed spec is the spec that just closed cannot be found again by anyone reading the matrix later. Repoint both at TASK-1308. The correct pattern is already one column over in the same table: every Antigravity Degraded cell cites TASK-1207, which is separate and open.
+    (b) The completion clause in seat-parity.md reads "Do not claim completion until the first wave has merged at least one drain-mode spec behind the Codex advisor gate." That clause now refers to TASK-1308 rather than to this spec, and must say so, or the document forbids the state it is about to be in.
+
+  WHAT THIS SPEC DID DELIVER, all independently verified and not in question: a non-Claude resolved vendor routes to cold_boot_and_run with AgentSeat::Advisor so per-seat model and effort still apply; the dry-run path reports the same branch; and codex_hooks_match_settings at aida-core/src/scaffolding/codex_hooks.rs:131 is a real test comparing both embedded hook sets. Implementer and reviewer parity were already proven before this spec existed.
+
+  ALSO CARRIED TO TASK-1308: the matrix currently pastes four proving probes against roughly twenty-four non-N/A cells, and two of the four are --help invocations. A --help proves a flag parses, not that a seat works. That gap is real but it is the same evidence-from-running problem as criterion 4, so it travels with it rather than blocking this merge.
 status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:29:01.811098746Z
-modified_at: 2026-09-21T01:50:31.200855873Z
+modified_at: 2026-09-21T01:50:33.379532973Z
 req_type: Task
 tags:
 - batch:followups-0918i
