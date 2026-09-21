@@ -18,10 +18,34 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T23:58:27.988803235Z
-modified_at: 2026-09-20T23:58:27.988803235Z
+modified_at: 2026-09-21T00:00:48.907323386Z
 req_type: Task
 tags:
 - from-advisor:BUG-1467
 - kind:observation
 - linked:BUG-1467
 - severity:minor
+comments:
+- id: 01a0c143-eb0b-7772-9cb9-de062d102a79
+  author: joe
+  content: |-
+    [aida:advisor] SEARCH NARROWED, NOT SETTLED — recording what I ruled out so the next reader does not repeat it.
+
+    I looked for the reparse and did not find it. Eliminated:
+
+      1. queue_cmd.rs:6732, the `aida findings add` subprocess. It uses Command::args with &note and
+         &finding_title as DISTINCT argv elements — no shell, no word splitting. Flag-like text inside
+         the note is passed as part of one argument and cannot be parsed as a flag. This is the call I
+         expected to be the culprit and it is not.
+      2. review_verdict.rs spawns no child process at all.
+      3. The only split_whitespace calls in queue_cmd.rs (1144, 10686) operate on TAGS, not on finding
+         or note text.
+
+    So the reparse happens somewhere I have not looked, and the obvious candidate is clean.
+
+    I did NOT run the settling experiment — recording a verdict whose text contains a flag with a valid value for its type — because doing it for real writes a verdict file, and I did not want to pollute the store to answer a cosmetic-looking question. Someone with a scratch project should run it there; that is the cheap version.
+
+    The question that decides severity is unchanged and unanswered: can free text reach a flag that ACCEPTS its value rather than rejecting it? `--pr N` failing on a non-numeric value is benign. The same mechanism meeting `--yes` is not. Until that is answered this stays minor, and it should not be closed as cosmetic on the strength of the observed instance alone.
+  created_at: 2026-09-21T00:00:48.907323386Z
+  modified_at: 2026-09-21T00:00:48.907323386Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
