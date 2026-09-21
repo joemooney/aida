@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T18:11:23.801730426Z
+modified_at: 2026-09-21T18:29:59.736304169Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -504,6 +504,39 @@ comments:
       5. The deletion blindness in `discipline_content_mismatches` (`.ok()?` silently skips a missing project copy).
   created_at: 2026-09-21T18:11:16.531884508Z
   modified_at: 2026-09-21T18:11:16.531884508Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c53b-6738-77b0-9000-c300d23009de
+  author: joe
+  content: |-
+    [aida:advisor] THE macOS CONTROL ARM IS IN AND IT IS CLEAN. Reported by claude-reviewer-1 from the dispatched run 35637049540; Windows — the test arm — still running.
+
+        core.autocrlf = (unset)
+        core.eol      = (unset)
+        project copy  : LF   (.aida/discipline/README.md)
+        master        : LF   (aida-core/templates/.aida/discipline/README.md)
+        all 26 .md guides: LF
+        Build (macos-latest): completed SUCCESS
+
+    WHAT THE CONTROL ESTABLISHES IS MORE THAN "macOS IS FINE". On a platform where autocrlf is UNSET, both sides are LF and the discipline-pack test PASSES. That is mechanism 1's prediction for the control arm, and it held. A mechanism that predicts the control as well as the case is worth more than one that only explains the failure — and this spec's history is a ledger of six mechanisms that explained the failure.
+
+    THE PREDICTION IS REGISTERED IN ADVANCE, by the reviewer, before the Windows reading:
+        Windows reports CRLF on the project copy against LF on the master  -> MECHANISM 1 CONFIRMED
+                                                                              end to end: precondition,
+                                                                              activation, and both arms
+        Windows reports LF on BOTH sides                                   -> MECHANISM 1 FALSIFIED,
+                                                                              and BUG-1555 returns to
+                                                                              NO SURVIVING CAUSE with the
+                                                                              23-of-23 systematic failure
+                                                                              unexplained
+    Recording both outcomes before the measurement is what makes the measurement informative. Without it an LF result gets absorbed as a puzzle instead of landing as a falsification — which is precisely how this spec accumulated six mechanisms.
+
+    FINDING 2 ON THE PROBE IS NOW CONFIRMED EMPIRICALLY RATHER THAN BY READING. The macOS output enumerates 26 files, EVERY ONE A .md, and glossary.yaml is ABSENT. The loop globs `.aida/discipline/*.md` and there are 27 tracked guides. glossary.yaml IS in the compared 23 and DID fail on the 09-21 nightly.
+
+    Low impact today. IT MATTERS WHEN THE FIX IS WRITTEN: a `.gitattributes` rule scoped to `*.md` would leave glossary.yaml unpinned AND THIS PROBE WOULD REPORT ALL-LF AND NEVER SHOW IT — blind in exactly the dimension it will be trusted for. The acceptance item requiring `.aida/discipline/**` rather than an extension glob, in both the probe and the rule, is now backed by an observation rather than an argument.
+
+    ALSO WORTH RECORDING AS A DATA POINT RATHER THAN NOTICED AND DROPPED: macOS went FULLY GREEN on this run. That is the first macOS-green cross-platform leg observed today, and it is evidence AGAINST BUG-1556's arrival-rate thesis for this run. One run does not refute a rate. It is exactly the kind of result that gets discarded when a channel is known-red, which is BUG-1556's own subject, so it goes on the record.
+  created_at: 2026-09-21T18:29:59.736304169Z
+  modified_at: 2026-09-21T18:29:59.736304169Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c528-482c-7ed0-85a1-8d70052bfedf
