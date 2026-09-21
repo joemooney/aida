@@ -30,7 +30,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:26:51.735985744Z
-modified_at: 2026-09-21T04:26:51.735985744Z
+modified_at: 2026-09-21T04:38:03.437625606Z
 req_type: Bug
 tags:
 - papercut multi-hub mirror-drift severity:operational
+comments:
+- id: 01a0c241-bdad-75c0-afcd-a527e1da6409
+  author: joe
+  content: |-
+    OPERATOR EXPLANATION 2026-09-20, which resolves most of this: the gitlab main commit ff45dcbd6c is there because we force merged to gitlab last night deliberately, and we are the only users of that mirror.
+
+    That removes the concern this was filed on. The worry was unreviewed code sitting on a hub other people might clone; with a single known user and a deliberate action, there is no such exposure. Downgrading from High to Low accordingly, and criterion 1 is answered: the commit is wanted, it got there on purpose.
+
+    WHAT STILL STANDS, and it is small: every push to any branch now warns non-fast-forward on the gitlab leg and is skipped, so the mirror falls further behind on each one. Observed twice tonight on story-1353-work. If gitlab CI is expected to run against a current tree, it is running against a stale one. That is the only remaining reason to reconcile, and it is an operational convenience rather than a correctness problem.
+
+    Criteria 2 and 3 stand as written but at Low. Criterion 4 -- surfacing a rejected mirror push somewhere more durable than a one-line warning inside another command output -- is the part worth keeping regardless, since the warning is how this stayed invisible until it was two legs deep.
+  created_at: 2026-09-21T04:38:03.437625606Z
+  modified_at: 2026-09-21T04:38:03.437625606Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
