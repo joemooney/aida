@@ -323,6 +323,215 @@ fn agent_journey_toon_list_search_queue_done_and_status() {
     );
     let spec = parse_spec_id(&String::from_utf8_lossy(&add.stdout));
 
+    // BUG-1442: one requirement carrying an ordinary core edge, a custom
+    // edge, and a blocker must expose the same relationship types to humans
+    // and TOON consumers. The TOON view also carries the blocker's pickup
+    // consequence instead of forcing an agent to make a second graph query.
+    // trace:BUG-1442 | ai:codex
+    let mut targets = Vec::new();
+    for title in [
+        "Reference target",
+        "Implementation target",
+        "Blocking target",
+    ] {
+        let target = aida(&repo, &home)
+            .env("AIDA_AGENT_OUTPUT", "toon")
+            .env("AIDA_SESSION_ROLE", "advisor")
+            .args([
+                "add", "--type", "task", "--status", "approved", "--title", title,
+            ])
+            .output()
+            .expect("add relationship target");
+        assert!(
+            target.status.success(),
+            "target add failed: {}",
+            String::from_utf8_lossy(&target.stderr)
+        );
+        targets.push(parse_spec_id(&String::from_utf8_lossy(&target.stdout)));
+    }
+    for (target, rel_type) in targets
+        .iter()
+        .zip(["references", "implemented-by", "blocked-by"])
+    {
+        let rel = aida(&repo, &home)
+            .env("AIDA_AGENT_OUTPUT", "toon")
+            .args(["rel", "add", &spec, target, "--type", rel_type])
+            .output()
+            .expect("add relationship");
+        assert!(
+            rel.status.success(),
+            "relationship add failed: {}",
+            String::from_utf8_lossy(&rel.stderr)
+        );
+    }
+    let human_show = aida(&repo, &home)
+        .env("AIDA_AGENT_OUTPUT", "0")
+        .args(["show", &spec])
+        .output()
+        .expect("show human relationship types");
+    let toon_show = aida(&repo, &home)
+        .env("AIDA_AGENT_OUTPUT", "toon")
+        .args(["show", &spec])
+        .output()
+        .expect("show TOON relationship types");
+    let human_show = String::from_utf8_lossy(&human_show.stdout);
+    let toon_show = String::from_utf8_lossy(&toon_show.stdout);
+
+    // Compare the two projections as PARSED EDGES, not by searching each
+    // output for substrings. Independent substring searches pass while the
+    // two disagree on row cardinality, on which target an edge points at, on
+    // ordering, or on an extra collapsed row — every one of those is a real
+    // divergence that "both documents contain the word blocked-by" cannot
+    // see.
+    //
+    // The two surfaces use DIFFERENT vocabularies on purpose: human prose
+    // ("is blocked by") against canonical stored labels ("blocked-by"). So
+    // the correspondence has to be declared rather than assumed, and it is
+    // declared HERE so that changing either vocabulary fails this test
+    // instead of drifting silently.
+    // trace:BUG-1442 | ai:claude
+    fn canonical_edge_type(label: &str) -> &str {
+        match label {
+            "is parent of" | "parent" => "Parent",
+            "is child of" | "child" => "Child",
+            "is duplicate of" | "duplicate" => "Duplicate",
+            "verifies" => "Verifies",
+            "is verified by" | "verified-by" => "VerifiedBy",
+            "references" => "References",
+            "is blocked by" | "blocked-by" => "BlockedBy",
+            "blocks" => "Blocks",
+            "is superseded by" | "superseded-by" => "SupersededBy",
+            "supersedes" => "Supersedes",
+            // a custom edge carries the same string through both surfaces
+            other => other,
+        }
+    }
+
+    // `TASK-4` yes; `out` no. Deliberately strict so a stray line cannot
+    // become an edge.
+    fn looks_like_spec_id(s: &str) -> bool {
+        let Some((prefix, number)) = s.rsplit_once('-') else {
+            return false;
+        };
+        !prefix.is_empty()
+            && prefix
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '-')
+            && !number.is_empty()
+            && number.chars().all(|c| c.is_ascii_digit())
+    }
+
+    // The human section is `Relations:` followed by rows shaped
+    // `  <glyph> <phrase> <SPEC-ID> (<title>)`. Parsed against the renderer's
+    // OBSERVED output rather than a renderer that merely looked like it: the
+    // first version of this parser targeted a different `Relationships:`
+    // section that `aida show` does not emit, and the comparison failed loudly
+    // rather than passing vacuously, which is the point of comparing
+    // structures instead of searching for substrings.
+    //
+    // NOTE the collapse rule: above five relationships, and without --rels,
+    // the human surface prints a COUNT instead of rows while TOON still
+    // enumerates. That is exactly the "extra collapsed rows" divergence this
+    // test exists to catch, so the fixture deliberately stays at three.
+    // trace:BUG-1442 | ai:claude
+    fn human_edges(show: &str) -> Vec<(String, String)> {
+        let mut rows = Vec::new();
+        let mut inside = false;
+        for line in show.lines() {
+            let line = line.trim();
+            if line == "Relations:" {
+                inside = true;
+                continue;
+            }
+            if !inside {
+                continue;
+            }
+            // rows end with the target's title in parentheses; the first line
+            // that does not is the end of the section
+            let Some((lhs, _title)) = line.split_once(" (") else {
+                break;
+            };
+            let Some((glyph_and_phrase, target)) = lhs.rsplit_once(' ') else {
+                break;
+            };
+            // The section ends at the first line that is not a row. Bound it
+            // on the TARGET looking like a spec id rather than on the glyph or
+            // on a blank line: `Centrality: 0 in / 3 out  (heft 5)` follows
+            // immediately, contains " (" too, and parsed as a bogus edge until
+            // this predicate was added.
+            let target = target.trim();
+            if !looks_like_spec_id(target) {
+                break;
+            }
+            // drop the leading sub-arrow glyph, whatever it renders as
+            let phrase = match glyph_and_phrase.split_once(char::is_whitespace) {
+                Some((_glyph, rest)) => rest.trim(),
+                None => break,
+            };
+            rows.push((canonical_edge_type(phrase).to_string(), target.to_string()));
+        }
+        rows
+    }
+
+    // TOON is `relationships[N]{rel,id,title}:` then N rows of `rel,id,title`
+    fn toon_edges(show: &str) -> Vec<(String, String)> {
+        let mut rows = Vec::new();
+        let mut lines = show
+            .lines()
+            .skip_while(|l| !l.starts_with("relationships["));
+        let Some(header) = lines.next() else {
+            return rows;
+        };
+        let count: usize = header
+            .split_once('[')
+            .and_then(|(_, rest)| rest.split_once(']'))
+            .and_then(|(n, _)| n.parse().ok())
+            .unwrap_or(0);
+        for line in lines.take(count) {
+            let cells: Vec<&str> = line.trim().splitn(3, ',').collect();
+            if cells.len() < 2 {
+                break;
+            }
+            rows.push((
+                canonical_edge_type(cells[0].trim()).to_string(),
+                cells[1].trim().to_string(),
+            ));
+        }
+        rows
+    }
+
+    let human_rel = human_edges(&human_show);
+    let toon_rel = toon_edges(&toon_show);
+
+    // Ordered, not sorted: both surfaces render from the same stored
+    // relationship order, so an ordering difference IS a divergence rather
+    // than a formatting choice.
+    assert_eq!(
+        human_rel, toon_rel,
+        "human and TOON relationship projections disagree\n\
+         human: {human_rel:?}\n  toon: {toon_rel:?}\n\
+         --- human ---\n{human_show}\n--- toon ---\n{toon_show}"
+    );
+
+    // Agreement alone is not enough — both projections could agree and both
+    // be wrong. Pin the edges the fixture actually created, each against its
+    // own target, so a collapsed or misassociated row fails here.
+    let expected: Vec<(String, String)> = vec![
+        ("References".to_string(), targets[0].clone()),
+        ("implemented-by".to_string(), targets[1].clone()),
+        ("BlockedBy".to_string(), targets[2].clone()),
+    ];
+    assert_eq!(
+        human_rel, expected,
+        "relationship edges lost their type or their target association\n{human_show}"
+    );
+    assert!(
+        toon_show.contains("blockers[1]{id,status,satisfied}")
+            && toon_show.contains("blocked: true")
+            && toon_show.contains("pickup: refused until all blockers are Completed"),
+        "TOON show must convey blocked state and pickup consequence:\n{toon_show}"
+    );
+
     // ---- STORY-734 / BUG-668 / BUG-672: lean TOON list, not the box-table. ----
     let list = aida(&repo, &home)
         .env("AIDA_AGENT_OUTPUT", "toon")
