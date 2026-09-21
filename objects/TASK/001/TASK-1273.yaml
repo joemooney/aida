@@ -3,12 +3,12 @@ spec_id: TASK-1273
 agreed_id: TASK-1273
 title: 'Nightly live forge smoke test per provider (GitLab mirror): open MR, wait CI, review, merge through the trait'
 description: 'The 2026-09-18 live validation (TASK-1254) found four GitHub assumptions that unit tests with mocked forges could not see: the headless CI watch returning after one probe, the auto-queue-review forge hard-coded to GitHub, a second forge detector that only knew gitlab.com, and a GitHub-shaped run id in a hint. Each surfaced within minutes of a real drain against the self-hosted mirror. Proposal: a nightly (cross-platform.yml cadence) job that, against the mirror project, pushes a throwaway branch, opens an MR through Forge::open_change, waits for CI through the trait, records a verdict, merges through merge_change, and asserts the spec lifecycle events (SpecShelved kinds, CiTerminal, merge) — then deletes the branch. Needs a GITLAB token secret and the merge-hold gate wired (already done). Acceptance: a green nightly proves the GitLab path end to end; a regression in any Forge method for GitLab turns it red with the failing phase named; runs are skipped, not failed, when the mirror is unreachable.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-21T07:40:39.950928066Z
+modified_at: 2026-09-21T07:40:41.338248881Z
 req_type: Task
 tags:
 - batch:followups-0918i
