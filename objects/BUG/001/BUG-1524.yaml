@@ -1,0 +1,77 @@
+id: 01a0c243-e264-7d32-81b8-7d1b864bd489
+spec_id: BUG-1524
+agreed_id: BUG-1524
+title: 'A phase-1 launch refusal is treated as a recoverable failure and the drain continues from the CI gate, manufacturing a round that reports CI green and review routed against a head no implementer ever '
+description: |
+  Observed directly by the driver advisor on 2026-09-20 21:30-21:45 on BUG-1460, twice,
+  against main at 0b474a66d1. Reproduced, then made to go away by fixing the precondition,
+  so the causal chain is established rather than inferred.
+
+  WHAT HAPPENED. aida queue work BUG-1460 --auto-complete=through-ci --no-human=both
+  printed a successful-looking run ending "CI: green / Review: routed to reviewer queue".
+  PR-2034's head was 8f4b6c85a0 before the run and 8f4b6c85a0 after it. No commit was
+  produced. The run was a no-op that reported as a round.
+
+  The cause is in the phase-1 output, four lines above the success text:
+
+    error: "refusing to launch on PR branch bug-1460-work because local bug-1460-work
+     has diverged from origin/bug-1460-work; creating a side branch would strand this
+     round's commits off the PR. Realign it explicitly, then retry:"
+    implementer session exited 1 - verifying by substrate before classifying
+    phase-1 failed, but BUG-1460 has open PR-2034 - continuing from the CI gate
+     (phase 2) on the PR's branch instead of retrying phase 1
+    phase 1 complete
+
+  THE DEFECT IS THE THIRD LINE, AND IT IS A CATEGORY ERROR. The fallback exists for a
+  sound reason: an implementer that exits non-zero AFTER committing has done its work,
+  and re-running it would duplicate. But it is keyed on exit status plus "an open PR
+  exists", which cannot tell those two cases apart:
+
+    A  implementer ran, committed, then exited non-zero   -> continuing is CORRECT
+    B  implementer never launched at all                  -> continuing is a LIE
+
+  In case B the branch head is unchanged, so the CI the drain then waits on is the
+  PREVIOUS round's CI, and it is green because the previous round passed it. The drain
+  then routes to review a head the reviewer has already refused. Every downstream
+  signal is truthful about the wrong head.
+
+  Note the fourth line: "phase 1 complete". The refusal is not merely tolerated, it is
+  reported as completion.
+
+  WHY THIS MATTERS BEYOND ONE SPEC. A sweep of local -work branches found TWELVE in the
+  same diverged state, ten of them realignable pre-rebase copies (verified by patch-id,
+  all ahead-commits already present on origin). Five are in the pending rework set:
+  BUG-1291, STORY-1350, TASK-1272, TASK-1273, TASK-1298. Had the fifteen-spec rework
+  dispatch run as planned, each of those would have produced this same silent no-op
+  round - fifteen specs reported as reworked, none reworked. The blast radius is the
+  whole rework lane, and the failure is silent by construction.
+
+  RELATED BUT DISTINCT. BUG-1460 itself is "review entered against a head with no
+  terminal CI result". This bug is a second, independent way to reach a review of the
+  wrong head, arriving through the phase-1 fallback rather than through CI ordering.
+  Fixing BUG-1460 does not fix this.
+
+  ## Acceptance
+  1. The phase-1 fallback distinguishes "implementer launched and committed" from
+     "implementer never launched". The branch head before and after phase 1 is
+     sufficient and is already available; exit status alone is not.
+  2. When no implementer ran, the drain does NOT continue to the CI gate. It parks the
+     spec with the launch refusal as the reason, so the failure is visible where
+     findings are read.
+  3. A launch refusal is never reported as "phase 1 complete".
+  4. When the refusal is the diverged-branch case specifically, the reason text names
+     the branch and the realign command, since that is the operator's actual next move.
+  5. A test drives the orchestrator through a phase-1 launch refusal with an unchanged
+     head and asserts the run does NOT reach the reviewer phase. MockPhaseDriver in
+     auto_complete.rs already drives orchestrate() this way for BUG-1447 and is the
+     right instrument.
+  6. The test asserts on the phase actually reached, not on source order or log text.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:40:23.908358534Z
+modified_at: 2026-09-21T04:40:23.908358534Z
+req_type: Bug
+tags:
+- parent:EPIC-62 drain orchestrator silent-noop severity:major
