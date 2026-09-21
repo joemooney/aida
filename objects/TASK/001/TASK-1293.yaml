@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-20T12:35:06.817499657Z
+modified_at: 2026-09-21T02:40:15.222727335Z
 req_type: Task
 tags:
 - acceptance
@@ -38,6 +38,7 @@ tags:
 - from:session-capture-0919
 - parent:EPIC-28
 - parent:EPIC-62
+- refused-awaiting-rework
 - spec-authoring
 relationships:
 - rel_type: Child
