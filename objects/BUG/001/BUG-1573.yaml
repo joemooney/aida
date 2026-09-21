@@ -34,5 +34,47 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:26:07.580218491Z
-modified_at: 2026-09-21T21:26:07.580218491Z
+modified_at: 2026-09-21T21:51:07.523992281Z
 req_type: Bug
+comments:
+- id: 01a0c5f3-8b04-7ca0-a364-92d11f94067d
+  author: joe
+  content: |-
+    [aida:advisor] CONFIRMED FROM THE CONSUMER SIDE, THIRTY MINUTES AFTER FILING, AND THERE ARE TWO MORE DEFECTS THAN THIS SPEC RECORDS. #2062 merged at 14:46 MST and enabled the jobs. `aida awaiting` immediately routed me a due job. I AM THE FIRST REAL CONSUMER OF THIS PATH, and I could not perform the task it assigned me.
+
+    THE ROUTING PROMPT, verbatim from `aida schedule list`:
+
+        "A performance budget was breached. Read the ledger entry at schedule/performance-guard.yaml,
+         CONFIRM THE BUDGET IN FORCE AT THE TIME OF THE TRIP, and decide: real regression, or a
+         budget that needs changing deliberately."
+
+    THE ENTIRE LEDGER ENTRY:
+
+        job: performance-guard
+        last_run: 2026-09-21T15:50:45.875384311Z
+        last_by:
+          seat: substrate
+          vendor: tick
+        result: failed:1
+
+    FIVE FIELDS. No budget. No tolerance. No proportion. No denominator. No worst-case. THE TASK THE PROMPT ASSIGNS IS NOT PERFORMABLE FROM THE ARTEFACT THE PROMPT NAMES — not difficult, not tedious: the information is absent. That is this spec as filed, and it is now observed rather than predicted.
+
+    TWO FURTHER DEFECTS FOUND ONLY BY FOLLOWING THE INSTRUCTION LITERALLY:
+
+    1. THE PATH IN THE PROMPT IS WRONG. The prompt says `schedule/performance-guard.yaml`. Both that and `.aida/schedule/performance-guard.yaml` DO NOT EXIST. The file is at `.aida-store/schedule/performance-guard.yaml` - inside the orphan-branch store worktree. An advisor following the instruction as written gets "No such file or directory" and has no reason to suspect the store worktree. I found it with `find`, which is not what the prompt told me to do.
+
+    2. THE LEDGER ENTRY IS NOT CORRELATED WITH THE TRIP THAT ROUTED ME. `last_run` is 2026-09-21T15:50:45Z - roughly six hours before the jobs were enabled in this repo at 21:46Z. So the entry I was routed to READ IS NOT THE ENTRY FOR THE EVENT THAT ROUTED ME, and nothing in either the routing item or the ledger carries a trip identifier that would let me tell. A single mutable `last_run` field cannot answer "what happened at the trip" for any trip but the most recent, and the consumer has no way to detect the mismatch.
+
+    SO THE FAILURE IS THREE-LAYERED AND EACH LAYER DEFEATS THE NEXT: the advisor cannot find the file; if they find it, it does not describe their trip; and if it did, it would not contain the numbers they were asked to confirm.
+
+    WHY THIS MATTERS MORE THAN A MISSING FIELD. STORY-1422 built this routing step specifically as the defence against the documented way latency gates die - nobody looks at them. The defence fires correctly, reaches the right seat within minutes, and then hands that seat an impossible instruction. A GATE THAT ROUTES RELIABLY TO A DEAD END TRAINS ITS READER TO DISMISS IT, which is a faster path to the same death than being ignored.
+
+    AND THE OBSERVATION COST NOTHING BUT TRYING. Both extra defects are invisible to anyone reading the code - the path looks plausible, the ledger looks like a ledger. They appear the moment someone does what the prompt says. Same as the lane that filed this spec by FIRING the gate rather than reading it.
+
+    Acceptance additions, on top of what is filed:
+    - The routing prompt must name the path that exists, and it should be produced from the same source that writes the file rather than hand-written in a template.
+    - The ledger must key entries by TRIP, not overwrite a single `last_run` - or the routing item must carry the trip's numbers itself, so the consumer never needs the correlation.
+    - DEMONSTRATE THE FIX FROM THE CONSUMER SIDE: route a real trip to a seat and have that seat perform the assigned task using only what it was given. Reading the code will not surface any of these three.
+  created_at: 2026-09-21T21:51:07.523992281Z
+  modified_at: 2026-09-21T21:51:07.523992281Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
