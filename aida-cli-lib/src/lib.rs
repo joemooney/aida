@@ -87175,6 +87175,31 @@ fn try_open_orchestrator_pr_for_no_pr_worktree(
     }
 }
 
+/// Preserve the watchdog diagnosis while adding the concrete review artifact
+/// it left behind. The caller only uses this after PR recovery failed, so the
+/// shelve record must tell triage that this is reviewable branch work rather
+/// than an empty timed-out session.
+// trace:BUG-1450 | ai:codex
+fn watchdog_failure_with_committed_work(
+    mut failure: auto_complete::PhaseFailure,
+    worktree: &std::path::Path,
+    branch: &str,
+) -> auto_complete::PhaseFailure {
+    let ahead = branch_commits_ahead_main(worktree, branch).unwrap_or(0);
+    if ahead > 0 {
+        failure.reason = format!(
+            "{}; left {ahead} committed commit(s) on reviewable branch `{branch}` with no open PR",
+            failure.reason
+        );
+        failure.hint_override = Some(format!(
+            "Reviewable work survived on `{branch}` ({ahead} commit(s) ahead); open or recover its PR before re-driving the implementer"
+        ));
+    } else {
+        failure.reason = format!("{}; left no committed work", failure.reason);
+    }
+    failure
+}
+
 fn try_open_orchestrator_pr_for_no_pr_pushed_branch(
     project_root: &std::path::Path,
     branch: &str,
@@ -87557,7 +87582,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // BUG-420: the watchdog killed a degenerate headless session — surface
         // it as a shelvable phase-1 failure so a batch drain parks the spec and
         // advances. trace:BUG-420 | ai:claude
-        if let exit_signal::ExitOutcome::WatchdogTripped(reason) = &outcome {
+        let watchdog_failure = if let exit_signal::ExitOutcome::WatchdogTripped(reason) = &outcome {
             // BUG-1299: attach the hint resolved alongside `reason` in the
             // same `watchdog_trip_report` match arm rather than let
             // `recovery_hint` re-derive one from `FailureKind` alone.
@@ -87569,8 +87594,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             if let Some(hint) = watchdog.as_mut().and_then(|w| w.take_trip_hint()) {
                 failure = failure.with_hint_override(hint);
             }
-            return Err(failure);
-        }
+            Some(failure)
+        } else {
+            None
+        };
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
             if !status.success() {
                 if headless_impl && headless_log_is_zero_bytes(&self.project_root, &session_uuid) {
@@ -87685,7 +87712,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 }
                 // Deliberately fall through — the resolution below is the arbiter.
             }
-        } else {
+        } else if watchdog_failure.is_none() {
             eprintln!(
                 "  {} implementer skill signalled completion — session reaped",
                 crate::glyph(crate::glyphs::Glyph::Info).cyan()
@@ -87916,6 +87943,21 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 }
                 if let Some(reason) = self.auto_punt_text_question(&worktree_path, &session_uuid) {
                     return Ok(auto_complete::ImplementerOutcome::Punted { reason });
+                }
+                // A watchdog is allowed to stop the process, but not to hide
+                // artifacts the process already produced. We deliberately ran
+                // the normal lease/branch/PR recovery above first. If opening
+                // the PR was impossible, retain the watchdog classification
+                // and make the shelve event name the branch + commit count.
+                // The punt signal was also consumed before this point, so a
+                // design fork filed by the stopped phase is still delivered.
+                // trace:BUG-1450 | ai:codex
+                if let Some(failure) = watchdog_failure {
+                    return Err(watchdog_failure_with_committed_work(
+                        failure,
+                        &worktree_path,
+                        &branch,
+                    ));
                 }
                 let failure = auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::NoPr,
