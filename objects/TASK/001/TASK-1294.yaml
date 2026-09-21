@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-21T22:24:12.135189937Z
+modified_at: 2026-09-21T22:25:03.495096741Z
 req_type: Task
 tags:
 - follow-up:TASK-1291
@@ -255,6 +255,36 @@ comments:
     PROCESS NOTE ON WHY THIS SPEC FAILED TWICE WITH `no-pr`. It was dispatched to a code implementer on two attempts and both correctly produced no PR, BECAUSE THERE IS NO CODE TO WRITE. Its execution_mode is `operator` and its output is a report comment. The failure was routing, not execution - a measurement task sent twice to a seat that writes code. That is the same shape as TASK-1418 item 3: a work item whose clearing seat is not the one it was handed to.
   created_at: 2026-09-21T22:24:12.135189937Z
   modified_at: 2026-09-21T22:24:12.135189937Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c612-9c07-7c61-8694-ee97f6839a70
+  author: joe
+  content: |-
+    [aida:advisor] COMPLETING THE ACCEPTANCE: the named sample, and the explicit in-window change list. The preceding comment gave the analysis and omitted these two required items; recording them rather than treating the report as done without them.
+
+    THE SAMPLE - all 43 drain-driven specs measured, with each one's shelve count:
+      TASK-1298(6), BUG-1286(4), BUG-1297(4), BUG-1485(4), BUG-1291(3), BUG-1310(3), BUG-1441(3), BUG-1231(2), BUG-1429(2), BUG-1432(2), BUG-1454(2), BUG-1460(2), TASK-1279(2), TASK-1291(2), BUG-1268(1), BUG-1303(1), BUG-1305(1), BUG-1420(1), BUG-1424(1), BUG-1442(1), BUG-1450(1), BUG-1452(1), BUG-1467(1), BUG-1470(1), BUG-1476(1), SPIKE-83(1), TASK-1272(1), BUG-1234(0), BUG-1275(0), BUG-1298(0), BUG-1301(0), BUG-1316(0), BUG-1422(0), BUG-1425(0), BUG-1426(0), BUG-1427(0), BUG-1435(0), BUG-1445(0), BUG-1447(0), BUG-1462(0), BUG-1464(0), BUG-1465(0), TASK-1300(0)
+
+    CHANGES THAT LANDED INSIDE THE MEASUREMENT WINDOW (2026-09-19T20:07:33Z to 2026-09-21T15:19Z), stated explicitly per the acceptance:
+      TASK-1291  the change under measurement - round-1 reviewer does a full sweep. Merged at the window's open.
+      TASK-1289  pre-flight guards gate PR publication. Targets ci-red, NOT request-changes.
+      TASK-1290  criteria gate - untraced criteria reach the reviewer's first round. Targets request-changes.
+      BUG-1277   changed how reworks are QUEUED mid-window, so the mechanism being measured moved during the measurement.
+
+    ITEM 13 IS NOT SATISFIED AND I AM SAYING SO RATHER THAN APPROXIMATING IT. Per-spec exposure - which of those four was live when each spec ran - is not recoverable from the feed, because the feed records no marker for which orchestrator behaviours were active at run time. It could be reconstructed from each change's merge timestamp against each spec's RunStarted, but that reconstruction would itself need verifying and I have not done it. Treating the window as uniform would attribute to one change what belongs to another, which is the specific error the acceptance warns against.
+
+    ACCEPTANCE STATUS, itemised:
+      median before/after           MET   2.11 -> 2.00 per shelved spec; 1.26 per completed spec, and the two are not comparable
+      per-cause split                MET   and reported as the PRIMARY result per item 11
+      spec ids in the sample         MET   above, all 43 named with counts; the 34 lane-driven exclusions named in the prior comment
+      other changes in window        MET   above, four named
+      null result reported as such   MET   the comparison is reported as UNANSWERABLE, not re-cut
+      item 12 lane-driven separate   MET   34 named, not diluted, not hidden
+      item 13 per-spec exposure      NOT MET - stated above, with the reason
+      item 14 say so if too thin     MET   this is the report's headline
+
+    ONE ITEM UNMET OUT OF EIGHT, AND IT IS UNMET FOR A REASON THE DATA IMPOSES RATHER THAN A CORNER CUT. I am leaving this spec open rather than closing it on seven of eight - the advisor seat does not get to grade its own measurement into Completed, and item 13 is the one that would let someone attribute the ci-red movement correctly. Whoever closes this should either do that reconstruction or strike item 13 deliberately.
+  created_at: 2026-09-21T22:25:03.495096741Z
+  modified_at: 2026-09-21T22:25:03.495096741Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: operator
 failure_reason:
