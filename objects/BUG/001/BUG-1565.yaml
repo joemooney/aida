@@ -1,0 +1,43 @@
+id: 01a0c55c-c5ba-7352-bed8-bc464d3ae50a
+spec_id: BUG-1565
+agreed_id: BUG-1565
+title: 'A test merged tonight breaks the Windows build outright: an ungated std::os::unix import in auto_bump_done_tests is a compile error, not a test failure'
+description: |-
+  PR 2040 (BUG-1454) landed a test that cannot COMPILE on Windows. This is a build break, not a failing test: it takes the whole aida-cli-lib test target with it, so every other test on that leg stops reporting.
+
+  THE LINE, aida-cli-lib/src/tests/auto_bump_done_tests.rs in open_pr_for_same_spec_defers_auto_bump:
+
+      use std::os::unix::fs::PermissionsExt;
+
+  with no cfg gate. std::os::unix does not exist on a Windows target.
+
+  VERIFIED RATHER THAN REASONED, because the repo's own Linux-hosted target check cannot answer it - cargo check --target x86_64-pc-windows-msvc dies in ring's build script, exactly the foreign-C-dependency limitation CLAUDE.md documents for that guard. So the rule was tested directly with a minimal file containing only that import:
+
+      rustc --target x86_64-pc-windows-msvc  -> error[E0433]: failed to resolve: could not find `unix` in `os`
+      rustc --target x86_64-unknown-linux-gnu -> compiles clean
+
+  Same file, same flags, two targets. The Linux leg is the control.
+
+  THE REPO ALREADY HAS THE CONVENTION AND THIS TEST MISSED IT. Two sibling examples:
+  - auto_bump_done_tests.rs itself wraps an identical PermissionsExt use in #[cfg(unix)] at another test.
+  - The STORY-1043 detector test carries #[cfg_attr(windows, ignore = "fake-gh harness is a bash script; gh cannot be stubbed via shebang on Windows")] AND uses an executable_fake_gh helper.
+
+  An ignore attribute alone is NOT sufficient: an ignored test still has to compile. The unix-only code must be cfg-gated whether or not the test runs.
+
+  Acceptance:
+  - The Windows target compiles: the unix-only permission code is behind #[cfg(unix)].
+  - The test is marked ignored on Windows, since a shebang fake gh is not executable there, with the reason stated in the attribute rather than left implicit.
+  - The minimal rustc two-target probe above is recorded in the fix so the next reader can re-run it without rebuilding the workspace.
+
+  WHY THIS MATTERS BEYOND THE ONE LINE, and it belongs on BUG-1556's evidence rather than being argued here: this is a portability defect arriving on main tonight, caught only because a cross-platform run on an unrelated PR head was being read for another reason. PR CI is Linux-only by design, the portability ratchet greps Rust TEST code for path and shell assumptions but does not catch a cfg-less std::os::unix import, and the report-only Windows target check cannot run to completion on this workspace. All three guards were present and none of them could see it.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T19:06:26.618364993Z
+modified_at: 2026-09-21T19:06:26.618364993Z
+req_type: Bug
+tags:
+- aida:tests
+- parent:EPIC-62
+- portability
