@@ -31,13 +31,20 @@ description: |-
   SCOPE, kept narrow deliberately: this is the --help text on aida queue work, not the code and not docs/autonomous-drain.md, which I have not checked. Someone fixing this should check whether the same "pinned to 1" claim appears in the guide and the TUI help, since a claim this specific tends to have been copied.
 
   Worth noting the general form, which is the same shape as several findings tonight: a surface that describes the system's capabilities is a coordination surface, and this one reports absent evidence -- "no concurrency here" -- where the evidence is simply out of date. Nothing distinguishes "pinned to 1 by design" from "written before the scheduler landed".
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:02:15.338764730Z
-modified_at: 2026-09-21T02:02:15.338764730Z
+modified_at: 2026-09-21T21:16:43.590336280Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a0c5d4-0cc6-7512-b669-01b2e0b4f7fe
+  author: joe
+  content: 'Promoted by joe 2026-09-21: CONFIRMED LIVE, not recalled: ''aida queue work --help'' line 175 still reads ''one-member-at-a-time; concurrency is pinned to 1''. STORY-1091 made that false. This is a landed feature advertised as absent, which is the worst direction for a help-text error — a user reads it and does not try the thing that works. Trivial fix, and it is the canonical surface a new user reads.'
+  created_at: 2026-09-21T21:16:43.590336280Z
+  modified_at: 2026-09-21T21:16:43.590336280Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
