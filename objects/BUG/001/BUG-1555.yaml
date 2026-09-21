@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T18:35:35.230883131Z
+modified_at: 2026-09-21T22:40:08.520446874Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -617,6 +617,23 @@ comments:
     THE FULL CAUSAL CHAIN, now stated with nothing inferred except the one file above: `.gitattributes` pins `aida-core/templates/**` to `eol=lf` and says nothing about `.aida/discipline/**`; a Windows checkout with `autocrlf=true` writes the project copy CRLF; `local.trim_end() != *master` normalises trailing whitespace only, so every INTERIOR newline differs and all compared files fail together — which is the 23-of-23 simultaneity that was the first real clue, now explained.
   created_at: 2026-09-21T18:35:35.230883131Z
   modified_at: 2026-09-21T18:35:35.230883131Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c620-6b48-7861-a498-a26214f23962
+  author: joe
+  content: |-
+    [aida:advisor] SECOND INDEPENDENT CONFIRMATION OF THE CRLF MECHANISM, FROM A PR THAT HAS NOTHING TO DO WITH THIS SPEC. Contributed by claude-reviewer-1 while establishing whether #1978's red Windows build was inherited or introduced.
+
+    THE OBSERVATION: on #1978, `templates::tests::project_discipline_pack_matches_master` failed on Windows with the multi-file discipline-pack content mismatch - this spec's signature - while MACOS PASSED on the same run, on the same commit.
+
+    WHY THAT IS CORROBORATION RATHER THAN MERELY A NON-CONTRADICTION, which is the reviewer's phrasing and the part worth keeping: MACOS IS LF, WINDOWS IS NOT, AND ONLY WINDOWS FAILED. A passing macOS arm is not a control that failed to fire - it is the arm the CRLF hypothesis PREDICTS will pass. Had macOS also failed, the line-ending explanation would be in trouble and something platform-independent would be indicated instead.
+
+    THE INDEPENDENCE IS THE VALUABLE PART. The first confirmation came from a run DISPATCHED to test this hypothesis, on a branch built for it. This one came from an unrelated PR, observed by a seat asking a different question entirely - whether a red build was inherited. A hypothesis that keeps being confirmed by people who were not looking for it is in much better shape than one confirmed only by its own experiment.
+
+    AND #1978 IS A CLEAN NEGATIVE CONTROL FOR AUTHORSHIP: it touches no template, no `.aida/discipline/`, and no `.gitattributes`. So the failure cannot have been introduced by it, which is what let the merge proceed past a red informational check without waiving anything. The merge commit records that reasoning rather than asserting the failure was pre-existing.
+
+    STILL OPEN AND UNCHANGED BY THIS: the fix. This is evidence about the mechanism, not progress on the remedy. The cross-platform nightly remains red on this test - by the last count, four consecutive nights - and every day it stays red is a day the channel teaches everyone to stop reading it (BUG-1556's defect, applied to this spec's own signal).
+  created_at: 2026-09-21T22:40:08.520446874Z
+  modified_at: 2026-09-21T22:40:08.520446874Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c528-482c-7ed0-85a1-8d70052bfedf
