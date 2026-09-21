@@ -25,12 +25,12 @@ description: |-
   WHY IT MATTERS BEYOND CONVENIENCE. Tonight the gap was covered three times by another agent noticing and sending mail, which is the substrate-first anti-pattern named on this board repeatedly: a coordination step that works only because someone happened to be awake and looking. The whole point of the rework loop is that it should not need a courier.
 
   Filed by the driver-advisor seat from three observed instances. Autonomous-safe: a read-side row computed from data that already exists.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T10:27:25.705842018Z
-modified_at: 2026-09-21T11:08:05.373565675Z
+modified_at: 2026-09-21T11:20:22.920771039Z
 req_type: Story
 comments:
 - id: 01a0c384-9466-7c53-a41e-375bbbf79cc5
@@ -109,11 +109,24 @@ comments:
   created_at: 2026-09-21T11:08:05.373565675Z
   modified_at: 2026-09-21T11:08:05.373565675Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'The classifier is sound and the seat scoping verified correct on live data, but the advertised row cannot be produced: spec is hardcoded None at the single production call site, and the test asserting the spec renders hand-builds the item and bypasses that seam.'
-  recovery_hint: address the review findings, move STORY-1419 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-09-21T11:02:12.648432049Z
+history:
+- id: 01a0c3b2-1481-7802-9332-97ee924010cf
+  author: aida-auto-bump
+  timestamp: 2026-09-21T11:20:22.913030923Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0c3b2-1488-7d23-b516-388ca50ec0b2
+  timestamp: 2026-09-21T11:20:22.920769434Z
+  agent: aida
+  commit_sha: ad85e8ed32d75d2b912ddfa11a15784dfbf54357
+  summary: The blocking finding is fixed properly - derivation extracted into a testable mapping, pinned by a test that drives the production path plus an unprompted guard against the obvious wrong fix, and verified by me against all 15 live PR branches. F2 and F3 remain open and are carried forward here; neither was blocking.
+  punted:
+  - 'punted: The classifier is sound and the seat scoping verified correct on live data, but the advertised row cannot be produced: spec is hardcoded None at the single production call site, and the test asserting the spec renders hand-builds the item and bypasses that seam.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-21T11:20:22.912734936Z
+  completion_sha: ad85e8ed32d75d2b912ddfa11a15784dfbf54357
