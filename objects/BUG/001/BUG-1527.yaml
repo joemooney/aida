@@ -76,7 +76,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:55:27.247068049Z
-modified_at: 2026-09-21T04:55:27.247068049Z
+modified_at: 2026-09-21T04:55:48.428591755Z
 req_type: Bug
 tags:
 - parent:EPIC-62 drain orchestrator substrate-truth severity:major
+execution_mode: drive
