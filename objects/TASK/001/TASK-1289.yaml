@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T02:08:13.224234325Z
+modified_at: 2026-09-21T02:13:07.273372692Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1032,6 +1032,56 @@ comments:
   created_at: 2026-09-21T02:08:13.224234325Z
   modified_at: 2026-09-21T02:08:13.224234325Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1bd-0c49-70e1-8856-93cfd5c152c0
+  author: joe
+  content: |-
+    [reviewer] EXPRESS BYPASS INDEPENDENTLY REPRODUCED ON 35de6d3abb, AND I FOUND WHY IT SURVIVED. The advisor's claim holds exactly. Adding the mechanism, because the reason it was missed is a third instance of tonight's class and it belongs in the fix.
+
+    REPRODUCED, from the surviving base's own tree:
+
+        auto_complete.rs:131   "lifecycle:no-preflight" => skip.no_preflight = true
+        auto_complete.rs:106   pub(crate) no_preflight: bool
+
+    and the express force-off block, lines 149-153:
+
+            if skip.express {
+                skip.no_ci_wait = false;
+                skip.no_review  = false;
+                skip.no_build   = false;
+            }
+
+    Five skip fields exist -- no_preflight, no_ci_wait, no_review, no_build, no_harvest. Express forces off THREE. So `batch:express` + `lifecycle:no-preflight` yields a spec that express claims is running the full gate while the preflight skip survives. Live on the branch ruled to survive.
+
+    no_harvest is also not forced off, and that one is CORRECT: it is documented at line 110 as the advisory harvest step, never a phase, never blocking. So the set that must be forced off is the four gates, and express covers three.
+
+    WHY IT SURVIVED, AND THIS IS THE PART WORTH FIXING BEYOND THE ONE LINE. The test that exists to prevent exactly this passes:
+
+        fn lifecycle_skip_express_tier_forces_full_gate()
+
+            let conflicting = LifecycleSkip::from_tags([
+                "lifecycle:trivial", EXPRESS_TIER_TAG, "lifecycle:no-review",
+            ]);
+            assert!(
+                !conflicting.no_ci_wait && !conflicting.no_review && !conflicting.no_build,
+                "express overrides any lifecycle:* short-circuit — full gate enforced"
+            );
+
+    The assertion message makes a UNIVERSAL claim -- "any lifecycle:* short-circuit", "full gate enforced" -- while the body checks three named fields, and the input tags never include `lifecycle:no-preflight`. So the test cannot fail for the field it does not name, and it reads to a later author as proof that the invariant is covered. Its name is the strongest claim in the file.
+
+    That is the same shape as the timeout test pinning the fail-open decision in BUG-1507, and as the #2040 fake that answers every query identically: a test whose charter is an invariant, written as an enumeration of the instances that existed when it was authored. It does not fail when the set grows -- it silently narrows.
+
+    THE CHEAP FIX AND THE STRONGER ONE. `is_empty()` at line 159 already covers all five fields, so `assert!(conflicting.is_empty())` is one line and self-maintains as fields are added. The stronger form, and the one that matches BUG-1507 criterion 4's "make the unknown case unrepresentable", is to destructure:
+
+        let LifecycleSkip { no_preflight, no_ci_wait, no_review, no_build, no_harvest, express } = conflicting;
+
+    Adding a sixth field then BREAKS COMPILATION at this test, forcing whoever adds it to decide whether express must clear it. That converts "remember to update the test" into "the compiler will not let you forget", which is the only version of this that has worked tonight.
+
+    RELEVANCE TO ADR-48 CONSEQUENCE C. The instruction is to enumerate every way preflight's answer can be Open without guards having run, before the orchestrator is allowed to trust it. Two doors are known: the lifecycle tag and the unrunnable guard. The lesson from this test is that an ENUMERATION is the wrong instrument for that job -- it is precisely what failed here, and what failed in decide()'s wildcard. Consequence C is safer as an exhaustiveness requirement than as a list: the orchestrator should be unable to compile against a PreflightDecision that grows a variant it does not handle.
+
+    I agree with the revised order -- carry 6512f1312a, fix decide(), then implement ADR-48 -- and would add that (a) should carry the test change too, not just the one-line force-off. Carrying the fix without strengthening the test leaves the same instrument in place for the next field.
+  created_at: 2026-09-21T02:13:07.273372692Z
+  modified_at: 2026-09-21T02:13:07.273372692Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
 execution_mode: guided
 implementation_info:
   implemented: true
