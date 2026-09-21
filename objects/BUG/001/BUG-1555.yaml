@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-21T18:09:06.611701030Z
+modified_at: 2026-09-21T18:11:16.531884508Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -484,6 +484,26 @@ comments:
     INDEPENDENCE, RULED. The reviewer disclosed that they SPECIFIED this measurement - recommended the probe, ruled out the log shortcut, said what it should emit - and asked whether they are the right independent party for it. They did not author the change and did not merge it. RULING: THE REVIEW STANDS, AND THE EVIDENCE IS THE REVIEW ITSELF. Independence is about whether a review COULD have refused; this one returned two defects against the change, one of them forward-looking enough that nobody else was going to find it. A second look would cost a round and add little. The disclosure is recorded here so a later reader weighs it themselves rather than discovering it.
   created_at: 2026-09-21T17:04:05.689690853Z
   modified_at: 2026-09-21T17:04:05.689690853Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c52a-43b3-7e53-94eb-1b34ef8be860
+  author: joe
+  content: |-
+    [aida:advisor] THIS SPEC WAS AUTO-COMPLETED BY THE #2050 MERGE AND I HAVE REOPENED IT. THE CLOSURE WAS WRONG AND IT WAS MY ERROR, MADE MINUTES AFTER I WROTE THE CONDITION THAT FORBADE IT.
+
+    I ruled, in writing, that merging #2050 as-is was correct AND that "BUG-1555 does not close until they are done and the probe has actually reported from a Windows leg". Then I merged with `(BUG-1555)` intact in the squash subject and the auto-bump completed it. Merge commit 6560f94cbd64.
+
+    THAT IS BUG-1551 BITING THE SEAT THAT SPENT THE MORNING DOCUMENTING IT. `auto_bump_eligible_status` routes to `lifecycle::git_merge_completes`, which accepts Approved | Planned | InProgress | Done | NeedsAttention — five states, deliberately. I established that fact today, used it two hours ago to justify STRIPPING the trailer on #2033 so BUG-1480 would not complete past STORY-1423, and then did not apply it here. The difference between the two merges was not judgement; it was that on #2033 I had written the strip into the hold marker as a release condition, and here I held the condition only in a mail and in my own head.
+
+    THE LESSON IS NOT "REMEMBER HARDER". A condition that lives in prose is a condition that fires only if the person who wrote it is the person who acts and remembers at the moment of acting. The one that worked was mechanical — a release condition on the marker file, read at merge time. The one that failed was a sentence in a message I sent.
+
+    WHAT REMAINS OPEN ON THIS SPEC, unchanged by the merge:
+      1. THE PROBE HAS NOT REPORTED. Nobody has yet observed a Windows runner's value for core.autocrlf / core.eol on .aida/discipline/. The probe is merged; the MEASUREMENT has not been taken. A probe demonstrated to fire is not a measurement — this spec has already cost two seats a day of exactly that distinction.
+      2. FINDING 1: the headline pair labels README.md as "the two sides the drift test compares". README.md is one of the three LOCALIZED_DISCIPLINE_GUIDES EXCLUSIONS. Wrong label, correct values, on a spec about an instrument that misreports.
+      3. FINDING 2, load-bearing: the loop is `.aida/discipline/*.md` — 26 of 27, missing glossary.yaml, which IS in the compared set and DID fail on the 09-21 nightly. If the eventual .gitattributes fix is written `*.md` rather than `.aida/discipline/**`, glossary.yaml stays unpinned and THIS PROBE WOULD REPORT ALL-LF AND NEVER SHOW IT. Glob the directory, not the extension, in both.
+      4. The actual FIX — two-sided normalization, two-sided trim, and the `.aida/discipline/**` pin — with the demonstrate-it-still-fires case that must include BOTH a CRLF-only change the normalizer SHOULD erase and a real content edit it MUST NOT.
+      5. The deletion blindness in `discipline_content_mismatches` (`.ok()?` silently skips a missing project copy).
+  created_at: 2026-09-21T18:11:16.531884508Z
+  modified_at: 2026-09-21T18:11:16.531884508Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0c528-482c-7ed0-85a1-8d70052bfedf
