@@ -1,0 +1,45 @@
+id: 01a0c5ae-fe5e-73f3-afab-68fd8dda0f05
+spec_id: BUG-1570
+agreed_id: BUG-1570
+title: A drain-lock collision is reported as a phase-2 failure of the first batch member, naming an innocent spec and telling the reader to fix it
+description: |
+  A DRAIN-LOCK COLLISION IS REPORTED AS A PHASE-2 FAILURE OF THE FIRST BATCH MEMBER, SO THE ERROR NAMES A SPEC THAT DID NOTHING WRONG AND SENDS THE READER TO FIX IT.
+
+  Split from BUG-1568 by the advisor 2026-09-21, on claude-reviewer-1's finding that #2060 deliberately leaves this item unfixed while it sits on BUG-1568's acceptance. Splitting rather than stripping the trailer, so BUG-1568 closes honestly on the defect it actually fixed.
+
+  WHAT THE USER SEES, from BUG-1568's own evidence:
+
+      x batch `batch:night-0920` drain stopped at BUG-1462 (phase 2 failed)
+        -> the rest of the batch is untouched - fix BUG-1462 (hint above), then re-run
+
+  BUG-1462 DID NOT FAIL. The launch died on a drain lock held by a process started seconds earlier — the collision BUG-1568 fixes. The message attributes a LOCK CONTENTION FAILURE to the FIRST PICKABLE BATCH MEMBER and frames it as that spec's phase-2 failure, complete with an instruction to go and fix it.
+
+  WHY THIS IS SEPARATE WORK RATHER THAN REMAINING WORK ON BUG-1568, which is the test this board applies before splitting: BUG-1568's defect is that THE COLLISION HAPPENS. This one is that WHEN A LAUNCH FAILS FOR ANY REASON, THE FAILURE IS ATTRIBUTED TO A SPEC. Fixing the collision removes one cause and leaves the misattribution in place for every other cause — a lock held by a genuinely live drain, a permissions failure, a missing binary. The two fail independently and the second outlives the first.
+
+  IT IS ALSO THE MOST EXPENSIVE KIND OF WRONG MESSAGE. It does not merely fail to explain; IT NAMES AN INNOCENT SPEC AND ISSUES AN INSTRUCTION. A reader who follows it investigates a spec that has nothing wrong with it, and the real cause — a process that started seconds earlier — is nowhere in the output. BUG-1568's own history is the proof: the overnight drain shipped nothing for 17.5 HOURS while every launch reported a different innocent spec.
+
+  Acceptance:
+  - A LAUNCH FAILURE THAT IS NOT A SPEC'S FAULT MUST NOT BE REPORTED AS A PHASE FAILURE OF THAT
+    SPEC. The message must name the actual cause — lock held by pid N started at T — and must not
+    instruct the reader to fix a spec that did not fail.
+  - DISTINGUISH THE CASES RATHER THAN COLLAPSING THEM: a lock held by a LIVE drain is a legitimate
+    refusal ("one drain per repo"); a lock held by a DEAD pid is stale state with a heal path
+    (`aida doctor --heal --category stale-locks`); a spec's phase genuinely failing is the only
+    case that should name a spec. Today all three print the third message.
+  - DEMONSTRATE-IT-FIRES, RED-FIRST: reproduce a launch that dies on a held lock and show the
+    message naming the lock rather than a spec. The old message must be shown FIRST, quoted.
+  - FALSIFY THE OTHER DIRECTION: a genuine phase-2 failure of a real spec must STILL name that
+    spec. A fix that stops attributing anything is as wrong as one that attributes everything.
+  - NOT IN SCOPE: the collision itself, fixed by BUG-1568 at #2060.
+
+  Related: BUG-1568 (the collision, fixed — this is its unfixed acceptance item, split out),
+  STORY-1430 (auto-completion never reads closure criteria — this split exists because a trailer
+  would otherwise have closed BUG-1568 past this item), BUG-1563 (a stale lock from a dead pid
+  went unnoticed for 179 hours; the dead-vs-live distinction above is the same seam).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T20:36:15.070702470Z
+modified_at: 2026-09-21T20:36:15.070702470Z
+req_type: Bug
