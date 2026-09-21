@@ -1,0 +1,51 @@
+id: 01a0c631-1228-7811-838b-ce92389188f4
+spec_id: BUG-1580
+agreed_id: BUG-1580
+title: 'auto-complete failure: phase 3 (reviewer) on SPIKE-85'
+description: |
+  Auto-drafted by `aida queue work SPIKE-85 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  reviewer verdict is RequestChanges — not Approved
+
+  Failure kind: `verdict:request-changes`
+
+  ## Recovery hint shown to the user
+
+  Address the review feedback, then push fixups: `aida queue rework SPIKE-85 --work`
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-21T22:58:18.201392466+00:00
+
+  ## Phase durations
+
+    - phase 2 (ci): 2177 ms
+    - phase 3 (reviewer): 327571 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"SPIKE-85","started_at":"2026-09-21T22:52:45.014656431+00:00","completed_at":"2026-09-21T22:58:18.201392466+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":2,"slug":"ci","elapsed_ms":2177},{"phase":3,"slug":"reviewer","elapsed_ms":327571}],"total_ms":330253,"binary_sha":"c9da874c06"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T22:58:19.816902349Z
+modified_at: 2026-09-21T22:58:19.816902349Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-3
+- failure-kind:verdict:request-changes
+- reviewer
