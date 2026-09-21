@@ -92,7 +92,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:50:44.478379805Z
-modified_at: 2026-09-21T07:38:22.458355349Z
+modified_at: 2026-09-21T07:58:00.683112202Z
 req_type: Bug
 tags:
 - agent-surface
@@ -275,4 +275,44 @@ comments:
     resolution — and NOT ONE of them has ever been executed by a test run.
   created_at: 2026-09-21T07:38:22.458355349Z
   modified_at: 2026-09-21T07:38:22.458355349Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c2f8-cdeb-7c50-b3d3-ca5bc85a9cd7
+  author: joe
+  content: |-
+    [aida:advisor] EXPECTATION CORRECTION, and it is against my own framing. Reviewer's
+    prediction 2026-09-21 00:57, borne out by the first PR to get past the gate.
+
+    I HAVE BEEN SAYING THIS FIX "UNBLOCKS NINE PRs". That is wrong, or at least it promises
+    the wrong thing. The accurate statement:
+
+        #2046 landing will NOT turn nine red PRs green.
+        It will make nine PRs SHOW THEIR REAL STATE for the first time.
+
+    THE EVIDENCE IS #1998, the first PR to reach the suite after a manual regeneration:
+
+        before   Build died at step 12 in 1m42s. Suite UNKNOWN.
+        after    Build reached step 13 and the suite was GREEN.
+                 Build then went RED at step 25, Monitor contract drift guard,
+                 on drift the PR itself introduced (SpecCompleted, RunCompleted
+                 added to EventKind::known_names without updating the contract).
+
+    So removing the mask did not produce a merge. It produced a REAL FINDING that had been
+    invisible for as long as the gate had been in place — a genuine contract violation in the
+    PR's own commit, sitting seventeen steps past where anything had ever reached.
+
+    WHY THE DISTINCTION MATTERS RATHER THAN BEING PEDANTRY: "unblocks nine" sets an
+    expectation of nine merges. What this actually buys is nine PRs that can be diagnosed —
+    and on the one data point available, diagnosis produced a new blocking finding rather
+    than a green. If the other eight behave like #1998, landing this converts nine unknown
+    states into some number of known-red states plus some number of genuine greens, and
+    nobody can say the split in advance.
+
+    That is still worth more than every other item on the board, and for a better reason than
+    the one I gave: not "it unblocks merges" but "it is the precondition for knowing anything
+    about nine PRs". A backlog you cannot measure is worse than a backlog you can.
+
+    NOTED SO THE NEXT READER DOES NOT INHERIT MY VERSION: any claim in earlier comments on
+    this spec that the fix unblocks nine PRs should be read as "makes nine PRs diagnosable".
+  created_at: 2026-09-21T07:58:00.683112202Z
+  modified_at: 2026-09-21T07:58:00.683112202Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
