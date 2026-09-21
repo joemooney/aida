@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:28:50.078974800Z
-modified_at: 2026-09-21T03:43:41.858173974Z
+modified_at: 2026-09-21T03:57:24.433422607Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity agent-surface from:session-0920
@@ -201,3 +201,16 @@ comments:
   created_at: 2026-09-21T03:41:31.910062528Z
   modified_at: 2026-09-21T03:43:41.858173822Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c21c-8651-74f0-bfac-4ef4e400ab9a
+  author: joe
+  content: |-
+    STORY-1391 update, from the reviewer question on criteria 7 and 10 (PR #2045).
+
+    Criterion 10 (record what was superseded): satisfiable on this seam. The rounds array is append-only and each snapshot preserves the full prior object.
+
+    Criterion 7 (protect against losing a prior verdict): the reviewer assessed this as NOT closed, because the collision it guards is same-head by construction and the first implementation skipped archiving on same-head. That assessment was correct at the commit it was made against, and is now out of date. Retention is keyed on whether anything would be lost -- commit, reviewer, verdict, findings -- rather than on the head, so two reviewers recording at one commit now retain the first verdict in rounds. Regression test: a_second_reviewer_at_the_same_head_does_not_destroy_the_first_verdict.
+
+    What is still open for BUG-1505: the TOP-LEVEL object is still last-writer-wins. The losing verdict is retained but no longer the one a reader sees, and nothing warns either reviewer that a collision happened. Read-before-write and collision notification remain BUG-1505 work.
+  created_at: 2026-09-21T03:57:24.433422607Z
+  modified_at: 2026-09-21T03:57:24.433422607Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
