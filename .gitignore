@@ -131,3 +131,55 @@ docs/book/
 # mdbook-mermaid vendored lib (2.6MB — regenerate via `mdbook-mermaid install docs`)
 docs/mermaid.min.js
 __pycache__/
+
+# ── Personal dotfiles at the repository root ────────────────────────────────
+# This repository is PUBLIC. These are the filenames that accumulate
+# machine-local and employer context over time — a proxy setting, an internal
+# host, a work email in .gitconfig, a corporate alias in a shell rc. None of
+# them has ever been committed here, and the point of this block is to keep it
+# that way: without it, one `git add -A` by a human tidying a dirty tree, a
+# broad add by an agent, or a scaffolding step publishes whatever has since
+# filled them.
+#
+# Named entries rather than a root glob, so the rule states what it protects
+# against and a genuinely new project dotfile still has to be decided on
+# rather than silently swallowed. Same deny-by-default intent as the .aida/
+# block above. trace:BUG-1511 | ai:claude
+/.bashrc
+/.bash_profile
+/.bash_login
+/.profile
+/.zshrc
+/.zprofile
+/.zshenv
+/.gitconfig
+/.ripgreprc
+/.inputrc
+/.netrc
+/.npmrc
+
+# Codex agent config (BUG-1511 criterion 2, decided rather than left open):
+# `.codex/hooks.json` wires local hooks with ABSOLUTE machine paths, so it is
+# per-machine state. `.codex/config.toml` is portable project configuration —
+# three lines registering the aida MCP server, the Codex twin of the tracked
+# `.mcp.json` — so it stays trackable and is deliberately NOT ignored here.
+# `.codex/skills/` is a scaffolded pack like `.claude/skills/` and is left
+# trackable for the same reason. trace:BUG-1511 | ai:claude
+/.codex/hooks.json
+
+# `.codex/hooks/` — the ten handler scripts the wiring above points at — is
+# IGNORED too, decided rather than left open. It is NOT tracked even though
+# `.claude/hooks/` carries the same ten script names, because the two are not
+# the same kind of object. `.claude/hooks/` is tracked as ten SYMLINKS into
+# `aida-core/templates/hooks/`, so those script bodies are in git exactly once
+# at their master, and its manifest (`.claude/settings.json`) is itself tracked
+# and uses portable `$CLAUDE_PROJECT_DIR` paths. The Codex side is generated
+# output: `scaffold_codex_hooks` WRITES COPIES of those same embedded masters,
+# so tracking them would add a second copy of already-tracked content — the
+# per-vendor forking that module's own header says the design exists to
+# prevent. And it would buy a fresh clone nothing: the only file that wires
+# these handlers is `.codex/hooks.json`, ignored just above, so the scaffolder
+# has to run regardless — and that one pass writes the handlers and the wiring
+# together. Untracked-and-unignored is the one state that is neither.
+# trace:BUG-1511 | ai:claude
+/.codex/hooks/
