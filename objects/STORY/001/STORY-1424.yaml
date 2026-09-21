@@ -1,0 +1,53 @@
+id: 01a0c4cf-fb08-70e2-9715-0ee6eef97f04
+spec_id: STORY-1424
+agreed_id: STORY-1424
+title: Let an acceptance criterion carry an executable check the reviewer RUNS instead of reads — graded, never a hard rule
+description: |-
+  GOAL: shrink what the review phase has to JUDGE, by letting individual acceptance criteria carry a command the reviewer executes. Not to make every criterion executable — see the non-goal.
+
+  WHY THIS AND NOT SOMETHING ELSE. Phase 3 (reviewer) is where drains die most often, and 20 of the last 49 filed specs are verdict plumbing. Every criterion that becomes a command is one fewer place a non-deterministic actor's opinion is load-bearing. The target is a smaller trusted computing base, not a simpler orchestrator: leases, reconciliation and staleness checks are a distributed-systems tax that crisp criteria do not reduce.
+
+  PRIOR ART -- THREE BUILT PIECES THAT DO NOT COMPOSE (verified 2026-09-21)
+  1. The reviewer ALREADY consumes acceptance criteria: aida-cli-lib/src/lib.rs:75995 "The reviewer reads the actual DIFF against ## Acceptance (AC-2)", and lib.rs:76955 falls back to title+description when no ## Acceptance / ## Verify section exists. The seam is there; the criteria arrive as PROSE TO BE READ.
+  2. `aida goal` ALREADY implements criterion-plus-verification-command: "Each flag contributes one clause ... every clause carries an explicit verification command so a small evaluator can check it deterministically - no vague 'make the tests pass' conditions." The pattern is built, aimed at /goal completion conditions rather than review.
+  3. The plan template has a ## Verification (executable) section, which is authored per-plan and never reaches the reviewer.
+
+  The gap is the wiring, not the idea. This story connects (2)'s clause-plus-command shape to (1)'s review seam, and lets (3) be the authoring surface.
+
+  DESIGN -- GRADED, NOT A MANDATE
+  - A criterion may be prose OR carry a check. Mixed is the expected normal case, not a degraded one.
+  - At review, every criterion carrying a check is RUN. Its verdict is a deterministic pass/fail with the exit code and output captured.
+  - The LLM reviewer is then asked to judge ONLY the remainder. Its prompt names which criteria were machine-verified and excludes them.
+  - Value is proportional. Four executable criteria out of six means the judge decides two instead of six. There is no threshold to cross and no minimum ratio.
+  - A spec with zero executable criteria behaves EXACTLY as today. No new refusal, no new gate, nothing blocks on adoption.
+
+  SECOND-ORDER BENEFIT WORTH DESIGNING FOR. A check that was RUN produces a result keyed to the commit it ran at. That is precisely the provenance the current verdict defects are missing - BUG-1538 (verdicts with no reviewed_sha), BUG-1539 (verdict keyed to a PR number rather than the reviewed commit), BUG-1516 (abbreviated sha comparison), BUG-1549 (head moved past an approving verdict). For the executable portion of a review, staleness stops being a bookkeeping problem and becomes a re-run: if the head moved, run the checks again at the new head. Cheap, and definitionally current. Prefer a shape where the machine-verified portion carries its sha natively rather than inheriting the verdict record's.
+
+  NON-GOAL -- AND THE REASON, RECORDED (operator, 2026-09-21): "I think a hard rule may sometimes be hard to realize."
+  A mandate that all criteria be executable is explicitly REJECTED, for three reasons:
+  (a) some criteria are irreducibly judgment - whether an API is tasteful, whether an error message is clear to a first-time user;
+  (b) forcing executability produces Goodhart artifacts - a command that checks something adjacent and cheap, satisfying the gate while verifying nothing, which is WORSE than honest prose because it reads as machine-confirmed;
+  (c) automating a criterion can cost more than the criterion is worth.
+  Any implementation that makes prose criteria harder to write, or that ranks/scores specs on their executable ratio, has missed the point and should be rejected in review.
+
+  OPEN QUESTION FOR THE SLICE: where does the command live? Candidates - an inline convention inside ## Acceptance (lowest ceremony, no schema change, parseable), a sibling ## Verify block (already half-recognized at lib.rs:76955), or a typed field. Prefer the lowest-ceremony option that `aida lint` can already see, and keep the authored form something a human writes without looking anything up.
+
+  ACCEPTANCE
+  - A criterion carrying a check is executed during the review phase; its pass/fail and captured output appear in the review record.
+  - The reviewer prompt lists machine-verified criteria as already settled and asks for judgment only on the remainder.
+  - A spec with no executable criteria produces byte-identical review behaviour to today.
+  - A machine-verified result records the sha it was produced at.
+  - No surface refuses, warns, scores or nags about a spec whose criteria are all prose.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T16:32:39.688630178Z
+modified_at: 2026-09-21T16:32:39.688630178Z
+req_type: Story
+tags:
+- acceptance
+- orchestration
+- review
+- tcb
+- verdict
