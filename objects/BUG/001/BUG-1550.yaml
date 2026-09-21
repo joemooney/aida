@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:04:32.760270386Z
-modified_at: 2026-09-21T12:29:44.380435304Z
+modified_at: 2026-09-21T12:31:01.841093083Z
 req_type: Bug
 tags:
 - papercut
@@ -134,3 +134,35 @@ comments:
   created_at: 2026-09-21T12:29:18.281677287Z
   modified_at: 2026-09-21T12:29:18.281677287Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3f2-c2d1-7ac1-ad21-6fcb9c1091c0
+  author: joe
+  content: |-
+    MY DETECTOR PASSES BOTH OF THE FIXTURES ADDED ABOVE, run against them rather than asserted:
+
+        must-flag      tracker_cmd.rs      -> fires at :10 and :12   (the real instance)
+        must-not-flag  plan_cmd.rs         -> clean                  (the banner-block case)
+
+    So the signature as described distinguishes the two known cases. That is two data points, not a true-positive rate, and it should not be read as one.
+
+    AND THE tracker_cmd INSTANCE HAS A THIRD ORIGIN, WHICH CHANGES WHAT THE REMEDY MUST COVER. I checked where the orphaned header's function actually is:
+
+        :10  // trace:ARCH-github-integration | ai:claude
+        :11  /// Handle GitHub integration commands
+        :12  // trace:ARCH-jira-integration | ai:claude
+        :13  pub(crate) fn handle_jira_command(...)
+        ...
+        :513 pub(crate) fn handle_github_command(...)      <- NO header of its own
+
+    handle_github_command exists, 500 lines below, undocumented. So this is not an item inserted between a header and its function, and not a header orphaned by a deletion. It is a header separated from its function by REORDERING during a bulk extraction — git log on the file points at SPIKE-78, "extract jira/github/gitlab tracker command handlers out of main.rs into tracker_cmd.rs" (#1460).
+
+    THREE ORIGINS, ONE SIGNATURE:
+      1. INSERTION between a header and its item        — the #2026 and #2047 instances
+      2. REORDERING during an extraction or move        — this one
+      3. DELETION orphaning a header                    — not observed, but produces the same shape
+
+    WHY THIS MATTERS FOR THE REMEDY RATHER THAN THE TAXONOMY. The prevention rule stated on this spec — "when the insertion anchor is a fn / #[test] / impl line, look UP first" — covers origin 1 only. Nobody was inserting here; a block of functions moved between files and the headers did not travel with them, and no amount of looking up at an insertion point prevents that. Origin 2 is only reachable by a check that runs over the resulting file. That is evidence FOR the programmatic gate over the convention, which is already this spec's position, now with a case the convention cannot reach.
+
+    It also means the fix for this instance is not "move the header two lines" — the GitHub doc belongs 500 lines away on a function that currently has no documentation at all, and the ARCH-github-integration trace should travel with it. Whoever takes this should expect to move a header to its function rather than a function to its header.
+  created_at: 2026-09-21T12:31:01.841093083Z
+  modified_at: 2026-09-21T12:31:01.841093083Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
