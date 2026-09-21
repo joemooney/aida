@@ -1,0 +1,45 @@
+id: 01a0c199-920b-7771-8534-1ec272eec3d7
+spec_id: TASK-1-162
+title: 'aida review record silently destroys a prior reviewer''s verdict: last-writer-wins, no history, gitignored, no forge copy'
+description: |-
+  aida review record silently destroys a prior reviewer's verdict: last-writer-wins, no history, no backup, gitignored, no forge-side copy
+
+  DEMONSTRATED, not hypothetical. I destroyed one myself on PR #2040 / BUG-1454 within the last five minutes, and I cannot get it back.
+
+  TIMELINE
+    18:28:00  advisor stranded-refusal sweep observes "PR #2040 BUG-1454, CHANGES REQUESTED at the current head, no hold, mergeable" and arms the hold
+    18:31:53  I run aida review record BUG-1454 --verdict request-changes --pr 2040 with four --finding values
+    18:33     both .aida/review-verdicts/BUG-1454.json and PR-2040.json contain only MY findings
+
+  The prior verdict's findings, summary, reviewed_sha and provenance are gone.
+
+  WHY IT IS UNRECOVERABLE. I checked every place a copy could survive:
+    - .aida/ is gitignored (.git/info/exclude:19), so the file has no git history
+    - no .bak, no dated copy, nothing else in .aida/review-verdicts/ for BUG-1454
+    - GitHub-side: zero reviews and zero issue comments on #2040, verified by API count, so nothing was mirrored to the forge
+    - no finding filed against BUG-1454
+
+  WHY THE DOCUMENTED SAFEGUARD DID NOT APPLY. aida review record --help promises "omitted findings preserve any existing findings[]". That preservation is conditional on omitting --finding. I supplied four, which is the normal thing a reviewer doing a real review does, so the preserving path is the one taken only when you have nothing to say. The safeguard is inverted relative to the risk: the more substantive the second review, the more completely it erases the first.
+
+  WHAT MAKES IT SILENT. There is no read-before-write and no warning. The command printed a clean success and named both files it wrote. Nothing in the output indicated a verdict already existed, who recorded it, or that anything was replaced. I only discovered the overwrite because the advisor happened to mail a sweep result three minutes earlier that mentioned the PR.
+
+  MY OWN GAP, stated plainly: I did not check for an existing verdict before recording. The tool gave me no prompt to, but I also did not look, and I had just read the file path in an earlier tick. A reviewer should read the current verdict before replacing it. That habit is worth writing down regardless of whether the tool changes.
+
+  SEVERITY. The substance may well have been equivalent here -- both verdicts were request-changes, so the gate behaved correctly and nothing shipped that should not have. The damage is to the audit trail, and it is the shape that matters: two reviewers disagreeing is exactly when the record is load-bearing, and it is exactly the case where the second write erases the evidence of disagreement. An approved-over-a-refusal write is the same mechanism with teeth.
+
+  RELATION TO BUG-1505. The advisor measured the verdict corpus today and found 543 files, 45 key shapes, 9 spellings of the verdict value, and 86 percent with no head sha. That is the corpus being schemaless. This is the corpus also being destructive: the reason 543 files show that much drift is partly that every write is a blind full replace, so no file is ever reconciled against what it replaced. Same store, and I would fix them together -- a schema without a read-before-write still loses the prior verdict, just in a tidier shape.
+
+  SUGGESTED SHAPE, advisory only, the advisor owns the call:
+    - read-before-write: if a verdict exists at a different sha or from a different recorder, print it and require --supersede (or append rather than replace)
+    - keep prior verdicts rather than replacing: a verdicts[] array, or a dated sibling file
+    - if the store stays gitignored, it needs its own retention, because the usual safety net does not apply to it
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T01:34:22.219128104Z
+modified_at: 2026-09-21T01:34:22.219128104Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
