@@ -2,7 +2,7 @@ id: 01a0c1e7-e607-7002-8000-c781b9291d6a
 spec_id: ADR-49
 agreed_id: ADR-49
 title: 'Mass-change mode: split the reviewer verdict into blocking defects and deferrable acceptance gaps, with a deferred-findings budget, rather than gating on the regression suite'
-description: |
+description: |-
   CONTEXT
 
   During a period of mass change the review gate stopped draining. On 2026-09-20: forty `verdict:request-changes` shelves against thirty-two merges, and two consecutive drain waves that completed with `shipped:0 shelved:0`. Work accumulated faster than it could pass review.
@@ -65,12 +65,37 @@ description: |
   RECORDED BY
 
   The product seat, from an operator decision in session 2026-09-20. This is a relay: the advisor and reviewer seats did not witness it. The reviewer was sent the proposal before this was recorded, specifically so it could object to a change in its own contract.
+
+
+  ADVISOR AMENDMENTS 2026-09-20 20:06. Four clauses added before acceptance. ADR-50 was filed independently by the advisor for this same decision, minutes apart, and is SUPERSEDED by this one - its unique content is folded in below so there is one record rather than two.
+
+  A. THE CLASSIFICATION DEFAULT IS BLOCK. This decision routes on a judgement the reviewer makes at verdict time, and 33 percent of the 78 classified findings landed in 'other'. An unclassified, ambiguous, or mixed finding BLOCKS. Absent classification must never read as acceptance-only. That is PRIN-5 at the precise point this decision introduces a permissive path, and it is where the mode fails silently if it fails: a misclassified defect merges and nothing downstream distinguishes it from a correctly-merged acceptance gap. This clause is not optional and the mode should not ship without it.
+
+  B. THE CHILD SPEC MUST EXIST AND BE LINKED BEFORE THE MERGE COMPLETES THE PARENT. Raised by the reviewer seat and it is the requirement that stops this industrialising the failure it resolves. Merging auto-completes the parent through its commit trailer; Completed is terminal and drops from every open-work lens; and an unmet criterion recorded only on that spec then becomes unreadable. So 'file a child and merge' is correct ONLY in that order. Filed after the merge, there is a window in which the parent is Completed, the remainder exists nowhere, and nothing is watching. Child creation belongs INSIDE emitting the verdict, not as a follow-up step a seat may be interrupted before reaching.
+
+  C. THE SPLIT IS FORMALISING WHAT WAS DONE BY HAND THREE TIMES TONIGHT, which is stronger evidence than the 41/21 classification. Each case was behaviour-fine with a criterion unmet, and each was resolved by filing the remainder as a child and letting the work merge:
+        BUG-1454   criterion 7 scoped the comment-borne criteria out to BUG-1506, then mergeable
+        TASK-1279  criterion 4 scoped out to TASK-1308
+        BUG-1452   criterion 6 withdrawn and split to TASK-1307
+      Each cost a mail round trip, an advisor edit, and a reviewer re-verdict. The decision removes a negotiation already held three times in one evening. Note also that the reviewer disclosed this policy would have reversed two of its own refusals - #2040 and #1984, both acceptance-unmet rather than behaviour defects - and endorsed it anyway.
+
+  D. THE SPLIT LANDS AS A NEW VERDICT KIND, NOT A FIELD ON THE EXISTING ONE. Answering the question the product seat raised, and it is not a detail. A kind is greppable; a field is not, and today established how much of this system reasons by matching prose - nine spellings of the verdict value across 543 files, four live writers disagreeing, and a gate that would accept 'CONTENT APPROVED - MERGE WITHHELD FOR INDEPENDENCE' on a substring match. A new kind also fails safe against old readers: a consumer that does not recognise it cannot mistake it for approval, whereas a consumer that does not read a new FIELD sees an ordinary refusing verdict and blocks - or worse, sees an ordinary approving one. The kind must be drawn from the closed set BUG-1505 criterion 1 requires.
+
+  TWO CORRECTIONS TO THE RECORD AS FILED:
+
+  E. THE PREREQUISITE IS MIS-STATED. This ADR says STORY-1391 is approved. It reads IN-PROGRESS, heft 6, drain mode - and it is the spec whose session was briefed BUG-1420 rework under its own lease, produced no code of its own, and whose branch is the held duplicate PR #2043. So the gating item has not started and its last run misattributed a verdict to it. Caught by the reviewer seat.
+
+  F. A COLLISION ON THAT PREREQUISITE. STORY-1391 criterion 1 is verdict-history-per-round, which IS the missing measurement. But BUG-1505 criteria 7 and 10 also require read-before-write and a superseding verdict recording what it superseded. Both specs own verdict history. One must own it and the other reference it, or it is implemented twice in two shapes and neither is authoritative.
+
+  OPEN QUESTION, NOT DECIDED - FOR THE OPERATOR. WHAT ENDS THIS MODE. The proposal is scoped to 'a period of mass change' and that period has no stated end. Without an exit condition the permissive half becomes the process: the project ships acceptance-unmet work indefinitely while the deferred pile grows against a budget set for a temporary state. The exit should tie to the same measurement that justifies entry - the queue draining, or the shelve-to-merge ratio inverting - and be written down before the mode starts. This ADR stays DRAFT until it is answered, because an ADR adopting a temporary mode without recording what ends it is not finished.
+
+  ON THE ATTRIBUTION. The reviewer seat reported that this proposal reached it carrying operator authority it could not verify, and declined to weigh the attribution - engaging the argument on its merits instead - on the grounds that relaxing its own gate on a relayed operator preference would end the independence the seat exists for. That is the correct handling and it is recorded here so the decision does not rest on an unverifiable relay. The measurements, not the attribution, are what carry this.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:59:55.527300499Z
-modified_at: 2026-09-21T03:00:38.750966970Z
+modified_at: 2026-09-21T03:02:35.410777296Z
 req_type: Decision
 tags:
 - operator-decision
