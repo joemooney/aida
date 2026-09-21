@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:04:29.972266635Z
-modified_at: 2026-09-21T23:01:15.376707412Z
+modified_at: 2026-09-21T23:12:00.247949919Z
 req_type: Bug
 tags:
 - batch:night-0920 public-repo hygiene drain-safe from:session-0920
@@ -57,6 +57,35 @@ comments:
     A NOTE ON THE COUNT ITSELF, because it nearly went in wrong. The reviewer first reported EIGHT scripts, from a command ending in 'head -8'. It is ten. The discrepancy surfaced only because this seat independently read the same file and quoted a script absent from their list. A truncated read produced a count that would otherwise have gone into the record unchallenged — the same mechanism already recorded on TASK-190 and in this session's mail handling.
   created_at: 2026-09-21T23:01:15.376707412Z
   modified_at: 2026-09-21T23:01:15.376707412Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c63d-96f7-7570-a189-06f1a40edaa2
+  author: joe
+  content: |-
+    [aida:advisor] THE LANE CHOSE AGAINST THE ANSWER I CALLED "EXPECTED", AND IT WAS RIGHT. The set comparison two seats ran was correct about the NAMES and silent about the STORAGE FORM, and the storage form is what decides it. Verified here rather than accepted:
+
+        .claude/hooks/ tracked entries       10, ALL MODE 120000 — SYMLINKS
+        scaffold_codex_hooks                 std::fs::write at codex_hooks.rs:90 — REAL COPIES
+        module header, verbatim              "ONE SET OF SCRIPTS, TWO WIRINGS. The handlers are NOT
+                                              forked per vendor. Forking would double every future
+                                              hook fix and guarantee drift; instead the scripts ...
+                                              are COPIED FROM THE SAME EMBEDDED MASTERS into each
+                                              vendor's tree."
+
+    SO `.claude/hooks/` DOES NOT TRACK TEN SCRIPTS. It tracks ten POINTERS into `aida-core/templates/hooks/`, where the bodies live in git exactly once. Tracking `.codex/hooks/` would add a SECOND TRACKED COPY of already-tracked content — the precise outcome the module's own design note exists to prevent.
+
+    MY ARGUMENT WAS "SAME TEN NAMES, SO SAME TREATMENT". That inferred a conclusion about storage from a fact about naming. The reviewer and I both ran the set comparison, both got zero difference in both directions, and neither of us asked HOW EITHER SIDE IS STORED. A set comparison answers "are these the same items" and says nothing about "are these the same kind of artefact" — and the second question was the one that mattered.
+
+    THE COHERENT RULE, WHICH IS THE LANE'S AND IS BETTER THAN MINE: each vendor's MANIFEST and its PAYLOAD sit on the same side of the line. `.claude/settings.json` is tracked and path-portable, so its handlers are tracked. `.codex/hooks.json` is ignored — it wires by absolute path with a username in it — so its handlers are ignored. Splitting a manifest from the payload it references would be the arbitrary choice, and the scaffolder writes both in one pass on any clone regardless, so tracking buys a fresh clone nothing.
+
+    NOTHING WAS EVER PUBLISHABLE. `.codex/hooks/` was empty throughout — the exposure was purely prospective, as expected. The lane re-ran the behavioural check with the directory ACTUALLY POPULATED plus a non-empty `.bashrc` and confirmed `git add -A` staged only `.gitignore` and `CLAUDE.md`, then removed the fixtures. That is the right way to test a rule about what `git add -A` publishes: populate the trap and try it, rather than reasoning about an empty directory.
+
+    THE FIX IS IN: `.gitignore:185` now carries `/.codex/hooks/`, `git check-ignore -v` resolves both the directory and a populated file to it, `.codex/config.toml` remains unignored and tracked, and CLAUDE.md states the rule so a reader learns it without opening `.gitignore` — including the symlink-versus-copy distinction that pre-empts exactly the objection I raised.
+
+    CRITERION 2 IS SATISFIED BY "IGNORE, WITH REASONS" AND I AM RULING THAT EXPLICITLY, since the brief's phrasing invited the other answer: the criterion required the directory to be DECIDED, not tracked. It is decided, the decision is recorded where both a git operation and a human reader meet it, and the reasoning is stronger than the one I supplied.
+
+    WHAT I WOULD HAVE LOST BY BEING OBEYED: a second tracked copy of ten scripts, drifting from the masters the moment anyone edited one copy — which is the failure the module header names, in a repo that already has a dual-copy template system precisely to avoid it.
+  created_at: 2026-09-21T23:12:00.247949919Z
+  modified_at: 2026-09-21T23:12:00.247949919Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 failure_reason:
   phase: reviewer
