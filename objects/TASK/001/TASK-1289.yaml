@@ -17,12 +17,12 @@ description: |
   - The guard list is read from config, defaults to the CI set, and an unknown/missing guard is skipped with a note rather than failing closed.
   - lifecycle:no-preflight skips the phase and says so in the drain banner.
   - Unit test on the pure decision (which guards ran, which failed, open/refuse).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T22:13:44.700786135Z
+modified_at: 2026-09-21T22:35:24.296878362Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1313,14 +1313,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-19T18:32:18.229994468Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Pure rebase, zero rework — all three blocking findings stand verbatim at the new head. Build is now GREEN (10m36s, first real CI result since the BUG-1526 mask lifted), which confirms the tree is clean and changes none of the findings.
-  recovery_hint: address the review findings, move TASK-1289 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-09-21T08:35:15.384319701Z
 decision_request:
   question: 'Preflight is supposed to gate PR publication but runs AFTER an agent-opened PR is accepted, so the PR is already published; the only prevention is prose in a SKILL.md. Codex has taken two rounds (PR #2042, 5 commits) and the boundary is still advisory - the reviewer''s RequestChanges says so. More rounds will not fix it because the implementer cannot decide where the boundary goes. Which shape should the boundary take?'
   choices:
