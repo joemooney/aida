@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T03:30:59.539323012Z
-modified_at: 2026-09-21T11:39:30.989012579Z
+modified_at: 2026-09-21T11:42:20.315640082Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity drain-safe from:session-0920
@@ -190,4 +190,21 @@ comments:
     RECORDED HERE BECAUSE A DELIBERATE OMISSION WITH NO HOME IS INDISTINGUISHABLE FROM AN OVERSIGHT. That is STORY-1421's lesson applied before the fact rather than after it: the product seat left this out of a PR on purpose and said so, and the place it would otherwise have lived is a PR description that closes when the PR merges.
   created_at: 2026-09-21T11:39:30.989012579Z
   modified_at: 2026-09-21T11:39:30.989012579Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3c6-2e9b-7251-9ec6-16e0ef4700b2
+  author: joe
+  content: |-
+    RULING ON CRITERION 4's SPIRIT, recorded so it is a decision rather than something inherited.
+
+    The reviewer seat observed during #2048's review that criterion 4's LETTER is met — Moved emits a row, Incomparable does not, so cannot-determine is distinct from stale in the gate's behaviour — while Incomparable RENDERS IDENTICALLY TO Same: both produce no row. This spec invokes PRIN-5 by name, and PRIN-5 is that absent evidence must be distinguishable from good evidence. Here unusable and confirmed-current produce the same silence.
+
+    RULING: ACCEPT FOR THE ROW SURFACE. A row surface cannot carry a distinction in the absence of a row. "No row" is one state however many reasons produce it, so requiring Incomparable to be visibly different from Same there is asking silence to have two flavours. The right reading of PRIN-5 is that the distinction must exist SOMEWHERE A CONSUMER CAN REACH, not that every surface must render it.
+
+    BINDING CONSEQUENCE: any future diagnostic or verbose view over verdict staleness MUST report Incomparable distinctly from Same. The three-state relation exists precisely so that distinction is available; a diagnostic that collapses it back to a boolean would be the PRIN-5 failure this spec is about, at the surface where it actually matters.
+
+    AND IT SHOULD BE STATED IN THE CODE AS A DECISION. The reviewer's point is that the current behaviour is defensible and consistent with the absent-provenance contract, but nothing says it was chosen. A comment at the render site saying "Incomparable is silent HERE because a row surface has one silence; the distinction lives in the relation and must survive into any diagnostic" converts an inherited behaviour into a recorded one.
+
+    trace:BUG-1546 — the slice where the three-state relation was introduced.
+  created_at: 2026-09-21T11:42:20.315640082Z
+  modified_at: 2026-09-21T11:42:20.315640082Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
