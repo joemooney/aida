@@ -80,10 +80,71 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:55:34.840549Z
-modified_at: 2026-09-21T04:58:58.666528413Z
+modified_at: 2026-09-21T04:59:01.005076232Z
 req_type: Bug
 tags:
 - agent-surface
 - aida:show
 - reviewer-surface
 - severity:operational
+comments:
+- id: 01a0c254-ee0d-7070-a076-ddd63c7891e9
+  author: joe
+  content: |-
+    [aida:advisor-disposition] Approved, queued, HIGH. Independently reproduced in
+    substance, with one difference in form worth recording before anyone writes the test.
+
+    WHAT I REPRODUCE. aida show BUG-1420 --format human, run from the repo root at
+    2026-09-20 21:57 local, renders its Implementation block as exactly three lines:
+
+        Implementation:
+          Completed: 2026-09-20 01:31 -07:00
+          By:        joe
+
+    No branch line and NO PR LINE AT ALL. Against:
+
+        git branch --list 'bug-1420*'             bug-1420-work            (local, present)
+        git ls-remote --heads origin 'bug-1420*'  bug-1420-round2, bug-1420-work
+        gh pr list --state open --search BUG-1420 #2009 bug-1420-work
+                                                  #2042 bug-1420-round2
+                                                  #2043 story-1391-work
+
+    So the second and structural defect is confirmed: a spec with three open PRs on three
+    different branches renders with no PR line. That is the half that hurt, and it is the
+    half the reviewer identified as structural rather than cosmetic.
+
+    THE DIFFERENCE IN FORM. The report describes the output as
+
+        Branch     work committed but branch not found locally
+
+    I do not get that line; I get no branch line whatsoever. Same conclusion, different
+    rendering, and the gap matters for criterion 4: a regression test written against the
+    "branch not found locally" string would not catch the shape I see, and one written
+    against line-absence would not catch theirs. Whoever fixes this should establish which
+    rendering the call site produces under which condition before pinning a test to either.
+    I have not chased that down and am not asserting which of us hit an edge.
+
+    WHY I AM TAKING THIS AS HIGH rather than the cosmetic reading. The consequence is
+    stated precisely in the report and I can confirm it from my own night: the reviewer
+    found the #2042 / #2043 branch-crossings by enumerating branches by hand, after this
+    surface answered the question with silence. This is the command both non-implementing
+    seats use to ask "where is this spec's work?", and tonight it answered "nothing here"
+    for the spec with the most work in flight.
+
+    STRUCTURAL POINT WORTH KEEPING IN THE FIX. ChangeLinkageState is one enum with mutually
+    exclusive arms, and the enum ALREADY carries CliMissing / CliFailed / Unreachable as
+    explicit state-unknown answers for the PR. The design intends to distinguish "no PR"
+    from "could not determine the PR". BranchNotFound is the single path that collapses
+    that distinction by never asking. So criterion 2 is not adding a concept — it is
+    stopping one arm from bypassing a distinction the type already makes. That is the
+    cheapest possible version of PRIN-5: the vocabulary for absent-vs-unknown exists and
+    one code path declines to use it.
+
+    RELATED, AND WORTH THE FIXER KNOWING: the reviewer notes this shares a root assumption
+    with BUG-1525 — that a spec's branch is named exactly after its spec id, missing the
+    -work suffix convention. BUG-1525 is that assumption on the write side (the brief
+    generator), this is the read side. Fixing one will not fix the other, but whoever
+    touches either should know the convention is assumed in at least two places.
+  created_at: 2026-09-21T04:59:01.005076232Z
+  modified_at: 2026-09-21T04:59:01.005076232Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
