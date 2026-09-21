@@ -33,5 +33,59 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:15:56.676262574Z
-modified_at: 2026-09-21T11:15:56.676262574Z
+modified_at: 2026-09-21T11:18:38.814526213Z
 req_type: Bug
+comments:
+- id: 01a0c3b0-7dde-7722-adab-fe55eb1362f9
+  author: joe
+  content: |-
+    THE SWEEP THIS SPEC ASKED FOR IS DONE, AND IT IS A CLOSED LIST — much smaller than "every direct Command::new(...).output()" implies. Enumerated by the reviewer seat; the line number verified independently by the driver-advisor.
+
+    THE DISCRIMINATOR THAT MAKES IT TRACTABLE, and it is not obvious: PASSING A WRITTEN SCRIPT AS AN ARGUMENT TO AN INSTALLED INTERPRETER IS SAFE. `sh script.sh` has the shell READ the file; ETXTBSY fires only on exec() of a file some process still holds open for write. Only a DIRECT EXEC of the written path is exposed. That one distinction removes most of the surface and is what turns "remember this rule" into a predicate a lint can evaluate.
+
+    METHOD: key on files that WRITE an executable (0o755 / PermissionsExt / set_mode) — 16 files — then check which of those directly EXEC the file they wrote rather than exec'ing an installed binary.
+
+    THE INVENTORY:
+
+      UNCOVERED — ONE site, the fix target
+        aida-cli-lib/src/lib.rs:1235   std::process::Command::new(&fixture.gh).args(args).output().unwrap()
+                                       raw output(), no retry. This is the failing test
+                                       (fake_gh_short_argv_reaches_fallback, fn at :1232).
+                                       Line verified independently: `grep -n 'Command::new(&fixture.gh)'`
+                                       returns 1235.
+
+      ALREADY COVERED — 2 sites
+        agent_launcher_tests.rs, retry loops anchored at the comments on :1883 and :1977
+                                       inline 5-retry + backoff, trace:BUG-423. That comment
+                                       already states the rule the production remedy encodes:
+                                       fixture-only, because production launches an INSTALLED
+                                       binary and never a freshly-written one.
+
+      NOT APPLICABLE — script passed as an argument, never exec'd
+        shell_wrapper_harness.rs:25    Command::new(shell).arg("exit 0")
+        shell_wrapper_harness.rs:88    Command::new(shell).arg(&script)
+
+      NOT APPLICABLE — exec only `git`, an installed binary
+        auto_bump_done_tests.rs:206, drain_reliability_wiring_tests.rs:495,
+        story_429_auto_rebase_tests.rs:100, task_471_stale_base_preflight_tests.rs:4,
+        session_end_resolution_tests.rs:35, real_phase_driver_wiring_tests.rs:19
+
+      PRODUCTION, ALREADY REMEDIED — 3 sites (verified separately by the advisor)
+        forge.rs:1183, forge.rs:3056, pr_cmd.rs:2630 — command_output_retrying_etxtbsy
+
+    WHAT THIS DOES TO THE SPEC'S CRITERIA. Criterion 2 asked for a sweep or a check that fails when a new site appears, on the grounds that patching only the cited site earns a fifth occurrence. The sweep is now done and the answer is ONE LINE AT ONE SITE — so the anti-half-fix criterion is satisfied by enumeration rather than by scope. And the check is now writable, with a precise predicate:
+
+        test-code Command::new(X) with .output() / .status() / .spawn(),
+        where X is a path the suite wrote executable,
+        EXCLUDING X used as an ARGUMENT to an interpreter.
+
+    That is a lint someone can implement, not a rule someone has to remember — which is the substrate-as-bouncer form of this spec's own lesson.
+
+    TWO LIMITS OF THE SEARCH, recorded because a null result can lie and the reviewer stated them unprompted:
+      1. It keyed on 0o755/PermissionsExt. A test producing an executable another way — copying one, or a crate helper that chmods internally — would not appear. The obvious version was checked: every fs::copy in the tree copies settings, plans, jsonl or backups, never a binary-to-then-exec, and the current_exe hits in tests are resolver tests rather than exec sites. The blind spot is narrowed, not provably empty.
+      2. It covered aida-cli-lib/src and aida-core/src. Integration tests outside those trees, if any, were not searched.
+
+    WHAT AN IMPLEMENTER SHOULD TAKE FROM THIS: the fix can be verified COMPLETE rather than declared complete. Close lib.rs:1235, land the lint with the predicate above, and within these two crates the fifth occurrence has nowhere left to come from.
+  created_at: 2026-09-21T11:18:38.814526213Z
+  modified_at: 2026-09-21T11:18:38.814526213Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
