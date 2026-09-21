@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:38:32.393127411Z
-modified_at: 2026-09-21T16:46:36.691986566Z
+modified_at: 2026-09-21T17:10:38.520396204Z
 req_type: Spike
 tags:
 - architecture
@@ -106,5 +106,39 @@ comments:
     IMPLICATION FOR THE VISION TEXT: it should state a comparative advantage for the user's project, not an absolute capability of the store, and it should not promise whole-system regeneration. Suggested shape for operator wording, not final: AIDA captures the intent behind a system so that, if the code were lost or rewritten, what the system was FOR survives in a form an agent can rebuild from - far better than commit messages and a README alone.
   created_at: 2026-09-21T16:46:36.691986566Z
   modified_at: 2026-09-21T16:46:36.691986566Z
+  session_id: 01a0b204-9df4-7622-8b91-f12fd291d8df
+- id: 01a0c4f2-c0b8-7e83-87b9-c91479291705
+  author: joe
+  content: |-
+    THIRD THESIS COMPONENT (operator, 2026-09-21) - the agent-collaboration claim, distinct from reconstitution and needed in the vision wording:
+
+    "the metadata gathered by aida, the requirements, bugs etc., are useful for an LLM coding agent. That they provide a basis for identifying inconsistencies, contradictions, aspirations, intent, etc. that the LLM will be inclined to lean on and consider aida a buddy in its endeavors to help the user realize their goals for a project."
+
+    This is a SEPARATE value claim from reconstitution. Reconstitution says the corpus survives the code. This says the corpus improves the work WHILE IT HAPPENS. A vision that states only the first undersells the second, and the second is the one a user experiences daily.
+
+    FIRST-PERSON EVIDENCE FROM THIS SESSION. The agent in question was me, so this is direct observation rather than inference.
+
+    WHERE THE STORE CARRIED THE WORK - six instances:
+    - `aida search codegraph` returned four Completed specs and prevented a duplicate filing.
+    - Reading EPIC-39, ADR-4 and VIS-1 surfaced FIVE mutually-inconsistent theses about what AIDA is, including a live contradiction (see STORY-1426). That is literally "identifying inconsistencies and contradictions", and it came from the store, not the code.
+    - `aida search reconstitut` surfaced EPIC-70 and ADR-44 and stopped me re-proposing a capability that had shipped four days earlier.
+    - ADR-44's REJECTED ALTERNATIVES let me establish that a control arm had never been considered, so STORY-1425 could propose one without re-litigating settled ground.
+    - `aida list --sort modified` plus a categorisation pass produced the 36-of-49 control-plane finding - the corpus used as a dataset about itself.
+    - `aida show ADR-6` corrected advice I had already given about cluster routing.
+
+    WHERE IT FAILED, AND WHY IT MATTERS MORE THAN THE WINS - two instances:
+    - THE --single-branch MISS. Asked whether AIDA could ship a set of issues as one unit, I answered from CLAUDE.md and docs/lifecycle.md, concluded the capability was missing, and designed it with the operator across two turns. It existed: `queue work --batch NAME --auto-complete --single-branch`, shipped as TASK-1003 from SPIKE-70. The STORE HELD THE ANSWER. I consulted PROSE.
+    - THE CODEGRAPH FRAMING. The store confidently encoded a stale conclusion (codegraph as competitor, Kill-shot 3) that the operator's first-hand use contradicts. Captured metadata can be confidently wrong, and an agent leaning on it inherits that.
+
+    THE DIAGNOSIS, WHICH IS THE USEFUL PART: PROSE COMPETES WITH THE STORE FOR THE AGENT'S ATTENTION, AND OFTEN WINS. CLAUDE.md, 48 skills, the discipline pack and docs/ are all easier to reach than a query, and each can answer a question ALMOST right - which suppresses the query that would have answered it exactly. AIDA scaffolds a great deal of prose, and every page of it is a competitor to its own store. The failure is not that the store lacked the answer; it is that a good-enough prose answer arrived first. Any "buddy" claim has to survive this, because it is the normal case, not an edge case.
+
+    WHAT DISTINGUISHES THE STORE FROM THE CODE - the negative space. Code shows decisions TAKEN. It cannot show what was REJECTED and why, what is CONTRADICTORY, what is ASPIRATIONAL versus actual, or what was DEFERRED and never revisited. ADR-44's three rejected alternatives did more for me this session than any amount of source reading could have. If the agent-collaboration thesis has a defensible core, it is this: an LLM reading only code sees a snapshot of decisions taken with zero record of the alternatives, and no amount of context window recovers that.
+
+    IMPLICATIONS FOR THIS SPIKE
+    1. The vision must carry BOTH claims - the corpus survives the code, AND the corpus improves the work in flight. Wording that states only reconstitution undersells the daily experience.
+    2. "Buddy" has a testable mechanism worth naming: UNPROMPTED CONSULTATION. A buddy is what you turn to without being told. Measurable as the rate at which an agent queries the store before asserting, versus reasoning from code and prose. STORY-1094's reflex scaffolding is the existing lever, and `~/.aida/usage.jsonl` already records the query side.
+    3. The prose-competes-with-store finding should be tested against SPIKE-81's parallel result - capabilities going unused because they were undiscoverable. Both are reachability failures, and they may have one cause and one fix.
+  created_at: 2026-09-21T17:10:38.520396204Z
+  modified_at: 2026-09-21T17:10:38.520396204Z
   session_id: 01a0b204-9df4-7622-8b91-f12fd291d8df
 human_only: true
