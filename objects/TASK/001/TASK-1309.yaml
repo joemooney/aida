@@ -1,0 +1,35 @@
+id: 01a0c23c-6dd7-7391-beac-1072a9d243ec
+spec_id: TASK-1309
+agreed_id: TASK-1309
+title: The external-prose-classifier inventory guard is keyed on line numbers, so any PR that shifts lines in lib.rs reds CI and must commit a regenerated table
+description: |-
+  The CI step External-prose classifier inventory fails a PR when docs/architecture/external-tool-output-classifiers.md does not match a freshly generated table. The table records each classifier as file:LINE.
+
+  Line numbers drift on any edit above the symbol. Observed on PR #1989 (STORY-1353) immediately after a routine rebase onto main: CI went red and the entire diff needed to turn it green was
+
+    claude_log_indicates_api_outage    lib.rs:37014 -> 37025
+    gh_stderr_is_network_error         lib.rs:36992 -> 37003
+    status_context::load_pr_facts      lib.rs:64992 -> 65042
+
+  No classifier was added, removed, or renamed. The inventory's PURPOSE -- make every new external-output prose decision visible to review -- was not served by any part of that diff.
+
+  The cost is not the one commit. It is that every PR touching lib.rs above line 37000 inherits a red CI and a mandatory regeneration commit, and reviewers learn that this guard going red usually means nothing. A guard that cries wolf on line drift trains people to regenerate without reading, which is precisely the state in which a genuinely NEW classifier slips through unexamined.
+
+  This repo already has the rule: CLAUDE.md says prefer symbol refs over line refs because line refs drift fast and are often stale within hours. The generated artifact does not follow it.
+
+  ACCEPTANCE
+  1. The inventory identifies each classifier by a stable key (module path plus symbol name), not file:line.
+  2. The guard fails only when the SET of classifiers changes -- added, removed, or renamed -- not when existing ones move.
+  3. A test shifts a classifier's line number without changing the set and asserts the guard stays green.
+  4. A test adds a new classifier and asserts the guard goes red.
+
+  If keeping the line number is wanted for navigation, it may stay as non-authoritative display detail that the comparison ignores.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:32:15.319281838Z
+modified_at: 2026-09-21T04:32:15.319281838Z
+req_type: Task
+tags:
+- papercut ci-guard churn severity:cosmetic
