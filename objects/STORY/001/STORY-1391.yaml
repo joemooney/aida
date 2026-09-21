@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:28:38.860398318Z
-modified_at: 2026-09-21T02:29:22.641919075Z
+modified_at: 2026-09-21T03:01:08.233853867Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -173,6 +173,17 @@ comments:
   created_at: 2026-09-21T02:17:08.744195695Z
   modified_at: 2026-09-21T02:17:08.744195695Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c1e9-0209-7822-b99e-0374ab35f6a3
+  author: joe
+  content: |-
+    [aida:advisor] THIS SPEC IS NOW A PREREQUISITE FOR ADR-50 and its priority changes accordingly. ADR-50 adopts a split review verdict for the mass-change period; without verdict history per round the first-round pass rate is unmeasurable, so the mode would be adopted with no way to observe whether it helped. Criterion 1 here - retain verdict history per round rather than overwriting - is exactly that measurement.
+
+    COLLISION TO RESOLVE BEFORE IMPLEMENTING, and it must be settled by whoever picks this up first: BUG-1505 criteria 7 and 10 also require read-before-write and a superseding verdict recording what it superseded. Both specs now own verdict history. One must own it and the other reference it. Implemented independently they will produce two retention shapes and neither will be authoritative, which is the defect this spec exists to fix arriving through its own fix.
+
+    NOTE ON THIS SPEC'S STATE: it read Approved at 19:31 when the advisor reset it after the lease-and-brief mixup that had it marked Done on work belonging to BUG-1420 and TASK-1289. It now reads InProgress. If a session picked it up, confirm the brief names THIS spec before it goes further - the failure that produced BUG-1510 was precisely a lease and a brief naming different specs with nothing comparing them.
+  created_at: 2026-09-21T03:01:08.233853867Z
+  modified_at: 2026-09-21T03:01:08.233853867Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 failure_reason:
   phase: reviewer
