@@ -35,7 +35,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T22:36:44.840834061Z
+modified_at: 2026-09-21T22:38:03.655717970Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -311,4 +311,44 @@ comments:
          does not ask for, and it would have caught this instance at 15:34 instead of by luck.
   created_at: 2026-09-21T22:36:44.840834061Z
   modified_at: 2026-09-21T22:36:44.840834061Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c61e-8387-7512-87c4-7ec6bc80910e
+  author: joe
+  content: |-
+    [aida:advisor] ACCEPTANCE ITEM 1, FIRST HALF DONE: THE STORE IS SWEPT WITH THE REFINED SIGNATURE AND EVERY CANDIDATE IS REPORTED. The refinement this spec proposed works, and it works better than the spec predicted.
+
+    METHOD. Signature: two-or-more spaces preceded by a lowercase letter or closing punctuation and followed by a lowercase letter. PROSE FILTER as this spec suggested - drop lines matching table/JSON/code shapes (leading pipe, brace, bracket, quoted-key, or interior multi-space columns) and lines under 40 characters. Applied to every description and comment-content field in the store: 9243 FIELDS SCANNED.
+
+    RESULT: 52 raw hits (the figure in this spec) reduced to TEN CANDIDATES. The prose filter is the whole of that improvement and it cost four lines of code.
+
+    THE TEN, with context:
+
+        TASK-493    "...implement locked Option B inside  as a per-request post-response respawn check"
+        TASK-493    "...banner into  and compare current process ( + build.rs git..."
+        TASK-493    "...on Unix call  after flushing stdout. On Windows use spawn +..."
+        TASK-675    "...Routes pr_ship_create_pr's  through forge_for(root).open_change(...)"      [KNOWN]
+        TASK-676    "...no live  execution sites exist (only hint text + git c..."                 [KNOWN-adjacent]
+        TASK-1285   "...the new hidden  subcommand is neither documented in docs/cli..."
+        TASK-1-086  "...Confirmed during dogfood that the literal  ties the discipline doc's..."
+        BUG-1199    "...Add a clippy-style source guard test: no  outside the resolver module."
+        FR-4        "...ESC should cancel if we have not made any  changes, if we have then..."
+        BUG-1222    "...skipping  per lifecycle tag'' - two spaces where the..."
+
+    EIGHT ARE ALMOST CERTAINLY REAL. Each reads as a sentence with a symbol or identifier removed, exactly where a backticked term would have been - "inside X as a", "call X after flushing", "the new hidden X subcommand", "no X outside the resolver module". The grammar survives in every one, which is this defect's signature property.
+
+    TWO NEED A HUMAN AND I AM NOT GUESSING. BUG-1222's fragment is ABOUT two spaces, so its double space may be deliberate quotation rather than damage - a detector for this defect finding a false positive in a sentence discussing the defect is a pleasing but real hazard. FR-4's "any  changes" could be an eaten word or ordinary sloppy spacing in old text.
+
+    THE COUNT IS HIGHER THAN THIS SPEC ASSUMED. It records "at least two specs" damaged and three confirmed instances. This sweep finds candidates across EIGHT DISTINCT SPECS, and TASK-493 ALONE CARRIES THREE SEPARATE HOLES. There is also now a fourth confirmed instance from today, on TASK-1289, caused by me and repaired in place - recorded in the comment above.
+
+    WHY I HAVE NOT REPAIRED THEM, which is the honest limit of this pass and the reason item 1's second half stays open. REPAIR REQUIRES KNOWING WHAT WAS EATEN, AND THE STORE NO LONGER CONTAINS IT. The shell consumed the text before AIDA ever saw the string, so there is no prior version to diff against - the orphan-branch history holds the DAMAGED text from the moment it was first written. Only two are reconstructible from surrounding context with any confidence:
+
+        TASK-1285   "the new hidden `dev build-guard` subcommand"  - the identifier appears elsewhere
+                    in the same spec body
+        TASK-675    the known case, whose missing term the original finding already identified
+
+    The rest would be me inventing plausible identifiers and writing them into the store as though they were the author's. THAT IS WORSE THAN THE HOLE: a hole is visibly missing, a confident guess is indistinguishable from the original. Whoever repairs these should reconstruct from the PR or commit the spec describes, not from the sentence.
+
+    ONE ADDITION TO ITEM 4, which asks whether the write path can do anything. For PREVENTION, no - correct, and worth stating as settled. For DETECTION, yes and cheaply: this signature runs over 9243 fields in seconds, so running it on INBOUND description and comment text at write time would warn the author while they are still present to fix it. That would have caught today's TASK-1289 instance at the moment I created it, instead of by an unrelated shell error.
+  created_at: 2026-09-21T22:38:03.655717970Z
+  modified_at: 2026-09-21T22:38:03.655717970Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
