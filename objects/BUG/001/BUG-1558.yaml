@@ -1,7 +1,7 @@
 id: 01a0c4bc-c7b8-7572-ac79-4e820f75817f
 spec_id: BUG-1558
 agreed_id: BUG-1558
-title: aida show collapses every typed relationship except Parent into Related, so blockers and supersessions are invisible on the primary per-spec read surface - it has already produced a false disagreement
+title: aida show --json carries no relationships field at all - and the wider 'every type renders as Related' claim was measured on a stale binary, not the source
 description: |
   `aida show` COLLAPSES EVERY TYPED RELATIONSHIP EXCEPT Parent INTO "Related", SO THE TYPED GRAPH - THE THING THIS PROJECT CALLS ITS DIFFERENTIATOR - IS INVISIBLE ON ITS PRIMARY READ SURFACE. IT HAS ALREADY CAUSED A SEAT TO CONCLUDE AN EDGE DID NOT EXIST AND TO BUILD A HOLD ANALYSIS ON THAT.
 
@@ -45,12 +45,81 @@ description: |
   - Establish whether the collapse is in the renderer, in the cache projection, or in the cache's schema. The cache is a derived read projection and `aida graph` may not use it; if the cache never stored the type, `cache rebuild` is part of the fix and the blast radius includes anything else reading relationships through the cache.
 
   Related: TASK-1176 (SupersededBy as a first-class typed edge - undermined by this), BUG-1551 (BlockedBy gates pickup not closure - reasoning about blockers is exactly what this surface breaks), PRIN-5 (absent evidence must not read as good evidence).
+
+  ===============================================================================
+  CORRECTION, AND IT IS LARGE: I MEASURED A STALE BINARY, NOT THE SOURCE.
+  READ THIS BEFORE ANYTHING ABOVE. Filed by the advisor; caught by the
+  implementer 2026-09-21 and re-verified by the advisor.
+  ===============================================================================
+
+  EVERY `aida show` OBSERVATION IN THIS SPEC WAS PRODUCED BY THE BINARY ON PATH,
+  WHICH WAS NINE HOURS OLD AND BUILT FROM A DIFFERENT COMMIT:
+
+      which aida        /home/joe/ai/aida/target/release/aida
+      aida --version    0.15.0 (built 2026-09-21 01:12:55 -07:00, sha 1460a0168a+dirty)
+      HEAD at filing    8bc2512480 and later
+      HEAD now          c049a3da12
+
+  THE COLLAPSE WAS ALREADY FIXED IN SOURCE. `relationship_phrase` (lib.rs:12544)
+  renders every typed variant - "is blocked by", "is child of", "blocks", "is
+  superseded by", "supersedes" - and `rel_type_label` (lib.rs:71590) does the same
+  for TOON. Both are live at HEAD and both are reachable from show. Rebuilt from
+  source, `aida show TASK-1247` prints "is blocked by / is child of / blocks / is
+  parent of" and TOON prints `blocked-by,child,blocks,Parent`. NOT "Related".
+
+  SO THE HEADLINE MEASUREMENT IS WRONG. "Only Parent survives", the 997 Child /
+  229 References / 47 BlockedBy / 18 Blocks / 11 Duplicate / 4 SupersededBy /
+  4 Supersedes tally presented as "every type except Parent is misrendered", and
+  the claim that ~1300 specs render wrong TODAY - all of those describe the output
+  of a binary that predates the fixes, not the code. The store-wide TYPE COUNTS
+  remain correct as counts; what is wrong is the inference that they are all
+  being misrendered.
+
+  WHAT REMAINS TRUE, AND IT IS A REAL DEFECT OF ITS OWN: `aida show --json`'s
+  `ShowJson` struct had NO `relationships` FIELD AT ALL. That is a STRONGER form
+  of the same failure - not mislabelled, MISSING - and it is exactly the
+  machine-readable path this spec's acceptance said to check separately, on the
+  grounds that an agent reading relationships over the CLI inherits the defect
+  silently if only the human table is fixed. That reasoning was right even though
+  the premise it rested on was not.
+
+  ALSO CONFIRMED AND STILL USEFUL: the collapse was never a storage or cache-schema
+  problem. `CachedGitBackend::get_requirement_by_spec_id` delegates straight to the
+  git YAML backend rather than the SQLite cache, so the cache-rebuild blast radius
+  this spec speculated about does not exist. MCP `show_requirement` renders via
+  `RelationshipType`'s Display impl and `query_graph` walks typed legs; neither
+  needed changing.
+
+  MY ERROR, NAMED. I have a standing rule for exactly this - MERGED IS NOT RUNNING;
+  CHECK THE BINARY'S SHA AGAINST HEAD BEFORE TREATING ITS OUTPUT AS A MEASUREMENT
+  OF THE CODE - and I did not apply it. `aida --version` prints the build time and
+  the sha and I never ran it. I then built a store-wide tally, a PRIN-5 narrative
+  about the collapse always erring toward the weakest type, and a priority-high
+  filing on top of that output.
+
+  AND IT PROPAGATED. A reviewer independently reported "aida show renders Related"
+  from the same stale binary, and the two of us treated the agreement as
+  corroboration. TWO SEATS MEASURING THE SAME STALE ARTEFACT IS NOT INDEPENDENT
+  CONFIRMATION - it is one observation counted twice. The "false disagreement
+  between two seats" in this spec's own title was real, but its cause was the
+  binary at least as much as the renderer.
+
+  THE DERIVED GUIDANCE IS WITHDRAWN: the instruction recorded here that any
+  relationship judgement made from `aida show` before "the fix" must be re-derived
+  from `aida graph` was addressed to a fix that had already landed. Judgements made
+  with a CURRENT binary were fine. Judgements made with a stale one were not - which
+  is a different and more general hazard, and not one this spec closes.
+
+  REVISED SCOPE: this spec is now ONLY the missing `--json` relationships field,
+  plus TASK-1417's view-limit disclosure. Priority drops from high accordingly.
+  The red-first requirement stands and was met on the real remaining defect - the
+  implementer quotes the JSON having no `relationships` key before the fix.
 status: InProgress
-priority: High
+priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:11:41.368773223Z
-modified_at: 2026-09-21T17:34:49.538119648Z
+modified_at: 2026-09-21T17:38:31.136737178Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
