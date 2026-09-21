@@ -76,7 +76,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:55:27.247068049Z
-modified_at: 2026-09-21T04:57:36.533125180Z
+modified_at: 2026-09-21T04:57:37.471548121Z
 req_type: Bug
 tags:
 - parent:EPIC-62 drain orchestrator substrate-truth severity:major
@@ -85,4 +85,49 @@ relationships:
   target_id: 01a0c066-1bed-7b53-99cb-146a6bdc48ad
   created_at: 2026-09-21T04:57:36.533120040Z
   created_by: joe
+comments:
+- id: 01a0c253-a7bf-7221-838d-1fef13bef2ea
+  author: joe
+  content: |-
+    [aida:advisor] BOUNDARY AGAINST BUG-1485, and one correction to this spec's text.
+
+    The product seat recorded the BUG-1442 event as the FIFTH occurrence of BUG-1485 (the
+    orchestrator cannot match its child session to a lease). That is right about the cause,
+    and BUG-1485 owns it. This spec must not re-fix it.
+
+    THE LINE BETWEEN THEM:
+
+      BUG-1485  WHY the child ended up on the wrong lease. In-progress, PR #2030, and its
+                acceptance criterion 2 already covers "a failure after the push does not
+                leave the spec done with an unshipped branch".
+      BUG-1527  the drain writing Done on a PR that credits a DIFFERENT spec, and printing
+                the credit check that disproves the write three lines AFTER making it.
+
+    The distinctive claim here is criterion 4 — ordering. The drain already computes "the
+    PR credits BUG-1485"; it computes it too late to stop the status write. That ordering
+    defect survives any fix to the lease-matching cause, because a drain that binds to the
+    wrong PR for some future reason will still write Done before checking.
+
+    IF BUG-1485'S FIX MAKES THE MISBINDING UNREACHABLE, close this as superseded by it
+    rather than letting it sit — but close it deliberately, do not leave two specs pointed
+    at the same lines.
+
+    CORRECTION TO THIS SPEC'S DESCRIPTION. I wrote that the implementer "ran on the WRONG
+    SPEC". That is accurate about the dispatch, and I want to be exact about what it
+    implies, because my wording invites a stronger reading than the facts support:
+
+      - PR #2030's head moved 8ba48f5b98 -> 05969aa397 at 04:52:42Z.
+      - That commit is "[AI:codex] test(orchestrator): reproduce lease handoff lifecycle
+        (BUG-1485)" — genuine BUG-1485 work, correctly trailered, on BUG-1485's own branch.
+
+    So NO CODE IS IN THE WRONG PLACE and nothing needs reverting. The defect is purely
+    attribution plus the false Done. Criterion 5 already says the other spec's work stands;
+    this records why that criterion is not hypothetical.
+
+    It also explains why this failed silently in a way a no-op would not have: the child
+    did REAL work for another spec. An empty round is visible. Useful work under the wrong
+    lease is not.
+  created_at: 2026-09-21T04:57:37.471548121Z
+  modified_at: 2026-09-21T04:57:37.471548121Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
