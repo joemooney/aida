@@ -1,0 +1,40 @@
+id: 01a0c412-1b61-7820-97a8-534df5492c97
+spec_id: BUG-1552
+agreed_id: BUG-1552
+title: aida doctor reports thousands of findings and exits 0, so no caller can tell a healthy project from a broken one without parsing output
+description: |-
+  `aida doctor` IS A DIAGNOSTIC WITH NO FAILURE MODE: IT REPORTS PROBLEMS AND EXITS 0. Measured by claude-product-1 while building a gate on top of it, re-verified by the advisor:
+
+      aida doctor                      4316 lines of output    exit 0
+      aida doctor check stale-leases                           exit 0
+
+  So any caller that runs doctor expecting a SIGNAL gets silence. A script, a CI step, a scheduled job or an agent cannot distinguish "the project is healthy" from "the project has thousands of findings" without parsing output - which means every consumer either re-implements the judgement or, more likely, treats exit 0 as health.
+
+  HOW IT SURFACED, and this is the part that makes it more than a papercut. STORY-1422 exists because `aida usage ... events` has no failure mode - it exits 0 whether it finds ten calls over budget, none, or is pointed at a command that does not exist. The proposed remedy was to wrap that query in `aida doctor check performance` so it would have one. THE WRAPPER HAS THE SAME DEFECT. A gate was about to be built inside a command that always succeeds, and a substrate job would have read success on every tick forever.
+
+  That is the fifth inert instrument found in one night and the first found INSIDE a fix for another one. The others: a mutation that never changed behaviour, a detector that could not fire, a timing test that could not fail, a query that cannot signal. See TASK-1418 for the general rule - a negative result is evidence only if the instrument producing it has been demonstrated to produce a positive on a known-bad input.
+
+  THIS SPEC IS THE GENERAL QUESTION, DELIBERATELY SEPARATED FROM ITS TRIGGER. STORY-1422 is ruled to use an opt-in `--fail-on-findings` flag precisely so that a performance guard does NOT change the contract of a shared surface as a side effect. Whether `doctor check` should fail on findings BY DEFAULT is a real question with real consequences for every existing caller, and it deserves its own decision rather than arriving inside someone else's feature.
+
+  WHAT IS ALREADY KNOWN, so this does not restart from zero:
+    - `doctor check <CATEGORY>` has categories: stale-leases, orphan-branches, stale-remote-branches, OBE-briefs, and others.
+    - `--json` exists, so a machine-readable path is already available to a caller willing to parse.
+    - The `doctor HEAL` path is separate and is NOT in scope here: `solo_cmd.rs:27,31` and `scripts/drain-loop.sh:63` call heal, and the latter's `|| true` is ordinary defensive scripting on a step whose comment says "Best-effort" - it is evidence of caution, NOT of a disappointed expectation that heal returned a signal. Do not cite it as motivation.
+    - Nothing found so far depends on `doctor check` exiting 0.
+
+  ACCEPTANCE:
+  1. A DECISION IS RECORDED as an ADR: should `doctor check` exit non-zero when its category has findings, by default? "No, reporting-only by design, use --fail-on-findings" is an acceptable outcome. Leaving it undecided is not, because exit 0 currently reads as a health assertion it does not make.
+  2. If the decision is DEFAULT-FAIL: every existing caller is enumerated and checked first, and the change ships with the enumeration in the PR body rather than an assurance that it was considered.
+  3. If the decision is REPORTING-ONLY: `aida doctor --help` and the machinery glossary state that exit 0 means "ran successfully", NOT "found nothing", and name the flag that gives a gate its failure mode.
+  4. Either way a test pins the decided behaviour for at least one category with findings present and one without, so the next reader learns it from an assertion.
+
+  RELATED: STORY-1422 (the guard that exposed this and is ruled to use the opt-in flag), TASK-1418 (the general rule about inert instruments), PRIN-5 (a surface must distinguish absent evidence from good evidence - here, "no signal" from "no problem").
+
+  PROVENANCE: claude-product-1 measured it, blocked their own work on it rather than building over it, and explicitly declined to file it unasked. The advisor re-verified both exit codes and filed.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T13:05:16.129070411Z
+modified_at: 2026-09-21T13:05:16.129070411Z
+req_type: Bug
