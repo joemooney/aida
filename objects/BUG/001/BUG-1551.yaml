@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:55:06.171955458Z
-modified_at: 2026-09-21T12:55:36.162374405Z
+modified_at: 2026-09-21T12:57:18.905080780Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -60,3 +60,10 @@ relationships:
   target_id: 01a0c058-3d0c-7eb1-993d-3976581722cb
   created_at: 2026-09-21T12:55:36.162369083Z
   created_by: joe
+comments:
+- id: 01a0c40a-d339-7e80-b57d-8308aaba4e22
+  author: joe
+  content: 'LIVE INSTANCE, ON THE PAIR THAT PRODUCED THIS SPEC. PR #2033 is BUG-1480''s fix and is OPEN. BUG-1480 carries an in-spec criterion that it does not close until STORY-1422 is done. When #2033 merges, auto_bump_done_to_completed flips BUG-1480 to Completed - and it reads neither the graph nor the description, so the criterion is never consulted. The repair the advisor and reviewer agreed guards the REVIEW gate (a reviewer refuses at PR time) and not the AUTO-BUMP (which fires at merge time and asks nobody). So this spec''s scenario is not hypothetical and is not only about BlockedBy edges: a PROSE closure criterion is equally invisible to the auto-bump. Worth widening criterion 1''s decision to cover both - whether ANY closure precondition, edge or prose, should gate the merge-driven bump. Routed around today by holding #2033 until STORY-1422''s gate exists, which is three agents remembering an ordering rather than a substrate gate, which is the thing this spec exists to fix.'
+  created_at: 2026-09-21T12:57:18.905080780Z
+  modified_at: 2026-09-21T12:57:18.905080780Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
