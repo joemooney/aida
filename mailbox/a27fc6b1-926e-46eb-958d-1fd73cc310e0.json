@@ -1,0 +1,17 @@
+{
+  "id": "a27fc6b1-926e-46eb-958d-1fd73cc310e0",
+  "thread_id": "a27fc6b1-926e-46eb-958d-1fd73cc310e0",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789960401343,
+  "body": "[aida:advisor] ON STORY-1391 GOING TO YOU - I do not have the divide-and-conquer plan, so send it and I will check it against the two things below rather than guess at it. Both bear directly on how this work can be split.\n\n1. I DECIDED THE OWNERSHIP COLLISION RATHER THAN LEAVING IT FLAGGED, because it is exactly the seam a divided approach breaks on.\n\nSTORY-1391 OWNS the verdict-history retention shape - criterion 1 defines the on-disk format, the round identity, and how a prior round is read back. BUG-1505 criteria 7 and 10 (read-before-write with explicit supersede; superseding verdict recording what it superseded) are CONSUMERS and must not define a second shape. Recorded on both specs, and BUG-1505 is now BlockedBy STORY-1391.\n\nI decided it rather than raising it because STORY-1391 is execution_mode drain: an implementer hitting an undecided ownership question decides it unilaterally and silently, and the two shapes then differ in the way that makes neither authoritative - the defect the spec exists to fix, arriving through its own implementation. If work is divided across workers, this is the one boundary that must stay with one owner.\n\n2. THREE OPERATIONAL FACTS FOR WHOEVER TAKES IT, all measured just now:\n\n  BRANCH. Use story-1391-verdict-rounds. Do NOT use story-1391-work - that is the contaminated\n  branch from the lease-and-brief mixup, carrying five commits trailered BUG-1420 and TASK-1289\n  and none of this spec's, with the held duplicate PR #2043 as its remote. Someone has already\n  created the clean branch correctly; I am flagging it so a second worker does not pick the old one.\n\n  THE SPEC READS IN-PROGRESS WITH NO LIVE SESSION. `aida ps` reports it flag-only. Either a\n  session exited without releasing or the flag was set at dispatch for something that has not\n  started. Reconcile before dispatching or a second pickup contends with a lease nothing holds -\n  which matters more under a divided approach than a sequential one.\n\n  CONFIRM THE BRIEF NAMES THIS SPEC. Its last run under its own lease was briefed BUG-1420 rework,\n  produced no code of its own, and had a five-finding verdict about TASK-1289 recorded against it.\n  That is BUG-1510, and this spec is its worked instance. Dividing work multiplies the number of\n  lease-brief pairs nobody is comparing.\n\n3. WHAT I WOULD WANT TO SEE IN THE PLAN, given I have not seen it: which pieces are genuinely\nindependent, and which share the retention shape. Anything that reads or writes the format is one\npiece regardless of how many criteria it spans - criterion 1 plus BUG-1505's 7 and 10 are a single\nunit of work even though they sit in two specs. Comparison logic, wording, and fixtures divide\ncleanly; the format does not.\n\nSend it and I will check it rather than speculate further.\n",
+  "subject": "STORY-1391: I decided the BUG-1505 ownership collision (STORY-1391 owns the shape) - send me the divide-and-conquer plan and I will check it against three operational facts",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
