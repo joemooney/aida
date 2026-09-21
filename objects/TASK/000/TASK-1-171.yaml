@@ -34,7 +34,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T03:23:51.142028019Z
+modified_at: 2026-09-21T03:45:41.774131580Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -100,4 +100,35 @@ comments:
     ONE PROPERTY WORTH NOTING FOR WHOEVER IMPLEMENTS IT: this finding appears under both sub-rules because it quotes the damaged text. Any detector run over a store containing its own findings will match them. Exclude self-references by spec id, or accept a known constant of noise equal to the number of findings that quote holes.
   created_at: 2026-09-21T03:23:51.142028019Z
   modified_at: 2026-09-21T03:23:51.142028019Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c211-cd8e-7340-abe1-11100fb35487
+  author: joe
+  content: |-
+    [aida:advisor] THE VERIFICATION HALF, which belongs with this finding because marking-not-repairing creates the exact case that defeats a single instrument. Placed by the finding's holder; the synthesis is the reviewer seat's and the refinement about absence is the advisor's.
+
+    TWO INSTRUMENTS, NEITHER SUFFICIENT ALONE:
+
+        a count over the WHOLE ARTIFACT   tells you HOW MANY occurrences remain
+        the passage at EACH HIT           tells you WHAT EACH ONE IS
+
+    A passage shows what is present and can never show that nothing remains - so only a count establishes absence. But a count cannot distinguish an ASSERTION from a QUOTATION OF IT, and a repair that quotes what it repairs is the honest way to repair, which makes this the normal case rather than an edge.
+
+    BOTH FAILURE DIRECTIONS WERE HIT TONIGHT, ON THIS VERY FINDING'S SUBJECT MATTER:
+
+        a count returned TRUE after the phrase was removed, because the replacement quoted it -
+          read as a failed repair when the repair had succeeded
+        a count returned ONE when a second copy survived in a paragraph the editor had not read -
+          correctly alarming, and only the passage at that hit showed which kind it was
+        a count returned ONE on the final state, where the single hit IS the withdrawal quoting
+          what it withdraws - the repair had landed
+
+    Three readings, three different truths, same number. The count alarms and the passage classifies; run them in that order.
+
+    AND THE FIRST-PASS FAILURE WAS NOT A VERIFICATION FAILURE, which is the sharper point and the reviewer's. The verification worked - it is what caught the surviving copy. What failed was one step earlier: the editor decided WHERE TO CUT based on a part of the artifact they had read, and the second copy was in a part they had not. The edit was then correct within the scope it was given.
+
+    So no amount of checking the edit would have found it, and "read the whole thing before editing" is the wrong lesson because it is unbounded. The bounded version: AN EDIT'S SCOPE IS A CLAIM ABOUT THE ARTIFACT, and it needs the same whole-artifact count as the result does - before choosing where to cut, not only after cutting.
+
+    WHY THIS BELONGS ON THIS FINDING SPECIFICALLY. Criterion 1 here requires holes to be MARKED rather than reconstructed, because the eaten text is unrecoverable. A marking is a repair that quotes its own damage. So every remediation this spec produces will be one of the cases where the count alarms and only the passage clears it, and an implementer verifying their sweep by count alone will read correct markings as failed repairs.
+  created_at: 2026-09-21T03:45:41.774131580Z
+  modified_at: 2026-09-21T03:45:41.774131580Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
