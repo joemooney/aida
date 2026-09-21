@@ -116,6 +116,12 @@ pub struct RecordedVerdict {
     pub review_comment: Option<String>,
     /// Optional structured findings, preserved when a newer reviewer writes it.
     pub findings: Vec<String>,
+    /// STORY-1391: findings that also appeared in the PREVIOUS round. Empty on
+    /// a first round, and empty when every finding is new. Populated by
+    /// [`parse_recorded_verdict`] from the retained `rounds`, so every caller
+    /// that already reads a verdict gets the signal without a new argument.
+    // trace:STORY-1391 | ai:claude
+    pub surviving_findings: Vec<String>,
 }
 
 /// Path of the per-spec verdict file. Spec ids are upper-cased so
@@ -140,7 +146,7 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
             .map(str::to_string)
     };
     let raw = str_field("verdict")?;
-    let findings = obj
+    let findings: Vec<String> = obj
         .get("findings")
         .and_then(|v| v.as_array())
         .map(|items| {
@@ -164,8 +170,41 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         review_comment: str_field("review_comment")
             .or_else(|| str_field("comment_body"))
             .or_else(|| str_field("body")),
+        surviving_findings: surviving_against_previous_round(obj, &findings),
         findings,
     })
+}
+
+/// STORY-1391: the findings in `current` that also appeared in the most recent
+/// archived round. Shared by [`parse_recorded_verdict`] and
+/// [`findings_surviving_round`] so the two can never disagree about what
+/// "survived" means.
+// trace:STORY-1391 | ai:claude
+fn surviving_against_previous_round(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    current: &[String],
+) -> Vec<String> {
+    if current.is_empty() {
+        return Vec::new();
+    }
+    let previous: Vec<String> = obj
+        .get("rounds")
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.last())
+        .and_then(|r| r.get("findings"))
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    current
+        .iter()
+        .filter(|f| previous.iter().any(|p| p == *f))
+        .cloned()
+        .collect()
 }
 
 /// Render the review delta a rework implementer must address.
@@ -238,6 +277,24 @@ pub fn rework_findings_comment(
     out.push_str("\nFindings:");
     for (idx, item) in items.iter().enumerate() {
         out.push_str(&format!("\n{}. {}", idx + 1, item));
+    }
+    // STORY-1391: a finding that survives a round is evidence about the BRIEF,
+    // not about the implementer. The wording below is load-bearing and is the
+    // spec's central point: an implementer-performance framing produces the
+    // escalating firmness that demonstrably failed three times, so this says
+    // what to DO — establish implementability — and never says "again".
+    // trace:STORY-1391 | ai:claude
+    if !verdict.surviving_findings.is_empty() {
+        out.push_str("\nSurvived the previous round:");
+        for item in &verdict.surviving_findings {
+            out.push_str(&format!("\n- {item}"));
+        }
+        out.push_str(
+            "\nThese were raised before and are unchanged. Restating them more firmly will not \
+             help: establish whether each can be done AS WRITTEN. Supply the missing mechanism \
+             (a constant, a helper, a terminating definition), split the finding into parts that \
+             can be done, or say explicitly that it is blocked and why.",
+        );
     }
     // trace:TASK-1190 | ai:codex
     out.push_str(
@@ -353,26 +410,7 @@ pub fn findings_surviving_round(body: &str) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default();
-    if current.is_empty() {
-        return Vec::new();
-    }
-    let previous: Vec<String> = obj
-        .get("rounds")
-        .and_then(|v| v.as_array())
-        .and_then(|a| a.last())
-        .and_then(|r| r.get("findings"))
-        .and_then(|v| v.as_array())
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str())
-                .map(|s| s.trim().to_string())
-                .collect()
-        })
-        .unwrap_or_default();
-    current
-        .into_iter()
-        .filter(|f| previous.iter().any(|p| p == f))
-        .collect()
+    surviving_against_previous_round(&obj, &current)
 }
 
 pub fn record_verdict(

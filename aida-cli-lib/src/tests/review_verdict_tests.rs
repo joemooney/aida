@@ -18,6 +18,7 @@ fn rc(kind_raw: &str, sha: Option<&str>) -> RecordedVerdict {
         comment_url: None,
         review_comment: None,
         findings: Vec::new(),
+        surviving_findings: Vec::new(),
     }
 }
 
@@ -516,4 +517,86 @@ fn a_finding_fixed_then_regressed_is_not_reported_as_surviving() {
         findings_surviving_round(&body).is_empty(),
         "round 3 repeats round 1, not round 2 — that is a regression, not a survivor"
     );
+}
+
+// STORY-1391 criteria 2 and 3: the surviving-finding signal must REACH the
+// rework prompt, and its wording is load-bearing. The spec exists because
+// escalating firmness on an unimplementable requirement failed three times, so
+// the text must say what to DO — establish implementability — and must not read
+// as an implementer-performance complaint.
+// trace:STORY-1391 | ai:claude
+#[test]
+fn the_rework_prompt_carries_surviving_findings_and_says_what_to_do() {
+    let tmp = tempfile::tempdir().unwrap();
+    for (sha, findings) in [
+        ("aaa1111", vec!["share the marker constant", "add a test"]),
+        ("bbb2222", vec!["share the marker constant"]),
+    ] {
+        record_verdict(
+            tmp.path(),
+            "PR-6",
+            Some("RequestChanges"),
+            Some(sha),
+            Some("b"),
+            None,
+            &findings.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            "reviewer",
+        )
+        .unwrap();
+    }
+    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-6")).unwrap();
+    let verdict = parse_recorded_verdict(&body).expect("verdict parses");
+
+    // criterion 2: parse carries the signal, so every existing caller gets it
+    assert_eq!(
+        verdict.surviving_findings,
+        vec!["share the marker constant".to_string()]
+    );
+
+    let prompt = rework_findings_comment("STORY-9", "PR #6", &verdict).expect("blocking verdict");
+    assert!(
+        prompt.contains("Survived the previous round"),
+        "the signal must reach the implementer, not just the struct"
+    );
+    assert!(
+        prompt.contains("share the marker constant"),
+        "the surviving finding is named"
+    );
+
+    // criterion 3: says what to DO, and does not blame
+    assert!(
+        prompt.contains("AS WRITTEN"),
+        "must direct at implementability, not at effort"
+    );
+    for blaming in ["again", "still", "failed to", "you did not"] {
+        assert!(
+            !prompt.to_lowercase().contains(blaming),
+            "performance framing `{blaming}` produces the escalating firmness \
+             this spec exists to prevent"
+        );
+    }
+}
+
+// A first round must produce no signal at all — a false survivor sends someone
+// to rewrite a brief that was fine.
+// trace:STORY-1391 | ai:claude
+#[test]
+fn a_first_round_rework_prompt_carries_no_survival_signal() {
+    let tmp = tempfile::tempdir().unwrap();
+    record_verdict(
+        tmp.path(),
+        "PR-7",
+        Some("RequestChanges"),
+        Some("aaa1111"),
+        Some("b"),
+        None,
+        &["share the marker constant".to_string()],
+        "reviewer",
+    )
+    .unwrap();
+    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-7")).unwrap();
+    let verdict = parse_recorded_verdict(&body).expect("verdict parses");
+    assert!(verdict.surviving_findings.is_empty());
+    let prompt = rework_findings_comment("STORY-9", "PR #7", &verdict).expect("blocking verdict");
+    assert!(!prompt.contains("Survived the previous round"));
 }
