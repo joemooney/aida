@@ -2,13 +2,246 @@ id: 01a0c242-58c6-7b01-8deb-4ab148eacf95
 spec_id: BUG-1522
 agreed_id: BUG-1522
 title: The rework no-op guard is checked on only one of four implementer-advance paths, and a rework on an already-open PR never takes that path
-description: "The rework no-op guard is consulted on exactly ONE of the four code paths that advance the implementer phase, and a rework round on an ALREADY-OPEN PR does not take that path.\n\nIn aida-cli-lib/src/auto_complete.rs, the implementer phase arms the guard once (begin_rework_guard, line 3616) and then advances via four branches. Only one checks it:\n\n  ~3623  capture_phase_done_pr + emit_done                      NO guard check\n   3681  Punted -> PuntFlow::Proceed: capture + emit_done        NO guard check\n   3689  PrOpened: capture, THEN rework_no_op_failure, emit_done  guard CHECKED\n   3717  AlreadyMerged: emit_done                                NO guard check\n\nrework_no_op_failure itself is correct -- it compares the PR head before and after and returns a ReworkNoOp failure unless content changed. It is simply not reached on three of four exits.\n\nWHY THAT DEFEATS THE GUARD EXACTLY WHEN IT IS NEEDED: the guard exists for a REWORK round, which by definition runs against a PR that is ALREADY OPEN. An implementer in that situation does not open a PR, so it cannot return PrOpened -- the one outcome that checks the guard. The guard is wired to the single case it was not written for.\n\nOBSERVED, from .aida/events.jsonl, on BUG-1460 / PR #2034:\n\n  04:30:23  PhaseEntered idx=1 implementer  vendor=codex attempt=1\n  04:30:25  PhaseEntered idx=2 ci\n  04:30:28  PhaseDonePr  pr=2034\n  04:32:17  PhaseEntered idx=1 implementer\n  04:32:39  PhaseEntered idx=2 ci\n  04:32:41  PhaseDonePr  pr=2034\n\nTwo implementer phases, two and twenty-two seconds long, no commit produced. No SpecShelved event on either. The only shelves on this spec are from 22:27:52 and 23:13:22, both the original reviewer rounds.\n\nPR #2034 head is still 8f4b6c85a0, which is the exact sha the CHANGES REQUESTED verdict in .aida/review-verdicts/PR-2034.json was recorded against. So the pipeline advanced an unchanged, already-refused head into CI and on toward the reviewer, twice, and reported it as phase completion.\n\nThe arming preconditions were all satisfied, which is why this is a wiring defect and not a detection one: branch bug-1460-work yields BUG-1460 through rework_pr_head_matches_spec, and blocking_rework_verdict resolves the PR-keyed blocking verdict since BUG-1445 landed.\n\nCONSEQUENCE: this is the engine of the loop that has consumed the night. A refused spec is redispatched, the implementer no-ops, the guard is bypassed, CI re-runs green on an unchanged head, the reviewer is handed the same sha it already refused and refuses it again. Each iteration costs a full review cycle and converges on nothing. The advisor probed ONE spec before dispatching fifteen and caught it; fifteen would have been fifteen false successful routings.\n\nNOT CONFIRMED, and deliberately not asserted: which ImplementerOutcome variant the BUG-1460 runs actually returned. The evidence establishes that the run advanced without the guard firing, which is consistent with any of the three unchecked branches. Whoever fixes this should confirm the variant rather than trust this inference -- it changes nothing about the fix, which is to check the guard on every advancing path, but it matters for the regression test.\n\nACCEPTANCE\n1. rework_no_op_failure is consulted on EVERY path that advances past the implementer\n   phase, not only PrOpened. THE ARMS ARE ENUMERATED BELOW AND THE COUNT IS SIX, NOT\n   FOUR. Verified in code by the reviewer and re-verified by the driver advisor\n   2026-09-20 22:08 against main at 0b474a66d1. rework_no_op_failure has exactly ONE\n   production call site, auto_complete.rs:3689 (1372 is the trait method, 6497 the test\n   mock). The match on run_implementer has six arms:\n\n     3621  Err(f)                                   UNGUARDED\n     3665  Ok(ImplementerOutcome::Punted)           UNGUARDED\n     3686  Ok(ImplementerOutcome::PrOpened)         GUARDED  (the guard is at 3689)\n     3707  Ok(ImplementerOutcome::AlreadyMerged)    UNGUARDED\n     3728  Ok(ImplementerOutcome::Inconclusive)     UNGUARDED\n     3753  Ok(ImplementerOutcome::Held)             UNGUARDED\n\n   INCONCLUSIVE AND HELD ARE NAMED HERE BECAUSE THEY WERE MISSED. The original report\n   named three unguarded arms and mislabelled a fourth (3717 is inside the PrOpened\n   block, AFTER the guard; AlreadyMerged is 3707). Inconclusive and Held are the\n   \"could not determine what happened\" shapes - precisely where a silent no-op is most\n   likely and a guard most needed. A fix written against three arms leaves the two most\n   dangerous ones open, and both reviewing seats would call it done.\n\n   Prefer one check at the single point where the phase advances over six call sites\n   that can drift apart again. A fix is NOT complete while any arm that advances the\n   pipeline reaches phase 2 without the check.\n2. A rework round against an already-open PR whose head is unchanged produces a ReworkNoOp failure and a SpecShelved event, for each ImplementerOutcome variant that can advance.\n3. A test per advancing variant asserts the guard fires; a test asserts a genuine new commit still passes, so the fix cannot be a blanket refusal.\n4. Confirm and record which variant the already-open-PR rework path actually returns.\n\n5. THE GUARD'S PREDICATE IS \"DID THIS BRANCH MOVE PAST THE SHA I REFUSED\", NOT \"DID A\n   HEAD MOVE\". Added by the driver advisor 2026-09-20 after BUG-1527, which this\n   guard in its current form would NOT catch: a drain dispatched for BUG-1442 bound its\n   phase to BUG-1485's PR #2030, whose head genuinely moved (8ba48f5b98 -> 05969aa397)\n   with a genuine commit. Any predicate of the form \"a PR opened\" or \"a head moved\"\n   passes that case clean while the dispatched spec's own branch sat untouched.\n   The guard must compare against the DISPATCHED spec's branch, and the comparison\n   point is the sha the refusal was recorded against.\n6. The inputs for criterion 5 already exist and should be read rather than recomputed:\n   the review verdict records carry reviewed_sha and reviewed_branch. Consulting the\n   verdict rather than the PR also makes the guard correct when a spec has several PRs\n   or a PR is re-pointed. Reviewer's observation, 2026-09-20.\n7. A test drives an advance in which SOME head moved but the dispatched spec's branch\n   did not, and asserts the guard fires. Criterion 3's \"genuine new commit passes\" test\n   must use a commit on the DISPATCHED spec's branch, or it will pass vacuously against\n   criterion 5.\n\nNOTE ON THE CORPUS THIS PREDICATE READS (driver advisor, 2026-09-20). Two of 53\nspec-keyed verdict files are Completed specs whose LATEST verdict is still a refusal -\nreworked, merged, and never re-recorded as approved. So \"does this spec carry an\noutstanding refusal?\" currently answers yes for work that shipped weeks ago. A guard\nbuilt on criterion 6 inherits that. It is small (2 of 53) and is being filed separately;\nthis note exists so the fixer does not discover it as a surprise mid-implementation.\n\n\n8. THE Err ARM AT 3621 IS BUG-1524'S PATH, and this is code evidence for a pairing that\n   previously rested on log evidence alone. That arm calls\n   recover_phase1_failure_with_open_pr (3622) and sets start_phase = reentry_phase\n   (3626): phase 1 fails, the failure is recovered as an open-PR re-entry, the pipeline\n   continues - with no no-op check on the way through. So the arm BUG-1524 travels is\n   one of the five this spec does not guard. Fixing this spec's criterion 1 removes\n   BUG-1524's SILENCE but not BUG-1524's cause; the two remain separate repairs.\n   Reviewer's finding, 2026-09-20; re-verified by the driver advisor.\n\n9. THE VERDICT CORPUS CANNOT ANSWER CRITERION 6 FOR MOST OF ITS ENTRIES, AND THE GUARD\n   MUST SAY SO RATHER THAN PASS. Measured by the driver advisor 2026-09-20 22:16,\n   independently reproducing the reviewer's figures:\n\n     total verdict files                              556\n     carrying a sha under ANY of the three key names  127  (22%)\n     carrying no sha at all                           429  (77%)\n     recorded in the last 24h                          67, of which 11 have no sha\n\n   Criterion 6 tells an implementer to read reviewed_sha. For 429 of 556 files that key\n   is absent, so the comparison \"did this branch move past the sha I refused\" cannot be\n   evaluated. A guard that treats an unreadable verdict as \"no refusal to compare\n   against\" passes silently Ã¢Â\x80Â\x94 which is the exact failure this whole spec exists to stop,\n   reintroduced one layer down.\n\n   So: a verdict with no recorded sha is UNKNOWN, not clear. The guard must refuse or\n   escalate on unknown, never advance. Absent evidence is not good evidence (PRIN-5).\n\n   The recent slice is the workable one Ã¢Â\x80Â\x94 84% of the last 24h carry a sha Ã¢Â\x80Â\x94 so the\n   predicate is viable for live work. It is the legacy majority that must not read as\n   permission. BUG-1466 is the spec that makes provenance reach the corpus; until it\n   lands, criterion 9 is what keeps this guard honest without it.\n\"\nexecution_mode: drive\nrelationships[1]{rel,id,title}:\n  Related,BUG-1466,\"aida review record --pr writes a PR handshake with no provenance: reviewed_sha, reviewed_branch, recorded_at and recorded_by are all dropped (452 of 481 files affected)\n\nCORRECTION TO THE DENOMINATOR ABOVE — THE 77% IS THE WRONG NUMBER FOR SIZING THIS\nCRITERION, and reading it as the blast radius leads to the opposite conclusion from the\none the evidence supports. Reviewer's correction 2026-09-20 22:19, re-measured by the\ndriver advisor and identical:\n\n    WHOLE CORPUS            127/556  have a sha   23%   <- BUG-1466's coverage question\n    SPEC-KEYED               43/53   have a sha   81%   <- what THIS guard reads\n    PR-KEYED, OPEN PRs       16/21   have a sha   76%   <- what BUG-1531's hint reads\n\nA live guard never reads the whole corpus. It reads the verdict for the spec or PR in\nfront of it. The 429 missing are overwhelmingly closed, legacy, PR-keyed files no live\nguard will consult. 77% is the right figure for \"can retention reach the corpus\"; it is\nthe wrong figure for \"how often will this guard hit unknown\".\n\nTHE OPERATIONAL RATE IS ROUGHLY ONE IN FOUR AND IT IS NAMEABLE. Five open PRs carry a\nverdict with no sha, so these are the cases where this criterion refuses TODAY:\n\n    PR-1984   PR-1998   PR-2009   PR-2039   PR-2040\n\nVerified by the driver advisor 22:21 against the open-PR list.\n\nWHY THIS ARGUES FOR KEEPING THE CRITERION HARD RATHER THAN SOFTENING IT. Sized against\n77%, \"refuse or escalate on unknown\" reads as \"the guard refuses most of the time\",\nwhich invites softening — and softening is precisely what reintroduces the silence this\nspec exists to remove. Sized against five named PRs it is survivable and specific, and\nan implementer can check the behaviour against each one. Do not soften this criterion on\nthe strength of the corpus-wide figure.\n\"\nexecution_mode: drive\nrelationships[1]{rel,id,title}:\n  Related,BUG-1466,\"aida review record --pr writes a PR handshake with no provenance: reviewed_sha, reviewed_branch, recorded_at and recorded_by are all dropped (452 of 481 files affected)\n\n10. A REBASE ADVANCES THE HEAD WITHOUT REWORKING ANYTHING, AND THE PREDICATE CANNOT SEE\n    THE DIFFERENCE. Raised by the driver advisor 2026-09-20 22:26 after the product seat\n    disclosed running `aida pr rebase 1989` plus a force-push.\n\n    First, the safety question they asked, answered from code: `aida pr rebase` does NOT\n    share the merge-hold hazard. crate::merge_hold::clear_hold has exactly two call\n    sites — pr_cmd.rs:1804 (the `pr ship` release) and lib.rs:29735/29764 (the explicit\n    `aida merge-hold clear` command). pr_rebase_handler (pr_cmd.rs:176) is neither. It\n    rebases and force-pushes without merging and without touching a marker.\n\n    But it moves the head, and that is a problem for THIS criterion. Criterion 6 asks\n    \"did this branch move past the sha the refusal was recorded against\". A rebase\n    force-push moves every commit to a new sha, so after a rebase the head no longer\n    equals reviewed_sha — with no rework having occurred, no finding addressed, and\n    nothing new reviewed. The predicate reads it as progress.\n\n    This is not hypothetical maintenance work: rebasing a stale-based PR is the\n    documented response to a CI failure on unrelated tests, so refused PRs get rebased\n    routinely, and every one of those silently satisfies a naive head-moved test.\n\n    The predicate therefore cannot be equality-against-a-sha alone. Candidate\n    discriminators, none verified, for whoever implements it:\n      - compare PATCH-IDs rather than shas: a pure rebase preserves them, a rework does\n        not. This repo already uses patch-id comparison for exactly this class of\n        question.\n      - require a verdict recorded AT the current head, rather than inferring rework\n        from the head having changed. This is stronger and is what criterion 4 of\n        BUG-1532 already asks for.\n\n    *** CORRECTED 2026-09-20 22:31. THE DISCRIMINATOR FIRST WRITTEN HERE — \"require a\n    verdict recorded AT the current head\" — INVERTS THIS GUARD AND WOULD REFUSE EVERY\n    ROUND, INCLUDING EVERY GENUINE ONE. Caught by the reviewer; verified by the driver\n    advisor at auto_complete.rs:3686-3700 before correcting. ***\n\n    WHY IT INVERTS. This guard is consulted at auto_complete.rs:3689, inside\n    Ok(ImplementerOutcome::PrOpened), immediately after capture_phase_done_pr() and\n    BEFORE emit_done(Phase::Implementer, ...). That is the END OF THE IMPLEMENTER PHASE.\n    CI is phase 2; review is later still. So at the instant this guard runs there is BY\n    CONSTRUCTION no verdict at the new head — the reviewer has not run. Requiring one\n    makes the predicate false for every round and the guard refuses all of them.\n\n    The guard asks \"did the implementer produce anything\". A verdict-at-head predicate\n    asks \"has this been reviewed\". Different questions at different pipeline positions,\n    and the earlier correction moved a merge-time predicate into a pre-review position.\n\n    SO THE DISCRIMINATOR MUST BE CONTENT, NOT REVIEW STATE, because review state does not\n    exist yet. A rebase produces new shas for the SAME patches; a round produces new\n    patches. Two workable forms, reviewer's, neither verified:\n      - patch-id over the commits between base and head, compared against the set\n        recorded at refusal time: a pure rebase preserves patch-ids, a rework does not.\n      - cheaper and nearly as good, the TREE hash: a pure rebase onto an unchanged base\n        leaves the tree identical, and onto a moved base it differs only by what main\n        contributed. Comparing the head tree against the refused head's tree answers\n        \"did anything the implementer controls change\" with no review state at all.\n\n    Patch-ids were ruled out here earlier as fiddly. That was a preference, not an\n    argument, and the binding constraint overrides it: whatever this guard uses must be\n    answerable AT THE MOMENT IT RUNS, and review state is not.\n\n    THE INTENT IS UNCHANGED AND STILL BINDING — a moved head is not evidence of rework.\n    Only the discriminator changes, and it splits by guard POSITION:\n\n      BUG-1522  (pre-review, this spec)  content changed since the refused head —\n                                         patch-id or tree — not head identity, not\n                                         review state\n      BUG-1531  (hint time)              no ship hint for a head with an unresolved\n                                         refusal and no newer verdict\n      BUG-1532  (merge time)             a refusal hold clears only on a fresh verdict\n                                         at the current head\n\n    So it is ONE INTENT WITH THREE POSITION-APPROPRIATE TESTS, not one shared predicate.\n    Any earlier line in this spec describing it as \"the same predicate, third consumer\"\n    is superseded by this paragraph.\n\n    ONE QUESTION LEFT FOR THE IMPLEMENTER, which the reviewer could not settle from the\n    call site: whether the PrOpened arm can be re-entered on a later pass with a review\n    already recorded for the round — the Err arm at 3621 does set start_phase and\n    re-enter. On reading, the implementer phase still precedes review on any re-entry, so\n    the conclusion above appears to hold. Confirm it rather than inherit it.\n"
+description: |
+  The rework no-op guard is consulted on exactly ONE of the four code paths that advance the implementer phase, and a rework round on an ALREADY-OPEN PR does not take that path.
+
+  In aida-cli-lib/src/auto_complete.rs, the implementer phase arms the guard once (begin_rework_guard, line 3616) and then advances via four branches. Only one checks it:
+
+    ~3623  capture_phase_done_pr + emit_done                      NO guard check
+     3681  Punted -> PuntFlow::Proceed: capture + emit_done        NO guard check
+     3689  PrOpened: capture, THEN rework_no_op_failure, emit_done  guard CHECKED
+     3717  AlreadyMerged: emit_done                                NO guard check
+
+  rework_no_op_failure itself is correct -- it compares the PR head before and after and returns a ReworkNoOp failure unless content changed. It is simply not reached on three of four exits.
+
+  WHY THAT DEFEATS THE GUARD EXACTLY WHEN IT IS NEEDED: the guard exists for a REWORK round, which by definition runs against a PR that is ALREADY OPEN. An implementer in that situation does not open a PR, so it cannot return PrOpened -- the one outcome that checks the guard. The guard is wired to the single case it was not written for.
+
+  OBSERVED, from .aida/events.jsonl, on BUG-1460 / PR #2034:
+
+    04:30:23  PhaseEntered idx=1 implementer  vendor=codex attempt=1
+    04:30:25  PhaseEntered idx=2 ci
+    04:30:28  PhaseDonePr  pr=2034
+    04:32:17  PhaseEntered idx=1 implementer
+    04:32:39  PhaseEntered idx=2 ci
+    04:32:41  PhaseDonePr  pr=2034
+
+  Two implementer phases, two and twenty-two seconds long, no commit produced. No SpecShelved event on either. The only shelves on this spec are from 22:27:52 and 23:13:22, both the original reviewer rounds.
+
+  PR #2034 head is still 8f4b6c85a0, which is the exact sha the CHANGES REQUESTED verdict in .aida/review-verdicts/PR-2034.json was recorded against. So the pipeline advanced an unchanged, already-refused head into CI and on toward the reviewer, twice, and reported it as phase completion.
+
+  The arming preconditions were all satisfied, which is why this is a wiring defect and not a detection one: branch bug-1460-work yields BUG-1460 through rework_pr_head_matches_spec, and blocking_rework_verdict resolves the PR-keyed blocking verdict since BUG-1445 landed.
+
+  CONSEQUENCE: this is the engine of the loop that has consumed the night. A refused spec is redispatched, the implementer no-ops, the guard is bypassed, CI re-runs green on an unchanged head, the reviewer is handed the same sha it already refused and refuses it again. Each iteration costs a full review cycle and converges on nothing. The advisor probed ONE spec before dispatching fifteen and caught it; fifteen would have been fifteen false successful routings.
+
+  NOT CONFIRMED, and deliberately not asserted: which ImplementerOutcome variant the BUG-1460 runs actually returned. The evidence establishes that the run advanced without the guard firing, which is consistent with any of the three unchecked branches. Whoever fixes this should confirm the variant rather than trust this inference -- it changes nothing about the fix, which is to check the guard on every advancing path, but it matters for the regression test.
+
+  ACCEPTANCE
+  1. rework_no_op_failure is consulted on EVERY path that advances past the implementer
+     phase, not only PrOpened. THE ARMS ARE ENUMERATED BELOW AND THE COUNT IS SIX, NOT
+     FOUR. Verified in code by the reviewer and re-verified by the driver advisor
+     2026-09-20 22:08 against main at 0b474a66d1. rework_no_op_failure has exactly ONE
+     production call site, auto_complete.rs:3689 (1372 is the trait method, 6497 the test
+     mock). The match on run_implementer has six arms:
+
+       3621  Err(f)                                   UNGUARDED
+       3665  Ok(ImplementerOutcome::Punted)           UNGUARDED
+       3686  Ok(ImplementerOutcome::PrOpened)         GUARDED  (the guard is at 3689)
+       3707  Ok(ImplementerOutcome::AlreadyMerged)    UNGUARDED
+       3728  Ok(ImplementerOutcome::Inconclusive)     UNGUARDED
+       3753  Ok(ImplementerOutcome::Held)             UNGUARDED
+
+     INCONCLUSIVE AND HELD ARE NAMED HERE BECAUSE THEY WERE MISSED. The original report
+     named three unguarded arms and mislabelled a fourth (3717 is inside the PrOpened
+     block, AFTER the guard; AlreadyMerged is 3707). Inconclusive and Held are the
+     "could not determine what happened" shapes - precisely where a silent no-op is most
+     likely and a guard most needed. A fix written against three arms leaves the two most
+     dangerous ones open, and both reviewing seats would call it done.
+
+     Prefer one check at the single point where the phase advances over six call sites
+     that can drift apart again. A fix is NOT complete while any arm that advances the
+     pipeline reaches phase 2 without the check.
+  2. A rework round against an already-open PR whose head is unchanged produces a ReworkNoOp failure and a SpecShelved event, for each ImplementerOutcome variant that can advance.
+  3. A test per advancing variant asserts the guard fires; a test asserts a genuine new commit still passes, so the fix cannot be a blanket refusal.
+  4. Confirm and record which variant the already-open-PR rework path actually returns.
+
+  5. THE GUARD'S PREDICATE IS "DID THIS BRANCH MOVE PAST THE SHA I REFUSED", NOT "DID A
+     HEAD MOVE". Added by the driver advisor 2026-09-20 after BUG-1527, which this
+     guard in its current form would NOT catch: a drain dispatched for BUG-1442 bound its
+     phase to BUG-1485's PR #2030, whose head genuinely moved (8ba48f5b98 -> 05969aa397)
+     with a genuine commit. Any predicate of the form "a PR opened" or "a head moved"
+     passes that case clean while the dispatched spec's own branch sat untouched.
+     The guard must compare against the DISPATCHED spec's branch, and the comparison
+     point is the sha the refusal was recorded against.
+  6. The inputs for criterion 5 already exist and should be read rather than recomputed:
+     the review verdict records carry reviewed_sha and reviewed_branch. Consulting the
+     verdict rather than the PR also makes the guard correct when a spec has several PRs
+     or a PR is re-pointed. Reviewer's observation, 2026-09-20.
+  7. A test drives an advance in which SOME head moved but the dispatched spec's branch
+     did not, and asserts the guard fires. Criterion 3's "genuine new commit passes" test
+     must use a commit on the DISPATCHED spec's branch, or it will pass vacuously against
+     criterion 5.
+
+  NOTE ON THE CORPUS THIS PREDICATE READS (driver advisor, 2026-09-20). Two of 53
+  spec-keyed verdict files are Completed specs whose LATEST verdict is still a refusal -
+  reworked, merged, and never re-recorded as approved. So "does this spec carry an
+  outstanding refusal?" currently answers yes for work that shipped weeks ago. A guard
+  built on criterion 6 inherits that. It is small (2 of 53) and is being filed separately;
+  this note exists so the fixer does not discover it as a surprise mid-implementation.
+
+
+  8. THE Err ARM AT 3621 IS BUG-1524'S PATH, and this is code evidence for a pairing that
+     previously rested on log evidence alone. That arm calls
+     recover_phase1_failure_with_open_pr (3622) and sets start_phase = reentry_phase
+     (3626): phase 1 fails, the failure is recovered as an open-PR re-entry, the pipeline
+     continues - with no no-op check on the way through. So the arm BUG-1524 travels is
+     one of the five this spec does not guard. Fixing this spec's criterion 1 removes
+     BUG-1524's SILENCE but not BUG-1524's cause; the two remain separate repairs.
+     Reviewer's finding, 2026-09-20; re-verified by the driver advisor.
+
+  9. THE VERDICT CORPUS CANNOT ANSWER CRITERION 6 FOR MOST OF ITS ENTRIES, AND THE GUARD
+     MUST SAY SO RATHER THAN PASS. Measured by the driver advisor 2026-09-20 22:16,
+     independently reproducing the reviewer's figures:
+
+       total verdict files                              556
+       carrying a sha under ANY of the three key names  127  (22%)
+       carrying no sha at all                           429  (77%)
+       recorded in the last 24h                          67, of which 11 have no sha
+
+     Criterion 6 tells an implementer to read reviewed_sha. For 429 of 556 files that key
+     is absent, so the comparison "did this branch move past the sha I refused" cannot be
+     evaluated. A guard that treats an unreadable verdict as "no refusal to compare
+     against" passes silently — which is the exact failure this whole spec exists to stop,
+     reintroduced one layer down.
+
+     So: a verdict with no recorded sha is UNKNOWN, not clear. The guard must refuse or
+     escalate on unknown, never advance. Absent evidence is not good evidence (PRIN-5).
+
+     The recent slice is the workable one — 84% of the last 24h carry a sha — so the
+     predicate is viable for live work. It is the legacy majority that must not read as
+     permission. BUG-1466 is the spec that makes provenance reach the corpus; until it
+     lands, criterion 9 is what keeps this guard honest without it.
+  "
+  execution_mode: drive
+  relationships[1]{rel,id,title}:
+    Related,BUG-1466,"aida review record --pr writes a PR handshake with no provenance: reviewed_sha, reviewed_branch, recorded_at and recorded_by are all dropped (452 of 481 files affected)
+
+  CORRECTION TO THE DENOMINATOR ABOVE — THE 77% IS THE WRONG NUMBER FOR SIZING THIS
+  CRITERION, and reading it as the blast radius leads to the opposite conclusion from the
+  one the evidence supports. Reviewer's correction 2026-09-20 22:19, re-measured by the
+  driver advisor and identical:
+
+      WHOLE CORPUS            127/556  have a sha   23%   <- BUG-1466's coverage question
+      SPEC-KEYED               43/53   have a sha   81%   <- what THIS guard reads
+      PR-KEYED, OPEN PRs       16/21   have a sha   76%   <- what BUG-1531's hint reads
+
+  A live guard never reads the whole corpus. It reads the verdict for the spec or PR in
+  front of it. The 429 missing are overwhelmingly closed, legacy, PR-keyed files no live
+  guard will consult. 77% is the right figure for "can retention reach the corpus"; it is
+  the wrong figure for "how often will this guard hit unknown".
+
+  THE OPERATIONAL RATE IS ROUGHLY ONE IN FOUR AND IT IS NAMEABLE. Five open PRs carry a
+  verdict with no sha, so these are the cases where this criterion refuses TODAY:
+
+      PR-1984   PR-1998   PR-2009   PR-2039   PR-2040
+
+  Verified by the driver advisor 22:21 against the open-PR list.
+
+  WHY THIS ARGUES FOR KEEPING THE CRITERION HARD RATHER THAN SOFTENING IT. Sized against
+  77%, "refuse or escalate on unknown" reads as "the guard refuses most of the time",
+  which invites softening — and softening is precisely what reintroduces the silence this
+  spec exists to remove. Sized against five named PRs it is survivable and specific, and
+  an implementer can check the behaviour against each one. Do not soften this criterion on
+  the strength of the corpus-wide figure.
+  "
+  execution_mode: drive
+  relationships[1]{rel,id,title}:
+    Related,BUG-1466,"aida review record --pr writes a PR handshake with no provenance: reviewed_sha, reviewed_branch, recorded_at and recorded_by are all dropped (452 of 481 files affected)
+
+  10. A REBASE ADVANCES THE HEAD WITHOUT REWORKING ANYTHING, AND THE PREDICATE CANNOT SEE
+      THE DIFFERENCE. Raised by the driver advisor 2026-09-20 22:26 after the product seat
+      disclosed running `aida pr rebase 1989` plus a force-push.
+
+      First, the safety question they asked, answered from code: `aida pr rebase` does NOT
+      share the merge-hold hazard. crate::merge_hold::clear_hold has exactly two call
+      sites — pr_cmd.rs:1804 (the `pr ship` release) and lib.rs:29735/29764 (the explicit
+      `aida merge-hold clear` command). pr_rebase_handler (pr_cmd.rs:176) is neither. It
+      rebases and force-pushes without merging and without touching a marker.
+
+      But it moves the head, and that is a problem for THIS criterion. Criterion 6 asks
+      "did this branch move past the sha the refusal was recorded against". A rebase
+      force-push moves every commit to a new sha, so after a rebase the head no longer
+      equals reviewed_sha — with no rework having occurred, no finding addressed, and
+      nothing new reviewed. The predicate reads it as progress.
+
+      This is not hypothetical maintenance work: rebasing a stale-based PR is the
+      documented response to a CI failure on unrelated tests, so refused PRs get rebased
+      routinely, and every one of those silently satisfies a naive head-moved test.
+
+      The predicate therefore cannot be equality-against-a-sha alone. Candidate
+      discriminators, none verified, for whoever implements it:
+        - compare PATCH-IDs rather than shas: a pure rebase preserves them, a rework does
+          not. This repo already uses patch-id comparison for exactly this class of
+          question.
+        - require a verdict recorded AT the current head, rather than inferring rework
+          from the head having changed. This is stronger and is what criterion 4 of
+          BUG-1532 already asks for.
+
+      *** CORRECTED 2026-09-20 22:31. THE DISCRIMINATOR FIRST WRITTEN HERE — "require a
+      verdict recorded AT the current head" — INVERTS THIS GUARD AND WOULD REFUSE EVERY
+      ROUND, INCLUDING EVERY GENUINE ONE. Caught by the reviewer; verified by the driver
+      advisor at auto_complete.rs:3686-3700 before correcting. ***
+
+      WHY IT INVERTS. This guard is consulted at auto_complete.rs:3689, inside
+      Ok(ImplementerOutcome::PrOpened), immediately after capture_phase_done_pr() and
+      BEFORE emit_done(Phase::Implementer, ...). That is the END OF THE IMPLEMENTER PHASE.
+      CI is phase 2; review is later still. So at the instant this guard runs there is BY
+      CONSTRUCTION no verdict at the new head — the reviewer has not run. Requiring one
+      makes the predicate false for every round and the guard refuses all of them.
+
+      The guard asks "did the implementer produce anything". A verdict-at-head predicate
+      asks "has this been reviewed". Different questions at different pipeline positions,
+      and the earlier correction moved a merge-time predicate into a pre-review position.
+
+      SO THE DISCRIMINATOR MUST BE CONTENT, NOT REVIEW STATE, because review state does not
+      exist yet. A rebase produces new shas for the SAME patches; a round produces new
+      patches. Two workable forms, reviewer's, neither verified:
+        - patch-id over the commits between base and head, compared against the set
+          recorded at refusal time: a pure rebase preserves patch-ids, a rework does not.
+        - cheaper and nearly as good, the TREE hash: a pure rebase onto an unchanged base
+          leaves the tree identical, and onto a moved base it differs only by what main
+          contributed. Comparing the head tree against the refused head's tree answers
+          "did anything the implementer controls change" with no review state at all.
+
+      Patch-ids were ruled out here earlier as fiddly. That was a preference, not an
+      argument, and the binding constraint overrides it: whatever this guard uses must be
+      answerable AT THE MOMENT IT RUNS, and review state is not.
+
+      THE INTENT IS UNCHANGED AND STILL BINDING — a moved head is not evidence of rework.
+      Only the discriminator changes, and it splits by guard POSITION:
+
+        BUG-1522  (pre-review, this spec)  content changed since the refused head —
+                                           patch-id or tree — not head identity, not
+                                           review state
+        BUG-1531  (hint time)              no ship hint for a head with an unresolved
+                                           refusal and no newer verdict
+        BUG-1532  (merge time)             a refusal hold clears only on a fresh verdict
+                                           at the current head
+
+      So it is ONE INTENT WITH THREE POSITION-APPROPRIATE TESTS, not one shared predicate.
+      Any earlier line in this spec describing it as "the same predicate, third consumer"
+      is superseded by this paragraph.
+
+      ONE QUESTION LEFT FOR THE IMPLEMENTER, which the reviewer could not settle from the
+      call site: whether the PrOpened arm can be re-entered on a later pass with a review
+      already recorded for the round — the Err arm at 3621 does set start_phase and
+      re-enter. On reading, the implementer phase still precedes review on any re-entry, so
+      the conclusion above appears to hold. Confirm it rather than inherit it.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-21T05:36:02.539403910Z
+modified_at: 2026-09-21T05:36:34.419653646Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
