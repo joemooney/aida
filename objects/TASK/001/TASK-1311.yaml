@@ -1,0 +1,37 @@
+id: 01a0c243-713a-76f0-9169-2e25cb00e43e
+spec_id: TASK-1311
+agreed_id: TASK-1311
+title: Nothing owns moving a NeedsAttention spec back into flight, so shelved work leaves the drain and never re-enters it
+description: |
+  Split out of BUG-1470 acceptance criterion 4 by the driver advisor on 2026-09-20,
+  before PR #2035 merges. #2035 satisfies criterion 1 only; BUG-1470 is Done, so the
+  merge would auto-bump it Completed with this criterion unmet and unfiled.
+
+  THE GAP. EPIC-28 resilient drain parks a spec NeedsAttention and continues, which is
+  the right call for throughput. What is undefined is the return path. No role, job or
+  command owns the transition back. In practice it has been a human noticing, which is
+  the failure mode the presence-is-not-the-clock rule exists to forbid: the work waits
+  on an agent being awake rather than on the substrate.
+
+  This is the ownership question, deliberately filed separately from the two mechanical
+  siblings so it is not answered by adding another report. A report of shelved specs
+  already exists (aida findings list). What is missing is who acts on it and when.
+
+  ## Acceptance
+  1. A named owner exists for the NeedsAttention -> back-in-flight transition, recorded
+     where roles are defined rather than in prose.
+  2. The trigger is substrate-driven - a due job or a gate - not "an agent notices".
+  3. The cases that must NOT auto-return are enumerated and enforced: a spec shelved on
+     a design fork awaiting a human decision must not be re-dispatched into the same
+     fork, or the drain loops on it.
+  4. Re-entry records why the spec was considered ready, so a wrong return is auditable
+     rather than indistinguishable from a correct one.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T04:39:54.938488038Z
+modified_at: 2026-09-21T04:39:54.938488038Z
+req_type: Task
+tags:
+- parent:BUG-1470 lifecycle ownership severity:operational
