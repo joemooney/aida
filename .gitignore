@@ -166,3 +166,20 @@ __pycache__/
 # `.codex/skills/` is a scaffolded pack like `.claude/skills/` and is left
 # trackable for the same reason. trace:BUG-1511 | ai:claude
 /.codex/hooks.json
+
+# `.codex/hooks/` — the ten handler scripts the wiring above points at — is
+# IGNORED too, decided rather than left open. It is NOT tracked even though
+# `.claude/hooks/` carries the same ten script names, because the two are not
+# the same kind of object. `.claude/hooks/` is tracked as ten SYMLINKS into
+# `aida-core/templates/hooks/`, so those script bodies are in git exactly once
+# at their master, and its manifest (`.claude/settings.json`) is itself tracked
+# and uses portable `$CLAUDE_PROJECT_DIR` paths. The Codex side is generated
+# output: `scaffold_codex_hooks` WRITES COPIES of those same embedded masters,
+# so tracking them would add a second copy of already-tracked content — the
+# per-vendor forking that module's own header says the design exists to
+# prevent. And it would buy a fresh clone nothing: the only file that wires
+# these handlers is `.codex/hooks.json`, ignored just above, so the scaffolder
+# has to run regardless — and that one pass writes the handlers and the wiring
+# together. Untracked-and-unignored is the one state that is neither.
+# trace:BUG-1511 | ai:claude
+/.codex/hooks/
