@@ -1,0 +1,52 @@
+id: 01a0c1a6-767c-74f1-b8ef-177d7dd756b5
+spec_id: BUG-1507
+agreed_id: BUG-1507
+title: 'Four gates treat unknown, absent and did-not-run as consent: the preflight publishes when guards never ran, and a test pins it'
+description: |
+  Four gates in this codebase enumerate the values that mean STOP and let everything else fall through as GO. Unknown, absent and could-not-run all become consent. This is PRIN-5 expressed as a code pattern, and it is now frequent enough to be worth finding mechanically rather than one bug at a time.
+
+  THE INSTANCES, all verified 2026-09-20. This list is the deliverable - a fix that addresses the shape without addressing each site leaves the others exactly as they are.
+
+  1. THE PREFLIGHT GATE, PR #1972 / TASK-1289, the sharpest case because it gates publication.
+     decide() collects only GuardResult::Failed and lets `_ => None` swallow everything else, then
+     returns Open when that collection is empty. GuardResult::Skipped is produced for SEVEN distinct
+     conditions, not the three first reported: CI workflow missing, CI workflow unreadable, no
+     matching CI guard, resolved-guard skipped, worktree binary unavailable, guard timed out, guard
+     could not start. So every guard skipping yields Open, and a PR publishes on the strength of
+     guards that never ran - including the case where the CI workflow file itself is missing or
+     unreadable, which is precisely when publishing on "nothing failed" is least defensible.
+     A test then pins it by asserting a timeout yields Skipped, so the suite locks the wrong decision in.
+
+  2. THE AWAITING GATE, BUG-1481, aida-cli-lib/src/awaiting_you.rs.
+     `match pr.ci_rollup.as_deref() { Some("fail") | Some("pending") => return false, _ => {} }` -
+     the wildcard swallows None, so a PR whose CI state is unknown reads as ready for you.
+
+  3. THE VERDICT MATCH, BUG-1505.
+     A gate matching loosely on APPROVED accepts "APPROVED pending cross-platform green" and
+     "CONTENT APPROVED - MERGE WITHHELD FOR INDEPENDENCE", both of which mean do-not-merge.
+
+  4. THE COUNTEREXAMPLE, and it is the reason this is about DEFAULTS rather than matching.
+     Verdict::parse in PR #2001 normalises aggressively and falls through to None. None means no
+     verdict, which makes the PR sweep-eligible, which produces another review. Same function shape
+     as the three above, opposite default, and it fails toward more scrutiny instead of less.
+     Whoever fixes 1-3 should read 4 first.
+
+  WHY A SPEC RATHER THAN THREE BUGS. Each site is individually defensible to its author - enumerate what you know is bad, allow the rest - and the bug only appears when you ask what the unenumerated values are. Three independent authors wrote it in one codebase, and the one that got it right did so by choosing None as the fallthrough rather than by reasoning about the class. That is the signature of something a review cannot reliably catch and a lint can.
+
+  Acceptance:
+  1. Each of the three sites above refuses, or explicitly reports could-not-determine, when the value is unknown, absent, or the check did not run. Skipped is not passed. Unknown CI state is not ready. An unparseable verdict is not an approval.
+  2. The preflight gate distinguishes all three outcomes - passed, failed, and did not run - rather than two. State what publication does on did-not-run; the defensible answer is refuse, and if it is not refuse, say why in the code.
+  3. The test that pins the current preflight behaviour is corrected, not deleted, so it asserts the new decision. A test asserting a timeout yields Skipped is fine; a test asserting that Skipped permits Open is the defect.
+  4. Establish whether this is mechanically findable: a clippy lint, a grep-able pattern, or a type change that makes the unknown case unrepresentable. The strongest form is the type change - a three-state enum with no default arm - and if that is impractical say what was tried.
+  5. Each fix names PRIN-5 in a trace comment, so the next reader finds the principle rather than rediscovering the class.
+
+  NOT IN SCOPE: the verdict schema itself, which is BUG-1505, and the boundary design decision on TASK-1289, which is with the operator. This spec covers the decision function's treatment of unknowns wherever it appears.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T01:48:27.132082612Z
+modified_at: 2026-09-21T01:48:27.132082612Z
+req_type: Bug
+tags:
+- batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
