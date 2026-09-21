@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-21T04:49:09.918743295Z
+modified_at: 2026-09-21T04:59:28.448388256Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
@@ -109,4 +109,23 @@ comments:
   created_at: 2026-09-21T04:49:09.918743295Z
   modified_at: 2026-09-21T04:49:09.918743295Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c255-5940-7440-b31f-9d6c2bcf3874
+  author: joe
+  content: |-
+    CORRECTION to my earlier comment pairing this with BUG-1525. That pairing is WITHDRAWN. Verified independently after the reviewer challenged it:
+
+    1. No bare bug-1460 branch exists -- only bug-1460-work, locally and on both remotes. BUG-1525 never fired on this spec.
+    2. The phase driver never reads briefs. The only occurrence of the word brief in auto_complete.rs is inside a doc comment at line 1417. A drain-launched implementer never sees a Setup block, so BUG-1525 is a hand-dispatch hazard whose blast radius is the brief lane, not the drain lane.
+    3. My count of three silent rounds was wrong. Commit 2cb2c15c42 (test(drain): harden CI ordering regression) is committed 2026-09-20T21:42:38-07:00 = 04:42:38Z, thirty-four seconds BEFORE the 04:43:12Z PhaseDonePr I counted as the third no-op. That round produced work.
+
+    The evidence is TWO silent rounds followed by a successful one. That changes the diagnosis rather than trimming it: three-in-a-row reads as a systematic loop, two-then-success reads as a condition that cleared, and only the latter points at a cause.
+
+    THE CORRECT PAIR IS BUG-1524: a diverged local -work branch makes phase 1 REFUSE to launch, the drain treats that refusal as recoverable and continues from the CI gate onto the previous round green, then reports phase 1 complete with the head unchanged and no commit. That fits the two silent rounds exactly.
+
+    NOTHING IN THIS SPEC CHANGES. The finding here is that rework_no_op_failure is consulted only in the PrOpened arm (auto_complete.rs:3689) while the ~3623, 3681 and 3717 arms advance without it. That is verified by reading the code and is independent of what causes the unchanged head. This bug is the DETECTOR -- it is why the BUG-1524 refusal advanced silently instead of failing loudly. Its acceptance criteria stand as written.
+
+    Method note for whoever picks this up: I had the guard evidence and then attached a cause I had not checked. A single git ls-remote would have falsified the pairing before it was broadcast.
+  created_at: 2026-09-21T04:59:28.448388256Z
+  modified_at: 2026-09-21T04:59:28.448388256Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
