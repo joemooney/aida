@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:48:22.112145500Z
-modified_at: 2026-09-21T08:52:43.826344371Z
+modified_at: 2026-09-21T11:40:55.329802062Z
 req_type: Bug
 comments:
 - id: 01a0c32a-e6b2-7533-8f1c-d46c7421a528
@@ -70,4 +70,21 @@ comments:
     Reviewer's count of Review-PR specs by status at the time of filing, recorded as context rather than as a load-bearing number: Completed 150, Rejected 15, Approved 5, Draft 1 — 171 total.
   created_at: 2026-09-21T08:52:43.826344371Z
   modified_at: 2026-09-21T08:52:43.826344371Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c3c4-e2a1-79c0-99dc-888f619bea20
+  author: joe
+  content: |-
+    LIVE INSTANCE, still stuck at the time of writing — 2026-09-21 04:40.
+
+        STORY-1362  "Review PR-1986: [AI:codex] feat(roles): ship cold-session seat handoff pack (STORY-1351)"
+        status      draft
+        PR #1986    MERGED
+
+    It is sitting in the reviewer queue asking for a review of a PR that shipped. It cannot be resolved by `aida pull` — the stranded Review-PR sweep's filter is `Approved | InProgress`, which is this spec's whole subject — and it cannot be removed by either queue predicate: `aida queue gc` keys on the backing spec being archived/completed/rejected and this one is Draft, while `aida queue prune --merged` did not match it either. Both were run with --dry-run and both reported nothing.
+
+    SO THE ROW IS UNREACHABLE BY EVERY AUTOMATIC PATH AT ONCE, which is a sharper statement of this bug than the original filing: the sweep skips it because of its STATUS, and the queue cleaners skip it because its status is not terminal. Draft is simultaneously "too early for the sweep" and "too alive for the garbage collector".
+
+    WHY IT IS WORTH ATTACHING A LIVE INSTANCE RATHER THAN LEAVING THE CLASS: the complement criterion already recorded on this spec — consider every NON-TERMINAL status, expressed as "not in the terminal set", never as a list of statuses to include — is what fixes it. This row is the proof that the list-of-two form leaves something genuinely stranded rather than merely theoretically uncovered. An implementer can verify the fix against it directly: after the change, `aida pull` should resolve STORY-1362 to Completed, because #1986 merged.
+  created_at: 2026-09-21T11:40:55.329802062Z
+  modified_at: 2026-09-21T11:40:55.329802062Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
