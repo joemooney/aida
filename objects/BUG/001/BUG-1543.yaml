@@ -1,0 +1,46 @@
+id: 01a0c326-e860-72e0-9927-4ee2009900d7
+spec_id: BUG-1543
+agreed_id: BUG-1543
+title: TASK-1296's stranded Review-PR sweep skips Draft, so a review story left Draft by a failed queueing step is never resolved against its terminal PR
+description: |-
+  A NARROW GAP IN TASK-1296's OTHERWISE WORKING FIX, found by running the fix rather than by reading about it.
+
+  TASK-1296 ships `collect_stranded_review_pr_resolutions` (aida-cli-lib/src/lib.rs:63011), which rides `aida pull` and resolves a "Review PR-N" spec whose own PR reached a terminal state on the forge — merged closes it Completed, closed-unmerged closes it Rejected. IT WORKS. Verified live 2026-09-21 01:48 after three PRs were closed without merging:
+
+      auto-rejected 3 review stories → Rejected (PR closed without merging)
+        STORY-1412 (PR #2043)
+        STORY-1356 (PR #1972)
+        STORY-1376 (PR #2009)
+
+  All three flipped on the first `aida pull` after the closures. So a "dead review task" observed before the next pull is CADENCE, not a defect, and should not be filed as one.
+
+  THE GAP: THE STATUS FILTER EXCLUDES Draft. lib.rs:63024-63025 matches only
+
+      RequirementStatus::Approved | RequirementStatus::InProgress
+
+  so a review story sitting in Draft against a terminal PR is never considered. Confirmed by the one survivor of that same pull:
+
+      STORY-1362  "Review PR-1986: [AI:codex] feat(roles): ship cold-session seat handoff pack (STORY-1351)"
+      status      draft
+      PR #1986    MERGED 2026-09-20T17:54:33Z
+
+  Merged nineteen hours before the pull that resolved its three siblings, and untouched by it. The review it asks for cannot happen, because the thing already shipped.
+
+  WHY Draft IS REACHABLE AND NOT A CURIOSITY. `aida pr auto-queue-review` creates these stories, and a review story can sit Draft when the routing that would approve it did not complete — BUG-1230 records exactly that shape ("says 'already has a Review PR-N story queued — skipping' when the story exists but is NOT in the reviewer queue"). So Draft-and-stranded is precisely the state produced when the queueing half fails, which is the case most in need of the sweep, and it is the one case the sweep skips.
+
+  MEASURED, not assumed: of six open specs matching the "Review PR-N:" title shape at 01:47, five have now resolved or track an open PR; STORY-1362 is the single survivor and it is the only Draft among them. One instance, stated as one instance.
+
+  WHAT TO FIX. Include Draft in the status filter at lib.rs:63024. The re-check inside `apply_stranded_review_pr_resolution` (:63071) that confirms the spec is still in the expected set must widen in the same change or it will refuse the flip it was just asked to make. A merged PR should still close the story Completed and a closed-unmerged one Rejected, unchanged.
+
+  VERIFICATION: a Draft "Review PR-N" spec against a merged PR must flip to Completed on `aida pull`, and against a closed-unmerged PR to Rejected. Keep an Approved case as the control so a regression cannot pass by breaking both.
+
+  DENOMINATOR CAVEAT, inherited honestly from the reviewer seat who found the symptom: the population was found by matching the title prefix "Review PR-N:". If review stories are ever titled another way, this count is a lower bound rather than the whole set.
+
+  Found by the driver-advisor seat while testing whether a reviewer-reported symptom was a new defect. It was not — the fix works; this is its edge. Autonomous-safe.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-21T08:48:22.112145500Z
+modified_at: 2026-09-21T08:48:22.112145500Z
+req_type: Bug
