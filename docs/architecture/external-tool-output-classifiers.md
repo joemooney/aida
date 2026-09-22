@@ -7,29 +7,32 @@ A production classifier is enumerated when its Rust decision site carries
 unmarked string comparisons deliberately do not count. The marker is the precise
 boundary because Rust syntax cannot reveal whether an arbitrary string came from
 an external process; code review must require it for every new such decision.
+The module-qualified symbol is the stable inventory key. Source paths and line
+numbers are emitted by the generator only as non-authoritative navigation aids.
 
-| Site | Source |
-|---|---|
-| `auto_complete::is_database_locked_message` | `aida-cli-lib/src/auto_complete.rs` |
-| `auto_complete::is_environmental_failure` | `aida-cli-lib/src/auto_complete.rs` |
-| `auto_complete::is_merge_conflict_failure` | `aida-cli-lib/src/auto_complete.rs` |
-| `cache::is_cache_schema_drift_error` | `aida-core/src/db/cache.rs` |
-| `claude_log_indicates_api_outage` | `aida-cli-lib/src/lib.rs` |
-| `compete::parse_gate_result` | `aida-cli-lib/src/compete.rs` |
-| `forge::gitlab_merge_response_is_retryable` | `aida-cli-lib/src/forge.rs` |
-| `forge::gitlab_merge_response_is_stale_head` | `aida-cli-lib/src/forge.rs` |
-| `forge::glab_stderr_is_transient` | `aida-cli-lib/src/forge.rs` |
-| `gh_stderr_is_network_error` | `aida-cli-lib/src/lib.rs` |
-| `git_ops::commit` | `aida-core/src/git_ops.rs` |
-| `git_ops::looks_like_index_lock_failure` | `aida-core/src/git_ops.rs` |
-| `git_ops::push` | `aida-core/src/git_ops.rs` |
-| `git_ops::restore_stranded_autostash` | `aida-core/src/git_ops.rs` |
-| `network_retry::classify_transient` | `aida-cli-lib/src/network_retry.rs` |
-| `overlay::ci_style` | `aida-tui/src/overlay.rs` |
-| `pr_cmd::pr_fetch_failure_message` | `aida-cli-lib/src/pr_cmd.rs` |
-| `pr_ship::classify_gh_pr_checks_registration` | `aida-cli-lib/src/pr_ship.rs` |
-| `remote_create::gitlab_release_body_exists` | `aida-cli-lib/src/remote_create.rs` |
-| `status_context::load_pr_facts` | `aida-cli-lib/src/lib.rs` |
-| `terminal_cmd::run_terminator_command` | `aida-cli-lib/src/terminal_cmd.rs` |
+| Stable classifier key |
+|---|
+| `auto_complete::is_database_locked_message` |
+| `auto_complete::is_environmental_failure` |
+| `auto_complete::is_merge_conflict_failure` |
+| `cache::is_cache_schema_drift_error` |
+| `claude_log_indicates_api_outage` |
+| `compete::parse_gate_result` |
+| `forge::gitlab_merge_response_is_retryable` |
+| `forge::gitlab_merge_response_is_stale_head` |
+| `forge::glab_stderr_is_transient` |
+| `gh_stderr_is_network_error` |
+| `git_ops::commit` |
+| `git_ops::looks_like_index_lock_failure` |
+| `git_ops::push` |
+| `git_ops::restore_stranded_autostash` |
+| `network_retry::classify_transient` |
+| `overlay::ci_style` |
+| `pr_cmd::pr_fetch_failure_message` |
+| `pr_ship::classify_gh_pr_checks_registration` |
+| `remote_create::gitlab_release_body_exists` |
+| `status_context::collect_pr_facts_uncached` |
+| `terminal_cmd::run_terminator_command` |
 
 <!-- trace:TASK-1300 | ai:codex -->
+<!-- trace:TASK-1309 | ai:codex -->
