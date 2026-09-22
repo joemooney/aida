@@ -95,9 +95,18 @@ One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-
 **Key options (rationale only).**
 - `add --parent <COMMENT_ID>` — thread a reply under an existing comment rather than starting a new top-level note. Keeps a back-and-forth readable.
 - `add --author` — override the recorded author (defaults to `AIDA_AUTHOR` env or system user). For when one shell is posting on behalf of a named agent/role.
+- `add --body-file <PATH>` / `add --stdin` — pass rich text without exposing
+  backticks or `$()` to shell command substitution. The same inputs are
+  available on `edit`, which makes an in-place repair safe.
 - `edit` / `delete --comment-id` — these address a comment by its *comment-id* plus `--req-id`, not by spec alone (a spec has many comments). Get the id from `comment list`.
 
-**Gotchas.** `edit` and `delete` need *both* `--req-id` and `--comment-id` — the spec doesn't uniquely identify which comment you mean. Run `aida comment list <ID>` first to get the comment-id.
+**Gotchas.** Never put Markdown containing backticks inside a double-quoted
+shell argument: the shell expands it before AIDA starts, so no write-path
+validation can recover or reliably recognize the original text. Put the body
+in a file (a quoted heredoc is safe) and use `--body-file`, or pipe it via
+`--stdin`. `edit` and `delete` need *both* `--req-id` and `--comment-id` — the
+spec doesn't uniquely identify which comment you mean. Run `aida comment list
+<ID>` first to get the comment-id.
 
 **Chains with** — comments captured during design become inputs to `aida digest` / the living-docs flow; doc seeds get promoted via `aida doc` (Chapter 9).
 

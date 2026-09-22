@@ -10,6 +10,28 @@ use serde::Serialize;
 
 use crate::*;
 
+// trace:TASK-190 | ai:codex
+fn resolve_comment_body(
+    content: Option<String>,
+    body_file: Option<&std::path::Path>,
+    stdin: bool,
+) -> Result<String> {
+    if let Some(path) = body_file {
+        let body = std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read comment body from {}", path.display()))?;
+        anyhow::ensure!(!body.trim().is_empty(), "comment body file is empty");
+        return Ok(body);
+    }
+    if stdin {
+        let mut body = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut body)
+            .context("failed to read comment body from stdin")?;
+        anyhow::ensure!(!body.trim().is_empty(), "comment body from stdin is empty");
+        return Ok(body);
+    }
+    Ok(content.unwrap_or_default())
+}
+
 const PROXY_APPROVAL_MARKER: &str = "[aida:proxy-approval]";
 
 fn terminal_list_width() -> Option<usize> {
@@ -5792,6 +5814,8 @@ pub(crate) fn handle_git_backend_command(
             id: req_id,
             content,
             content_positional,
+            body_file,
+            stdin,
             author,
             ..
         }) => {
@@ -5805,10 +5829,11 @@ pub(crate) fn handle_git_backend_command(
             // `content_positional`. Earlier the git-backend dispatch only
             // looked at `--content`, so positional invocations silently
             // wrote empty comments. trace:BUG-28 | ai:claude
-            let body = content
-                .clone()
-                .or_else(|| content_positional.clone())
-                .unwrap_or_default();
+            let body = resolve_comment_body(
+                content.clone().or_else(|| content_positional.clone()),
+                body_file.as_deref(),
+                *stdin,
+            )?;
             if body.trim().is_empty() {
                 anyhow::bail!(
                     "comment body required: pass it positionally `aida comment add {} \"...\"` \
@@ -5892,6 +5917,8 @@ pub(crate) fn handle_git_backend_command(
             req_id,
             comment_id,
             content,
+            body_file,
+            stdin,
             interactive,
         }) => {
             // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
@@ -5901,18 +5928,19 @@ pub(crate) fn handle_git_backend_command(
             record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
             let comment_uuid = resolve_comment_uuid(&req, comment_id)?;
 
-            let new_content = if *interactive || content.is_none() {
-                let existing = req
-                    .find_comment_mut(&comment_uuid)
-                    .map(|c| c.content.clone())
-                    .unwrap_or_default();
-                inquire::Editor::new("Edit comment")
-                    .with_predefined_text(&existing)
-                    .prompt()
-                    .context("Editor cancelled")?
-            } else {
-                content.clone().unwrap()
-            };
+            let new_content =
+                if *interactive || (content.is_none() && body_file.is_none() && !stdin) {
+                    let existing = req
+                        .find_comment_mut(&comment_uuid)
+                        .map(|c| c.content.clone())
+                        .unwrap_or_default();
+                    inquire::Editor::new("Edit comment")
+                        .with_predefined_text(&existing)
+                        .prompt()
+                        .context("Editor cancelled")?
+                } else {
+                    resolve_comment_body(content.clone(), body_file.as_deref(), *stdin)?
+                };
 
             let comment = req
                 .find_comment_mut(&comment_uuid)
