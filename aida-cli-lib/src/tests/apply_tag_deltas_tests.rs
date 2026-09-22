@@ -1,4 +1,4 @@
-use super::apply_tag_deltas;
+use super::{apply_tag_deltas, apply_tag_deltas_report};
 use std::collections::HashSet;
 
 fn set(items: &[&str]) -> HashSet<String> {
@@ -120,4 +120,47 @@ fn remove_tag_drops_only_named_tag() {
     let changed = apply_tag_deltas(&mut tags, &[], &vec(&["supervised"]));
     assert!(changed);
     assert_eq!(tags, set(&["from-friction", "papercut", "safety"]));
+}
+
+// trace:BUG-1542 | ai:codex
+#[test]
+fn remove_colon_namespaced_tag_preserves_exact_and_prefixed_neighbors() {
+    let mut tags = set(&[
+        "severity:cosmetic",
+        "severity:functional",
+        "batch:probe",
+        "aida:queue:work",
+        "ordinary",
+    ]);
+
+    let report = apply_tag_deltas_report(&mut tags, &[], &vec(&["severity:cosmetic"]));
+
+    assert_eq!(report.removed, vec!["severity:cosmetic"]);
+    assert!(report.absent.is_empty());
+    assert_eq!(
+        tags,
+        set(&[
+            "severity:functional",
+            "batch:probe",
+            "aida:queue:work",
+            "ordinary",
+        ])
+    );
+}
+
+// trace:BUG-1542 | ai:codex
+#[test]
+fn removal_report_distinguishes_simple_success_from_absent_noop() {
+    let mut tags = set(&["ordinary", "batch:probe"]);
+
+    let removed = apply_tag_deltas_report(&mut tags, &[], &vec(&["ordinary"]));
+    assert_eq!(removed.summary_lines(), vec!["removed 1 tag: ordinary"]);
+
+    let absent = apply_tag_deltas_report(&mut tags, &[], &vec(&["ordinary"]));
+    assert!(!absent.changed());
+    assert_eq!(
+        absent.summary_lines(),
+        vec!["no matching tag to remove: ordinary"]
+    );
+    assert_eq!(tags, set(&["batch:probe"]));
 }
