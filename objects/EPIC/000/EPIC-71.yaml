@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:38:35.944935297Z
-modified_at: 2026-09-22T14:04:08.230141549Z
+modified_at: 2026-09-22T14:04:10.823205865Z
 req_type: Epic
 tags:
 - cost
@@ -51,3 +51,8 @@ comments:
   created_at: 2026-09-19T21:33:01.900882087Z
   modified_at: 2026-09-19T21:33:01.900882087Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c96e-66c7-7d31-868f-66cff9d810c6
+  author: joe
+  content: '[aida:driver-disposition] Reopened 2026-09-22. The completed research spike satisfied only slice 1; message-level collection, spec/phase/round attribution, query exposure, and derived cost metrics remain unimplemented. Completed status was inconsistent with the epic acceptance and operator priority.'
+  created_at: 2026-09-22T14:04:10.823205865Z
+  modified_at: 2026-09-22T14:04:10.823205865Z
