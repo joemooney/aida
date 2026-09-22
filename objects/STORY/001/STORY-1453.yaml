@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T10:47:53.128398296Z
-modified_at: 2026-09-22T10:47:57.685009953Z
+modified_at: 2026-09-22T10:54:07.114254590Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0c3cc-68db-7661-9adb-cb057b115513
   created_at: 2026-09-22T10:47:57.685001244Z
   created_by: joe
+comments:
+- id: 01a0c8c0-650a-7d63-a1c2-f309bfa8be09
+  author: joe
+  content: '[aida:cold-review] REQUEST_CHANGES on PR #2095 exact head a9378c1bae6cb7eb4e65cfeb84e86f423088d052. Independent cold review found two BUG-1548 acceptance blockers: material punted/escalated outcomes do not reset the idle streak, and invoker provenance is sampled at drain completion rather than drain start. Focused tests and fmt pass but do not cover these cases. Full verdict recorded on PR #2095.'
+  created_at: 2026-09-22T10:54:07.114254590Z
+  modified_at: 2026-09-22T10:54:07.114254590Z
