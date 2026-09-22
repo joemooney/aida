@@ -34,12 +34,12 @@ description: |
   5. A test compares an abbreviated recorded sha against a full head and asserts they are recognised as the same commit.
 
   RELATED: this is the same shape as the marker-versus-forge comparison in TASK-1-170 and the verdict-spelling normalisation in BUG-1505 - a comparison that cannot distinguish a difference in REPRESENTATION from a difference in VALUE. Third instance tonight.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T03:30:59.539323012Z
-modified_at: 2026-09-22T07:07:17.812200340Z
+modified_at: 2026-09-22T07:07:37.338924954Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity drain-safe from:session-0920
@@ -235,3 +235,22 @@ comments:
   content: '[aida:proxy-approval] verdict=approved; reasoning=third independent cold review verified exact head b372a8e0b2634b8a5d6a65f42ce7db2982c45173, including live primary/fallback/sibling/resume provenance enforcement and red-first tests; independent=yes; gates=required Ubuntu CI green, merge-hold-gate green, exact-head review approved; timestamp=2026-09-22T00:07:17-07:00'
   created_at: 2026-09-22T07:07:17.812200340Z
   modified_at: 2026-09-22T07:07:17.812200340Z
+history:
+- id: 01a0c7f1-07f1-7611-90d2-0c3dd799342d
+  author: aida-auto-bump
+  timestamp: 2026-09-22T07:07:37.329685417Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c7f1-07fa-7190-9ad3-5c1cbe75ea2d
+  timestamp: 2026-09-22T07:07:37.338922834Z
+  agent: aida
+  commit_sha: 3a404d0bf1e2156e636ddd473cf24ca7f4ecb802
+  summary: 'Cold independent round-3 review: exact-head implementation satisfies acceptance; focused tests and required CI green.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T07:07:36.535704530Z
+  completion_sha: 3a404d0bf1e2156e636ddd473cf24ca7f4ecb802
