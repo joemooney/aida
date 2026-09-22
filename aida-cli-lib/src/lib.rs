@@ -67254,33 +67254,90 @@ struct PrHeadEvidence {
 struct PrHeadStateSnapshot {
     by_branch: std::collections::HashMap<String, PrHeadEvidence>,
     open_heads_by_spec: std::collections::HashMap<String, Vec<String>>,
-    merged_at_by_spec: std::collections::HashMap<String, i64>,
+    merged_heads_by_spec: std::collections::HashMap<String, Vec<String>>,
 }
 
-// BUG-1576: query every PR state because squash merges replace the branch's
-// commits with a new commit. `git cherry` and per-commit patch IDs therefore
-// cannot prove that a multi-commit branch shipped. The forge's recorded head
-// SHA identifies the exact branch incarnation that was reviewed and merged.
-fn collect_pr_head_state_snapshot(project_root: &std::path::Path) -> Option<PrHeadStateSnapshot> {
+// BUG-1576: query each bounded candidate by head name instead of sampling the
+// first N PRs from repository history. This remains proportional to active
+// work, while finding an arbitrarily old merged PR in a repository with more
+// than 1,000 PRs. The recorded head SHA identifies the exact branch
+// incarnation reviewed and merged; `git cherry` cannot prove an N-to-1 squash.
+fn collect_pr_head_state_snapshot(
+    project_root: &std::path::Path,
+    candidate_branches: &[String],
+) -> Option<PrHeadStateSnapshot> {
     let gh_bin = resolve_gh_binary()?;
-    let out = std::process::Command::new(&gh_bin)
-        .current_dir(project_root)
-        .args([
+    let query = |args: &[&str]| -> Option<PrHeadStateSnapshot> {
+        let out = std::process::Command::new(&gh_bin)
+            .current_dir(project_root)
+            .args(args)
+            .output()
+            .ok()?;
+        out.status
+            .success()
+            .then(|| parse_pr_head_state_snapshot(&String::from_utf8_lossy(&out.stdout)))?
+    };
+    let mut snapshot = query(&[
+        "pr",
+        "list",
+        "--state",
+        "open",
+        "--limit",
+        "1000",
+        "--json",
+        "state,title,headRefName,headRefOid",
+    ])?;
+    for branch in candidate_branches {
+        if let Some(found) = query(&[
             "pr",
             "list",
+            "--head",
+            branch,
             "--state",
             "all",
             "--limit",
-            "1000",
+            "100",
             "--json",
-            "state,title,headRefName,headRefOid,mergedAt",
-        ])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
+            "state,title,headRefName,headRefOid",
+        ]) {
+            snapshot.merge(found);
+        }
     }
-    parse_pr_head_state_snapshot(&String::from_utf8_lossy(&out.stdout))
+    Some(snapshot)
+}
+
+impl PrHeadStateSnapshot {
+    fn merge(&mut self, other: Self) {
+        for (branch, evidence) in other.by_branch {
+            let replace = self.by_branch.get(&branch).is_none_or(|old| {
+                (evidence.state == "open" && old.state != "open")
+                    || (evidence.state == "merged" && old.state == "closed")
+            });
+            if replace {
+                self.by_branch.insert(branch, evidence);
+            }
+        }
+        for (spec, mut heads) in other.open_heads_by_spec {
+            self.open_heads_by_spec
+                .entry(spec)
+                .or_default()
+                .append(&mut heads);
+        }
+        for (spec, mut heads) in other.merged_heads_by_spec {
+            self.merged_heads_by_spec
+                .entry(spec)
+                .or_default()
+                .append(&mut heads);
+        }
+        for heads in self.open_heads_by_spec.values_mut() {
+            heads.sort();
+            heads.dedup();
+        }
+        for heads in self.merged_heads_by_spec.values_mut() {
+            heads.sort();
+            heads.dedup();
+        }
+    }
 }
 
 fn parse_pr_head_state_snapshot(json: &str) -> Option<PrHeadStateSnapshot> {
@@ -67312,32 +67369,37 @@ fn parse_pr_head_state_snapshot(json: &str) -> Option<PrHeadStateSnapshot> {
                     .or_default()
                     .push(branch.to_string());
             }
-        } else if state == "merged" {
-            if let Some(ts) = row
-                .get("mergedAt")
-                .and_then(|v| v.as_str())
-                .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
-                .map(|v| v.timestamp())
-            {
-                for spec in &spec_ids {
-                    snapshot
-                        .merged_at_by_spec
-                        .entry(spec.to_ascii_uppercase())
-                        .and_modify(|old| *old = (*old).max(ts))
-                        .or_insert(ts);
-                }
-            }
         }
         let head_sha = row
             .get("headRefOid")
             .and_then(|v| v.as_str())
             .filter(|v| !v.is_empty())
             .map(str::to_string);
-        snapshot
-            .by_branch
-            .insert(branch.to_string(), PrHeadEvidence { state, head_sha });
+        if state == "merged" {
+            if let Some(sha) = &head_sha {
+                for spec in &spec_ids {
+                    snapshot
+                        .merged_heads_by_spec
+                        .entry(spec.to_ascii_uppercase())
+                        .or_default()
+                        .push(sha.clone());
+                }
+            }
+        }
+        let evidence = PrHeadEvidence { state, head_sha };
+        let replace = snapshot.by_branch.get(branch).is_none_or(|old| {
+            (evidence.state == "open" && old.state != "open")
+                || (evidence.state == "merged" && old.state == "closed")
+        });
+        if replace {
+            snapshot.by_branch.insert(branch.to_string(), evidence);
+        }
     }
     for heads in snapshot.open_heads_by_spec.values_mut() {
+        heads.sort();
+        heads.dedup();
+    }
+    for heads in snapshot.merged_heads_by_spec.values_mut() {
         heads.sort();
         heads.dedup();
     }
@@ -67739,10 +67801,21 @@ fn collect_unshipped_work_items(
     branches.sort_by(|a, b| a.0.cmp(&b.0));
 
     // trace:BUG-1576 | ai:codex
+    let candidate_pr_heads: Vec<String> = branches
+        .iter()
+        .map(|(display, _, _)| {
+            display
+                .strip_prefix("origin/")
+                .unwrap_or(display)
+                .to_string()
+        })
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
     let pr_head_states = if no_forge {
         None
     } else {
-        collect_pr_head_state_snapshot(project_root)
+        collect_pr_head_state_snapshot(project_root, &candidate_pr_heads)
     };
 
     let mut candidates = Vec::new();
@@ -67805,20 +67878,26 @@ fn collect_unshipped_work_items(
         }) {
             continue;
         }
-        // An abandoned pre-merge branch may not equal the final PR head (for
-        // example a rework branch replaced it). A merged PR naming the same
-        // spec is a durable merge record. Suppress only branch tips that
-        // predate that merge; commits added afterwards remain visible.
-        if pr_head_states
+        // A rework ref may have a different name from the PR head while
+        // pointing at that reviewed head (or one of its ancestors). This is
+        // commit-representation proof, unlike branch age: a divergent branch
+        // for the same spec is not an ancestor and remains visible.
+        let represented_by_merged_head = pr_head_states
             .as_ref()
-            .and_then(|s| s.merged_at_by_spec.get(&spec_key))
-            .is_some_and(|merged_at| {
-                git_output_checked(project_root, &["log", "-1", "--format=%ct", &refname])
-                    .ok()
-                    .and_then(|v| v.trim().parse::<i64>().ok())
-                    .is_some_and(|tip_at| tip_at < *merged_at)
-            })
-        {
+            .and_then(|s| s.merged_heads_by_spec.get(&spec_key))
+            .is_some_and(|merged_heads| {
+                merged_heads.iter().any(|head| {
+                    let is_ancestor = std::process::Command::new("git")
+                        .arg("-C")
+                        .arg(project_root)
+                        .args(["merge-base", "--is-ancestor", &refname, head])
+                        .status()
+                        .is_ok_and(|status| status.success());
+                    is_ancestor
+                        || doctor_cmd::branch_content_fully_landed(project_root, head, &refname)
+                })
+            });
+        if represented_by_merged_head {
             continue;
         }
         if !seen.insert(display_branch.clone()) {
@@ -68465,6 +68544,73 @@ printf '[{"state":"OPEN","title":"fix (BUG-1578)","headRefName":"bug-1578-real-h
             2,
             "ambiguity must remain explicit rather than selecting a head"
         );
+    }
+
+    // trace:BUG-1576 | ai:codex
+    #[cfg_attr(windows, ignore = "fake-gh harness requires a Unix shebang")]
+    #[test]
+    fn merged_same_spec_does_not_hide_an_unrepresented_divergent_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        branch_with_commit(root, "bug-1576-divergent", "BUG-1576");
+        branch_with_commit(root, "bug-1576-shipped", "BUG-1576");
+        let shipped = git_output_checked(root, &["rev-parse", "bug-1576-shipped"]).unwrap();
+        let body = format!(
+            r#"#!/usr/bin/env bash
+if [[ "$*" == *"--state open"* ]]; then printf '[]'; exit 0; fi
+if [[ "$*" == *"--head bug-1576-shipped"* ]]; then
+  printf '[{{"state":"MERGED","title":"fix (BUG-1576)","headRefName":"bug-1576-shipped","headRefOid":"{}"}}]'
+else
+  printf '[]'
+fi
+"#,
+            shipped.trim()
+        );
+        let fake = executable_fake_gh(root, &body);
+        let _env =
+            crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake.to_str().unwrap())]);
+        let rows =
+            collect_unshipped_work_items(root, &[summary("BUG-1576", "InProgress")], false, false);
+        assert!(rows.iter().any(|r| r.branch == "bug-1576-divergent"));
+        assert!(rows.iter().all(|r| r.branch != "bug-1576-shipped"));
+    }
+
+    // trace:BUG-1576 | ai:codex
+    #[cfg_attr(windows, ignore = "fake-gh harness requires a Unix shebang")]
+    #[test]
+    fn merged_head_lookup_is_targeted_not_limited_by_repository_history_page() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        branch_with_commit(root, "bug-1576-ancient", "BUG-1576");
+        let head = git_output_checked(root, &["rev-parse", "bug-1576-ancient"]).unwrap();
+        let calls = root.join("gh-calls");
+        let body = format!(
+            r#"#!/usr/bin/env bash
+printf '%s\n' "$*" >> '{}'
+if [[ "$*" == *"--state open"* ]]; then printf '[]'; exit 0; fi
+if [[ "$*" == *"--head bug-1576-ancient"* ]]; then
+  printf '[{{"state":"MERGED","title":"ancient (BUG-1576)","headRefName":"bug-1576-ancient","headRefOid":"{}"}}]'
+else
+  printf '[]'
+fi
+"#,
+            calls.display(),
+            head.trim()
+        );
+        let fake = executable_fake_gh(root, &body);
+        let _env =
+            crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake.to_str().unwrap())]);
+        let rows =
+            collect_unshipped_work_items(root, &[summary("BUG-1576", "InProgress")], false, false);
+        assert!(rows.is_empty());
+        let calls = std::fs::read_to_string(calls).unwrap();
+        assert!(
+            calls.contains("--head bug-1576-ancient --state all"),
+            "{calls}"
+        );
+        assert!(!calls.contains("--state all --limit 1000"), "{calls}");
     }
 }
 
