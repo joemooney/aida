@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:26:07.580218491Z
-modified_at: 2026-09-22T09:38:42.455527180Z
+modified_at: 2026-09-22T09:57:20.008427665Z
 req_type: Bug
 comments:
 - id: 01a0c5f3-8b04-7ca0-a364-92d11f94067d
@@ -99,3 +99,8 @@ comments:
   content: '[aida:architecture-signoff] APPROVED. Additive optional typed failure_context, shared trip_id in event and ledger, bounded trip history, legacy latest fields, and writer-derived canonical path are accepted. Keep the projection strictly allow-listed; never persist arbitrary stdout/stderr or secrets. Make the retained-history bound explicit and deterministic. Prefer typed data from the performance evaluation boundary; if parsing existing stdout is unavoidable, isolate and exhaustively test the parser, including zero denominator and malformed output that must fail visibly rather than fabricate metrics. Consumer-side routed-trip proof is required.'
   created_at: 2026-09-22T09:38:42.455527180Z
   modified_at: 2026-09-22T09:38:42.455527180Z
+- id: 01a0c88c-6808-7a02-a32d-5ddb5a23f540
+  author: joe
+  content: '[aida:implementer] Implemented in PR #2091 (commit 68a411415f). The scheduler now consumes typed JSON performance audits, persists allow-listed budget/tolerance/proportion/denominator/worst/scope evidence in a 20-trip oldest-first bounded history, correlates the same trip_id and evidence into CronJobFailed, renders compact evidence in schedule.log, preserves legacy YAML/event deserialization, exposes zero denominators explicitly, and surfaces malformed typed output without persisting child payload. Corrected the route prompt to .aida-store/schedule/performance-guard.yaml. Consumer-side test fires a real CronJobFailed into the advisor route and proves its evidence matches the immutable ledger trip. Focused BUG-1573 tests and fmt pass. Full lib run: 5348 passed; two unrelated queue_rework tests failed under inherited advisor authority.'
+  created_at: 2026-09-22T09:57:20.008427665Z
+  modified_at: 2026-09-22T09:57:20.008427665Z
