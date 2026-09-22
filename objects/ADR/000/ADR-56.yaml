@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T15:03:10.284830825Z
-modified_at: 2026-09-22T15:06:16.610341449Z
+modified_at: 2026-09-22T15:08:11.825839641Z
 req_type: Decision
 tags:
 - adr-55
@@ -46,3 +46,34 @@ relationships:
   target_id: 01a0c9a6-c0a9-7342-a07c-16262513089c
   created_at: 2026-09-22T15:06:16.610338284Z
   created_by: joe
+comments:
+- id: 01a0c9a9-02b1-72f2-a258-cf2e49ae14e6
+  author: joe
+  content: |-
+    ## Architectural Sketch: ADR-56 Remote Evaluator Resilience
+
+    ### 1. Error Taxonomy & Typed Classification
+    - `EvaluatorErrorKind`:
+      - `Transient`: Transport resets, connection timeouts, DNS flaps, HTTP 429, HTTP 502/503/504.
+      - `Permanent`: HTTP 400 (Bad Request), 401/403 (Auth/Unauthorized), 404 (Not Found), and malformed response JSON schema.
+      - `DeadlineExceeded`: Budget exhausted before completion.
+      - `CircuitOpen`: Circuit open, fast fallback without network IO.
+
+    ### 2. Deadline-Aware Retry Adapter (`DeadlineRetryAdapter`)
+    - Wraps any `EvaluatorEngine` implementation.
+    - Takes caller-supplied `operation_deadline: Instant` or `timeout: Duration` (e.g. 2–5s for review prep; non-blocking fire-and-forget for `aida add`).
+    - Enforces budget rule: retries are only scheduled if `remaining_budget >= min_budget_for_retry` (default 500ms).
+    - Max retries bounded to 1 (or 2 under explicit policy).
+    - Injects `X-Idempotency-Key` or deterministic payload hash to prevent duplicate charges.
+
+    ### 3. Concurrency-Safe Circuit Breaker (`EvaluatorCircuitBreaker`)
+    - Scoped per endpoint/model.
+    - States: `Closed` -> `Open` (after 3 consecutive transient failures, 30s cooldown) -> `Half-Open` (1 trial request).
+    - Fails closed immediately without network IO when Open.
+    - No blocking health probes on request critical path.
+
+    ### 4. Structured Observability
+    - Emits structured telemetry for retry attempts, backoffs, circuit state transitions, and fallbacks.
+    - Never silent drops: all fallbacks record fallback reason, latency, and status.
+  created_at: 2026-09-22T15:08:11.825839641Z
+  modified_at: 2026-09-22T15:08:11.825839641Z
