@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T15:03:10.284830825Z
-modified_at: 2026-09-22T15:04:29.208830208Z
+modified_at: 2026-09-22T15:06:16.610341449Z
 req_type: Decision
 tags:
 - adr-55
@@ -41,4 +41,8 @@ relationships:
 - rel_type: Blocks
   target_id: 01a0c9a5-82b8-7811-9011-8bad8aa8728d
   created_at: 2026-09-22T15:04:29.208824126Z
+  created_by: joe
+- rel_type: Blocks
+  target_id: 01a0c9a6-c0a9-7342-a07c-16262513089c
+  created_at: 2026-09-22T15:06:16.610338284Z
   created_by: joe
