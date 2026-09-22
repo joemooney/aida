@@ -43,12 +43,12 @@ description: |-
 
   Filed by the driver-advisor seat, on a finding from an independent review of #2070 that was
   dispatched specifically because the advisor had written that PR's brief and could not review it.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T00:20:45.943120Z
-modified_at: 2026-09-22T07:58:08.796662966Z
+modified_at: 2026-09-22T07:58:14.185797864Z
 req_type: Bug
 tags:
 - docs drain papercut
@@ -73,3 +73,21 @@ comments:
   content: '[aida:proxy-approval] verdict=approved; reasoning=independent cold rereview verified exact head bc34143308060773c1d81dcc76e64835eb52b6a1, corrected four-source default claim inventory, compiled guide and field-doc guard, and BUG-1586 separation; independent=yes; gates=required Ubuntu CI green, merge-hold-gate green, exact-head review approved; timestamp=2026-09-22T00:58:08-07:00'
   created_at: 2026-09-22T07:58:08.796662966Z
   modified_at: 2026-09-22T07:58:08.796662966Z
+history:
+- id: 01a0c81f-5e99-7950-9365-8d6e28bb87ce
+  author: aida-auto-bump
+  timestamp: 2026-09-22T07:58:14.169928973Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c81f-5ea9-70a2-bb7d-2a1704282061
+  timestamp: 2026-09-22T07:58:14.185796577Z
+  agent: aida
+  commit_sha: 4c8ff74115ddf21619c75e353503ecdfb7d476e5
+  summary: Completed via merge 4c8ff741
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T07:58:14.169755660Z
+  completion_sha: 4c8ff74115ddf21619c75e353503ecdfb7d476e5
