@@ -20,10 +20,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T14:33:57.976444371Z
-modified_at: 2026-09-22T14:37:26.957992932Z
+modified_at: 2026-09-22T14:46:50.482235228Z
 req_type: Bug
 tags:
 - data-integrity
 - effort:open:1h
 - store
 - test-isolation
+comments:
+- id: 01a0c995-7572-7822-b6b0-e38379244495
+  author: joe
+  content: |-
+    Implementation diagnosis (2026-09-22): the contaminating writes were produced by the final PR #2097 review reproduction, not by the checked-in BUG-1502 test itself. The reviewer transcript at 14:22 UTC shows a shell snippet creating a temporary repository through git -C, but then invoking aida init and two aida add commands without changing cwd. exec_command kept cwd at /home/joe/ai/aida-bug1502, whose sibling-worktree resolver targets the live canonical store. Those commands created TASK-1428 (first) and TASK-1429 (target). Their rejected objects and history remain intact.
+
+    The fix hardens the real-binary BUG-1502 harness boundary: every invocation requires a fixture git checkout as cwd; inherited AIDA_STORE, AIDA_PROJECT_ROOT, AIDA_DRIVE_ROOT, GIT_DIR, and GIT_WORK_TREE are cleared; after init AIDA_STORE is explicitly pinned to the fixture store. A regression supplies hostile inherited store/root anchors, writes an isolation sentinel, and proves it exists in the fixture object tree but not the decoy caller store. All adjacent tests in that integration suite use this single helper.
+  created_at: 2026-09-22T14:46:50.482235228Z
+  modified_at: 2026-09-22T14:46:50.482235228Z
