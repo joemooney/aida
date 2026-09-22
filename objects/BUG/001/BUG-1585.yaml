@@ -1,0 +1,54 @@
+id: 01a0c67c-8af7-7af3-88ed-a7cf0e9317a3
+spec_id: BUG-1585
+agreed_id: BUG-1585
+title: docs/autonomous-drain.md says pipeline_depth defaults to 2 and the code says 1, and the PR that checked it reported clean from a grep for a different phrasing
+description: |-
+  THE USER GUIDE STATES THE WRONG DEFAULT FOR THE KNOB THAT GOVERNS DRAIN CONCURRENCY, AND IT WAS DECLARED CLEAN BY A STRING CHECK STANDING IN FOR A CLAIM CHECK.
+
+  docs/autonomous-drain.md:171-176 says:
+
+      Depth `1` keeps the historical strictly sequential behavior. Depth `2` is the
+      default: once spec A has opened a PR and moved into CI/review/merge, the drain
+      may start spec B's implementer in a separate worktree instead of idling...
+
+  THE CODE SAYS OTHERWISE, at aida-cli-lib/src/drain_state.rs:445:
+
+      pub(crate) fn default_pipeline_depth() -> usize {
+          1
+      }
+
+  The comment beside it records the change: ADR-27 originally set 2 WHILE DEPTH WAS INERT; STORY-1091 made depth live, so the default dropped to 1. The guide still describes the pre-STORY-1091 world.
+
+  WHY IT MATTERS MORE NOW THAN IT DID YESTERDAY. PR #2070 is correcting `aida queue work --help` to say the batch drain runs strictly one member at a time at the default `[drain] pipeline_depth = 1`. Once that lands, THE HELP TEXT AND THE GUIDE WILL DIRECTLY CONTRADICT EACH OTHER on the same value — and a reader who trusts the guide will believe their drain overlaps members when it does not, or will set depth = 2 believing they are restoring a default rather than opting into something.
+
+  HOW IT SURVIVED, AND THIS IS THE PART WORTH KEEPING. TASK-185 explicitly said to check whether the same claim appears in the guide. #2070's body reports: "Checked and found clean: docs/autonomous-drain.md." THAT IS TRUE OF THE STRING AND FALSE OF THE CLAIM. The guide contains no occurrence of "pinned to 1" — the literal phrase being hunted — while containing a different, and wronger, statement about the same knob. A GREP FOR THE OLD WORDING CANNOT FIND A PARAPHRASE, AND "clean" READ AS "no instances" WHEN IT MEANT "no instances OF THAT STRING".
+
+  That is the same defect class #2070 exists to fix: a claim about behaviour that nothing verifies against the behaviour. It is also the fourth time today a bounded or literal check has been reported as a general one.
+
+  Acceptance:
+  - docs/autonomous-drain.md states the correct default, sourced from `default_pipeline_depth()`
+    rather than restated, and explains that ADR-27's 2 predates STORY-1091 making depth live —
+    a reader who finds ADR-27 should not conclude the guide is stale in the other direction.
+  - SWEEP FOR THE CLAIM, NOT THE STRING. Enumerate every place that asserts a pipeline_depth
+    default or describes drain concurrency as overlapping by default: docs, discipline pack,
+    skills, TUI help, ADR-27 itself. Report the count from an unbounded command and name each
+    instance. A `grep` for one phrasing does not satisfy this.
+  - Decide whether ADR-27 needs a superseding note. It recorded 2 as correct when depth was
+    inert; it is not wrong about its own moment, and a reader arriving at it today is misled.
+    `--superseded-by` exists for whole ADRs; a partial supersession may need a comment instead.
+
+  NOT IN SCOPE: changing the default, or making `--batches` honour pipeline_depth (that path is
+  serial regardless — verified: handle_auto_complete_batches never calls
+  drain_batch_pipelined_with_caps).
+
+  Filed by the driver-advisor seat, on a finding from an independent review of #2070 that was
+  dispatched specifically because the advisor had written that PR's brief and could not review it.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T00:20:45.943120Z
+modified_at: 2026-09-22T00:20:45.943120Z
+req_type: Bug
+tags:
+- docs drain papercut
