@@ -475,6 +475,10 @@ if [[ "${1:-}" == "pr" && "${2:-}" == "list" ]]; then
   fi
 fi
 if [[ "${1:-}" == "pr" && "${2:-}" == "view" ]]; then
+  if [[ "$*" == *"state,mergeable,reviewDecision,headRefOid"* ]]; then
+    printf 'OPEN\tMERGEABLE\tAPPROVED\t__HEAD__\n'
+    exit 0
+  fi
   if [[ "$*" == *"headRefName"* ]]; then
     echo "task-4"
     exit 0
@@ -485,7 +489,8 @@ if [[ "${1:-}" == "pr" && "${2:-}" == "view" ]]; then
   fi
 fi
 exit 1
-"#,
+"#
+        .replace("__HEAD__", &head),
     )
     .unwrap();
     #[cfg(unix)]
@@ -535,6 +540,24 @@ exit 1
     .unwrap();
     let (facts, _, _) = probe_resume_facts(root, &storage, "TASK-4", None);
     assert!(facts.reviewed, "an approval at the current head may resume");
+
+    std::fs::write(
+        verdict_dir.join("TASK-4.json"),
+        format!(
+            r#"{{"verdict":"RequestChanges","reviewed_sha":"{head}","recorded_by":"reviewer-spec"}}"#
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        &verdict,
+        format!(r#"{{"verdict":"Approved","reviewed_sha":"{head}","recorded_by":"reviewer-pr"}}"#),
+    )
+    .unwrap();
+    let (facts, _, _) = probe_resume_facts(root, &storage, "TASK-4", None);
+    assert!(
+        !facts.reviewed,
+        "same-head opposing spec evidence must resume at reviewer"
+    );
     match prev {
         Some(value) => std::env::set_var("AIDA_TEST_GH_BINARY", value),
         None => std::env::remove_var("AIDA_TEST_GH_BINARY"),

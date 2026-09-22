@@ -235,6 +235,175 @@ fn recording_key(m: &JsonObj) -> RecordingKey {
     )
 }
 
+fn same_reviewed_sha(a: &str, b: &str) -> bool {
+    let a = a.trim();
+    let b = b.trim();
+    let common = a.len().min(b.len());
+    common >= 7
+        && a.bytes().all(|c| c.is_ascii_hexdigit())
+        && b.bytes().all(|c| c.is_ascii_hexdigit())
+        && (a.eq_ignore_ascii_case(b)
+            || (a.len() < b.len() && b[..a.len()].eq_ignore_ascii_case(a))
+            || (b.len() < a.len() && a[..b.len()].eq_ignore_ascii_case(b)))
+}
+
+/// Explain an irreconcilable pair of independent verdicts at the artifact's
+/// current reviewed commit. Historical disagreement at an older commit is an
+/// audit trail, not a veto on a later review.
+// trace:BUG-1581 | ai:codex
+pub fn verdict_conflict_for_current_sha(body: &str) -> Option<String> {
+    let serde_json::Value::Object(obj) = serde_json::from_str(body).ok()? else {
+        return None;
+    };
+    let current_sha = round_sha(&obj)?;
+    let mut rounds: Vec<&JsonObj> = vec![&obj];
+    rounds.extend(
+        obj.get("rounds")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|v| v.as_object()),
+    );
+
+    let mut approvals = Vec::new();
+    let mut blockers = Vec::new();
+    for round in rounds {
+        let Some(_) = round_sha(round).filter(|sha| same_reviewed_sha(sha, &current_sha)) else {
+            continue;
+        };
+        let reviewer = round
+            .get("recorded_by")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("unknown reviewer")
+            .to_string();
+        match VerdictKind::parse(
+            round
+                .get("verdict")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default(),
+        ) {
+            VerdictKind::Approved => approvals.push(reviewer),
+            VerdictKind::RequestChanges | VerdictKind::Rejected => blockers.push(reviewer),
+            VerdictKind::Other => {}
+        }
+    }
+    approvals.sort();
+    approvals.dedup();
+    blockers.sort();
+    blockers.dedup();
+    let independent = approvals
+        .iter()
+        .any(|approved| blockers.iter().any(|blocked| approved != blocked));
+    if approvals.is_empty() || blockers.is_empty() || !independent {
+        return None;
+    }
+    Some(format!(
+        "conflicting review verdicts at {}: approved by {}; blocked by {}",
+        short_sha(&current_sha),
+        approvals.join(", "),
+        blockers.join(", ")
+    ))
+}
+
+/// Reconcile every review recording from multiple artifacts at `current_sha`.
+/// Retained rounds are durable evidence, so an ill-formed or unattributed
+/// round is an integrity error rather than something a later approval may
+/// silently hide.
+// trace:BUG-1581 | ai:codex
+pub fn reconcile_artifacts_for_sha<'a>(
+    bodies: impl IntoIterator<Item = &'a str>,
+    current_sha: &str,
+) -> Result<Option<VerdictKind>, String> {
+    let mut approvals = Vec::new();
+    let mut blockers = Vec::new();
+    let mut saw_current = false;
+
+    for body in bodies {
+        let value: serde_json::Value = serde_json::from_str(body)
+            .map_err(|e| format!("verdict artifact is not valid JSON: {e}"))?;
+        let obj = value
+            .as_object()
+            .ok_or_else(|| "verdict artifact is not a JSON object".to_string())?;
+        let mut recordings = vec![(obj, false)];
+        if let Some(rounds) = obj.get("rounds") {
+            let rounds = rounds
+                .as_array()
+                .ok_or_else(|| "retained `rounds` is not an array".to_string())?;
+            for (index, round) in rounds.iter().enumerate() {
+                let round = round
+                    .as_object()
+                    .ok_or_else(|| format!("retained round {} is not a JSON object", index + 1))?;
+                recordings.push((round, true));
+            }
+        }
+
+        for (recording, retained) in recordings {
+            let sha = round_sha(recording).ok_or_else(|| {
+                if retained {
+                    "retained round has no reviewed_sha/head provenance".to_string()
+                } else {
+                    "verdict artifact has no reviewed_sha/head provenance".to_string()
+                }
+            })?;
+            let raw = recording
+                .get("verdict")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| "review recording has no verdict".to_string())?;
+            let kind = VerdictKind::parse(raw);
+            if kind == VerdictKind::Other {
+                return Err(format!("review recording has unrecognised verdict `{raw}`"));
+            }
+            let reviewer = recording
+                .get("recorded_by")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|v| !v.is_empty());
+            if retained && reviewer.is_none() {
+                return Err("retained round has no recorded_by provenance".to_string());
+            }
+            if !same_reviewed_sha(&sha, current_sha) {
+                continue;
+            }
+            saw_current = true;
+            let reviewer = reviewer.unwrap_or("unknown reviewer").to_string();
+            match kind {
+                VerdictKind::Approved => approvals.push(reviewer),
+                VerdictKind::RequestChanges | VerdictKind::Rejected => blockers.push(reviewer),
+                VerdictKind::Other => unreachable!(),
+            }
+        }
+    }
+
+    approvals.sort();
+    approvals.dedup();
+    blockers.sort();
+    blockers.dedup();
+    if approvals
+        .iter()
+        .any(|approved| blockers.iter().any(|blocked| approved != blocked))
+    {
+        return Err(format!(
+            "conflicting review verdicts at {}: approved by {}; blocked by {}",
+            short_sha(current_sha),
+            approvals.join(", "),
+            blockers.join(", ")
+        ));
+    }
+    if !blockers.is_empty() {
+        Ok(Some(VerdictKind::RequestChanges))
+    } else if !approvals.is_empty() {
+        Ok(Some(VerdictKind::Approved))
+    } else if saw_current {
+        unreachable!()
+    } else {
+        Ok(None)
+    }
+}
+
 fn surviving_against_previous_round(
     obj: &serde_json::Map<String, serde_json::Value>,
     current: &[String],
@@ -625,6 +794,34 @@ pub fn record_verdict(
     recorded_by: &str,
 ) -> std::io::Result<PathBuf> {
     let path = verdict_path(project_root, spec);
+    record_verdict_at_path(
+        project_root,
+        &path,
+        verdict,
+        reviewed_sha,
+        reviewed_branch,
+        summary,
+        findings,
+        recorded_by,
+    )
+}
+
+/// Record a verdict at an explicitly anchored artifact path. The orchestrator
+/// uses this for `PR-N.json`; sharing this boundary with spec-keyed records is
+/// what prevents the authoritative handshake from silently clobbering another
+/// reviewer's evidence.
+// trace:BUG-1581 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub fn record_verdict_at_path(
+    project_root: &Path,
+    path: &Path,
+    verdict: Option<&str>,
+    reviewed_sha: Option<&str>,
+    reviewed_branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    recorded_by: &str,
+) -> std::io::Result<PathBuf> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -694,7 +891,7 @@ pub fn record_verdict(
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
         .unwrap_or_else(|_| "{}".to_string());
     std::fs::write(&path, format!("{body}\n"))?;
-    Ok(path)
+    Ok(path.to_path_buf())
 }
 
 /// Where the branch tip sits relative to the commit the verdict named.

@@ -4997,6 +4997,7 @@ pub(crate) fn wave_pr_action(f: &WavePrFacts) -> WavePrAction {
     let state = crate::integrate::PrIntegrationState {
         ci: f.ci,
         request_changes_pending: f.request_changes,
+        review_integrity_unproven: false,
         mergeable: f.mergeable,
     };
     match crate::integrate::classify_integration_action(&state) {
