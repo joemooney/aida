@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T10:47:53.128398296Z
-modified_at: 2026-09-22T10:54:07.114254590Z
+modified_at: 2026-09-22T11:07:17.106893462Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -35,3 +35,8 @@ comments:
   content: '[aida:cold-review] REQUEST_CHANGES on PR #2095 exact head a9378c1bae6cb7eb4e65cfeb84e86f423088d052. Independent cold review found two BUG-1548 acceptance blockers: material punted/escalated outcomes do not reset the idle streak, and invoker provenance is sampled at drain completion rather than drain start. Focused tests and fmt pass but do not cover these cases. Full verdict recorded on PR #2095.'
   created_at: 2026-09-22T10:54:07.114254590Z
   modified_at: 2026-09-22T10:54:07.114254590Z
+- id: 01a0c8cc-72f2-7682-ac6f-5b06c60b2a01
+  author: joe
+  content: '[aida:cold-review] APPROVED PR #2095 at exact head 70cabccefe784978663be55b41d8346977401ce7, conditional on required Build green. Independent: yes. Prior idle-reset and start-time provenance blockers are closed; focused/adversarial tests, fmt, and diff-check pass. merge-hold-gate green; Build remains in progress. Full evidence is on the PR and BUG-1548.'
+  created_at: 2026-09-22T11:07:17.106893462Z
+  modified_at: 2026-09-22T11:07:17.106893462Z
