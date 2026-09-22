@@ -1641,6 +1641,95 @@ fn auto_bump_leaves_approved_review_story_alone_without_merge() {
     );
 }
 
+/// BUG-1560: the stale-review-flip sweep excluded Draft at its candidate
+/// selection (`collect_stale_review_story_flips`) and its re-check
+/// (`apply_stale_review_flip`) for the same unexamined reason BUG-1543 fixed
+/// in the sibling stranded-review-PR sweep. Unlike that sibling, this sweep
+/// only ever considers a PR whose merge commit was already found in the
+/// local git log (`pr_to_sha`) — a "stale-review-flip" candidate is, by
+/// construction, always against a CONFIRMED-merged PR; the "is it still
+/// open?" ambiguity belongs entirely to the forge-lookup (stranded) sweep,
+/// which is why this sweep needs no forge mock to test. A Draft review
+/// story here means the review-story spec's own tracking record never even
+/// reached Approved before the code it tracks landed — the same
+/// "review lifecycle never finished" fact the Approved/InProgress cases
+/// already flip on, just caught one stage earlier. That reasoning
+/// transfers directly, so this flips Draft too, decided rather than left
+/// excluded by omission.
+// trace:BUG-1560 | ai:claude
+#[test]
+fn auto_bump_completes_draft_review_story_on_self_merge() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    let review_id = seed_review_story_at(
+        &store_path,
+        "STORY-9802",
+        83,
+        "self-merged while draft",
+        "draft",
+    );
+
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+    run_git(&project_root, &["add", "file.txt"]);
+    run_git(&project_root, &["commit", "-m", "feat: ship work (#83)"]);
+    let merge_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+
+    let storage = Storage::new(store_path.clone());
+    auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+
+    let after = storage.load().unwrap();
+    let req = after.get_requirement_by_spec_id(&review_id).unwrap();
+    assert!(
+        matches!(req.status, RequirementStatus::Completed),
+        "a Draft review story whose PR merged should auto-complete like its \
+         Approved/InProgress siblings, was {:?}",
+        req.status
+    );
+    assert_eq!(
+        req.implementation_info
+            .as_ref()
+            .and_then(|i| i.completion_sha.as_deref()),
+        Some(merge_sha.as_str()),
+    );
+    assert!(
+        req.comments
+            .iter()
+            .any(|c| c.content.contains("without a reviewer session")),
+        "an audit comment naming the skipped reviewer session should be recorded"
+    );
+}
+
+/// BUG-1560 opposite-direction falsifier: a Draft review story whose PR has
+/// NOT merged must be left untouched, mirroring
+/// `auto_bump_leaves_approved_review_story_alone_without_merge`. Without
+/// this, a sweep that flipped Draft unconditionally would satisfy the
+/// happy-path test above for the wrong reason — this is the assertion the
+/// BUG-1560 spec calls out as the one most people skip.
+// trace:BUG-1560 | ai:claude
+#[test]
+fn auto_bump_leaves_draft_review_story_alone_without_merge() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    let review_id =
+        seed_review_story_at(&store_path, "STORY-9902", 84, "queued while draft", "draft");
+
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    // A commit with NO `(#N)` suffix — the PR has not merged.
+    std::fs::write(project_root.join("file.txt"), "wip\n").unwrap();
+    run_git(&project_root, &["add", "file.txt"]);
+    run_git(&project_root, &["commit", "-m", "chore: unrelated work"]);
+
+    let storage = Storage::new(store_path.clone());
+    auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+
+    let after = storage.load().unwrap();
+    let req = after.get_requirement_by_spec_id(&review_id).unwrap();
+    assert!(
+        matches!(req.status, RequirementStatus::Draft),
+        "review story stays Draft until its PR merges, was {:?}",
+        req.status
+    );
+}
+
 /// BUG-219 acceptance regression: 4 review stories at Approved (the
 /// observed PR-52/53/54/56 case — `--auto-complete` shipped them,
 /// the orchestrator failed before spawning a reviewer), all 4 PRs
@@ -1715,6 +1804,46 @@ fn reconcile_status_completes_approved_review_story() {
     assert!(
         matches!(req.status, RequirementStatus::Completed),
         "reconcile-status should flip an Approved review story whose PR merged, was {:?}",
+        req.status
+    );
+    assert!(
+        req.comments
+            .iter()
+            .any(|c| c.content.contains("without a reviewer session")),
+        "reconcile-status should record the audit comment too"
+    );
+}
+
+/// BUG-1560, third site: `aida db reconcile-status`'s own write loop
+/// duplicates `apply_stale_review_flip`'s re-check inline (it doesn't call
+/// the shared helper) and had the same Draft exclusion. Fixed alongside the
+/// other two sites — a widen-one-site-only fix would leave this path a
+/// silent no-op exactly the way BUG-1543's review warned against.
+// trace:BUG-1560 | ai:claude
+#[test]
+fn reconcile_status_completes_draft_review_story() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    let review_id = seed_review_story_at(
+        &store_path,
+        "STORY-9952",
+        72,
+        "self-merged while draft",
+        "draft",
+    );
+
+    std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+    run_git(&project_root, &["add", "file.txt"]);
+    run_git(&project_root, &["commit", "-m", "feat: ship work (#72)"]);
+
+    let r = handle_db_reconcile_status(&store_path, None, Some(&review_id), false);
+    assert!(r.is_ok(), "reconcile-status failed: {:?}", r.err());
+
+    let storage = Storage::new(store_path.clone());
+    let after = storage.load().unwrap();
+    let req = after.get_requirement_by_spec_id(&review_id).unwrap();
+    assert!(
+        matches!(req.status, RequirementStatus::Completed),
+        "reconcile-status should flip a Draft review story whose PR merged, was {:?}",
         req.status
     );
     assert!(

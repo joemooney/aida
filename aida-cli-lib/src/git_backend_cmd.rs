@@ -673,15 +673,65 @@ mod show_latency_regression_tests {
     /// not fire on the exact change it existed to catch.
     ///
     /// Rather than repair a source-text parser to guard a property the
-    /// compiler already enforces, it is gone. Widening the trait is a visible
-    /// deliberate act in a diff; a whole-store read through it is not
-    /// expressible at all. What remains is a witness that the restricted view
-    /// is what the path is typed against.
+    /// compiler already enforces, it is gone.
+    ///
+    /// WHAT THIS ONE ACTUALLY ESTABLISHES (BUG-1559). It used to be described
+    /// here as "a witness that the restricted view is what the path is typed
+    /// against" — that is stronger than what it does, and BUG-1559 corrects
+    /// it: this only asserts that `aida_core::CachedGitBackend` implements
+    /// `CacheOnlyReads`. It says nothing about `show_cached_context`'s own
+    /// parameter type. Demonstrated: narrow that parameter from
+    /// `&impl CacheOnlyReads` to the concrete `&aida_core::CachedGitBackend`
+    /// and this test still compiles and still passes, because
+    /// `CachedGitBackend` implements the trait either way — the guarantee
+    /// that matters is gone and this assertion does not notice. Kept because
+    /// it is still a true, narrower fact worth having (this production type
+    /// does implement the trait); the actual path-typing guarantee is
+    /// `show_cached_context_stays_generic_over_cache_only_reads` below.
     // trace:BUG-1480 | ai:claude
     #[test]
-    fn the_show_path_is_typed_against_the_cache_only_view() {
+    fn cached_git_backend_implements_cache_only_reads() {
         fn requires_cache_only_view<T: CacheOnlyReads>() {}
         requires_cache_only_view::<aida_core::CachedGitBackend>();
+    }
+
+    /// A second, independent implementor of `CacheOnlyReads` — deliberately
+    /// not `aida_core::CachedGitBackend` and with no relationship to it. Its
+    /// only job is to be a distinct type that satisfies the trait, so a call
+    /// through it can only type-check if the callee's parameter is still
+    /// generic over the trait rather than pinned to one concrete type.
+    struct AnotherCacheOnlyView;
+
+    impl CacheOnlyReads for AnotherCacheOnlyView {
+        fn list_summaries(
+            &self,
+            _filter: &aida_core::ListFilter,
+        ) -> anyhow::Result<Vec<aida_core::RequirementSummary>> {
+            Ok(Vec::new())
+        }
+    }
+
+    /// THE WITNESS BUG-1559 ASKED FOR: this asserts `show_cached_context`'s
+    /// own parameter, not merely that some type implements the trait it
+    /// names. `AnotherCacheOnlyView` has no relationship to
+    /// `aida_core::CachedGitBackend`, so passing it here only type-checks
+    /// while the parameter is generic (`&impl CacheOnlyReads`). If a later
+    /// change narrows the parameter to the concrete
+    /// `&aida_core::CachedGitBackend`, this call becomes a type mismatch and
+    /// the crate fails to build — see BUG-1559 for the mutation demonstrated
+    /// both ways (the sibling test above shown to stay green under it, this
+    /// one shown to fail).
+    ///
+    /// A `trybuild` compile-fail fixture was considered for this and judged
+    /// disproportionate: it would add a dev-dependency plus an out-of-crate
+    /// `.rs`/`.stderr` fixture pair to assert exactly the fact this in-crate
+    /// type mismatch already asserts for free, with a clearer error at the
+    /// call site than a separately-maintained stderr snapshot would give.
+    // trace:BUG-1559 | ai:claude
+    #[test]
+    fn show_cached_context_stays_generic_over_cache_only_reads() {
+        let req = Requirement::new("BUG-1559 witness".to_string(), String::new());
+        let _ = show_cached_context(&AnotherCacheOnlyView, &req);
     }
 }
 
