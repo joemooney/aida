@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:29:09.929894136Z
-modified_at: 2026-09-22T08:59:41.207454802Z
+modified_at: 2026-09-22T09:04:37.078084264Z
 req_type: Bug
 tags:
 - awaiting
@@ -243,6 +243,11 @@ comments:
   content: '[aida:reviewer] COLD REREVIEW VERDICT — APPROVE CODE at exact PR #2086 head bb920e5087f60ebb6ce1b246d5ca57afb9722a5b; merge remains conditional on exact-head CI completing green. Prior initialization-layer blocker is closed: awaiting --notice opens CachedGitBackend via with_inner_cache_snapshot (no freshness rebuild), collect_awaiting_report_inner uses raw cache snapshot queries on notice-fast, and the upstream full-store report notice is skipped. Protocol resolution performs targeted authoritative reads of the leased spec and cache-located META YAML, validates the authoritative type/tag, and turns a stale-snapshot protocol miss into a visible warning instead of claiming no protocol. Correctness/staleness tradeoff is intentional and bounded: compact awaiting counts can lag at snapshot age, but protocol content and identity are authoritative when indexed; stale missing protocol is explicit. Reproduced the unrelated malformed YAML regression successfully six consecutive times (one cold plus five repeats) under the 500ms inner watchdog; previous rereview had failed 1/4. Also passed full task_1283_protocol_cli 4/4, protocol_cmd unit tests 7/7, and cargo fmt --all -- --check. Exact-head GitHub CI run 35706734262 had passed build, full tests, MCP, distributed integration, trace and doc-intent stages and was still running final static gates when this verdict was recorded; merge-hold-gate failure is the expected hold, not a product failure. No implementation or merge performed.'
   created_at: 2026-09-22T08:59:41.207454802Z
   modified_at: 2026-09-22T08:59:41.207454802Z
+- id: 01a0c85c-24d6-7ba0-b86d-d06ed09ca6cf
+  author: joe
+  content: '[aida:proxy-approval] verdict=approved; reasoning=independent cold rereviewer verified exact head bb920e5087f60ebb6ce1b246d5ca57afb9722a5b, snapshot-only notice path, authoritative targeted reads, visible stale-cache errors, and six repeated malformed-object regressions; independent=yes; gates=required Ubuntu CI green, exact-head code approval; hold-release=deliberate gh label bypass because non-TTY ship path cannot clear supervised hold; timestamp=2026-09-22T02:04:36-07:00'
+  created_at: 2026-09-22T09:04:37.078084264Z
+  modified_at: 2026-09-22T09:04:37.078084264Z
 failure_reason:
   phase: reviewer
   phase_index: 3
