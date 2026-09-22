@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:14:13.323242098Z
-modified_at: 2026-09-22T16:30:22.673961632Z
+modified_at: 2026-09-22T16:30:46.001514749Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -45,6 +45,10 @@ relationships:
 - rel_type: References
   target_id: 01a0bfa0-5a97-7cb3-8382-f90973400e83
   created_at: 2026-09-20T18:14:30.888545194Z
+  created_by: joe
+- rel_type: !Custom implemented-by
+  target_id: 01a0c9f4-831a-7c42-bc14-573ac9560ebf
+  created_at: 2026-09-22T16:30:46.001506082Z
   created_by: joe
 comments:
 - id: 01a0c640-c4ee-7021-b52b-91698de20899
