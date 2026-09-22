@@ -43,7 +43,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:09:49.662292511Z
-modified_at: 2026-09-22T11:36:08.691884418Z
+modified_at: 2026-09-22T12:03:11.630411751Z
 req_type: Bug
 tags:
 - aida:show cli-conformance agent-surface drain-safe from:session-0920
@@ -71,3 +71,8 @@ comments:
   content: 'REVIEW REQUEST_CHANGES at exact PR #2097 head 120d97d1925be37e03afdc861afb99750892e734. Independent cold review found three blockers: (1) capability gate equates a local json clap argument with implemented global-format support, but fasttrack status is a concrete counterexample because dispatch passes only the local json boolean; silent fallback remains possible. (2) exhaustive audit test only compares path sets and executes seven hard-coded honoured probes plus one unsupported probe; it does not behaviorally test every catalog/audit row or detect outcome drift on existing paths, so acceptance 4 is unmet. (3) show JSON omits human-view fields including timestamps, assignee, origin, external refs, interface changes, implementation summary, risk notes, test coverage notes, and execution mode, so acceptance 1 is unmet. Exact description bytes and structured git linkage pass. GitHub would not permit Request Changes review because the shared account owns the PR; durable blocking verdict is recorded as PR comment https://github.com/joemooney/aida/pull/2097#issuecomment-5775723303.'
   created_at: 2026-09-22T11:36:08.691884418Z
   modified_at: 2026-09-22T11:36:08.691884418Z
+- id: 01a0c8ff-a28e-76a1-869e-8681fb05bfec
+  author: joe
+  content: 'REWORK pushed to PR #2097 exact head 467827980a376cde15958e004693883374c240d2. Global format json now materializes the selected leaf dedicated json flag before dispatch; fasttrack status is covered. The audit detects path and outcome drift, executes every unsupported catalog row fail-closed, and parses/compares every verified honoured projection. Show JSON now starts from the full stored Requirement and overlays derived human-view fields plus structured git linkage; the regression fixture asserts opened/modified, assignee, origin, external refs, interface changes, implementation/risk/test notes, execution mode, null no-git linkage, and exact description bytes. Previous CI failure was a stale test requiring successful human fallback; corrected to fail closed. Focused tests 5 passed, fmt passed, CI-equivalent clippy passed. Requires a different independent reviewer because this implementer authored the prior findings.'
+  created_at: 2026-09-22T12:03:11.630411751Z
+  modified_at: 2026-09-22T12:03:11.630411751Z
