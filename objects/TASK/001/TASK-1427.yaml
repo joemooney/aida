@@ -1,0 +1,49 @@
+id: 01a0c96e-7991-7431-93ca-31252ac2adb2
+spec_id: TASK-1427
+agreed_id: TASK-1427
+title: Build a derived per-message token ledger attributable to spec, run, phase, round, seat and vendor
+description: |
+  Operator priority 2026-09-22: reliably track token consumption for each spec, ideally split across implementation, review, and rework phases.
+
+  Build the smallest durable attribution layer described by SPIKE-83. It is a read-only/idempotently rebuildable normalizer over already-retained Claude Code and Codex session artifacts plus AIDA session/lease/run metadata. The first slice measures tokens; dated pricing is a later layer.
+
+  Required record identity and dimensions:
+  - stable vendor session and message/request identity for deduplication;
+  - vendor and raw model name;
+  - AIDA spec ID and run/session identity where provable;
+  - seat/role, orchestration phase, and review/rework round where provable;
+  - raw token classes without lossy collapse: uncached input, cache creation/write, cache read/cached input, output, and reasoning/thinking output;
+  - collection status and provenance, so unknown/unattributed/unpriced are never encoded as zero.
+
+  Architecture constraints:
+  - derived local data is rebuildable and must not mutate vendor transcripts;
+  - repeated ingestion is idempotent and does not double-count cumulative Codex events or duplicate Claude message representations;
+  - joins are evidence-based. Ambiguous joins remain unattributed with a reason rather than guessed;
+  - use OpenTelemetry-compatible semantic names where practical while retaining vendor-native fields;
+  - historical drain_summary zero values remain lower-bound legacy evidence, not converted into measured zeros;
+  - do not require vendor network APIs for local attribution.
+
+  Acceptance:
+  1. Fixture-backed parsers normalize Claude message.usage and Codex last_token_usage records, including cache and reasoning classes, with deterministic deduplication.
+  2. A fixture-backed join correlates vendor sessions through AIDA manifests/leases/run metadata to spec, seat, phase, and round when evidence exists; each missing or ambiguous dimension has an explicit null plus reason.
+  3. An idempotent rebuild command produces a durable local derived ledger/schema with version and provenance. Running it twice yields identical records and totals.
+  4. A query surface reports totals for one spec and groups them at least by phase and vendor; when round metadata exists it is exposed. Unknown/unattributed records and coverage counts are shown alongside measured totals.
+  5. Genuine measured zero is distinguishable from unknown, missing log, unsupported schema, truncated record, and ambiguous join.
+  6. Tests cover duplicate Claude representations, repeated Codex cumulative totals, truncated/unsupported events, missing manifests, ambiguous joins, and a complete implementation-review-rework example.
+  7. Documentation states coverage limits, local-vs-billing semantics, legacy lower bounds, schema/version location, and the exact rebuild/query commands.
+  8. No dollar estimate is emitted without a separately versioned dated rate and exact model match; pricing is explicitly out of scope for this slice.
+
+  Sketch-first: before implementation, post the proposed ledger location/schema, join keys, deduplication rules, and CLI surface on this task for driver signoff.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T14:04:15.633781093Z
+modified_at: 2026-09-22T14:04:15.633781093Z
+req_type: Task
+tags:
+- cost
+- effort:open:1d
+- observability
+- operator-priority
+- telemetry
