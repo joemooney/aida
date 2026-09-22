@@ -1403,6 +1403,7 @@ pub(crate) fn handle_git_backend_command(
             priority,
             feature,
             tags,
+            machine_drafts,
             no_scope,
             show_origin,
             include_meta,
@@ -1523,6 +1524,16 @@ pub(crate) fn handle_git_backend_command(
                 (Some(s), None) | (None, Some(s)) => Some(s.to_string()),
                 (None, None) => None,
             };
+            if *machine_drafts
+                && !raw_status
+                    .as_deref()
+                    .is_some_and(crate::status_spec_is_exact_draft)
+            {
+                anyhow::bail!(
+                    "`--machine-drafts` requires the exact draft view: \
+                     `aida list --status draft --machine-drafts`"
+                );
+            }
             // BUG-788: capture whether this is the explicit `open` shortcut
             // BEFORE `raw_status` is expanded into the canonical status set —
             // once expanded, `open` is indistinguishable from a hand-typed
@@ -1530,6 +1541,9 @@ pub(crate) fn handle_git_backend_command(
             // bare-list default lens's accepted-decision exclusion (BUG-781), so
             // `aida list` and `aida list open` agree. trace:BUG-788 | ai:claude
             let explicit_open_alias = crate::status_spec_is_open_alias(raw_status.as_deref());
+            let exact_draft_view = raw_status
+                .as_deref()
+                .is_some_and(crate::status_spec_is_exact_draft);
             let status: Option<String> = match raw_status {
                 Some(spec) => {
                     let expanded = aida_core::RequirementStatus::expand_filter_spec(&spec)
@@ -1688,7 +1702,7 @@ pub(crate) fn handle_git_backend_command(
                 // CLI accepted --priority but it never reached the query.
                 priority: priority.clone(),
                 feature: feature.clone(),
-                tags: effective_tags,
+                tags: effective_tags.clone(),
                 archive,
                 defer,
                 sort: sort_order,
@@ -1815,6 +1829,22 @@ pub(crate) fn handle_git_backend_command(
             if !*all && !user_asked_for_standing_type {
                 reqs.retain(|r| !is_standing_artifact_type(&r.req_type));
             }
+
+            // BUG-1498: draft grooming is human-first. Auto-complete failure
+            // records retain their provenance and remain directly reachable
+            // (and batchable) through --machine-drafts or an explicit
+            // --tags auto-drafted filter. Older records that predate the tag
+            // are recognized by their stable description preamble. Apply
+            // after parent/focus/type lenses so the hidden count is local to
+            // exactly the view the advisor requested.
+            let explicitly_asked_for_machine_tag =
+                effective_tags.iter().any(|tag| tag == "auto-drafted");
+            let machine_drafts_hidden = crate::apply_machine_draft_lens(
+                &mut reqs,
+                exact_draft_view,
+                *machine_drafts,
+                explicitly_asked_for_machine_tag,
+            );
 
             // BUG-781: a decision spec (an ADR) sitting at `Approved` is
             // ACCEPTED — that class's TERMINAL state — so it belongs with the
@@ -2036,6 +2066,15 @@ pub(crate) fn handle_git_backend_command(
                     accepted_decisions_hidden,
                 ) {
                     println!("{}", line.dimmed());
+                }
+                if machine_drafts_hidden > 0 {
+                    println!(
+                        "{}",
+                        format!(
+                            "  ({machine_drafts_hidden} machine-filed drafts hidden — pass --machine-drafts to groom them)"
+                        )
+                        .dimmed()
+                    );
                 }
             };
 
@@ -2272,6 +2311,11 @@ pub(crate) fn handle_git_backend_command(
                 if accepted_decisions_hidden > 0 {
                     println!(
                         "note: {accepted_decisions_hidden} accepted decisions hidden (terminal) — `aida list --type decision`"
+                    );
+                }
+                if machine_drafts_hidden > 0 {
+                    println!(
+                        "note: {machine_drafts_hidden} machine-filed drafts hidden — `aida list --status draft --machine-drafts`"
                     );
                 }
                 // TASK-974 (AXI #9): trailing next-step block — drill into a row

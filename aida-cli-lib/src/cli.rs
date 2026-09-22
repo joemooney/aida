@@ -8441,6 +8441,14 @@ pub enum Command {
         #[clap(long)]
         tags: Option<String>,
 
+        /// Show only machine-filed auto-complete failure drafts. Plain
+        /// `aida list --status draft` shows human-filed drafts so advisor
+        /// grooming is not dominated by orchestrator records. Machine drafts
+        /// remain batchable with `--machine-drafts --short`.
+        // trace:BUG-1498 | ai:codex
+        #[clap(long, requires = "status")]
+        machine_drafts: bool,
+
         /// Bypass the active role's scope filters for this command.
         // trace:TASK-1-021 | ai:claude
         #[clap(long)]
@@ -13647,6 +13655,34 @@ mod tests {
             }
             other => panic!("expected List, got {other:?}"),
         }
+    }
+
+    // trace:BUG-1498 | ai:codex
+    #[test]
+    fn bug_1498_list_machine_drafts_flag_requires_explicit_draft_status() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "list",
+            "--status",
+            "draft",
+            "--machine-drafts",
+            "--short",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::List {
+                status,
+                machine_drafts,
+                short,
+                ..
+            } => {
+                assert_eq!(status.as_deref(), Some("draft"));
+                assert!(machine_drafts);
+                assert!(short);
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
+        assert!(Cli::try_parse_from(["aida", "list", "--machine-drafts"]).is_err());
     }
 
     // trace:STORY-662 — the `--user <name>` flag parses, and the positional
