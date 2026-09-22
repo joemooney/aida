@@ -137,6 +137,12 @@ jobs:
         # crates, instead of stopping at the first (BUG-1021).
         run: cargo test --workspace --no-fail-fast
 
+      # Keep the live-smoke workflow's perimeter-auth contract testable without
+      # exposing credentials in ordinary PR CI. trace:TASK-1425 trace:ADR-54 | ai:codex
+      - name: GitLab live-smoke workflow guard
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_gitlab_live_access_workflow.sh
+
       # BUG-1526: this step runs AFTER the test suite deliberately. It used to sit
       # at position 12 of 26, and `bash -e` aborts the job on failure — so a stale
       # generated markdown file skipped `Run tests` and twelve later guards, and the
