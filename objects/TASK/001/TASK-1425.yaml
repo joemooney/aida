@@ -55,7 +55,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:09:54.985425283Z
-modified_at: 2026-09-21T22:09:54.985425283Z
+modified_at: 2026-09-22T04:34:46.097197001Z
 req_type: Task
 tags:
 - forge gitlab ci infrastructure
+comments:
+- id: 01a0c765-16d1-72e3-b079-2b6ea5e028b2
+  author: joe
+  content: '[architecture-sketch] Operator selected remedy A by provisioning AIDA_CF_ACCESS_CLIENT_ID and AIDA_CF_ACCESS_CLIENT_SECRET. Implement with glab host custom_headers sourced from environment, install a glab version that supports that configuration, authenticate preflight against GitLab API JSON rather than readiness HTML, document credential separation and rotation, then demonstrate the complete live lifecycle. Security trade recorded in the linked accepted decision.'
+  created_at: 2026-09-22T04:34:46.097197001Z
+  modified_at: 2026-09-22T04:34:46.097197001Z
