@@ -21,12 +21,12 @@ description: |-
   Option 3 depends on a working machine-readable read, and `aida show --format json` is currently ignored on the show verb, so the alternative a consumer would be pushed toward is itself broken. That coupling is why this should be decided rather than left.
 
   NOT IN SCOPE: the escape-residue corruption, which is a separate observation about descriptions being round-tripped through a display surface.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:26:14.774144314Z
-modified_at: 2026-09-22T09:07:07.040900574Z
+modified_at: 2026-09-22T09:07:24.319930143Z
 req_type: Task
 tags:
 - from-advisor:general
