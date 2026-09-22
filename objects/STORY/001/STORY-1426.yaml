@@ -33,12 +33,12 @@ description: |-
   - The sweep takes no action and changes no spec.
   - Output is bounded and actionable - a reader can work the whole list, not sample it.
   - Clean stores produce empty output and a zero exit; a store with candidates is distinguishable by exit code from one without.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:10:07.727932558Z
-modified_at: 2026-09-22T14:29:41.703309526Z
+modified_at: 2026-09-22T14:29:54.278463685Z
 req_type: Story
 tags:
 - agent-collaboration
@@ -91,3 +91,22 @@ comments:
   content: '[aida:proxy-approval] verdict=APPROVE; reasoning=fresh independent exact-head review approved PR #2080 at a245bed46a4fd44244614cdabe66f87019fc5669; implementation and docs satisfy the linked spec, with tested low-confidence escalation, lossless contradiction pagination, honest benchmark, and evaluator provenance; independent=yes; gates=Build ubuntu SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; timestamp=2026-09-22T07:29:33-07:00'
   created_at: 2026-09-22T14:29:41.703309526Z
   modified_at: 2026-09-22T14:29:41.703309526Z
+history:
+- id: 01a0c985-f3d3-7c02-98b4-ce6fc0b55520
+  author: aida-auto-bump
+  timestamp: 2026-09-22T14:29:54.259478146Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0c985-f3e6-7a33-84e9-47d305aa49c7
+  timestamp: 2026-09-22T14:29:54.278462027Z
+  agent: aida
+  commit_sha: 61ba7d9959e32eb76d412664ee5574695a9d4a96
+  summary: Named fixtures pass, but 182-item live output violates bounded/actionable acceptance
+  review_verdict: request-changes
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T14:29:52.489828916Z
+  completion_sha: 61ba7d9959e32eb76d412664ee5574695a9d4a96
