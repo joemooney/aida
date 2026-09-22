@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T15:58:28.521305527Z
-modified_at: 2026-09-22T15:58:28.521305527Z
+modified_at: 2026-09-22T15:58:33.315425896Z
 req_type: Task
 tags:
 - cost
@@ -38,3 +38,8 @@ tags:
 - operator-priority
 - pricing
 - telemetry
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a0c96e-7991-7431-93ca-31252ac2adb2
+  created_at: 2026-09-22T15:58:33.315417671Z
+  created_by: joe
