@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T11:30:52.264950402Z
-modified_at: 2026-09-22T12:03:16.948119703Z
+modified_at: 2026-09-22T13:57:53.988173407Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -40,3 +40,8 @@ comments:
   content: 'PR #2097 rework is ready at exact head 467827980a376cde15958e004693883374c240d2. All prior blocking findings were implemented and focused gates pass. A different cold reviewer is required; the implementer authored the previous review findings and is not independent.'
   created_at: 2026-09-22T12:03:16.948119703Z
   modified_at: 2026-09-22T12:03:16.948119703Z
+- id: 01a0c968-a6c4-7ca3-a04f-889ab2045747
+  author: joe
+  content: 'REQUEST_CHANGES at exact PR #2097 head 467827980a376cde15958e004693883374c240d2. BUG-1502 acceptance 1 remains incomplete: ShowJson omits human-visible queue membership and disagrees on type-aware Decision Approved status (human Accepted vs JSON Approved). PR comment with repro/evidence: https://github.com/joemooney/aida/pull/2097#issuecomment-5777841310.'
+  created_at: 2026-09-22T13:57:53.988173407Z
+  modified_at: 2026-09-22T13:57:53.988173407Z
