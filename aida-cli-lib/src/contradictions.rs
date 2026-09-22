@@ -438,33 +438,45 @@ pub fn sweep_contradictions_at(
                         .copied()
                         .unwrap_or(resp.confidence);
 
-                    // Flag as finding if choice is "contradicts" or "supersedes" with probability >= 0.50
-                    if (resp.choice == "contradicts" || resp.choice == "supersedes") && prob >= 0.50
-                    {
-                        let summary = format!(
+                    // Slice 1 is an independently actionable mechanical sweep.
+                    // A Rung-3.5 heuristic may enrich a candidate, but a
+                    // `compatible` answer is not evidence sufficient to erase
+                    // the deterministic join that discovered it.
+                    let is_semantic_conflict = (resp.choice == "contradicts"
+                        || resp.choice == "supersedes")
+                        && prob >= 0.50;
+                    let summary = if is_semantic_conflict {
+                        format!(
                             "Semantic conflict detected: {} ({}) is contradicted or superseded by {} ({}) without status alignment.",
                             pair.spec_a_id, pair.spec_a_status, pair.spec_b_id, pair.spec_b_status
-                        );
-                        findings.push(ContradictionFinding {
-                            spec_a_id: pair.spec_a_id.clone(),
-                            spec_a_title: pair.spec_a_title.clone(),
-                            spec_a_status: pair.spec_a_status.clone(),
-                            spec_a_type: pair.spec_a_type.clone(),
-
-                            spec_b_id: pair.spec_b_id.clone(),
-                            spec_b_title: pair.spec_b_title.clone(),
-                            spec_b_status: pair.spec_b_status.clone(),
-                            spec_b_type: pair.spec_b_type.clone(),
-
-                            verdict: resp.choice,
-                            confidence: resp.confidence,
-                            probability: prob,
-                            heuristic: resp.heuristic,
-                            model: resp.model,
-                            mechanical_reason: pair.mechanical_reason.clone(),
-                            summary,
-                        });
-                    }
+                        )
+                    } else {
+                        format!(
+                            "Mechanical contradiction candidate remains unresolved: {} vs {}; heuristic classified it as {}.",
+                            pair.spec_a_id, pair.spec_b_id, resp.choice
+                        )
+                    };
+                    findings.push(ContradictionFinding {
+                        spec_a_id: pair.spec_a_id.clone(),
+                        spec_a_title: pair.spec_a_title.clone(),
+                        spec_a_status: pair.spec_a_status.clone(),
+                        spec_a_type: pair.spec_a_type.clone(),
+                        spec_b_id: pair.spec_b_id.clone(),
+                        spec_b_title: pair.spec_b_title.clone(),
+                        spec_b_status: pair.spec_b_status.clone(),
+                        spec_b_type: pair.spec_b_type.clone(),
+                        verdict: if is_semantic_conflict {
+                            resp.choice
+                        } else {
+                            "candidate".into()
+                        },
+                        confidence: resp.confidence,
+                        probability: prob,
+                        heuristic: resp.heuristic,
+                        model: resp.model,
+                        mechanical_reason: pair.mechanical_reason.clone(),
+                        summary,
+                    });
                 }
                 Err(err) => {
                     // PRIN-5: an unavailable heuristic cannot erase a mechanical candidate.

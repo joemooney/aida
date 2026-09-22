@@ -410,6 +410,7 @@ pub fn execute_graded_review(
     // Rung 3.5: Evaluate residual prose criteria via Jev System One
     let mut min_probability = 1.0f64;
     let mut min_confidence = 1.0f64;
+    let mut confident_failure: Option<(f64, f64)> = None;
     let mut evaluation_failed = false;
 
     if let Some(eval) = evaluator {
@@ -432,6 +433,9 @@ pub fn execute_graded_review(
                         min_probability = resp.noul;
                     }
                     min_confidence = min_confidence.min(resp.confidence);
+                    if resp.noul <= 0.20 && resp.confidence >= 0.85 {
+                        confident_failure = Some((resp.noul, resp.confidence));
+                    }
                     let status = if resp.noul >= 0.95 {
                         CriterionStatus::Passed
                     } else if resp.noul <= 0.20 {
@@ -511,11 +515,8 @@ pub fn execute_graded_review(
                 machine_passed_count, min_probability
             ),
         })
-    } else if !evaluation_failed
-        && evaluator.is_some()
-        && min_probability <= 0.20
-        && min_confidence >= 0.85
-    {
+    } else if !evaluation_failed && evaluator.is_some() && confident_failure.is_some() {
+        let (failure_probability, failure_confidence) = confident_failure.unwrap();
         Ok(GradedReviewVerdict {
             spec_id: spec_id.to_string(),
             reviewed_sha: reviewed_sha.to_string(),
@@ -528,8 +529,8 @@ pub fn execute_graded_review(
             escalated_to_seat: false,
             results,
             summary: format!(
-                "Residual prose criterion failed evaluation (p={:.2} <= 0.20, heuristic: true).",
-                min_probability
+                "Residual prose criterion failed evaluation (p={:.2} <= 0.20, confidence={:.2} >= 0.85, heuristic: true).",
+                failure_probability, failure_confidence
             ),
         })
     } else {

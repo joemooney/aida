@@ -130,6 +130,29 @@ fn test_high_probability_low_confidence_escalates() {
 }
 
 #[test]
+fn test_fast_fail_probability_and_confidence_belong_to_same_criterion() {
+    let desc = "## Acceptance\n- [ ] `true`\n- First prose criterion\n- Second prose criterion\n";
+    // The first criterion is a confident failure. The second is uncertain.
+    // A global minimum confidence would incorrectly erase the valid fast-fail.
+    let mock = MockEvaluator::new()
+        .with_noul_confidence(0.10, 0.95)
+        .with_noul_confidence(0.90, 0.40);
+    let verdict = execute_graded_review(
+        "TASK-106",
+        "Per-criterion thresholds",
+        desc,
+        "+ change",
+        "abc1234",
+        Path::new("."),
+        Some(&mock),
+    )
+    .unwrap();
+    assert_eq!(verdict.overall_verdict, "request-changes");
+    assert!(!verdict.escalated_to_seat);
+    assert!(verdict.summary.contains("confidence=0.95"));
+}
+
+#[test]
 fn test_graded_review_mixed_jev_fast_fail() {
     let desc = "## Acceptance\n- [ ] `true`\n- Proper error handling\n";
     let cwd = Path::new(".");

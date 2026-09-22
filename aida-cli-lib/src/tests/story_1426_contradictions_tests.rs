@@ -203,3 +203,40 @@ fn test_terminal_plan_missing_followup_child_is_reported() {
         .iter()
         .any(|c| c.spec_a_id == "EPIC-63" && c.spec_b_id == "docs/plans/entry.md#Followups"));
 }
+
+#[test]
+fn test_exact_epic_63_store_shape_survives_compatible_evaluator() {
+    let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap();
+    let mut store = RequirementsStore::default();
+    store.requirements.push(make_req(
+        "EPIC-63",
+        "Entry 'memory lane': AIDA under the hood as an invisible requirements store / memory / notepad for a normal Claude or Codex chat (no automation machinery)",
+        "The entry adoption lane for AIDA: used transparently as a requirements store + memory + notepad that the coding agent consults and updates on its own, with the user knowing nothing about AIDA (like codegraph under the hood). Store + query CLI + trace + trailer + MCP + --footprint minimal already exist; this epic packages them into a coherent no-machinery lane. Excludes queue/drain/orchestrator/roles/multi-agent and codegraph auto-population (deferred). Plan: docs/plans/2026-09-12-entry-memory-lane.md. Operator-approved shape 2026-09-12.",
+        RequirementType::Epic,
+        RequirementStatus::Completed,
+        10,
+    ));
+
+    let candidates = find_mechanical_candidates_at(&store, repo_root);
+    let epic_candidate = candidates
+        .iter()
+        .find(|candidate| {
+            candidate.spec_a_id == "EPIC-63" && candidate.spec_b_id.ends_with("#Followups")
+        })
+        .expect("the exact EPIC-63 plan Followups shape must be discovered");
+    assert!(epic_candidate.spec_b_title.contains("Codegraph"));
+
+    let mut probabilities = HashMap::new();
+    probabilities.insert("compatible".to_string(), 0.99);
+    let mock = MockEvaluator::new().with_choice("compatible", 0.99, probabilities);
+    let findings =
+        crate::contradictions::sweep_contradictions_at(&store, Some(&mock), repo_root).unwrap();
+    let finding = findings
+        .iter()
+        .find(|finding| finding.spec_a_id == "EPIC-63")
+        .expect("a compatible heuristic must not erase a mechanical candidate");
+    assert_eq!(finding.verdict, "candidate");
+    assert!(finding.mechanical_reason.contains("Followups"));
+}
