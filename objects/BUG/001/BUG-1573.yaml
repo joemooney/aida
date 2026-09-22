@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:26:07.580218491Z
-modified_at: 2026-09-22T09:37:47.943104844Z
+modified_at: 2026-09-22T09:38:15.587420845Z
 req_type: Bug
 comments:
 - id: 01a0c5f3-8b04-7ca0-a364-92d11f94067d
@@ -78,3 +78,19 @@ comments:
   created_at: 2026-09-21T21:51:07.523992281Z
   modified_at: 2026-09-21T21:51:07.523992281Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c87a-f1a3-7a03-b93a-17e1a0029fce
+  author: joe
+  content: |-
+    [aida:implementer] ARCHITECTURE SKETCH — awaiting driver sign-off before code changes.
+
+    Persisted contract: extend JobLedger additively with an optional bounded failure_context projection (serde default/skip when absent), preserving existing result: failed:<code> and compatibility with old ledgers/readers. For performance-guard failures only, parse the command's already-produced stdout into typed audit fields: proportion_pct, denominator, budget_ms, tolerated_pct, worst_ms, plus a compact normalized summary. Do not persist arbitrary stdout, stderr, config, paths, or payloads. Zero denominator is represented explicitly and must not divide/recompute.
+
+    Trip correlation: add a stable trip_id derived/generated at recording time and place the same ID plus compact performance context into both the ledger and CronJobFailed event. Retain a bounded trip history (not just mutable last_run) so an event's trip remains auditable; keep legacy top-level last_* fields as the latest projection for existing readers.
+
+    Consumer path: derive the advisor-facing ledger path from the same schedule-ledger path helper/constant used by the writer, naming .aida-store/schedule/<job>.yaml. The routed event carries enough context itself to diagnose even if the ledger advances.
+
+    Tests (red first): failing performance trip records all typed fields and matching trip correlation in ledger/event/log display; passing run records no failure context; zero denominator is explicit/safe; legacy YAML deserializes and new YAML round-trips; bounded/noisy stdout and sensitive unrelated output are excluded; routing prompt points to the actual writer path. Then targeted tests and cargo fmt --all -- --check.
+
+    Please sign off or redirect this contract before implementation.
+  created_at: 2026-09-22T09:38:15.587420845Z
+  modified_at: 2026-09-22T09:38:15.587420845Z
