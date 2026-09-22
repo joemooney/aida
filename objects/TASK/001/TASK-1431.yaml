@@ -13,12 +13,12 @@ description: |-
   - Uses monotonic clock (Instant) to avoid clock skew.
   - Zero blocking network probes on the critical request path; health state is inferred directly from evaluation results.
   - Emits structured state transition events for telemetry.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T15:04:02.852450940Z
-modified_at: 2026-09-22T15:50:03.656494494Z
+modified_at: 2026-09-22T16:25:57.966418861Z
 req_type: Task
 tags:
 - adr-56
