@@ -580,8 +580,8 @@ mod tests {
         req.tags.insert("tag-mango".into());
         req.custom_fields.insert("z_key".into(), "1".into());
         req.custom_fields.insert("a_key".into(), "2".into());
-        // A custom relationship must serialize as a `!Custom` tag (the shape a
-        // stock YAML loader trips on — hazard #1).
+        // TASK-184: custom relationships serialize as plain scalars so stock
+        // YAML loaders can consume canonical objects. trace:TASK-184 | ai:codex
         req.relationships.push(Relationship {
             rel_type: RelationshipType::Custom("verifies-indirectly".into()),
             target_id: Uuid::now_v7(),
@@ -604,11 +604,17 @@ mod tests {
             "custom_fields keys must serialize sorted:\n{yaml}"
         );
 
-        // 2. RelationshipType::Custom → `!Custom` tag.
+        // 2. RelationshipType::Custom → plain scalar, never a local YAML tag.
         assert!(
-            yaml.contains("!Custom"),
-            "custom rel must tag as !Custom:\n{yaml}"
+            yaml.contains("rel_type: verifies-indirectly"),
+            "custom rel must serialize as a plain scalar:\n{yaml}"
         );
+        assert!(
+            !yaml.contains("!Custom"),
+            "local tags are forbidden:\n{yaml}"
+        );
+        let _: serde_yaml::Value = serde_yaml::from_str(&yaml)
+            .expect("canonical object must parse through a generic YAML value loader");
 
         // 3. Timestamps are RFC3339 Zulu strings (nanosecond-Z), never `+00:00`.
         let created_line = yaml
