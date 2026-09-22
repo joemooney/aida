@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T03:30:59.539323012Z
-modified_at: 2026-09-22T06:47:38.020807551Z
+modified_at: 2026-09-22T07:06:54.233637686Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity drain-safe from:session-0920
@@ -225,3 +225,8 @@ comments:
   content: 'Cold independent rereview REQUEST CHANGES at exact PR #2076 head 32aead2b4077e608937c177454355bc1f5208bd8. The direct PR-keyed live phase-3 and resume consumers now validate stale/SHA-less approvals, but both live phase-3 call sites treat that validation failure as permission to consult spec_verdict_fallback_for_phase3 / sibling_verdict_sweep_for_phase3; those paths parse only the verdict spelling and accept fresh Approved records without checking reviewed_sha against the current head. Thus stale, SHA-less, or current-head-unresolved approvals can still advance through fallback. Exact-head GitHub CI is also red (ubuntu Build; scaffold_refresh starter_role_refresh test). Focused provenance tests were launched locally. Reviewer independent of spec/implementation; no code edits or merge.'
   created_at: 2026-09-22T06:47:38.020807551Z
   modified_at: 2026-09-22T06:47:38.020807551Z
+- id: 01a0c7f0-5f99-7143-a005-68aefb2ff0df
+  author: joe
+  content: Cold independent round-3 APPROVED at b372a8e0b2634b8a5d6a65f42ce7db2982c45173. Full spec/diff and prior blockers reviewed; commit identity normalization/comparison and tests satisfy acceptance; exact-head CI green. Reviewer independent; no implementation or merge.
+  created_at: 2026-09-22T07:06:54.233637686Z
+  modified_at: 2026-09-22T07:06:54.233637686Z
