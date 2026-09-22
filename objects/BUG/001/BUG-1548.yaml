@@ -51,10 +51,10 @@ description: |-
        repeating silently. Six identical shipped=0 runs is a signal, not noise.
 
   NOT IN SCOPE: the reason shipped=0, which is the nine-refusals ceiling recorded separately. This spec is about a drain being invisible, not about it being idle.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:49:08.443039479Z
-modified_at: 2026-09-21T11:49:08.443039479Z
+modified_at: 2026-09-22T10:30:21.955072117Z
 req_type: Bug
