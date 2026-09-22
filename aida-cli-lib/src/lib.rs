@@ -69187,71 +69187,19 @@ fn arm_notice_deadline() {
     });
 }
 
-/// The per-turn notice's fail-open bound. TASK-1274 root-caused
-/// `awaiting_notice_tracks_real_lease_through_session_end` failing on both
-/// the GitLab mirror (pipeline 308: FAILED, 1256s) and a plain local `cargo
-/// test` run on this machine (reproduced outside any container) to THIS
-/// deadline, not to the docker-executor PID theory an earlier commit on that
-/// branch guessed at (that "container-stable" fixture fix left the failure
-/// unchanged) — also the root cause independently converged on for BUG-1563
-/// (three prior hypotheses there, all wrong, none of which asked whether the
-/// test had a deadline). The protocol-notice half of `handle_awaiting_command`'s
-/// `notice` branch calls `backend.load()` — a full, UNCACHED store read whose
-/// cost scales with the number of requirement objects, not with cache
-/// warmth — despite that branch's own "CHEAP... NO full-store load" contract
-/// comment; on this repo's current object count that load alone can exceed
-/// 1s, so a shared watchdog fires mid-computation and silently drops the
-/// notice's second line (and, being a whole-process `exit`, every line after
-/// it too) before any of it is ever printed.
-///
-/// A SINGLE CONSTANT CANNOT SERVE BOTH SIDES OF THIS, measured directly by
-/// running both regression tests this bug touches against the same value:
-///   - `awaiting_notice_tracks_real_lease_through_session_end` needs the
-///     deadline LONG enough for a real `backend.load()` to finish — fails at
-///     1s (every run, this workstation and the GitLab mirror), passes
-///     reliably at 4s/10s/30s.
-///   - `awaiting_notice_does_not_read_an_open_stdin_pipe` asserts the
-///     opposite: `aida awaiting --notice` must exit within a hard 2s budget
-///     (3s reap) with no lease held — a genuine, pre-existing product
-///     contract, not a test artifact. At 10s on the GitLab mirror (pipeline
-///     318) it took 3.1358s, a widening this deadline's product value is not
-///     supposed to permit.
-/// So this is dependency-injected rather than a bare constant: production
-/// callers get `PRODUCT_NOTICE_DEADLINE`, and only a test that deliberately
-/// wants to observe the slow-store path past that bound sets
-/// `AIDA_TEST_NOTICE_DEADLINE_MS` to override it for its own subprocess.
-///
-/// THE PRODUCT BOUND STAYS AT BUG-1239's ORIGINAL 1s, ARGUED SEPARATELY FROM
-/// WHAT EITHER TEST NEEDS: the notice is advisory and fires on every turn of
-/// every session, so this watchdog's job is to guarantee it can never
-/// meaningfully stall a turn — that is what
-/// `awaiting_notice_does_not_read_an_open_stdin_pipe`'s 2s budget encodes,
-/// and it predates this bug. Raising the *product* bound to let a slow
-/// `backend.load()` usually finish would not fix that load's inefficiency;
-/// it would only move the object-count threshold at which the exact same
-/// silent-drop recurs, while taxing every real turn that happens to hit
-/// lock contention or a cold filesystem cache with several extra seconds of
-/// visible stall — the specific harm BUG-1239 exists to prevent. The
-/// silent-drop-under-load behavior at 1s is not new: it already existed in
-/// production before TASK-1274 whenever a real `backend.load()` exceeded 1s
-/// for reasons unrelated to this test's fixture; keeping the product bound
-/// at 1s does not introduce that risk, it declines to paper over it with a
-/// number that would need to keep growing as the store does. The actual fix
-/// is making the protocol-notice lookup cache-backed so it never needs
-/// `backend.load()` at all, matching the STORY-707/TASK-1065 pattern every
-/// other hot path in this file already follows — filed separately as
-/// BUG-1569 (see also BUG-1563, which reached the same root cause from the
-/// flakiness side).
+/// The per-turn notice's fail-open bound. TASK-1274 traced a flaky leased-spec
+/// reminder to its full-store protocol lookup racing this watchdog. BUG-1569
+/// replaces that scan with targeted/cache-indexed reads, allowing the product
+/// bound to remain meaningfully sub-second. The override exists only so
+/// black-box tests can assert tighter latency budgets in their subprocesses.
 fn notice_deadline() -> std::time::Duration {
-    // Test-only escape hatch for the one regression test that must observe a
-    // real `backend.load()` complete rather than race it. Never read by a
-    // production caller; a bare `aida awaiting --notice` never sets this.
+    // Test-only escape hatch; a production caller never sets this.
     if let Ok(ms) = std::env::var("AIDA_TEST_NOTICE_DEADLINE_MS") {
         if let Ok(ms) = ms.parse::<u64>() {
             return std::time::Duration::from_millis(ms);
         }
     }
-    const PRODUCT_NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
+    const PRODUCT_NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_millis(750);
     PRODUCT_NOTICE_DEADLINE
 }
 
@@ -69308,9 +69256,13 @@ fn handle_awaiting_command(
             .find(|lease| canonical_cwd.starts_with(&lease.worktree_path))
             .map(|lease| lease.scope)
         {
-            if let Ok(store) = backend.load() {
-                if let Some(line) = protocol_cmd::notice_line_for_scope(&store, Some(&scope)) {
+            match protocol_cmd::targeted_notice_line_for_scope(backend, &scope) {
+                Ok(Some(line)) => {
                     println!("{line}");
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    eprintln!("warning: unable to resolve protocol notice for {scope}: {err:#}")
                 }
             }
         }
