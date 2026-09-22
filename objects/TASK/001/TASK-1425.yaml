@@ -55,7 +55,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:09:54.985425283Z
-modified_at: 2026-09-22T04:54:49.842240043Z
+modified_at: 2026-09-22T06:32:44.953279871Z
 req_type: Task
 tags:
 - forge gitlab ci infrastructure
@@ -80,3 +80,8 @@ comments:
   content: 'Rework evidence (2026-09-21): PR #2075 head 51bf43b77eeeb6c676ca67424ec4156186f36022, run 35688631021, job 106620702586. Safe diagnostics classify the GitLab API response as cloudflare-access-login-redirect: curl exit 0, HTTP 302, text/html, sanitized Location path at joemooney.cloudflareaccess.com/cdn-cgi/access/login/gitlab.joemooney.com, with a CF-Ray. The separate identity probe returned HTTP 400 application/json and its body was not printed. Cloudflare rejected the supplied service-token pair before GitLab. Since a Service Auth policy reportedly exists, verify its hostname/path coverage, that its Include rule names this exact service token, and that the two GitHub secrets are the matching client ID/secret pair. No lifecycle phase ran; acceptance remains unmet.'
   created_at: 2026-09-22T04:54:49.842240043Z
   modified_at: 2026-09-22T04:54:49.842240043Z
+- id: 01a0c7d1-1a99-7e12-8f73-ac3730b6e66e
+  author: joe
+  content: 'Acceptance evidence (2026-09-21): PR #2075 exact head 8e83575e5ab1d560e0e5896544c4cf9061881d72, workflow run 35694942445, GitLab live forge smoke job 106639645411 completed SUCCESS. Preflight returned HTTP 200 application/json with body_class=gitlab-version-json. The live test then passed clone/push using process-scoped Git Access headers and executed ci-registration (MR 1), ci-wait, review-verdict Approved, merge, lifecycle-events, branch-cleanup, and project-cleanup for project 18. The test ended ok. No Access secret was written to repo/global Git config or printed. This is the required non-skipped full lifecycle and cleanup evidence. Independent review and required PR CI remain merge gates.'
+  created_at: 2026-09-22T06:32:44.953279871Z
+  modified_at: 2026-09-22T06:32:44.953279871Z
