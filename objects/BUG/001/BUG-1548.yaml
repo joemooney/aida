@@ -56,7 +56,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:49:08.443039479Z
-modified_at: 2026-09-22T11:07:15.885442274Z
+modified_at: 2026-09-22T11:15:11.665393341Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -99,3 +99,8 @@ comments:
   content: '[aida:cold-review] APPROVED on PR #2095 exact head 70cabccefe784978663be55b41d8346977401ce7, conditional on required Build green. Independent: yes. Both prior blockers are closed: punted and escalated outcomes reset the idle streak, and invocation provenance is captured once at each batch, batch-chain, and next-N start then passed unchanged through finalization. Revalidated bounded recent human/JSON/TOON status, allow-listed provenance without argv/environment, deterministic 24h expiry, legacy compatibility, and PID/start-identity liveness. Local gates: 15 last_drain, 2 BUG-1548 render, 56 drain_state tests, fmt and diff-check all pass. merge-hold-gate green; Build still in progress. Full verdict is on PR #2095.'
   created_at: 2026-09-22T11:07:15.885442274Z
   modified_at: 2026-09-22T11:07:15.885442274Z
+- id: 01a0c8d3-b0b1-7f41-a86b-4db34dd67c58
+  author: joe
+  content: '[aida:proxy-approval] verdict=APPROVE; reasoning=independent cold rereview approved exact head 70cabccefe784978663be55b41d8346977401ce7 after idle/provenance rework; material outcomes, capture-once invocation provenance, bounded recent status, safe fields, expiry and legacy compatibility verified; independent=yes; gates=Build ubuntu SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; timestamp=2026-09-22T04:15:11-07:00'
+  created_at: 2026-09-22T11:15:11.665393341Z
+  modified_at: 2026-09-22T11:15:11.665393341Z
