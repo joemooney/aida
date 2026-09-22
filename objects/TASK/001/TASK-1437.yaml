@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T16:06:55.248003750Z
-modified_at: 2026-09-22T16:08:07.649086966Z
+modified_at: 2026-09-22T16:08:41.983922286Z
 req_type: Task
 tags:
 - epic-72
@@ -26,4 +26,8 @@ relationships:
 - rel_type: Blocks
   target_id: 01a0c9df-c965-7e21-9d13-84511de19815
   created_at: 2026-09-22T16:08:07.649079195Z
+  created_by: joe
+- rel_type: Blocks
+  target_id: 01a0c9df-7d38-7e01-a9a5-03e85ab4f52a
+  created_at: 2026-09-22T16:08:41.983917798Z
   created_by: joe
