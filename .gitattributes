@@ -4,3 +4,8 @@
 # Defense-in-depth — the load-bearing fix is parser-side line-ending
 # normalization (normalize_line_endings). trace:BUG-244
 aida-core/templates/** text eol=lf
+
+# Keep the checked-in project copy under the same contract as the embedded
+# master. The comparison also normalizes defensively, but this prevents a
+# Windows checkout from manufacturing drift on disk. trace:BUG-1555 | ai:codex
+.aida/discipline/** text eol=lf
