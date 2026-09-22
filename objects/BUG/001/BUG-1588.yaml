@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T14:33:57.976444371Z
-modified_at: 2026-09-22T14:50:21.226587562Z
+modified_at: 2026-09-22T14:57:59.848412552Z
 req_type: Bug
 tags:
 - data-integrity
@@ -41,3 +41,8 @@ comments:
     The fix hardens the real-binary BUG-1502 harness boundary: every invocation requires a fixture git checkout as cwd; inherited AIDA_STORE, AIDA_PROJECT_ROOT, AIDA_DRIVE_ROOT, GIT_DIR, and GIT_WORK_TREE are cleared; after init AIDA_STORE is explicitly pinned to the fixture store. A regression supplies hostile inherited store/root anchors, writes an isolation sentinel, and proves it exists in the fixture object tree but not the decoy caller store. All adjacent tests in that integration suite use this single helper.
   created_at: 2026-09-22T14:46:50.482235228Z
   modified_at: 2026-09-22T14:46:50.482235228Z
+- id: 01a0c99f-ac28-7b52-955a-01b9c865c5ca
+  author: joe
+  content: 'Cold independent review PASS for PR #2100 exact head 6a1ad3f709e3fc2b5741ee4d863f8f7026f0a1ff. Verified the inherited AIDA_STORE precedence root cause, mandatory fixture cwd, explicit fixture store pin, AIDA and Git root stripping, hostile decoy isolation, adjacent helper use, and retained real-binary execution. Full affected suite passed 6/6 under poisoned live-root environment; canonical store contains none of the fixture sentinel or fixture titles. A concurrent store-head change was solely an unrelated TASK-1427 lease commit. Hold gate green; PASS remains conditional on required Ubuntu Build.'
+  created_at: 2026-09-22T14:57:59.848412552Z
+  modified_at: 2026-09-22T14:57:59.848412552Z
