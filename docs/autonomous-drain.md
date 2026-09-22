@@ -625,6 +625,13 @@ the cost-per-drain history is queryable for the calibration + budget-dispatching
 loop. Telemetry opt-out (`AIDA_TELEMETRY=0` / `[telemetry] enabled = false`)
 suppresses the persisted record; the on-screen summary still prints.
 
+Token totals in records written before 2026-09-22 used `0` both for a genuine
+measured zero and for failed or absent collection. Historical sums are therefore
+lower bounds, not totals. New records carry `token_measurement`, `vendor`, and
+`run_key`; when collection cannot establish an exact total,
+`token_measurement` is `unknown` and the token fields are JSON `null`.
+// trace:BUG-1418 | ai:codex
+
 ## Findings reach the advisor (STORY-278, STORY-285)
 
 A headless drain phase surfaces things a human would normally hand to the

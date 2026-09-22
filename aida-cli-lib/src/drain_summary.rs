@@ -104,11 +104,11 @@ pub(crate) struct DrainSummary {
     /// budget cap stopped the drain, the cap flag (`max-tokens`, …).
     pub(crate) outcome: String,
     pub(crate) tallies: DrainTallies,
-    /// Cumulative reported tokens across every headless phase of THIS drain
-    /// (input + output + cache), summed from each phase's `stream-json` log via
-    /// [`crate::drain_caps::tokens_from_log`]. `0` for a fully-interactive
-    /// drain (no headless logs).
-    pub(crate) cumulative_tokens: u64,
+    /// Exact cumulative tokens when every in-window phase log was recognized
+    /// and complete. `None` means collection could not establish a total; it
+    /// must never be serialized as a fabricated zero.
+    // trace:BUG-1418 | ai:codex
+    pub(crate) cumulative_tokens: Option<u64>,
     pub(crate) diff: DrainDiffStats,
     /// Wall time the drain ran, whole seconds.
     pub(crate) elapsed_secs: u64,
@@ -122,13 +122,10 @@ pub(crate) struct DrainSummary {
 impl DrainSummary {
     /// Mean reported tokens per acted-on spec — `cumulative_tokens /
     /// iterations`, or `0` when the drain acted on nothing.
-    pub(crate) fn tokens_per_spec(&self) -> u64 {
+    pub(crate) fn tokens_per_spec(&self) -> Option<u64> {
         let n = self.tallies.iterations() as u64;
-        if n == 0 {
-            0
-        } else {
-            self.cumulative_tokens / n
-        }
+        self.cumulative_tokens
+            .map(|tokens| if n == 0 { 0 } else { tokens / n })
     }
 
     /// The permanent human EXIT SUMMARY block. Deliberately free of registry
@@ -153,11 +150,14 @@ impl DrainSummary {
             // without it. trace:BUG-660 | ai:claude
             format_elapsed(self.elapsed_secs),
         ));
-        out.push_str(&format!(
-            "  tokens: {} cumulative · ~{}/spec\n",
-            group_thousands(self.cumulative_tokens),
-            group_thousands(self.tokens_per_spec())
-        ));
+        match (self.cumulative_tokens, self.tokens_per_spec()) {
+            (Some(total), Some(per_spec)) => out.push_str(&format!(
+                "  tokens: {} cumulative · ~{}/spec\n",
+                group_thousands(total),
+                group_thousands(per_spec)
+            )),
+            _ => out.push_str("  tokens: unknown (collection incomplete)\n"),
+        }
         out.push_str(&format!(
             "  diff: +{} -{} across {} file{}\n",
             group_thousands(self.diff.insertions as u64),
@@ -225,6 +225,8 @@ impl DrainSummary {
         ts: &str,
         binary_sha: Option<&str>,
         role: Option<&str>,
+        vendor: &str,
+        run_key: &str,
     ) -> serde_json::Value {
         json!({
             "event": "drain_summary",
@@ -239,6 +241,9 @@ impl DrainSummary {
             "iterations": self.tallies.iterations(),
             "cumulative_tokens": self.cumulative_tokens,
             "tokens_per_spec": self.tokens_per_spec(),
+            "token_measurement": if self.cumulative_tokens.is_some() { "measured" } else { "unknown" },
+            "vendor": vendor,
+            "run_key": run_key,
             "files_changed": self.diff.files_changed,
             "insertions": self.diff.insertions,
             "deletions": self.diff.deletions,
@@ -350,12 +355,12 @@ mod tests {
             label: "next 3".into(),
             outcome: "drained".into(),
             tallies: tallies(3, 0, 0),
-            cumulative_tokens: 900_000,
+            cumulative_tokens: Some(900_000),
             diff: DrainDiffStats::default(),
             elapsed_secs: 0,
             events: crate::events::EventTally::default(),
         };
-        assert_eq!(s.tokens_per_spec(), 300_000);
+        assert_eq!(s.tokens_per_spec(), Some(300_000));
     }
 
     #[test]
@@ -365,12 +370,12 @@ mod tests {
             label: "next 1".into(),
             outcome: "drained".into(),
             tallies: tallies(0, 0, 0),
-            cumulative_tokens: 0,
+            cumulative_tokens: Some(0),
             diff: DrainDiffStats::default(),
             elapsed_secs: 0,
             events: crate::events::EventTally::default(),
         };
-        assert_eq!(s.tokens_per_spec(), 0);
+        assert_eq!(s.tokens_per_spec(), Some(0));
     }
 
     #[test]
@@ -386,7 +391,7 @@ mod tests {
                 punted: 0,
                 escalated: 0,
             },
-            cumulative_tokens: 1_234_567,
+            cumulative_tokens: Some(1_234_567),
             diff: DrainDiffStats {
                 files_changed: 37,
                 insertions: 4210,
@@ -422,7 +427,7 @@ mod tests {
             label: "next 1".into(),
             outcome: "drained".into(),
             tallies: tallies(1, 0, 0),
-            cumulative_tokens: 50,
+            cumulative_tokens: Some(50),
             diff: DrainDiffStats {
                 files_changed: 1,
                 insertions: 3,
@@ -461,7 +466,7 @@ mod tests {
                 punted: 1,
                 escalated: 0,
             },
-            cumulative_tokens: 800_000,
+            cumulative_tokens: Some(800_000),
             diff: DrainDiffStats {
                 files_changed: 9,
                 insertions: 100,
@@ -470,7 +475,13 @@ mod tests {
             elapsed_secs: 600,
             events: crate::events::EventTally::default(),
         };
-        let v = s.to_usage_value("2026-06-28T00:00:00Z", Some("abc1234"), Some("advisor"));
+        let v = s.to_usage_value(
+            "2026-06-28T00:00:00Z",
+            Some("abc1234"),
+            Some("advisor"),
+            "claude",
+            "run-test",
+        );
         assert_eq!(v["event"], "drain_summary");
         assert_eq!(v["kind"], "batch-chain");
         assert_eq!(v["outcome"], "max-tokens");
@@ -487,7 +498,30 @@ mod tests {
         assert_eq!(v["elapsed_secs"], 600);
         assert_eq!(v["binary_sha"], "abc1234");
         assert_eq!(v["role"], "advisor");
+        assert_eq!(v["vendor"], "claude");
+        assert_eq!(v["run_key"], "run-test");
+        assert_eq!(v["token_measurement"], "measured");
         assert_eq!(v["ts"], "2026-06-28T00:00:00Z");
+    }
+
+    // trace:BUG-1418 | ai:codex
+    #[test]
+    fn unknown_measurement_serializes_null_not_zero() {
+        let s = DrainSummary {
+            kind: "next-n".into(),
+            label: "next 1".into(),
+            outcome: "failed".into(),
+            tallies: tallies(0, 1, 0),
+            cumulative_tokens: None,
+            diff: DrainDiffStats::default(),
+            elapsed_secs: 1,
+            events: crate::events::EventTally::default(),
+        };
+        let v = s.to_usage_value("2026-09-22T00:00:00Z", None, None, "codex", "run-42");
+        assert!(v["cumulative_tokens"].is_null());
+        assert!(v["tokens_per_spec"].is_null());
+        assert_eq!(v["token_measurement"], "unknown");
+        assert!(s.render().contains("tokens: unknown"));
     }
 
     #[test]
@@ -497,12 +531,12 @@ mod tests {
             label: "next 2".into(),
             outcome: "drained".into(),
             tallies: tallies(2, 0, 0),
-            cumulative_tokens: 0,
+            cumulative_tokens: Some(0),
             diff: DrainDiffStats::default(),
             elapsed_secs: 1,
             events: crate::events::EventTally::default(),
         };
-        let v = s.to_usage_value("2026-06-28T00:00:00Z", None, None);
+        let v = s.to_usage_value("2026-06-28T00:00:00Z", None, None, "claude", "run-test");
         assert!(v["binary_sha"].is_null());
         assert!(v["role"].is_null());
     }
@@ -517,7 +551,7 @@ mod tests {
             label: "batch:foo".into(),
             outcome: "drained".into(),
             tallies: tallies(4, 0, 0),
-            cumulative_tokens: 0,
+            cumulative_tokens: Some(0),
             diff: DrainDiffStats::default(),
             elapsed_secs: 0,
             events: crate::events::EventTally {
@@ -544,7 +578,7 @@ mod tests {
             label: "next 2".into(),
             outcome: "drained".into(),
             tallies: tallies(2, 0, 0),
-            cumulative_tokens: 0,
+            cumulative_tokens: Some(0),
             diff: DrainDiffStats::default(),
             elapsed_secs: 0,
             events: crate::events::EventTally {
@@ -570,7 +604,7 @@ mod tests {
             label: "next 1".into(),
             outcome: "drained".into(),
             tallies: tallies(1, 0, 0),
-            cumulative_tokens: 0,
+            cumulative_tokens: Some(0),
             diff: DrainDiffStats::default(),
             elapsed_secs: 0,
             events: crate::events::EventTally::default(),
@@ -593,7 +627,7 @@ mod tests {
             label: "batch:foo".into(),
             outcome: "drained".into(),
             tallies: tallies(1, 0, 0),
-            cumulative_tokens: 0,
+            cumulative_tokens: Some(0),
             diff: DrainDiffStats::default(),
             elapsed_secs: 0,
             events: crate::events::EventTally {
@@ -602,7 +636,7 @@ mod tests {
                 partial_window: true,
             },
         };
-        let v = s.to_usage_value("2026-07-20T00:00:00Z", None, None);
+        let v = s.to_usage_value("2026-07-20T00:00:00Z", None, None, "claude", "run-test");
         assert_eq!(v["events_seen"], 40);
         assert_eq!(v["events_benign_absorbed"], 30);
         assert_eq!(v["events_actionable"], 10);

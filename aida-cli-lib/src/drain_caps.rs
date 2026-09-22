@@ -232,7 +232,7 @@ fn usage_tokens(v: &serde_json::Value) -> Option<u64> {
     let usage = v
         .get("usage")
         .or_else(|| v.get("message").and_then(|m| m.get("usage")))?;
-    let sum: u64 = [
+    let values: Vec<u64> = [
         "input_tokens",
         "output_tokens",
         "cache_creation_input_tokens",
@@ -240,8 +240,8 @@ fn usage_tokens(v: &serde_json::Value) -> Option<u64> {
     ]
     .iter()
     .filter_map(|k| usage.get(*k).and_then(serde_json::Value::as_u64))
-    .sum();
-    Some(sum)
+    .collect();
+    (!values.is_empty()).then(|| values.into_iter().sum())
 }
 
 /// Parse a single line of `claude -p --output-format stream-json` output and
@@ -280,6 +280,48 @@ pub(crate) fn tokens_from_log(contents: &str) -> u64 {
         }
     }
     result_tokens.unwrap_or(max_tokens)
+}
+
+/// A strict, durable measurement for one completed headless log.
+///
+/// Unlike [`tokens_from_log`], which deliberately returns a best-effort lower
+/// bound for live budget enforcement, this requires a parseable terminal
+/// `result` usage event. A missing result or malformed non-empty line means the
+/// completed log cannot support an exact exit-record total.
+// trace:BUG-1418 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CompletedLogTokens {
+    Measured(u64),
+    Unrecognized,
+    Truncated,
+}
+
+// trace:BUG-1418 | ai:codex
+pub(crate) fn completed_log_tokens(contents: &str) -> CompletedLogTokens {
+    let mut saw_usage = false;
+    let mut result_tokens = None;
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+            return CompletedLogTokens::Truncated;
+        };
+        if let Some(tokens) = usage_tokens(&v) {
+            saw_usage = true;
+            if v.get("type").and_then(serde_json::Value::as_str) == Some("result") {
+                result_tokens = Some(tokens);
+            }
+        }
+    }
+    if let Some(tokens) = result_tokens {
+        CompletedLogTokens::Measured(tokens)
+    } else if saw_usage {
+        CompletedLogTokens::Truncated
+    } else {
+        CompletedLogTokens::Unrecognized
+    }
 }
 
 #[cfg(test)]
@@ -485,5 +527,31 @@ mod tests {
     fn tokens_from_log_zero_for_empty_or_garbage() {
         assert_eq!(tokens_from_log(""), 0);
         assert_eq!(tokens_from_log("not json\nstill not json"), 0);
+    }
+
+    #[test]
+    fn completed_log_distinguishes_measured_zero_unrecognized_and_truncated() {
+        assert_eq!(
+            completed_log_tokens(
+                r#"{"type":"result","usage":{"input_tokens":0,"output_tokens":0}}"#
+            ),
+            CompletedLogTokens::Measured(0)
+        );
+        assert_eq!(
+            completed_log_tokens(r#"{"type":"usage","tokens":42}"#),
+            CompletedLogTokens::Unrecognized
+        );
+        assert_eq!(
+            completed_log_tokens(r#"{"type":"result","usage":{"total_tokens":42}}"#),
+            CompletedLogTokens::Unrecognized
+        );
+        assert_eq!(
+            completed_log_tokens(r#"{"type":"assistant","message":{"usage":{"input_tokens":4}}}"#),
+            CompletedLogTokens::Truncated
+        );
+        assert_eq!(
+            completed_log_tokens("{broken"),
+            CompletedLogTokens::Truncated
+        );
     }
 }
