@@ -41,7 +41,38 @@ const LAST_DRAIN_FILE: &str = "last-drain.json";
 /// How recent a finished drain must be for the morning-after banner to surface.
 /// Past this the banner is suppressed (an old outcome is no longer "since you
 /// were away"). 24h covers the overnight-drain → next-morning case with margin.
-const RECENT_WINDOW_SECS: i64 = 24 * 60 * 60;
+pub(crate) const RECENT_WINDOW_SECS: i64 = 24 * 60 * 60;
+
+/// Allow-listed process provenance captured while the drain process still
+/// exists. Deliberately contains no argv, cwd, or environment data.
+// trace:BUG-1548 | ai:codex
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct DrainInvocation {
+    pub(crate) pid: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) process_started_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) parent_pid: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) parent_started_at: Option<String>,
+    pub(crate) source: String,
+}
+
+impl DrainInvocation {
+    pub(crate) fn capture() -> Self {
+        let pid = std::process::id();
+        let parent_pid = crate::process_probe::walk_ancestor_pids(pid)
+            .get(1)
+            .copied();
+        Self {
+            pid,
+            process_started_at: crate::process_probe::process_start_identity(pid),
+            parent_pid,
+            parent_started_at: parent_pid.and_then(crate::process_probe::process_start_identity),
+            source: "foreground-process".to_string(),
+        }
+    }
+}
 
 /// Path of the last-drain file under `project_root`.
 pub(crate) fn last_drain_path(project_root: &Path) -> PathBuf {
@@ -68,15 +99,34 @@ pub(crate) struct LastDrainOutcome {
     /// by an older binary that did not know the field.
     #[serde(default)]
     pub(crate) acknowledged: bool,
+    /// Consecutive completed drains which shipped/shelved/skipped nothing.
+    #[serde(default)]
+    pub(crate) consecutive_idle_runs: usize,
+    /// Process identity captured at invocation. Optional for legacy files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) invocation: Option<DrainInvocation>,
 }
 
 impl LastDrainOutcome {
     /// Lift the compact outcome out of a finished-drain
     /// [`crate::drain_summary::DrainSummary`], stamped with `finished_at`.
-    pub(crate) fn from_summary(
+    pub(crate) fn from_summary_with_previous(
         summary: &crate::drain_summary::DrainSummary,
         finished_at: &str,
+        previous: Option<&Self>,
+        invocation: Option<DrainInvocation>,
     ) -> Self {
+        let idle = summary.tallies.shipped == 0
+            && summary.tallies.shelved == 0
+            && summary.tallies.skipped == 0;
+        let consecutive_idle_runs = if idle {
+            previous
+                .map(|p| p.consecutive_idle_runs)
+                .unwrap_or(0)
+                .saturating_add(1)
+        } else {
+            0
+        };
         Self {
             shipped: summary.tallies.shipped,
             shelved: summary.tallies.shelved,
@@ -84,6 +134,8 @@ impl LastDrainOutcome {
             findings_to_triage: summary.tallies.findings_to_triage(),
             finished_at: finished_at.to_string(),
             acknowledged: false,
+            consecutive_idle_runs,
+            invocation,
         }
     }
 
@@ -118,7 +170,7 @@ impl LastDrainOutcome {
 
     /// Age in whole seconds at `now`, or `None` when `finished_at` does not parse
     /// (a corrupt timestamp fails safe to "not recent" → suppressed).
-    fn age_secs(&self, now: chrono::DateTime<chrono::Utc>) -> Option<i64> {
+    pub(crate) fn age_secs(&self, now: chrono::DateTime<chrono::Utc>) -> Option<i64> {
         let finished = chrono::DateTime::parse_from_rfc3339(&self.finished_at).ok()?;
         Some((now - finished.with_timezone(&chrono::Utc)).num_seconds())
     }
@@ -134,6 +186,49 @@ impl LastDrainOutcome {
             Some(secs) => secs < RECENT_WINDOW_SECS,
             None => false,
         }
+    }
+
+    /// Drain-status visibility intentionally includes idle outcomes. Unlike the
+    /// morning-after status banner, an idle run is the diagnostic signal.
+    pub(crate) fn should_show_in_drain_status(&self, now: chrono::DateTime<chrono::Utc>) -> bool {
+        !self.acknowledged
+            && self
+                .age_secs(now)
+                .map(|secs| secs < RECENT_WINDOW_SECS)
+                .unwrap_or(false)
+    }
+
+    pub(crate) fn status_json(&self, now: chrono::DateTime<chrono::Utc>) -> serde_json::Value {
+        let invocation = self.invocation.as_ref().map(|invocation| {
+            serde_json::json!({
+                "pid": invocation.pid,
+                "process_started_at": invocation.process_started_at,
+                "process_alive": crate::process_probe::process_identity_is_alive(
+                    invocation.pid,
+                    invocation.process_started_at.as_deref(),
+                ),
+                "parent_pid": invocation.parent_pid,
+                "parent_started_at": invocation.parent_started_at,
+                "parent_alive": invocation.parent_pid.map(|pid| {
+                    crate::process_probe::process_identity_is_alive(
+                        pid,
+                        invocation.parent_started_at.as_deref(),
+                    )
+                }),
+                "source": invocation.source,
+            })
+        });
+        serde_json::json!({
+            "finished_at": self.finished_at,
+            "age_secs": self.age_secs(now),
+            "acknowledged": self.acknowledged,
+            "shipped": self.shipped,
+            "shelved": self.shelved,
+            "skipped": self.skipped,
+            "findings_to_triage": self.findings_to_triage,
+            "consecutive_idle_runs": self.consecutive_idle_runs,
+            "invocation": invocation,
+        })
     }
 
     /// The "since you were away" banner line, e.g.
@@ -244,6 +339,8 @@ mod tests {
             findings_to_triage: findings,
             finished_at: finished.to_rfc3339(),
             acknowledged: false,
+            consecutive_idle_runs: 0,
+            invocation: None,
         };
         (o, now)
     }
@@ -325,6 +422,8 @@ mod tests {
             findings_to_triage: 0,
             finished_at: "not-a-timestamp".to_string(),
             acknowledged: false,
+            consecutive_idle_runs: 0,
+            invocation: None,
         };
         assert!(!o.should_show(now));
     }
@@ -350,6 +449,76 @@ mod tests {
         assert_eq!(format_age(2 * 24 * 60 * 60), "2d ago");
         // Negative (clock skew) reads "just now".
         assert_eq!(format_age(-10), "just now");
+    }
+
+    // trace:BUG-1548 | ai:codex
+    #[test]
+    fn drain_status_surfaces_recent_idle_legacy_record() {
+        let now = chrono::Utc::now();
+        let body = format!(
+            r#"{{"shipped":0,"shelved":0,"skipped":0,"findings_to_triage":0,"finished_at":"{}","acknowledged":false}}"#,
+            (now - chrono::Duration::minutes(3)).to_rfc3339()
+        );
+        let legacy: LastDrainOutcome = serde_json::from_str(&body).unwrap();
+        assert!(legacy.should_show_in_drain_status(now));
+        assert_eq!(legacy.consecutive_idle_runs, 0);
+        assert!(legacy.invocation.is_none());
+        assert!(
+            !legacy.should_show(now),
+            "the general status banner stays quiet"
+        );
+    }
+
+    // trace:BUG-1548 | ai:codex
+    #[test]
+    fn idle_streak_increments_and_material_run_resets_it() {
+        fn summary(shipped: usize) -> crate::drain_summary::DrainSummary {
+            crate::drain_summary::DrainSummary {
+                kind: "batch".into(),
+                label: "test".into(),
+                outcome: "drained".into(),
+                tallies: crate::drain_summary::DrainTallies {
+                    shipped,
+                    ..Default::default()
+                },
+                cumulative_tokens: 0,
+                diff: Default::default(),
+                elapsed_secs: 1,
+                events: Default::default(),
+            }
+        }
+        let first = LastDrainOutcome::from_summary_with_previous(
+            &summary(0),
+            "2026-09-22T00:00:00Z",
+            None,
+            None,
+        );
+        let second = LastDrainOutcome::from_summary_with_previous(
+            &summary(0),
+            "2026-09-22T00:04:00Z",
+            Some(&first),
+            None,
+        );
+        let productive = LastDrainOutcome::from_summary_with_previous(
+            &summary(1),
+            "2026-09-22T00:08:00Z",
+            Some(&second),
+            None,
+        );
+        assert_eq!(first.consecutive_idle_runs, 1);
+        assert_eq!(second.consecutive_idle_runs, 2);
+        assert_eq!(productive.consecutive_idle_runs, 0);
+    }
+
+    // trace:BUG-1548 | ai:codex
+    #[test]
+    fn drain_status_recency_boundary_is_strict_and_acknowledged_is_hidden() {
+        let (mut recent, now) = outcome(0, 0, 0, 0, RECENT_WINDOW_SECS - 1);
+        assert!(recent.should_show_in_drain_status(now));
+        let (expired, now) = outcome(0, 0, 0, 0, RECENT_WINDOW_SECS);
+        assert!(!expired.should_show_in_drain_status(now));
+        recent.acknowledged = true;
+        assert!(!recent.should_show_in_drain_status(now));
     }
 
     // write → read round-trips; acknowledge flips the flag durably.
@@ -389,7 +558,12 @@ mod tests {
             elapsed_secs: 0,
             events: crate::events::EventTally::default(),
         };
-        let o = LastDrainOutcome::from_summary(&summary, "2026-06-30T00:00:00+00:00");
+        let o = LastDrainOutcome::from_summary_with_previous(
+            &summary,
+            "2026-06-30T00:00:00+00:00",
+            None,
+            None,
+        );
         assert_eq!(o.shipped, 4);
         assert_eq!(o.shelved, 2);
         assert_eq!(o.skipped, 1);

@@ -83203,7 +83203,14 @@ fn finalize_drain_summary(
     // the live drain-state file (kept distinct so the "presence ⇒ live-or-crashed"
     // invariant of `drain-state.json` is unaffected). Best-effort. trace:STORY-730
     if let Some(root) = project_root {
-        let _ = last_drain::LastDrainOutcome::from_summary(&summary, &ts).write(root);
+        let previous = last_drain::LastDrainOutcome::read(root);
+        let _ = last_drain::LastDrainOutcome::from_summary_with_previous(
+            &summary,
+            &ts,
+            previous.as_ref(),
+            Some(last_drain::DrainInvocation::capture()),
+        )
+        .write(root);
     }
     // STORY-712: emit the terminal QueueDrained wake — the "agent is done" an
     // overnight loop waits on. Drain-level, so no spec. Best-effort, not
