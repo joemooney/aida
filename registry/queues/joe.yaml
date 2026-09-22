@@ -27,27 +27,6 @@
   added_at: 2026-09-21T03:09:04.522969439Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0c192-21f6-71c0-9893-f0ec7c6789cc
-  position: 5000
-  added_by: joe
-  note: Promoted from finding TASK-1-161 via `aida findings promote`
-  added_at: 2026-09-21T21:16:23.916557591Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 01a0c1b3-19aa-7b93-a75c-9fee6de00922
-  position: 6000
-  added_by: joe
-  note: Promoted from finding TASK-1-164 via `aida findings promote`
-  added_at: 2026-09-21T21:16:43.152046573Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 01a0c1f9-1311-7003-bb9b-ad3c97222f02
-  position: 8000
-  added_by: joe
-  note: Promoted from finding TASK-1-171 via `aida findings promote`
-  added_at: 2026-09-21T21:23:59.406931705Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a0c19b-9c2f-74c0-bdb0-9ee70bcbb0af
   position: 9000
   added_by: joe
@@ -83,86 +62,6 @@
   added_at: 2026-09-21T21:27:23.830662408Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0c6bd-5434-7061-a207-625dbea987fb
-  position: 14000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c6b4); covers 1 spec
-  added_at: 2026-09-22T01:31:40.703661341Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c6d9-0b17-7432-95dd-f8b088ed46d7
-  position: 15000
-  added_by: joe
-  note: auto-queued by `session end` (01a0bbe8); covers 2 specs
-  added_at: 2026-09-22T02:02:02.714346949Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c7ed-8bc5-7361-98fd-64f5d6ff1e9a
-  position: 16000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c7df); covers 1 spec
-  added_at: 2026-09-22T07:03:59.916620753Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c805-d157-76e3-adbf-ed6c844f4f8d
-  position: 17000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c7fb); covers 1 spec
-  added_at: 2026-09-22T07:30:35.981248667Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c809-96b2-7732-a136-587a5f81cf65
-  position: 18000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c7fe); covers 1 spec
-  added_at: 2026-09-22T07:34:51.945775330Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c820-2774-76b0-ac80-02640b077b6e
-  position: 19000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c81b); covers 1 spec
-  added_at: 2026-09-22T07:59:14.357848545Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c821-b359-7150-991a-529d51a1c5fb
-  position: 20000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c813); covers 1 spec
-  added_at: 2026-09-22T08:00:56.888619590Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c827-be91-7361-846d-c3b09fb12689
-  position: 21000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c81f); covers 1 spec
-  added_at: 2026-09-22T08:07:30.046158614Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c836-2cd0-7ca1-a4d6-49370c61708f
-  position: 22000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c827); covers 1 spec
-  added_at: 2026-09-22T08:23:15.593792791Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c867-213f-7f60-bb50-f52d71886a4d
-  position: 23000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c85e); covers 1 spec
-  added_at: 2026-09-22T09:16:54.451028490Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0c86f-50ff-7233-b88e-0694eedd1554
   position: 24000
   added_by: joe
@@ -176,14 +75,6 @@
   added_by: joe
   note: auto-queued by `session end` (01a0c87a); covers 1 spec
   added_at: 2026-09-22T09:58:01.544449166Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c896-26fd-7a02-9557-2cf882d8e1a5
-  position: 26000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c882); covers 1 spec
-  added_at: 2026-09-22T10:08:06.558486556Z
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
