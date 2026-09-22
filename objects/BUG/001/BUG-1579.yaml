@@ -68,12 +68,12 @@ description: |-
   it to "there is exactly ONE CI run on this branch and it failed" before anyone acted. Had that
   first read stood, the rerun would never have been dispatched and the conclusion would have rested
   on a misreading. Related: BUG-1464 (introduced the test), #2065.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:55:48.841488488Z
-modified_at: 2026-09-22T07:17:34.309559522Z
+modified_at: 2026-09-22T07:17:41.191589717Z
 req_type: Bug
 tags:
 - ci flaky test-infra
@@ -93,3 +93,21 @@ comments:
   content: '[aida:proxy-approval] verdict=approved; reasoning=independent cold reviewer verified exact head 9dc0a4ed17da07430a27d7ac6dac060b7abbf1dd, deterministic pre-fix environment interleaving reproduction, isolated fixture fix, targeted tests, and exact-head CI; independent=yes; gates=required Ubuntu CI green, merge-hold-gate green, exact-head review approved; timestamp=2026-09-22T00:17:33-07:00'
   created_at: 2026-09-22T07:17:34.309559522Z
   modified_at: 2026-09-22T07:17:34.309559522Z
+history:
+- id: 01a0c7fa-3ec0-7110-a5be-9adc77adcdbc
+  author: aida-auto-bump
+  timestamp: 2026-09-22T07:17:41.184889983Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c7fa-3ec7-77b0-902e-b4cfa4427425
+  timestamp: 2026-09-22T07:17:41.191589037Z
+  agent: aida
+  commit_sha: 7ad1003698df46ab71d117bf599be613bc9f2593
+  summary: Completed via merge 7ad10036
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T07:17:41.184715177Z
+  completion_sha: 7ad1003698df46ab71d117bf599be613bc9f2593
