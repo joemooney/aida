@@ -1,0 +1,48 @@
+id: 01a0c690-9212-7be3-8af7-3b10e6dea404
+spec_id: BUG-1586
+agreed_id: BUG-1586
+title: The --sequential drain notice prints the DEFAULT pipeline_depth instead of the resolved one, so in this repo it announces strictly-one-at-a-time and then pipelines at depth 2
+description: |-
+  A RUNTIME NOTICE REPORTS THE DEFAULT VALUE OF A KNOB INSTEAD OF THE RESOLVED ONE, AND ATTACHES A BEHAVIOURAL CONCLUSION THAT IS FALSE FOR ANYONE WHO HAS RAISED IT — INCLUDING EVERY SEAT IN THIS REPO.
+
+  Found by an independent review of PR #2070, as a NEW finding on the rework rather than on the original defect. Non-blocking there; filed here because the fix is more than a text edit.
+
+  `aida-cli-lib/src/queue_cmd.rs:5643-5649` interpolates `crate::drain_state::default_pipeline_depth()`, which always returns 1. So the `--sequential` notice prints:
+
+      Ordering only — concurrency for this single-batch drain follows `[drain] pipeline_depth`
+      (default 1, i.e. strictly one at a time).
+
+  THIS REPO SETS `pipeline_depth = 2` AT .aida/config.toml:60, verified. So the sentence is printed, and the drain then pipelines at depth 2.
+
+  IT IS NOT FALSE, AND THAT IS WHY IT IS WORTH FILING. The number is explicitly labelled "default", so the statement is literally true. THE DEFECT IS THAT A RUNTIME NOTICE IS READ AS DESCRIBING THIS RUN. `--help` describing the default is correct; an `eprintln!` emitted DURING a drain is not documentation, it is a status line, and "i.e. strictly one at a time" is a behavioural conclusion that does not hold for the run the reader is watching.
+
+  SAME SHAPE AS THE DEFECT #2070 EXISTS TO FIX, ONE DEGREE WEAKER. #2070 corrected help text that asserted an engine pin which did not exist. This asserts a runtime behaviour which does not hold — but from a true premise, correctly labelled, which is why it survived a review that caught the stronger version.
+
+  WHY IT IS MORE THAN A TEXT EDIT. Printing the resolved value needs `crate::DrainTuning::resolve(root).pipeline_depth()` plus a project-root resolution with a fallback for when `find_main_worktree_root()` fails — a notice must not fail the drain because it could not locate a root. VISIBILITY IS NOT A BARRIER: `DrainTuning` and its `resolve` are private to the crate root and `queue_cmd` is a descendant module, so the path already resolves.
+
+  Acceptance:
+  - The notice reports the RESOLVED depth for this run, not the default, and the behavioural clause
+    agrees with it — "strictly one at a time" only when the resolved depth is 1.
+  - Root resolution failure degrades gracefully: the notice still prints, naming the knob without
+    asserting a value, and never fails the drain.
+  - `--help` is UNCHANGED. Describing the default is correct there and this is not a reason to touch it.
+  - A test that the notice's value follows config rather than the constant: set `[drain]
+    pipeline_depth = 2`, assert the emitted line does not claim one-at-a-time. A test with the
+    default configured cannot see this defect, which is why the current tests pass.
+
+  RELATED AND NOT THE SAME: BUG-1585 (docs/autonomous-drain.md states the default is 2 when the code
+  says 1) is the inverse error in a different surface — documentation stating a wrong constant, where
+  this is a runtime surface stating a right constant in a place that implies a resolved one. They
+  should not be fixed together; a reader who conflates them will make one of them worse.
+
+  Filed by the driver-advisor seat from an independent review's non-blocking finding. The advisor
+  could not review #2070 itself, having written the brief that produced it.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T00:42:38.482858241Z
+modified_at: 2026-09-22T00:42:38.482858241Z
+req_type: Bug
+tags:
+- drain cli papercut
