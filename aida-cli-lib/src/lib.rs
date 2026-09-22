@@ -85358,26 +85358,26 @@ fn sibling_verdict_sweep_for_phase3(
         }
     }
     candidates.sort_by(|a, b| b.0.cmp(&a.0));
-    for (_, cand, _is_pr) in candidates {
-        // A fresh artifact is evidence. If it is conflicting, malformed, or
-        // stale at the current head, do not walk onward until some other file
-        // happens to approve; surface the first deterministic failure.
-        // trace:BUG-1581 | ai:codex
-        let outcome = read_verdict_file_for_head(&cand, current_head)?;
-        // Copy back to the canonical location (best-effort): audit trail +
-        // the STORY-439 calibration tag-along both read the drive root.
-        let dest_dir = project_root.join(".aida").join("review-verdicts");
-        let _ = std::fs::create_dir_all(&dest_dir);
-        let dest = dest_dir.join(cand.file_name().expect("candidate has a file name"));
-        let _ = std::fs::copy(&cand, &dest);
-        eprintln!(
-            "  {} no verdict at the drive root, but the reviewer wrote one in a sibling checkout ({}) during this session — accepting it",
-            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-            cand.display()
-        );
-        return Ok(Some(outcome));
-    }
-    Ok(None)
+    let Some((_, cand, _is_pr)) = candidates.into_iter().next() else {
+        return Ok(None);
+    };
+    // A fresh artifact is evidence. If it is conflicting, malformed, or
+    // stale at the current head, do not walk onward until some other file
+    // happens to approve; surface the first deterministic failure.
+    // trace:BUG-1581 | ai:codex
+    let outcome = read_verdict_file_for_head(&cand, current_head)?;
+    // Copy back to the canonical location (best-effort): audit trail +
+    // the STORY-439 calibration tag-along both read the drive root.
+    let dest_dir = project_root.join(".aida").join("review-verdicts");
+    let _ = std::fs::create_dir_all(&dest_dir);
+    let dest = dest_dir.join(cand.file_name().expect("candidate has a file name"));
+    let _ = std::fs::copy(&cand, &dest);
+    eprintln!(
+        "  {} no verdict at the drive root, but the reviewer wrote one in a sibling checkout ({}) during this session — accepting it",
+        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+        cand.display()
+    );
+    Ok(Some(outcome))
 }
 
 fn read_verdict_file(
