@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:04:43.121876649Z
-modified_at: 2026-09-22T14:51:10.863394794Z
+modified_at: 2026-09-22T15:10:44.254554182Z
 req_type: Bug
 tags:
 - cost
@@ -63,3 +63,8 @@ comments:
   content: '[aida:driver-disposition] Promoted to Approved as the first integrity prerequisite for cost observability. Measured zeros are currently ambiguous with unknown collection, so downstream totals cannot be trusted until this is fixed.'
   created_at: 2026-09-22T14:04:13.820940110Z
   modified_at: 2026-09-22T14:04:13.820940110Z
+- id: 01a0c9ab-561e-7ff2-9cdc-4cd18f9881e9
+  author: joe
+  content: Rework pushed to PR 2101 at cb7e877a236f8aaabdf47c4633ba612c7cb17451. Foreign usage-bearing terminal shapes are now distinct from truncated Claude logs and produce a bounded basename plus schema diagnostic. Focused tests pass; ready for a different cold reviewer.
+  created_at: 2026-09-22T15:10:44.254554182Z
+  modified_at: 2026-09-22T15:10:44.254554182Z
