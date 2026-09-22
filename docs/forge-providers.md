@@ -147,6 +147,11 @@ trace:ADR-54 | ai:codex -->
 The workflow pins a current `glab` release and configures host-scoped
 `custom_headers`. Header values use `valueFromEnv`; secret values must never be
 written literally into `config.yml`, committed, or printed in diagnostics.
+Git clone, fetch, and push use Git's numbered environment configuration to add
+the same two headers only to HTTPS requests for the mirror host. The values
+exist only in the live-test process tree and are unset on exit; repository and
+global Git configuration remain free of the Access secret. A process-scoped
+`glab auth git-credential` helper supplies the separate GitLab PAT.
 The API preflight calls `/api/v4/version` with both Access headers and validates
 the JSON response. A response beginning with `<!DOCTYPE html>` and titled
 `Sign in ・ Cloudflare Access` means the request did not pass the perimeter; a

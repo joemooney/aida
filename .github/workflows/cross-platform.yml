@@ -193,7 +193,28 @@ jobs:
           GITLAB_TOKEN: ${{ secrets.AIDA_GITLAB_TOKEN }}
           AIDA_CF_ACCESS_CLIENT_ID: ${{ secrets.AIDA_CF_ACCESS_CLIENT_ID }}
           AIDA_CF_ACCESS_CLIENT_SECRET: ${{ secrets.AIDA_CF_ACCESS_CLIENT_SECRET }}
-        run: cargo test -p aida-cli-lib gitlab_live_mr_round_trip -- --ignored --nocapture
+        shell: bash
+        run: |
+          # Git's smart-HTTP transport is separate from glab and must cross the
+          # same Access perimeter. Numbered environment config applies only to
+          # this process tree: no secret-bearing repo/global config is written.
+          # The glab credential helper supplies the separate GitLab PAT without
+          # embedding it in the clone URL. trace:TASK-1425 trace:ADR-54 | ai:codex
+          export GIT_CONFIG_COUNT=3
+          export GIT_CONFIG_KEY_0="http.https://${AIDA_GITLAB_LIVE_HOST}/.extraHeader"
+          export GIT_CONFIG_VALUE_0="CF-Access-Client-Id: ${AIDA_CF_ACCESS_CLIENT_ID}"
+          export GIT_CONFIG_KEY_1="http.https://${AIDA_GITLAB_LIVE_HOST}/.extraHeader"
+          export GIT_CONFIG_VALUE_1="CF-Access-Client-Secret: ${AIDA_CF_ACCESS_CLIENT_SECRET}"
+          export GIT_CONFIG_KEY_2="credential.https://${AIDA_GITLAB_LIVE_HOST}.helper"
+          export GIT_CONFIG_VALUE_2='!glab auth git-credential'
+          trap 'unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0 GIT_CONFIG_KEY_1 GIT_CONFIG_VALUE_1 GIT_CONFIG_KEY_2 GIT_CONFIG_VALUE_2' EXIT
+
+          header_count="$(git config --get-all "http.https://${AIDA_GITLAB_LIVE_HOST}/.extraHeader" | wc -l)"
+          if [ "$header_count" -ne 2 ]; then
+            echo "::error::Git smart-HTTP Access headers were not installed in process-scoped configuration"
+            exit 1
+          fi
+          cargo test -p aida-cli-lib gitlab_live_mr_round_trip -- --ignored --nocapture
 
   build:
     name: Build (${{ matrix.os }})
