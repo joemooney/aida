@@ -1881,6 +1881,25 @@ fn pacing_json(
 mod tests {
     use super::*;
 
+    #[test]
+    // trace:BUG-1585 | ai:codex
+    fn autonomous_drain_guide_matches_pipeline_depth_default() {
+        let guide = include_str!("../../docs/autonomous-drain.md");
+        let default = default_pipeline_depth();
+        let lines: Vec<_> = guide.lines().collect();
+        let configured = lines.windows(2).find_map(|pair| {
+            (pair[0] == "[drain]")
+                .then(|| pair[1].strip_prefix("pipeline_depth = "))
+                .flatten()
+                .and_then(|value| value.parse::<usize>().ok())
+        });
+
+        assert_eq!(configured, Some(default));
+        assert!(guide.contains(&format!("The default is depth `{default}`")));
+        assert!(guide.contains("ADR-27"));
+        assert!(guide.contains("STORY-1091"));
+    }
+
     fn write_lock(dir: &std::path::Path, pid: u32) {
         let path = drain_lock::drain_lock_path(dir);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
