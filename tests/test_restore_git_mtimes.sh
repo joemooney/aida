@@ -1,48 +1,51 @@
 #!/bin/sh
 set -eu
 
-# Regression for TASK-1274: warm GitLab checkouts must normalize both blobs and
-# trees, because Cargo's recursive rerun-if-changed watches directory mtimes.
+# Regression for TASK-1274: exact-SHA retries stay warm, while a changed source
+# file still rebuilds even when the previous normalized timestamp was newer.
 repo_root=$(git rev-parse --show-toplevel)
 fixture=$(mktemp -d)
 trap 'chmod -R u+w "$fixture" 2>/dev/null || true; rm -rf "$fixture"' EXIT
 
-git -C "$fixture" init -q
+cargo init -q --name mtime_probe "$fixture"
 git -C "$fixture" config user.name test
 git -C "$fixture" config user.email test@example.invalid
 mkdir -p "$fixture/templates/nested"
-printf 'one\n' > "$fixture/templates/nested/input.txt"
+printf 'fixture\n' > "$fixture/templates/nested/input.txt"
+cat > "$fixture/build.rs" <<'EOF'
+fn main() {
+    println!("cargo:rerun-if-changed=templates/");
+}
+EOF
 git -C "$fixture" add .
 git -C "$fixture" commit -qm initial
 
-(
-    cd "$fixture"
-    "$repo_root/ci/restore-git-mtimes"
-)
-file_before=$(stat -c %Y "$fixture/templates/nested/input.txt")
-nested_before=$(stat -c %Y "$fixture/templates/nested")
-templates_before=$(stat -c %Y "$fixture/templates")
+run_restore() {
+    (cd "$fixture" && "$repo_root/ci/restore-git-mtimes")
+}
+run_build() {
+    CARGO_TARGET_DIR="$fixture/target" \
+        cargo build --manifest-path "$fixture/Cargo.toml" -v 2>&1
+}
 
-touch "$fixture/templates/nested/input.txt" "$fixture/templates/nested" "$fixture/templates"
-(
-    cd "$fixture"
-    "$repo_root/ci/restore-git-mtimes"
-)
+run_restore
+run_build >/dev/null
+git -C "$fixture" checkout -qf HEAD
+run_restore
+warm=$(run_build)
+printf '%s\n' "$warm" | grep -q 'Fresh mtime_probe'
 
-test "$(stat -c %Y "$fixture/templates/nested/input.txt")" = "$file_before"
-test "$(stat -c %Y "$fixture/templates/nested")" = "$nested_before"
-test "$(stat -c %Y "$fixture/templates")" = "$templates_before"
-
-printf 'two\n' > "$fixture/templates/nested/input.txt"
+sed -i 's/Hello, world!/Changed/' "$fixture/src/main.rs"
 git -C "$fixture" add .
 git -C "$fixture" commit -qm changed
-(
-    cd "$fixture"
-    "$repo_root/ci/restore-git-mtimes"
-)
+run_restore
+changed=$(run_build)
+printf '%s\n' "$changed" | grep -q 'Compiling mtime_probe'
+test "$($fixture/target/debug/mtime_probe)" = Changed
 
-test "$(stat -c %Y "$fixture/templates/nested/input.txt")" != "$file_before"
-test "$(stat -c %Y "$fixture/templates/nested")" != "$nested_before"
-test "$(stat -c %Y "$fixture/templates")" != "$templates_before"
+git -C "$fixture" checkout -qf HEAD
+run_restore
+warm_again=$(run_build)
+printf '%s\n' "$warm_again" | grep -q 'Fresh mtime_probe'
 
-echo "restore-git-mtimes: blob and tree mtimes are content-stable"
+echo "restore-git-mtimes: changed sources rebuild; exact-SHA retry is fresh"

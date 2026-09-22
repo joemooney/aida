@@ -2,39 +2,68 @@
 set -eu
 
 # GitLab Runner force-checks out every pipeline, refreshing source and directory
-# mtimes even when their content is unchanged. Derive stable, past mtimes from
-# Git object IDs: identical blobs/trees keep their timestamps, while changed
-# content gets a different one and still invalidates Cargo correctly.
+# mtimes even when their content is unchanged. Cargo primarily uses mtimes for
+# freshness, so assigning arbitrary content-derived times is unsafe: a changed
+# blob can receive an older time and be mistaken for a fresh input.
+#
+# Instead, compare this checkout with the previous checkout recorded in HEAD's
+# reflog. Leave changed paths at the fresh checkout time so Cargo rebuilds them;
+# only normalize unchanged blobs and trees. An exact-SHA retry has an empty diff
+# and therefore gets stable mtimes throughout.
 # trace:TASK-1274 | ai:codex
-git ls-files --stage -z | perl -0ne '
-    next unless /^(100644|100755) ([0-9a-f]{40,64}) 0\t(.*)$/s;
-    my ($hash, $path) = ($2, $3);
-    my $mtime = 946684800 + (hex(substr($hash, 0, 8)) % 630720000);
-    utime($mtime, $mtime, $path) or die "utime $path: $!\n";
-'
+previous=$(git rev-parse --verify 'HEAD@{1}^{commit}' 2>/dev/null || true)
+current=$(git rev-parse HEAD)
 
-# Cargo treats `rerun-if-changed=some/directory/` as a recursive watch. A forced
-# checkout refreshes the directory mtime even after every tracked file has been
-# normalized, which made aida-core/build.rs rerun and recompile its unchanged
-# dependants on every warm verify. Git tree IDs give directories the same
-# content-stable identity that blob IDs give files. Normalize directories after
-# files so touching a file cannot refresh its parent again.
-# trace:TASK-1274 | ai:codex
-git ls-tree -dr -z HEAD | perl -0ne '
-    next unless /^040000 tree ([0-9a-f]{40,64})\t(.*)$/s;
-    my ($hash, $path) = ($1, $2);
-    my $mtime = 946684800 + (hex(substr($hash, 0, 8)) % 630720000);
-    utime($mtime, $mtime, $path) or die "utime $path: $!\n";
-'
+if test -n "$previous"; then
+    changed=$(mktemp)
+    trap 'rm -f "$changed"' EXIT
+    git diff --name-only -z "$previous" "$current" > "$changed"
 
-# aida-cli-lib/build.rs intentionally watches HEAD and the index for its build
-# stamp. Normalize those too so a retry of the exact same commit stays warm;
-# a different commit/tree still receives a different timestamp and rebuilds.
-set -- "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})"
-perl -e '
-    for my $pair (0, 2) {
-        my ($hash, $path) = @ARGV[$pair, $pair + 1];
+    git ls-files --stage -z | perl -0ne '
+        BEGIN {
+            my $changed_path = shift @ARGV;
+            open my $fh, "<", $changed_path or die "open $changed_path: $!\n";
+            local $/;
+            my $raw = <$fh> // "";
+            %changed = map { $_ => 1 } grep { length } split /\0/, $raw;
+        }
+        chomp;
+        next unless /^(100644|100755) ([0-9a-f]{40,64}) 0\t(.*)$/s;
+        my ($hash, $path) = ($2, $3);
+        next if $changed{$path};
         my $mtime = 946684800 + (hex(substr($hash, 0, 8)) % 630720000);
         utime($mtime, $mtime, $path) or die "utime $path: $!\n";
-    }
-' "$1" "$(git rev-parse --git-path HEAD)" "$2" "$(git rev-parse --git-path index)"
+    ' "$changed" -
+
+    # Cargo treats `rerun-if-changed=some/directory/` as a recursive watch.
+    # Normalize a directory only when no changed path is at or below it.
+    git ls-tree -dr -z HEAD | perl -0ne '
+        BEGIN {
+            my $changed_path = shift @ARGV;
+            open my $fh, "<", $changed_path or die "open $changed_path: $!\n";
+            local $/;
+            my $raw = <$fh> // "";
+            @changed = grep { length } split /\0/, $raw;
+        }
+        chomp;
+        next unless /^040000 tree ([0-9a-f]{40,64})\t(.*)$/s;
+        my ($hash, $path) = ($1, $2);
+        next if grep { $_ eq $path || index($_, "$path/") == 0 } @changed;
+        my $mtime = 946684800 + (hex(substr($hash, 0, 8)) % 630720000);
+        utime($mtime, $mtime, $path) or die "utime $path: $!\n";
+    ' "$changed" -
+
+    # The CLI build stamp watches HEAD and the index. Stabilize them only for
+    # an exact-SHA retry; a new commit must rerun the build script.
+    if test "$previous" = "$current"; then
+        tree=$(git rev-parse HEAD^{tree})
+        perl -e '
+            for my $pair (0, 2) {
+                my ($hash, $path) = @ARGV[$pair, $pair + 1];
+                my $mtime = 946684800 + (hex(substr($hash, 0, 8)) % 630720000);
+                utime($mtime, $mtime, $path) or die "utime $path: $!\n";
+            }
+        ' "$current" "$(git rev-parse --git-path HEAD)" \
+          "$tree" "$(git rev-parse --git-path index)"
+    fi
+fi

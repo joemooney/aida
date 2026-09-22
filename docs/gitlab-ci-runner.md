@@ -71,16 +71,16 @@ rather than putting an unconditional clean back on every pipeline.
 
 GitLab Runner still performs a forced checkout even without `git clean`, which
 can refresh tracked-file and directory mtimes. Before each builder job,
-`ci/restore-git-mtimes` assigns every regular tracked file and directory a
-deterministic past mtime derived from its Git blob or tree ID. Directories
-matter because Cargo recursively watches paths such as `aida-core/templates/`;
-restoring only file mtimes still reruns that crate's build script after every
-forced checkout. Unchanged content therefore keeps the same mtime across
-pipelines, while a content change gets a different mtime and continues to
-invalidate Cargo correctly. The helper also normalizes `.git/HEAD`
-and `.git/index` from the commit and tree IDs because the CLI build-stamp script
-intentionally watches those paths; a retry of one SHA remains warm, while a new
-commit still refreshes the embedded build identity.
+`ci/restore-git-mtimes` compares the new checkout with the prior checkout in
+Git's reflog. Changed paths retain their fresh checkout time so Cargo must
+rebuild them; unchanged regular files and directories receive a deterministic
+past mtime derived from their Git blob or tree ID. Directories matter because
+Cargo recursively watches paths such as `aida-core/templates/`; restoring only
+file mtimes still reruns that crate's build script after every forced checkout.
+On an exact-SHA retry the helper also normalizes `.git/HEAD` and `.git/index`,
+which are watched by the CLI build-stamp script. This is intentionally not a
+blanket hash-to-time transform: giving a changed file an older synthetic mtime
+can make Cargo incorrectly reuse stale output.
 
 Gotchas learned the hard way:
 
