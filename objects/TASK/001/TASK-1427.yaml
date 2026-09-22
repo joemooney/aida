@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T14:04:15.633781093Z
-modified_at: 2026-09-22T15:58:34.465278581Z
+modified_at: 2026-09-22T16:07:46.285615041Z
 req_type: Task
 tags:
 - cost
@@ -149,3 +149,8 @@ comments:
     The implementation has a useful schema and privacy posture, but these are data-integrity and required-gate failures, so approval is not safe yet.
   created_at: 2026-09-22T14:53:27.250562253Z
   modified_at: 2026-09-22T14:53:27.250562253Z
+- id: 01a0c9df-8d6d-7b53-8b7a-909174094390
+  author: codex
+  content: '[aida:independent-review] REQUEST_CHANGES on PR #2099 exact head 873aa85dcde5770334428f5ad972f66c2e9f1fba. Fresh cold review confirms the prior parser, query, attribution, rebuild-security, test-coverage, and portability blockers are addressed. One signed-architecture blocker remains: EventKind::PhaseEntered records an authoritative attempt counter, but token_ledger::load_phases() ignores it and derives round from occurrence count, assigning potentially false non-null rounds on skipped/partial/non-retry re-entries. Consume attempt or leave round null with an explicit reason when retry evidence is absent/ambiguous, and add a regression fixture. Exact-head local evidence: 16 token-ledger/CLI tests, formatter, diff, portability, and six-test BUG-1502 audit pass. merge-hold-gate is green; required Ubuntu Build is still in progress. Durable PR verdict: https://github.com/joemooney/aida/pull/2099#issuecomment-5779823391'
+  created_at: 2026-09-22T16:07:46.285615041Z
+  modified_at: 2026-09-22T16:07:46.285615041Z
