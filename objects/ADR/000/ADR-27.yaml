@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T21:12:04.987183577Z
-modified_at: 2026-09-13T02:01:23.345577235Z
+modified_at: 2026-09-22T07:21:05.144698238Z
 req_type: Decision
 tags:
 - adr
@@ -42,3 +42,8 @@ comments:
   created_at: 2026-09-13T02:01:23.345577235Z
   modified_at: 2026-09-13T02:01:23.345577235Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0c7fd-5b78-7f20-8bc5-e2b46a3b84ce
+  author: joe
+  content: 'Partial supersession note (BUG-1585): ADR-27''s default of two slots was correct for its state-only, inert pipeline-depth slice. STORY-1091 later made pipeline depth control live scheduling and changed default_pipeline_depth() to 1 so concurrency is opt-in. Keep ADR-27 as historical context; do not use its value as the current runtime default.'
+  created_at: 2026-09-22T07:21:05.144698238Z
+  modified_at: 2026-09-22T07:21:05.144698238Z
