@@ -21,7 +21,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:03:46.513817918Z
-modified_at: 2026-09-22T11:11:13.905274364Z
+modified_at: 2026-09-22T11:13:12.286458034Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -46,3 +46,8 @@ comments:
   created_at: 2026-09-21T21:26:41.534208302Z
   modified_at: 2026-09-21T21:26:41.534208302Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c8d1-de5e-7ee2-b10d-64538a87b4bd
+  author: joe
+  content: '[aida:driver-disposition] No implementation is warranted under this record. Its corrected description explicitly identifies it as a practice/detection observation, says to promote only if a second instance appears, and assigns the actionable machine-readable read contract to BUG-1502. Current inspection confirms TOON escaping is valid/reversible through its parser, show --json round-trips exact bytes, and list/export do not reproduce the alleged corrupting path. Superseding this observation by BUG-1502 avoids inventing a raw display contract that would conflict with valid TOON grammar.'
+  created_at: 2026-09-22T11:13:12.286458034Z
+  modified_at: 2026-09-22T11:13:12.286458034Z
