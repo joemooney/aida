@@ -127,6 +127,35 @@ fn test_high_probability_low_confidence_escalates() {
     .unwrap();
     assert_eq!(verdict.overall_verdict, "escalated");
     assert!(verdict.escalated_to_seat);
+    assert_eq!(verdict.results[1].status, CriterionStatus::Escalated);
+
+    let prompt = generate_graded_reviewer_prompt("TASK-102", Some(456), &verdict);
+    assert!(prompt.contains("Clear operational behavior"));
+}
+
+#[test]
+fn test_low_probability_low_confidence_remains_phase3_residual() {
+    let desc = "## Acceptance\n- [ ] `true`\n- Safe rollback behavior\n";
+    let mock = MockEvaluator::new().with_noul_confidence(0.20, 0.84);
+    let verdict = execute_graded_review(
+        "TASK-102",
+        "Low confidence failure boundary",
+        desc,
+        "+ change",
+        "abc1234",
+        Path::new("."),
+        Some(&mock),
+    )
+    .unwrap();
+
+    // p <= .20 is not enough to fast-fail when confidence is below .85: the
+    // criterion must remain a residual with a prompt-visible outcome.
+    assert_eq!(verdict.overall_verdict, "escalated");
+    assert!(verdict.escalated_to_seat);
+    assert_eq!(verdict.results[1].status, CriterionStatus::Escalated);
+
+    let prompt = generate_graded_reviewer_prompt("TASK-102", Some(457), &verdict);
+    assert!(prompt.contains("Safe rollback behavior"));
 }
 
 #[test]

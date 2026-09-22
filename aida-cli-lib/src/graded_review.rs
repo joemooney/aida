@@ -436,9 +436,14 @@ pub fn execute_graded_review(
                     if resp.noul <= 0.20 && resp.confidence >= 0.85 {
                         confident_failure = Some((resp.noul, resp.confidence));
                     }
-                    let status = if resp.noul >= 0.95 {
+                    // A probability at either fast-decision boundary is only
+                    // settled when its confidence also satisfies the ADR-55
+                    // predicate.  Otherwise this criterion is residual work
+                    // for Phase 3; marking it Passed/Failed here would make
+                    // aggregate escalation silently drop it from the prompt.
+                    let status = if resp.noul >= 0.95 && resp.confidence >= 0.90 {
                         CriterionStatus::Passed
-                    } else if resp.noul <= 0.20 {
+                    } else if resp.noul <= 0.20 && resp.confidence >= 0.85 {
                         CriterionStatus::Failed
                     } else {
                         CriterionStatus::Escalated
