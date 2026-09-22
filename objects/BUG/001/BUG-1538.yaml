@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:44.578137790Z
-modified_at: 2026-09-22T04:54:10.387702502Z
+modified_at: 2026-09-22T06:34:15.592071535Z
 req_type: Bug
 comments:
 - id: 01a0c312-bb00-72a3-95b8-3088f0b66089
@@ -177,3 +177,13 @@ comments:
     Verification: 32 review_verdict tests passed; 27 bug_775 commits-ahead/writer tests passed; 6 TASK-1265 rework tests passed; cargo fmt --all -- --check and git diff --check passed. Full aida-cli-lib run reached 5310 passed, 1 ignored, with one unrelated transient Text file busy failure in bug_1265_finish_ci_tests::fake_gh_short_argv_reaches_fallback; its exact same-head rerun passed.
   created_at: 2026-09-22T04:54:10.387702502Z
   modified_at: 2026-09-22T04:54:10.387702502Z
+- id: 01a0c7d2-7ca8-7170-b11d-0b0bb945cc21
+  author: joe
+  content: |
+    Cold-review rework for PR #2076 closes the live-consumer gap. The actual phase-3 verdict reader now refuses Approved when reviewed_sha is absent, when the current PR head cannot be resolved, or when the recorded commit differs; safe abbreviations of at least seven hexadecimal characters still compare by commit identity. Both the ordinary reviewer path and configured agent-gate path pass the forge-resolved PR head. probe_resume_facts now compares the PR-keyed handshake against the resolved current branch tip before setting reviewed=true.
+
+    Red-first evidence: a temporary mutation restored the old spelling-only behavior (`return Ok(outcome)` for Approved). Both new live consumer tests failed by receiving Ok(Verdict(Approved)) for stale and SHA-less records. The mutation and unreachable-code allowance were removed; all three live phase-3 tests then passed. The real probe_resume_facts test now exercises SHA-less=false, stale=false, and exact-head=true.
+
+    Verification: live_phase3 tests 3/3 passed; probe_resume_facts live consumer test passed; prior bug_775 suite remained 27/27; cargo fmt check and git diff check passed.
+  created_at: 2026-09-22T06:34:15.592071535Z
+  modified_at: 2026-09-22T06:34:15.592071535Z
