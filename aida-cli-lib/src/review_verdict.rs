@@ -307,6 +307,103 @@ pub fn verdict_conflict_for_current_sha(body: &str) -> Option<String> {
     ))
 }
 
+/// Reconcile every review recording from multiple artifacts at `current_sha`.
+/// Retained rounds are durable evidence, so an ill-formed or unattributed
+/// round is an integrity error rather than something a later approval may
+/// silently hide.
+// trace:BUG-1581 | ai:codex
+pub fn reconcile_artifacts_for_sha<'a>(
+    bodies: impl IntoIterator<Item = &'a str>,
+    current_sha: &str,
+) -> Result<Option<VerdictKind>, String> {
+    let mut approvals = Vec::new();
+    let mut blockers = Vec::new();
+    let mut saw_current = false;
+
+    for body in bodies {
+        let value: serde_json::Value = serde_json::from_str(body)
+            .map_err(|e| format!("verdict artifact is not valid JSON: {e}"))?;
+        let obj = value
+            .as_object()
+            .ok_or_else(|| "verdict artifact is not a JSON object".to_string())?;
+        let mut recordings = vec![(obj, false)];
+        if let Some(rounds) = obj.get("rounds") {
+            let rounds = rounds
+                .as_array()
+                .ok_or_else(|| "retained `rounds` is not an array".to_string())?;
+            for (index, round) in rounds.iter().enumerate() {
+                let round = round
+                    .as_object()
+                    .ok_or_else(|| format!("retained round {} is not a JSON object", index + 1))?;
+                recordings.push((round, true));
+            }
+        }
+
+        for (recording, retained) in recordings {
+            let sha = round_sha(recording).ok_or_else(|| {
+                if retained {
+                    "retained round has no reviewed_sha/head provenance".to_string()
+                } else {
+                    "verdict artifact has no reviewed_sha/head provenance".to_string()
+                }
+            })?;
+            let raw = recording
+                .get("verdict")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| "review recording has no verdict".to_string())?;
+            let kind = VerdictKind::parse(raw);
+            if kind == VerdictKind::Other {
+                return Err(format!("review recording has unrecognised verdict `{raw}`"));
+            }
+            let reviewer = recording
+                .get("recorded_by")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|v| !v.is_empty());
+            if retained && reviewer.is_none() {
+                return Err("retained round has no recorded_by provenance".to_string());
+            }
+            if !same_reviewed_sha(&sha, current_sha) {
+                continue;
+            }
+            saw_current = true;
+            let reviewer = reviewer.unwrap_or("unknown reviewer").to_string();
+            match kind {
+                VerdictKind::Approved => approvals.push(reviewer),
+                VerdictKind::RequestChanges | VerdictKind::Rejected => blockers.push(reviewer),
+                VerdictKind::Other => unreachable!(),
+            }
+        }
+    }
+
+    approvals.sort();
+    approvals.dedup();
+    blockers.sort();
+    blockers.dedup();
+    if approvals
+        .iter()
+        .any(|approved| blockers.iter().any(|blocked| approved != blocked))
+    {
+        return Err(format!(
+            "conflicting review verdicts at {}: approved by {}; blocked by {}",
+            short_sha(current_sha),
+            approvals.join(", "),
+            blockers.join(", ")
+        ));
+    }
+    if !blockers.is_empty() {
+        Ok(Some(VerdictKind::RequestChanges))
+    } else if !approvals.is_empty() {
+        Ok(Some(VerdictKind::Approved))
+    } else if saw_current {
+        unreachable!()
+    } else {
+        Ok(None)
+    }
+}
+
 fn surviving_against_previous_round(
     obj: &serde_json::Map<String, serde_json::Value>,
     current: &[String],

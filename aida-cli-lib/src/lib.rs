@@ -50343,7 +50343,7 @@ fn integrate_wave_prs(
         // Review + mergeability, from the forge and the local verdict file —
         // either RequestChanges is a hard stop (never merge over a reviewer).
         let (forge_request_changes, mergeable) = wave_pr_review_facts(project_root, pr.number);
-        let local_request_changes = local_verdict_blocks_merge(project_root, pr.number);
+        let local_request_changes = local_verdict_blocks_merge(project_root, pr.number, &pr.spec);
 
         let action = burndown::wave_pr_action(&burndown::WavePrFacts {
             supervision_label,
@@ -50533,33 +50533,35 @@ fn wave_pr_review_facts(
 /// but an existing unreadable file is evidence whose meaning cannot be proven
 /// and therefore fails closed.
 // trace:TASK-1169 | ai:claude
-fn local_verdict_blocks_merge(project_root: &std::path::Path, pr_number: u64) -> bool {
-    let path = project_root
-        .join(".aida")
-        .join("review-verdicts")
-        .join(format!("PR-{pr_number}.json"));
-    if !path.exists() {
+fn local_verdict_blocks_merge(project_root: &std::path::Path, pr_number: u64, spec: &str) -> bool {
+    let paths = [
+        review_verdict::verdict_path(project_root, &format!("PR-{pr_number}")),
+        review_verdict::verdict_path(project_root, spec),
+    ];
+    let existing: Vec<_> = paths.iter().filter(|path| path.exists()).collect();
+    if existing.is_empty() {
         return false;
     }
-    // A disagreement is not a malformed/missing optional verdict: it is two
-    // valid, independent decisions that the merge seat must reconcile. Treat
-    // it as a hard stop even though the generic parser error fallback below
-    // remains permissive for legacy unreadable artifacts.
-    // trace:BUG-1581 | ai:codex
-    if std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|body| review_verdict::verdict_conflict_for_current_sha(&body))
-        .is_some()
+    let bodies: Vec<String> = match existing
+        .iter()
+        .map(|path| std::fs::read_to_string(path))
+        .collect::<Result<_, _>>()
     {
+        Ok(bodies) => bodies,
+        Err(_) => return true,
+    };
+    let Some(current_sha) = bodies.iter().find_map(|body| {
+        review_verdict::parse_recorded_verdict(body).and_then(|recorded| recorded.reviewed_sha)
+    }) else {
         return true;
-    }
-    match read_verdict_file(&path) {
-        Ok(auto_complete::ReviewerOutcome::Verdict(v)) => {
-            !matches!(v, auto_complete::Verdict::Approved)
-        }
-        Ok(auto_complete::ReviewerOutcome::EscalatedToHuman { .. }) => true,
-        Err(_) => true,
-    }
+    };
+    !matches!(
+        review_verdict::reconcile_artifacts_for_sha(
+            bodies.iter().map(String::as_str),
+            &current_sha
+        ),
+        Ok(Some(review_verdict::VerdictKind::Approved))
+    )
 }
 
 #[cfg(test)]
@@ -50585,7 +50587,25 @@ mod bug_1581_merge_block_tests {
             }"#,
         )
         .unwrap();
-        assert!(local_verdict_blocks_merge(root.path(), 2066));
+        assert!(local_verdict_blocks_merge(root.path(), 2066, "BUG-1581"));
+    }
+
+    #[test]
+    fn local_merge_chokepoint_reconciles_pr_and_spec_artifacts() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("PR-2090.json"),
+            r#"{"verdict":"Approved","reviewed_sha":"ac772eaca9d389fa762a232156df996023bfdf7a","recorded_by":"reviewer-pr"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("STORY-1448.json"),
+            r#"{"verdict":"RequestChanges","reviewed_sha":"ac772eaca9d389fa762a232156df996023bfdf7a","recorded_by":"reviewer-spec"}"#,
+        )
+        .unwrap();
+        assert!(local_verdict_blocks_merge(root.path(), 2090, "STORY-1448"));
     }
 }
 
@@ -85313,6 +85333,18 @@ fn read_verdict_file(
             "the reviewer session produced no verdict file — the review did not complete",
         )
     })?;
+    if let Some(current_sha) =
+        review_verdict::parse_recorded_verdict(&body).and_then(|recorded| recorded.reviewed_sha)
+    {
+        review_verdict::reconcile_artifacts_for_sha([body.as_str()], &current_sha).map_err(
+            |reason| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::NoVerdict,
+                    format!("{reason} — review evidence cannot be proven safe"),
+                )
+            },
+        )?;
+    }
     if let Some(conflict) = review_verdict::verdict_conflict_for_current_sha(&body) {
         return Err(auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::NoVerdict,

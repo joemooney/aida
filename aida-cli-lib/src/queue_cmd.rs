@@ -11911,25 +11911,38 @@ pub(crate) fn probe_pr_integration_state(
     // the optimistic absence of RequestChanges.
     // trace:BUG-1581 | ai:codex
     let (local_request_changes, review_integrity_unproven) = item
-        .map(|i| i.number)
-        .map(|n| {
-            let path = project_root
-                .join(".aida/review-verdicts")
-                .join(format!("PR-{n}.json"));
-            if !path.exists() {
+        .map(|i| {
+            let n = i.number;
+            let paths = [
+                review_verdict::verdict_path(project_root, &format!("PR-{n}")),
+                review_verdict::verdict_path(project_root, spec_id),
+            ];
+            let existing: Vec<_> = paths.iter().filter(|path| path.exists()).collect();
+            let bodies: Vec<String> = match existing
+                .iter()
+                .map(|path| std::fs::read_to_string(path))
+                .collect::<Result<_, _>>()
+            {
+                Ok(bodies) => bodies,
+                Err(_) => return (false, true),
+            };
+            if bodies.is_empty() {
                 return (false, false);
             }
-            match read_verdict_file(&path) {
-                Ok(auto_complete::ReviewerOutcome::Verdict(verdict)) => {
-                    (!matches!(verdict, auto_complete::Verdict::Approved), false)
-                }
-                Ok(auto_complete::ReviewerOutcome::EscalatedToHuman { .. }) => (true, false),
+            let Some(head) = i.head_sha.as_deref() else {
+                return (false, true);
+            };
+            match review_verdict::reconcile_artifacts_for_sha(
+                bodies.iter().map(String::as_str),
+                head,
+            ) {
+                Ok(Some(review_verdict::VerdictKind::Approved)) | Ok(None) => (false, false),
+                Ok(Some(_)) => (true, false),
                 Err(_) => (false, true),
             }
         })
         .unwrap_or((false, false));
 
-    let _ = spec_id; // spec id is the caller's message prefix, not a probe input.
     integrate::PrIntegrationState {
         ci,
         request_changes_pending: forge_request_changes || local_request_changes,
@@ -11961,6 +11974,103 @@ mod bug_1581_integration_probe_tests {
 
     fn verdict_path(root: &std::path::Path) -> std::path::PathBuf {
         root.join(".aida/review-verdicts/PR-2090.json")
+    }
+
+    fn write_separate_verdicts(root: &std::path::Path, pr_verdict: &str, spec_verdict: &str) {
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        let artifact = |verdict: &str, reviewer: &str| {
+            format!(
+                r#"{{"verdict":"{verdict}","reviewed_sha":"ac772eaca9d389fa762a232156df996023bfdf7a","recorded_by":"{reviewer}"}}"#
+            )
+        };
+        std::fs::write(
+            dir.join("PR-2090.json"),
+            artifact(pr_verdict, "reviewer-pr"),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("BUG-1581.json"),
+            artifact(spec_verdict, "reviewer-spec"),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn integrate_probe_parks_opposite_verdicts_in_separate_artifacts_both_orders() {
+        for (pr, spec) in [
+            ("Approved", "RequestChanges"),
+            ("RequestChanges", "Approved"),
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            write_separate_verdicts(root.path(), pr, spec);
+            let state =
+                probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snapshot());
+            assert!(matches!(
+                crate::integrate::classify_integration_action(&state),
+                crate::integrate::IntegrationAction::Park(
+                    crate::integrate::ParkReason::ReviewIntegrity
+                )
+            ));
+        }
+    }
+
+    #[test]
+    fn integrate_probe_parks_unattributed_retained_round() {
+        let root = tempfile::tempdir().unwrap();
+        let path = verdict_path(root.path());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            path,
+            r#"{"verdict":"Approved","reviewed_sha":"ac772eaca9d389fa762a232156df996023bfdf7a","recorded_by":"reviewer-a","rounds":[{"verdict":"RequestChanges","reviewed_sha":"ac772eaca9"}]}"#,
+        )
+        .unwrap();
+        let state =
+            probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snapshot());
+        assert!(matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Park(
+                crate::integrate::ParkReason::ReviewIntegrity
+            )
+        ));
+    }
+
+    #[test]
+    fn integrate_probe_ignores_stale_opposition_in_separate_artifact() {
+        let root = tempfile::tempdir().unwrap();
+        write_separate_verdicts(root.path(), "Approved", "RequestChanges");
+        let spec = root.path().join(".aida/review-verdicts/BUG-1581.json");
+        let stale = std::fs::read_to_string(&spec).unwrap().replace(
+            "ac772eaca9d389fa762a232156df996023bfdf7a",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        );
+        std::fs::write(spec, stale).unwrap();
+        let state =
+            probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snapshot());
+        assert!(matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Merge
+        ));
+    }
+
+    #[test]
+    fn integrate_probe_parks_malformed_retained_round() {
+        let root = tempfile::tempdir().unwrap();
+        let path = verdict_path(root.path());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            path,
+            r#"{"verdict":"Approved","reviewed_sha":"ac772eaca9d389fa762a232156df996023bfdf7a","recorded_by":"reviewer-a","rounds":["lost evidence"]}"#,
+        )
+        .unwrap();
+        let state =
+            probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snapshot());
+        assert!(matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Park(
+                crate::integrate::ParkReason::ReviewIntegrity
+            )
+        ));
     }
 
     // Drive the actual integrate probe and pure decision together. A green,
