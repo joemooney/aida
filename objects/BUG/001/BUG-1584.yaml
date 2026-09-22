@@ -50,7 +50,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T23:41:00.172675010Z
-modified_at: 2026-09-22T07:22:35.956649082Z
+modified_at: 2026-09-22T07:32:54.958468186Z
 req_type: Bug
 tags:
 - card rendering papercut
+comments:
+- id: 01a0c808-30e9-75c2-95a3-5b7652a337f9
+  author: joe
+  content: 'Implemented via CardRel::edge: every standard edge under the neutral Related bucket now renders its canonical type inline; Child remains a bare target under the Parent heading, and Custom preserves its existing inline name. Red-first regression covered Parent, Duplicate, Verifies, VerifiedBy, References, BlockedBy, Blocks, SupersededBy, Supersedes plus Child/Custom controls. cargo test -p aida-cli-lib card_ passed (8 tests); cargo fmt --all -- --check and git diff --check passed.'
+  created_at: 2026-09-22T07:32:54.958468186Z
+  modified_at: 2026-09-22T07:32:54.958468186Z
