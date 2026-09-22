@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:04:43.121876649Z
-modified_at: 2026-09-22T15:11:07.771136687Z
+modified_at: 2026-09-22T15:28:26.225139499Z
 req_type: Bug
 tags:
 - cost
@@ -73,3 +73,8 @@ comments:
   content: 'SHA correction: exact pushed and live PR 2101 head is cb7e877a23ad44daad9e6049b89e0b81e48fc99d. The prior long SHA in the rework note was a transcription error.'
   created_at: 2026-09-22T15:11:07.771136687Z
   modified_at: 2026-09-22T15:11:07.771136687Z
+- id: 01a0c9bb-8a71-73e1-b838-05055421d785
+  author: joe
+  content: '[aida:proxy-approval] verdict=APPROVE; reasoning=fresh independent exact-head review approved PR #2101 at cb7e877a23ad44daad9e6049b89e0b81e48fc99d; null-vs-zero, vendor/run identity, foreign-shape diagnostics, strict/live split, separate fixtures and legacy lower-bound docs verified; independent=yes; gates=Build ubuntu SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; timestamp=2026-09-22T08:28:25-07:00'
+  created_at: 2026-09-22T15:28:26.225139499Z
+  modified_at: 2026-09-22T15:28:26.225139499Z
