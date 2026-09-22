@@ -31,12 +31,12 @@ description: |-
   SCOPE, kept narrow deliberately: this is the --help text on aida queue work, not the code and not docs/autonomous-drain.md, which I have not checked. Someone fixing this should check whether the same "pinned to 1" claim appears in the guide and the TUI help, since a claim this specific tends to have been copied.
 
   Worth noting the general form, which is the same shape as several findings tonight: a surface that describes the system's capabilities is a coordination surface, and this one reports absent evidence -- "no concurrency here" -- where the evidence is simply out of date. Nothing distinguishes "pinned to 1 by design" from "written before the scheduler landed".
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:02:15.338764730Z
-modified_at: 2026-09-22T07:35:53.740221686Z
+modified_at: 2026-09-22T07:36:00.884239543Z
 req_type: Task
 tags:
 - docs:impacted
