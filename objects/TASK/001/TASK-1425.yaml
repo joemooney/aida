@@ -55,7 +55,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:09:54.985425283Z
-modified_at: 2026-09-22T04:35:05.448285014Z
+modified_at: 2026-09-22T04:43:27.373065124Z
 req_type: Task
 tags:
 - forge gitlab ci infrastructure
@@ -70,3 +70,8 @@ comments:
   content: '[architecture-sketch] Operator selected remedy A by provisioning AIDA_CF_ACCESS_CLIENT_ID and AIDA_CF_ACCESS_CLIENT_SECRET. Implement with glab host custom_headers sourced from environment, install a glab version that supports that configuration, authenticate preflight against GitLab API JSON rather than readiness HTML, document credential separation and rotation, then demonstrate the complete live lifecycle. Security trade recorded in the linked accepted decision.'
   created_at: 2026-09-22T04:34:46.097197001Z
   modified_at: 2026-09-22T04:34:46.097197001Z
+- id: 01a0c76d-0b0d-7c40-b3c9-16c305ee6fc0
+  author: joe
+  content: 'Live verification blocker (2026-09-21): PR #2075 head 3a5a614a5626e545c08735985b7c59978cc390a5, workflow run 35687873391, job 106618482498. All three repository secrets were present, and the Access-header request completed at the transport layer, but /api/v4/version did not return GitLab JSON. The job failed before installing glab or creating a project; no lifecycle phase ran and this is not acceptance evidence. Verify that the Cloudflare Access application for gitlab.joemooney.com has a Service Auth policy whose Include rule selects the newly provisioned service token (and that both GitHub secret values are the matching pair), then rerun the exact head.'
+  created_at: 2026-09-22T04:43:27.373065124Z
+  modified_at: 2026-09-22T04:43:27.373065124Z
