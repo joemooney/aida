@@ -236,7 +236,7 @@ fn agents_md_block_refresh(
         let existing = std::fs::read_to_string(&dest).ok()?;
         let (merged, _) =
             aida_core::scaffolding::merge_agents_md_aida_block(&existing, &artifact.content);
-        if merged.replace("\r\n", "\n") == existing.replace("\r\n", "\n") {
+        if aida_core::scaffolding::generated_text_matches(&merged, &existing) {
             report.record(
                 Path::new("AGENTS.md"),
                 aida_core::scaffolding::refresh::RefreshOutcome::Unchanged,

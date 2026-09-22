@@ -79,3 +79,23 @@ fn user_aida_instructions_refresh_keeps_edited_blocks() {
     assert_eq!(merged, existing);
     assert_eq!(report.kept_edited, 1);
 }
+
+#[test]
+fn user_aida_instructions_crlf_block_is_pristine() {
+    let block = render_user_aida_instructions_block().replace('\n', "\r\n");
+
+    let (same, unchanged) = merge_user_aida_instructions(Some(&block), true);
+    assert_eq!(same, block);
+    assert_eq!(unchanged.unchanged, 1, "CRLF-only block is unchanged");
+
+    // Make the generated region byte-different without changing its body or
+    // recorded checksum. This reaches checksum classification rather than the
+    // fast equality path; CRLF body bytes must still classify as pristine.
+    let legacy_header = block.replacen(" -->\r\n", "  -->\r\n", 1);
+    let (_, refreshed) = merge_user_aida_instructions(Some(&legacy_header), true);
+    assert_eq!(refreshed.written, 1);
+    assert_eq!(
+        refreshed.kept_edited, 0,
+        "newline conversion must not make an untouched block look edited"
+    );
+}
