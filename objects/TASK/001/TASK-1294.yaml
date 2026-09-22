@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-21T22:25:03.495096741Z
+modified_at: 2026-09-22T02:10:00.066837378Z
 req_type: Task
 tags:
 - follow-up:TASK-1291
@@ -286,6 +286,58 @@ comments:
   created_at: 2026-09-21T22:25:03.495096741Z
   modified_at: 2026-09-21T22:25:03.495096741Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c6e0-8d02-7213-8576-f78852b2c362
+  author: joe
+  content: |-
+    [aida:measurement] 2026-09-21 — fixed 20-spec post-TASK-1291 report
+
+    RESULT: NULL / TOO THIN TO SUPPORT A CLAIM. The primary per-cause result for the measurable drain population is 5 verdict:request-changes, 0 ci-red, 1 tool-exit, and 1 ci-unavailable across 14 specs. Six other specs were lane-driven and have no RunStarted boundary, so this method cannot measure their rounds. The requested partition leaves only seven shelves; no causal conclusion about TASK-1291 is supportable.
+
+    Method and reproducibility
+
+    - Intervention boundary: TASK-1291 merged at 2026-09-19T20:07:33Z; its authoritative Done-to-Completed store commit is 4e29bf873585b255d4b545952924602f4ab94d49 at 2026-09-19T20:07:38Z. I retained the merge time fixed in the spec for sample eligibility and used the store transition for verification.
+    - Sample: the next 20 non-review work specs whose YAML object changed exactly from status Done to Completed after that boundary, in aida-store commit order. Auto-created Review PR-N stories are lifecycle artifacts and were excluded. I did not use PrMerged.
+    - Each drain window opens at that spec's first RunStarted in .aida/events.jsonl and closes at its verified Done-to-Completed store commit timestamp. SpecShelved events inside the inclusive window are counted by kind.
+    - A lane spec with no RunStarted is named and kept as a separate population; it is not assigned a synthetic zero.
+    - Reproduction: git log aida-store --since=2026-09-19T20:07:33Z --reverse -G'^status: Completed' --format plus --name-only over objects; for every candidate compare git show COMMIT^:PATH and COMMIT:PATH, retaining only Done -> Completed; parse events.jsonl by spec and timestamp. The generated cross-check contained exactly 20 work specs, 14 with RunStarted and 6 without.
+
+    Baseline (fixed; not re-cut)
+
+    The spec's fixed 2026-09-18 12:00 through 2026-09-19 09:30 MST baseline is 40 shelves across 19 shelved specs: 26 verdict:request-changes, 10 ci-red, 4 tool-exit. Its per-shelved-spec distribution is 1:6, 2:8, 3:2, 4:3; median 2, mean 2.11. The baseline did not record the total number of completed specs, so it cannot supply a comparable per-completed-spec rate or a zero-round population.
+
+    Primary result: per-cause split
+
+    - Drain-driven (n=14): verdict:request-changes 5; ci-red 0; tool-exit 1; ci-unavailable 1. Total 7 shelves.
+    - Drain distribution: 0 shelves: 7 specs; 1 shelf: 7 specs; median 0.5; mean 0.50 per completed drain spec.
+    - Lane-driven (n=6): rounds unmeasurable because RunStarted is absent. No zero is imputed.
+    - Baseline versus after: baseline median 2 among shelved specs versus after median 1 among the 7 drain specs that shelved; baseline mean 2.11 among shelved specs versus after mean 1.00 among shelved specs. These like-denominator numbers are descriptive only: 19 versus 7 shelved specs is thin, and the fixed baseline has no completed-spec denominator. The tempting comparison 2 versus 0.5 changes denominator and is invalid.
+
+    Named fixed sample, close time, and shelves
+
+    Drain-driven: BUG-1268 (2026-09-19T21:21:33Z, 1 ci-unavailable); BUG-1234 (21:48:08Z, 0); TASK-168 (2026-09-20T03:08:04Z, 1 tool-exit; stored at path TASK-1-144); BUG-1275 (03:32:10Z, 0); STORY-1352 (03:44:30Z, 1 request-changes); SPIKE-83 (06:51:31Z, 1 request-changes); BUG-1298 (07:57:42Z, 0); BUG-1305 (09:11:20Z, 1 request-changes); BUG-1301 (09:26:15Z, 0); BUG-1316 (09:52:41Z, 0); BUG-1422 (10:26:43Z, 0); BUG-1303 (10:55:06Z, 1 request-changes); BUG-1424 (12:55:59Z, 1 request-changes); BUG-1425 (13:21:18Z, 0).
+
+    Lane-driven: TASK-1290 (2026-09-20T06:41:02Z); TASK-1297 (07:14:19Z); BUG-1279 (07:16:16Z); BUG-1277 (07:18:34Z); TASK-1292 (07:59:31Z); BUG-1283 (09:50:46Z). Their feed has no RunStarted, so this report does not dilute the drain population with them.
+
+    Per-spec exposure
+
+    Exposure means the change had completed before the drain spec's first RunStarted, not merely before its eventual merge.
+
+    - TASK-1291: BUG-1268 was already running before TASK-1291 landed and is not exposed. The other 13 drain specs started after it and are exposed.
+    - TASK-1290 (completed 2026-09-20T06:41:02Z): BUG-1268, BUG-1234, TASK-168, BUG-1275, STORY-1352, and SPIKE-83 are not exposed. BUG-1298, BUG-1305, BUG-1301, BUG-1316, BUG-1422, BUG-1303, BUG-1424, and BUG-1425 are exposed.
+    - BUG-1277 (completed 2026-09-20T07:18:34Z): the same first six drain specs are not exposed; the same latter eight are exposed.
+    - For all six lane-driven specs, process-time exposure is unobservable because the required pickup event is absent. By completion ordering only: TASK-1290, TASK-1297, and BUG-1279 closed before BUG-1277; BUG-1277 is the intervention itself; TASK-1292 and BUG-1283 closed after it. All six closed after TASK-1291, but that does not prove when their work began.
+
+    Other in-window changes and confounds
+
+    TASK-1290 and BUG-1277 landed during the fixed sample, at the timestamps above, and divide the drain population 6/8. TASK-1289 did not land in this window and remains Approved as of this report, so its proposed pre-flight guard cannot explain this sample. The lane/drain process split is the dominant confound: 6/20 have no observable open boundary. TASK-168's agreed ID differs from its store path (TASK-1-144), but the object itself supplies the canonical agreed ID and was counted once.
+
+    Conclusion
+
+    This fixed sample does not demonstrate that TASK-1291 reduced rounds. Request-changes is 5 events across 14 measurable specs, but only 13 of those were exposed to TASK-1291 at run start, and only eight were also exposed to TASK-1290 and BUG-1277. CI-red is zero, but TASK-1289 did not land, so attributing that zero to pre-flight guards would be false. After partitioning by driver and exposure, the cause counts are too thin. The honest result is null: retain the counts and rerun later with a baseline that records all completed specs and with a pickup event for lane work.
+
+    Explicit exclusions: auto-created Review PR-N stories; transitions into Completed whose immediately prior status was not Done; events outside each first-RunStarted-to-store-completion window; lane specs from the drain statistics because they lack RunStarted. Nothing was substituted with PrMerged, and the sample was not re-cut to improve the outcome.
+  created_at: 2026-09-22T02:10:00.066837378Z
+  modified_at: 2026-09-22T02:10:00.066837378Z
 execution_mode: operator
 failure_reason:
   phase: implementer
