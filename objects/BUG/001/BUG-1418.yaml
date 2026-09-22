@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:04:43.121876649Z
-modified_at: 2026-09-22T14:31:25.073119948Z
+modified_at: 2026-09-22T14:51:10.863394794Z
 req_type: Bug
 tags:
 - cost
@@ -52,6 +52,10 @@ relationships:
 - rel_type: !Custom related
   target_id: 01a0bbf0-ada2-71c3-a890-2ed927426bb7
   created_at: 2026-09-20T06:05:04.806856727Z
+  created_by: joe
+- rel_type: !Custom implemented-by
+  target_id: 01a0c999-45b1-7290-9e2f-58a1b988c57b
+  created_at: 2026-09-22T14:51:10.863385596Z
   created_by: joe
 comments:
 - id: 01a0c96e-727c-7922-aa13-5c7777036529
