@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
 
 use aida_core::{
-    get_type_protocol, resolve_protocol, seed_missing_type_protocols, Requirement, RequirementType,
-    RequirementsStore, Storage,
+    get_type_protocol, resolve_protocol, seed_missing_type_protocols, CachedGitBackend,
+    DatabaseBackend, ListFilter, Requirement, RequirementType, RequirementsStore, Storage,
 };
 
 use crate::cli::ProtocolCommand;
@@ -72,6 +72,7 @@ pub(crate) fn pickup_block_for_requirement(
 /// Lease discovery stays with the CLI layer; keeping this lookup pure makes the
 /// quiet/no-lease contract directly regression-testable.
 // trace:TASK-1283 | ai:codex
+#[cfg(test)]
 pub(crate) fn notice_line_for_scope(
     store: &RequirementsStore,
     leased_scope: Option<&str>,
@@ -85,6 +86,55 @@ pub(crate) fn notice_line_for_scope(
                 .is_some_and(|id| id.eq_ignore_ascii_case(scope))
     })?;
     protocol_for_requirement(store, &req.req_type).map(|protocol| protocol.notice_line())
+}
+
+/// Resolve the per-turn reminder without loading the requirement store. The
+/// lease names one canonical spec, and the cache identifies the one editable
+/// META record for its type; both authoritative records are then read directly
+/// from their YAML objects.
+// trace:BUG-1569 | ai:codex
+pub(crate) fn targeted_notice_line_for_scope(
+    backend: &CachedGitBackend,
+    leased_scope: &str,
+) -> Result<Option<String>> {
+    let Some(req) = backend.get_requirement_by_spec_id(leased_scope)? else {
+        return Ok(None);
+    };
+    let protocol_tag = format!("protocol:{}", req.req_type.to_string().to_ascii_lowercase());
+    let filter = ListFilter {
+        tags: vec![protocol_tag.clone()],
+        ..ListFilter::default()
+    };
+    let summary = backend
+        .cache()
+        .list_summaries(&filter)?
+        .into_iter()
+        .find(|candidate| candidate.req_type.eq_ignore_ascii_case("meta"));
+    let Some(summary) = summary else {
+        if backend.cache_snapshot_is_stale()? {
+            anyhow::bail!(
+                "stale cache snapshot has no {protocol_tag} record; refusing to claim no protocol"
+            );
+        }
+        return Ok(None);
+    };
+    let Some(protocol) = backend.get_requirement(&summary.id)? else {
+        anyhow::bail!(
+            "cached protocol {} no longer resolves to an authoritative requirement",
+            summary.spec_id.as_deref().unwrap_or("<unknown>")
+        );
+    };
+    if protocol.req_type != RequirementType::Meta
+        || !protocol
+            .tags
+            .iter()
+            .any(|tag| tag.eq_ignore_ascii_case(&protocol_tag))
+    {
+        anyhow::bail!("cached protocol record failed authoritative tag/type validation");
+    }
+    let mut protocol_only = RequirementsStore::default();
+    protocol_only.requirements.push(protocol);
+    Ok(protocol_for_requirement(&protocol_only, &req.req_type).map(|value| value.notice_line()))
 }
 
 pub(crate) fn resolved_protocol_for_requirement(

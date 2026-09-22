@@ -265,17 +265,22 @@ fn awaiting_notice_tracks_real_lease_through_session_end() {
         .unwrap_or_else(|e| panic!("open lease {}: {e}", lease_path.display()));
     writeln!(lease, "active_pid = {}", std::process::id()).unwrap();
 
+    // BUG-1569 red-first control: an unrelated unreadable object makes the old
+    // backend.load() lookup fail (and silently omit the protocol line). A
+    // targeted lookup must not inspect it. Leave git HEAD unchanged so the
+    // already-current cache remains a valid index of canonical objects.
+    let poison_dir = p.repo.join(".aida-store/objects/BUG/999");
+    std::fs::create_dir_all(&poison_dir).unwrap();
+    std::fs::write(poison_dir.join("BUG-999999.yaml"), "not: [valid yaml").unwrap();
+
     let held = run(
         {
             let mut cmd = aida(&worktree, &p.home);
             cmd.env("AIDA_SESSION_ID", session_id)
-                // This is the one call in this file that needs to observe a
-                // real `backend.load()` finish rather than race the
-                // production 1s fail-open bound (BUG-1239) — see
-                // `notice_deadline` (aida-cli-lib/src/lib.rs, TASK-1274) for
-                // why that bound must stay short for every other caller,
-                // `awaiting_notice_does_not_read_an_open_stdin_pipe` included.
-                .env("AIDA_TEST_NOTICE_DEADLINE_MS", "10000")
+                // BUG-1569: the leased-spec reminder must fit comfortably
+                // inside a tighter-than-production bound now that it performs
+                // two targeted reads instead of a full-store scan.
+                .env("AIDA_TEST_NOTICE_DEADLINE_MS", "500")
                 .args(["awaiting", "--notice"]);
             cmd
         },

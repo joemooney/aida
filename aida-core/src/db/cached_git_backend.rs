@@ -49,6 +49,26 @@ impl CachedGitBackend {
         Ok(backend)
     }
 
+    /// Open the last committed cache snapshot without refreshing it.
+    ///
+    /// This is reserved for tightly bounded advisory paths such as
+    /// `aida awaiting --notice`: refreshing a stale cache may require a full
+    /// canonical-store scan, which violates those paths' latency contract.
+    /// Callers must validate any cache-located record against the authoritative
+    /// targeted YAML read and surface cache misses/errors when the snapshot is
+    /// stale.
+    // trace:BUG-1569 | ai:codex
+    pub fn with_inner_cache_snapshot(inner: GitBackend, cache_path: &Path) -> Result<Self> {
+        let cache = Cache::open(cache_path)?;
+        Ok(CachedGitBackend { inner, cache })
+    }
+
+    /// Whether the unrefreshed cache snapshot differs from canonical HEAD.
+    // trace:BUG-1569 | ai:codex
+    pub fn cache_snapshot_is_stale(&self) -> Result<bool> {
+        self.cache.is_stale(&self.current_head_sha())
+    }
+
     /// Default cache location for a project's git store at `git_root`:
     /// `<project_root>/.aida/cache.db`. We never put the cache *inside* the
     /// store directory — that would pollute the orphan branch's worktree —
