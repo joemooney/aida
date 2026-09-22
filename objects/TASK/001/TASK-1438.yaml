@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T16:07:08.046867836Z
-modified_at: 2026-09-22T16:07:08.046867836Z
+modified_at: 2026-09-22T16:07:30.953526261Z
 req_type: Task
 tags:
 - audit
@@ -16,3 +16,8 @@ tags:
 - evaluator
 - jev
 - quality
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a0c9de-953e-7b72-b0f3-ebf668100f3c
+  created_at: 2026-09-22T16:07:30.953519680Z
+  created_by: joe
