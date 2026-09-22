@@ -23,37 +23,37 @@ Granting a System 1 classifier terminal authority over irreversible actions (lik
 ### The Core Design Rule
 > **Use Jev to decide *"which bounded path should handle this?"* before using it to decide *"is this safe to merge?"***
 
-System 1 models excel at **bounded categorization, ranking, and context filtering** where:
+System 1 models are best explored for **bounded categorization, ranking, and context filtering** where:
 * The action is advisory, reversible, or filtered.
 * Mistakes cleanly fall back to human inspection or conversational agent review.
 * Deterministic checks (Rungs 1–3) pre-filter the problem space to minimize AI invocations.
 
 ---
 
-## 2. Landscape of Lower-Risk, High-Leverage Application Areas
+## 2. Candidate Application Areas (Hypotheses)
 
-The following matrix identifies 12 candidate application areas in AIDA where Jev's fast, typed classification primitives (`choice`, `noul`, `score`) provide immediate leverage without requiring merge or store mutation authority.
+The following matrix identifies 12 candidate application hypotheses in AIDA where Jev's fast, typed classification primitives (`choice`, `noul`, `score`) may provide value without requiring merge or store mutation authority. These represent unvalidated research directions that require labeled empirical validation.
 
-| AIDA Subsystem / Area | Proposed Jev Role | Mechanism & Primitives | Why It Fits Better Than Terminal Gating |
+| AIDA Subsystem / Area | Proposed Jev Role | Mechanism & Primitives | Why It May Fit Better (Hypotheses) |
 | :--- | :--- | :--- | :--- |
-| **1. Queue & Task Routing** | Classify a spec into implementation, docs, research, review, or advisor escalation. | `choice` over canonical roles: `implementer`, `reviewer`, `advisor`, `researcher`, `docs`, `escalate`. | Bounded classification; mistakes fall back to human operator routing or lane default. |
-| **2. Requirement Metadata Hygiene** | Suggest requirement type, tags, feature group, or priority for unformatted drafts. | Multi-question `choice` & `score` on spec description. | Advises the operator or agent during grooming; never mutates canonical YAML without human confirmation. |
-| **3. Duplicate / Related-Spec Detection** | Rank whether a incoming draft duplicates, supersedes, or extends an existing spec. | `choice` (`duplicate`, `extends`, `unrelated`, `supersedes`) over mechanically pre-filtered candidates. | Semantic similarity aids deduplication before specs enter the store; zero risk of false store mutation. |
-| **4. Change-Impact Analysis** | Identify which specs, plans, documentation, or test suites are likely affected by a git diff. | `noul` query against candidate specs retrieved via AST/graph dependencies. | Functions as a retrieval and ranking aid for the implementer or reviewer, not an authority. |
-| **5. Review-Finding Triage** | Cluster repeated findings across review rounds and identify likely duplicates or rephrasings. | `choice` (`duplicate_prior`, `new_issue`, `fixed`) comparing new finding text against past round notes. | Directly attacks review-round churn ("one finding per round" loops) without altering verdicts. |
+| **1. Queue & Task Routing** | Classify a spec into implementation, docs, research, review, or advisor escalation. | `choice` over canonical roles: `implementer`, `reviewer`, `advisor`, `researcher`, `docs`, `escalate`. | Bounded classification; mistakes fall back to human routing. High-impact types remain barred from auto-dispatch. |
+| **2. Requirement Metadata Hygiene** | Suggest requirement type, tags, feature group, or priority for unformatted drafts. | Multi-question `choice` & `score` on spec description. | Advises operator during grooming; no automatic canonical mutation occurs without confirmation. |
+| **3. Duplicate / Related-Spec Detection** | Rank whether an incoming draft duplicates, supersedes, or extends an existing spec. | `choice` (`duplicate`, `extends`, `unrelated`, `supersedes`) over mechanically pre-filtered candidates. | Semantic similarity aids deduplication before specs enter the store; no automatic canonical mutation. |
+| **4. Change-Impact Analysis** | Identify which specs, plans, documentation, or test suites are likely affected by a git diff. | `noul` query against candidate specs retrieved via AST/graph dependencies. | Functions as a retrieval and ranking aid for the implementer or reviewer, not a merge authority. |
+| **5. Review-Finding Triage** | Cluster repeated findings across review rounds and identify likely duplicates or rephrasings. | `choice` (`duplicate_prior`, `new_issue`, `fixed`) comparing new finding text against past round notes. | Aims to identify repeated review feedback; must preserve all original findings without deletion. |
 | **6. Finding Severity Classification** | Categorize review findings as `blocker`, `correctness`, `maintainability`, or `advisory`. | `score` / `choice` with defined rubric definitions. | Standardizes finding terminology; human reviewer or conversational agent retains final say. |
-| **7. Review Prompt & Context Selection** | Select the most relevant acceptance criteria, prior findings, and related specs for a reviewer prompt. | `score` ranking relevance of ambient project rules to the current PR diff. | Context compression: saves expensive context tokens in Claude/Codex seats without losing critical rules. |
-| **8. Traceability Assistance** | Detect likely missing or misplaced `// trace:<SPEC-ID>` comments in modified AST nodes. | `noul` verifying whether a modified function conceptually realizes the given spec ID. | Narrow proposition with immediate deterministic follow-up (file grep / diff check). |
-| **9. Stale-Document Detection** | Judge whether `AGENTS.md`, `OVERVIEW.md`, or architecture guides still reflect current source code. | Pairwise `choice` (`fresh`, `stale_terminology`, `contradicted`) on doc sections vs recent commits. | Escalates candidates for human or docs-lane review; prevents silent architectural documentation rot. |
-| **10. Session / Punt Classification** | Classify why an autonomous agent session was shelved or punted, and suggest the next lane. | `choice` over punt taxonomy (`environment_error`, `ambiguous_spec`, `ci_failure`, `agent_loop`). | Yields high-fidelity fleet analytics and rework analysis without modifying runtime state. |
-| **11. Reconstitution Comparison** | Compare regenerated test suites and behavioral descriptions against ground truth intent. | Calibrated `choice` (`matched`, `partial`, `divergent`) on test semantics (ADR-44). | Replaces expensive conversational LLM scoring passes with low-cost, structured comparison. |
-| **12. Operator-Facing Explanations** | Select a concise, human-friendly explanation category for a complex deterministic failure. | `choice` among predefined curated explanation templates based on error logs. | Jev selects among predefined, safe explanations; it is strictly barred from inventing unverified policy. |
+| **7. Review Prompt & Context Selection** | Select the most relevant acceptance criteria, prior findings, and related specs for a reviewer prompt. | `score` ranking relevance of ambient project rules to the current PR diff. | Context compression: aims to reduce context tokens in Claude/Codex seats without dropping mandatory rules. |
+| **8. Traceability Assistance** | Detect likely missing or misplaced `// trace:<SPEC-ID>` comments in modified AST nodes. | `noul` verifying whether a modified function conceptually realizes the given spec ID. | Narrow proposition with immediate deterministic follow-up (diff inspection / grep). |
+| **9. Stale-Document Detection** | Judge whether `AGENTS.md`, `OVERVIEW.md`, or architecture guides still reflect current source code. | Pairwise `choice` (`fresh`, `stale_terminology`, `contradicted`) on doc sections vs recent commits. | Escalates candidates for human or docs-lane confirmation; candidate flagging only. |
+| **10. Session / Punt Classification** | Classify why an autonomous agent session was shelved or punted, and suggest the next lane. | `choice` over punt taxonomy (`environment_error`, `ambiguous_spec`, `ci_failure`, `agent_loop`). | Useful for fleet analytics and rework analysis without modifying runtime state. |
+| **11. Reconstitution Comparison** | Compare regenerated test suites and behavioral descriptions against ground truth intent. | Calibrated `choice` (`matched`, `partial`, `divergent`) on test semantics (ADR-44). | Mentioned in earlier reports, but unvalidated in live evaluation; needs empirical testing. |
+| **12. Operator-Facing Explanations** | Select a concise, human-friendly explanation category for a complex deterministic failure. | `choice` among predefined curated explanation templates based on error logs. | Jev chooses among predefined, vetted explanations; must cite the triggering deterministic evidence. |
 
 ---
 
 ## 3. Top Four Prioritized Near-Term Experiments
 
-To establish defensible utility before expanding Jev's operational footprint, we prioritize four candidate experiments characterized by high operational value, low catastrophic risk, and measurable baselines.
+To establish defensible utility before expanding Jev's operational footprint, we prioritize four candidate experiments characterized by high potential operational value, low catastrophic risk, and measurable baselines.
 
 ```
                      ┌──────────────────────────────────────────────┐
@@ -64,39 +64,49 @@ To establish defensible utility before expanding Jev's operational footprint, we
         ▼                   ▼                               ▼                   ▼
  1. Review Context   2. Duplicate Spec               3. Finding Triage   4. Queue Routing
     Selection           Detection                       & Clustering        & Lane Triage
- • Selects key rules • Prevents graph bloat          • Halts 1-finding   • Dispatches to right
- • Compresses prompt • Advisory merge hint             review loops        agent lane
- • Lowers token cost • Zero false deletions          • Classifies sever. • Safe fallback
+ • Context select.   • Advisory hint                 • Preserves all     • Dispatches routine
+ • Mandatory recall  • No auto-mutate                  findings            tasks to lane
+ • Hard timeout      • Fallback search               • Annotates loops   • No auto-dispatch
+                                                                           for high-impact
 ```
 
 ### Experiment 1: Review Prompt & Context Selection
 * **Problem:** Conversational reviewers (Claude Code, Codex) suffer from context bloat. Stuffing entire project rules, full spec hierarchies, and past review history degrades judgment and causes timeout stalls.
-* **Jev Role:** Pre-scan the PR diff and candidate guidelines to select the top $K$ relevant acceptance criteria and past review findings.
-* **Why It Wins:** Even an imperfect selection provides a better reviewer prompt than raw truncation or massive prompt dumps. Conversational reviewers retain full reasoning capacity.
+* **Proposed Jev Role:** Pre-scan the PR diff and candidate guidelines to select the top $K$ relevant acceptance criteria and past review findings.
+* **Critical Safety Metric (Mandatory Rule Recall):** Token reduction is insufficient on its own. The experiment must measure **Recall of Mandatory Acceptance Criteria and Critical Governing Rules** ($\ge 99.5\%$). A shorter prompt that omits a single load-bearing requirement or security invariant is an unacceptable regression.
 
 ### Experiment 2: Duplicate & Related-Spec Detection
 * **Problem:** Human operators and autonomous agents frequently file duplicate bugs or overlapping tasks because searching hundreds of YAML specs via exact keywords misses synonyms or architectural overlap.
-* **Jev Role:** When `aida add` runs, mechanically retrieve top 5 semantic candidates (via trigram / SQLite FTS) and invoke Jev `choice` (`duplicate`, `extends`, `unrelated`).
-* **Why It Wins:** Advisory only. It outputs a helpful hint: *"Did you mean to extend TASK-412?"* If wrong, the operator simply ignores it. No specs are deleted or blocked.
+* **Proposed Jev Role:** When `aida add` runs, mechanically retrieve top candidate specs (via trigram / SQLite FTS) and invoke Jev `choice` (`duplicate`, `extends`, `unrelated`).
+* **Non-Blocking Advisory Semantics:** The output is purely informational (e.g. *"Candidate overlap: TASK-412"*). It has **no automatic canonical mutation** authority. A misleading hint can still confuse an operator, so the hint must display the exact matching spec title and probability.
+* **Interactive Latency SLA & Deterministic Fallback:** Given measured Jev P95 of 550 ms and tail spikes of 5.2s, interactive CLI invocations must enforce a **hard client-side timeout of $\le 400\text{ ms}$** with asynchronous cancellation. On timeout or error, `aida add` proceeds immediately using deterministic search without blocking the developer.
 
 ### Experiment 3: Review-Finding Clustering & Triage
 * **Problem:** Autonomous drains often enter 3-to-5 round review loops where the reviewer raises one superficial finding per round, or re-raises a concern the implementer already addressed.
-* **Jev Role:** Compare new reviewer findings against historical findings from prior rounds on the same PR:
-  - Cluster duplicates.
-  - Classify severity (`blocker` vs `maintainability`).
-  - Drop or downrank already-acknowledged advisory points.
-* **Why It Wins:** Directly attacks the review tail without giving Jev authority to approve PRs.
+* **Proposed Jev Role:** Compare new reviewer findings against historical findings from prior rounds on the same PR to cluster duplicates and annotate recurrence.
+* **Strict Invariant (Never Discard Evidence):** Jev must **never drop, suppress, or delete findings** based on its judgment. It may annotate, cluster, or group related findings, but the complete set of original findings and reviewer notes must remain fully visible to the human operator and reviewing agent.
 
 ### Experiment 4: Queue & Task Lane Routing
 * **Problem:** `aida queue work` dispatches tasks to agents. Certain tasks require specialized tools (e.g. `docs`, `research`, `spike`, `keystone`), but operators rarely set explicit lanes on creation.
-* **Jev Role:** Classify pending requirements into execution lanes (`implementer`, `researcher`, `docs`, `needs_human_refinement`).
-* **Why It Wins:** Explicit `unknown/escalate` class. Misclassified tasks simply get reassigned or handled in the general implementer lane.
+* **Proposed Jev Role:** Classify pending requirements into execution lanes (`implementer`, `researcher`, `docs`, `advisor`).
+* **High-Impact "Do Not Auto-Dispatch" Gate:** Misrouting is not harmless if an autonomous agent is unleashed on the wrong task. High-impact types (`EPIC`, `ADR`, `GOAL`, security-sensitive, or novel architectural tasks) must **never be auto-dispatched** by Jev. Such tasks require an explicit human assignment or default to an advisory escalation lane.
 
 ---
 
-## 4. Rigorous Experimental Evaluation Framework
+## 4. Privacy, Payload Boundaries & Redaction
 
-Each candidate experiment must be validated against an explicit evaluation protocol before merging into mainline toolchains.
+Several proposed applications transmit code diffs, requirement descriptions, review findings, or session traces to an external SaaS endpoint. The system must enforce strict operational boundaries:
+
+1. **Opt-In Policy:** External evaluator calls must be strictly opt-in (`AIDA_JEV_API_KEY` or `TYPESAFE_API_KEY` explicitly set). If unset or if `AIDA_EVALUATOR_OFFLINE=1` is active, AIDA defaults to `MockEvaluator` or local models without network transmission.
+2. **Secret & Credential Redaction:** All code diffs and context strings must pass through AIDA's credential sanitization filters (stripping API keys, JWTs, `.env` variables, and SSH keys) before transmission.
+3. **Payload Truncation Caps:** Input context payloads are capped at 16 KB. If a diff or context exceeds this boundary, deterministic chunking or truncation must be applied rather than sending unbounded source trees.
+4. **Offline Local Sovereignty:** Under ADR-55, all capabilities must retain an offline, local implementation (`LocalLlmEvaluator` or `MockEvaluator`) to protect repository sovereignty.
+
+---
+
+## 5. Experimental Evaluation Protocol
+
+Each candidate experiment must be evaluated against an empirical ground-truth corpus before any mainline tooling adoption.
 
 ```
        Input Space
@@ -106,7 +116,7 @@ Each candidate experiment must be validated against an explicit evaluation proto
 │ Rung 3 Deterministic  │ ──Excluded (Zero AI Cost)──► Bypass
 │ Mechanical Pre-Filter │
 └───────────┬───────────┘
-            │ Candidate Subset
+            │ Candidate Subset (Hard Timeout ≤ 400ms)
             ▼
 ┌───────────────────────┐
 │ Jev System 1 Evaluate │
@@ -114,41 +124,46 @@ Each candidate experiment must be validated against an explicit evaluation proto
             │
     ┌───────┴───────┐
     ▼               ▼
-High Confidence    Low Confidence / Ambiguous
+High Confidence    Low Confidence / Ambiguous / Timeout
     │               │
     ▼               ▼
-[Advisory Action] [Abstain / Escalate to Human/Agent]
+[Annotate / Advise] [Abstain / Silent Deterministic Fallback]
 ```
 
-For each experiment, the benchmark harness must measure and report:
+For each experiment, the benchmark harness must report:
 
-1. **Coverage & Abstention Rate:**
-   * What percentage of inputs does the model confidently classify vs. route to `unknown` / `escalate`?
-   * *Target:* $\ge 70\%$ coverage on routine cases, $\le 30\%$ abstention.
-2. **Precision and Recall by Class:**
-   * Per-class breakdown (e.g. for Finding Severity: precision and recall across `blocker`, `correctness`, `maintainability`, `advisory`).
-3. **Calibration & Threshold Performance:**
-   * Compute empirical calibration metrics: Brier score, Expected Calibration Error (ECE), and reliability diagrams across probability deciles.
-4. **Asymmetric Cost of False Positives vs. False Negatives:**
-   * Example (Duplicate Detection): A false negative (missing a duplicate) costs minor graph clutter; a false positive (falsely claiming duplication) risks discarding legitimate work. Thresholds must be tuned to the lower-cost error direction.
-5. **Latency & Tail Metrics:**
-   * Measure P50, P90, P95, and Max latency. Any task intended for interactive CLI use (e.g. `aida add`) must enforce a hard timeout of $\le 500\text{ ms}$ with graceful fallback.
+1. **Workload-Specific Coverage vs. Abstention:**
+   * Measure the percentage of inputs the model confidently classifies vs. routes to `unknown`/`escalate`. 
+   * Coverage targets must be justified per workload rather than assuming a blanket 70% threshold. (Recall: the historical review benchmark achieved only 4% autonomous decisions under safe thresholds).
+2. **Precision, Recall & Class Breakdown:**
+   * Detailed breakdown across classes, including mandatory constraint recall for context selection.
+3. **Calibration & Empirical Thresholds:**
+   * Compute Brier scores, Expected Calibration Error (ECE), and reliability curves to test whether output probabilities reflect empirical frequencies.
+4. **Asymmetric Error Costs:**
+   * Map the concrete cost of a False Positive vs. False Negative. For example, in duplicate detection, missing a duplicate adds slight graph clutter, whereas a false duplicate hint risks confusing an operator into abandoning valid work.
+5. **Latency Distributions & Timeout Rates:**
+   * Measure P50, P90, P95, and Max latency, tracking the percentage of calls that exceed the 400 ms interactive timeout.
 6. **Deterministic Pre-Filtering Efficiency:**
-   * Measure how effectively mechanical heuristics (keyword matches, diff paths, author filters) reduce the candidate volume *before* Jev is invoked, maximizing token economy and bounding latency.
+   * Quantify how effectively mechanical filters (ripgrep, SQLite FTS, AST joins) narrow the input volume before invoking AI.
 
 ---
 
-## 5. Governance Alignment (PRIN-5 through PRIN-8)
+## 6. Governance Alignment (PRIN-5 through PRIN-8)
 
-Every new application of Jev must strictly conform to AIDA's governing principles:
+Every application of Jev must conform to AIDA's constitutional principles:
 
-* **PRIN-5 (Fail-Closed):** Any API unavailability, network error, or low-confidence score must fail closed to human advisory or standard fallback paths. Never default to an affirmative action on error.
-* **PRIN-6 (Currency & Provenance):** Any advisory output must bind its source payload hash, target commit SHA, and evaluator model version. If the underlying file or spec changes, the recommendation is invalidated.
-* **PRIN-7 (Dual Predicates):** Advisory recommendations never bypass mandatory CI or human approvals.
-* **PRIN-8 (Determinism Ladder):** Jev remains classified as **Rung 3.5 (Calibrated Heuristic)**. All outputs presented to agents or humans must carry `heuristic: true` and the evaluated probability $p$. Deterministic checks (Rungs 1–3) must always run first.
+* **PRIN-5 (Fail-Closed):** Any API unavailability, network error, timeout, or low-confidence score must fail closed to human advisory or standard deterministic paths.
+* **PRIN-6 (Currency & Provenance):** Any advisory output must bind its source payload hash, target commit SHA, and evaluator model version.
+* **PRIN-7 (Dual Predicates):** Advisory recommendations never bypass mandatory CI or required review verdicts.
+* **PRIN-8 (Determinism Ladder):** Jev remains classified as **Rung 3.5 (Calibrated Heuristic)**. All outputs presented to agents or humans must carry `heuristic: true` and cite the underlying deterministic evidence that triggered them.
 
 ---
 
-## 6. Summary
+## 7. Current Verification Status
 
-By pivoting Jev from an unreviewed merge gatekeeper to a **structured triage, ranking, and context-selection engine**, AIDA leverages Jev's true strengths—speed, typed schemas, and cheap classification—while protecting the repository from catastrophic tail failures. The next phase of evaluation should implement the four prioritized experiments using the labeled evaluation protocol outlined above.
+* **Targeted Unit Tests:** 23 targeted unit tests pass across [`aida-cli-lib`](file:///home/joe/ai/aida-spike-87/aida-cli-lib):
+  * 5 evaluator engine tests (`adr_55_evaluator_tests`)
+  * 11 graded review tests (`story_1424_graded_review_tests`)
+  * 7 contradiction sweep tests (`story_1426_contradictions_tests`)
+* **Remote CI Checks:** PR #2080 checks pass on Ubuntu (`CI/Build` and `merge-hold-gate`).
+* **Governance Invariant:** No code has been merged to `main`; fast-pass auto-merging remains strictly disabled.
