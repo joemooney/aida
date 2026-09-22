@@ -26,7 +26,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:26:14.774144314Z
-modified_at: 2026-09-22T09:24:42.635704559Z
+modified_at: 2026-09-22T09:26:18.168125634Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -133,3 +133,8 @@ comments:
   content: '[cold-review][changes-requested] PR #2088 exact head ded0bdbf1de66ced45da280e1339324b9b4b156e fails the signed-off semantic-preservation gate for colliding Custom names. `!Custom blocked-by` reads as Custom, writes scalar blocked-by, then reads as typed BlockedBy; canonical built-in spellings and parser aliases have the same ambiguity. Requested explicit architecture-consistent collision handling/tests, including legacy YAML and JSON. Full core suite passed (972/2 ignored), focused 8/8, fmt clean; no merge.'
   created_at: 2026-09-22T09:24:42.635704559Z
   modified_at: 2026-09-22T09:24:42.635704559Z
+- id: 01a0c86f-ff38-71b2-8a4f-be7d765e6161
+  author: joe
+  content: '[aida:architecture-signoff-amendment] APPROVED after cold-review counterexample. Scalar-only Custom encoding is withdrawn because names colliding with built-ins or aliases lose enum identity. Revised canonical format: built-in RelationshipType values serialize as ordinary scalar strings; Custom values serialize as a standard-YAML mapping such as custom: blocked-by (exact field spelling may follow serde conventions), preserving exact custom text and identity. Reader must indefinitely accept legacy !Custom, prior JSON-map Custom, new mapping, and scalar built-ins/unknowns. Tests must include Custom values colliding with every built-in/alias family and prove semantic round-trip plus generic YAML parsing. No taxonomy rewrite or bulk migration.'
+  created_at: 2026-09-22T09:26:18.168125634Z
+  modified_at: 2026-09-22T09:26:18.168125634Z
