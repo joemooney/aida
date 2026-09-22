@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:14:13.323242098Z
-modified_at: 2026-09-21T23:21:46.452340669Z
+modified_at: 2026-09-22T16:11:15.074394719Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -53,6 +53,58 @@ comments:
   created_at: 2026-09-21T23:15:28.622511307Z
   modified_at: 2026-09-21T23:15:28.622511307Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c9e2-bd02-7721-8754-cb75bb7ed708
+  author: joe
+  content: |-
+    Sketch-first proposal for STORY-1397 (design only)
+
+    1. Typed hold record and compatibility boundary
+    - Replace the implicit first-line contract internally with MergeHoldRecord v2 while keeping one marker per PR at .aida/merge-holds/PR-N. Fields: schema_version, pr, reason_kind, detail, created_at, created_by, recused_principals, target_head_sha, linked_spec_ids, routing_state, routed_to, routed_brief_refs, and label_state/detail.
+    - reason_kind is a closed enum: supervision, recusal, rework, decision. Unknown future values parse as unknown and remain held fail-closed. Recusal requires at least one recused principal; rework and decision must not invent one.
+    - Use an atomic write and preserve the marker as the Layer-1 merge chokepoint. The forge label remains only a Layer-2 mirror; typed routing metadata never weakens hold enforcement.
+    - All hold creation paths must call one typed API rather than constructing prose: supervised PR creation => supervision; blocking reviewer verdict => rework; explicit independence refusal => recusal; unresolved operator choice => decision. Free-text detail remains required operator context, not the classifier.
+
+    2. Identity and recusal semantics
+    - A principal is not a role name. Store a stable identity tuple: principal_kind (registered-agent or operator), principal_id (agent registry ID or canonical operator handle), plus informational session_id, agent_type/vendor, role, and display_name captured at creation.
+    - Eligibility comparison uses exact principal_kind + principal_id. Session ID alone is too transient, and role/vendor alone would wrongly recuse every advisor or every Codex seat. Legacy/unregistered callers that cannot establish a stable ID may create a fail-closed recusal with identity_status = unresolved; it is visible to the operator and must not guess that another session is independent.
+    - The record names every known author/specifier/reviewer who is recused for this merge decision. Routing excludes all of them. No flag or pressure-based override permits a matching principal to clear or merge the hold.
+    - Clearing a recusal requires the acting principal to be known, not recused, and to record the reviewed head and verdict/approval evidence. Existing interactive-TTY presence is not sufficient identity proof. Stale-head approval leaves the hold armed.
+
+    3. Routing
+    - On creation or reconciliation of a recusal hold, resolve live registered seats with reviewer/merger capability, same repository, and known identity; exclude every recused principal, the PR branch owner where known, paused/dead agents, and any seat already routed the same PR/head.
+    - Produce idempotent routes keyed by PR + target_head_sha + recipient principal. Prefer the existing durable agent-brief path and pending sentinel: a review brief names the PR, linked specs, exact head, recusal identities/reason, required independence statement, CI/hold status, and the action for recording verdict. Re-running routing updates/reuses rather than duplicating briefs.
+    - Do not route recusal as implementation queue work and do not auto-merge after a brief is acknowledged. Brief acknowledgement means seen, not reviewed. A PASS at the exact head makes the hold ready for a distinct authorized merger; REQUEST_CHANGES should transition or replace the typed hold to rework and route back to the branch owner.
+    - If multiple eligible readers exist, route deterministically to the least-loaded eligible seat, with stable principal ID as tie-breaker; optionally expose alternates but create one primary route to prevent duplicate reviews. Reconcile when agents appear/disappear or the PR head changes. A head change invalidates readiness and routes a fresh exact-head review.
+
+    4. Explicit no-reader state
+    - routing_state is one of pending, routed, no_independent_reader, reviewed_ready, or stale_head, with last_routed_at and diagnostic reason. no_independent_reader is a positive state, not absence of a row.
+    - With no eligible independent reader, retain the hold, create no bogus brief, and surface: PR N recusal hold; nobody independent is currently available; recused: identities; operator action: start/assign an independent reviewer. The state is retried on awaiting/status collection or explicit merge-hold route/reconcile, without a busy loop.
+    - Unknown identity/capability data degrades to no_independent_reader rather than treating a possibly recused seat as eligible.
+
+    5. Awaiting presentation
+    - Add recusal_holds to AwaitingReport rather than mixing them into generic mergeable_prs. Each row carries PR, exact head, linked specs, state, recused principals, routed recipient if any, and action.
+    - For a matching recused seat: never render Awaiting you / merge this PR. If shown, label it Awaiting another independent reader and provide no clear/merge action.
+    - For the routed independent reader: render Awaiting you: independently review PR N at SHA, with the brief path/action. For other non-recused seats, verbose/global output may say routed to X; do not claim it is theirs.
+    - For no-reader state, show the operator an actionable line and include it in notice/JSON/TOON/statusbar counts as no-reader, while recused seats see informational awaiting-another-reader text rather than a personal action count. Unknown current identity must render the state conservatively, not personalize it.
+    - Generic mergeable-PR classification must exclude every active typed hold. Rework rows point to the implementer/owner; decision rows point to the operator; supervision retains current advisor/human semantics. Thus opposite actions no longer share one undifferentiated row.
+
+    6. Migration and backward compatibility
+    - Reader accepts v2 plus the legacy plaintext marker. Legacy text and current optional label line map to reason_kind = supervision, identity_status = unknown, routing_state = pending; the PR stays held exactly as today. Never infer recusal by keyword parsing.
+    - First successful mutation/reconciliation may atomically rewrite a legacy marker to v2 while preserving original text and label state. Listing is read-only unless an explicit migrate/fix option is supplied.
+    - Existing read_hold callers continue receiving a safe display reason through a projection over MergeHoldRecord. Unreadable, malformed, wrong-PR, or unknown-schema markers remain held and show a diagnostic; they never become no hold.
+    - JSON/TOON additions are additive and versioned. Existing merge-hold add remains compatible by defaulting to supervision; add typed flags such as --reason-kind and repeatable --recuse-principal, with validation. Do not make old scripts silently create recusal records from prose.
+
+    7. Tests and adversarial cases
+    - Round-trip each reason kind; recusal validation; unknown enum/schema; malformed/unreadable marker fail-closed; legacy one/two-line markers; atomic migration preserving detail and label sync state.
+    - Identity tests prove same role/vendor is not the same principal, the same agent across sessions remains recused, unresolved identity cannot self-clear, multiple recused authors are excluded, and an independent exact-head reviewer can advance readiness.
+    - Routing tests cover one/many/no readers, paused/dead agents, deterministic least-load tie-break, idempotent repeat, recipient disappearance, new reader appearance, head change, stale approval, duplicate brief suppression, and REQUEST_CHANGES transition to rework.
+    - Awaiting human/JSON/TOON/notice tests cover recused-seat informational rendering, routed-reader actionable rendering, unrelated-seat routed rendering, operator no-reader alert, unknown current identity, and held PR exclusion from generic mergeable rows.
+    - Enforcement tests prove every merge path still refuses while held, a recused principal cannot clear/merge even at a TTY, brief acknowledgement does not clear, no-reader never adds an override, and only independent exact-head approval plus the existing authorized merge flow releases the hold.
+    - Forge-label sync failures and offline forge reads must not erase type/routing state or weaken the local chokepoint.
+
+    Suggested bounded delivery: first land the typed record/parser and identity-safe clear gate; then routing/brief reconciliation and awaiting projections in the same story only if the acceptance can be demonstrated end to end. No autonomous drain should merge this architecture-class change.
+  created_at: 2026-09-22T16:11:15.074394719Z
+  modified_at: 2026-09-22T16:11:15.074394719Z
 execution_mode: drain
 implementation_info:
   implemented: true
