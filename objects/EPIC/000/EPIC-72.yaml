@@ -1,0 +1,18 @@
+id: 01a0c9de-3cc8-7252-8b3f-c099735dce73
+spec_id: EPIC-72
+agreed_id: EPIC-72
+title: Human-Centric Spec Exposition & Living Project Wiki
+description: Establish a derived human exposition layer and living wiki projection to translate dense machine-authored specs into accessible, plain-language explanations for operators, product owners, and contributors without altering canonical requirements.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T16:06:20.104325043Z
+modified_at: 2026-09-22T16:06:20.104325043Z
+req_type: Epic
+tags:
+- exposition
+- human-in-the-loop
+- living-docs
+- readability
+- wiki
