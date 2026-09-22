@@ -39,12 +39,12 @@ description: |-
   SUGGESTED SHAPE, advisory: the complement of the orphan sweep. Where that sweep claims clean-and-unowned PRs for review, something needs to surface RED-and-unowned PRs for repair - or `aida awaiting` needs a line for "your spec is Done and its PR is failing", which is a two-way check between spec status and PR state that nothing currently performs. The cheapest version is a predicate that is the exact negation of the sweep's green test, so the two together cover every open PR rather than leaving the red ones in the gap between them.
 
   NOTE ON PROVENANCE: I did not review #2035 and am not proposing to. Its CI is red; a review now would produce findings against a tree that cannot merge. This is filed as a routing and visibility defect, not a code finding.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:29:00.515328965Z
-modified_at: 2026-09-22T14:01:09.517396202Z
+modified_at: 2026-09-22T14:01:18.883633732Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -81,3 +81,22 @@ comments:
   content: '[aida:proxy-approval] verdict=APPROVE; reasoning=fresh independent cold review approved exact head a0beb5be3c87511cd8221944226b42ee43129a6a; forge-label holds, reviewer-route unknown fail-closed behavior, state matrix and all projections verified; independent=yes; gates=Build ubuntu/windows/macos SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; timestamp=2026-09-22T07:01:09-07:00'
   created_at: 2026-09-22T14:01:09.517396202Z
   modified_at: 2026-09-22T14:01:09.517396202Z
+history:
+- id: 01a0c96b-c6fd-7ea3-a8d7-9f31aa9f2e96
+  author: aida-auto-bump
+  timestamp: 2026-09-22T14:01:18.845247376Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c96b-c723-7ff3-8a7f-67f1025eded3
+  timestamp: 2026-09-22T14:01:18.883631799Z
+  agent: aida
+  commit_sha: 68ad725cb6fda2d36741ea889afea7271a7292f0
+  summary: Fail closed on unknown routing and include forge hold label
+  review_verdict: request-changes
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T14:01:18.806588551Z
+  completion_sha: 68ad725cb6fda2d36741ea889afea7271a7292f0
