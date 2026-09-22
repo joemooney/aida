@@ -188,6 +188,7 @@ pub(crate) fn handle_init_command(
 
     // Check existing state
     if db_path.exists() && !force {
+        maybe_repair_codex_hooks_on_reinit(std::path::Path::new("."), agent, no_hooks)?;
         eprintln!(
             "{} AIDA is already initialized in this directory (requirements.db exists).",
             "!".yellow()
@@ -3110,6 +3111,60 @@ mod task_631_init_self_commit_tests {
         );
     }
 
+    /// BUG-1587: `.codex/hooks/` is intentionally ignored machine-local
+    /// output, so it can disappear while the wiring remains. Re-running init
+    /// must restore missing handlers without overwriting customized wiring.
+    // trace:BUG-1587 | ai:codex
+    #[test]
+    fn reinit_repairs_missing_codex_hook_handlers_without_force() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        aida_core::scaffolding::codex_hooks::scaffold_codex_hooks(root, false).unwrap();
+        let wiring = root.join(".codex/hooks.json");
+        let customized = format!("{}\n", std::fs::read_to_string(&wiring).unwrap());
+        std::fs::write(&wiring, &customized).unwrap();
+        std::fs::remove_dir_all(root.join(".codex/hooks")).unwrap();
+
+        maybe_repair_codex_hooks_on_reinit(root, Some("codex"), false).unwrap();
+
+        for name in aida_core::scaffolding::codex_hooks::handler_names() {
+            assert!(
+                root.join(".codex/hooks").join(&name).is_file(),
+                "re-init must restore missing handler {name}"
+            );
+        }
+        assert_eq!(
+            std::fs::read_to_string(wiring).unwrap(),
+            customized,
+            "non-force repair must preserve customized wiring"
+        );
+    }
+
+    #[test]
+    fn reinit_codex_hook_repair_honors_agent_allow_list_and_no_hooks() {
+        for (agent, no_hooks) in [(Some("claude"), false), (Some("codex"), true)] {
+            let dir = tempfile::tempdir().unwrap();
+            maybe_repair_codex_hooks_on_reinit(dir.path(), agent, no_hooks).unwrap();
+            assert!(
+                !dir.path().join(".codex/hooks.json").exists(),
+                "agent={agent:?}, no_hooks={no_hooks} must not scaffold Codex hooks"
+            );
+        }
+    }
+
+    #[test]
+    fn sibling_reinit_uses_the_config_written_by_initialization_as_its_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(dir.path().join(".aida/config.toml"), "[deployment]\n").unwrap();
+
+        assert!(sibling_init_marker_exists(dir.path()));
+        assert!(
+            !dir.path().join(".aida/node.toml").exists(),
+            "a standard sibling init does not write the obsolete marker"
+        );
+    }
+
     // trace:STORY-830 | ai:codex
     #[test]
     fn init_footprint_round_trips_project_config() {
@@ -3706,6 +3761,7 @@ pub(crate) fn handle_init_distributed_worktree(
             )?;
             return Ok(());
         }
+        maybe_repair_codex_hooks_on_reinit(&cwd, agent, no_hooks)?;
         eprintln!(
             "{} AIDA distributed mode is already initialized (.aida/config.toml exists).",
             "!".yellow()
@@ -4202,6 +4258,37 @@ fn maybe_scaffold_codex_hooks_on_init(project_root: &std::path::Path, force: boo
     }
 }
 
+/// Repair the ignored, machine-local Codex hook handlers when `aida init` is
+/// re-run in an existing project. The normal already-initialized guard returns
+/// before full scaffolding, but a tracked/retained `.codex/hooks.json` can
+/// outlive the ignored handler copies and otherwise leave every hook failing
+/// with exit 127. Existing files remain untouched because this always uses the
+/// idempotent, non-force scaffolder.
+// trace:BUG-1587 | ai:codex
+fn maybe_repair_codex_hooks_on_reinit(
+    project_root: &std::path::Path,
+    agent: Option<&str>,
+    no_hooks: bool,
+) -> Result<()> {
+    if no_hooks {
+        return Ok(());
+    }
+
+    let codex_selected = match agent {
+        Some(agent) => parse_agent_selection(agent)?.codex,
+        None => {
+            read_enabled_agent_selection(project_root).is_some_and(|selection| selection.codex)
+                || aida_core::agents_config::resolve_default_vendor(project_root).as_deref()
+                    == Some("codex")
+                || project_root.join(".codex/hooks.json").is_file()
+        }
+    };
+    if codex_selected {
+        maybe_scaffold_codex_hooks_on_init(project_root, false);
+    }
+    Ok(())
+}
+
 /// STORY-763/BUG-1095: init-time hook — when the resolved default vendor is
 /// codex, write the legacy Codex prompt bodies to ~/.codex/prompts
 /// (skip-existing, never forced). Quiet no-op for claude-default machines.
@@ -4606,10 +4693,14 @@ pub(crate) fn handle_init_distributed_sibling(
         }
     };
 
-    // Check if already initialized
-    if aida_dir.join("node.toml").exists() && !force {
+    // Check if already initialized. Sibling mode writes `.aida/config.toml`;
+    // it has never created `.aida/node.toml`, so checking the latter sent a
+    // normal re-init into the populated-store refusal before the Codex hook
+    // repair could run. trace:BUG-1587 | ai:codex
+    if sibling_init_marker_exists(&cwd) && !force {
+        maybe_repair_codex_hooks_on_reinit(&cwd, agent, no_hooks)?;
         eprintln!(
-            "{} AIDA distributed mode is already initialized (.aida/node.toml exists).",
+            "{} AIDA distributed mode is already initialized (.aida/config.toml exists).",
             "!".yellow()
         );
         eprintln!("  Use {} to reinitialize.", "--force".bold());
@@ -4998,4 +5089,8 @@ pub(crate) fn handle_init_distributed_sibling(
     println!();
 
     Ok(())
+}
+
+fn sibling_init_marker_exists(project_root: &std::path::Path) -> bool {
+    project_root.join(".aida/config.toml").is_file()
 }
