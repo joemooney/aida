@@ -58,7 +58,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:59:21.615803647Z
-modified_at: 2026-09-22T09:48:38.977712944Z
+modified_at: 2026-09-22T10:06:55.386538343Z
 req_type: Bug
 tags:
 - review-verdicts orchestrator integrity
@@ -194,6 +194,11 @@ comments:
   content: '[aida:implementer] REWORK for PR #2090 cold-review finding: confirmed `probe_pr_integration_state` mapped `Err(NoVerdict)` to no local RequestChanges and could classify a green conflict as Merge. Added red-first tests through the real integrate probe + decision; both conflict and unreadable artifact initially selected Merge. Fixed probe to classify existing untrustworthy evidence as `review_integrity_unproven` and visibly park for reconciliation; Rejected and merge escalation also block. The launcher wave helper now treats any existing unreadable artifact as blocking. Audited phase-3 fallbacks: fresh conflicting/malformed spec or sibling artifacts now propagate failure instead of being skipped until another artifact approves. Focused results green: BUG-1581 3/3, integration 59/59, BUG-775/fallback 28/28, fmt check.'
   created_at: 2026-09-22T09:48:38.977712944Z
   modified_at: 2026-09-22T09:48:38.977712944Z
+- id: 01a0c895-2f9a-7610-a9bb-1090e76638ca
+  author: joe
+  content: 'Round-2 rework for PR #2090: merge/integrate gates now reconcile both PR-keyed and linked spec-keyed artifacts against the current PR head, independent of recording order. Same-SHA opposite reviewers park visibly; stale opposition is ignored. Shared reading now rejects malformed or unattributed retained rounds so a top-level approval cannot hide unprovable additive evidence. Added actual probe/classifier and merge-chokepoint regressions.'
+  created_at: 2026-09-22T10:06:55.386538343Z
+  modified_at: 2026-09-22T10:06:55.386538343Z
 implementation_info:
   implemented: true
   implemented_at: 2026-09-22T09:25:00.454373899Z
