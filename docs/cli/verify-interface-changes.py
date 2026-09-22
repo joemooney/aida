@@ -38,12 +38,15 @@ USAGE
 
 Exit 0 = clean (no surface change, or surface change with a marked spec).
 Exit 1 = surface change with no doc-impact-marked spec.
-Exit 2 = could not resolve the store (can't verify) — soft, prints SKIP.
+Exit 2 = reserved for compatibility (resolution failures now fail closed as 1).
 """
+import io
 import os
 import re
 import subprocess
 import sys
+import tarfile
+from functools import lru_cache
 
 REPO = subprocess.run(
     ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
@@ -110,22 +113,72 @@ def referenced_specs(base, head):
     return specs
 
 
+@lru_cache(maxsize=1)
+def _store_objects():
+    """Return ({relative path: YAML}, source_error) from one store snapshot."""
+    # `git archive` reads the orphan branch in one pass and avoids thousands of
+    # per-object `git show` processes. It also gives every lookup in one gate run
+    # a consistent snapshot.  trace:BUG-1582 | ai:codex
+    archive = subprocess.run(
+        ["git", "archive", "--format=tar", STORE_BRANCH, "objects"],
+        capture_output=True,
+        cwd=REPO,
+    )
+    if archive.returncode == 0:
+        objects = {}
+        with tarfile.open(fileobj=io.BytesIO(archive.stdout), mode="r:") as tar:
+            for member in tar.getmembers():
+                if member.isfile() and member.name.endswith(".yaml"):
+                    fh = tar.extractfile(member)
+                    if fh is not None:
+                        objects[member.name] = fh.read().decode("utf-8")
+        return objects, None
+
+    store = os.path.join(REPO, ".aida-store", "objects")
+    if os.path.isdir(store):
+        objects = {}
+        for root, _dirs, fnames in os.walk(store):
+            for filename in fnames:
+                if not filename.endswith(".yaml"):
+                    continue
+                path = os.path.join(root, filename)
+                with open(path, encoding="utf-8") as fh:
+                    relative = os.path.relpath(path, os.path.join(REPO, ".aida-store"))
+                    objects[relative] = fh.read()
+        return objects, None
+    return {}, "store unavailable"
+
+
+def _identifier_values(yaml_text):
+    values = set()
+    for key in ("spec_id", "agreed_id"):
+        match = re.search(rf"^{key}:\s*([^#\n]+?)\s*$", yaml_text, re.M)
+        if match:
+            values.add(match.group(1).strip().strip("\"'"))
+    return values
+
+
+def resolve_spec_yaml(spec_id):
+    """Return (YAML, error) resolving either canonical or agreed identifier."""
+    objects, source_error = _store_objects()
+    if source_error:
+        return None, source_error
+    matches = []
+    for path, yaml_text in objects.items():
+        filename_id = os.path.basename(path)[:-5]
+        if spec_id == filename_id or spec_id in _identifier_values(yaml_text):
+            matches.append((path, yaml_text))
+    if not matches:
+        return None, f"spec not found: {spec_id}"
+    if len(matches) > 1:
+        paths = ", ".join(path for path, _text in sorted(matches))
+        return None, f"ambiguous spec identifier {spec_id}; matches: {paths}"
+    return matches[0][1], None
+
+
 def load_spec_yaml(spec_id):
-    """Return the raw YAML for a spec, from aida-store or the local worktree."""
-    # 1. orphan branch (works in CI without an attached worktree)
-    ls = sh(["git", "ls-tree", "-r", STORE_BRANCH, "--name-only"])
-    if ls.returncode == 0:
-        for path in ls.stdout.splitlines():
-            if path.endswith(f"/{spec_id}.yaml"):
-                show = sh(["git", "show", f"{STORE_BRANCH}:{path}"])
-                if show.returncode == 0:
-                    return show.stdout
-    # 2. local attached worktree
-    for root, _dirs, fnames in os.walk(os.path.join(REPO, ".aida-store", "objects")):
-        if f"{spec_id}.yaml" in fnames:
-            with open(os.path.join(root, f"{spec_id}.yaml")) as fh:
-                return fh.read()
-    return None
+    """Return raw YAML resolved by spec_id or agreed_id, else None."""
+    return resolve_spec_yaml(spec_id)[0]
 
 
 def _block_body(yaml_text, header_re):
@@ -193,28 +246,29 @@ def main():
     print(f"referenced spec(s): {', '.join(sorted(specs))}")
 
     marked = []
-    unresolved = []
+    resolution_errors = []
     unmarked = []
     for sid in sorted(specs):
-        verdict = spec_marks_doc_impact(load_spec_yaml(sid))
+        yaml_text, resolution_error = resolve_spec_yaml(sid)
+        verdict = spec_marks_doc_impact(yaml_text)
         if verdict is True:
             marked.append(sid)
         elif verdict is None:
-            unresolved.append(sid)
+            resolution_errors.append(resolution_error or f"spec not found: {sid}")
         else:
             unmarked.append(sid)
+
+    if resolution_errors:
+        print(
+            "ERROR doc-intent — referenced spec resolution failed; cannot verify doc-impact:\n"
+            + "\n".join(f"    {error}" for error in resolution_errors)
+        )
+        print("::error::doc-intent: referenced spec resolution failed")
+        sys.exit(1)
 
     if marked:
         print(f"OK doc-intent — doc-impact marked on: {', '.join(marked)}")
         sys.exit(0)
-
-    if unresolved and not unmarked:
-        print(
-            f"SKIP doc-intent — could not resolve spec(s) {', '.join(unresolved)} "
-            f"from the '{STORE_BRANCH}' branch or a local worktree; cannot verify.\n"
-            f"    (Fetch the store: git fetch origin {STORE_BRANCH}:{STORE_BRANCH})"
-        )
-        sys.exit(2)
 
     print(
         "ERROR doc-intent — surface changed but NO referenced spec marks doc-impact.\n"
