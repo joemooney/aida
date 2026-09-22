@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T11:30:52.264950402Z
-modified_at: 2026-09-22T11:36:12.504560896Z
+modified_at: 2026-09-22T12:03:16.948119703Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -35,3 +35,8 @@ comments:
   content: 'REVIEW REQUEST_CHANGES at exact PR #2097 head 120d97d1925be37e03afdc861afb99750892e734. BUG-1502 acceptance is not met: global-format capability gate has false negatives such as fasttrack status; audit tests do not behaviorally enumerate all paths or catch outcome drift; show JSON is not field-equivalent to the human view. Exact description byte round-trip and git linkage pass. GitHub shared-account limitation prevented a formal Request Changes review, so the blocking verdict is recorded at https://github.com/joemooney/aida/pull/2097#issuecomment-5775723303.'
   created_at: 2026-09-22T11:36:12.504560896Z
   modified_at: 2026-09-22T11:36:12.504560896Z
+- id: 01a0c8ff-b754-7af1-8618-337e80f33bf7
+  author: joe
+  content: 'PR #2097 rework is ready at exact head 467827980a376cde15958e004693883374c240d2. All prior blocking findings were implemented and focused gates pass. A different cold reviewer is required; the implementer authored the previous review findings and is not independent.'
+  created_at: 2026-09-22T12:03:16.948119703Z
+  modified_at: 2026-09-22T12:03:16.948119703Z
