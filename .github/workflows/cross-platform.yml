@@ -92,7 +92,9 @@ jobs:
           content_type="$(awk 'BEGIN { IGNORECASE=1 } /^content-type:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$headers")"
           cf_ray="$(awk 'BEGIN { IGNORECASE=1 } /^cf-ray:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$headers")"
           location="$(awk 'BEGIN { IGNORECASE=1 } /^location:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$headers" | sed -E 's/[?#].*$//')"
-          if jq -e '.version | type == "string" and length > 0' "$response" >/dev/null 2>&1; then
+          if [ "$http_status" = "302" ] && [[ "$location" == *cloudflareaccess.com/cdn-cgi/access/login/* ]]; then
+            body_class="cloudflare-access-login-redirect"
+          elif jq -e '.version | type == "string" and length > 0' "$response" >/dev/null 2>&1; then
             body_class="gitlab-version-json"
           elif grep -Eqi '<title>[^<]*(Cloudflare Access|Sign in)[^<]*</title>' "$response"; then
             body_class="cloudflare-access-html"
@@ -131,7 +133,11 @@ jobs:
             echo "::notice::Skipping GitLab forge smoke: mirror is unreachable"
             echo "run=false" >> "$GITHUB_OUTPUT"
           elif [ "$http_status" -lt 200 ] || [ "$http_status" -ge 300 ]; then
-            echo "::error::GitLab API preflight returned HTTP ${http_status}; verify the Access Service Auth policy and both credential pairs"
+            if [ "$body_class" = "cloudflare-access-login-redirect" ]; then
+              echo "::error::Cloudflare Access rejected the service-token pair and redirected to interactive login; verify that the matching token is included by a Service Auth policy covering this hostname and path"
+            else
+              echo "::error::GitLab API preflight returned HTTP ${http_status}; verify the Access Service Auth policy and both credential pairs"
+            fi
             exit 1
           elif [ "$body_class" != "gitlab-version-json" ]; then
             echo "::error::GitLab API preflight returned ${body_class}, not GitLab version JSON; compare the safe API and identity probe classifications above"
