@@ -1,0 +1,59 @@
+id: 01a0c7ed-171d-7860-a062-1316bfe3197f
+spec_id: ADR-55
+agreed_id: ADR-55
+title: System One EvaluatorEngine trait, tri-state confidence escalation, and calibrated quality gating
+description: |
+  CONTEXT & MOTIVATION:
+  AIDA's autonomous drain and quality-gating pipeline are bottlenecked at the boundary between deterministic checks (compiler, tests) and non-deterministic evaluation (PRIN-8, STORY-1424, STORY-1427). Over 40% of autonomous stalls stem from deploying heavyweight conversational LLMs (Claude/Codex) to render pass/fail review verdicts—introducing multi-second latency, shell timeouts, and fragile regex verdict scraping. Conversely, pure deterministic tools cannot evaluate semantic intent, prose acceptance criteria, or store contradictions.
+
+  TypeSafe AI's Jev (System One) model provides typed, calibrated, parallel evaluation primitives (noul, choice, score) in 100-300ms at ~1/400th the cost of conversational models, validated empirically in SPIKE-87.
+
+  DECISIONS:
+
+  1. THE EvaluatorEngine TRAIT IN aida-cli-lib:
+     - Abstract evaluation behind an asynchronous Rust trait:
+         pub trait EvaluatorEngine: Send + Sync {
+             async fn evaluate_noul(&self, context: &str, instruction: &str) -> Result<NoulResponse, EvaluatorError>;
+             async fn evaluate_choice(&self, context: &str, instruction: &str, options: &HashMap<String, String>) -> Result<ChoiceResponse, EvaluatorError>;
+             async fn evaluate_score(&self, context: &str, instruction: &str, levels: &[String]) -> Result<ScoreResponse, EvaluatorError>;
+         }
+     - Implementations:
+       (a) JevEvaluator: Connects to https://api.typesafe.ai/v1/systemone using TYPESAFE_API_KEY / AIDA_JEV_API_KEY.
+       (b) LocalLlmEvaluator: Fallback connecting to local vLLM/Ollama endpoints with constrained JSON schemas.
+       (c) MockEvaluator: Deterministic fixture engine for CI testing.
+
+  2. TRI-STATE CONFIDENCE ESCALATION MODEL (STORY-1424):
+     - A conservative tri-state threshold policy for merge gating:
+       * Fast-Pass Auto-Approve: p >= 0.95 across all residual prose criteria AND confidence >= 0.90. (Bypasses reviewer agent subprocess; enables < 500ms auto-merge).
+       * Fast-Fail Auto-Reject: p <= 0.20 on any single criterion AND confidence >= 0.85. (Immediately returns structured feedback to implementer).
+       * Escalation Zone (0.20 < p < 0.95 or low confidence): Cleanly escalates to Phase 3 conversational reviewer seat (Claude/Codex) or flags NeedsAttention for human advisor.
+     - Preserves System 1 (fast automated filtering for ~80% of routine cases) while reserving System 2 (deep deliberation) for genuinely ambiguous cases.
+
+  3. STRICT GOVERNANCE COMPLIANCE:
+     - PRIN-8 (Determinism Ladder): Jev is classified as Rung 3.5 (Calibrated Heuristic). Every verdict records `heuristic: true` and its calibrated probability p. Deterministic executable checks (Rung 2) ALWAYS run first.
+     - PRIN-7 (Dual Predicates): Merge-readiness strictly requires (1) required CI checks pass AND (2) an explicit review verdict naming HEAD. Evaluator verdicts supply (2), but never bypass (1).
+     - PRIN-6 (Currency & Provenance): Verdict records must bind the evaluated reviewed_sha, model version, and question payload hash. Any branch move invalidates the cached evaluation.
+     - PRIN-5 (Fail Closed): Network timeout, HTTP error, or missing context fails closed—escalating to human/agent review, never defaulting to an unearned green pass.
+
+  REJECTED ALTERNATIVES:
+  - Forcing all acceptance criteria into bash exit codes (Rejected: produces Goodhart artifacts on semantic qualities like doc clarity, API ergonomics, or domain taste).
+  - Relying exclusively on conversational LLM agents for review (Rejected: 15-60s latency, high token cost, and 40% drain stall rate).
+  - Binary thresholding without an escalation band (e.g. p >= 0.50 pass, < 0.50 fail) (Rejected: risks false approvals on borderline diffs; tri-state routing is mathematically required).
+  - Tight coupling to TypeSafe AI's proprietary SaaS API (Rejected: violates AIDA's git-canonical, offline-capable sovereignty; trait abstraction is mandatory).
+
+  STATUS: Approved / Accepted
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T07:03:19.069580239Z
+modified_at: 2026-09-22T07:03:19.069580239Z
+req_type: Decision
+tags:
+- architecture
+- epic-66
+- evaluator
+- gating
+- story-1424
+- story-1426
+- system-one
