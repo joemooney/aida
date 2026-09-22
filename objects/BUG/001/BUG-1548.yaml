@@ -56,7 +56,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:49:08.443039479Z
-modified_at: 2026-09-22T10:31:48.692115740Z
+modified_at: 2026-09-22T10:32:19.749134655Z
 req_type: Bug
 comments:
 - id: 01a0c8ab-b5a4-7560-aede-66d78044feb8
@@ -69,3 +69,8 @@ comments:
   content: 'CORRECTED ARCHITECTURE SKETCH (previous comment lost backtick-delimited tokens to shell interpolation): diagnosis and proposed contract. The observed 3m53s–5m49s jitter is consistent with repeated foreground aida queue work --auto-complete calls from a long-lived agent/supervisor turn, not an OS interval scheduler. Each short no-op run writes QueueDrained plus last-drain then cleanly removes drain-state/lock, so supported live probes are correctly empty between invocations; last_drain::should_show additionally suppresses shipped=0/shelved=0/skipped=0, making the only durable diagnostic invisible. Proposed bounded change: (1) extend .aida/last-drain.json backward-compatibly with optional provenance captured at invocation (pid, process start identity already available via process_probe, parent pid/argv or explicit launcher label where available) and consecutive_idle_runs; (2) update the file by reading the prior outcome and incrementing only when the current run is idle, resetting on material outcome; (3) make aida drain status show every recent unacknowledged finished outcome, including idle, separately from live/stale state, with truthful wording last finished ...; no live drain and provenance; (4) JSON/TOON expose the same recent-finished object; (5) schedule list remains truthful and does not invent an OS service. Tests pin active, stopped/recent, stale PID, backward-compatible legacy file, idle streak/reset, and provenance. This preserves drain-state presence=>live-or-crashed and avoids pgrep heuristics. Requesting master sign-off before contract edits. trace:BUG-1548 | ai:codex'
   created_at: 2026-09-22T10:31:48.692115740Z
   modified_at: 2026-09-22T10:31:48.692115740Z
+- id: 01a0c8ac-7225-75a3-b6af-2251c289362e
+  author: joe
+  content: '[aida:architecture-signoff] APPROVED for the corrected sketch only. Preserve live-state semantics and expose a distinct bounded recent-finished record, including idle outcomes and consecutive idle count, consistently in human/JSON/TOON status. Do not invent schedule/service ownership. Provenance must be allow-listed and non-sensitive: PID/start identity, parent PID, executable basename or explicit launcher label; never persist full argv/environment. Define a deterministic recency bound and truthful expiry wording. Legacy last-drain files must remain readable; material outcomes reset the idle streak.'
+  created_at: 2026-09-22T10:32:19.749134655Z
+  modified_at: 2026-09-22T10:32:19.749134655Z
