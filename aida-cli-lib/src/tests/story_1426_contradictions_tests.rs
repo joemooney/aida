@@ -6,7 +6,8 @@ use chrono::Utc;
 use std::collections::HashMap;
 
 use crate::contradictions::{
-    find_mechanical_candidates, find_mechanical_candidates_at, sweep_contradictions,
+    find_mechanical_candidates, find_mechanical_candidates_at, paginate_findings,
+    sweep_contradictions, ContradictionFinding,
 };
 use crate::evaluator::{EvaluatorError, MockEvaluator};
 use aida_core::{
@@ -259,4 +260,81 @@ fn test_exact_epic_63_store_shape_survives_compatible_evaluator() {
         .expect("a compatible heuristic must not erase a mechanical candidate");
     assert_eq!(finding.verdict, "candidate");
     assert!(finding.mechanical_reason.contains("Followups"));
+}
+
+fn finding(a: &str, b: &str, reason: &str) -> ContradictionFinding {
+    ContradictionFinding {
+        spec_a_id: a.into(),
+        spec_a_title: a.into(),
+        spec_a_status: "Completed".into(),
+        spec_a_type: "Epic".into(),
+        spec_b_id: b.into(),
+        spec_b_title: b.into(),
+        spec_b_status: "MissingChild".into(),
+        spec_b_type: "PlanFollowup".into(),
+        verdict: "candidate".into(),
+        confidence: 0.0,
+        probability: 0.0,
+        heuristic: true,
+        model: "fixture".into(),
+        mechanical_reason: reason.into(),
+        summary: "fixture".into(),
+    }
+}
+
+#[test]
+fn test_bounded_pages_are_deterministic_and_lossless() {
+    let input = vec![
+        finding(
+            "EPIC-3",
+            "plan#3",
+            "Terminal EPIC-3 plan promises Followups bullet with no corresponding child spec",
+        ),
+        finding(
+            "ADR-2",
+            "ADR-9",
+            "Accepted ADR ADR-2 overlaps later accepted ADR ADR-9 by tag",
+        ),
+        finding(
+            "EPIC-1",
+            "plan#1",
+            "Terminal EPIC-1 plan promises Followups bullet with no corresponding child spec",
+        ),
+        finding(
+            "VIS-1",
+            "CR-6",
+            "Approved Vision (VIS-1) is older than completed Change Request (CR-6) referencing it",
+        ),
+        finding(
+            "EPIC-2",
+            "plan#2",
+            "Terminal EPIC-2 plan promises Followups bullet with no corresponding child spec",
+        ),
+    ];
+    let first = paginate_findings(input.clone(), 2, 0, false);
+    let second = paginate_findings(input.clone(), 2, first.next_offset.unwrap(), false);
+    let third = paginate_findings(input.clone(), 2, second.next_offset.unwrap(), false);
+    assert_eq!((first.total, first.returned, first.remaining), (5, 2, 3));
+    assert_eq!(first.category_counts.values().sum::<usize>(), 5);
+    assert_eq!(first.category_counts["plan-followup"], 3);
+
+    let walked = first
+        .findings
+        .iter()
+        .chain(&second.findings)
+        .chain(&third.findings)
+        .map(|f| (&f.spec_a_id, &f.spec_b_id))
+        .collect::<Vec<_>>();
+    let all = paginate_findings(input, 99, 99, true);
+    let complete = all
+        .findings
+        .iter()
+        .map(|f| (&f.spec_a_id, &f.spec_b_id))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        walked, complete,
+        "pagination must neither lose nor duplicate findings"
+    );
+    assert_eq!(all.remaining, 0);
+    assert_eq!(all.next_offset, None);
 }

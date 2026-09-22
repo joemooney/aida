@@ -56,6 +56,87 @@ pub struct ContradictionFinding {
     pub summary: String,
 }
 
+/// Stable category used for grouping, ordering, and bounded continuation.
+// trace:STORY-1426 | ai:codex
+pub fn finding_category(finding: &ContradictionFinding) -> &'static str {
+    let reason = finding.mechanical_reason.as_str();
+    if reason.starts_with("Accepted ADR ") {
+        "adr-overlap"
+    } else if reason.starts_with("Terminal ") && reason.contains(" plan promises Followups") {
+        "plan-followup"
+    } else if reason.starts_with("Terminal spec ") {
+        "post-terminal-acceptance-edit"
+    } else if reason.starts_with("Epic ") {
+        "completed-epic-blocks-open"
+    } else {
+        "approved-reference"
+    }
+}
+
+/// Deterministic ordering makes offset pagination stable for a fixed store.
+// trace:STORY-1426 | ai:codex
+pub fn sort_findings(findings: &mut [ContradictionFinding]) {
+    findings.sort_by(|a, b| {
+        finding_category(a)
+            .cmp(finding_category(b))
+            .then_with(|| a.spec_a_id.cmp(&b.spec_a_id))
+            .then_with(|| a.spec_b_id.cmp(&b.spec_b_id))
+            .then_with(|| a.mechanical_reason.cmp(&b.mechanical_reason))
+    });
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ContradictionPage {
+    pub total: usize,
+    pub offset: usize,
+    pub limit: usize,
+    pub returned: usize,
+    pub remaining: usize,
+    pub next_offset: Option<usize>,
+    pub category_counts: std::collections::BTreeMap<String, usize>,
+    pub findings: Vec<ContradictionFinding>,
+}
+
+/// Sort and page without dropping information: `next_offset` walks every
+/// finding, while category totals let an operator size and prioritize the
+/// complete scan before opening later pages.
+// trace:STORY-1426 | ai:codex
+pub fn paginate_findings(
+    mut findings: Vec<ContradictionFinding>,
+    limit: usize,
+    offset: usize,
+    all: bool,
+) -> ContradictionPage {
+    sort_findings(&mut findings);
+    let total = findings.len();
+    let mut category_counts = std::collections::BTreeMap::<String, usize>::new();
+    for finding in &findings {
+        *category_counts
+            .entry(finding_category(finding).to_string())
+            .or_default() += 1;
+    }
+    let effective_offset = if all { 0 } else { offset.min(total) };
+    let effective_limit = if all { total } else { limit.max(1) };
+    let page = findings
+        .into_iter()
+        .skip(effective_offset)
+        .take(effective_limit)
+        .collect::<Vec<_>>();
+    let returned = page.len();
+    let next = effective_offset + returned;
+    let remaining = total.saturating_sub(next);
+    ContradictionPage {
+        total,
+        offset: effective_offset,
+        limit: effective_limit,
+        returned,
+        remaining,
+        next_offset: (remaining > 0).then_some(next),
+        category_counts,
+        findings: page,
+    }
+}
+
 /// Helper to get a stable display ID for a requirement.
 fn req_id(req: &Requirement) -> String {
     req.agreed_id
@@ -559,8 +640,14 @@ pub fn sweep_contradictions_at(
 
 /// Render contradiction findings to the terminal.
 // trace:STORY-1426 | ai:antigravity
-pub fn render_findings(findings: &[ContradictionFinding]) {
-    if findings.is_empty() {
+pub fn render_findings_page(
+    findings: &[ContradictionFinding],
+    total: usize,
+    offset: usize,
+    limit: usize,
+    category_counts: &std::collections::BTreeMap<String, usize>,
+) {
+    if total == 0 {
         println!(
             "{}",
             "No semantic contradictions detected in requirement store.".green()
@@ -571,13 +658,28 @@ pub fn render_findings(findings: &[ContradictionFinding]) {
     println!(
         "\n{} Detected {} semantic contradiction candidate(s):\n",
         "▲".red().bold(),
-        findings.len().to_string().bold()
+        total.to_string().bold()
+    );
+
+    println!(
+        "  categories: {}",
+        category_counts
+            .iter()
+            .map(|(category, count)| format!("{category}={count}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    println!(
+        "  showing {}..{} of {}\n",
+        offset.min(total),
+        (offset + findings.len()).min(total),
+        total
     );
 
     for (idx, f) in findings.iter().enumerate() {
         println!(
             "  {}. {} {} (heuristic: p={:.2}, model: {})",
-            idx + 1,
+            offset + idx + 1,
             format!("[{}]", f.verdict.to_ascii_uppercase()).red().bold(),
             f.summary.bold(),
             f.probability,
@@ -599,5 +701,16 @@ pub fn render_findings(findings: &[ContradictionFinding]) {
         println!("       \"{}\"", f.spec_b_title);
         println!("     Join trigger: {}", f.mechanical_reason.dimmed());
         println!();
+    }
+
+    let next = offset.saturating_add(findings.len());
+    if next < total {
+        println!(
+            "  {} {} finding(s) remain; continue with `aida doctor --contradictions --contradictions-limit {} --contradictions-offset {}` or use `--all`.",
+            "…".yellow(),
+            total - next,
+            limit,
+            next
+        );
     }
 }

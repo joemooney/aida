@@ -3880,6 +3880,8 @@ fn run() -> Result<()> {
         since,
         fix_sandbox,
         contradictions,
+        contradictions_limit,
+        contradictions_offset,
         cmd,
     } = &cli.command
     {
@@ -3894,7 +3896,12 @@ fn run() -> Result<()> {
         // contradiction sweep combining mechanical joins with Jev choice queries.
         // trace:STORY-1426 | ai:antigravity
         if *contradictions {
-            return doctor_cmd::doctor_contradictions(*json);
+            return doctor_cmd::doctor_contradictions(
+                *json,
+                *contradictions_limit,
+                *contradictions_offset,
+                *all,
+            );
         }
         return doctor_cmd::handle_doctor_command(
             *heal,

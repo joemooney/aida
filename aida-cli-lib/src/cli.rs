@@ -10614,6 +10614,19 @@ pub enum Command {
         #[clap(long)]
         contradictions: bool,
 
+        /// Maximum contradiction findings to print per page. The default is
+        /// deliberately bounded; use --contradictions-offset to continue or
+        /// --all to request the complete scan.
+        // trace:STORY-1426 | ai:codex
+        #[clap(long, value_name = "N", default_value_t = 25)]
+        contradictions_limit: usize,
+
+        /// Zero-based offset into the deterministically ordered contradiction
+        /// findings. Ignored with --all.
+        // trace:STORY-1426 | ai:codex
+        #[clap(long, value_name = "N", default_value_t = 0)]
+        contradictions_offset: usize,
+
         /// Legacy maintenance subcommand or focused doctor action.
         #[clap(subcommand)]
         cmd: Option<DoctorCommand>,

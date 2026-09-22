@@ -8201,7 +8201,12 @@ fn update_config_counter_scope(config_path: &std::path::Path, new_value: &str) -
 
 /// Sweep the requirement store for semantic contradictions (STORY-1426).
 // trace:STORY-1426 | ai:antigravity
-pub(crate) fn doctor_contradictions(json: bool) -> Result<()> {
+pub(crate) fn doctor_contradictions(
+    json: bool,
+    limit: usize,
+    offset: usize,
+    all: bool,
+) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     let store = load_store_for_lookup(&project_root).ok_or_else(|| {
@@ -8219,13 +8224,21 @@ pub(crate) fn doctor_contradictions(json: bool) -> Result<()> {
         &project_root,
     )?;
 
+    let page = crate::contradictions::paginate_findings(findings, limit, offset, all);
+
     if json {
-        println!("{}", serde_json::to_string_pretty(&findings)?);
+        println!("{}", serde_json::to_string_pretty(&page)?);
     } else {
-        crate::contradictions::render_findings(&findings);
+        crate::contradictions::render_findings_page(
+            &page.findings,
+            page.total,
+            page.offset,
+            page.limit,
+            &page.category_counts,
+        );
     }
 
-    if !findings.is_empty() {
+    if page.total > 0 {
         std::process::exit(1);
     }
 
