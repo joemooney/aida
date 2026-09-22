@@ -26,7 +26,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:26:14.774144314Z
-modified_at: 2026-09-21T22:53:00.124217518Z
+modified_at: 2026-09-22T09:06:36.200984713Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -99,3 +99,17 @@ comments:
   created_at: 2026-09-21T22:53:00.124217518Z
   modified_at: 2026-09-21T22:53:00.124217518Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c85d-f628-77d2-a33a-c2f89b515f07
+  author: codex
+  content: |-
+    ARCHITECTURE SKETCH — compatibility/migration proposal
+
+    1. Canonical wire format: encode RelationshipType as an ordinary YAML scalar for every variant, including custom names (for example `rel_type: implemented-by`), eliminating serde_yaml local tags. Keep the Rust enum/API unchanged so this is a storage compatibility change, not a taxonomy decision; normalization of implements/implemented-by remains separate.
+    2. Backward-compatible reader: implement explicit Deserialize that accepts both the new scalar spelling and legacy serde enum encodings, especially `!Custom value`. Known names continue through RelationshipType::from_str; unknown scalar names become Custom(name). Preserve exact custom spelling so legacy objects round-trip canonically without semantic changes.
+    3. Writer/canonicalization: implement explicit Serialize to emit only plain scalar strings. Any object read from legacy tagged YAML writes back in standard-parser-safe form on its next normal persistence; no eager whole-store rewrite or giant store commit is required. Existing untouched objects remain readable by AIDA during the transition.
+    4. Tests, red first: standard serde_yaml parsing of representative built-in and Custom relationships; legacy `!Custom` compatibility; new scalar Custom parsing; semantic round-trip for all built-ins and representative custom spellings (hyphen/underscore); migration test proving legacy input reserializes without `!Custom` and reloads identically; standard generic YAML Value parser accepts output.
+    5. Validation: targeted core/store tests, full relevant crate tests, fmt check, and (where locally practical) run a standard parser over generated/migrated fixtures.
+
+    Risk controls: do not reinterpret or rename relationship values, do not bulk-migrate `.aida-store`, and retain legacy reads indefinitely unless a future migration spec explicitly removes them. Requesting master sign-off before implementation because this changes the canonical file format.
+  created_at: 2026-09-22T09:06:36.200984713Z
+  modified_at: 2026-09-22T09:06:36.200984713Z
