@@ -3791,6 +3791,17 @@ pub(crate) fn handle_git_backend_command(
                     // object merely to render one spec. trace:BUG-626
                     let effective_status_str =
                         cached_epic_status.unwrap_or_else(|| format!("{}", req.effective_status()));
+                    // BUG-781: JSON is the machine projection of the same
+                    // human detail view, so use the type-aware display label
+                    // (a stored Approved decision is displayed as Accepted).
+                    // Keep the stored status separately below; consumers must
+                    // not have to infer which value is presentation-only.
+                    // trace:BUG-1502 | ai:codex
+                    let display_status = status_display::display_status_for_type(
+                        &format!("{:?}", req.req_type),
+                        &effective_status_str,
+                    )
+                    .to_string();
                     // STORY-632: `--json` emits the spec as a machine object,
                     // including the centrality fields, then returns early.
                     // trace:STORY-632 | ai:claude
@@ -3892,6 +3903,25 @@ pub(crate) fn handle_git_backend_command(
                                 repo: linkage.repo,
                             })
                         };
+                        // BUG-527: carry the human-visible queue membership
+                        // into JSON as structured role/position pairs. The
+                        // helper uses the same per-role rank as the human
+                        // `Queued:` line, including the `general` label for
+                        // unrouted entries. trace:BUG-1502 | ai:codex
+                        let project_root = store_path
+                            .parent()
+                            .map(|p| p.to_path_buf())
+                            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                        let queue_membership: Vec<serde_json::Value> =
+                            queue_memberships_for(&project_root, &req.id)
+                                .into_iter()
+                                .map(|(role, position)| {
+                                    serde_json::json!({
+                                        "role": role.unwrap_or_else(|| "general".to_string()),
+                                        "position": position,
+                                    })
+                                })
+                                .collect();
                         // Start from the complete stored requirement rather
                         // than maintaining a lossy parallel projection. Then
                         // overlay every derived field the human view computes
@@ -3919,7 +3949,11 @@ pub(crate) fn handle_git_backend_command(
                         );
                         object.insert(
                             "status".to_string(),
-                            serde_json::Value::String(effective_status_str.clone()),
+                            serde_json::Value::String(display_status.clone()),
+                        );
+                        object.insert(
+                            "stored_status".to_string(),
+                            serde_json::Value::String(req.status.to_string()),
                         );
                         object.insert(
                             "priority".to_string(),
@@ -3981,6 +4015,10 @@ pub(crate) fn handle_git_backend_command(
                         object.insert(
                             "git_linkage".to_string(),
                             serde_json::to_value(git_linkage)?,
+                        );
+                        object.insert(
+                            "queue_membership".to_string(),
+                            serde_json::Value::Array(queue_membership),
                         );
                         println!("{}", serde_json::to_string_pretty(&out)?);
                         return Ok(());
@@ -4243,11 +4281,7 @@ pub(crate) fn handle_git_backend_command(
                     // BUG-781: for a decision spec, the stored `Approved` IS
                     // ACCEPTED — the terminal state — so display it that way
                     // here and in the reprint at the foot. trace:BUG-781
-                    let status = status_display::display_status_for_type(
-                        &format!("{:?}", req.req_type),
-                        &effective_status_str,
-                    )
-                    .to_string();
+                    let status = display_status.clone();
                     println!(
                         "{}: {}",
                         "Status".bold(),

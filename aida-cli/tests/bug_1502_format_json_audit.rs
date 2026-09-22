@@ -203,6 +203,47 @@ fn show_format_json_round_trips_description_and_matches_json_flag() {
         format_value["interface_changes"]["cli"][0],
         "fixture command changed"
     );
+    assert_eq!(format_value["queue_membership"][0]["role"], "general");
+    assert_eq!(format_value["queue_membership"][0]["position"], 1);
+}
+
+#[test]
+fn show_json_uses_type_aware_status_display_and_preserves_stored_status() {
+    let (_tmp, repo, home, _task_spec) = fixture();
+    let add = aida(
+        &repo,
+        &home,
+        &[
+            "add",
+            "--title",
+            "status display fixture",
+            "--type",
+            "decision",
+            "--status",
+            "approved",
+        ],
+    );
+    assert!(
+        add.status.success(),
+        "stdout={}\nstderr={}",
+        String::from_utf8_lossy(&add.stdout),
+        String::from_utf8_lossy(&add.stderr)
+    );
+    let spec = String::from_utf8_lossy(&add.stdout)
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
+        .find(|token| token.starts_with("ADR-") && token[4..].chars().all(|c| c.is_ascii_digit()))
+        .unwrap()
+        .to_string();
+    let value = json(
+        &aida(
+            &repo,
+            &home,
+            &["show", &spec, "--no-git", "--format", "json"],
+        ),
+        "decision show --format json",
+    );
+    assert_eq!(value["status"], "Accepted");
+    assert_eq!(value["stored_status"], "Approved");
 }
 
 #[test]
