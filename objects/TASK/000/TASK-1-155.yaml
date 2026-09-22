@@ -19,12 +19,12 @@ description: |-
   NOT ASSERTING A CAUSE. I have not read the session-matching code and do not know whether the six stale leases cause the BUG-1442 mismatch or merely appear in its error text. The run recovered on its own — BUG-1442 is live again under lease 01a0c04e. What I have established is only that the cleanup remedy someone would reach for first is unavailable and should not be attempted.
 
   WHAT WOULD SETTLE IT: does the matcher disambiguate by spec, by branch, by pid, or by scanning? If it scans and takes a first match, six stale candidates is a plausible mechanism. If it keys on the spec, they are irrelevant and the error text is merely noisy — which would itself be worth fixing, since listing seven lease ids in a failure that has nothing to do with them sends the reader where I just went.
-status: Approved
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T19:41:23.949746312Z
-modified_at: 2026-09-22T11:39:45.412200719Z
+modified_at: 2026-09-22T11:40:16.662150976Z
 req_type: Task
 tags:
 - from-advisor:BUG-1442
