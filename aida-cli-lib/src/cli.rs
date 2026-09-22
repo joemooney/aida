@@ -900,6 +900,17 @@ pub enum ReviewCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// One-time repair: expand every abbreviated `reviewed_sha` on disk to
+    /// its full commit sha where this repo can still resolve it, and mark
+    /// the rest explicitly unresolvable. Never invents a value and never
+    /// touches an already-full or sha-less record.
+    // trace:BUG-1516 | ai:claude
+    NormalizeShas {
+        /// Report what would change without writing anything.
+        #[clap(long)]
+        dry_run: bool,
+    },
 }
 
 /// Per-scope disposition / triage lease commands (the intake gate).

@@ -77034,7 +77034,42 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         ),
         // trace:BUG-775 | ai:claude
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
+        // trace:BUG-1516 | ai:claude
+        ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
     }
+}
+
+/// `aida review normalize-shas` — BUG-1516 criterion 3's repair verb: expand
+/// every abbreviated `reviewed_sha` on disk to its full commit sha where this
+/// repo can still resolve it, and mark the rest unresolvable rather than
+/// guessing. Deliberately never runs on its own — `.aida/review-verdicts/` is
+/// live coordination state other seats may be reading right now, so touching
+/// it is always an explicit, operator-invoked action.
+// trace:BUG-1516 | ai:claude
+fn handle_review_normalize_shas(dry_run: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let report = review_verdict::backfill_abbreviated_shas(&project_root, dry_run)
+        .with_context(|| "could not sweep .aida/review-verdicts for abbreviated shas")?;
+    let verb = if dry_run { "would resolve" } else { "resolved" };
+    println!(
+        "{} {} {} abbreviated sha(s), {} unresolvable, {} already full, {} with no sha",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        verb,
+        report.resolved.len(),
+        report.unresolvable.len(),
+        report.already_full,
+        report.skipped_no_sha
+    );
+    for name in &report.resolved {
+        println!("  {} {name}", "→".green());
+    }
+    for name in &report.unresolvable {
+        println!(
+            "  {} {name} (kept verbatim, marked reviewed_sha_unresolvable)",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
+    Ok(())
 }
 
 fn guided_review_prompt(spec: &str) -> String {
@@ -77437,14 +77472,22 @@ fn handle_review_record(
         if let Some(dir) = handshake.parent() {
             std::fs::create_dir_all(dir)?;
         }
+        // Read back the canonical record rather than rebuilding provenance.
+        // Besides keeping the timestamp byte-identical, this carries the
+        // full SHA produced by record_verdict's write-boundary normalization
+        // when the caller supplied an abbreviation.
+        // trace:BUG-1466 | ai:codex
+        // trace:BUG-1516 | ai:codex
+        let recorded = review_verdict::read_recorded_verdict(&project_root, spec)
+            .ok_or_else(|| anyhow::anyhow!("the verdict was written but could not be read back"))?;
         let mut body = serde_json::json!({
             "verdict": kind.label(),
             "summary": summary.unwrap_or(""),
             "mode": "orchestrator-phase-3",
-            "reviewed_sha": resolved_sha.as_deref().expect("checked above"),
-            "reviewed_branch": branch,
-            "recorded_at": chrono::Utc::now().to_rfc3339(),
-            "recorded_by": recorded_by,
+            "reviewed_sha": recorded.reviewed_sha,
+            "reviewed_branch": recorded.reviewed_branch,
+            "recorded_at": recorded.recorded_at,
+            "recorded_by": recorded.recorded_by,
         });
         let findings: Vec<_> = findings
             .iter()

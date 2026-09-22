@@ -12909,9 +12909,17 @@ pub(crate) fn evaluate_review_verdict_gate(
     let Some(verdict) = verdict else {
         return (review_verdict::VerdictGate::Proceed, None);
     };
-    if !verdict.kind.blocks_done() {
-        return (review_verdict::VerdictGate::Proceed, Some(verdict));
-    }
+    // BUG-1466 / BUG-1538: this used to return early here for every verdict
+    // that does not block_done() — which includes APPROVED, the consequential
+    // direction. That made `queue_done_verdict_gate`'s own `reviewed_sha ==
+    // None` refusal (added for BUG-1467) unreachable from the ONE call site
+    // `aida queue done` actually uses, and it meant an approval recorded
+    // against an earlier commit cleared the gate identically to a fresh one:
+    // relation was never even computed for a non-blocking verdict. The pure
+    // gate function now makes this decision for every verdict kind; this
+    // wiring must always ask it rather than pre-empting it.
+    // trace:BUG-1466 | ai:claude
+    // trace:BUG-1538 | ai:claude
     let branch = current_branch_at(project_root);
     let relation = verdict_tip_relation(
         project_root,
