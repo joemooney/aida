@@ -578,21 +578,44 @@ pub(crate) fn probe_resume_facts(
     // The spelling is insufficient: prove it names the current branch tip.
     // trace:BUG-1466 | ai:codex
     // trace:BUG-1538 | ai:codex
-    let current_head = branch.as_deref().and_then(|b| {
-        resolve_commit_sha(project_root, &format!("origin/{b}"))
-            .or_else(|| resolve_commit_sha(project_root, b))
+    let current_head = pr.and_then(|n| {
+        let change = crate::forge::ChangeRef {
+            id: n as u64,
+            url: String::new(),
+            branch: branch.clone().unwrap_or_default(),
+            base: String::new(),
+            title: None,
+        };
+        crate::forge::forge_for(project_root)
+            .change_status(&change)
+            .ok()
+            .map(|status| status.head_sha)
+            .filter(|sha| !sha.trim().is_empty())
     });
     let reviewed = pr
         .map(|n| {
-            let path = project_root
-                .join(".aida")
-                .join("review-verdicts")
-                .join(format!("PR-{n}.json"));
+            let Some(head) = current_head.as_deref() else {
+                return false;
+            };
+            let paths = [
+                review_verdict::verdict_path(project_root, &format!("PR-{n}")),
+                review_verdict::verdict_path(project_root, spec),
+            ];
+            let bodies: Vec<String> = match paths
+                .iter()
+                .filter(|path| path.exists())
+                .map(std::fs::read_to_string)
+                .collect::<Result<Vec<String>, _>>()
+            {
+                Ok(bodies) if !bodies.is_empty() => bodies,
+                _ => return false,
+            };
             matches!(
-                read_verdict_file_for_head(&path, current_head.as_deref()),
-                Ok(auto_complete::ReviewerOutcome::Verdict(
-                    auto_complete::Verdict::Approved
-                ))
+                review_verdict::reconcile_artifacts_for_sha(
+                    bodies.iter().map(String::as_str),
+                    head
+                ),
+                Ok(Some(review_verdict::VerdictKind::Approved))
             )
         })
         .unwrap_or(false);

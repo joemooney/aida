@@ -50342,8 +50342,10 @@ fn integrate_wave_prs(
 
         // Review + mergeability, from the forge and the local verdict file —
         // either RequestChanges is a hard stop (never merge over a reviewer).
-        let (forge_request_changes, mergeable) = wave_pr_review_facts(project_root, pr.number);
-        let local_request_changes = local_verdict_blocks_merge(project_root, pr.number, &pr.spec);
+        let (forge_request_changes, mergeable, forge_head) =
+            wave_pr_review_facts(project_root, pr.number);
+        let local_request_changes =
+            local_verdict_blocks_merge(project_root, pr.number, &pr.spec, forge_head.as_deref());
 
         let action = burndown::wave_pr_action(&burndown::WavePrFacts {
             supervision_label,
@@ -50500,7 +50502,7 @@ mod bug_1163_supervision_fail_closed_tests {
 fn wave_pr_review_facts(
     project_root: &std::path::Path,
     pr_number: u64,
-) -> (bool, integrate::MergeableState) {
+) -> (bool, integrate::MergeableState, Option<String>) {
     let change_ref = forge::ChangeRef {
         id: pr_number,
         url: String::new(),
@@ -50520,8 +50522,9 @@ fn wave_pr_review_facts(
                 // safe in both directions.
                 integrate::MergeableState::Unknown
             },
+            (!status.head_sha.trim().is_empty()).then_some(status.head_sha),
         ),
-        Err(_) => (false, integrate::MergeableState::Unknown),
+        Err(_) => (false, integrate::MergeableState::Unknown, None),
     }
 }
 
@@ -50533,7 +50536,12 @@ fn wave_pr_review_facts(
 /// but an existing unreadable file is evidence whose meaning cannot be proven
 /// and therefore fails closed.
 // trace:TASK-1169 | ai:claude
-fn local_verdict_blocks_merge(project_root: &std::path::Path, pr_number: u64, spec: &str) -> bool {
+fn local_verdict_blocks_merge(
+    project_root: &std::path::Path,
+    pr_number: u64,
+    spec: &str,
+    current_sha: Option<&str>,
+) -> bool {
     let paths = [
         review_verdict::verdict_path(project_root, &format!("PR-{pr_number}")),
         review_verdict::verdict_path(project_root, spec),
@@ -50550,16 +50558,11 @@ fn local_verdict_blocks_merge(project_root: &std::path::Path, pr_number: u64, sp
         Ok(bodies) => bodies,
         Err(_) => return true,
     };
-    let Some(current_sha) = bodies.iter().find_map(|body| {
-        review_verdict::parse_recorded_verdict(body).and_then(|recorded| recorded.reviewed_sha)
-    }) else {
+    let Some(current_sha) = current_sha else {
         return true;
     };
     !matches!(
-        review_verdict::reconcile_artifacts_for_sha(
-            bodies.iter().map(String::as_str),
-            &current_sha
-        ),
+        review_verdict::reconcile_artifacts_for_sha(bodies.iter().map(String::as_str), current_sha),
         Ok(Some(review_verdict::VerdictKind::Approved))
     )
 }
@@ -50587,7 +50590,12 @@ mod bug_1581_merge_block_tests {
             }"#,
         )
         .unwrap();
-        assert!(local_verdict_blocks_merge(root.path(), 2066, "BUG-1581"));
+        assert!(local_verdict_blocks_merge(
+            root.path(),
+            2066,
+            "BUG-1581",
+            Some("ac772eaca9d389fa762a232156df996023bfdf7a")
+        ));
     }
 
     #[test]
@@ -50605,7 +50613,41 @@ mod bug_1581_merge_block_tests {
             r#"{"verdict":"RequestChanges","reviewed_sha":"ac772eaca9d389fa762a232156df996023bfdf7a","recorded_by":"reviewer-spec"}"#,
         )
         .unwrap();
-        assert!(local_verdict_blocks_merge(root.path(), 2090, "STORY-1448"));
+        assert!(local_verdict_blocks_merge(
+            root.path(),
+            2090,
+            "STORY-1448",
+            Some("ac772eaca9d389fa762a232156df996023bfdf7a")
+        ));
+    }
+
+    #[test]
+    fn wave_gate_uses_forge_head_not_stale_pr_artifact_head() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("PR-2090.json"),
+            r#"{"verdict":"Approved","reviewed_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","recorded_by":"reviewer-pr"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("STORY-1448.json"),
+            r#"{"verdict":"RequestChanges","reviewed_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","recorded_by":"reviewer-spec"}"#,
+        )
+        .unwrap();
+        assert!(local_verdict_blocks_merge(
+            root.path(),
+            2090,
+            "STORY-1448",
+            Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+        ));
+        assert!(local_verdict_blocks_merge(
+            root.path(),
+            2090,
+            "STORY-1448",
+            None
+        ));
     }
 }
 
@@ -50643,6 +50685,20 @@ fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> b
             pr.number,
             pr.spec,
             label,
+        );
+        return false;
+    }
+    // Re-probe the forge head and reconcile every local artifact at the
+    // irreversible boundary. The earlier wave classification is only a
+    // snapshot; evidence or the PR head may change before merge execution.
+    // trace:BUG-1581 | ai:codex
+    let (_, _, forge_head) = wave_pr_review_facts(project_root, pr.number);
+    if local_verdict_blocks_merge(project_root, pr.number, &pr.spec, forge_head.as_deref()) {
+        eprintln!(
+            "  {} refusing to auto-merge PR-{} ({}) — current-head review evidence is conflicting, blocking, or unprovable",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            pr.number,
+            pr.spec,
         );
         return false;
     }
