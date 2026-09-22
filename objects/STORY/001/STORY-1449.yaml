@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T09:57:54.571074789Z
-modified_at: 2026-09-22T10:07:56.650285974Z
+modified_at: 2026-09-22T10:23:36.339966349Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -35,3 +35,8 @@ comments:
   content: 'Cold independent review PR #2091 exact head 68a411415fb4d2126769a4e0de5ad658790169a4: CHANGES REQUIRED for BUG-1573. Typed persistence/event contract is present and tests pass, but the routed consumer does not receive the trip evidence: event matching reduces the event to its name and DueJob renders only static prompt/reason. The purported consumer test proves only due_since, not advisor-visible trip_id/evidence. PR comment records precise lines/remediation. Full lib suite: 5352 passed, 1 ignored; CI pending. Formal GitHub request-changes unavailable because this account owns the PR.'
   created_at: 2026-09-22T10:07:56.650285974Z
   modified_at: 2026-09-22T10:07:56.650285974Z
+- id: 01a0c8a4-7593-7e93-8bcc-463270381c5a
+  author: joe
+  content: 'Cold rereview verdict at exact PR head 6ae06bbb5c59d67efdbd5cefd6bc9853136403a6: APPROVE on code/acceptance, merge only after exact-head required CI is green. Verified typed allow-listed performance audits (budget, over-budget count, denominator, millipercent proportion/tolerance, window, worst, excluded count, lineage scope) flow from doctor JSON into an immutable producer failure trip, correlated CronJobFailed event, routed seat ledger due_failure, DueJob JSON, and the shared DueJob renderer used by advisor schedule output, pickup prompt, launch context, and awaiting notice. The end-to-end consumer test asserts the rendered artifact contains the matching trip id and decision-relevant metrics. schedule done clears due_failure; failure history and per-trip audit lists are each capped at 20; legacy ledgers/events deserialize via defaults; malformed stdout stores only an audit error and does not leak payload. Producer/event/route ledger correlation is by exact trip_id. Local verification: git diff --check and cargo fmt --check clean; performance_ tests 11/11 pass; failure-history bound, legacy ledger round-trip, and legacy CronJobFailed compatibility tests pass. At review time merge-hold-gate passed; Ubuntu/macOS/Windows builds remained pending.'
+  created_at: 2026-09-22T10:23:36.339966349Z
+  modified_at: 2026-09-22T10:23:36.339966349Z
