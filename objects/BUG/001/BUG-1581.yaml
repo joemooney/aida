@@ -58,7 +58,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:59:21.615803647Z
-modified_at: 2026-09-22T10:06:55.386538343Z
+modified_at: 2026-09-22T10:19:53.207704192Z
 req_type: Bug
 tags:
 - review-verdicts orchestrator integrity
@@ -199,6 +199,11 @@ comments:
   content: 'Round-2 rework for PR #2090: merge/integrate gates now reconcile both PR-keyed and linked spec-keyed artifacts against the current PR head, independent of recording order. Same-SHA opposite reviewers park visibly; stale opposition is ignored. Shared reading now rejects malformed or unattributed retained rounds so a top-level approval cannot hide unprovable additive evidence. Added actual probe/classifier and merge-chokepoint regressions.'
   created_at: 2026-09-22T10:06:55.386538343Z
   modified_at: 2026-09-22T10:06:55.386538343Z
+- id: 01a0c8a1-0df7-7682-9058-9367951ceeb7
+  author: joe
+  content: 'Round-3 rework: drain resume now gets the current head from forge change_status and reconciles PR-keyed plus spec-keyed evidence before setting reviewed. Wave integration passes that same forge head into reconciliation, fails closed when unavailable, and merge_wave_pr repeats the probe/reconciliation at the irreversible merge boundary. Added resume regression for same-head spec opposition and wave gate regression for stale PR approval/current spec refusal.'
+  created_at: 2026-09-22T10:19:53.207704192Z
+  modified_at: 2026-09-22T10:19:53.207704192Z
 implementation_info:
   implemented: true
   implemented_at: 2026-09-22T09:25:00.454373899Z
