@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-22T06:58:06.902015371Z
+modified_at: 2026-09-22T07:11:11.948526196Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -669,6 +669,11 @@ comments:
   content: 'Second cold-review rework pushed to PR #2073 at exact head 4091a71871. Closed remaining generated-text equality surfaces in scaffold apply no-op detection, generated documentation projections, deployed Codex prompt drift, lifecycle Mermaid pinning, and three marker-merge no-op paths in init/user instruction installation. Exact identifiers, set comparisons, trace transforms, and semantic JSON comparisons remain intentionally outside text normalization. Added focused CRLF-versus-real-drift coverage for scaffold, docs, Codex prompts, and lifecycle. Targeted tests, cargo check, fmt, and diff-check pass; fresh exact-head cross-platform run dispatched.'
   created_at: 2026-09-22T06:58:06.902015371Z
   modified_at: 2026-09-22T06:58:06.902015371Z
+- id: 01a0c7f4-4e4c-7f80-9194-b94cd1ea2752
+  author: joe
+  content: 'Third cold-review rework pushed to PR #2073 at exact head 0b5a4d61f5. Starter-memory refresh/drift now use symmetric generated-text comparison. User-instruction region equality normalizes both sides and checksum classification hashes the LF-normalized body, preventing an untouched CRLF block from being classified kept_edited. AGENTS refresh now uses the shared contract instead of ad-hoc CRLF replacement. New tests convert the full memory pack to CRLF and exercise user-block equality plus checksum classification. A repository-wide machine-assisted audit scanned file reads against equality, trim, bytes, hashes/checksums, and ad-hoc newline normalization; remaining matches are identifiers, sets, parser tokens, semantic JSON, intentional transforms, or tests rather than generated-text verdicts. Focused tests, cargo check, fmt, and diff-check pass; fresh exact-head cross-platform run dispatched.'
+  created_at: 2026-09-22T07:11:11.948526196Z
+  modified_at: 2026-09-22T07:11:11.948526196Z
 history:
 - id: 01a0c528-482c-7ed0-85a1-8d70052bfedf
   author: aida-auto-bump
