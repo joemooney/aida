@@ -23,12 +23,12 @@ description: |
   4. The derived numbers that change behaviour: cost per MERGED spec, and cost of the rework tail as a share of total — the figure that tells us whether the review round-trip or the implementation is the expensive part.
 
   Non-goals: per-request billing reconciliation with a vendor invoice; real-time budget enforcement (a later epic if the numbers justify it).
-status: Draft
-priority: Medium
+status: InProgress
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:38:35.944935297Z
-modified_at: 2026-09-19T21:33:01.900882087Z
+modified_at: 2026-09-22T14:04:08.230141549Z
 req_type: Epic
 tags:
 - cost
