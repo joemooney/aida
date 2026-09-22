@@ -53,12 +53,12 @@ description: |-
   Filed by the driver-advisor seat from a live instance on PR #2066. Related: BUG-1539 (clobber),
   BUG-1571 (missing handshake), BUG-1466 (verdict provenance). The three together say the verdict
   substrate cannot currently answer "who reviewed this commit, and did they agree".
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:59:21.615803647Z
-modified_at: 2026-09-21T23:07:55.052558692Z
+modified_at: 2026-09-22T09:06:29.021188013Z
 req_type: Bug
 tags:
 - review-verdicts orchestrator integrity
