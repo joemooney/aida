@@ -1,0 +1,35 @@
+id: 01a0c9a5-82b8-7811-9011-8bad8aa8728d
+spec_id: TASK-1432
+agreed_id: TASK-1432
+title: Add fault-injection test suite and structured telemetry for evaluator resilience
+description: |-
+  CONTEXT:
+  Under ADR-56, the evaluator resilience layer must be verified through automated fault-injection test cases rather than relying on happy-path assertions.
+
+  REQUIREMENTS:
+  - Implement mock fault-injection harness in aida-cli-lib.
+  - Verify failure scenarios:
+    1. Timeout exceeding operation deadline (aborts cleanly within budget).
+    2. Transport connection reset (retries transiently with backoff).
+    3. DNS resolution failure (retries transiently; trips breaker on exhaustion).
+    4. HTTP 429 / 502 / 503 / 504 (classified as transient; retries within budget).
+    5. HTTP 400 / 401 / 403 (classified as permanent; fails closed immediately without retry).
+    6. Malformed JSON payload (fails closed immediately).
+    7. Async cancellation (drops in-flight requests cleanly).
+    8. Stale reviewed SHA advancement (invalidates cache per PRIN-6).
+    9. Missing API credentials (falls back to local offline mock without network calls).
+    10. Idempotency key preservation (prevents duplicate charge on retry).
+  - Verify structured telemetry events emitted to .aida/telemetry/.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T15:04:22.456365222Z
+modified_at: 2026-09-22T15:04:22.456365222Z
+req_type: Task
+tags:
+- adr-56
+- evaluator
+- observability
+- resilience
+- testing
