@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:10:07.727932558Z
-modified_at: 2026-09-22T11:34:43.401203533Z
+modified_at: 2026-09-22T11:57:00.373321507Z
 req_type: Story
 tags:
 - agent-collaboration
@@ -56,3 +56,8 @@ comments:
   content: '[aida:independent-review] REQUEST_CHANGES at exact PR #2080 head dffd8aa634ac599705df1bcca0321923a60d0e49. Exact-head binary run against the current store reports VIS-1/CR-6 but fails to emit the required EPIC-63 Followups instance. Additionally, a configured evaluator can erase any mechanical candidate by returning compatible, contrary to the Slice-1-first/report-candidates design and especially unsafe because the checked-in live benchmark missed VIS-1/CR-6. Preserve mechanical candidates independently of heuristic enrichment, correct real EPIC-63 child correlation, and add a current-store regression. Focused tests 5/5 passed but do not cover the real failing instance.'
   created_at: 2026-09-22T11:34:43.401203533Z
   modified_at: 2026-09-22T11:34:43.401203533Z
+- id: 01a0c8f9-f855-74d0-9e21-0e37f15c50d0
+  author: joe
+  content: 'Cold rereview PR-2080 exact head 2268be32ee886243068c59026553b57a1bacb6b6: REQUEST_CHANGES. Prior blockers are fixed: built CLI/current canonical store detects VIS-1 versus CR-6 and EPIC-63 Followups, and compatible or unavailable evaluators retain mechanical candidates. New blocking live-corpus evidence: the sweep emits 182 findings (109 plan Followups, 68 ADR overlaps, 5 approved-reference) with no cap, grouping, pagination, or selective-enough join. This fails the explicit bounded/actionable acceptance criterion that a reader can work the whole list rather than sample it. Tighten or bound deterministically while preserving both named fixtures.'
+  created_at: 2026-09-22T11:57:00.373321507Z
+  modified_at: 2026-09-22T11:57:00.373321507Z
