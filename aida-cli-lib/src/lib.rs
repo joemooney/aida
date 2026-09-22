@@ -68920,9 +68920,17 @@ fn collect_awaiting_report_inner(
         .collect();
 
     // Escalations need the full summary list; findings need a draft-only view.
-    let summaries = backend
-        .list_summaries(&aida_core::ListFilter::default())
-        .unwrap_or_default();
+    // BUG-1569: the notice backend intentionally opens an unrefreshed cache
+    // snapshot. Calling CachedGitBackend::list_summaries here would freshness-
+    // check and potentially full-rebuild before the targeted protocol lookup.
+    let summaries = if notice_fast {
+        backend
+            .cache()
+            .list_summaries(&aida_core::ListFilter::default())
+    } else {
+        backend.list_summaries(&aida_core::ListFilter::default())
+    }
+    .unwrap_or_default();
     // BUG-472: the findings breadcrumb must mirror `aida findings list` — DRAFT
     // specs carrying a from-* tag only. Building it from the unfiltered
     // `summaries` also counts completed/rejected specs that still carry their
@@ -68930,12 +68938,16 @@ fn collect_awaiting_report_inner(
     // said "35" while `aida findings list` showed 0). Filter to draft like
     // print_status_findings_section does. trace:BUG-472 | ai:claude
     let findings_total = {
-        let draft = backend
-            .list_summaries(&aida_core::ListFilter {
-                status: Some("draft".to_string()),
-                ..Default::default()
-            })
-            .unwrap_or_default();
+        let filter = aida_core::ListFilter {
+            status: Some("draft".to_string()),
+            ..Default::default()
+        };
+        let draft = if notice_fast {
+            backend.cache().list_summaries(&filter)
+        } else {
+            backend.list_summaries(&filter)
+        }
+        .unwrap_or_default();
         findings::count_findings(&findings::build_findings_view(
             &draft,
             &findings::FindingsFilter::default(),

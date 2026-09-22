@@ -783,7 +783,17 @@ pub(crate) fn handle_git_backend_command(
     if notice_fast_fail {
         aida_core::db::set_fast_fail_cache(true);
     }
-    let backend = match aida_core::CachedGitBackend::with_inner(inner, &cache_path) {
+    let backend_result = if notice_fast_fail {
+        // BUG-1569: even a non-contended normal open may refresh a stale cache
+        // by scanning every canonical object before dispatch reaches the
+        // targeted notice lookup. The advisory path instead consumes the last
+        // committed snapshot and validates cache-located records with targeted
+        // authoritative reads.
+        aida_core::CachedGitBackend::with_inner_cache_snapshot(inner, &cache_path)
+    } else {
+        aida_core::CachedGitBackend::with_inner(inner, &cache_path)
+    };
+    let backend = match backend_result {
         Ok(backend) => backend,
         Err(_) if notice_fast_fail => {
             // Cache momentarily locked — the advisory notice degrades to empty.
@@ -794,7 +804,7 @@ pub(crate) fn handle_git_backend_command(
     if let Some(project_root) = store_path.parent() {
         warn_if_periodic_auto_push(project_root);
     }
-    if !matches!(command, Command::Report { recheck: true, .. }) {
+    if !notice_fast_fail && !matches!(command, Command::Report { recheck: true, .. }) {
         let storage = Storage::new(store_path);
         report_cmd::maybe_print_upstream_recheck_notice(&storage);
     }

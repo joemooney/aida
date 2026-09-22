@@ -105,12 +105,17 @@ pub(crate) fn targeted_notice_line_for_scope(
         tags: vec![protocol_tag.clone()],
         ..ListFilter::default()
     };
-    let Some(summary) = backend
+    let summary = backend
         .cache()
         .list_summaries(&filter)?
         .into_iter()
-        .find(|candidate| candidate.req_type.eq_ignore_ascii_case("meta"))
-    else {
+        .find(|candidate| candidate.req_type.eq_ignore_ascii_case("meta"));
+    let Some(summary) = summary else {
+        if backend.cache_snapshot_is_stale()? {
+            anyhow::bail!(
+                "stale cache snapshot has no {protocol_tag} record; refusing to claim no protocol"
+            );
+        }
         return Ok(None);
     };
     let Some(protocol) = backend.get_requirement(&summary.id)? else {
