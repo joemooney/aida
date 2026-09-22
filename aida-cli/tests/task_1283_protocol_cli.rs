@@ -5,6 +5,7 @@
 //! store discovery, lease discovery, and user-visible output are all covered.
 // trace:TASK-1283 | ai:codex
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -29,6 +30,9 @@ fn aida(repo: &Path, home: &Path) -> Command {
     cmd.current_dir(repo)
         .env("HOME", home)
         .env("AIDA_TELEMETRY", "0")
+        // These assertions exercise the human protocol notice. Pin the format
+        // so CI's non-TTY auto-selection cannot silently switch them to TOON.
+        .env("AIDA_OUTPUT_FORMAT", "human")
         .env("NO_COLOR", "1")
         .env_remove("AIDA_HEADLESS")
         .env_remove("AIDA_SESSION_ID")
@@ -247,10 +251,31 @@ fn awaiting_notice_tracks_real_lease_through_session_end() {
         })
         .unwrap_or_else(|| panic!("no session id export in:\n{shell}"));
 
+    // `worktree enter` is itself a short-lived child process. In a Docker
+    // executor its creator PID cannot be resolved back through the runner's
+    // process tree, so explicitly attach the still-live test harness to the
+    // real lease before exercising notice and session-end behavior.
+    let lease_path = p
+        .repo
+        .join(".aida/sessions")
+        .join(format!("{session_id}.toml"));
+    let mut lease = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&lease_path)
+        .unwrap_or_else(|e| panic!("open lease {}: {e}", lease_path.display()));
+    writeln!(lease, "active_pid = {}", std::process::id()).unwrap();
+
     let held = run(
         {
             let mut cmd = aida(&worktree, &p.home);
             cmd.env("AIDA_SESSION_ID", session_id)
+                // This is the one call in this file that needs to observe a
+                // real `backend.load()` finish rather than race the
+                // production 1s fail-open bound (BUG-1239) — see
+                // `notice_deadline` (aida-cli-lib/src/lib.rs, TASK-1274) for
+                // why that bound must stay short for every other caller,
+                // `awaiting_notice_does_not_read_an_open_stdin_pipe` included.
+                .env("AIDA_TEST_NOTICE_DEADLINE_MS", "10000")
                 .args(["awaiting", "--notice"]);
             cmd
         },
