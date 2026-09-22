@@ -4474,16 +4474,16 @@ pub enum CommentCommand {
         content: Option<String>,
 
         /// Comment content (positional argument)
-        #[clap(name = "CONTENT")]
+        #[clap(value_name = "CONTENT")]
         content_positional: Option<String>,
 
         /// Read comment content from a file. Prefer this for text containing
         /// backticks or `$()` so the shell cannot perform command substitution.
-        #[clap(long, value_name = "PATH", conflicts_with_all = ["content", "stdin"])]
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["content", "content_positional", "stdin"])]
         body_file: Option<PathBuf>,
 
         /// Read comment content from stdin.
-        #[clap(long, conflicts_with_all = ["content", "body_file"])]
+        #[clap(long, conflicts_with_all = ["content", "content_positional", "body_file"])]
         stdin: bool,
 
         /// Author of the comment (defaults to AIDA_AUTHOR env var or system user)
@@ -4544,6 +4544,55 @@ pub enum CommentCommand {
         #[clap(long)]
         comment_id: String,
     },
+}
+
+#[cfg(test)]
+mod task_190_comment_source_parser_tests {
+    use super::Cli;
+    use clap::Parser;
+
+    #[test]
+    fn positional_comment_conflicts_with_body_file_and_stdin() {
+        assert!(Cli::try_parse_from([
+            "aida",
+            "comment",
+            "add",
+            "TASK-1",
+            "positional",
+            "--body-file",
+            "body.md",
+        ])
+        .is_err());
+        assert!(Cli::try_parse_from(
+            ["aida", "comment", "add", "TASK-1", "positional", "--stdin",]
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn hidden_content_conflicts_with_body_file_and_stdin() {
+        assert!(Cli::try_parse_from([
+            "aida",
+            "comment",
+            "add",
+            "TASK-1",
+            "--content",
+            "legacy",
+            "--body-file",
+            "body.md",
+        ])
+        .is_err());
+        assert!(Cli::try_parse_from([
+            "aida",
+            "comment",
+            "add",
+            "TASK-1",
+            "--content",
+            "legacy",
+            "--stdin",
+        ])
+        .is_err());
+    }
 }
 
 /// GitLab integration commands

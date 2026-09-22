@@ -76,15 +76,27 @@ fn resolve_body(
     body_file: Option<&std::path::Path>,
     stdin: bool,
 ) -> Result<Option<String>> {
+    resolve_body_with_reader(content, body_file, stdin, &mut std::io::stdin())
+}
+
+fn resolve_body_with_reader(
+    content: Option<String>,
+    body_file: Option<&std::path::Path>,
+    stdin: bool,
+    reader: &mut impl std::io::Read,
+) -> Result<Option<String>> {
     if let Some(path) = body_file {
-        return std::fs::read_to_string(path)
-            .with_context(|| format!("failed to read comment body from {}", path.display()))
-            .map(Some);
+        let body = std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read comment body from {}", path.display()))?;
+        anyhow::ensure!(!body.trim().is_empty(), "comment body file is empty");
+        return Ok(Some(body));
     }
     if stdin {
         let mut body = String::new();
-        std::io::Read::read_to_string(&mut std::io::stdin(), &mut body)
+        reader
+            .read_to_string(&mut body)
             .context("failed to read comment body from stdin")?;
+        anyhow::ensure!(!body.trim().is_empty(), "comment body from stdin is empty");
         return Ok(Some(body));
     }
     Ok(content)
@@ -92,7 +104,7 @@ fn resolve_body(
 
 #[cfg(test)]
 mod task_190_tests {
-    use super::resolve_body;
+    use super::{resolve_body, resolve_body_with_reader};
 
     #[test]
     fn body_file_preserves_shell_metacharacters_literally() {
@@ -103,6 +115,26 @@ mod task_190_tests {
             resolve_body(None, Some(&path), false).unwrap().unwrap(),
             "keep `date` and $(pwd) literal\n"
         );
+    }
+
+    #[test]
+    fn empty_body_file_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty.md");
+        std::fs::write(&path, " \n").unwrap();
+        assert!(resolve_body(None, Some(&path), false)
+            .unwrap_err()
+            .to_string()
+            .contains("empty"));
+    }
+
+    #[test]
+    fn empty_stdin_is_rejected() {
+        let mut input = std::io::Cursor::new(Vec::<u8>::new());
+        assert!(resolve_body_with_reader(None, None, true, &mut input)
+            .unwrap_err()
+            .to_string()
+            .contains("empty"));
     }
 }
 

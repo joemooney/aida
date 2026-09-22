@@ -17,13 +17,16 @@ fn resolve_comment_body(
     stdin: bool,
 ) -> Result<String> {
     if let Some(path) = body_file {
-        return std::fs::read_to_string(path)
-            .with_context(|| format!("failed to read comment body from {}", path.display()));
+        let body = std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read comment body from {}", path.display()))?;
+        anyhow::ensure!(!body.trim().is_empty(), "comment body file is empty");
+        return Ok(body);
     }
     if stdin {
         let mut body = String::new();
         std::io::Read::read_to_string(&mut std::io::stdin(), &mut body)
             .context("failed to read comment body from stdin")?;
+        anyhow::ensure!(!body.trim().is_empty(), "comment body from stdin is empty");
         return Ok(body);
     }
     Ok(content.unwrap_or_default())
