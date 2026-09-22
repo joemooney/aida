@@ -175,7 +175,7 @@ pub fn write_object_if_changed(objects_root: &Path, req: &Requirement) -> Result
     // spuriously rewrite an unchanged file. trace:TASK-346 | ai:claude
     if path.exists() {
         if let Ok(existing) = crate::read_atomic(&path) {
-            if existing == yaml {
+            if crate::scaffolding::generated_text_matches(&existing, &yaml) {
                 return Ok(false);
             }
         }
@@ -532,6 +532,24 @@ mod tests {
         write_object(&objects_root, &assigned).unwrap();
         let loaded = read_object(&objects_root, "TASK-701").unwrap();
         assert_eq!(loaded.assignee.as_deref(), Some("alice"));
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn unchanged_object_ignores_checkout_newlines_but_not_real_edits() {
+        // Generated YAML is text; Windows checkout conversion must not create
+        // a synthetic object-store write. trace:BUG-1555 | ai:codex
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+        let mut req = Requirement::new("Stable".into(), "body".into());
+        req.spec_id = Some("TASK-1555".into());
+        let path = write_object(&objects_root, &req).unwrap();
+        let lf = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, lf.replace('\n', "\r\n")).unwrap();
+
+        assert!(!write_object_if_changed(&objects_root, &req).unwrap());
+        req.title = "Actually changed".into();
+        assert!(write_object_if_changed(&objects_root, &req).unwrap());
     }
 
     /// SPIKE-46 conformance gate: AIDA's on-disk YAML format must stay stable,
