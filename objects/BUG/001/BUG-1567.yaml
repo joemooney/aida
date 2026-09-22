@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:56:20.778714126Z
-modified_at: 2026-09-22T09:46:51.313292493Z
+modified_at: 2026-09-22T10:05:57.663418562Z
 req_type: Bug
 tags:
 - aida:tests
@@ -125,3 +125,8 @@ comments:
   created_at: 2026-09-21T21:46:43.966497126Z
   modified_at: 2026-09-21T21:46:43.966497126Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c894-4e1f-7b22-a919-b8f5377febd9
+  author: joe
+  content: '[aida:implementer] Root cause: the lifecycle/content regression injected a 500ms watchdog deadline, so under scheduler/filesystem contention the watchdog could exit 0 after printing only the timing line. BUG-1569 removed the full-store scan but did not make a finite wall-clock assertion deterministic. Fix: define the existing test-only deadline override value 0 as watchdog-disabled and use it only in the lease lifecycle test, so that test synchronizes on subprocess completion. The dedicated open-stdin test retains coverage of the production watchdog contract; production remains 750ms. Red-first: value 0 previously reproduced the missing protocol line deterministically. Verification: 20/20 separate targeted cargo-test invocations passed while four busy-loop workers saturated a 6-core host; full task_1283_protocol_cli suite 4/4; cargo fmt --check and git diff --check pass.'
+  created_at: 2026-09-22T10:05:57.663418562Z
+  modified_at: 2026-09-22T10:05:57.663418562Z
