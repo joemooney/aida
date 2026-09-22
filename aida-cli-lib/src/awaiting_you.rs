@@ -29,6 +29,10 @@ pub(crate) struct AwaitingReport {
     /// aida-chat motivating case: 5 PRs sat open for hours because the
     /// system was waiting on the human's merge button and nothing said so.
     pub mergeable_prs: Vec<MergeablePrItem>,
+    /// Typed recusal holds, projected for the current principal. They never
+    /// masquerade as ordinary ready-to-merge rows.
+    // trace:STORY-1397 | ai:codex
+    pub recusal_holds: Vec<RecusalHoldItem>,
     /// Open PRs whose CI is failing and which have no verdict, merge hold,
     /// reviewer route, or live branch owner. These are repair work, not review
     /// work, so the green-only orphan sweep deliberately does not claim them.
@@ -461,6 +465,74 @@ pub(crate) struct PendingBriefItem {
     pub path: std::path::PathBuf,
 }
 
+// trace:STORY-1397 | ai:codex
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct RecusalHoldItem {
+    pub pr: u64,
+    pub head_sha: Option<String>,
+    pub recused_principals: Vec<String>,
+    pub routed_to: Vec<String>,
+    pub state: String,
+    pub relationship: String,
+    pub action: String,
+}
+
+impl RecusalHoldItem {
+    pub(crate) fn is_actionable_for_current_principal(&self) -> bool {
+        self.relationship != "recused" && self.relationship != "other-reader"
+    }
+}
+
+/// Seat-aware projection. Exact stable principal equality is deliberately used:
+/// sharing a role or vendor does not make two agents the same reviewer.
+// trace:STORY-1397 | ai:codex
+pub(crate) fn project_recusal_hold(
+    record: &crate::merge_hold::MergeHoldRecord,
+    current_principal: &str,
+) -> Option<RecusalHoldItem> {
+    if record.reason_kind != crate::merge_hold::HoldReasonKind::Recusal {
+        return None;
+    }
+    let me = crate::merge_hold::PrincipalIdentity::parse(current_principal);
+    let verified = me.identity_status == crate::merge_hold::IdentityStatus::Verified;
+    let recused = verified && crate::merge_hold::principal_is_recused(record, &me);
+    let routed = verified && record.routed_to.iter().any(|p| p == &me);
+    let (relationship, action) = if recused {
+        (
+            "recused".to_string(),
+            "await another independent reader; you cannot review, clear, or merge this hold"
+                .to_string(),
+        )
+    } else if routed {
+        (
+            "routed-reader".to_string(),
+            format!("independently review PR-{} at exact head", record.pr),
+        )
+    } else if record.routing_state == crate::merge_hold::HoldRoutingState::NoIndependentReader {
+        (
+            "operator-attention".to_string(),
+            format!(
+                "no independent reader is recorded; if independent, review PR-{} at exact head, otherwise start or assign one",
+                record.pr
+            ),
+        )
+    } else {
+        (
+            "other-reader".to_string(),
+            "await the routed independent reader".to_string(),
+        )
+    };
+    Some(RecusalHoldItem {
+        pr: record.pr,
+        head_sha: record.target_head_sha.clone(),
+        recused_principals: record.recused_principals.iter().map(|p| p.key()).collect(),
+        routed_to: record.routed_to.iter().map(|p| p.key()).collect(),
+        state: record.routing_state.as_str().to_string(),
+        relationship,
+        action,
+    })
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ReviewerQueueItem {
     pub spec_id: String,
@@ -499,6 +571,11 @@ impl AwaitingReport {
     /// the section header and the empty-report short-circuit.
     pub fn total(&self) -> usize {
         self.mergeable_prs.len()
+            + self
+                .recusal_holds
+                .iter()
+                .filter(|h| h.is_actionable_for_current_principal())
+                .count()
             + self.unowned_failing_prs.len()
             + self.pending_briefs.len()
             + (if self.findings_total > 0 { 1 } else { 0 })
@@ -594,6 +671,20 @@ impl AwaitingReport {
                 pr.number.to_string().bold(),
                 pr.title,
                 ci,
+            )?;
+            budget -= 1;
+        }
+        for hold in &self.recusal_holds {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            writeln!(
+                w,
+                "  🛑 PR-{} recusal hold [{}] — {}",
+                hold.pr.to_string().bold(),
+                hold.relationship,
+                hold.action
             )?;
             budget -= 1;
         }
@@ -819,6 +910,7 @@ impl AwaitingReport {
                 "head_branch": p.head_branch,
                 "ci_rollup": p.ci_rollup,
             })).collect::<Vec<_>>(),
+            "recusal_holds": self.recusal_holds,
             "unowned_failing_prs": self.unowned_failing_prs.iter().map(|p| serde_json::json!({
                 "number": p.number,
                 "title": p.title,
@@ -891,6 +983,18 @@ impl AwaitingReport {
         let mut parts: Vec<String> = Vec::new();
         if !self.mergeable_prs.is_empty() {
             parts.push(pluralize(self.mergeable_prs.len(), "PR", "PRs"));
+        }
+        let actionable_recusals = self
+            .recusal_holds
+            .iter()
+            .filter(|h| h.is_actionable_for_current_principal())
+            .count();
+        if actionable_recusals > 0 {
+            parts.push(format!(
+                "{} recusal-hold{}",
+                actionable_recusals,
+                if actionable_recusals == 1 { "" } else { "s" }
+            ));
         }
         if !self.unowned_failing_prs.is_empty() {
             parts.push(format!("{} broken-unowned", self.unowned_failing_prs.len()));
@@ -1053,6 +1157,71 @@ mod tests {
             route: ReviewerRoute::Unrouted,
             actively_owned: false,
         }
+    }
+
+    fn recusal(state: crate::merge_hold::HoldRoutingState) -> crate::merge_hold::MergeHoldRecord {
+        crate::merge_hold::MergeHoldRecord {
+            schema_version: 2,
+            pr: 2023,
+            reason_kind: crate::merge_hold::HoldReasonKind::Recusal,
+            detail: "author recusal".into(),
+            recused_principals: vec!["agent:author".into()],
+            routed_to: vec!["agent:reader".into()],
+            routing_state: state,
+            target_head_sha: Some("abcdef0123456789".into()),
+            label_state: Some("synced".into()),
+            legacy: false,
+        }
+    }
+
+    // trace:STORY-1397 | ai:codex
+    #[test]
+    fn recusal_projection_never_offers_the_author_the_merge() {
+        let author = project_recusal_hold(
+            &recusal(crate::merge_hold::HoldRoutingState::Routed),
+            "agent:author",
+        )
+        .unwrap();
+        assert_eq!(author.relationship, "recused");
+        assert!(author.action.contains("cannot review, clear, or merge"));
+        let author_report = AwaitingReport {
+            recusal_holds: vec![author],
+            ..Default::default()
+        };
+        assert!(
+            author_report.is_empty(),
+            "recusal is not the author's action"
+        );
+
+        let reader = project_recusal_hold(
+            &recusal(crate::merge_hold::HoldRoutingState::Routed),
+            "agent:reader",
+        )
+        .unwrap();
+        assert_eq!(reader.relationship, "routed-reader");
+        assert!(reader.action.contains("exact head"));
+    }
+
+    #[test]
+    fn no_reader_is_an_explicit_operator_state_in_all_report_shapes() {
+        let mut record = recusal(crate::merge_hold::HoldRoutingState::NoIndependentReader);
+        record.routed_to.clear();
+        let item = project_recusal_hold(&record, "operator").unwrap();
+        assert_eq!(item.relationship, "operator-attention");
+        assert!(item.action.contains("no independent reader"));
+        let report = AwaitingReport {
+            recusal_holds: vec![item],
+            ..Default::default()
+        };
+        let mut rendered = Vec::new();
+        report.render(false, &mut rendered).unwrap();
+        let rendered = String::from_utf8(rendered).unwrap();
+        assert!(rendered.contains("no independent reader"));
+        assert_eq!(
+            report.to_json()["recusal_holds"][0]["state"],
+            "no-independent-reader"
+        );
+        assert!(report.compact_line().unwrap().contains("recusal-hold"));
     }
 
     // TASK-192: the historical PR-2035 shape is red and has no route at all.

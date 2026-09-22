@@ -114,6 +114,14 @@ pub(crate) fn you_channels(report: &awaiting_you::AwaitingReport) -> Vec<(usize,
     if prs > 0 {
         v.push((prs, label(prs, "PR", "PRs")));
     }
+    let recusals = report
+        .recusal_holds
+        .iter()
+        .filter(|h| h.is_actionable_for_current_principal())
+        .count();
+    if recusals > 0 {
+        v.push((recusals, label(recusals, "recusal", "recusals")));
+    }
     let broken = report.unowned_failing_prs.len();
     if broken > 0 {
         v.push((broken, "broken-unowned".to_string()));
@@ -388,6 +396,7 @@ mod tests {
                 head_branch: "b".into(),
                 ci_rollup: Some("pass".into()),
             }],
+            recusal_holds: Vec::new(),
             unowned_failing_prs: vec![crate::awaiting_you::UnownedFailingPrItem {
                 number: 8,
                 title: "broken".into(),

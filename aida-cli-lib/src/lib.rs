@@ -1539,8 +1539,9 @@ mod bug_1173_detection_hold_tests {
             .unwrap_or(src.len());
         let body = &src[start..end];
         assert!(
-            body.contains("merge_hold::write_hold"),
-            "set_pr_number must stamp the local merge-hold marker at PR-detection"
+            body.contains("merge_hold::write_typed_hold")
+                && body.contains("HoldReasonKind::Supervision"),
+            "set_pr_number must stamp a typed supervision marker at PR-detection"
         );
         assert!(
             body.contains("merge_hold::sync_label"),
@@ -30045,7 +30046,20 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         merge_hold::LabelState::Unsynced(e) => format!("unsynced: {e}"),
                         merge_hold::LabelState::Unknown => "unknown".to_string(),
                     };
-                    format!("{{\"pr\":{pr},\"reason\":{reason:?},\"stale\":{is_stale},\"label\":{label:?}}}")
+                    let record = merge_hold::read_hold_record(&root, pr);
+                    let kind = record
+                        .as_ref()
+                        .map(|r| format!("{:?}", r.reason_kind).to_ascii_lowercase())
+                        .unwrap_or_else(|| "unknown".into());
+                    let routing = record
+                        .as_ref()
+                        .map(|r| r.routing_state.as_str().to_string())
+                        .unwrap_or_else(|| "pending".into());
+                    let recused = record
+                        .as_ref()
+                        .map(|r| r.recused_principals.clone())
+                        .unwrap_or_default();
+                    format!("{{\"pr\":{pr},\"reason\":{reason:?},\"reason_kind\":{kind:?},\"routing_state\":{routing:?},\"recused_principals\":{},\"stale\":{is_stale},\"label\":{label:?}}}", serde_json::to_string(&recused).unwrap_or_else(|_| "[]".into()))
                 };
                 let mut items: Vec<String> = Vec::new();
                 for (pr, reason) in &live {
@@ -30084,14 +30098,57 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             Ok(())
         }
         // BUG-1236: the symmetric hand-hold — marker + label together.
-        crate::cli::MergeHoldAction::Add { pr, reason } => {
+        crate::cli::MergeHoldAction::Add {
+            pr,
+            reason,
+            reason_kind,
+            recused_principals,
+            routed_to,
+            head,
+        } => {
             let reason = reason
                 .as_deref()
                 .map(str::trim)
                 .filter(|r| !r.is_empty())
                 .unwrap_or("held by hand — merge requires human/advisor review")
                 .to_string();
-            merge_hold::write_hold(&root, *pr, &reason)?;
+            let kind = merge_hold::HoldReasonKind::parse(reason_kind).ok_or_else(|| {
+                anyhow::anyhow!("--reason-kind must be supervision, recusal, rework, or decision")
+            })?;
+            let recused_principals: Vec<merge_hold::PrincipalIdentity> = recused_principals
+                .iter()
+                .map(|p| merge_hold::PrincipalIdentity::parse(p))
+                .filter(|p| !p.principal_id.is_empty())
+                .collect();
+            let routed_to: Vec<merge_hold::PrincipalIdentity> = routed_to
+                .iter()
+                .map(|p| merge_hold::PrincipalIdentity::parse(p))
+                .filter(|p| !p.principal_id.is_empty())
+                .collect();
+            let routing_state = if kind == merge_hold::HoldReasonKind::Recusal {
+                if routed_to.is_empty() {
+                    merge_hold::HoldRoutingState::NoIndependentReader
+                } else {
+                    merge_hold::HoldRoutingState::Routed
+                }
+            } else {
+                merge_hold::HoldRoutingState::Pending
+            };
+            merge_hold::write_typed_hold(
+                &root,
+                &merge_hold::MergeHoldRecord {
+                    schema_version: 2,
+                    pr: *pr,
+                    reason_kind: kind,
+                    detail: reason,
+                    recused_principals,
+                    routed_to,
+                    routing_state,
+                    target_head_sha: head.clone(),
+                    label_state: None,
+                    legacy: false,
+                },
+            )?;
             match merge_hold::sync_label(&root, *pr, true) {
                 Ok(()) => println!(
                     "Merge-hold placed on PR #{pr} (marker written, `aida:merge-hold` label applied). Release with `aida merge-hold clear {pr}`."
@@ -30124,6 +30181,51 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     );
                 }
                 (Some(pr), false) => {
+                    if let Some(record) = merge_hold::read_hold_record(&root, *pr) {
+                        let principal = merge_hold::current_principal();
+                        if principal
+                            .as_ref()
+                            .is_some_and(|p| merge_hold::principal_is_recused(&record, p))
+                        {
+                            anyhow::bail!(
+                                "the registered acting principal is recused from PR-{pr}; only an independent reader/merger may clear this hold"
+                            );
+                        }
+                        if record.reason_kind == merge_hold::HoldReasonKind::Recusal {
+                            let principal = principal.ok_or_else(|| anyhow::anyhow!(
+                                "PR-{pr} recusal hold cannot be cleared without a verified registered-agent identity"
+                            ))?;
+                            let verdict = review_verdict::read_recorded_verdict(
+                                &root,
+                                &format!("PR-{pr}"),
+                            )
+                            .ok_or_else(|| anyhow::anyhow!(
+                                "PR-{pr} recusal hold requires a durable independent approval at its exact head before clearing"
+                            ))?;
+                            let expected = record.target_head_sha.as_deref().unwrap_or("");
+                            let live_head = pr_cmd::fetch_change_info_via_resolved_forge(
+                                &root,
+                                *pr,
+                                crate::forge::resolve_open_change_forge_kind(&root),
+                            )?
+                            .head_oid;
+                            let reviewed = verdict.reviewed_sha.as_deref().unwrap_or("");
+                            let reviewer = verdict.recorded_by.as_deref().unwrap_or("");
+                            let reviewer = merge_hold::PrincipalIdentity::parse(reviewer);
+                            if !merge_hold::recusal_clear_evidence_valid(
+                                &record,
+                                Some(&principal),
+                                verdict.kind == review_verdict::VerdictKind::Approved,
+                                reviewed,
+                                &reviewer,
+                                &live_head,
+                            ) {
+                                anyhow::bail!(
+                                    "PR-{pr} recusal hold requires APPROVED at current exact head {expected} by a verified non-recused reviewer"
+                                );
+                            }
+                        }
+                    }
                     let existed = merge_hold::read_hold(&root, *pr).is_some();
                     merge_hold::clear_hold(&root, *pr)?;
                     if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
@@ -50880,7 +50982,15 @@ fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> b
         // merger (an integrate sweep, another agent session, a stale-binary
         // drain) also refuses at the merge_change chokepoint — not just this
         // in-process guard, which was the BUG-1167 gap. trace:BUG-1167 | ai:claude
-        let _ = crate::merge_hold::write_hold(project_root, pr.number, &label);
+        let _ = crate::merge_hold::write_typed_hold(
+            project_root,
+            &crate::merge_hold::typed_hold(
+                pr.number,
+                crate::merge_hold::HoldReasonKind::Supervision,
+                &label,
+                None,
+            ),
+        );
         // trace:BUG-1236 | ai:claude
         if let Err(err) = crate::merge_hold::sync_label(project_root, pr.number, true) {
             eprintln!(
@@ -69617,13 +69727,47 @@ fn collect_awaiting_report_inner(
     };
     // Mergeable PRs — reuse the same `gh pr list` snapshot that the cleanup
     // report consumes, then filter via the awaiting-you classifier.
-    let mergeable_prs = if no_ci {
-        Vec::new()
-    } else {
-        let snapshot = collect_open_prs(project_root);
-        let prs: Vec<_> = snapshot.by_branch.into_values().collect();
-        awaiting_you::classify_open_prs(&prs)
-    };
+    let held_prs: std::collections::HashSet<u64> = merge_hold::list_holds(project_root)
+        .into_iter()
+        .map(|(pr, _)| pr)
+        .collect();
+    let open_pr_snapshot = (!no_ci).then(|| collect_open_prs(project_root));
+    let live_pr_heads: std::collections::HashMap<u64, String> = open_pr_snapshot
+        .as_ref()
+        .into_iter()
+        .flat_map(|snapshot| snapshot.by_branch.values())
+        .filter_map(|pr| pr.head_sha.as_ref().map(|sha| (pr.number, sha.clone())))
+        .collect();
+    let mergeable_prs = open_pr_snapshot
+        .map(|snapshot| {
+            let prs: Vec<_> = snapshot
+                .by_branch
+                .into_values()
+                .filter(|pr| !held_prs.contains(&pr.number))
+                .collect();
+            awaiting_you::classify_open_prs(&prs)
+        })
+        .unwrap_or_default();
+
+    // STORY-1397: typed recusal holds are local/offline coordination state, so
+    // they remain visible even on the fast notice path. A recused principal is
+    // explicitly told this is awaiting somebody else, never offered a merge.
+    let current_principal = std::env::var("AIDA_AGENT_ID")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .map(|id| format!("agent:{id}"))
+        .unwrap_or_default();
+    let recusal_holds = held_prs
+        .iter()
+        .filter_map(|pr| {
+            merge_hold::reconcile_recusal_hold(
+                project_root,
+                *pr,
+                live_pr_heads.get(pr).map(String::as_str),
+            )
+        })
+        .filter_map(|record| awaiting_you::project_recusal_hold(&record, &current_principal))
+        .collect();
 
     // Pending briefs — prefer narrowing to the running agent so we
     // don't spam the operator with hand-offs filed for a different
@@ -69885,6 +70029,7 @@ fn collect_awaiting_report_inner(
 
     awaiting_you::AwaitingReport {
         mergeable_prs,
+        recusal_holds,
         unowned_failing_prs,
         rework_ready,
         pending_briefs,
@@ -70125,6 +70270,28 @@ fn handle_awaiting_command(
         println!(
             "{}",
             crate::toon::table_raw("prs", &["number", "title", "ci"], &prs)
+        );
+        // trace:STORY-1397 | ai:codex
+        let recusal_holds: Vec<Vec<String>> = report
+            .recusal_holds
+            .iter()
+            .map(|h| {
+                vec![
+                    h.pr.to_string(),
+                    h.head_sha.clone().unwrap_or_else(|| "?".into()),
+                    h.state.clone(),
+                    h.relationship.clone(),
+                    h.action.clone(),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw(
+                "recusal_holds",
+                &["pr", "head", "state", "relationship", "action"],
+                &recusal_holds,
+            )
         );
         // trace:TASK-192 | ai:codex
         let broken_prs = awaiting_you::unowned_failing_pr_toon_rows(&report.unowned_failing_prs);
@@ -78293,8 +78460,16 @@ fn handle_review_record(
             .map(std::path::PathBuf::from)
             .filter(|p| p.is_dir())
             .unwrap_or_else(|| project_root.clone());
-        merge_hold::write_hold(&protection_root, n, &reason)
-            .with_context(|| format!("could not protect PR-{n} with a merge hold"))?;
+        merge_hold::write_typed_hold(
+            &protection_root,
+            &merge_hold::typed_hold(
+                n,
+                merge_hold::HoldReasonKind::Rework,
+                &reason,
+                resolved_sha.clone(),
+            ),
+        )
+        .with_context(|| format!("could not protect PR-{n} with a merge hold"))?;
         if let Err(err) = merge_hold::sync_label(&protection_root, n, true) {
             eprintln!(
                 "  {} merge-hold label not applied on PR-{n}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`",
@@ -78420,6 +78595,11 @@ fn handle_review_record(
 /// name is stable and distinguishable from the drain's own metadata writer.
 // trace:BUG-1467 | ai:codex
 fn review_recorded_by() -> String {
+    if let Ok(id) = std::env::var("AIDA_AGENT_ID") {
+        if !id.trim().is_empty() {
+            return format!("agent:{}", id.trim());
+        }
+    }
     review_recorded_by_from(
         std::env::var("AIDA_AGENT_NAME").ok().as_deref(),
         std::env::var("AIDA_AGENT_TYPE").ok().as_deref(),
@@ -88421,7 +88601,15 @@ impl RealPhaseDriver {
         self.pr_number = Some(pr);
         if let Some(reason) = auto_complete::PhaseDriver::merge_supervision_hold(self) {
             let pr = u64::from(pr);
-            let _ = crate::merge_hold::write_hold(&self.project_root, pr, &reason);
+            let _ = crate::merge_hold::write_typed_hold(
+                &self.project_root,
+                &crate::merge_hold::typed_hold(
+                    pr,
+                    crate::merge_hold::HoldReasonKind::Supervision,
+                    &reason,
+                    None,
+                ),
+            );
             // BUG-1173 deferred the LABEL to merge time because an early red
             // merge-hold-gate read as a CI failure. Since BUG-1180 / ADR-39 the
             // drain's CI watch and `aida pr ship` classify that red as THE HOLD
@@ -92317,7 +92505,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn record_merge_supervision_hold(&mut self, reason: &str) {
         if let Some(pr) = self.pr_number {
             let pr = u64::from(pr);
-            let _ = crate::merge_hold::write_hold(&self.project_root, pr, reason);
+            let _ = crate::merge_hold::write_typed_hold(
+                &self.project_root,
+                &crate::merge_hold::typed_hold(
+                    pr,
+                    crate::merge_hold::HoldReasonKind::Supervision,
+                    reason,
+                    None,
+                ),
+            );
             // trace:BUG-1236 | ai:claude
             if let Err(err) = crate::merge_hold::sync_label(&self.project_root, pr, true) {
                 eprintln!(
