@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T01:21:50.376418646Z
-modified_at: 2026-09-22T01:53:07.204997425Z
+modified_at: 2026-09-22T03:55:20.254647745Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -31,3 +31,8 @@ comments:
   content: 'Rework for reviewer RequestChanges: sibling mode incorrectly checked .aida/node.toml although standard sibling init writes .aida/config.toml. Changed the sibling already-initialized marker to config.toml and added a regression. Exact real-CLI sequence now passes: fresh init --sibling --store-path (rc 0), remove generated hook directory, rerun identical init (rc 0), 10 executable handlers restored, no populated-store refusal.'
   created_at: 2026-09-22T01:53:07.204997425Z
   modified_at: 2026-09-22T01:53:07.204997425Z
+- id: 01a0c740-fd3e-7340-aa67-3cb878725169
+  author: joe
+  content: '[aida:proxy-approval] verdict=approved; reasoning=cold review approved exact head f74cb63561dcfd8a05c42186dad54f3e109a988a and all BUG-1587 acceptance paths passed; independent=yes; gates=required Ubuntu CI green, merge-hold-gate green, macOS green, Windows failure isolated to unrelated BUG-1555 and BUG-1579; timestamp=2026-09-21T20:57:00-07:00; merger=codex-advisor.'
+  created_at: 2026-09-22T03:55:20.254647745Z
+  modified_at: 2026-09-22T03:55:20.254647745Z
