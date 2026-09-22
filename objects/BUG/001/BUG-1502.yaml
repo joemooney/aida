@@ -43,7 +43,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:09:49.662292511Z
-modified_at: 2026-09-22T14:27:35.045079991Z
+modified_at: 2026-09-22T14:32:02.678881094Z
 req_type: Bug
 tags:
 - aida:show cli-conformance agent-surface drain-safe from:session-0920
@@ -86,3 +86,8 @@ comments:
   content: PASS — independent cold final review at exact head 891e4921673bf24c86e32ccdd671e46afc1f5f58. Focused audit 5/5, BUG-1289 conformance 7/7, fail-closed regression 1/1. Verified full human-field parity including routed queue role/position, exact description bytes, linkage/no-git, actual fasttrack JSON dispatch and --json equivalence, Decision Approved -> JSON status Accepted with stored_status Approved, and regenerated 581-row audit (9 honoured / 470 not honoured / 102 could not verify). Exact-head Build remains pending; merge-hold-gate is green.
   created_at: 2026-09-22T14:27:35.045079991Z
   modified_at: 2026-09-22T14:27:35.045079991Z
+- id: 01a0c987-e976-7e20-b7ed-d63a2e614d57
+  author: joe
+  content: '[aida:proxy-approval] verdict=APPROVE; reasoning=fresh independent exact-head review approved PR #2097 at 891e4921673bf24c86e32ccdd671e46afc1f5f58; 581-path audit, real dispatch, fail-closed unsupported formats, exact description, full field/status/queue parity and linkage verified; independent=yes; gates=Build ubuntu SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; timestamp=2026-09-22T07:32:02-07:00'
+  created_at: 2026-09-22T14:32:02.678881094Z
+  modified_at: 2026-09-22T14:32:02.678881094Z
