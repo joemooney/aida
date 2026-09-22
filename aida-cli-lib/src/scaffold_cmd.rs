@@ -709,17 +709,17 @@ fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -
                     match aida_core::scaffolding::extract_aida_block(actual) {
                         // markers present → AIDA owns the block content
                         Some(a) => match aida_core::scaffolding::extract_aida_block(expected) {
-                            Some(e) => a.trim() == e.trim(),
+                            Some(e) => aida_core::scaffolding::generated_text_matches(a, e),
                             None => true,
                         },
                         // markers absent → user opted out, fully their file
                         None => true,
                     }
                 }
-                _ => actual.trim() == expected.trim(),
+                _ => aida_core::scaffolding::generated_text_matches(actual, expected),
             }
         }
-        FileCategory::Template => actual.trim() == expected.trim(),
+        FileCategory::Template => aida_core::scaffolding::generated_text_matches(actual, expected),
         FileCategory::ManagedMerge => {
             // Slot-equality: parse both sides as JSON and compare just the
             // AIDA-owned slots. User keys outside the slots don't trigger
@@ -727,14 +727,14 @@ fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -
             // `scaffold upgrade` actually applies. trace:FR-1-047
             use serde_json::Value;
             let Ok(av): Result<Value, _> = serde_json::from_str(actual) else {
-                return actual.trim() == expected.trim();
+                return aida_core::scaffolding::generated_text_matches(actual, expected);
             };
             let Ok(ev): Result<Value, _> = serde_json::from_str(expected) else {
-                return actual.trim() == expected.trim();
+                return aida_core::scaffolding::generated_text_matches(actual, expected);
             };
             let slots = aida_core::scaffolding::slots_for_file(path);
             if slots.is_empty() {
-                actual.trim() == expected.trim()
+                aida_core::scaffolding::generated_text_matches(actual, expected)
             } else {
                 slots.iter().all(|s| av.pointer(s) == ev.pointer(s))
             }

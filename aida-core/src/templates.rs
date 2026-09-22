@@ -1225,24 +1225,13 @@ mod tests {
         masters: &[(&str, &str)],
         localized: &[(&str, &str)],
     ) -> Vec<String> {
-        // Git may materialize either side with platform-native endings. Compare
-        // the semantic text under one symmetric contract; the attributes rule
-        // is defense-in-depth, not a substitute for this boundary.
-        // trace:BUG-1555 | ai:codex
-        fn normalized(content: &str) -> String {
-            content.replace("\r\n", "\n").replace('\r', "\n")
-        }
-
         masters
             .iter()
             .filter(|(name, _)| !localized.iter().any(|(local, _)| local == name))
             .filter_map(
                 |(name, master)| match std::fs::read_to_string(project_dir.join(name)) {
-                    Ok(local) => {
-                        let local = normalized(&local);
-                        let master = normalized(master);
-                        (local.trim_end() != master.trim_end()).then(|| (*name).to_string())
-                    }
+                    Ok(local) => (!crate::scaffolding::generated_text_matches(&local, master))
+                        .then(|| (*name).to_string()),
                     // Absence or unreadability cannot be treated as agreement.
                     Err(_) => Some((*name).to_string()),
                 },
