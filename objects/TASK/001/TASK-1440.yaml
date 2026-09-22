@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T16:08:01.637576942Z
-modified_at: 2026-09-22T16:08:01.637576942Z
+modified_at: 2026-09-22T16:08:06.217333042Z
 req_type: Task
 tags:
 - benchmark
@@ -16,3 +16,8 @@ tags:
 - epic-72
 - human-in-the-loop
 - metrics
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a0c9de-c610-7011-b30b-cb82b41e0c85
+  created_at: 2026-09-22T16:08:06.217324699Z
+  created_by: joe
