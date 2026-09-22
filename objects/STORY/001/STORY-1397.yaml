@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:14:13.323242098Z
-modified_at: 2026-09-22T16:11:15.074394719Z
+modified_at: 2026-09-22T16:11:39.329143779Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -105,6 +105,11 @@ comments:
     Suggested bounded delivery: first land the typed record/parser and identity-safe clear gate; then routing/brief reconciliation and awaiting projections in the same story only if the acceptance can be demonstrated end to end. No autonomous drain should merge this architecture-class change.
   created_at: 2026-09-22T16:11:15.074394719Z
   modified_at: 2026-09-22T16:11:15.074394719Z
+- id: 01a0c9e3-1bc1-7ca1-9c91-9cf18263d664
+  author: joe
+  content: '[driver signoff] APPROVED architecture sketch. Implement MergeHoldRecord v2 with typed reason and stable principal identity; route only to independently eligible seats via idempotent briefs; expose recusal/rework/decision distinctions and explicit no_independent_reader; make awaiting/JSON/TOON/notice seat-aware; migrate legacy plaintext conservatively without keyword inference; enforce exact-head and no self-merge, with brief acknowledgment meaning seen only. No TTY override. Timestamp 2026-09-22T09:11:00-07:00.'
+  created_at: 2026-09-22T16:11:39.329143779Z
+  modified_at: 2026-09-22T16:11:39.329143779Z
 execution_mode: drain
 implementation_info:
   implemented: true
