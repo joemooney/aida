@@ -30,12 +30,12 @@ description: |-
   4. Decide whether the write path can do anything at all. It probably cannot - by the time AIDA sees the string the text is already gone - which is worth stating explicitly so nobody looks for a guard that cannot exist. If that is the conclusion, the detector and the habit are the whole remedy.
 
   WHAT THIS IS NOT. Not a bug in AIDA's write path. The shell consumes the text before any AIDA code runs. It is filed because the DAMAGE is in AIDA's store, is silent, is not rare, and is findable - and because a known hazard that leaves no trace is indistinguishable from one that is not happening.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-22T08:23:14.363100202Z
+modified_at: 2026-09-22T08:48:51.129850774Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -400,3 +400,10 @@ comments:
     Live sweep (excluding this spec's self-referential examples) reported nine candidates across descriptions and comments. TASK-675 and TASK-676 were the explicitly confirmed historical damage, so their gaps were marked in place using description files without guessing the lost identifiers. Other candidates were left unchanged pending evidence.
   created_at: 2026-09-22T08:22:17.572028805Z
   modified_at: 2026-09-22T08:22:17.572028805Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'REQUEST CHANGES: both prior blockers are fixed, but comment add still accepts explicit file or stdin together with interactive mode and resolves that combination inconsistently across backends.'
+  recovery_hint: address the review findings, move TASK-190 back to In Progress, and clear the PR hold only after approval
+  shelved_at: 2026-09-22T08:48:51.129850774Z
