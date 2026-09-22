@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:44.578137790Z
-modified_at: 2026-09-21T17:12:01.319595991Z
+modified_at: 2026-09-22T04:54:10.387702502Z
 req_type: Bug
 comments:
 - id: 01a0c312-bb00-72a3-95b8-3088f0b66089
@@ -165,3 +165,15 @@ comments:
   created_at: 2026-09-21T13:50:48.309295321Z
   modified_at: 2026-09-21T13:50:48.309295321Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c776-dad3-7cf0-819e-1fa582af43f6
+  author: joe
+  content: |
+    Implementation recovery evidence (2026-09-21): recovered seven dirty files, rebased them onto current origin/main, and completed the combined BUG-1516 / BUG-1466 / BUG-1538 acceptance path.
+
+    Red-first evidence: with the deliberate mutation in non_blocking_verdict_gate restored (unconditional Refuse("mutation A")), cargo test -p aida-cli-lib bug_775_commits_ahead_tests::approved_verdict_still_at_the_reviewed_sha_proceeds -- --exact failed: actual Refuse(["mutation A"]), expected Proceed. The mutation and unreachable-code allowance were then removed; the same exact test passed.
+
+    Acceptance coverage: write-boundary git resolution expands reachable abbreviated SHAs to full 40-character identities; a deliberate normalize-shas operator command supports dry-run, resolves historical abbreviations, and marks unresolved values without fabrication. The real --pr writer now reads canonical provenance back and copies identical reviewed_sha, reviewed_branch, recorded_at, and recorded_by into the PR handshake. Queue-done no longer bypasses checks for Approved: exact head proceeds, advanced/rewritten heads warn, and unknown or SHA-less verdicts refuse distinctly as unverifiable. Historical SHA-less records remain readable legacy evidence and cannot clear the gate.
+
+    Verification: 32 review_verdict tests passed; 27 bug_775 commits-ahead/writer tests passed; 6 TASK-1265 rework tests passed; cargo fmt --all -- --check and git diff --check passed. Full aida-cli-lib run reached 5310 passed, 1 ignored, with one unrelated transient Text file busy failure in bug_1265_finish_ci_tests::fake_gh_short_argv_reaches_fallback; its exact same-head rerun passed.
+  created_at: 2026-09-22T04:54:10.387702502Z
+  modified_at: 2026-09-22T04:54:10.387702502Z
