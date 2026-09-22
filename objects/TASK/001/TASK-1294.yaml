@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-22T02:10:24.679649146Z
+modified_at: 2026-09-22T02:11:03.348105266Z
 req_type: Task
 tags:
 - follow-up:TASK-1291
@@ -338,4 +338,18 @@ comments:
     Explicit exclusions: auto-created Review PR-N stories; transitions into Completed whose immediately prior status was not Done; events outside each first-RunStarted-to-store-completion window; lane specs from the drain statistics because they lack RunStarted. Nothing was substituted with PrMerged, and the sample was not re-cut to improve the outcome.
   created_at: 2026-09-22T02:10:00.066837378Z
   modified_at: 2026-09-22T02:10:00.066837378Z
+- id: 01a0c6e1-8434-7212-b423-15a790ac1883
+  author: joe
+  content: |-
+    [aida:measurement-correction] 2026-09-21 — rounds versus shelves terminology
+
+    The report immediately above gives the distributions in SpecShelved events, because that is the metric the corrected method instructs us to count. The spec's phrase "five rounds (BUG-1244)" counts the initial attempt plus four shelves. To make the requested rounds-to-merge median explicit under that convention, add one to every measurable spec's shelf count:
+
+    - Fixed baseline, among the 19 specs that shelved: shelf distribution 1:6, 2:8, 3:2, 4:3; median 2 shelves and therefore median 3 attempts/rounds-to-merge. The baseline lacks completed specs with zero shelves, so an all-completions median remains unknowable.
+    - After, drain-driven n=14: shelf distribution 0:7, 1:7; median 0.5 shelves and therefore median 1.5 attempts/rounds-to-merge. Among only the seven specs that shelved, median 1 shelf and therefore median 2 attempts/rounds-to-merge.
+    - Lane-driven n=6 remains unmeasurable; no attempt count is imputed.
+
+    Thus the valid like-denominator descriptive comparison is median 3 -> 2 attempts among specs that shelved, based on only 19 versus 7 specs. The apparently stronger 3 -> 1.5 comparison is invalid because the fixed baseline omitted completed specs with zero shelves. This clarification changes no per-cause count, exposure classification, exclusion, or null conclusion in comment 01a0c6e0-8d02-7213-8576-f78852b2c362.
+  created_at: 2026-09-22T02:11:03.348105266Z
+  modified_at: 2026-09-22T02:11:03.348105266Z
 execution_mode: operator
