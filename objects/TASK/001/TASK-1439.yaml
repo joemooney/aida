@@ -1,0 +1,17 @@
+id: 01a0c9df-7d38-7e01-a9a5-03e85ab4f52a
+spec_id: TASK-1439
+agreed_id: TASK-1439
+title: Implement aida wiki build and local private aida wiki serve projection
+description: Build read-only static projection over canonical specs and exposition sidecars. Generates browsable hyperlinked HTML with Mermaid graph diagrams and subsystem groupings. aida wiki serve defaults strictly to loopback (127.0.0.1) for private local access.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T16:07:42.136636986Z
+modified_at: 2026-09-22T16:07:42.136636986Z
+req_type: Task
+tags:
+- epic-72
+- projection
+- web
+- wiki
