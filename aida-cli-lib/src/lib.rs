@@ -70742,6 +70742,49 @@ fn status_spec_is_open_alias(raw_status: Option<&str>) -> bool {
     }
 }
 
+/// BUG-1498: only the single explicit `draft` status activates the advisor's
+/// human-first draft lens. A mixed status expression is a broader operational
+/// query and must not silently lose machine-filed rows.
+// trace:BUG-1498 | ai:codex
+fn status_spec_is_exact_draft(raw: &str) -> bool {
+    raw.trim().eq_ignore_ascii_case("draft")
+}
+
+fn is_machine_filed_draft(r: &aida_core::RequirementSummary) -> bool {
+    r.tags.iter().any(|tag| tag == "auto-drafted")
+        || r.description
+            .trim_start()
+            .starts_with("Auto-drafted by `aida queue work")
+}
+
+/// Partition a draft grooming query by provenance. Returns the number hidden
+/// from the human-first view so renderers can advertise the escape hatch.
+// trace:BUG-1498 | ai:codex
+fn apply_machine_draft_lens(
+    reqs: &mut Vec<aida_core::RequirementSummary>,
+    exact_draft_view: bool,
+    machine_only: bool,
+    explicit_machine_tag: bool,
+) -> usize {
+    if !exact_draft_view {
+        return 0;
+    }
+    if machine_only {
+        reqs.retain(is_machine_filed_draft);
+        return 0;
+    }
+    if explicit_machine_tag {
+        return 0;
+    }
+    let before = reqs.len();
+    reqs.retain(|r| !is_machine_filed_draft(r));
+    before - reqs.len()
+}
+
+#[cfg(test)]
+#[path = "tests/bug_1498_machine_draft_lens_tests.rs"]
+mod bug_1498_machine_draft_lens_tests;
+
 /// BUG-788: should the open-work accepted-decision lens apply? True under the
 /// bare-list default open lens (STORY-723) OR the explicit `open` shortcut, so
 /// `aida list` and `aida list open` hide accepted ADRs identically. The explicit
