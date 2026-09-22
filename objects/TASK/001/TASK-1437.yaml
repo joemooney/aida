@@ -1,0 +1,17 @@
+id: 01a0c9de-c610-7011-b30b-cb82b41e0c85
+spec_id: TASK-1437
+agreed_id: TASK-1437
+title: Run human comprehension pilot on stratified 15-spec corpus
+description: Conduct pilot evaluation with human operators across a stratified sample of 15 diverse specs (bugs, tasks, stories, ADRs, epics) comparing raw specs against derived expositions on clarity, rationale comprehension, and constraint identification.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T16:06:55.248003750Z
+modified_at: 2026-09-22T16:06:55.248003750Z
+req_type: Task
+tags:
+- epic-72
+- evaluation
+- human-in-the-loop
+- pilot
