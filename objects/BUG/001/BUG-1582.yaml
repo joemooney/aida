@@ -52,7 +52,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T23:17:53.065101052Z
-modified_at: 2026-09-22T07:53:34.689766415Z
+modified_at: 2026-09-22T07:56:35.828216561Z
 req_type: Bug
 tags:
 - ci doc-gate papercut
+comments:
+- id: 01a0c81d-de74-7ab1-9be2-943c43159009
+  author: joe
+  content: 'Implementation enumeration (2026-09-22): scanned one consistent aida-store snapshot containing 4,301 objects. 96 objects have differing spec_id/agreed_id; 1 of those 96 currently marks doc impact (TASK-185 via docs:impacted). The repaired resolver accepts either identifier and fails closed on missing or ambiguous references.'
+  created_at: 2026-09-22T07:56:35.828216561Z
+  modified_at: 2026-09-22T07:56:35.828216561Z
