@@ -51,7 +51,11 @@ variables:
   # Pair it with a slot-local target dir so Cargo fingerprints never bounce
   # between `/builds/.../concurrent-0` and `concurrent-1` source paths.
   # trace:TASK-1274 | ai:codex
-  CARGO_TARGET_DIR: "/ci-cache/target-${CI_CONCURRENT_ID}"
+  # v2 invalidates artifacts produced by the original hash-to-mtime helper,
+  # which could mark changed sources older than their outputs and reuse stale
+  # crates. The reflog-aware helper below preserves change detection.
+  # trace:TASK-1274 | ai:codex
+  CARGO_TARGET_DIR: "/ci-cache/target-v2-${CI_CONCURRENT_ID}"
   CARGO_INCREMENTAL: "1"
 
 default:
