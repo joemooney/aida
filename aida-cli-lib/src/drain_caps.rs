@@ -289,16 +289,55 @@ pub(crate) fn tokens_from_log(contents: &str) -> u64 {
 /// `result` usage event. A missing result or malformed non-empty line means the
 /// completed log cannot support an exact exit-record total.
 // trace:BUG-1418 | ai:codex
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CompletedLogTokens {
     Measured(u64),
-    Unrecognized,
+    Unrecognized { shape: String },
     Truncated,
+}
+
+fn bounded_schema_label(value: &str, limit: usize) -> String {
+    let mut label = String::new();
+    for ch in value.chars().take(limit) {
+        label.push(
+            if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-') {
+                ch
+            } else {
+                '_'
+            },
+        );
+    }
+    if label.is_empty() {
+        "unknown".to_string()
+    } else {
+        label
+    }
+}
+
+/// Return schema metadata only: an event type when present, otherwise a
+/// bounded list of top-level key names. Values are deliberately never copied
+/// into diagnostics because headless records can contain prompts and output.
+// trace:BUG-1418 | ai:codex
+fn usage_shape(v: &serde_json::Value) -> String {
+    if let Some(event_type) = v.get("type").and_then(serde_json::Value::as_str) {
+        return format!("type={}", bounded_schema_label(event_type, 48));
+    }
+    let Some(object) = v.as_object() else {
+        return "non-object".to_string();
+    };
+    let mut keys: Vec<_> = object
+        .keys()
+        .map(|key| bounded_schema_label(key, 32))
+        .collect();
+    keys.sort();
+    keys.truncate(6);
+    format!("keys={}", keys.join(","))
 }
 
 // trace:BUG-1418 | ai:codex
 pub(crate) fn completed_log_tokens(contents: &str) -> CompletedLogTokens {
-    let mut saw_usage = false;
+    let mut saw_claude_partial_usage = false;
+    let mut first_shape = None;
     let mut result_tokens = None;
     for line in contents.lines() {
         let line = line.trim();
@@ -308,19 +347,27 @@ pub(crate) fn completed_log_tokens(contents: &str) -> CompletedLogTokens {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
             return CompletedLogTokens::Truncated;
         };
+        first_shape.get_or_insert_with(|| usage_shape(&v));
         if let Some(tokens) = usage_tokens(&v) {
-            saw_usage = true;
-            if v.get("type").and_then(serde_json::Value::as_str) == Some("result") {
-                result_tokens = Some(tokens);
+            match v.get("type").and_then(serde_json::Value::as_str) {
+                Some("result") => result_tokens = Some(tokens),
+                Some("assistant") => saw_claude_partial_usage = true,
+                _ => {
+                    return CompletedLogTokens::Unrecognized {
+                        shape: usage_shape(&v),
+                    };
+                }
             }
         }
     }
     if let Some(tokens) = result_tokens {
         CompletedLogTokens::Measured(tokens)
-    } else if saw_usage {
+    } else if saw_claude_partial_usage {
         CompletedLogTokens::Truncated
     } else {
-        CompletedLogTokens::Unrecognized
+        CompletedLogTokens::Unrecognized {
+            shape: first_shape.unwrap_or_else(|| "empty".to_string()),
+        }
     }
 }
 
@@ -539,11 +586,23 @@ mod tests {
         );
         assert_eq!(
             completed_log_tokens(r#"{"type":"usage","tokens":42}"#),
-            CompletedLogTokens::Unrecognized
+            CompletedLogTokens::Unrecognized {
+                shape: "type=usage".to_string()
+            }
         );
         assert_eq!(
             completed_log_tokens(r#"{"type":"result","usage":{"total_tokens":42}}"#),
-            CompletedLogTokens::Unrecognized
+            CompletedLogTokens::Unrecognized {
+                shape: "type=result".to_string()
+            }
+        );
+        assert_eq!(
+            completed_log_tokens(
+                r#"{"type":"turn.completed","usage":{"input_tokens":4,"output_tokens":2}}"#
+            ),
+            CompletedLogTokens::Unrecognized {
+                shape: "type=turn.completed".to_string()
+            }
         );
         assert_eq!(
             completed_log_tokens(r#"{"type":"assistant","message":{"usage":{"input_tokens":4}}}"#),

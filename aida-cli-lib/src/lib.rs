@@ -83513,18 +83513,40 @@ fn measure_completed_headless_logs(
             drain_caps::CompletedLogTokens::Measured(tokens) => {
                 total = total.saturating_add(tokens);
             }
-            drain_caps::CompletedLogTokens::Unrecognized => {
+            drain_caps::CompletedLogTokens::Unrecognized { shape } => {
                 let name = path
                     .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("<non-utf8>");
-                eprintln!("token usage unrecognized in headless log {name}");
+                eprintln!("{}", unrecognized_usage_diagnostic(name, &shape));
                 return None;
             }
             drain_caps::CompletedLogTokens::Truncated => return None,
         }
     }
     found.then_some(total)
+}
+
+// trace:BUG-1418 | ai:codex
+fn unrecognized_usage_diagnostic(file_name: &str, shape: &str) -> String {
+    fn safe_label(value: &str, limit: usize) -> String {
+        value
+            .chars()
+            .take(limit)
+            .map(|ch| {
+                if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-' | '=' | ',') {
+                    ch
+                } else {
+                    '_'
+                }
+            })
+            .collect()
+    }
+    format!(
+        "token usage unrecognized in headless log {} (shape: {})",
+        safe_label(file_name, 80),
+        safe_label(shape, 96)
+    )
 }
 
 /// TASK-967: the `BatchDrainOutcome` → machine label used in the drain exit

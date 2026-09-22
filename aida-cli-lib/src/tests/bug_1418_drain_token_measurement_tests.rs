@@ -35,6 +35,32 @@ fn unrecognized_usage_schema_is_unknown_not_zero() {
 
 // trace:BUG-1418 | ai:codex
 #[test]
+fn foreign_vendor_terminal_shape_is_reported_not_treated_as_truncated() {
+    let record =
+        "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":4,\"output_tokens\":2}}\n";
+    assert_eq!(
+        drain_caps::completed_log_tokens(record),
+        drain_caps::CompletedLogTokens::Unrecognized {
+            shape: "type=turn.completed".to_string()
+        }
+    );
+    let diagnostic = unrecognized_usage_diagnostic("codex-phase.jsonl", "type=turn.completed");
+    assert_eq!(
+        diagnostic,
+        "token usage unrecognized in headless log codex-phase.jsonl (shape: type=turn.completed)"
+    );
+    assert!(!diagnostic.contains("input_tokens"));
+
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(logs_dir(root.path()).join("codex-phase.jsonl"), record).unwrap();
+    assert_eq!(
+        measure_completed_headless_logs(root.path(), SystemTime::UNIX_EPOCH),
+        None
+    );
+}
+
+// trace:BUG-1418 | ai:codex
+#[test]
 fn logs_outside_resolved_root_are_unknown_not_zero() {
     let resolved = tempfile::tempdir().unwrap();
     let elsewhere = tempfile::tempdir().unwrap();
