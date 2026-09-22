@@ -5642,11 +5642,8 @@ pub(crate) fn handle_queue_command(
                              `[drain] pipeline_depth`."
                                 .to_string()
                         } else {
-                            format!(
-                                "Ordering only — concurrency for this single-batch drain \
-                                 follows `[drain] pipeline_depth` (default {}, i.e. strictly \
-                                 one at a time).",
-                                crate::drain_state::default_pipeline_depth()
+                            sequential_single_batch_concurrency_notice(
+                                find_main_worktree_root().ok().as_deref(),
                             )
                         };
                         eprintln!(
@@ -6081,6 +6078,77 @@ pub(crate) fn handle_queue_command(
         }
     }
     Ok(())
+}
+
+// trace:BUG-1586 | ai:codex
+fn sequential_single_batch_concurrency_notice(project_root: Option<&std::path::Path>) -> String {
+    let Some(project_root) = project_root else {
+        return "Ordering only — concurrency for this single-batch drain follows \
+                `[drain] pipeline_depth`; the resolved value is unavailable."
+            .to_string();
+    };
+    let depth = crate::DrainTuning::resolve(project_root).pipeline_depth();
+    if depth == 1 {
+        format!(
+            "Ordering only — concurrency for this single-batch drain follows \
+             `[drain] pipeline_depth` (resolved {depth}, i.e. strictly one at a time)."
+        )
+    } else {
+        format!(
+            "Ordering only — concurrency for this single-batch drain follows \
+             `[drain] pipeline_depth` (resolved {depth}, allowing up to {depth} members \
+             in flight)."
+        )
+    }
+}
+
+#[cfg(test)]
+mod sequential_notice_tests {
+    use super::sequential_single_batch_concurrency_notice;
+
+    fn project_with_depth(depth: usize) -> tempfile::TempDir {
+        let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir(project.path().join(".aida")).unwrap();
+        std::fs::write(
+            project.path().join(".aida/config.toml"),
+            format!("[drain]\npipeline_depth = {depth}\n"),
+        )
+        .unwrap();
+        project
+    }
+
+    // trace:BUG-1586 | ai:codex
+    #[test]
+    fn sequential_notice_reports_resolved_pipeline_depth_two() {
+        let project = project_with_depth(2);
+        let notice = sequential_single_batch_concurrency_notice(Some(project.path()));
+
+        assert!(notice.contains("resolved 2"), "notice was: {notice}");
+        assert!(
+            !notice.contains("strictly one at a time"),
+            "notice was: {notice}"
+        );
+    }
+
+    // trace:BUG-1586 | ai:codex
+    #[test]
+    fn sequential_notice_keeps_one_at_a_time_clause_for_default_depth() {
+        let project = project_with_depth(crate::drain_state::default_pipeline_depth());
+        let notice = sequential_single_batch_concurrency_notice(Some(project.path()));
+
+        assert!(notice.contains("resolved 1"), "notice was: {notice}");
+        assert!(notice.contains("strictly one at a time"));
+    }
+
+    // trace:BUG-1586 | ai:codex
+    #[test]
+    fn sequential_notice_degrades_gracefully_without_a_project_root() {
+        let notice = sequential_single_batch_concurrency_notice(None);
+
+        assert!(notice.contains("`[drain] pipeline_depth`"));
+        assert!(notice.contains("resolved value is unavailable"));
+        assert!(!notice.contains("strictly one at a time"));
+    }
 }
 
 /// TASK-218: smart status-transition table for `aida queue rework`.
