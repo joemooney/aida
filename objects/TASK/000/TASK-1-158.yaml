@@ -19,7 +19,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T23:58:27.988803235Z
-modified_at: 2026-09-22T11:16:40.855145677Z
+modified_at: 2026-09-22T11:22:06.386546923Z
 req_type: Task
 tags:
 - from-advisor:BUG-1467
@@ -66,3 +66,8 @@ comments:
   content: 'Implementation opened as PR #2096 at exact head 4983d3a94e. Review record finding values now accept leading hyphen and flag-like prose without steering Clap, while subsequent explicit flags still parse normally. Added adversarial coverage for quoted --pr N, inert --yes text, a later real --pr 999, and an unbound mistyped flag. Targeted tests and fmt pass; normal clippy passes with repository-baseline warnings, while -D warnings is blocked by pre-existing findings outside this patch.'
   created_at: 2026-09-22T11:16:26.547593088Z
   modified_at: 2026-09-22T11:16:26.547593088Z
+- id: 01a0c8da-04b2-7e21-a59c-add988d21ff2
+  author: joe
+  content: 'Independent cold review PASS at exact head 4983d3a94e0c1f46d8746db880e7cb750517e5e6. The narrow allow_hyphen_values change binds one flag-like argv value to each finding without consuming later argv: regression proof covers --pr N and --yes as inert prose, a later real --pr 999, and rejection of an unbound mistyped flag. Focused parser tests: 3 passed; cargo fmt check passed; diff check passed. Full strict clippy reached only six unrelated pre-existing aida-core warnings outside this diff. merge-hold-gate is green; required Ubuntu Build is pending, so merge approval is conditional on that exact-head Build succeeding.'
+  created_at: 2026-09-22T11:22:06.386546923Z
+  modified_at: 2026-09-22T11:22:06.386546923Z
