@@ -73,7 +73,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:55:48.841488488Z
-modified_at: 2026-09-22T06:48:25.786862330Z
+modified_at: 2026-09-22T07:02:03.897575433Z
 req_type: Bug
 tags:
 - ci flaky test-infra
+comments:
+- id: 01a0c7eb-f179-7252-b4c0-f505b9afea9e
+  author: joe
+  content: 'Mechanism confirmed and deterministically reproduced before the fix. The starter-role test set AIDA_TEST_HOME to its fixture while 11 sibling scaffold_refresh tests called refresh_agent_packs without taking ENV_LOCK. Every full refresh runs starter_roles_refresh, so a sibling entering during that window reads the fixture path and appends advisor.system_prompt first; the owning test then reports no Starter roles row and panics. Forced proof on unmodified origin/main: a regression invoked an unrelated full refresh between setting AIDA_TEST_HOME and the owning refresh; it failed deterministically with ''the unrelated refresh consumed this test''s role migration''. Enumeration: all 11 other refresh_agent_packs callsites in scaffold_refresh.rs were unguarded readers (lines 443, 489, 512, 551, 581, 599, 616, 635, 668, 710 at the incident revision; line 599 has a second call at 616). Fix injects the roles directory into a testable core, makes all unrelated unit tests pass None, and makes the owning test pass its explicit fixture path, removing process-global HOME from the entire module test surface.'
+  created_at: 2026-09-22T07:02:03.897575433Z
+  modified_at: 2026-09-22T07:02:03.897575433Z
