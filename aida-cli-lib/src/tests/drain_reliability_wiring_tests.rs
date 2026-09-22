@@ -429,6 +429,33 @@ fn probe_resume_facts_resolves_open_pr_without_lease_from_forge_surface() {
     )
     .unwrap();
     let storage = Storage::new(root.join("requirements.db"));
+    let git = |args: &[&str]| {
+        let status = std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .env("GIT_AUTHOR_NAME", "test")
+            .env("GIT_AUTHOR_EMAIL", "test@example.com")
+            .env("GIT_COMMITTER_NAME", "test")
+            .env("GIT_COMMITTER_EMAIL", "test@example.com")
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?}");
+    };
+    git(&["init", "--initial-branch=main", "--quiet"]);
+    git(&["commit", "--allow-empty", "-m", "root", "--quiet"]);
+    let head = String::from_utf8(
+        std::process::Command::new("git")
+            .current_dir(root)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_string();
+    git(&["branch", "task-4", &head]);
+    git(&["update-ref", "refs/remotes/origin/task-4", &head]);
     let fake_gh = root.join("gh");
     std::fs::write(
         &fake_gh,
@@ -472,10 +499,6 @@ exit 1
     let prev = std::env::var("AIDA_TEST_GH_BINARY").ok();
     std::env::set_var("AIDA_TEST_GH_BINARY", &fake_gh);
     let (facts, branch, pr) = probe_resume_facts(root, &storage, "TASK-4", None);
-    match prev {
-        Some(value) => std::env::set_var("AIDA_TEST_GH_BINARY", value),
-        None => std::env::remove_var("AIDA_TEST_GH_BINARY"),
-    }
 
     assert_eq!(pr, Some(3));
     assert_eq!(branch.as_deref(), Some("task-4"));
@@ -483,6 +506,39 @@ exit 1
         facts.branch_exists,
         "an open PR should satisfy the branch-exists postcondition"
     );
+
+    let verdict_dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdict_dir).unwrap();
+    let verdict = verdict_dir.join("PR-3.json");
+    std::fs::write(&verdict, r#"{"verdict":"Approved"}"#).unwrap();
+    let (facts, _, _) = probe_resume_facts(root, &storage, "TASK-4", None);
+    assert!(
+        !facts.reviewed,
+        "a SHA-less approval must not resume past review"
+    );
+
+    std::fs::write(
+        &verdict,
+        r#"{"verdict":"Approved","reviewed_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
+    )
+    .unwrap();
+    let (facts, _, _) = probe_resume_facts(root, &storage, "TASK-4", None);
+    assert!(
+        !facts.reviewed,
+        "a stale approval must not resume past review"
+    );
+
+    std::fs::write(
+        &verdict,
+        format!(r#"{{"verdict":"Approved","reviewed_sha":"{head}"}}"#),
+    )
+    .unwrap();
+    let (facts, _, _) = probe_resume_facts(root, &storage, "TASK-4", None);
+    assert!(facts.reviewed, "an approval at the current head may resume");
+    match prev {
+        Some(value) => std::env::set_var("AIDA_TEST_GH_BINARY", value),
+        None => std::env::remove_var("AIDA_TEST_GH_BINARY"),
+    }
 }
 
 #[test]
