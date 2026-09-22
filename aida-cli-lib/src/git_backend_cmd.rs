@@ -1282,6 +1282,8 @@ pub(crate) fn handle_git_backend_command(
             unreachable!("autopilot is dispatched before storage init")
         }
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
+        Command::Explain { .. } => unreachable!("explain is dispatched before storage init"),
+        Command::Wiki(_) => unreachable!("wiki is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         // trace:STORY-696
         Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),

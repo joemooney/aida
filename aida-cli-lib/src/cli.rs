@@ -8147,6 +8147,31 @@ pub enum MaintenanceScheduleCommand {
     EmitCron,
 }
 
+// trace:EPIC-72 trace:TASK-1439 | ai:antigravity
+#[derive(Subcommand, Clone, Debug, PartialEq, Eq)]
+pub enum WikiCommand {
+    /// Build static HTML living wiki projection from canonical specs and exposition sidecars
+    Build {
+        /// Output directory for generated wiki (defaults to .aida/wiki)
+        #[clap(long)]
+        out: Option<PathBuf>,
+    },
+    /// Serve generated living wiki on local private loopback (127.0.0.1)
+    Serve {
+        /// Port to bind (defaults to 8420)
+        #[clap(long, default_value = "8420")]
+        port: u16,
+
+        /// Host to bind (defaults strictly to 127.0.0.1 for private loopback)
+        #[clap(long, default_value = "127.0.0.1")]
+        host: String,
+
+        /// Path to wiki directory (defaults to .aida/wiki)
+        #[clap(long)]
+        dir: Option<PathBuf>,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Do one spec: dispatch it to the right harness based on its groomed
@@ -10487,6 +10512,35 @@ pub enum Command {
         #[clap(long)]
         json: bool,
     },
+
+    // trace:EPIC-72 trace:TASK-1436 | ai:antigravity
+    /// Generate, audit, and inspect human-friendly spec expositions with freshness,
+    /// bounded drift detection, and human review protection.
+    Explain {
+        /// Requirement ID (UUID or SPEC-ID)
+        spec: String,
+
+        /// Target audience persona (operator, executive, implementer, contributor)
+        #[clap(long, default_value = "operator")]
+        audience: String,
+
+        /// Re-generate exposition even if a sidecar already exists
+        #[clap(long)]
+        refresh: bool,
+
+        /// Override human_reviewed protection and force re-generation
+        #[clap(long)]
+        force: bool,
+
+        /// Machine-readable JSON output
+        #[clap(long)]
+        json: bool,
+    },
+
+    // trace:EPIC-72 trace:TASK-1439 | ai:antigravity
+    /// Living project wiki: build browsable hyperlinked HTML projection and serve locally
+    #[clap(subcommand)]
+    Wiki(WikiCommand),
 
     /// Set, show, or clear the current FOCUS — a persistent, per-worktree
     /// context (an epic or spec) that scopes the read commands to that spec's
