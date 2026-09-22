@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:26:07.580218491Z
-modified_at: 2026-09-22T09:58:00.214524269Z
+modified_at: 2026-09-22T10:07:55.441866792Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -109,3 +109,8 @@ comments:
   content: '[aida:implementer] Implemented in PR #2091 (commit 68a411415f). The scheduler now consumes typed JSON performance audits, persists allow-listed budget/tolerance/proportion/denominator/worst/scope evidence in a 20-trip oldest-first bounded history, correlates the same trip_id and evidence into CronJobFailed, renders compact evidence in schedule.log, preserves legacy YAML/event deserialization, exposes zero denominators explicitly, and surfaces malformed typed output without persisting child payload. Corrected the route prompt to .aida-store/schedule/performance-guard.yaml. Consumer-side test fires a real CronJobFailed into the advisor route and proves its evidence matches the immutable ledger trip. Focused BUG-1573 tests and fmt pass. Full lib run: 5348 passed; two unrelated queue_rework tests failed under inherited advisor authority.'
   created_at: 2026-09-22T09:57:20.008427665Z
   modified_at: 2026-09-22T09:57:20.008427665Z
+- id: 01a0c896-1a31-77c0-94fa-8a5ebec32619
+  author: joe
+  content: 'Cold review of PR #2091 at exact head 68a411415fb4d2126769a4e0de5ad658790169a4: CHANGES REQUIRED. Blocking consumer-boundary gap: CronJobFailed contains typed trip_id/performance and the source ledger retains 20 deterministic trips, but tick_core collapses the matching event to its name, the route ledger stores only `on CronJobFailed`, and DueJob/pickup rendering contains only the static prompt. The test called consumer-side proof merely proves due_since plus separately inspects the producer event; it does not prove that the advisor receives the evidence. Require durable matched-trip context in the due record and compact allow-listed rendering through the real advisor delivery surface, with trip_id correlation/no payload leakage. Producer-side focused tests and fmt pass; full lib suite passes 5352/5352 (1 ignored). CI pending at verdict. GitHub disallowed formal request-changes because reviewer account owns the PR; blocking PR comment posted instead.'
+  created_at: 2026-09-22T10:07:55.441866792Z
+  modified_at: 2026-09-22T10:07:55.441866792Z
