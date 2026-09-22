@@ -11906,27 +11906,116 @@ pub(crate) fn probe_pr_integration_state(
     // RequestChanges from the LOCAL review-verdict file (the orchestrator's own
     // reviewer writes `.aida/review-verdicts/PR-N.json`). Either source is a
     // hard stop — never merge over a pending RequestChanges. trace:TASK-836
-    let local_request_changes = item
+    // Share the launcher's merge chokepoint interpretation. In particular,
+    // an existing artifact that is conflicting or unreadable is a block, not
+    // the optimistic absence of RequestChanges.
+    // trace:BUG-1581 | ai:codex
+    let (local_request_changes, review_integrity_unproven) = item
         .map(|i| i.number)
         .map(|n| {
             let path = project_root
-                .join(".aida")
-                .join("review-verdicts")
+                .join(".aida/review-verdicts")
                 .join(format!("PR-{n}.json"));
-            matches!(
-                read_verdict_file(&path),
-                Ok(auto_complete::ReviewerOutcome::Verdict(
-                    auto_complete::Verdict::RequestChanges
-                ))
-            )
+            if !path.exists() {
+                return (false, false);
+            }
+            match read_verdict_file(&path) {
+                Ok(auto_complete::ReviewerOutcome::Verdict(verdict)) => {
+                    (!matches!(verdict, auto_complete::Verdict::Approved), false)
+                }
+                Ok(auto_complete::ReviewerOutcome::EscalatedToHuman { .. }) => (true, false),
+                Err(_) => (false, true),
+            }
         })
-        .unwrap_or(false);
+        .unwrap_or((false, false));
 
     let _ = spec_id; // spec id is the caller's message prefix, not a probe input.
     integrate::PrIntegrationState {
         ci,
         request_changes_pending: forge_request_changes || local_request_changes,
+        review_integrity_unproven,
         mergeable,
+    }
+}
+
+#[cfg(test)]
+mod bug_1581_integration_probe_tests {
+    use super::*;
+
+    fn snapshot() -> OpenPrSnapshot {
+        let mut snapshot = OpenPrSnapshot::default();
+        snapshot.by_branch.insert(
+            "bug-1581".into(),
+            crate::status_cleanup::OpenPrItem {
+                number: 2090,
+                title: "fix review reconciliation".into(),
+                head_branch: "bug-1581".into(),
+                ci_rollup: Some("pass".into()),
+                mergeable: Some("MERGEABLE".into()),
+                review_decision: None,
+                head_sha: Some("ac772eaca9d389fa762a232156df996023bfdf7a".into()),
+            },
+        );
+        snapshot
+    }
+
+    fn verdict_path(root: &std::path::Path) -> std::path::PathBuf {
+        root.join(".aida/review-verdicts/PR-2090.json")
+    }
+
+    // Drive the actual integrate probe and pure decision together. A green,
+    // mergeable PR with an approved top level still parks when retained
+    // independent evidence disagrees at that commit.
+    // trace:BUG-1581 | ai:codex
+    #[test]
+    fn integrate_probe_parks_a_same_sha_verdict_conflict() {
+        let root = tempfile::tempdir().unwrap();
+        let path = verdict_path(root.path());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            path,
+            r#"{
+              "verdict":"Approved",
+              "reviewed_sha":"ac772eaca9d389fa762a232156df996023bfdf7a",
+              "recorded_by":"reviewer-a",
+              "rounds":[{
+                "verdict":"RequestChanges",
+                "reviewed_sha":"ac772eaca9",
+                "recorded_by":"reviewer-b"
+              }]
+            }"#,
+        )
+        .unwrap();
+
+        let state =
+            probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snapshot());
+        assert!(matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Park(
+                crate::integrate::ParkReason::ReviewIntegrity
+            )
+        ));
+    }
+
+    // An artifact that exists but cannot be interpreted is not evidence of
+    // approval. The integration preflight must park it rather than degrade to
+    // the optimistic no-local-verdict state.
+    // trace:BUG-1581 | ai:codex
+    #[test]
+    fn integrate_probe_parks_an_unreadable_local_verdict() {
+        let root = tempfile::tempdir().unwrap();
+        let path = verdict_path(root.path());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, "not json").unwrap();
+
+        let state =
+            probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snapshot());
+        assert!(matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Park(
+                crate::integrate::ParkReason::ReviewIntegrity
+            )
+        ));
     }
 }
 

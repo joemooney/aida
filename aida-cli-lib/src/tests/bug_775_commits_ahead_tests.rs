@@ -423,7 +423,8 @@ fn a_fresh_spec_verdict_is_accepted_when_the_pr_file_is_missing() {
         "STORY-783",
         started,
         Some("abcdef0123456789abcdef0123456789abcdef01"),
-    );
+    )
+    .unwrap();
     assert!(
         matches!(
             out,
@@ -448,8 +449,10 @@ fn phase3_fallback_cannot_rescue_stale_or_sha_less_approval() {
 
     std::fs::write(&path, r#"{"verdict":"approved"}"#).unwrap();
     assert_eq!(
-        crate::spec_verdict_fallback_for_phase3(dir.path(), "TASK-99", started, Some(head)),
-        None,
+        crate::spec_verdict_fallback_for_phase3(dir.path(), "TASK-99", started, Some(head))
+            .unwrap_err()
+            .kind,
+        crate::auto_complete::FailureKind::NoVerdict,
         "a SHA-less fallback must not rescue an invalid primary approval"
     );
 
@@ -459,8 +462,10 @@ fn phase3_fallback_cannot_rescue_stale_or_sha_less_approval() {
     )
     .unwrap();
     assert_eq!(
-        crate::spec_verdict_fallback_for_phase3(dir.path(), "TASK-99", started, Some(head)),
-        None,
+        crate::spec_verdict_fallback_for_phase3(dir.path(), "TASK-99", started, Some(head))
+            .unwrap_err()
+            .kind,
+        crate::auto_complete::FailureKind::NoVerdict,
         "a stale fallback must not rescue an invalid primary approval"
     );
 }
@@ -475,7 +480,7 @@ fn a_verdict_recorded_before_this_session_is_stale_and_refused() {
     std::fs::write(vd.join("BUG-1.json"), r#"{"verdict":"approved"}"#).unwrap();
     let started = std::time::SystemTime::now() + std::time::Duration::from_secs(3600);
     assert_eq!(
-        crate::spec_verdict_fallback_for_phase3(dir.path(), "BUG-1", started, None),
+        crate::spec_verdict_fallback_for_phase3(dir.path(), "BUG-1", started, None).unwrap(),
         None
     );
 }
@@ -490,7 +495,7 @@ fn request_changes_flows_through_the_fallback_too() {
     let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
     std::fs::write(vd.join("BUG-2.json"), r#"{"verdict":"request-changes"}"#).unwrap();
     assert!(matches!(
-        crate::spec_verdict_fallback_for_phase3(dir.path(), "BUG-2", started, None),
+        crate::spec_verdict_fallback_for_phase3(dir.path(), "BUG-2", started, None).unwrap(),
         Some(crate::auto_complete::ReviewerOutcome::Verdict(
             crate::auto_complete::Verdict::RequestChanges
         ))
@@ -502,15 +507,15 @@ fn absent_or_garbage_records_fall_through() {
     let dir = tempfile::tempdir().unwrap();
     let started = std::time::SystemTime::UNIX_EPOCH;
     assert_eq!(
-        crate::spec_verdict_fallback_for_phase3(dir.path(), "BUG-3", started, None),
+        crate::spec_verdict_fallback_for_phase3(dir.path(), "BUG-3", started, None).unwrap(),
         None
     );
     let vd = dir.path().join(".aida").join("review-verdicts");
     std::fs::create_dir_all(&vd).unwrap();
     std::fs::write(vd.join("BUG-3.json"), "not json").unwrap();
-    assert_eq!(
-        crate::spec_verdict_fallback_for_phase3(dir.path(), "BUG-3", started, None),
-        None
+    assert!(
+        crate::spec_verdict_fallback_for_phase3(dir.path(), "BUG-3", started, None).is_err(),
+        "a fresh unreadable artifact must fail closed"
     );
 }
 
@@ -566,7 +571,8 @@ fn a_fresh_sibling_checkout_verdict_is_accepted_and_copied_back() {
         "STORY-784",
         started,
         Some("9f1c2b3a4d5e6f7089abcdef0123456789fedcba"),
-    );
+    )
+    .unwrap();
     assert!(
         matches!(
             out,
@@ -607,7 +613,9 @@ fn a_stale_sibling_verdict_is_refused() {
     // Session "started" in the future relative to the file's mtime.
     let started = std::time::SystemTime::now() + std::time::Duration::from_secs(3600);
     assert!(
-        crate::sibling_verdict_sweep_for_phase3(&root, 9, "BUG-9", started, None).is_none(),
+        crate::sibling_verdict_sweep_for_phase3(&root, 9, "BUG-9", started, None)
+            .unwrap()
+            .is_none(),
         "a verdict recorded before this session is stale for the sweep too"
     );
 }
@@ -631,7 +639,7 @@ fn a_sibling_spec_keyed_record_is_accepted() {
     )
     .unwrap();
     let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
-    let out = crate::sibling_verdict_sweep_for_phase3(&root, 42, "STORY-1", started, None);
+    let out = crate::sibling_verdict_sweep_for_phase3(&root, 42, "STORY-1", started, None).unwrap();
     assert!(
         matches!(
             out,
@@ -663,8 +671,8 @@ fn the_sweep_skips_the_drive_root_and_garbage() {
     std::fs::write(sibling_vd.join("PR-5.json"), "not json").unwrap();
     let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
     assert!(
-        crate::sibling_verdict_sweep_for_phase3(&root, 5, "BUG-5", started, None).is_none(),
-        "root is not a sibling; garbage siblings must not produce a verdict"
+        crate::sibling_verdict_sweep_for_phase3(&root, 5, "BUG-5", started, None).is_err(),
+        "root is not a sibling; fresh garbage sibling evidence must fail closed"
     );
 }
 

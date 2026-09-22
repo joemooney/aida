@@ -177,6 +177,12 @@ pub(crate) struct PrIntegrationState {
     /// Sourced from BOTH the local `.aida/review-verdicts/` file AND the forge's
     /// `reviewDecision` (`CHANGES_REQUESTED`) — either one is a hard stop.
     pub request_changes_pending: bool,
+    /// A local verdict artifact exists but cannot yield one trustworthy merge
+    /// decision (conflicting independent reviews, malformed JSON, or another
+    /// parser/provenance failure). Distinct from RequestChanges so the operator
+    /// sees that reconciliation is required rather than implementation rework.
+    // trace:BUG-1581 | ai:codex
+    pub review_integrity_unproven: bool,
     /// Whether the PR is mergeable per the forge. `Mergeable` = clean,
     /// `Conflicting` = real merge conflict (never auto-resolve), `Unknown` = the
     /// forge hasn't computed it (or we couldn't tell). The behind-base scenario
@@ -241,6 +247,8 @@ pub(crate) enum ParkReason {
     /// A RequestChanges review verdict is pending — never merge over it
     /// (matches the known auto-merge-over-RequestChanges hazard).
     RequestChanges,
+    /// Existing local review evidence is contradictory or unreadable.
+    ReviewIntegrity,
     /// A real merge conflict — never auto-resolved.
     MergeConflict,
 }
@@ -252,6 +260,9 @@ impl ParkReason {
             ParkReason::CiRed => "CI is red — not merging a failing PR (parked for triage)",
             ParkReason::RequestChanges => {
                 "a RequestChanges review is pending — not merging over it (parked for triage)"
+            }
+            ParkReason::ReviewIntegrity => {
+                "local review evidence conflicts or is unreadable — not selecting a winner (parked for reconciliation)"
             }
             ParkReason::MergeConflict => {
                 "the PR has a merge conflict — never auto-resolved (parked; rebase/resolve, then re-run)"
@@ -275,6 +286,9 @@ impl ParkReason {
 ///      corrupts).
 /// trace:TASK-836 | ai:claude
 pub(crate) fn classify_integration_action(s: &PrIntegrationState) -> IntegrationAction {
+    if s.review_integrity_unproven {
+        return IntegrationAction::Park(ParkReason::ReviewIntegrity);
+    }
     if s.request_changes_pending {
         return IntegrationAction::Park(ParkReason::RequestChanges);
     }
@@ -1023,6 +1037,7 @@ mod tests {
         PrIntegrationState {
             ci,
             request_changes_pending: rc,
+            review_integrity_unproven: false,
             mergeable: m,
         }
     }
@@ -1117,6 +1132,7 @@ mod tests {
         let msgs = [
             ParkReason::CiRed.message(),
             ParkReason::RequestChanges.message(),
+            ParkReason::ReviewIntegrity.message(),
             ParkReason::MergeConflict.message(),
         ];
         for m in msgs {
@@ -1126,6 +1142,7 @@ mod tests {
         }
         assert_ne!(msgs[0], msgs[1]);
         assert_ne!(msgs[1], msgs[2]);
+        assert_ne!(msgs[2], msgs[3]);
     }
 
     // ── STORY-335 forecast helpers ──────────────────────────────────────────

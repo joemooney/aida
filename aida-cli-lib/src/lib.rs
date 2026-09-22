@@ -50526,10 +50526,12 @@ fn wave_pr_review_facts(
 }
 
 /// TASK-1169: does a local `.aida/review-verdicts/PR-N.json` block the merge?
-/// True for a RequestChanges/Rejected verdict or a reviewer escalation — the
-/// launcher must never merge over a reviewer any more than the orchestrator
-/// does. A missing/unparseable file is NOT a block (the wave may simply not
-/// have used the delegated reviewer).
+/// True for a RequestChanges/Rejected verdict, a reviewer escalation, or an
+/// existing artifact that cannot be reconciled. The launcher must never merge
+/// over a reviewer any more than the orchestrator does. A genuinely missing
+/// file is not a block (the wave may simply not have used delegated review),
+/// but an existing unreadable file is evidence whose meaning cannot be proven
+/// and therefore fails closed.
 // trace:TASK-1169 | ai:claude
 fn local_verdict_blocks_merge(project_root: &std::path::Path, pr_number: u64) -> bool {
     let path = project_root
@@ -50556,7 +50558,7 @@ fn local_verdict_blocks_merge(project_root: &std::path::Path, pr_number: u64) ->
             !matches!(v, auto_complete::Verdict::Approved)
         }
         Ok(auto_complete::ReviewerOutcome::EscalatedToHuman { .. }) => true,
-        Err(_) => false,
+        Err(_) => true,
     }
 }
 
@@ -85200,22 +85202,28 @@ fn spec_verdict_fallback_for_phase3(
     spec: &str,
     reviewer_started_at: std::time::SystemTime,
     current_head: Option<&str>,
-) -> Option<auto_complete::ReviewerOutcome> {
+) -> Result<Option<auto_complete::ReviewerOutcome>, auto_complete::PhaseFailure> {
     let path = review_verdict::verdict_path(project_root, spec);
-    let mtime = std::fs::metadata(&path).ok()?.modified().ok()?;
+    let Some(mtime) = std::fs::metadata(&path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+    else {
+        return Ok(None);
+    };
     if mtime < reviewer_started_at {
-        return None; // stale: recorded by some earlier review, not this one
+        return Ok(None); // stale: recorded by some earlier review, not this one
     }
-    let outcome = read_verdict_file_for_head(&path, current_head).ok()?;
-    let body = std::fs::read_to_string(&path).ok()?;
-    let rec = review_verdict::parse_recorded_verdict(&body)?;
+    let outcome = read_verdict_file_for_head(&path, current_head)?;
     eprintln!(
         "  {} no PR-keyed verdict file, but the reviewer recorded {} for {} during this session — accepting it",
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-        rec.kind.label(),
+        match &outcome {
+            auto_complete::ReviewerOutcome::Verdict(verdict) => verdict.label(),
+            auto_complete::ReviewerOutcome::EscalatedToHuman { .. } => "ESCALATED TO HUMAN",
+        },
         spec
     );
-    Some(outcome)
+    Ok(Some(outcome))
 }
 
 /// BUG-809: last-ditch verdict discovery when both the PR-keyed file and the
@@ -85237,12 +85245,19 @@ fn sibling_verdict_sweep_for_phase3(
     spec: &str,
     reviewer_started_at: std::time::SystemTime,
     current_head: Option<&str>,
-) -> Option<auto_complete::ReviewerOutcome> {
-    let root_canon = project_root.canonicalize().ok()?;
-    let parent = root_canon.parent()?;
+) -> Result<Option<auto_complete::ReviewerOutcome>, auto_complete::PhaseFailure> {
+    let Some(root_canon) = project_root.canonicalize().ok() else {
+        return Ok(None);
+    };
+    let Some(parent) = root_canon.parent() else {
+        return Ok(None);
+    };
     // Collect fresh candidates: (mtime, path, is_pr_keyed), freshest first.
     let mut candidates: Vec<(std::time::SystemTime, std::path::PathBuf, bool)> = Vec::new();
-    for entry in std::fs::read_dir(parent).ok()?.flatten() {
+    let Some(entries) = std::fs::read_dir(parent).ok() else {
+        return Ok(None);
+    };
+    for entry in entries.flatten() {
         let dir = entry.path();
         if !dir.is_dir() {
             continue;
@@ -85268,8 +85283,11 @@ fn sibling_verdict_sweep_for_phase3(
     }
     candidates.sort_by(|a, b| b.0.cmp(&a.0));
     for (_, cand, _is_pr) in candidates {
-        let outcome = read_verdict_file_for_head(&cand, current_head).ok();
-        let Some(outcome) = outcome else { continue };
+        // A fresh artifact is evidence. If it is conflicting, malformed, or
+        // stale at the current head, do not walk onward until some other file
+        // happens to approve; surface the first deterministic failure.
+        // trace:BUG-1581 | ai:codex
+        let outcome = read_verdict_file_for_head(&cand, current_head)?;
         // Copy back to the canonical location (best-effort): audit trail +
         // the STORY-439 calibration tag-along both read the drive root.
         let dest_dir = project_root.join(".aida").join("review-verdicts");
@@ -85281,9 +85299,9 @@ fn sibling_verdict_sweep_for_phase3(
             crate::glyph(crate::glyphs::Glyph::Info).cyan(),
             cand.display()
         );
-        return Some(outcome);
+        return Ok(Some(outcome));
     }
-    None
+    Ok(None)
 }
 
 fn read_verdict_file(
@@ -88821,21 +88839,23 @@ impl RealPhaseDriver {
                 if verdict_path.is_file() {
                     return Err(primary_failure);
                 }
-                if let Some(o) = spec_verdict_fallback_for_phase3(
+                let fallback = spec_verdict_fallback_for_phase3(
                     &self.project_root,
                     &self.spec,
                     gate_started_at,
                     gate_head_sha.as_deref(),
-                )
-                .or_else(|| {
-                    sibling_verdict_sweep_for_phase3(
+                )?;
+                let fallback = match fallback {
+                    some @ Some(_) => some,
+                    None => sibling_verdict_sweep_for_phase3(
                         &self.project_root,
                         pr,
                         &self.spec,
                         gate_started_at,
                         gate_head_sha.as_deref(),
-                    )
-                }) {
+                    )?,
+                };
+                if let Some(o) = fallback {
                     o
                 } else if self.no_human.is_some() {
                     return Err(enrich_no_verdict_with_headless_diagnostic(
@@ -90753,21 +90773,23 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     // BUG-806: the spec-keyed record, when fresh, IS the verdict.
                     // BUG-809: failing that, sweep sibling checkouts — the env
                     // anchor does not reliably survive a vendor tool sandbox.
-                    if let Some(o) = spec_verdict_fallback_for_phase3(
+                    let fallback = spec_verdict_fallback_for_phase3(
                         &self.project_root,
                         &self.spec,
                         reviewer_started_at,
                         pre_review_head_sha.as_deref(),
-                    )
-                    .or_else(|| {
-                        sibling_verdict_sweep_for_phase3(
+                    )?;
+                    let fallback = match fallback {
+                        some @ Some(_) => some,
+                        None => sibling_verdict_sweep_for_phase3(
                             &self.project_root,
                             pr,
                             &self.spec,
                             reviewer_started_at,
                             pre_review_head_sha.as_deref(),
-                        )
-                    }) {
+                        )?,
+                    };
+                    if let Some(o) = fallback {
                         o
                     } else if self.no_human.is_some() {
                         // BUG-280: under a headless `--no-human` drain, a NoVerdict
