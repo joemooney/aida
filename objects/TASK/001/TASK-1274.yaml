@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:30:55.289650932Z
-modified_at: 2026-09-22T02:01:58.471394834Z
+modified_at: 2026-09-22T02:57:27.812098874Z
 req_type: Task
 tags:
 - batch:story-1216
@@ -75,6 +75,11 @@ comments:
   created_at: 2026-09-21T21:07:19.544535934Z
   modified_at: 2026-09-21T21:07:19.544535934Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c70c-0104-7302-8347-4456eb4aeebe
+  author: joe
+  content: 'Rework evidence at head 32e95b531f: GitLab pipeline 324 succeeded on the exact pushed SHA. Full test job 699 succeeded in 642.39s. Exact-SHA warm verify job 701 succeeded in 83.18s, logged identical previous/current verified SHA, and contained zero Compiling and zero Checking lines. GitHub Build also passed. The original blanket hash-to-time helper was proven unsafe because Cargo can reuse stale output when changed input receives an older synthetic mtime; it is replaced by last-successful-SHA state, changed paths retain fresh mtimes, and the target cache namespace is bumped to v2. Focused real-Cargo regression proves changed sources rebuild and exact-SHA retries are fresh. The 2026-09-19 punt remains explicitly unrecoverable per completed BUG-1285 and BUG-1450. Merge hold remains armed; status remains NeedsAttention pending independent review. Evidence: GitLab pipeline 324, verify job 701, test job 699, GitHub Actions run 35680474496.'
+  created_at: 2026-09-22T02:57:27.812098874Z
+  modified_at: 2026-09-22T02:57:27.812098874Z
 deferred: true
 deferred_at: 2026-09-20T00:40:42.574659212Z
 deferred_until: a keyboard session splits the pipeline-waiting from the code change — the work needs more than the 45m phase ceiling because it waits on real GitLab pipelines, so it must not re-enter a drain phase until it is a smaller spec
