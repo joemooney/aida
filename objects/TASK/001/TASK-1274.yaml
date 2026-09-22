@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:30:55.289650932Z
-modified_at: 2026-09-22T02:57:27.812098874Z
+modified_at: 2026-09-22T06:24:12.719659119Z
 req_type: Task
 tags:
 - batch:story-1216
@@ -80,6 +80,11 @@ comments:
   content: 'Rework evidence at head 32e95b531f: GitLab pipeline 324 succeeded on the exact pushed SHA. Full test job 699 succeeded in 642.39s. Exact-SHA warm verify job 701 succeeded in 83.18s, logged identical previous/current verified SHA, and contained zero Compiling and zero Checking lines. GitHub Build also passed. The original blanket hash-to-time helper was proven unsafe because Cargo can reuse stale output when changed input receives an older synthetic mtime; it is replaced by last-successful-SHA state, changed paths retain fresh mtimes, and the target cache namespace is bumped to v2. Focused real-Cargo regression proves changed sources rebuild and exact-SHA retries are fresh. The 2026-09-19 punt remains explicitly unrecoverable per completed BUG-1285 and BUG-1450. Merge hold remains armed; status remains NeedsAttention pending independent review. Evidence: GitLab pipeline 324, verify job 701, test job 699, GitHub Actions run 35680474496.'
   created_at: 2026-09-22T02:57:27.812098874Z
   modified_at: 2026-09-22T02:57:27.812098874Z
+- id: 01a0c7c9-49af-71b1-af31-3efcce405988
+  author: joe
+  content: '[aida:proxy-approval] verdict=approved; reasoning=independent cold reviewer verified exact head 32e95b531fb9f44bedcdf13299a92a4aa7974927, GitLab pipeline 324, warm verify 83.18s with zero Cargo compilation, 6880 tests plus MCP suites, GitHub Build, and mtime regression; independent=yes; gates=acceptance met, exact-head review approved, Ubuntu CI green; hold-release=deliberate gh label bypass required because non-TTY ship path cannot enforce trailer stripping; squash subject must omit TASK-1274; timestamp=2026-09-21T23:24:12-07:00'
+  created_at: 2026-09-22T06:24:12.719659119Z
+  modified_at: 2026-09-22T06:24:12.719659119Z
 deferred: true
 deferred_at: 2026-09-20T00:40:42.574659212Z
 deferred_until: a keyboard session splits the pipeline-waiting from the code change — the work needs more than the 45m phase ceiling because it waits on real GitLab pipelines, so it must not re-enter a drain phase until it is a smaller spec
