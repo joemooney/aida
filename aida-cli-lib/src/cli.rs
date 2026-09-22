@@ -5590,16 +5590,23 @@ pub enum QueueCommand {
         /// failure SHELVES that member and the drain continues with the rest —
         /// contrast `--single-branch`, which accumulates every member on one
         /// branch and HALTS on a failure. This names + guards that ordered,
-        /// per-member-PR SHAPE; it does not itself pin concurrency. The batch
-        /// drain runs strictly one member at a time at the default
-        /// `[drain] pipeline_depth = 1`; raise that (max 3) and the pipelined
-        /// scheduler starts a later member's implementer/CI leg while an earlier
-        /// member waits, with merges still serialized one at a time. Requires
+        /// per-member-PR SHAPE; it does not itself pin concurrency. A
+        /// single-batch drain (`--batch NAME`) runs strictly one member at a
+        /// time at the default `[drain] pipeline_depth = 1`; raise that (max 3)
+        /// and the pipelined scheduler starts a later member's implementer/CI
+        /// leg while an earlier member waits, with merges still serialized one
+        /// at a time. A `--batches A,B,C` chain ignores the depth entirely: the
+        /// batches run in turn, and each batch's members one at a time. Requires
         /// `--batch` or `--batches`.
         // trace:TASK-1005, SPIKE-70 | ai:claude — plain `//` keeps the marker out of `--help`.
         // trace:TASK-185 | ai:claude — STORY-1091 made `[drain] pipeline_depth`
-        // live for the batch drain, so the old "concurrency is pinned to 1"
-        // sentence advertised a landed feature as absent.
+        // live for the SINGLE-batch drain, so the old "concurrency is pinned to
+        // 1" sentence advertised a landed feature as absent. The depth is scoped
+        // to that path: `handle_auto_complete_batch` calls
+        // `drain_batch_pipelined_with_caps`, but `handle_auto_complete_batches`
+        // goes through `drain_batch_chain_with_caps`, which is typed on the
+        // non-pipelined `BatchDriver` and always calls `drain_batch_with_caps` —
+        // so an UNQUALIFIED depth claim would be false for `--batches`.
         #[clap(long, requires = "autonomous", conflicts_with = "single_branch")]
         sequential: bool,
         /// Preview without acting. For a single spec: print the resolved
@@ -13820,21 +13827,34 @@ mod tests {
 
     // TASK-185: the `--sequential` help text must not re-assert that
     // concurrency is pinned to 1 — STORY-1091 made `[drain] pipeline_depth`
-    // live for the batch drain, so that sentence advertised a landed feature as
-    // absent. Guard the corrected claim (and its absence) at the rendered help.
+    // live for the single-batch drain, so that sentence advertised a landed
+    // feature as absent. This guard FORBIDS the old falsehood; it deliberately
+    // does NOT mandate that the help name the knob at all, because an
+    // unqualified depth claim is itself false: `--batches` chains run through
+    // `drain_batch_chain_with_caps`, which is typed on the non-pipelined
+    // `BatchDriver` and always calls `drain_batch_with_caps`, so the depth is
+    // inert there. Naming the knob is therefore optional — but if the help
+    // names it, the claim has to carry its scope.
     // trace:TASK-185 | ai:claude
     #[test]
     fn sequential_help_does_not_claim_concurrency_is_pinned() {
         let mut cmd = <Cli as clap::CommandFactory>::command();
         let help = find_subcommand_help(&mut cmd, &["queue", "work"]);
+        // clap wraps long help at the terminal width, so flatten runs of
+        // whitespace before matching any multi-word phrase — a line break in
+        // the middle of a claim must not let it slip past this guard.
+        let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(
-            !help.contains("pinned to 1"),
-            "`aida queue work --help` still claims concurrency is pinned to 1"
+            !flat.contains("pinned to 1"),
+            "`aida queue work --help` still claims concurrency is pinned to 1; got:\n{help}"
         );
-        assert!(
-            help.contains("pipeline_depth"),
-            "`aida queue work --help` should name `[drain] pipeline_depth` as what governs concurrency; got:\n{help}"
-        );
+        if flat.contains("pipeline_depth") {
+            assert!(
+                flat.contains("chain ignores the depth"),
+                "`aida queue work --help` names `[drain] pipeline_depth` without scoping it \
+                 away from `--batches` chains, which are serial at any depth; got:\n{help}"
+            );
+        }
     }
 
     /// Render the long help for a nested subcommand path (e.g. `queue work`).

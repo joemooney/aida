@@ -144,9 +144,10 @@ order, tag the members `batch:NAME` and drain the batch instead of fanning out:
   the per-member-PR shape, not concurrency: members run strictly one at a time
   at the default `[drain] pipeline_depth = 1`, and raising that (max 3) lets a
   later member's implementer/CI leg overlap an earlier member's wait while
-  merges stay serial. A member failure **shelves** that member and the drain
-  **continues** with the rest. Use when the members are coupled but each
-  increment is independently shippable + reviewable.
+  merges stay serial. That depth applies to a **single-batch** drain only — a
+  `--batches A,B,C` chain is serial at any depth. A member failure **shelves**
+  that member and the drain **continues** with the rest. Use when the members
+  are coupled but each increment is independently shippable + reviewable.
 - **`aida queue work --batch NAME --auto-complete --single-branch`** — all
   members accumulate on ONE shared branch in one worktree, no per-member
   merge-to-main, ONE cluster PR at the end. A member failure **halts** the drain
