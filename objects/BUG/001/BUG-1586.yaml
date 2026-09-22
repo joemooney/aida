@@ -37,12 +37,12 @@ description: |-
 
   Filed by the driver-advisor seat from an independent review's non-blocking finding. The advisor
   could not review #2070 itself, having written the brief that produced it.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T00:42:38.482858241Z
-modified_at: 2026-09-22T00:42:38.482858241Z
+modified_at: 2026-09-22T07:08:35.747317548Z
 req_type: Bug
 tags:
 - drain cli papercut
