@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T00:42:38.482858241Z
-modified_at: 2026-09-22T07:21:39.509372975Z
+modified_at: 2026-09-22T08:00:22.566537986Z
 req_type: Bug
 tags:
 - drain cli papercut
@@ -57,3 +57,8 @@ comments:
   content: 'Cold independent review verdict for exact head b8fb3c17dd350b9bf4ef652069f2b7d61b632585: PASS on code and acceptance, with sequencing/CI gate. Independently reviewed the stacked delta against exact base a62a0ddf7cc20a55371d61c6fe81ef11a2554a7f (PR #2070): one file only, aida-cli-lib/src/queue_cmd.rs (73 insertions, 5 deletions); docs/autonomous-drain.md and --help surfaces are untouched, so BUG-1585 is excluded. Runtime notice resolves DrainTuning from the main worktree root; depth 1 alone says strictly one at a time, depth 2 reports resolved 2 and allows up to 2 in flight, and root lookup failure passes None to a value-free knob notice without failing the drain. Regression coverage is defect-sensitive: the depth-2 assertion rejects the old one-at-a-time text; focused tests passed independently (3/3), plus cargo fmt --all -- --check and git diff --check. GitHub merge-hold-gate is green for #2078. Sequencing: #2078 must remain stacked on and merge after #2070; #2070 substantive Build (ubuntu-latest) CI was still pending at review time, so this is not an unconditional merge-now verdict until that parent CI is green.'
   created_at: 2026-09-22T07:21:39.509372975Z
   modified_at: 2026-09-22T07:21:39.509372975Z
+- id: 01a0c821-5426-7872-a1ab-74a52fbeee2b
+  author: joe
+  content: 'PR #2078 was closed after #2070 squash-merged and polluted the retargeted stacked diff. Clean replacement PR #2082 is based on current main at commit 51c9f29d17; GitHub confirms only aida-cli-lib/src/queue_cmd.rs changed. Targeted tests and CI are green. Prior cold verdict was not carried forward; new head requires independent review.'
+  created_at: 2026-09-22T08:00:22.566537986Z
+  modified_at: 2026-09-22T08:00:22.566537986Z
