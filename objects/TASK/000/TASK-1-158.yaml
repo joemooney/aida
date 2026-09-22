@@ -19,7 +19,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T23:58:27.988803235Z
-modified_at: 2026-09-22T11:22:06.386546923Z
+modified_at: 2026-09-22T11:30:40.010446074Z
 req_type: Task
 tags:
 - from-advisor:BUG-1467
@@ -71,3 +71,8 @@ comments:
   content: 'Independent cold review PASS at exact head 4983d3a94e0c1f46d8746db880e7cb750517e5e6. The narrow allow_hyphen_values change binds one flag-like argv value to each finding without consuming later argv: regression proof covers --pr N and --yes as inert prose, a later real --pr 999, and rejection of an unbound mistyped flag. Focused parser tests: 3 passed; cargo fmt check passed; diff check passed. Full strict clippy reached only six unrelated pre-existing aida-core warnings outside this diff. merge-hold-gate is green; required Ubuntu Build is pending, so merge approval is conditional on that exact-head Build succeeding.'
   created_at: 2026-09-22T11:22:06.386546923Z
   modified_at: 2026-09-22T11:22:06.386546923Z
+- id: 01a0c8e1-db0a-7e83-8cca-b1e2b8157b21
+  author: joe
+  content: '[aida:proxy-approval] verdict=APPROVE; reasoning=independent cold review approved exact head 4983d3a94e0c1f46d8746db880e7cb750517e5e6; flag-like finding text remains opaque while later explicit flags and typo errors retain normal parsing; independent=yes; gates=Build ubuntu SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; timestamp=2026-09-22T04:30:39-07:00'
+  created_at: 2026-09-22T11:30:40.010446074Z
+  modified_at: 2026-09-22T11:30:40.010446074Z
