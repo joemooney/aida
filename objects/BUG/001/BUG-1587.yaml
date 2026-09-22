@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T01:21:50.376418646Z
-modified_at: 2026-09-22T01:29:37.778158413Z
+modified_at: 2026-09-22T01:31:20.654288461Z
 req_type: Bug
 comments:
 - id: 01a0c6bb-96f2-7e11-9749-e5f6e29d7ae5
@@ -16,3 +16,8 @@ comments:
   content: 'Root cause: every already-initialized guard returned before maybe_scaffold_codex_hooks_on_init, while .codex/hooks is intentionally ignored and can disappear independently of hooks.json. Fixed all three init modes to run a non-force Codex-hook repair before returning. The repair respects --agent and --no-hooks, preserves customized wiring/files, and restores only missing handlers. Verified with 2 new regression tests, 5 existing aida-core codex_hooks tests, cargo fmt, git diff --check, and an end-to-end initialized-project probe restoring 10 executable handlers.'
   created_at: 2026-09-22T01:29:37.778158413Z
   modified_at: 2026-09-22T01:29:37.778158413Z
+- id: 01a0c6bd-28ce-7f50-95d1-b717f76e7235
+  author: joe
+  content: Implemented in PR-2072 (commit 3cbb0f85be). aida pr ship pushed the branch and created the PR; auto-merge correctly stopped because the bug is supervised and awaits human/advisor review.
+  created_at: 2026-09-22T01:31:20.654288461Z
+  modified_at: 2026-09-22T01:31:20.654288461Z
