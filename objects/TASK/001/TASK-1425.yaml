@@ -55,7 +55,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:09:54.985425283Z
-modified_at: 2026-09-22T06:32:44.953279871Z
+modified_at: 2026-09-22T06:47:29.469546605Z
 req_type: Task
 tags:
 - forge gitlab ci infrastructure
@@ -85,3 +85,18 @@ comments:
   content: 'Acceptance evidence (2026-09-21): PR #2075 exact head 8e83575e5ab1d560e0e5896544c4cf9061881d72, workflow run 35694942445, GitLab live forge smoke job 106639645411 completed SUCCESS. Preflight returned HTTP 200 application/json with body_class=gitlab-version-json. The live test then passed clone/push using process-scoped Git Access headers and executed ci-registration (MR 1), ci-wait, review-verdict Approved, merge, lifecycle-events, branch-cleanup, and project-cleanup for project 18. The test ended ok. No Access secret was written to repo/global Git config or printed. This is the required non-skipped full lifecycle and cleanup evidence. Independent review and required PR CI remain merge gates.'
   created_at: 2026-09-22T06:32:44.953279871Z
   modified_at: 2026-09-22T06:32:44.953279871Z
+- id: 01a0c7de-99bd-7d83-9588-5ca0a278c424
+  author: joe
+  content: |-
+    REQUEST CHANGES — independent cold review of exact head 8e83575e5ab1d560e0e5896544c4cf9061881d72 for TASK-1425 / ADR-54.
+
+    Acceptance/security evidence:
+    - Workflow-dispatch run 35694942445, job 106639645411 is on this exact SHA and passed without skipping.
+    - Preflight reported HTTP 200, application/json, body_class=gitlab-version-json; the lifecycle then reached ci-registration, ci-wait, review-verdict (Approved), merge, lifecycle-events, branch-cleanup, and project-cleanup; gitlab_live_mr_round_trip passed.
+    - Cloudflare headers for glab are env-backed (valueFromEnv), while Git smart-HTTP uses host-scoped numbered GIT_CONFIG_* entries in the test process only. No literal secret is persisted to glab config, repository config, or global Git config; diagnostics print only classifications/status metadata.
+    - bash tests/test_gitlab_live_access_workflow.sh, workflow YAML parse, and git diff --check pass locally.
+
+    Blocking finding:
+    - Exact-head required CI is not green. GitHub branch protection requires Build (ubuntu-latest), and that check failed in run 35694945797 / job 106639653962 (scaffold_refresh::tests::starter_role_refresh_adds_missing_prompt_and_preserves_user_prompt). Exact-head Windows also failed in run 35694945775 / job 106639652090 (templates::tests::project_discipline_pack_matches_master). Regardless of whether these failures are baseline/flaky, this head cannot receive APPROVE while its protected required check is red. Rerun/rebase as appropriate and obtain green required CI on the unchanged reviewed head (or submit a new head for fresh review).
+  created_at: 2026-09-22T06:47:29.469546605Z
+  modified_at: 2026-09-22T06:47:29.469546605Z
