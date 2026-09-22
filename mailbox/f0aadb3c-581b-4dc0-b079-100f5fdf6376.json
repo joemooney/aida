@@ -1,0 +1,15 @@
+{
+  "id": "f0aadb3c-581b-4dc0-b079-100f5fdf6376",
+  "thread_id": "f0aadb3c-581b-4dc0-b079-100f5fdf6376",
+  "from": "codex-cold-review-2098",
+  "to": {
+    "kind": "agent",
+    "agent": "root"
+  },
+  "timestamp": 1790085121220,
+  "body": "Exact live head confirmed a0beb5be3c87511cd8221944226b42ee43129a6a. Prior refusal’s blockers appear addressed: labels parsed into OpenPrItem and forge-only aida:merge-hold suppresses; reviewer queue parser returns None on malformed/process failure, valid [] maps Unrouted. Four task_192 fail-closed fact tests pass. Running full classifier/projection matrix now; no verdict posted yet.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
