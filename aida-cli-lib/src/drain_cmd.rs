@@ -575,6 +575,13 @@ pub(crate) fn probe_resume_facts(
             .unwrap_or(false);
 
     // reviewed — an Approved verdict file exists for the PR.
+    // The spelling is insufficient: prove it names the current branch tip.
+    // trace:BUG-1466 | ai:codex
+    // trace:BUG-1538 | ai:codex
+    let current_head = branch.as_deref().and_then(|b| {
+        resolve_commit_sha(project_root, &format!("origin/{b}"))
+            .or_else(|| resolve_commit_sha(project_root, b))
+    });
     let reviewed = pr
         .map(|n| {
             let path = project_root
@@ -582,7 +589,7 @@ pub(crate) fn probe_resume_facts(
                 .join("review-verdicts")
                 .join(format!("PR-{n}.json"));
             matches!(
-                read_verdict_file(&path),
+                read_verdict_file_for_head(&path, current_head.as_deref()),
                 Ok(auto_complete::ReviewerOutcome::Verdict(
                     auto_complete::Verdict::Approved
                 ))

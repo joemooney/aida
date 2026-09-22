@@ -64,6 +64,12 @@ fn pr_keyed_reviewer_verdict_arms_rework_guard() {
     let verdict = blocking_rework_verdict(tmp.path(), "STORY-1350", 1974)
         .expect("the canonical PR-N reviewer artifact must arm the guard");
     assert_eq!(verdict.kind, review_verdict::VerdictKind::RequestChanges);
+    // BUG-1466 criterion 2 / "salvaged from PR #2029": this test asserted the
+    // returned verdict's KIND and not WHICH verdict was returned. Pinning
+    // identity (not just kind) asserts the property BUG-1466 is about — that
+    // the PR-keyed handshake actually carries the reviewed commit through.
+    // trace:BUG-1466 | ai:claude
+    assert_eq!(verdict.reviewed_sha.as_deref(), Some("deadbeef"));
 }
 
 // trace:TASK-1265 trace:BUG-1445 | ai:codex

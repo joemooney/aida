@@ -77134,7 +77134,42 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         ),
         // trace:BUG-775 | ai:claude
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
+        // trace:BUG-1516 | ai:claude
+        ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
     }
+}
+
+/// `aida review normalize-shas` — BUG-1516 criterion 3's repair verb: expand
+/// every abbreviated `reviewed_sha` on disk to its full commit sha where this
+/// repo can still resolve it, and mark the rest unresolvable rather than
+/// guessing. Deliberately never runs on its own — `.aida/review-verdicts/` is
+/// live coordination state other seats may be reading right now, so touching
+/// it is always an explicit, operator-invoked action.
+// trace:BUG-1516 | ai:claude
+fn handle_review_normalize_shas(dry_run: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let report = review_verdict::backfill_abbreviated_shas(&project_root, dry_run)
+        .with_context(|| "could not sweep .aida/review-verdicts for abbreviated shas")?;
+    let verb = if dry_run { "would resolve" } else { "resolved" };
+    println!(
+        "{} {} {} abbreviated sha(s), {} unresolvable, {} already full, {} with no sha",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        verb,
+        report.resolved.len(),
+        report.unresolvable.len(),
+        report.already_full,
+        report.skipped_no_sha
+    );
+    for name in &report.resolved {
+        println!("  {} {name}", "→".green());
+    }
+    for name in &report.unresolvable {
+        println!(
+            "  {} {name} (kept verbatim, marked reviewed_sha_unresolvable)",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
+    Ok(())
 }
 
 fn guided_review_prompt(spec: &str) -> String {
@@ -77537,14 +77572,22 @@ fn handle_review_record(
         if let Some(dir) = handshake.parent() {
             std::fs::create_dir_all(dir)?;
         }
+        // Read back the canonical record rather than rebuilding provenance.
+        // Besides keeping the timestamp byte-identical, this carries the
+        // full SHA produced by record_verdict's write-boundary normalization
+        // when the caller supplied an abbreviation.
+        // trace:BUG-1466 | ai:codex
+        // trace:BUG-1516 | ai:codex
+        let recorded = review_verdict::read_recorded_verdict(&project_root, spec)
+            .ok_or_else(|| anyhow::anyhow!("the verdict was written but could not be read back"))?;
         let mut body = serde_json::json!({
             "verdict": kind.label(),
             "summary": summary.unwrap_or(""),
             "mode": "orchestrator-phase-3",
-            "reviewed_sha": resolved_sha.as_deref().expect("checked above"),
-            "reviewed_branch": branch,
-            "recorded_at": chrono::Utc::now().to_rfc3339(),
-            "recorded_by": recorded_by,
+            "reviewed_sha": recorded.reviewed_sha,
+            "reviewed_branch": recorded.reviewed_branch,
+            "recorded_at": recorded.recorded_at,
+            "recorded_by": recorded.recorded_by,
         });
         let findings: Vec<_> = findings
             .iter()
@@ -85141,22 +85184,23 @@ fn spec_verdict_fallback_for_phase3(
     project_root: &std::path::Path,
     spec: &str,
     reviewer_started_at: std::time::SystemTime,
+    current_head: Option<&str>,
 ) -> Option<auto_complete::ReviewerOutcome> {
     let path = review_verdict::verdict_path(project_root, spec);
     let mtime = std::fs::metadata(&path).ok()?.modified().ok()?;
     if mtime < reviewer_started_at {
         return None; // stale: recorded by some earlier review, not this one
     }
+    let outcome = read_verdict_file_for_head(&path, current_head).ok()?;
     let body = std::fs::read_to_string(&path).ok()?;
     let rec = review_verdict::parse_recorded_verdict(&body)?;
-    let verdict = auto_complete::Verdict::parse(rec.kind.label())?;
     eprintln!(
         "  {} no PR-keyed verdict file, but the reviewer recorded {} for {} during this session — accepting it",
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
         rec.kind.label(),
         spec
     );
-    Some(auto_complete::ReviewerOutcome::Verdict(verdict))
+    Some(outcome)
 }
 
 /// BUG-809: last-ditch verdict discovery when both the PR-keyed file and the
@@ -85177,6 +85221,7 @@ fn sibling_verdict_sweep_for_phase3(
     pr: u32,
     spec: &str,
     reviewer_started_at: std::time::SystemTime,
+    current_head: Option<&str>,
 ) -> Option<auto_complete::ReviewerOutcome> {
     let root_canon = project_root.canonicalize().ok()?;
     let parent = root_canon.parent()?;
@@ -85207,17 +85252,8 @@ fn sibling_verdict_sweep_for_phase3(
         }
     }
     candidates.sort_by(|a, b| b.0.cmp(&a.0));
-    for (_, cand, is_pr) in candidates {
-        let outcome = if is_pr {
-            read_verdict_file(&cand).ok()
-        } else {
-            std::fs::read_to_string(&cand)
-                .ok()
-                .as_deref()
-                .and_then(review_verdict::parse_recorded_verdict)
-                .and_then(|rec| auto_complete::Verdict::parse(rec.kind.label()))
-                .map(auto_complete::ReviewerOutcome::Verdict)
-        };
+    for (_, cand, _is_pr) in candidates {
+        let outcome = read_verdict_file_for_head(&cand, current_head).ok();
         let Some(outcome) = outcome else { continue };
         // Copy back to the canonical location (best-effort): audit trail +
         // the STORY-439 calibration tag-along both read the drive root.
@@ -85283,6 +85319,66 @@ fn read_verdict_file(
                 format!("unrecognised verdict `{raw}` in the verdict file"),
             )
         })
+}
+
+/// Read a live phase-3 handshake and prove an approval covers the PR head the
+/// orchestrator is about to advance. Refusals and escalations remain usable
+/// without this check because they fail closed already.
+// trace:BUG-1466 | ai:codex
+// trace:BUG-1538 | ai:codex
+fn read_verdict_file_for_head(
+    path: &std::path::Path,
+    current_head: Option<&str>,
+) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
+    let outcome = read_verdict_file(path)?;
+    if !matches!(
+        outcome,
+        auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Approved)
+    ) {
+        return Ok(outcome);
+    }
+    let body = std::fs::read_to_string(path).map_err(|e| {
+        auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
+            format!("could not re-read approval provenance: {e}"),
+        )
+    })?;
+    let recorded = serde_json::from_str::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|v| {
+            v.get("reviewed_sha")
+                .and_then(|s| s.as_str())
+                .map(str::to_string)
+        });
+    let same_commit = match (recorded.as_deref(), current_head) {
+        (Some(a), Some(b)) => {
+            let a = a.trim();
+            let b = b.trim();
+            a.len().min(b.len()) >= 7
+                && a.bytes().all(|c| c.is_ascii_hexdigit())
+                && b.bytes().all(|c| c.is_ascii_hexdigit())
+                && (a.eq_ignore_ascii_case(b)
+                    || (a.len() < b.len() && b[..a.len()].eq_ignore_ascii_case(a))
+                    || (b.len() < a.len() && a[..b.len()].eq_ignore_ascii_case(b)))
+        }
+        _ => false,
+    };
+    if same_commit {
+        Ok(outcome)
+    } else {
+        Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
+            match (recorded.as_deref(), current_head) {
+                (None, _) => "the APPROVED verdict is UNPROVEN because it records no reviewed_sha"
+                    .to_string(),
+                (_, None) => "the APPROVED verdict is UNPROVEN because the current PR head could not be resolved"
+                    .to_string(),
+                (Some(reviewed), Some(current)) => format!(
+                    "the APPROVED verdict is stale: it reviewed {reviewed}, but the current PR head is {current}"
+                ),
+            },
+        ))
+    }
 }
 
 /// STORY-439: pick the calibration review-slot fields out of a verdict
@@ -88697,13 +88793,18 @@ impl RealPhaseDriver {
             );
         }
 
-        let outcome = match read_verdict_file(&verdict_path) {
+        let gate_head_sha = pr_head_sha_best_effort(self, pr);
+        let outcome = match read_verdict_file_for_head(&verdict_path, gate_head_sha.as_deref()) {
             Ok(o) => o,
             Err(primary_failure) => {
+                if verdict_path.is_file() {
+                    return Err(primary_failure);
+                }
                 if let Some(o) = spec_verdict_fallback_for_phase3(
                     &self.project_root,
                     &self.spec,
                     gate_started_at,
+                    gate_head_sha.as_deref(),
                 )
                 .or_else(|| {
                     sibling_verdict_sweep_for_phase3(
@@ -88711,6 +88812,7 @@ impl RealPhaseDriver {
                         pr,
                         &self.spec,
                         gate_started_at,
+                        gate_head_sha.as_deref(),
                     )
                 }) {
                     o
@@ -90620,44 +90722,50 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             );
         }
 
-        let outcome = match read_verdict_file(&verdict_path) {
-            Ok(o) => o,
-            Err(primary_failure) => {
-                // BUG-806: the spec-keyed record, when fresh, IS the verdict.
-                // BUG-809: failing that, sweep sibling checkouts — the env
-                // anchor does not reliably survive a vendor tool sandbox.
-                if let Some(o) = spec_verdict_fallback_for_phase3(
-                    &self.project_root,
-                    &self.spec,
-                    reviewer_started_at,
-                )
-                .or_else(|| {
-                    sibling_verdict_sweep_for_phase3(
+        let outcome =
+            match read_verdict_file_for_head(&verdict_path, pre_review_head_sha.as_deref()) {
+                Ok(o) => o,
+                Err(primary_failure) => {
+                    if verdict_path.is_file() {
+                        return Err(primary_failure);
+                    }
+                    // BUG-806: the spec-keyed record, when fresh, IS the verdict.
+                    // BUG-809: failing that, sweep sibling checkouts — the env
+                    // anchor does not reliably survive a vendor tool sandbox.
+                    if let Some(o) = spec_verdict_fallback_for_phase3(
                         &self.project_root,
-                        pr,
                         &self.spec,
                         reviewer_started_at,
+                        pre_review_head_sha.as_deref(),
                     )
-                }) {
-                    o
-                } else if self.no_human.is_some() {
-                    // BUG-280: under a headless `--no-human` drain, a NoVerdict
-                    // failure is most often the AskUserQuestion-in-headless
-                    // symptom (reviewer skill called a confirmation prompt
-                    // forbidden by the harness, bailed before writing the
-                    // verdict file). Enrich the error message so the recovery
-                    // hint names the likely cause instead of the generic
-                    // "no verdict file." trace:BUG-280 | ai:claude
-                    return Err(enrich_no_verdict_with_headless_diagnostic(
-                        primary_failure,
-                        &self.project_root,
-                        reviewer_started_at,
-                    ));
-                } else {
-                    return Err(primary_failure);
+                    .or_else(|| {
+                        sibling_verdict_sweep_for_phase3(
+                            &self.project_root,
+                            pr,
+                            &self.spec,
+                            reviewer_started_at,
+                            pre_review_head_sha.as_deref(),
+                        )
+                    }) {
+                        o
+                    } else if self.no_human.is_some() {
+                        // BUG-280: under a headless `--no-human` drain, a NoVerdict
+                        // failure is most often the AskUserQuestion-in-headless
+                        // symptom (reviewer skill called a confirmation prompt
+                        // forbidden by the harness, bailed before writing the
+                        // verdict file). Enrich the error message so the recovery
+                        // hint names the likely cause instead of the generic
+                        // "no verdict file." trace:BUG-280 | ai:claude
+                        return Err(enrich_no_verdict_with_headless_diagnostic(
+                            primary_failure,
+                            &self.project_root,
+                            reviewer_started_at,
+                        ));
+                    } else {
+                        return Err(primary_failure);
+                    }
                 }
-            }
-        };
+            };
 
         // The reviewer writes the decision fields, but the drain owns the
         // authoritative PR head and branch context. Normalize a PR-keyed
