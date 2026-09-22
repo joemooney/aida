@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T09:25:33.567593252Z
-modified_at: 2026-09-22T10:12:08.268926584Z
+modified_at: 2026-09-22T11:10:10.931342632Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -40,3 +40,8 @@ comments:
   content: 'Cold rereview at exact head 664c6539ad313f023efc7009cd95230b3403e4d8: REQUEST CHANGES. Blocking findings: (1) drain resume''s reviewed fact reads only PR-N.json, so an opposite same-head spec-keyed verdict is not reconciled and review may be skipped; (2) the launcher wave merge helper derives its reconciliation SHA from the first parseable artifact rather than the forge PR head, so stale PR approval + current spec block can be evaluated at the stale SHA and permit merge. Targeted BUG-1581/review_verdict/read_verdict_file tests and fmt pass; exact-head GitHub Build was still pending at review time.'
   created_at: 2026-09-22T10:12:08.268926584Z
   modified_at: 2026-09-22T10:12:08.268926584Z
+- id: 01a0c8cf-19f3-7e93-bc0f-80315be81edc
+  author: joe
+  content: 'Cold round-6 verdict: APPROVED at exact head 0a7446cc66f36bcd3a3cebbeb3da1f544fbba091. Independent review verified all fresh sibling PR/spec artifacts are reconciled against the actual forge head; opposing verdict orderings, malformed or unattributed evidence, missing current head, and stale/current separation fail closed. Canonical publication stages and fsyncs complete bytes, uses atomic no-clobber hard-link publication, and on AlreadyExists preserves canonical bytes while reconciling canonical plus all siblings. Resume, wave preflight, and the irreversible merge boundary all revalidate. Local gates passed: BUG-1581 9 tests, BUG-775 suite 30 tests, review-verdict 35 tests, verdict-reader 8 tests, drain wiring 15 tests, fmt, and workspace clippy with correctness denied. Merge-hold gate is green; required Ubuntu Build is still in progress, so approval is conditional on that exact-head Build succeeding. No merge performed.'
+  created_at: 2026-09-22T11:10:10.931342632Z
+  modified_at: 2026-09-22T11:10:10.931342632Z
