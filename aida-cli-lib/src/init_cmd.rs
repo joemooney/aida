@@ -3152,6 +3152,19 @@ mod task_631_init_self_commit_tests {
         }
     }
 
+    #[test]
+    fn sibling_reinit_uses_the_config_written_by_initialization_as_its_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(dir.path().join(".aida/config.toml"), "[deployment]\n").unwrap();
+
+        assert!(sibling_init_marker_exists(dir.path()));
+        assert!(
+            !dir.path().join(".aida/node.toml").exists(),
+            "a standard sibling init does not write the obsolete marker"
+        );
+    }
+
     // trace:STORY-830 | ai:codex
     #[test]
     fn init_footprint_round_trips_project_config() {
@@ -4680,11 +4693,14 @@ pub(crate) fn handle_init_distributed_sibling(
         }
     };
 
-    // Check if already initialized
-    if aida_dir.join("node.toml").exists() && !force {
+    // Check if already initialized. Sibling mode writes `.aida/config.toml`;
+    // it has never created `.aida/node.toml`, so checking the latter sent a
+    // normal re-init into the populated-store refusal before the Codex hook
+    // repair could run. trace:BUG-1587 | ai:codex
+    if sibling_init_marker_exists(&cwd) && !force {
         maybe_repair_codex_hooks_on_reinit(&cwd, agent, no_hooks)?;
         eprintln!(
-            "{} AIDA distributed mode is already initialized (.aida/node.toml exists).",
+            "{} AIDA distributed mode is already initialized (.aida/config.toml exists).",
             "!".yellow()
         );
         eprintln!("  Use {} to reinitialize.", "--force".bold());
@@ -5073,4 +5089,8 @@ pub(crate) fn handle_init_distributed_sibling(
     println!();
 
     Ok(())
+}
+
+fn sibling_init_marker_exists(project_root: &std::path::Path) -> bool {
+    project_root.join(".aida/config.toml").is_file()
 }
