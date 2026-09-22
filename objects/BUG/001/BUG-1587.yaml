@@ -3,10 +3,10 @@ spec_id: BUG-1587
 agreed_id: BUG-1587
 title: Re-running init repairs missing Codex hook runtime files
 description: An initialized project can retain .codex/hooks.json while its ignored .codex/hooks handler copies are absent. aida init currently exits at the already-initialized guard before scaffolding Codex hooks, and the suggested scaffold apply command does not manage them, leaving Codex hooks to fail with exit 127. Re-running init with the Codex profile must safely restore missing handler files without resetting the store or overwriting existing customized files.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T01:21:50.376418646Z
-modified_at: 2026-09-22T01:21:50.376418646Z
+modified_at: 2026-09-22T01:22:06.751843920Z
 req_type: Bug
