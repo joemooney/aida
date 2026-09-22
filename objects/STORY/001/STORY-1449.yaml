@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T09:57:54.571074789Z
-modified_at: 2026-09-22T10:23:36.339966349Z
+modified_at: 2026-09-22T10:38:57.380326814Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -40,3 +40,8 @@ comments:
   content: 'Cold rereview verdict at exact PR head 6ae06bbb5c59d67efdbd5cefd6bc9853136403a6: APPROVE on code/acceptance, merge only after exact-head required CI is green. Verified typed allow-listed performance audits (budget, over-budget count, denominator, millipercent proportion/tolerance, window, worst, excluded count, lineage scope) flow from doctor JSON into an immutable producer failure trip, correlated CronJobFailed event, routed seat ledger due_failure, DueJob JSON, and the shared DueJob renderer used by advisor schedule output, pickup prompt, launch context, and awaiting notice. The end-to-end consumer test asserts the rendered artifact contains the matching trip id and decision-relevant metrics. schedule done clears due_failure; failure history and per-trip audit lists are each capped at 20; legacy ledgers/events deserialize via defaults; malformed stdout stores only an audit error and does not leak payload. Producer/event/route ledger correlation is by exact trip_id. Local verification: git diff --check and cargo fmt --check clean; performance_ tests 11/11 pass; failure-history bound, legacy ledger round-trip, and legacy CronJobFailed compatibility tests pass. At review time merge-hold-gate passed; Ubuntu/macOS/Windows builds remained pending.'
   created_at: 2026-09-22T10:23:36.339966349Z
   modified_at: 2026-09-22T10:23:36.339966349Z
+- id: 01a0c8b2-8364-7d00-b1d2-26b8de35b793
+  author: joe
+  content: '[aida:driver-disposition] Review requirement terminalized: independent cold review approved PR #2091 at exact head 6ae06bbb5c59d67efdbd5cefd6bc9853136403a6, required Ubuntu/macOS/Windows checks passed, proxy-approval ledger was recorded on BUG-1573, and the PR was squash-merged. Marking this review story completed.'
+  created_at: 2026-09-22T10:38:57.380326814Z
+  modified_at: 2026-09-22T10:38:57.380326814Z
