@@ -30,12 +30,12 @@ description: |-
   4. Decide whether the write path can do anything at all. It probably cannot - by the time AIDA sees the string the text is already gone - which is worth stating explicitly so nobody looks for a guard that cannot exist. If that is the conclusion, the detector and the habit are the whole remedy.
 
   WHAT THIS IS NOT. Not a bug in AIDA's write path. The shell consumes the text before any AIDA code runs. It is filed because the DAMAGE is in AIDA's store, is silent, is not rare, and is findable - and because a known hazard that leaves no trace is indistinguishable from one that is not happening.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-21T23:16:31.457753536Z
+modified_at: 2026-09-22T08:07:06.315639941Z
 req_type: Task
 tags:
 - from-advisor:general
