@@ -114,6 +114,10 @@ pub(crate) fn you_channels(report: &awaiting_you::AwaitingReport) -> Vec<(usize,
     if prs > 0 {
         v.push((prs, label(prs, "PR", "PRs")));
     }
+    let broken = report.unowned_failing_prs.len();
+    if broken > 0 {
+        v.push((broken, "broken-unowned".to_string()));
+    }
     let briefs = report.pending_briefs.len();
     if briefs > 0 {
         v.push((briefs, label(briefs, "brief", "briefs")));
@@ -384,6 +388,11 @@ mod tests {
                 head_branch: "b".into(),
                 ci_rollup: Some("pass".into()),
             }],
+            unowned_failing_prs: vec![crate::awaiting_you::UnownedFailingPrItem {
+                number: 8,
+                title: "broken".into(),
+                head_branch: "broken-pr".into(),
+            }],
             pending_briefs: vec![PendingBriefItem {
                 agent: "claude".into(),
                 spec_id: "".into(),
@@ -436,6 +445,7 @@ mod tests {
             rendered,
             vec![
                 "1 PR",
+                "1 broken-unowned",
                 "1 brief",
                 "2 findings",
                 "3 mail",
@@ -447,13 +457,21 @@ mod tests {
                 "2 punts"
             ]
         );
+        assert_eq!(
+            channels
+                .iter()
+                .filter(|(_, label)| label == "broken-unowned")
+                .count(),
+            1,
+            "a broken PR must occupy exactly one statusbar channel"
+        );
         // The meter total is the SUM over channels (each mail counts), not
         // the awaiting report's collapsed line total.
         let c = MeterCounts {
             you: channels,
             ..Default::default()
         };
-        assert_eq!(c.you_total(), 14);
+        assert_eq!(c.you_total(), 15);
     }
 
     #[test]

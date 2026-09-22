@@ -137,6 +137,10 @@ pub(crate) struct OpenPrItem {
     /// the SAME `gh pr list` call as the other fields — no extra request.
     // trace:STORY-1419 | ai:claude
     pub head_sha: Option<String>,
+    /// Forge labels from the same snapshot. A merge hold may exist only on the
+    /// forge when the local marker has not been pulled yet.
+    // trace:TASK-192 | ai:codex
+    pub labels: Vec<String>,
 }
 
 /// A dormant lease (worktree present, no live process, <24h old).
@@ -1153,6 +1157,7 @@ mod tests {
             mergeable: Some("clean".into()),
             review_decision: None,
             head_sha: None,
+            labels: Vec::new(),
         });
         report.dormant_leases.push(DormantLeaseItem {
             lease_id: "abc".into(),
@@ -1198,6 +1203,7 @@ mod tests {
             mergeable: Some("clean".into()),
             review_decision: None,
             head_sha: None,
+            labels: Vec::new(),
         });
 
         report.forge_kind = Some(crate::forge::ForgeKind::GitLab);
@@ -1660,6 +1666,7 @@ mod tests {
                 mergeable: None,
                 review_decision: None,
                 head_sha: None,
+                labels: Vec::new(),
             }],
             missed_auto_bump: vec![MissedAutoBumpItem {
                 spec_id: "TASK-2".to_string(),

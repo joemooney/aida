@@ -29,6 +29,11 @@ pub(crate) struct AwaitingReport {
     /// aida-chat motivating case: 5 PRs sat open for hours because the
     /// system was waiting on the human's merge button and nothing said so.
     pub mergeable_prs: Vec<MergeablePrItem>,
+    /// Open PRs whose CI is failing and which have no verdict, merge hold,
+    /// reviewer route, or live branch owner. These are repair work, not review
+    /// work, so the green-only orphan sweep deliberately does not claim them.
+    // trace:TASK-192 | ai:codex
+    pub unowned_failing_prs: Vec<UnownedFailingPrItem>,
     /// Unacked briefs filed for the running agent (or every agent when
     /// the caller can't narrow). Each one is a hand-off the operator
     /// hasn't picked up yet.
@@ -373,6 +378,82 @@ pub(crate) struct MergeablePrItem {
     pub ci_rollup: Option<String>,
 }
 
+/// A broken PR which has fallen between the review and repair lanes.
+// trace:TASK-192 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct UnownedFailingPrItem {
+    pub number: u64,
+    pub title: String,
+    pub head_branch: String,
+}
+
+/// Routing facts layered over the forge snapshot. Kept separate from
+/// `OpenPrItem` because holds, queues, and live leases are local substrate
+/// state rather than forge properties.
+// trace:TASK-192 | ai:codex
+#[derive(Debug, Clone)]
+pub(crate) struct UnownedFailingPrCandidate {
+    pub pr: OpenPrItem,
+    pub has_local_verdict: bool,
+    pub held: bool,
+    pub route: ReviewerRoute,
+    pub actively_owned: bool,
+}
+
+/// Fail-closed knowledge of the reviewer queue. Queue read or parse failures
+/// are not evidence that a PR is unrouted.
+// trace:TASK-192 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReviewerRoute {
+    Routed,
+    Unrouted,
+    Unknown,
+}
+
+/// The complement of the green orphan-review lane: only definitively red work
+/// with no existing route is actionable here. Pending is not red; green/no-CI
+/// belongs to the reviewer sweep; any ownership signal suppresses the row.
+// trace:TASK-192 | ai:codex
+pub(crate) fn classify_unowned_failing_prs(
+    candidates: &[UnownedFailingPrCandidate],
+) -> Vec<UnownedFailingPrItem> {
+    candidates
+        .iter()
+        .filter(|c| c.pr.ci_rollup.as_deref() == Some("fail"))
+        .filter(|c| {
+            let forge_verdict =
+                c.pr.review_decision
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_ascii_uppercase();
+            !matches!(forge_verdict.as_str(), "APPROVED" | "CHANGES_REQUESTED")
+                && !c.has_local_verdict
+        })
+        .filter(|c| !c.held && c.route == ReviewerRoute::Unrouted && !c.actively_owned)
+        .map(|c| UnownedFailingPrItem {
+            number: c.pr.number,
+            title: c.pr.title.clone(),
+            head_branch: c.pr.head_branch.clone(),
+        })
+        .collect()
+}
+
+// Shared row projection keeps TOON aligned with human/JSON action text.
+// trace:TASK-192 | ai:codex
+pub(crate) fn unowned_failing_pr_toon_rows(items: &[UnownedFailingPrItem]) -> Vec<Vec<String>> {
+    items
+        .iter()
+        .map(|p| {
+            vec![
+                p.number.to_string(),
+                p.title.clone(),
+                p.head_branch.clone(),
+                format!("gh pr checks {}", p.number),
+            ]
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct PendingBriefItem {
     pub agent: String,
@@ -418,6 +499,7 @@ impl AwaitingReport {
     /// the section header and the empty-report short-circuit.
     pub fn total(&self) -> usize {
         self.mergeable_prs.len()
+            + self.unowned_failing_prs.len()
             + self.pending_briefs.len()
             + (if self.findings_total > 0 { 1 } else { 0 })
             + (if self.mail.unread > 0 { 1 } else { 0 })
@@ -512,6 +594,21 @@ impl AwaitingReport {
                 pr.number.to_string().bold(),
                 pr.title,
                 ci,
+            )?;
+            budget -= 1;
+        }
+        for pr in &self.unowned_failing_prs {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            writeln!(
+                w,
+                "  {} PR-{} CI failing with no owner or route — {} · inspect `{}`",
+                "🔴".red(),
+                pr.number.to_string().bold(),
+                pr.title,
+                format!("gh pr checks {}", pr.number).cyan(),
             )?;
             budget -= 1;
         }
@@ -722,6 +819,13 @@ impl AwaitingReport {
                 "head_branch": p.head_branch,
                 "ci_rollup": p.ci_rollup,
             })).collect::<Vec<_>>(),
+            "unowned_failing_prs": self.unowned_failing_prs.iter().map(|p| serde_json::json!({
+                "number": p.number,
+                "title": p.title,
+                "head_branch": p.head_branch,
+                "ci_rollup": "fail",
+                "action": format!("gh pr checks {}", p.number),
+            })).collect::<Vec<_>>(),
             "pending_briefs": self.pending_briefs.iter().map(|b| serde_json::json!({
                 "agent": b.agent,
                 "spec_id": b.spec_id,
@@ -787,6 +891,9 @@ impl AwaitingReport {
         let mut parts: Vec<String> = Vec::new();
         if !self.mergeable_prs.is_empty() {
             parts.push(pluralize(self.mergeable_prs.len(), "PR", "PRs"));
+        }
+        if !self.unowned_failing_prs.is_empty() {
+            parts.push(format!("{} broken-unowned", self.unowned_failing_prs.len()));
         }
         if !self.pending_briefs.is_empty() {
             parts.push(pluralize(self.pending_briefs.len(), "brief", "briefs"));
@@ -934,7 +1041,104 @@ mod tests {
             mergeable: mergeable.map(String::from),
             review_decision: verdict.map(String::from),
             head_sha: None,
+            labels: Vec::new(),
         }
+    }
+
+    fn failing_candidate(number: u64) -> UnownedFailingPrCandidate {
+        UnownedFailingPrCandidate {
+            pr: pr(number, Some("MERGEABLE"), Some("fail"), None),
+            has_local_verdict: false,
+            held: false,
+            route: ReviewerRoute::Unrouted,
+            actively_owned: false,
+        }
+    }
+
+    // TASK-192: the historical PR-2035 shape is red and has no route at all.
+    // It must be visible even though the green orphan-review sweep correctly
+    // refuses to claim it.
+    #[test]
+    fn red_unrouted_unheld_unowned_pr_is_actionable() {
+        let mut review_required = failing_candidate(2036);
+        review_required.pr.review_decision = Some("REVIEW_REQUIRED".into());
+        let rows = classify_unowned_failing_prs(&[failing_candidate(2035), review_required]);
+        assert_eq!(
+            rows.iter().map(|row| row.number).collect::<Vec<_>>(),
+            vec![2035, 2036],
+            "REVIEW_REQUIRED describes missing review, not an existing verdict"
+        );
+    }
+
+    #[test]
+    fn green_pending_and_every_existing_route_are_excluded() {
+        let mut green = failing_candidate(1);
+        green.pr.ci_rollup = Some("pass".into());
+        let mut pending = failing_candidate(2);
+        pending.pr.ci_rollup = Some("pending".into());
+        let mut held = failing_candidate(3);
+        held.held = true;
+        let mut routed = failing_candidate(4);
+        routed.route = ReviewerRoute::Routed;
+        let mut owned = failing_candidate(5);
+        owned.actively_owned = true;
+        let mut local_verdict = failing_candidate(6);
+        local_verdict.has_local_verdict = true;
+        let mut forge_verdict = failing_candidate(7);
+        forge_verdict.pr.review_decision = Some("CHANGES_REQUESTED".into());
+        let mut approved = failing_candidate(8);
+        approved.pr.review_decision = Some("APPROVED".into());
+
+        assert!(classify_unowned_failing_prs(&[
+            green,
+            pending,
+            held,
+            routed,
+            owned,
+            local_verdict,
+            forge_verdict,
+            approved,
+        ])
+        .is_empty());
+    }
+
+    #[test]
+    fn unknown_reviewer_queue_fails_closed() {
+        let mut unavailable = failing_candidate(9);
+        unavailable.route = ReviewerRoute::Unknown;
+        assert!(classify_unowned_failing_prs(&[unavailable]).is_empty());
+    }
+
+    #[test]
+    fn broken_unowned_row_reaches_human_and_json_surfaces() {
+        let report = AwaitingReport {
+            unowned_failing_prs: classify_unowned_failing_prs(&[failing_candidate(2035)]),
+            ..Default::default()
+        };
+        let mut rendered = Vec::new();
+        assert!(report.render(false, &mut rendered).unwrap());
+        let rendered = String::from_utf8(rendered).unwrap();
+        assert!(rendered.contains("PR-2035 CI failing with no owner or route"));
+        assert!(rendered.contains("gh pr checks 2035"));
+
+        let json = report.to_json();
+        assert_eq!(json["total"], 1);
+        assert_eq!(json["unowned_failing_prs"][0]["number"], 2035);
+        assert_eq!(
+            json["unowned_failing_prs"][0]["action"],
+            "gh pr checks 2035"
+        );
+        let compact = report.compact_line().unwrap();
+        assert!(compact.contains("1 broken-unowned"), "{compact}");
+        assert_eq!(
+            unowned_failing_pr_toon_rows(&report.unowned_failing_prs),
+            vec![vec![
+                "2035".to_string(),
+                "PR 2035".to_string(),
+                "branch-2035".to_string(),
+                "gh pr checks 2035".to_string(),
+            ]]
+        );
     }
 
     // ── BUG-767: the mail counting SCOPE ────────────────────────────────────

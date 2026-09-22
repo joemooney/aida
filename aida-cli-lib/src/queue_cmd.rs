@@ -11967,6 +11967,7 @@ mod bug_1581_integration_probe_tests {
                 mergeable: Some("MERGEABLE".into()),
                 review_decision: None,
                 head_sha: Some("ac772eaca9d389fa762a232156df996023bfdf7a".into()),
+                labels: Vec::new(),
             },
         );
         snapshot
