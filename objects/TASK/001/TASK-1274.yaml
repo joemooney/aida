@@ -3,12 +3,12 @@ spec_id: TASK-1274
 agreed_id: TASK-1274
 title: 'Mirror CI: bring the warm verify job under 10 minutes (split build/test jobs, trim what verify runs)'
 description: 'STORY-1216 slices 1+2 (builder image + persistent checkout/target) brought the warm verify run on the mirror from 1271 s cold to 903 s, but the acceptance said under 10 minutes and it is not met. Measured breakdown of the warm run (pipeline 290, 2026-09-18): fetch 14 s, release build 2m30 (5 workspace crates recompiled — the runner''s checkout refresh touches mtimes; deps reused), test-profile build 1m32, clippy 49 s, nextest 6530 tests in 314 s, plus the two MCP shell tests, fmt and doctests. Candidates, in order: (1) split verify into build and test jobs so test build overlaps with bwrap and the release build only runs when a bin is needed; (2) stop the checkout refresh from bumping mtimes (GIT_CLEAN_FLAGS none / keep timestamps) so the release build is a true no-op on unchanged code; (3) nextest partitioning across two jobs; (4) drop the release build from MR pipelines entirely (tests use the dev profile) and keep it for tags. Acceptance: warm verify on an unchanged-deps commit completes in under 10 minutes on the current runner; the job log shows no recompiles of unchanged crates.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:30:55.289650932Z
-modified_at: 2026-09-22T06:25:35.530902473Z
+modified_at: 2026-09-22T06:25:37.638896400Z
 req_type: Task
 tags:
 - batch:story-1216
