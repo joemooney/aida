@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T15:58:28.521305527Z
-modified_at: 2026-09-22T15:58:33.315425896Z
+modified_at: 2026-09-22T16:00:28.467165954Z
 req_type: Task
 tags:
 - cost
@@ -46,3 +46,48 @@ relationships:
 - rel_type: Child
   target_id: 01a0babf-a128-7123-8650-a7b7899b8e55
   created_at: 2026-09-22T15:58:35.299156897Z
+comments:
+- id: 01a0c9d8-df33-7eb0-ad9d-6488d08cd80c
+  author: joe
+  content: |-
+    Sketch-first proposal for TASK-1434 (design only; blocked on TASK-1427 / PR #2099)
+
+    1. Versioned rate data
+    - Check in data/token-rates/v1.toml and document it in docs/token-usage-ledger.md. It is release-versioned source data; the derived SQLite ledger remains .aida/derived/token-ledger-v1.sqlite.
+    - Top level: schema_version, table_version, published_at, default_currency = "USD", source_url, source_revision, source_retrieved_at, license/provenance_note.
+    - Each rate entry: provider, canonical_model (exact raw identifier), effective_from (inclusive RFC3339 UTC), effective_to (exclusive RFC3339 UTC or absent), currency, unit_tokens = 1000000, and optional decimal-string rates for input_uncached, input_cache_write, input_cache_read, output, output_reasoning. Omission means unsupported/unpriced, never zero.
+    - Explicit alias entries carry provider, alias, canonical_model, effective_from/effective_to, and provenance. Validation rejects duplicate or overlapping provider/model and provider/alias intervals.
+
+    2. Matching and time rules
+    - Join only on exact normalized provider plus exact raw_model from the ledger. If no direct entry exists, permit exactly one active explicit alias; never prefix, fuzzy, family, latest, or case-fold model matching.
+    - Select the interval where occurred_at >= effective_from and occurred_at < effective_to. An absent effective_to is open-ended. Missing/unparseable event timestamp, unknown provider/model, zero or multiple matches, ambiguous alias, currency mismatch, or missing class rate yields an unpriced reason and preserves the measured token count.
+    - A model alias resolves only within its own dated interval, then the resolved canonical entry must independently match that timestamp. Report both raw and resolved model plus rate-entry identity.
+
+    3. Arithmetic and rounding
+    - Parse rate decimal strings without floating point into checked i128 fixed point. Constrain fixture precision to at most six decimal USD per million tokens, allowing exact conversion to integer pico-USD per token; reject excess precision, negatives, overflow, or unit other than 1,000,000.
+    - Multiply tokens by pico-USD-per-token with checked integer arithmetic. Aggregate exact pico-USD values; do not round per message. Human output rounds only at each displayed aggregation boundary to six decimal USD using round-half-even. JSON/TOON expose cost_pico_usd as an integer and cost_usd as a fixed six-decimal string. Grand totals are calculated from exact rows, not sums of rounded display groups.
+    - Genuine measured zero with a valid rate is priced zero. Unknown usage stays unknown, never zero. Missing class rates leave that class token count explicitly unpriced.
+
+    4. Provenance and updates
+    - Pin the initial snapshot to one public upstream revision/date and record URL, revision/hash, retrieval date, license, and any hand adaptations. No runtime network access.
+    - Updates are reviewed data changes: new table_version, source revision/date, validation, boundary tests, and changelog note. Never rewrite old effective intervals to make historical totals follow current prices. Corrective backfills must add a documented superseding entry/version and state their effect.
+    - Query output records rate table version, snapshot date/revision, matched entry IDs, and local-estimate-not-billing semantics. Rates never overwrite usage_record or attribution facts.
+
+    5. CLI/API surface
+    - Extend aida usage show SPEC with --cost and retain existing --group-by phase,vendor,round. Without --cost, current token output remains stable. --cost reads the pinned table offline and adds priced measured tokens/cost, unpriced measured tokens grouped by reason/class, unknown/non-measured coverage, raw and resolved vendor/model, and rate provenance.
+    - Add model as an allowed grouping dimension because vendor alone cannot identify a price; --cost internally splits by matched rate entry even when model is not displayed, preventing blended-rate multiplication.
+    - Human heading states local estimate, not billing. JSON adds a versioned cost object without changing raw token fields. TOON carries the same semantic fields and explicit null/reason values. All forms report rate_table_version and source_revision.
+
+    6. Tests
+    - Fixture and validator tests: exact direct match, inclusive start/exclusive end, open end, unknown model/provider, missing timestamp, overlapping/ambiguous alias rejection, explicit alias resolution, missing token-class rate, precision/negative/overflow rejection.
+    - Query goldens in human/JSON/TOON: measured zero; unknown usage; mixed priced/unpriced classes and models; phase/vendor/model/round implementation-review-rework grouping; exact grand total independent of presentation grouping; no float drift; stable offline repeat.
+    - Regression tests confirm token-only output is unchanged and pricing cannot mutate/rebuild ledger facts.
+
+    7. Security/privacy and scope
+    - Treat the checked-in table as untrusted input: bounded size/count/string lengths, strict schema, HTTPS source metadata, no includes, paths, templates, environment expansion, commands, or network fetches. Output only model/provider/rate metadata and numeric aggregates already allowed by the content-free ledger; never transcript text, source paths, prompts, responses, environment variables, credentials, or vendor usage payloads.
+    - Preserve ledger directory/file permissions. Avoid model strings in filenames or SQL fragments; use parameters and escaped serializers.
+    - Out of scope: invoice reconciliation, negotiated discounts, credits, taxes, vendor API calls, currency conversion, and real-time budget enforcement.
+
+    Signoff questions: approve repository location data/token-rates/v1.toml; the six-decimal USD-per-million constraint / integer pico-USD-per-token representation; additive --cost surface; and adding model to --group-by.
+  created_at: 2026-09-22T16:00:28.467165954Z
+  modified_at: 2026-09-22T16:00:28.467165954Z
