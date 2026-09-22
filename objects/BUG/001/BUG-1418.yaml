@@ -31,12 +31,12 @@ description: |
   NOT IN SCOPE: the durable round/phase join in usage.jsonl that SPIKE-83 names as the replacement for its proportional estimates. That is a larger measurement and belongs on its own spec; this one is about the exit record not lying.
 
   Evidence and root cause from SPIKE-83 (docs/spikes/2026-09-19-cost-observability.md); the population figures were measured in that spike, not by this filing.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:04:43.121876649Z
-modified_at: 2026-09-22T15:28:26.225139499Z
+modified_at: 2026-09-22T15:28:33.566337866Z
 req_type: Bug
 tags:
 - cost
@@ -78,3 +78,22 @@ comments:
   content: '[aida:proxy-approval] verdict=APPROVE; reasoning=fresh independent exact-head review approved PR #2101 at cb7e877a23ad44daad9e6049b89e0b81e48fc99d; null-vs-zero, vendor/run identity, foreign-shape diagnostics, strict/live split, separate fixtures and legacy lower-bound docs verified; independent=yes; gates=Build ubuntu SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; timestamp=2026-09-22T08:28:25-07:00'
   created_at: 2026-09-22T15:28:26.225139499Z
   modified_at: 2026-09-22T15:28:26.225139499Z
+history:
+- id: 01a0c9bb-a717-7c90-bcea-5fa0fb0d5c19
+  author: aida-auto-bump
+  timestamp: 2026-09-22T15:28:33.559594291Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c9bb-a71e-7d20-9030-c063b6eccce4
+  timestamp: 2026-09-22T15:28:33.566336127Z
+  agent: aida
+  commit_sha: 0d09ef48cbe0c5a719828b13c5c47b32ce7688a7
+  summary: 'Cold review approved exact head: unknown-vs-zero, vendor/run identity, strict completed-vs-live accounting, four separate cases, privacy-safe foreign-shape diagnostic, and lower-bound compatibility are satisfied; merge remains held until required Ubuntu CI completes.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T15:28:33.559413202Z
+  completion_sha: 0d09ef48cbe0c5a719828b13c5c47b32ce7688a7
