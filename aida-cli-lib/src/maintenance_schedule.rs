@@ -295,6 +295,8 @@ pub(crate) struct DueJob {
     pub last_run: Option<DateTime<Utc>>,
     pub last_by: Option<String>,
     pub due_since: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<schedule_ledger::RoutedFailure>,
 }
 
 impl DueJob {
@@ -309,7 +311,26 @@ impl DueJob {
             .clone()
             .or_else(|| self.command.as_ref().map(|c| format!("run: {c}")))
             .unwrap_or_default();
-        format!("{} ({}, {}) → {}", self.name, self.reason, last, what)
+        let mut line = format!("{} ({}, {}) → {}", self.name, self.reason, last, what);
+        if let Some(failure) = &self.failure {
+            line.push_str(&format!("\n  trip evidence: {}", failure.trip_id));
+            for audit in &failure.performance {
+                line.push_str(&format!(
+                    "\n    aida {}: {:.3}% over {} ms ({} of {} calls; tolerance {:.3}%; worst {}; window {}h; excluded {}; lineage_scoped={})",
+                    audit.command,
+                    audit.proportion_millipercent as f64 / 1000.0,
+                    audit.budget_ms,
+                    audit.over_budget,
+                    audit.denominator,
+                    audit.tolerated_millipercent as f64 / 1000.0,
+                    audit.worst_ms.map_or_else(|| "n/a".into(), |v| format!("{v} ms")),
+                    audit.window_hours,
+                    audit.excluded_samples,
+                    audit.lineage_scoped,
+                ));
+            }
+        }
+        line
     }
 }
 
@@ -735,6 +756,7 @@ where
             }
             let mut newest: Option<DateTime<Utc>> = None;
             let mut kind_hit: Option<String> = None;
+            let mut due_failure: Option<schedule_ledger::RoutedFailure> = None;
             let scan: &[Event] = if continue_on { &[] } else { events };
             for ev in scan {
                 if !task.on.iter().any(|k| k == ev.kind.name()) {
@@ -746,6 +768,21 @@ where
                 if newest.is_none_or(|n| ev.ts > n) {
                     newest = Some(ev.ts);
                     kind_hit = Some(ev.kind.name().to_string());
+                    due_failure = match &ev.kind {
+                        EventKind::CronJobFailed {
+                            trip_id: Some(trip_id),
+                            performance,
+                            ..
+                        } => Some(schedule_ledger::RoutedFailure {
+                            trip_id: trip_id.clone(),
+                            performance: performance
+                                .iter()
+                                .take(schedule_ledger::MAX_PERFORMANCE_AUDITS)
+                                .cloned()
+                                .collect(),
+                        }),
+                        _ => None,
+                    };
                 }
             }
             if let (Some(ts), Some(kind)) = (newest, kind_hit) {
@@ -756,6 +793,12 @@ where
                     .last_seen_event_ts = Some(ts);
                 touched = true;
                 triggers.push(Trigger::Event(kind));
+                // The matched event is retained until `schedule done`; this is
+                // the actual pickup artifact, not a pointer to mutable latest.
+                staged_ledgers
+                    .entry(task.name.clone())
+                    .or_insert_with(|| JobLedger::new(&task.name))
+                    .due_failure = due_failure;
             }
         }
 
@@ -957,6 +1000,7 @@ fn done(project_root: &Path, job: &str, note: Option<&str>) -> Result<()> {
         l.note = note.map(str::to_string);
         l.due_since = None;
         l.due_reason = None;
+        l.due_failure = None;
     })?;
     let mut state = load_state(project_root)?;
     let entry = state.tasks.entry(job.to_string()).or_default();
@@ -1297,6 +1341,7 @@ fn collect_due(project_root: &Path, seat: Option<&str>, include_substrate: bool)
             last_run: effective_last_run(ledger, local),
             last_by: ledger.and_then(|l| l.last_by.as_ref()).map(last_by_label),
             due_since: ledger.and_then(|l| l.due_since),
+            failure: ledger.and_then(|l| l.due_failure.clone()),
         });
     }
     out
@@ -1770,9 +1815,14 @@ fn failure_trip(
         .is_some_and(|c| c.display == "doctor check performance --fail-on-findings");
     let (performance, audit_error) = if is_performance {
         match serde_json::from_str::<PerformanceAuditEnvelope>(&outcome.stdout) {
-            Ok(envelope) if !envelope.performance_audits.is_empty() => {
-                (envelope.performance_audits, None)
-            }
+            Ok(envelope) if !envelope.performance_audits.is_empty() => (
+                envelope
+                    .performance_audits
+                    .into_iter()
+                    .take(schedule_ledger::MAX_PERFORMANCE_AUDITS)
+                    .collect(),
+                None,
+            ),
             Ok(_) => (
                 Vec::new(),
                 Some("typed doctor output contained no performance_audits".into()),
@@ -2457,6 +2507,32 @@ enabled = true
         let route =
             schedule_ledger::load(&store_root(tmp.path()), "performance-guard-route").unwrap();
         assert!(route.due_since.is_some());
+        assert_eq!(
+            route.due_failure.as_ref().map(|f| f.trip_id.as_str()),
+            Some(trip.trip_id.as_str())
+        );
+
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            r#"
+[[schedule.jobs]]
+name = "performance-guard-route"
+seats = ["advisor"]
+on = ["CronJobFailed"]
+prompt = "decide whether this is a regression"
+enabled = true
+"#,
+        )
+        .unwrap();
+        let delivered = due_seat_jobs(tmp.path(), Some("advisor"));
+        let artifact = render_due_jobs_block(&delivered, "advisor");
+        assert!(artifact.contains(&trip.trip_id), "{artifact}");
+        assert!(artifact.contains("19.700% over 1000 ms"), "{artifact}");
+        assert!(artifact.contains("19 of 96 calls"), "{artifact}");
+        assert!(artifact.contains("tolerance 10.000%"), "{artifact}");
+        assert!(artifact.contains("worst 165672 ms"), "{artifact}");
+        assert!(artifact.contains("lineage_scoped=true"), "{artifact}");
 
         let log = std::fs::read_to_string(log_path(tmp.path())).unwrap();
         assert!(log.contains("19.700%/96,budget=1000ms,tolerance=10.000%"));
@@ -3175,6 +3251,7 @@ every = "1h"
             last_run: Some(Utc::now() - Duration::minutes(47)),
             last_by: Some("advisor/claude".into()),
             due_since: None,
+            failure: None,
         }];
         let block = render_due_jobs_block(&due, "advisor");
         assert!(block.starts_with("DUE JOBS (seat: advisor):\n"));

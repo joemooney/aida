@@ -33,6 +33,7 @@ const MAX_RETRIES: u32 = 10;
 /// while placing a deterministic ceiling on the git-canonical ledger.
 // trace:BUG-1573 | ai:codex
 pub(crate) const MAX_FAILURE_TRIPS: usize = 20;
+pub(crate) const MAX_PERFORMANCE_AUDITS: usize = 20;
 
 /// Allow-listed performance evidence emitted by `doctor check performance`.
 /// Percentages use thousandths of one percent so the persisted/event contract
@@ -64,6 +65,17 @@ pub(crate) struct FailureTrip {
     pub performance: Vec<PerformanceAudit>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audit_error: Option<String>,
+}
+
+/// Correlated evidence attached to a due seat job. Kept separate from the
+/// producer's history so the consumer receives exactly the event that fired
+/// its route even after the producer runs again.
+// trace:BUG-1573 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RoutedFailure {
+    pub trip_id: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub performance: Vec<PerformanceAudit>,
 }
 
 /// Who reported a run: the seat that acted, the session id if known, and the
@@ -121,6 +133,8 @@ pub(crate) struct JobLedger {
     /// Why the job is due, e.g. `every 30m`, `on PrMerged`, `when …`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_failure: Option<RoutedFailure>,
     /// Condition jobs: the current / most recent episode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub episode: Option<Episode>,
@@ -529,6 +543,7 @@ mod tests {
             note: Some("manual".into()),
             due_since: None,
             due_reason: None,
+            due_failure: None,
             episode: Some(Episode {
                 fired_at: Some(at(0, 0)),
                 cleared_at: Some(at(0, 30)),

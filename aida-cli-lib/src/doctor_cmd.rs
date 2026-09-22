@@ -1368,6 +1368,7 @@ fn performance_audit_records(
         });
     }
     out.sort_by(|a, b| a.command.cmp(&b.command));
+    out.truncate(schedule_ledger::MAX_PERFORMANCE_AUDITS);
     out
 }
 
