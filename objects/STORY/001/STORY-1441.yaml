@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T07:30:19.607183091Z
-modified_at: 2026-09-22T07:30:26.894666679Z
+modified_at: 2026-09-22T07:38:10.301157321Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0c67c-8af7-7af3-88ed-a7cf0e9317a3
   created_at: 2026-09-22T07:30:26.894657589Z
   created_by: joe
+comments:
+- id: 01a0c80c-fffd-72e2-a385-b37079e03235
+  author: joe
+  content: 'Cold independent review verdict for exact head bee8510d3ba4d83150bc016f03f255b7410ec2d3: REQUEST CHANGES. Blocking BUG-1585 acceptance/claim-sweep finding: aida-cli-lib/src/drain_state.rs:105-107 still states that `2` is the pipelined default once scheduling is live, directly contradicting default_pipeline_depth() = 1 and the corrected guide. The recorded unbounded sweep claimed three default-bearing sources but missed this same-file doc comment, and the new compiled guard does not cover it. Independently verified the exact two-file delta; BUG-1586''s runtime notice is distinct and untouched. ADR-27 accurately preserves the historical 2 decision and current 1 amendment, though the new partial-supersession comment duplicates its existing 2026-09-12 amendment. Red-first defect sensitivity is reconstructible (parent guide 2 versus function 1); focused test passed 1/1, cargo fmt --all -- --check passed, and git diff --check passed. At review time merge-hold-gate was green and Build (ubuntu-latest) remained pending. Reviewer was independent and made no implementation changes.'
+  created_at: 2026-09-22T07:38:10.301157321Z
+  modified_at: 2026-09-22T07:38:10.301157321Z
