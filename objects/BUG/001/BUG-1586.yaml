@@ -37,12 +37,12 @@ description: |-
 
   Filed by the driver-advisor seat from an independent review's non-blocking finding. The advisor
   could not review #2070 itself, having written the brief that produced it.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T00:42:38.482858241Z
-modified_at: 2026-09-22T08:06:03.295502667Z
+modified_at: 2026-09-22T08:06:08.692599768Z
 req_type: Bug
 tags:
 - drain cli papercut
@@ -72,3 +72,22 @@ comments:
   content: '[aida:proxy-approval] verdict=approved; reasoning=independent cold reviewer verified clean replacement exact head 51c9f29d1797d6c0f7a4dbec0f7dc66981e2275c, one-file diff, resolved depth 1/2 semantics, root-failure behavior, and separation from BUG-1585; independent=yes; gates=required Ubuntu CI green, merge-hold-gate green, exact-head review approved; timestamp=2026-09-22T01:06:02-07:00'
   created_at: 2026-09-22T08:06:03.295502667Z
   modified_at: 2026-09-22T08:06:03.295502667Z
+history:
+- id: 01a0c826-9c2d-7c41-819c-3d34afd7f2b9
+  author: aida-auto-bump
+  timestamp: 2026-09-22T08:06:08.685841841Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c826-9c34-7db1-afec-94b1fc170db9
+  timestamp: 2026-09-22T08:06:08.692593326Z
+  agent: aida
+  commit_sha: 687ccb59764a49c1e1447490ad136ebd208a5d2e
+  summary: 'Cold independent review passed: resolved depth 1/2 and root-error notice semantics verified; one-file scope, BUG-1585 untouched, focused tests and exact-head CI green.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T08:06:08.685662114Z
+  completion_sha: 687ccb59764a49c1e1447490ad136ebd208a5d2e
