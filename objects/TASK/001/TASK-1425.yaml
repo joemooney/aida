@@ -55,7 +55,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:09:54.985425283Z
-modified_at: 2026-09-22T04:43:27.373065124Z
+modified_at: 2026-09-22T04:54:49.842240043Z
 req_type: Task
 tags:
 - forge gitlab ci infrastructure
@@ -75,3 +75,8 @@ comments:
   content: 'Live verification blocker (2026-09-21): PR #2075 head 3a5a614a5626e545c08735985b7c59978cc390a5, workflow run 35687873391, job 106618482498. All three repository secrets were present, and the Access-header request completed at the transport layer, but /api/v4/version did not return GitLab JSON. The job failed before installing glab or creating a project; no lifecycle phase ran and this is not acceptance evidence. Verify that the Cloudflare Access application for gitlab.joemooney.com has a Service Auth policy whose Include rule selects the newly provisioned service token (and that both GitHub secret values are the matching pair), then rerun the exact head.'
   created_at: 2026-09-22T04:43:27.373065124Z
   modified_at: 2026-09-22T04:43:27.373065124Z
+- id: 01a0c777-74f2-7880-87e1-295c2060041a
+  author: joe
+  content: 'Rework evidence (2026-09-21): PR #2075 head 51bf43b77eeeb6c676ca67424ec4156186f36022, run 35688631021, job 106620702586. Safe diagnostics classify the GitLab API response as cloudflare-access-login-redirect: curl exit 0, HTTP 302, text/html, sanitized Location path at joemooney.cloudflareaccess.com/cdn-cgi/access/login/gitlab.joemooney.com, with a CF-Ray. The separate identity probe returned HTTP 400 application/json and its body was not printed. Cloudflare rejected the supplied service-token pair before GitLab. Since a Service Auth policy reportedly exists, verify its hostname/path coverage, that its Include rule names this exact service token, and that the two GitHub secrets are the matching client ID/secret pair. No lifecycle phase ran; acceptance remains unmet.'
+  created_at: 2026-09-22T04:54:49.842240043Z
+  modified_at: 2026-09-22T04:54:49.842240043Z
