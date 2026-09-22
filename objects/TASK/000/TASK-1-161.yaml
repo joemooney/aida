@@ -26,7 +26,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:26:14.774144314Z
-modified_at: 2026-09-22T09:06:36.200984713Z
+modified_at: 2026-09-22T09:07:07.040900574Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -113,3 +113,8 @@ comments:
     Risk controls: do not reinterpret or rename relationship values, do not bulk-migrate `.aida-store`, and retain legacy reads indefinitely unless a future migration spec explicitly removes them. Requesting master sign-off before implementation because this changes the canonical file format.
   created_at: 2026-09-22T09:06:36.200984713Z
   modified_at: 2026-09-22T09:06:36.200984713Z
+- id: 01a0c85e-6ea0-7850-be93-9ce2242b8d99
+  author: joe
+  content: '[aida:architecture-signoff] APPROVED. Keep the Rust taxonomy unchanged; emit plain scalar relationship names, accept legacy local-tag input indefinitely, preserve exact custom spelling, and migrate only on ordinary writes. No bulk store rewrite in this lane. Required gates: legacy tagged read, scalar read/write, all built-ins plus hyphen/underscore custom round-trips, generic YAML parser acceptance, and proof that no semantic relationship changes occur.'
+  created_at: 2026-09-22T09:07:07.040900574Z
+  modified_at: 2026-09-22T09:07:07.040900574Z
