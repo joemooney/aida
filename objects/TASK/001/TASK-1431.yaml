@@ -1,0 +1,26 @@
+id: 01a0c9a5-3624-7301-a851-61fab1b07e0d
+spec_id: TASK-1431
+agreed_id: TASK-1431
+title: Implement concurrency-safe evaluator circuit breaker and health state
+description: |-
+  CONTEXT:
+  Under ADR-56, consecutive remote evaluator failures (e.g. 3 consecutive timeouts or 5xx responses) must trip an in-memory circuit breaker so subsequent calls fail fast without blocking caller threads or wasting deadline budgets.
+
+  REQUIREMENTS:
+  - Implement EvaluatorCircuitBreaker scoped to endpoint + model.
+  - Concurrency-safe state transitions: Closed (normal), Open (tripped after N consecutive failures; cooldown duration 60s), Half-Open (allows 1 trial request to probe recovery).
+  - Uses monotonic clock (Instant) to avoid clock skew.
+  - Zero blocking network probes on the critical request path; health state is inferred directly from evaluation results.
+  - Emits structured state transition events for telemetry.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T15:04:02.852450940Z
+modified_at: 2026-09-22T15:04:02.852450940Z
+req_type: Task
+tags:
+- adr-56
+- circuit-breaker
+- evaluator
+- resilience
