@@ -3,12 +3,12 @@ spec_id: TASK-1433
 agreed_id: TASK-1433
 title: Wire JevEvaluator and local evaluators through the resilience adapter
 description: Integrate the deadline-aware retry adapter, circuit breaker, and structured telemetry into JevEvaluator and local evaluator instances in aida-cli-lib, ensuring fail-closed fallbacks and bounded operation budgets.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T15:05:43.849983357Z
-modified_at: 2026-09-22T15:06:15.967796437Z
+modified_at: 2026-09-22T16:26:03.788320022Z
 req_type: Task
 tags:
 - adr-56
