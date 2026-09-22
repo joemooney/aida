@@ -1,0 +1,17 @@
+id: 01a0c9de-953e-7b72-b0f3-ebf668100f3c
+spec_id: TASK-1436
+agreed_id: TASK-1436
+title: Implement aida explain with freshness, provenance, and human-edit protection
+description: 'Implement CLI command aida explain <SPEC> [--audience <ROLE>] [--refresh] [--json]. Saves generated expositions to sidecar YAML; computes stale status from SHA-256 closure hash; preserves human edits under human_reviewed: true while maintaining stale detection.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T16:06:42.750410922Z
+modified_at: 2026-09-22T16:06:42.750410922Z
+req_type: Task
+tags:
+- cli
+- epic-72
+- exposition
+- freshness
