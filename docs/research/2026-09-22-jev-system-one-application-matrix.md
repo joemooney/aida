@@ -78,8 +78,8 @@ To establish defensible utility before expanding Jev's operational footprint, we
 ### Experiment 2: Duplicate & Related-Spec Detection
 * **Problem:** Human operators and autonomous agents frequently file duplicate bugs or overlapping tasks because searching hundreds of YAML specs via exact keywords misses synonyms or architectural overlap.
 * **Proposed Jev Role:** When `aida add` runs, mechanically retrieve top candidate specs (via trigram / SQLite FTS) and invoke Jev `choice` (`duplicate`, `extends`, `unrelated`).
-* **Non-Blocking Advisory Semantics:** The output is purely informational (e.g. *"Candidate overlap: TASK-412"*). It has **no automatic canonical mutation** authority. A misleading hint can still confuse an operator, so the hint must display the exact matching spec title and probability.
-* **Interactive Latency SLA & Deterministic Fallback:** Given measured Jev P95 of 550 ms and tail spikes of 5.2s, interactive CLI invocations must enforce a **hard client-side timeout of $\le 400\text{ ms}$** with asynchronous cancellation. On timeout or error, `aida add` proceeds immediately using deterministic search without blocking the developer.
+* **Interactive Latency & Non-Blocking Fallback:** Requirement capture (`aida add`) must never block on AI latency. The requirement YAML is persisted first. Advisory duplicate checks run asynchronously or with a short cutoff; on timeout or unavailability, `aida add` proceeds silently without stalling developer capture.
+
 
 ### Experiment 3: Review-Finding Clustering & Triage
 * **Problem:** Autonomous drains often enter 3-to-5 round review loops where the reviewer raises one superficial finding per round, or re-raises a concern the implementer already addressed.
@@ -117,7 +117,7 @@ Each candidate experiment must be evaluated against an empirical ground-truth co
 │ Rung 3 Deterministic  │ ──Excluded (Zero AI Cost)──► Bypass
 │ Mechanical Pre-Filter │
 └───────────┬───────────┘
-            │ Candidate Subset (Hard Timeout ≤ 400ms)
+            │ Candidate Subset (Use-Case Deadline)
             ▼
 ┌───────────────────────┐
 │ Jev System 1 Evaluate │
@@ -142,10 +142,11 @@ For each experiment, the benchmark harness must report:
    * Compute Brier scores, Expected Calibration Error (ECE), and reliability curves to test whether output probabilities reflect empirical frequencies.
 4. **Asymmetric Error Costs:**
    * Map the concrete cost of a False Positive vs. False Negative. For example, in duplicate detection, missing a duplicate adds slight graph clutter, whereas a false duplicate hint risks confusing an operator into abandoning valid work.
-5. **Latency Distributions & Timeout Rates:**
-   * Measure P50, P90, P95, and Max latency, tracking the percentage of calls that exceed the 400 ms interactive timeout.
+5. **Latency Distributions & Cutoff Rates:**
+   * Measure P50, P90, P95, and Max latency, tracking the percentage of calls that exceed the declared use-case deadline.
 6. **Deterministic Pre-Filtering Efficiency:**
    * Quantify how effectively mechanical filters (ripgrep, SQLite FTS, AST joins) narrow the input volume before invoking AI.
+
 
 ---
 
