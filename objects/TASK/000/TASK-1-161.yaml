@@ -26,7 +26,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:26:14.774144314Z
-modified_at: 2026-09-22T09:16:51.173324018Z
+modified_at: 2026-09-22T09:24:42.635704559Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -128,3 +128,8 @@ comments:
   content: 'Implementation published in PR #2088 (commit ded0bdbf1d). RelationshipType now writes standard YAML scalars while continuing to read legacy `!Custom value` YAML and legacy externally-tagged JSON indefinitely. Exact custom spellings are preserved; no taxonomy normalization or bulk store migration was performed. Red-first migration test reproduced `!Custom implemented-by`; after implementation: full `cargo test -p aida-core` passed (971 passed, 2 ignored), focused relationship tests passed (8), object write-conformance test passed, fmt and diff checks clean.'
   created_at: 2026-09-22T09:16:27.111348186Z
   modified_at: 2026-09-22T09:16:27.111348186Z
+- id: 01a0c86e-8a0b-7802-a547-6d777cc26ada
+  author: joe
+  content: '[cold-review][changes-requested] PR #2088 exact head ded0bdbf1de66ced45da280e1339324b9b4b156e fails the signed-off semantic-preservation gate for colliding Custom names. `!Custom blocked-by` reads as Custom, writes scalar blocked-by, then reads as typed BlockedBy; canonical built-in spellings and parser aliases have the same ambiguity. Requested explicit architecture-consistent collision handling/tests, including legacy YAML and JSON. Full core suite passed (972/2 ignored), focused 8/8, fmt clean; no merge.'
+  created_at: 2026-09-22T09:24:42.635704559Z
+  modified_at: 2026-09-22T09:24:42.635704559Z
