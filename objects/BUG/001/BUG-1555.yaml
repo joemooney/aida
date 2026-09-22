@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-22T06:31:49.106449928Z
+modified_at: 2026-09-22T06:48:25.640826291Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -645,6 +645,25 @@ comments:
   content: 'Cold-review rework pushed to PR #2073 at exact head 7e1419e1ac. The expanded audit classified scaffold_cmd, status_cmd, aida-core scaffolding/report template comparisons, managed marker blocks, and rules_sync fragments as generated-text boundaries vulnerable to Windows newline conversion. They now share symmetric generated_text_matches normalization. JSON owned-slot paths retain semantic serde_json comparison; only malformed or slotless raw fallbacks normalize. Tests prove CRLF and classic-CR equivalence while deliberate content edits still fail, including whole-template and AGENTS.md owned-block paths. Targeted tests, aida_md tests, cargo check for aida-cli-lib, fmt, and diff-check pass. Fresh exact-head cross-platform run dispatched.'
   created_at: 2026-09-22T06:31:49.106449928Z
   modified_at: 2026-09-22T06:31:49.106449928Z
+- id: 01a0c7df-7528-7313-a63e-8bb36662c60b
+  author: joe
+  content: |-
+    REQUEST CHANGES — independent cold review, exact head `7e1419e1ac6869c1dd0f4a5948dfa150c61dac81`.
+
+    The discipline-specific fix is correct: both sides receive LF/CR normalization plus symmetric `trim_end`; missing project copies are reported; `.aida/discipline/**` resolves to `text eol=lf`; tests demonstrate CRLF/CR equivalence and real-content drift. The reworked scaffold/report/rules surfaces preserve semantic `serde_json::Value` slot comparisons and normalize only textual fallbacks. Local focused tests pass (3 discipline comparator tests, shared comparator test, and report matcher test), and required Ubuntu CI is green at this SHA.
+
+    Blocking finding: the required tree-wide generated-text comparison sweep is still incomplete. Exact-head source retains multiple Windows-sensitive raw comparisons at generated-text boundaries:
+
+    - `aida-cli-lib/src/scaffold_cmd.rs:268-272`: scaffold no-op detection compares on-disk bytes directly to `artifact.content.as_bytes()`. A CRLF checkout is reported/rewritten as an update although content is equivalent.
+    - `aida-cli-lib/src/docs.rs:80-83`: generated docs use raw `existing == body_with_marker`, so CRLF-only checkout differences become drift.
+    - `aida-cli-lib/src/lib.rs:21160-21174`: `codex_prompts_drift` compares deployed generated prompt text with `actual != expected`, so CRLF-only differences are diagnosed as rot.
+    - `aida-cli-lib/src/lifecycle_cmd.rs:55-63`: the pinned generated Mermaid block uses raw string equality and can fail `--check` solely on line endings.
+
+    These are the same raw generated-content comparison shape the spec explicitly requires auditing. Please classify every remaining match, route textual generated comparisons through the shared comparator (or document a concrete byte-exact reason), and add red/green tests for the corrected surfaces. Semantic JSON comparison must remain parsed-value/owned-slot based.
+
+    Exact-head cross-platform run 35695238711 is not yet a usable final gate: macOS is green, Windows is still running, and the unrelated GitLab live forge smoke has failed. A verdict should be re-issued only against an unchanged head after the Windows job completes.
+  created_at: 2026-09-22T06:48:25.640826291Z
+  modified_at: 2026-09-22T06:48:25.640826291Z
 history:
 - id: 01a0c528-482c-7ed0-85a1-8d70052bfedf
   author: aida-auto-bump
