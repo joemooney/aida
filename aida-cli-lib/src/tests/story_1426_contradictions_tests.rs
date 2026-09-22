@@ -190,14 +190,34 @@ fn test_terminal_plan_missing_followup_child_is_reported() {
     )
     .unwrap();
     let mut store = RequirementsStore::default();
-    store.requirements.push(make_req(
+    let mut epic = make_req(
         "EPIC-63",
         "Entry lane",
         "Plan: docs/plans/entry.md",
         RequirementType::Epic,
-        RequirementStatus::Completed,
+        // Exact canonical object currently presents Approved while `aida show`
+        // and all six linked children carry the completed roll-up.
+        RequirementStatus::Approved,
         10,
-    ));
+    );
+    for number in 0..6 {
+        let child = make_req(
+            &format!("TASK-63-{number}"),
+            &format!("Completed memory-lane child {number}"),
+            "A completed implementation child for the memory lane.",
+            RequirementType::Task,
+            RequirementStatus::Completed,
+            5,
+        );
+        epic.relationships.push(Relationship {
+            rel_type: RelationshipType::Parent,
+            target_id: child.id,
+            created_at: None,
+            created_by: None,
+        });
+        store.requirements.push(child);
+    }
+    store.requirements.push(epic);
     let candidates = find_mechanical_candidates_at(&store, root.path());
     assert!(candidates
         .iter()

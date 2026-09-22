@@ -64,6 +64,36 @@ fn req_id(req: &Requirement) -> String {
         .unwrap_or_else(|| req.id.to_string())
 }
 
+fn is_terminal_status(status: &RequirementStatus) -> bool {
+    matches!(
+        status,
+        RequirementStatus::Completed
+            | RequirementStatus::Done
+            | RequirementStatus::Rejected
+            | RequirementStatus::Superseded
+    )
+}
+
+/// A terminal plan owner can temporarily present an earlier cached/canonical
+/// status while every explicitly linked child already records the completed
+/// roll-up. Treat that fully terminal child set as equivalent evidence for the
+/// reporting-only Followups join; it cannot mutate or close the parent.
+fn plan_owner_is_terminal(req: &Requirement, reqs: &[Requirement]) -> bool {
+    if is_terminal_status(&req.status) {
+        return true;
+    }
+    !req.relationships.is_empty()
+        && req
+            .relationships
+            .iter()
+            .filter_map(|rel| reqs.iter().find(|candidate| candidate.id == rel.target_id))
+            .all(|child| is_terminal_status(&child.status))
+        && req
+            .relationships
+            .iter()
+            .all(|rel| reqs.iter().any(|candidate| candidate.id == rel.target_id))
+}
+
 /// Slice 1: Computable contradiction candidate extraction via mechanical joins.
 // trace:STORY-1426 | ai:antigravity
 pub fn find_mechanical_candidates(store: &RequirementsStore) -> Vec<CandidatePair> {
@@ -302,12 +332,7 @@ pub fn find_mechanical_candidates_at(
     }
 
     // Mechanical Join 5: terminal plan Followups with no matching child.
-    for req in reqs.iter().filter(|r| {
-        matches!(
-            r.status,
-            RequirementStatus::Completed | RequirementStatus::Done
-        )
-    }) {
+    for req in reqs.iter().filter(|r| plan_owner_is_terminal(r, reqs)) {
         let Some(plan_rel) = req
             .description
             .split_whitespace()
