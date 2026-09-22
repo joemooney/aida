@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-22T06:55:35.818180463Z
+modified_at: 2026-09-22T07:06:56.450518170Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -352,4 +352,9 @@ comments:
     Red-first evidence: a temporary mutation restored the old provenance-blind spec fallback. phase3_fallback_cannot_rescue_stale_or_sha_less_approval failed immediately because the SHA-less record returned Some(Verdict(Approved)) instead of None. The mutation was removed and the test passed. The complete bug_775 suite passed 28/28, read_verdict_file tests passed 7/7, the actual resume probe passed, and formatting/diff checks passed.
   created_at: 2026-09-22T06:55:35.818180463Z
   modified_at: 2026-09-22T06:55:35.818180463Z
+- id: 01a0c7f0-6842-7f61-92cf-b59908228e0d
+  author: joe
+  content: 'Cold independent round-3 APPROVED at b372a8e0b2634b8a5d6a65f42ce7db2982c45173. Both live phase-3 primary consumers, spec fallback, sibling fallback, and resume were traced: Approved is head-bound throughout and an invalid existing primary cannot be rescued. Focused tests and exact-head CI green. Reviewer independent; no implementation or merge.'
+  created_at: 2026-09-22T07:06:56.450518170Z
+  modified_at: 2026-09-22T07:06:56.450518170Z
 execution_mode: drain
