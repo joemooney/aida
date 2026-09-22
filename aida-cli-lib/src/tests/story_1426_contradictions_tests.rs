@@ -338,3 +338,46 @@ fn test_bounded_pages_are_deterministic_and_lossless() {
     assert_eq!(all.remaining, 0);
     assert_eq!(all.next_offset, None);
 }
+
+#[test]
+fn test_sweep_contradictions_without_evaluator_reports_mechanical_candidates() {
+    let mut store = RequirementsStore::default();
+
+    let vis1 = make_req(
+        "VIS-1",
+        "AIDA is your project's missing index",
+        "Missing index vision.",
+        RequirementType::Vision,
+        RequirementStatus::Approved,
+        100,
+    );
+    let vis1_id = vis1.id;
+    store.requirements.push(vis1);
+
+    let mut cr6 = make_req(
+        "CR-6",
+        "Reposition index headline",
+        "Retire the index headline from VIS-1.",
+        RequirementType::ChangeRequest,
+        RequirementStatus::Completed,
+        50,
+    );
+    cr6.relationships.push(Relationship {
+        rel_type: RelationshipType::References,
+        target_id: vis1_id,
+        created_at: None,
+        created_by: None,
+    });
+    store.requirements.push(cr6);
+
+    // Explicitly pass None: zero Jev access / zero evaluator configured
+    let findings = sweep_contradictions(&store, None).unwrap();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].spec_a_id, "VIS-1");
+    assert_eq!(findings[0].spec_b_id, "CR-6");
+    assert_eq!(findings[0].verdict, "candidate");
+    assert_eq!(findings[0].model, "mechanical-join");
+    assert!(findings[0]
+        .mechanical_reason
+        .contains("older than completed"));
+}

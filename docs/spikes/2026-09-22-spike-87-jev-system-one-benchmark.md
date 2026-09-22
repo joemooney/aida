@@ -92,31 +92,40 @@ before using it to decide "is this safe to merge?"**
 Detailed application matrix and experimental protocol:
 `docs/research/2026-09-22-jev-system-one-application-matrix.md`.
 
-### Candidate application areas
+### Candidate application areas (hypotheses)
 
-| AIDA area | Possible Jev use | Why it may fit better |
+| AIDA area | Possible Jev use | Why it may fit better (hypotheses) |
 | :--- | :--- | :--- |
-| **Queue and task routing** | Classify a spec into implementation, docs, research, review, or advisor escalation | Bounded classification; mistakes can fall back to human routing |
-| **Requirement metadata hygiene** | Suggest type, tags, feature, priority, or duplicate candidates | Helps normalize the graph without mutating it automatically |
-| **Duplicate/related-spec detection** | Rank whether a new requirement duplicates or extends an existing one | Semantic similarity is useful before creating another spec |
-| **Change-impact analysis** | Identify which requirements, plans, docs, or tests are likely affected by a diff | A retrieval/ranking aid, not a merge authority |
-| **Review-finding triage** | Cluster repeated findings across review rounds and identify likely duplicates | Could reduce “one finding per round” churn |
-| **Finding severity classification** | Categorize findings as blocker, correctness, maintainability, or advisory | Human reviewer still makes the final decision |
-| **Review prompt/context selection** | Select the most relevant acceptance criteria, prior findings, and related specs for a reviewer | Context selection may yield more benefit than verdict replacement |
-| **Traceability assistance** | Detect likely missing or misplaced trace:<SPEC-ID> comments | Narrow proposition with deterministic follow-up |
-| **Stale-document detection** | Judge whether AGENTS/OVERVIEW/docs still describe the current architecture | Escalate candidates for human confirmation |
-| **Session/punt classification** | Classify why a task was shelved or punted and suggest the next lane | Useful for fleet analytics and rework analysis |
-| **Reconstitution comparison** | Compare regenerated tests/docs to intended behavior | Mentioned in the report, but not actually benchmarked in the live evaluation |
-| **Operator-facing explanations** | Select a concise explanation category for a deterministic failure | Jev chooses among predefined explanations; it should not invent policy |
+| **Queue and task routing** | Classify a spec into implementation, docs, research, review, or advisor escalation | Bounded classification; mistakes fall back to human routing. High-impact types remain barred from auto-dispatch. |
+| **Requirement metadata hygiene** | Suggest type, tags, feature, priority, or duplicate candidates | Advises operator during grooming; no automatic canonical mutation occurs without confirmation. |
+| **Duplicate/related-spec detection** | Rank whether a new requirement duplicates or extends an existing one | Semantic similarity aids deduplication before specs enter the store; no automatic canonical mutation. |
+| **Change-impact analysis** | Identify which requirements, plans, docs, or tests are likely affected by a diff | A retrieval/ranking aid, not a merge authority. |
+| **Review-finding triage** | Cluster repeated findings across review rounds and identify likely duplicates | Aims to identify repeated review feedback; must preserve all original findings without deletion. |
+| **Finding severity classification** | Categorize findings as blocker, correctness, maintainability, or advisory | Standardizes finding terminology; human reviewer or conversational agent retains final say. |
+| **Review prompt/context selection** | Select the most relevant acceptance criteria, prior findings, and related specs for a reviewer | Context compression; aims to reduce context tokens in Claude/Codex seats without dropping mandatory rules. |
+| **Traceability assistance** | Detect likely missing or misplaced trace:<SPEC-ID> comments | Narrow proposition with immediate deterministic follow-up (diff inspection / grep). |
+| **Stale-document detection** | Judge whether AGENTS/OVERVIEW/docs still describe the current architecture | Escalates candidates for human or docs-lane confirmation; candidate flagging only. |
+| **Session/punt classification** | Classify why a task was shelved or punted and suggest the next lane | Useful for fleet analytics and rework analysis without modifying runtime state. |
+| **Reconstitution comparison** | Compare regenerated tests/docs to intended behavior | Mentioned in earlier reports, but unvalidated in live evaluation; needs empirical testing. |
+| **Operator-facing explanations** | Select a concise explanation category for a deterministic failure | Jev chooses among predefined, vetted explanations; must cite the triggering deterministic evidence. |
 
 ### Prioritized near-term experiments
 
-1. **Review-context selection** — choose relevant acceptance criteria and prior findings before a Claude/Codex review.
-2. **Duplicate/related-spec ranking** — reduce graph noise before requirements are added.
-3. **Finding clustering and rework classification** — directly attack the large review-tail cost without granting Jev merge authority.
-4. **Queue routing** — use Jev as a cheap classifier with an explicit “unknown/escalate” class.
+1. **Review-context selection** — choose relevant acceptance criteria and prior findings before a Claude/Codex review. Measure mandatory rule recall (safety critical).
+2. **Duplicate/related-spec ranking** — advisory candidate overlap hints during intake; capture persists first and never blocks, with silent deterministic fallback on cutoff.
 
-Each experiment should evaluate coverage/abstention rate, class precision/recall,
+3. **Finding clustering and triage** — cluster repeated findings across rounds to reduce review churn; strictly preserves all original findings without discarding evidence.
+4. **Queue routing** — advisory classifier with explicit "unknown/escalate" class; bars auto-dispatch for high-impact or ambiguous spec types.
+
+Each experiment should evaluate workload-justified coverage/abstention, class precision/recall,
 calibration/threshold performance, asymmetric error costs, latency/cost, and
 deterministic pre-filtering efficiency.
 
+External evaluation remains optional: Jev is not a prerequisite for compiling,
+testing, or running AIDA. Without Jev credentials, the contradiction sweep and
+graded-review paths fall back to deterministic candidates (`model:
+"mechanical-join"`) or conversational reviewer escalation. Secret redaction, a
+16 KB evaluator payload cap, and an explicit `AIDA_EVALUATOR_OFFLINE` switch are
+**proposed safeguards, not current implementation**; they require separate
+implementation and tests before expanding external evaluator use.
+The test suite validates 24 targeted unit tests across `adr_55`, `story_1424`, and `story_1426`.
