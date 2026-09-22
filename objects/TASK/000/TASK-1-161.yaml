@@ -26,7 +26,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:26:14.774144314Z
-modified_at: 2026-09-22T09:07:24.319930143Z
+modified_at: 2026-09-22T09:16:27.111348186Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -118,3 +118,8 @@ comments:
   content: '[aida:architecture-signoff] APPROVED. Keep the Rust taxonomy unchanged; emit plain scalar relationship names, accept legacy local-tag input indefinitely, preserve exact custom spelling, and migrate only on ordinary writes. No bulk store rewrite in this lane. Required gates: legacy tagged read, scalar read/write, all built-ins plus hyphen/underscore custom round-trips, generic YAML parser acceptance, and proof that no semantic relationship changes occur.'
   created_at: 2026-09-22T09:07:07.040900574Z
   modified_at: 2026-09-22T09:07:07.040900574Z
+- id: 01a0c866-fa67-7410-a816-00173e933c18
+  author: codex
+  content: 'Implementation published in PR #2088 (commit ded0bdbf1d). RelationshipType now writes standard YAML scalars while continuing to read legacy `!Custom value` YAML and legacy externally-tagged JSON indefinitely. Exact custom spellings are preserved; no taxonomy normalization or bulk store migration was performed. Red-first migration test reproduced `!Custom implemented-by`; after implementation: full `cargo test -p aida-core` passed (971 passed, 2 ignored), focused relationship tests passed (8), object write-conformance test passed, fmt and diff checks clean.'
+  created_at: 2026-09-22T09:16:27.111348186Z
+  modified_at: 2026-09-22T09:16:27.111348186Z
