@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:26:45.055351013Z
-modified_at: 2026-09-21T18:54:58.218503019Z
+modified_at: 2026-09-22T02:24:22.997753192Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -47,3 +47,9 @@ relationships:
   target_id: 01a0c3ec-fe63-74f2-9e46-5700d5a9a564
   created_at: 2026-09-21T17:27:20.824465234Z
   created_by: joe
+comments:
+- id: 01a0c6ed-b7d5-7002-8bc0-26d340ddb459
+  author: joe
+  content: 'Implementation recovered and opened as PR #2074 at d06259e49b. Demonstrate-it-fires evidence: after changing show_cached_context from generic CacheOnlyReads to concrete CachedGitBackend, the old impl-only witness passed (1 passed, 0 failed), while the new path witness failed compilation with E0308: expected &CachedGitBackend, found &AnotherCacheOnlyView. Restoring the generic signature made both tests pass. A trybuild fixture was considered and rejected as disproportionate because the in-crate independent implementor produces the binding compiler failure directly.'
+  created_at: 2026-09-22T02:24:22.997753192Z
+  modified_at: 2026-09-22T02:24:22.997753192Z
