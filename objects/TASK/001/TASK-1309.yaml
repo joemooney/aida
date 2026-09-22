@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:32:15.319281838Z
-modified_at: 2026-09-22T10:29:33.382217260Z
+modified_at: 2026-09-22T10:36:17.167872835Z
 req_type: Task
 tags:
 - papercut ci-guard churn severity:cosmetic
@@ -60,3 +60,8 @@ comments:
   content: 'Implemented in PR #2093. Inventory now keys only on module-qualified symbols, validates markers against containing function anchors, and retains file:line only in stdout. Tests cover line/file movement stability, changed anchors, additions, removals, and duplicate ambiguity.'
   created_at: 2026-09-22T10:29:13.358976201Z
   modified_at: 2026-09-22T10:29:13.358976201Z
+- id: 01a0c8b0-118f-7380-9935-7dd08521b344
+  author: joe
+  content: 'PR #2093 updated at 71159e91cb after cold-review request changes: marker validation now uses lexical brace scopes and the innermost containing function rather than nearest preceding fn. Added regressions for markers after closed functions, closed nested scopes restoring the outer function, and markers inside nested functions. Full 12-test suite, inventory check, cargo fmt, and diff check pass.'
+  created_at: 2026-09-22T10:36:17.167872835Z
+  modified_at: 2026-09-22T10:36:17.167872835Z
