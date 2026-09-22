@@ -41,74 +41,12 @@
   added_at: 2026-09-21T21:26:18.313338992Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0c17d-8f51-7151-95ff-295ea30594af
-  position: 11000
-  added_by: joe
-  note: Promoted from finding TASK-1-159 via `aida findings promote`
-  added_at: 2026-09-21T21:26:39.815660696Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 01a0c141-c494-7333-8219-ca70dcb97c45
-  position: 12000
-  added_by: joe
-  note: Promoted from finding TASK-1-158 via `aida findings promote`
-  added_at: 2026-09-21T21:26:54.324254531Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a0c056-6a6d-7052-8876-d2b734ab0299
   position: 13000
   added_by: joe
   note: Promoted from finding TASK-1-155 via `aida findings promote`
   added_at: 2026-09-21T21:27:23.830662408Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 01a0c86f-50ff-7233-b88e-0694eedd1554
-  position: 24000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c85d); covers 1 spec
-  added_at: 2026-09-22T09:25:45.236778897Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c88c-ef0b-7803-9ecc-1167bd796d10
-  position: 25000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c87a); covers 1 spec
-  added_at: 2026-09-22T09:58:01.544449166Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c8a9-ceb4-7662-97b8-7d0030aa0953
-  position: 27000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c8a4); covers 1 spec
-  added_at: 2026-09-22T10:29:34.669973849Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c8b8-44c0-7ed2-b8c3-50c6d974f6b9
-  position: 28000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c8ab); covers 1 spec
-  added_at: 2026-09-22T10:45:26.421554262Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c8ba-b028-7911-ae34-7dbe24dcfaf3
-  position: 29000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c8aa); covers 1 spec
-  added_at: 2026-09-22T10:48:00.441853222Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c8d4-f2ef-7fb2-8033-9917e828311e
-  position: 30000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c8ce); covers 1 spec
-  added_at: 2026-09-22T11:16:42.151213298Z
-  for_role: reviewer
-  added_by_machine: imac
 - user_id: joe
   requirement_id: 01a0c8e2-0ae8-7f02-8576-88969cebba5b
   position: 31000
