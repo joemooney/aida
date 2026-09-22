@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T06:37:14.468684494Z
-modified_at: 2026-09-22T06:37:25.481622659Z
+modified_at: 2026-09-22T06:37:26.933248366Z
 req_type: Spike
 tags:
 - epic-66
@@ -56,5 +56,9 @@ relationships:
 - rel_type: References
   target_id: 01a0c4f7-8371-7633-8cf5-18d0c7074cf8
   created_at: 2026-09-22T06:37:25.481616776Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0c4cf-fb08-70e2-9715-0ee6eef97f04
+  created_at: 2026-09-22T06:37:26.933243333Z
   created_by: joe
 human_only: true
