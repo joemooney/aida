@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T07:30:19.607183091Z
-modified_at: 2026-09-22T07:38:10.301157321Z
+modified_at: 2026-09-22T07:57:37.239846982Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -35,3 +35,8 @@ comments:
   content: 'Cold independent review verdict for exact head bee8510d3ba4d83150bc016f03f255b7410ec2d3: REQUEST CHANGES. Blocking BUG-1585 acceptance/claim-sweep finding: aida-cli-lib/src/drain_state.rs:105-107 still states that `2` is the pipelined default once scheduling is live, directly contradicting default_pipeline_depth() = 1 and the corrected guide. The recorded unbounded sweep claimed three default-bearing sources but missed this same-file doc comment, and the new compiled guard does not cover it. Independently verified the exact two-file delta; BUG-1586''s runtime notice is distinct and untouched. ADR-27 accurately preserves the historical 2 decision and current 1 amendment, though the new partial-supersession comment duplicates its existing 2026-09-12 amendment. Red-first defect sensitivity is reconstructible (parent guide 2 versus function 1); focused test passed 1/1, cargo fmt --all -- --check passed, and git diff --check passed. At review time merge-hold-gate was green and Build (ubuntu-latest) remained pending. Reviewer was independent and made no implementation changes.'
   created_at: 2026-09-22T07:38:10.301157321Z
   modified_at: 2026-09-22T07:38:10.301157321Z
+- id: 01a0c81e-ce57-71b1-afda-5cae2fdfdb35
+  author: joe
+  content: 'Cold independent rereview verdict for exact head bc34143308060773c1d81dcc76e64835eb52b6a1: APPROVE / no blocking findings. Prior blocker is resolved: DrainState.pipeline_depth field docs now state live default 1 and depth >1 opt-in. The compiled guard derives the expected value from default_pipeline_depth(), checks both docs/autonomous-drain.md and the field-doc slice, and rejects the previously missed stale `2`-as-default phrasing. The corrected durable claim sweep identifies all 4 default-bearing sources: authoritative function+note, field docs, guide, and historical ADR-27; discipline pack, skills, and exact-head TUI/help contain no competing claim. ADR-27 remains historical with an accurate partial-supersession comment. BUG-1586 remains distinct and untouched. Exact-head evidence: focused guard passed 1/1; cargo fmt --all -- --check and git diff --check passed; GitHub Build and merge-hold-gate succeeded at this SHA. Reviewer was independent and made no implementation changes.'
+  created_at: 2026-09-22T07:57:37.239846982Z
+  modified_at: 2026-09-22T07:57:37.239846982Z
