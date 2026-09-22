@@ -3791,10 +3791,26 @@ pub(crate) fn handle_git_backend_command(
                     // object merely to render one spec. trace:BUG-626
                     let effective_status_str =
                         cached_epic_status.unwrap_or_else(|| format!("{}", req.effective_status()));
+                    // BUG-781: JSON is the machine projection of the same
+                    // human detail view, so use the type-aware display label
+                    // (a stored Approved decision is displayed as Accepted).
+                    // Keep the stored status separately below; consumers must
+                    // not have to infer which value is presentation-only.
+                    // trace:BUG-1502 | ai:codex
+                    let display_status = status_display::display_status_for_type(
+                        &format!("{:?}", req.req_type),
+                        &effective_status_str,
+                    )
+                    .to_string();
                     // STORY-632: `--json` emits the spec as a machine object,
                     // including the centrality fields, then returns early.
                     // trace:STORY-632 | ai:claude
-                    if *json {
+                    // The global format pin and the dedicated flag are two
+                    // spellings of the same machine contract. Keeping this
+                    // test at the renderer (rather than only in dispatch)
+                    // also covers AIDA_OUTPUT_FORMAT=json.
+                    // trace:BUG-1502 | ai:codex
+                    if *json || output_format_is_json() {
                         // BUG-1558: the machine JSON projection used to omit
                         // relationships entirely — an agent reading `aida show
                         // --json` had no way to see the typed graph at all,
@@ -3811,26 +3827,25 @@ pub(crate) fn handle_git_backend_command(
                             title: String,
                         }
                         #[derive(serde::Serialize)]
-                        struct ShowJson<'a> {
-                            id: String,
-                            spec_id: Option<&'a str>,
-                            agreed_id: Option<&'a str>,
-                            title: &'a str,
-                            description: &'a str,
-                            req_type: String,
-                            status: String,
-                            priority: String,
-                            owner: &'a str,
-                            feature: &'a str,
-                            tags: Vec<&'a str>,
-                            // trace:FR-283 | ai:claude — omitted when unset.
-                            #[serde(skip_serializing_if = "Option::is_none")]
-                            weight: Option<f32>,
-                            in_degree: u32,
-                            out_degree: u32,
-                            heft: u32,
-                            // trace:BUG-1558 | ai:claude
-                            relationships: Vec<RelJson>,
+                        struct GitCommitJson {
+                            sha: String,
+                            short_sha: String,
+                            subject: String,
+                        }
+                        #[derive(serde::Serialize)]
+                        struct GitFileJson {
+                            file: String,
+                            symbol: Option<String>,
+                        }
+                        #[derive(serde::Serialize)]
+                        struct GitLinkageJson {
+                            commits: Vec<GitCommitJson>,
+                            files: Vec<GitFileJson>,
+                            shipped: bool,
+                            branch: Option<String>,
+                            worktree: Option<String>,
+                            shipped_pr: Option<u64>,
+                            repo: Option<String>,
                         }
                         let relationships: Vec<RelJson> = req
                             .relationships
@@ -3847,26 +3862,164 @@ pub(crate) fn handle_git_backend_command(
                                 }
                             })
                             .collect();
-                        let out = ShowJson {
-                            id: req.id.to_string(),
-                            spec_id: req.spec_id.as_deref(),
-                            agreed_id: req.agreed_id.as_deref(),
-                            title: &req.title,
-                            description: &req.description,
-                            req_type: format!("{:?}", req.req_type),
-                            // BUG-626: derived rollup for epics. trace:BUG-626
-                            status: effective_status_str.clone(),
-                            priority: format!("{}", req.effective_priority()),
-                            owner: &req.owner,
-                            feature: &req.feature,
-                            tags: req.tags.iter().map(|s| s.as_str()).collect(),
-                            // trace:FR-283 | ai:claude
-                            weight: req.weight,
-                            in_degree: degrees.in_degree,
-                            out_degree: degrees.out_degree,
-                            heft: degrees.heft,
-                            relationships,
+                        let git_linkage = if *no_git {
+                            None
+                        } else {
+                            let project_root = store_path
+                                .parent()
+                                .map(|p| p.to_path_buf())
+                                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                            let mut ids = vec![req.display_id()];
+                            if let Some(agreed) = req.agreed_id.as_deref() {
+                                if !ids.iter().any(|id| id == agreed) {
+                                    ids.push(agreed.to_string());
+                                }
+                            }
+                            if let Some(origin) = req.spec_id.as_deref() {
+                                if !ids.iter().any(|id| id == origin) {
+                                    ids.push(origin.to_string());
+                                }
+                            }
+                            let linkage = crate::collect_git_linkage(&project_root, &ids);
+                            Some(GitLinkageJson {
+                                commits: linkage
+                                    .commits
+                                    .into_iter()
+                                    .map(|(sha, short_sha, subject)| GitCommitJson {
+                                        sha,
+                                        short_sha,
+                                        subject,
+                                    })
+                                    .collect(),
+                                files: linkage
+                                    .files
+                                    .into_iter()
+                                    .map(|(file, symbol)| GitFileJson { file, symbol })
+                                    .collect(),
+                                shipped: linkage.shipped,
+                                branch: linkage.branch,
+                                worktree: linkage.worktree,
+                                shipped_pr: linkage.shipped_pr,
+                                repo: linkage.repo,
+                            })
                         };
+                        // BUG-527: carry the human-visible queue membership
+                        // into JSON as structured role/position pairs. The
+                        // helper uses the same per-role rank as the human
+                        // `Queued:` line, including the `general` label for
+                        // unrouted entries. trace:BUG-1502 | ai:codex
+                        let project_root = store_path
+                            .parent()
+                            .map(|p| p.to_path_buf())
+                            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                        let queue_membership: Vec<serde_json::Value> =
+                            queue_memberships_for(&project_root, &req.id)
+                                .into_iter()
+                                .map(|(role, position)| {
+                                    serde_json::json!({
+                                        "role": role.unwrap_or_else(|| "general".to_string()),
+                                        "position": position,
+                                    })
+                                })
+                                .collect();
+                        // Start from the complete stored requirement rather
+                        // than maintaining a lossy parallel projection. Then
+                        // overlay every derived field the human view computes
+                        // (effective lifecycle values, graph context, next
+                        // actions, and git linkage). New stored human fields
+                        // now arrive in JSON automatically instead of silently
+                        // disappearing until another bug is filed.
+                        // trace:BUG-1502 | ai:codex
+                        let mut out = serde_json::to_value(&req)?;
+                        let object = out.as_object_mut().ok_or_else(|| {
+                            anyhow::anyhow!("serialized requirement was not a JSON object")
+                        })?;
+                        object.insert(
+                            "display_id".to_string(),
+                            serde_json::Value::String(req.display_id()),
+                        );
+                        object.insert(
+                            "uuid".to_string(),
+                            serde_json::Value::String(req.id.to_string()),
+                        );
+                        object.insert("opened".to_string(), serde_json::to_value(req.created_at)?);
+                        object.insert(
+                            "modified".to_string(),
+                            serde_json::to_value(req.modified_at)?,
+                        );
+                        object.insert(
+                            "status".to_string(),
+                            serde_json::Value::String(display_status.clone()),
+                        );
+                        object.insert(
+                            "stored_status".to_string(),
+                            serde_json::Value::String(req.status.to_string()),
+                        );
+                        object.insert(
+                            "priority".to_string(),
+                            serde_json::Value::String(format!("{}", req.effective_priority())),
+                        );
+                        object.insert(
+                            "relationships".to_string(),
+                            serde_json::to_value(&relationships)?,
+                        );
+                        object.insert(
+                            "in_degree".to_string(),
+                            serde_json::to_value(degrees.in_degree)?,
+                        );
+                        object.insert(
+                            "out_degree".to_string(),
+                            serde_json::to_value(degrees.out_degree)?,
+                        );
+                        object.insert("heft".to_string(), serde_json::to_value(degrees.heft)?);
+
+                        let blockers: Vec<serde_json::Value> = req
+                            .relationships
+                            .iter()
+                            .filter(|rel| matches!(rel.rel_type, RelationshipType::BlockedBy))
+                            .map(|rel| match backend.get_requirement(&rel.target_id) {
+                                Ok(Some(blocker)) => serde_json::json!({
+                                    "id": blocker.display_id(),
+                                    "status": blocker.status.to_string(),
+                                    "satisfied": matches!(blocker.status, RequirementStatus::Completed),
+                                }),
+                                _ => serde_json::json!({
+                                    "id": rel.target_id.to_string(),
+                                    "status": "missing",
+                                    "satisfied": false,
+                                }),
+                            })
+                            .collect();
+                        object.insert(
+                            "blocked".to_string(),
+                            serde_json::Value::Bool(blockers.iter().any(|v| {
+                                v.get("satisfied").and_then(|v| v.as_bool()) == Some(false)
+                            })),
+                        );
+                        object.insert("blockers".to_string(), serde_json::Value::Array(blockers));
+
+                        let mut next =
+                            crate::help_next::spec_next(&effective_status_str, &req.display_id());
+                        crate::help_next::push_serialize_cluster(
+                            &mut next,
+                            serialize_cluster_command.clone(),
+                        );
+                        object.insert(
+                            "next".to_string(),
+                            serde_json::Value::Array(
+                                next.into_iter()
+                                    .map(|step| serde_json::json!({"cmd": step.cmd, "to": step.to}))
+                                    .collect(),
+                            ),
+                        );
+                        object.insert(
+                            "git_linkage".to_string(),
+                            serde_json::to_value(git_linkage)?,
+                        );
+                        object.insert(
+                            "queue_membership".to_string(),
+                            serde_json::Value::Array(queue_membership),
+                        );
                         println!("{}", serde_json::to_string_pretty(&out)?);
                         return Ok(());
                     }
@@ -4128,11 +4281,7 @@ pub(crate) fn handle_git_backend_command(
                     // BUG-781: for a decision spec, the stored `Approved` IS
                     // ACCEPTED — the terminal state — so display it that way
                     // here and in the reprint at the foot. trace:BUG-781
-                    let status = status_display::display_status_for_type(
-                        &format!("{:?}", req.req_type),
-                        &effective_status_str,
-                    )
-                    .to_string();
+                    let status = display_status.clone();
                     println!(
                         "{}: {}",
                         "Status".bold(),

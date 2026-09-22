@@ -1813,6 +1813,61 @@ pub(crate) fn output_format_is_json() -> bool {
     matches!(output_format_override(), Some(OutputFormat::Json))
 }
 
+/// Resolve the selected clap leaf and reject a JSON format pin unless that
+/// leaf advertises a dedicated JSON projection. `--format` is global, so clap
+/// otherwise accepts it for every command and lets unsupported handlers emit
+/// successful human/TOON text. A local `--json` argument is the executable
+/// declaration that the leaf owns a machine contract; the renderer must then
+/// make both spellings identical.
+// trace:BUG-1502 | ai:codex
+fn enforce_json_format_capability(argv: &mut Vec<String>) -> Result<()> {
+    if !output_format_is_json() {
+        return Ok(());
+    }
+
+    use clap::CommandFactory;
+    let root = Cli::command();
+    let matches = root.clone().try_get_matches_from(argv.clone())?;
+    let mut command = &root;
+    let mut selected = &matches;
+    let mut path = vec!["aida".to_string()];
+    while let Some((name, submatches)) = selected.subcommand() {
+        let Some(subcommand) = command
+            .get_subcommands()
+            .find(|candidate| candidate.get_name() == name)
+        else {
+            anyhow::bail!(
+                "could not resolve JSON capability for command `{}`",
+                path.join(" ")
+            );
+        };
+        path.push(name.to_string());
+        command = subcommand;
+        selected = submatches;
+    }
+
+    let supports_json = command
+        .get_arguments()
+        .any(|argument| argument.get_id().as_str() == "json");
+    if !supports_json {
+        anyhow::bail!(
+            "`{} --format json` is unsupported: this command has no JSON projection; use `--format human` or `--format toon`",
+            path.join(" ")
+        );
+    }
+
+    // Materialize the global spelling as the selected leaf's dedicated flag.
+    // This is the load-bearing dispatch guarantee: every existing handler sees
+    // exactly the same parsed boolean for `--format json` as for `--json`, so
+    // capability cannot drift from renderer wiring (for example, fasttrack
+    // status previously declared `--json` but only inspected that local bool).
+    // trace:BUG-1502 | ai:codex
+    if !selected.get_flag("json") {
+        argv.push("--json".to_string());
+    }
+    Ok(())
+}
+
 /// Build and dispatch the shared tail resolver from clap-parsed arguments.
 /// Both `aida tail drain` and `aida drain tail` enter here, then flow through
 /// `tail_cmd::handle_tail`.
@@ -3078,12 +3133,24 @@ fn run() -> Result<()> {
             &rewrite_advisor_assess(&rewrite_personal_view_alias(&expanded)),
         ))),
     );
-    let mut cli = Cli::parse_from(after_alias_rewrites);
+    let mut cli = Cli::parse_from(after_alias_rewrites.clone());
 
     // STORY-764: install the explicit output-format pin before any handler
     // renders. `--format` wins; else `AIDA_OUTPUT_FORMAT`; else the TTY-based
     // default stands. trace:STORY-764 | ai:claude
     set_output_format_override(cli.format);
+
+    // A global clap flag is syntactically accepted everywhere. Convert an
+    // unsupported JSON request into an explicit error before any command can
+    // silently fall back to prose. trace:BUG-1502 | ai:codex
+    let mut dispatch_argv = after_alias_rewrites;
+    let dispatch_len = dispatch_argv.len();
+    enforce_json_format_capability(&mut dispatch_argv)?;
+    // Reparse only when capability materialization changed argv. This makes
+    // the local `json` field authoritative for every downstream dispatcher.
+    if dispatch_argv.len() != dispatch_len {
+        cli = Cli::parse_from(dispatch_argv);
+    }
 
     // STORY-708: one-line, non-blocking deprecation hint. Printed to stderr (so
     // it never pollutes machine-readable stdout) only when the operator reached
