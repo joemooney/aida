@@ -78,27 +78,68 @@ jobs:
           done
 
           response="$(mktemp)"
+          headers="$(mktemp)"
           set +e
-          curl --silent --show-error --fail --max-time 15 \
+          http_status="$(curl --silent --show-error --max-time 15 \
+            --dump-header "$headers" --output "$response" --write-out '%{http_code}' \
             --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
             --header "CF-Access-Client-Id: ${AIDA_CF_ACCESS_CLIENT_ID}" \
             --header "CF-Access-Client-Secret: ${AIDA_CF_ACCESS_CLIENT_SECRET}" \
-            "https://${AIDA_GITLAB_LIVE_HOST}/api/v4/version" >"$response"
+            "https://${AIDA_GITLAB_LIVE_HOST}/api/v4/version")"
           curl_status=$?
           set -e
-          if [ "$curl_status" -eq 22 ]; then
-            echo "::error::GitLab API preflight returned an HTTP error; verify the Access Service Auth policy and both credential pairs"
-            exit 1
-          elif [ "$curl_status" -ne 0 ]; then
+
+          content_type="$(awk 'BEGIN { IGNORECASE=1 } /^content-type:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$headers")"
+          cf_ray="$(awk 'BEGIN { IGNORECASE=1 } /^cf-ray:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$headers")"
+          location="$(awk 'BEGIN { IGNORECASE=1 } /^location:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$headers" | sed -E 's/[?#].*$//')"
+          if jq -e '.version | type == "string" and length > 0' "$response" >/dev/null 2>&1; then
+            body_class="gitlab-version-json"
+          elif grep -Eqi '<title>[^<]*(Cloudflare Access|Sign in)[^<]*</title>' "$response"; then
+            body_class="cloudflare-access-html"
+          elif grep -Eqi '^[[:space:]]*<!DOCTYPE html|^[[:space:]]*<html' "$response"; then
+            body_class="other-html"
+          elif jq -e 'type == "object" or type == "array"' "$response" >/dev/null 2>&1; then
+            body_class="other-json"
+          else
+            body_class="other"
+          fi
+          echo "GitLab API probe: curl_status=${curl_status} http_status=${http_status:-none} content_type=${content_type:-none} cf_ray=${cf_ray:-none} location_path=${location:-none} body_class=${body_class}"
+
+          identity_response="$(mktemp)"
+          identity_headers="$(mktemp)"
+          set +e
+          identity_status="$(curl --silent --show-error --max-time 15 \
+            --dump-header "$identity_headers" --output "$identity_response" --write-out '%{http_code}' \
+            --header "CF-Access-Client-Id: ${AIDA_CF_ACCESS_CLIENT_ID}" \
+            --header "CF-Access-Client-Secret: ${AIDA_CF_ACCESS_CLIENT_SECRET}" \
+            "https://${AIDA_GITLAB_LIVE_HOST}/cdn-cgi/access/get-identity")"
+          identity_curl_status=$?
+          set -e
+          identity_content_type="$(awk 'BEGIN { IGNORECASE=1 } /^content-type:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$identity_headers")"
+          if jq -e 'type == "object"' "$identity_response" >/dev/null 2>&1; then
+            identity_body_class="json-object"
+          elif grep -Eqi '<title>[^<]*(Cloudflare Access|Sign in)[^<]*</title>' "$identity_response"; then
+            identity_body_class="cloudflare-access-html"
+          elif grep -Eqi '^[[:space:]]*<!DOCTYPE html|^[[:space:]]*<html' "$identity_response"; then
+            identity_body_class="other-html"
+          else
+            identity_body_class="other"
+          fi
+          echo "Cloudflare identity probe: curl_status=${identity_curl_status} http_status=${identity_status:-none} content_type=${identity_content_type:-none} body_class=${identity_body_class}"
+
+          if [ "$curl_status" -ne 0 ]; then
             echo "::notice::Skipping GitLab forge smoke: mirror is unreachable"
             echo "run=false" >> "$GITHUB_OUTPUT"
-          elif ! jq -e '.version | type == "string" and length > 0' "$response" >/dev/null 2>&1; then
-            echo "::error::GitLab API preflight did not return authenticated JSON (Cloudflare Access may have returned an HTML sign-in page)"
+          elif [ "$http_status" -lt 200 ] || [ "$http_status" -ge 300 ]; then
+            echo "::error::GitLab API preflight returned HTTP ${http_status}; verify the Access Service Auth policy and both credential pairs"
+            exit 1
+          elif [ "$body_class" != "gitlab-version-json" ]; then
+            echo "::error::GitLab API preflight returned ${body_class}, not GitLab version JSON; compare the safe API and identity probe classifications above"
             exit 1
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
-          rm -f "$response"
+          rm -f "$response" "$headers" "$identity_response" "$identity_headers"
 
       - name: Install Rust and GitLab CLI
         if: steps.preflight.outputs.run == 'true'
