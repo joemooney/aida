@@ -45,12 +45,12 @@ description: |-
   Filed by the driver-advisor seat, from a finding the #2065 lane raised against its own change and
   declined to fix rather than letting it pass silently. Related: BUG-1471 (the Custom half, merged
   at e0a211ec81), TASK-1426 (the inert-edge migration).
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T23:41:00.172675010Z
-modified_at: 2026-09-22T07:58:42.994748909Z
+modified_at: 2026-09-22T07:58:50.160864586Z
 req_type: Bug
 tags:
 - card rendering papercut
@@ -75,3 +75,22 @@ comments:
   content: '[aida:proxy-approval] verdict=approved; reasoning=independent cold reviewer verified exact head ac2900da189d9754bea939da0867076f085ad7c5, canonical relationship labels across all standard edge types, Parent/Child/Custom compatibility, ordering, and focused tests; independent=yes; gates=required Ubuntu CI green on rerun, merge-hold-gate green, exact-head review approved; timestamp=2026-09-22T00:58:42-07:00'
   created_at: 2026-09-22T07:58:42.994748909Z
   modified_at: 2026-09-22T07:58:42.994748909Z
+history:
+- id: 01a0c81f-eb2a-7cb1-8fde-c1d740268299
+  author: aida-auto-bump
+  timestamp: 2026-09-22T07:58:50.154062228Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c81f-eb30-7f40-81df-073afffb3807
+  timestamp: 2026-09-22T07:58:50.160863569Z
+  agent: aida
+  commit_sha: cfd74e19d2b3fcc856b4981b3341325a61275093
+  summary: 'Independent exact-head review passed: canonical labels and Parent/Child/Custom bucket compatibility verified; focused 8-test card suite, fmt and diff checks pass. Required CI failed only in unrelated BUG-1265 test with transient ETXTBSY; rerun requested.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T07:58:50.153892321Z
+  completion_sha: cfd74e19d2b3fcc856b4981b3341325a61275093
