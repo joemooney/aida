@@ -47,7 +47,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T07:03:19.069580239Z
-modified_at: 2026-09-22T10:57:53.974378134Z
+modified_at: 2026-09-22T11:34:47.676449139Z
 req_type: Decision
 tags:
 - architecture
@@ -100,3 +100,8 @@ comments:
   content: '[aida:independent-review] REQUEST_CHANGES at exact head 6b0a289cc5eae40f070f6e52a61b64b50192ce92. Independent reviewer; did not implement or specify. LocalLlmEvaluator is absent, evaluator confidence is not represented or enforced, and question-payload hash provenance is absent. ADR was approved before implementation, but the implementation does not conform to these accepted decisions. Full findings: https://github.com/joemooney/aida/pull/2080#issuecomment-5775250488'
   created_at: 2026-09-22T10:57:53.974378134Z
   modified_at: 2026-09-22T10:57:53.974378134Z
+- id: 01a0c8e5-a27c-7db0-9b8d-e4796e88677d
+  author: joe
+  content: '[aida:independent-review] REQUEST_CHANGES at exact PR #2080 head dffd8aa634ac599705df1bcca0321923a60d0e49. LocalLlmEvaluator, confidence, payload hashes and fail-closed errors are now implemented. Remaining blocker: fast-fail combines minimum probability from one criterion with minimum confidence across every criterion. The ADR requires any one criterion with p at most 0.20 and confidence at least 0.85 to reject; an unrelated low-confidence criterion currently suppresses that result. Implement a per-criterion qualifying predicate and mixed-confidence multi-criterion tests. Focused ADR tests 5/5 passed but omit this case.'
+  created_at: 2026-09-22T11:34:47.676449139Z
+  modified_at: 2026-09-22T11:34:47.676449139Z
