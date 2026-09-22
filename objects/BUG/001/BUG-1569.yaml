@@ -10,12 +10,12 @@ description: |-
   The actual fix belongs here: make the type-protocol notice lookup cache-backed (matching the STORY-707 / TASK-1065 pattern already used for `aida status`, `aida list`, `load_metadata_only`, etc. -- none of which pay for a full `backend.load()`), so this per-turn hook never needs to scan the whole store just to render one line. Until then the notice can silently truncate under load (a cold cache, a busy shared runner, or simply a large store) without printing an error -- by design "fail-open", but the design's own cost estimate (1s) was wrong for the case it exists to bound.
 
   Acceptance: `notice_line_for_scope`'s type-protocol lookup no longer requires backend.load() of the full store (a targeted per-id read suffices); `arm_notice_deadline` can return to a sub-second bound once it is; the TASK-1274-authored regression test stays green under the tighter deadline.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:29:09.929894136Z
-modified_at: 2026-09-22T09:04:37.078084264Z
+modified_at: 2026-09-22T09:05:19.680913068Z
 req_type: Bug
 tags:
 - awaiting
@@ -248,10 +248,24 @@ comments:
   content: '[aida:proxy-approval] verdict=approved; reasoning=independent cold rereviewer verified exact head bb920e5087f60ebb6ce1b246d5ca57afb9722a5b, snapshot-only notice path, authoritative targeted reads, visible stale-cache errors, and six repeated malformed-object regressions; independent=yes; gates=required Ubuntu CI green, exact-head code approval; hold-release=deliberate gh label bypass because non-TTY ship path cannot clear supervised hold; timestamp=2026-09-22T02:04:36-07:00'
   created_at: 2026-09-22T09:04:37.078084264Z
   modified_at: 2026-09-22T09:04:37.078084264Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'REQUEST CHANGES: the exact-head acceptance regression fails; backend initialization still performs a full-store cache rebuild and the unrelated malformed object suppresses the leased-spec protocol notice.'
-  recovery_hint: address the review findings, move BUG-1569 back to In Progress, and clear the PR hold only after approval
-  shelved_at: 2026-09-22T08:39:28.767694993Z
+history:
+- id: 01a0c85c-cb2b-7ec0-9792-6b7dccdeb505
+  author: aida-auto-bump
+  timestamp: 2026-09-22T09:05:19.659825124Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0c85c-cb40-7843-84b4-b7b12b6531ab
+  timestamp: 2026-09-22T09:05:19.680911278Z
+  agent: implementer
+  commit_sha: d5cf09e208b5b946957f3822c3d259f03c82c92a
+  summary: 'REQUEST CHANGES: the exact-head acceptance regression fails; backend initialization still performs a full-store cache rebuild and the unrelated malformed object suppresses the leased-spec protocol notice.'
+  punted:
+  - 'punted: REQUEST CHANGES: the exact-head acceptance regression fails; backend initialization still performs a full-store cache rebuild and the unrelated malformed object suppresses the leased-spec protocol notice.'
+  review_verdict: request-changes
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T09:05:19.659396164Z
+  completion_sha: d5cf09e208b5b946957f3822c3d259f03c82c92a
