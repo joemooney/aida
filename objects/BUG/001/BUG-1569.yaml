@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:29:09.929894136Z
-modified_at: 2026-09-22T08:20:33.055566525Z
+modified_at: 2026-09-22T08:29:32.859589166Z
 req_type: Bug
 tags:
 - awaiting
@@ -228,3 +228,8 @@ comments:
   created_at: 2026-09-21T22:54:08.686603214Z
   modified_at: 2026-09-21T22:54:08.686603214Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c83c-093b-7780-98fa-7db887d84de7
+  author: joe
+  content: 'Implemented targeted/cache-indexed notice lookup: reads only leased spec and matching META protocol YAML, validates authoritative tag/type, and surfaces lookup errors. Regression runs under 500ms test watchdog with an unrelated malformed object that would break the former full-store scan. Verified protocol CLI suite (4/4), protocol unit tests (7/7), and cargo fmt.'
+  created_at: 2026-09-22T08:29:32.859589166Z
+  modified_at: 2026-09-22T08:29:32.859589166Z
