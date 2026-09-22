@@ -14,12 +14,12 @@ description: |-
   NOT INVESTIGATED and deliberately not asserted: I have not isolated where the re-parse happens, whether the printed error is from the same process or a child, or whether any input could reach a flag that ACCEPTS its value rather than rejecting it. The last of those is the question worth answering first, because it is the difference between noisy output and free text steering a command.
 
   WHAT WOULD SETTLE IT: record a verdict whose finding text contains a flag with a VALID value for its type — something like `--yes` or a numeric `--pr 999` — and observe whether the invocation changes behaviour. If it does, this stops being cosmetic.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T23:58:27.988803235Z
-modified_at: 2026-09-21T21:26:54.962879376Z
+modified_at: 2026-09-22T11:09:32.221600441Z
 req_type: Task
 tags:
 - from-advisor:BUG-1467
