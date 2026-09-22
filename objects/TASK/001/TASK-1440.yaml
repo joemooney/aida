@@ -3,12 +3,12 @@ spec_id: TASK-1440
 agreed_id: TASK-1440
 title: Execute objective comprehension benchmark measuring human understanding time and decision accuracy
 description: 'Measure real human operator comprehension on raw machine specs vs derived expositions: (1) time to explain correctly, (2) comprehension quiz accuracy (problem, rationale, constraints, uncertainties, failure criteria), (3) correction rate, and (4) operator confidence ratings.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T16:08:01.637576942Z
-modified_at: 2026-09-22T16:08:48.072058030Z
+modified_at: 2026-09-22T16:53:23.174013060Z
 req_type: Task
 tags:
 - benchmark
