@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T14:04:15.633781093Z
-modified_at: 2026-09-22T14:08:03.868553155Z
+modified_at: 2026-09-22T14:08:50.938168432Z
 req_type: Task
 tags:
 - cost
@@ -114,3 +114,8 @@ comments:
     - Confirm that phase means orchestration lifecycle phase, while explicit rework is a phase only when a retained launch says so; round remains independent and nullable.
   created_at: 2026-09-22T14:08:03.868553155Z
   modified_at: 2026-09-22T14:08:03.868553155Z
+- id: 01a0c972-acfa-7811-9136-b85d6ea6ee32
+  author: joe
+  content: '[architecture-signoff] APPROVED. Use project-local gitignored .aida/derived/token-ledger-v1.sqlite with atomic replacement and owner-only permissions. Require exact vendor-session evidence before any project/session/run/spec/seat attribution; timestamps may only narrow an exact join. Retain only allow-listed numeric vendor usage fields and content-free identifiers/provenance—never prompts, responses, tool arguments, environment, or credentials. Phase means evidenced orchestration lifecycle phase; explicit rework is assigned only from a retained rework launch/lease, and round is independent/nullable with a reason when absent or ambiguous. Keep pricing, billing reconciliation, Antigravity without a proven schema, drain_summary changes (BUG-1418), and new orchestrator persistence out of scope. If retained evidence cannot prove a dimension, emit null plus reason and file a follow-up rather than expanding scope. Proceed with implementation and the complete fixture/idempotence/query test plan.'
+  created_at: 2026-09-22T14:08:50.938168432Z
+  modified_at: 2026-09-22T14:08:50.938168432Z
