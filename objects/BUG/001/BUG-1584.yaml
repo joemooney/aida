@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T23:41:00.172675010Z
-modified_at: 2026-09-22T07:34:46.030496328Z
+modified_at: 2026-09-22T07:43:44.405451803Z
 req_type: Bug
 tags:
 - card rendering papercut
@@ -65,3 +65,8 @@ comments:
   content: 'Implemented via CardRel::edge: every standard edge under the neutral Related bucket now renders its canonical type inline; Child remains a bare target under the Parent heading, and Custom preserves its existing inline name. Red-first regression covered Parent, Duplicate, Verifies, VerifiedBy, References, BlockedBy, Blocks, SupersededBy, Supersedes plus Child/Custom controls. cargo test -p aida-cli-lib card_ passed (8 tests); cargo fmt --all -- --check and git diff --check passed.'
   created_at: 2026-09-22T07:32:54.958468186Z
   modified_at: 2026-09-22T07:32:54.958468186Z
+- id: 01a0c812-1915-7720-8418-729d2f5a3a47
+  author: joe
+  content: 'Cold independent review at exact head ac2900da189d9754bea939da0867076f085ad7c5: APPROVED for code/spec. Inspected full 79-line/2-file diff against merge-base 7ad1003698; card_rel_edge_name now delegates every non-Child edge to RelationshipType::Display, preserving canonical parent, duplicate, verifies, verified-by, references, blocked-by, blocks, superseded-by, supersedes and Custom names. Child remains unlabeled in Parent; buckets remain Parent/Related/Custom and existing order is unchanged. Existing exhaustive invariant proves every enum case renders exactly once. Added regression directly distinguishes BlockedBy from References and includes all named variants plus Child/Custom controls. Independent cargo test -p aida-cli-lib card_: 8 passed; cargo fmt --all -- --check and git diff --check clean. Implementer recorded red-first coverage; the regression would fail on the parent implementation because standard edges had edge=None. Required CI run 35700245784 failed only in unrelated bug_1265_finish_ci_tests::fake_gh_short_argv_reaches_fallback with OS ETXTBSY (5321 passed, 1 failed); failed-job rerun requested. No findings in PR scope; do not merge until rerun is green.'
+  created_at: 2026-09-22T07:43:44.405451803Z
+  modified_at: 2026-09-22T07:43:44.405451803Z
