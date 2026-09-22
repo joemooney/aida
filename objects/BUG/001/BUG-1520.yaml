@@ -83,10 +83,55 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:29:26.082009790Z
-modified_at: 2026-09-21T04:39:14.671710107Z
+modified_at: 2026-09-22T00:01:23.842121448Z
 req_type: Bug
 tags:
 - agent-surface
 - json-contract
 - papercut
 - severity:operational
+comments:
+- id: 01a0c66a-cf82-7162-894c-41c9ea351792
+  author: joe
+  content: |-
+    INDEPENDENT PROXY REVIEW OF #2069 (BUG-1520), RECORDED BECAUSE THE REVIEWER SEAT IS NOT RESPONDING AND THE PR HAS BEEN GATE-GREEN FOR ~40 MINUTES. INDEPENDENT: YES — I did not write this code, did not brief its lane, and took no part in disposing BUG-1520. That is the opposite of #2070, which I am NOT reviewing because I wrote its brief and made the TASK-186 ruling; #2070 waits for the reviewer.
+
+    I REPRODUCED THE DEFECT ON MAIN BEFORE READING THE FIX, rather than taking the spec's measurement:
+
+        aida list --fields id,zzz --format json   ->  rc=0   (human and toon both rc=1)
+
+    Confirmed present at the merge base. The spec's central claim holds.
+
+    CRITERION-BY-CRITERION, checked in the diff rather than from the PR body:
+
+      1. VALIDATION BEFORE THE FORMAT BRANCH — satisfied, and structurally rather than by repetition.
+         `toon_list_fields(fields.as_deref())?` is hoisted ABOVE the format match, with a comment
+         naming why: "validate --fields BEFORE the format branch, so no format can skip it". That
+         is the criterion's actual requirement — it asked for the check to be unskippable by a
+         FUTURE format, not merely present on three current ones.
+
+      2. NARROWING ON JSON — satisfied. `if fields.is_some()` rebuilds each row from the selected
+         set. The comment records the design boundary I would otherwise have asked about: parity
+         with TOON is about WHICH fields come back, not how values are rendered, so `--fields`
+         cannot silently change data.
+
+      3. BOTH SPELLINGS, RENAME FORBIDDEN — satisfied, and the test ENFORCES the prohibition rather
+         than the addition. `json_rows_carry_both_type_spellings` panics with "req_type must be
+         RETAINED, not renamed" if the key is absent. That is the correct polarity: criterion 3's
+         risk was a well-meaning rename breaking an external dashboard under STORY-1352's contract,
+         and a test that only checked `type` exists would pass a rename.
+
+      4. ALL THREE FORMATS COVERED — satisfied by `bogus_field_is_refused_on_every_format` and
+         `valid_fields_narrow_every_format`, both iterating formats rather than asserting three
+         times.
+
+    213 lines of test against 79 of implementation.
+
+    WHAT I DID NOT DO, STATED SO THE LEDGER IS HONEST: I did not run the test suite myself, did not mutate the fix to confirm the tests fail without it, and did not read every line of the 79-line change. This is a criteria-and-seam review, not the adversarial pass the reviewer seat would give it. CI is green and the criteria are met at the seam; that is the basis, and it is weaker than a full review.
+
+    I AM NOT MERGING IT ON THIS ALONE. The reviewer has been responsive all session and the PR is not urgent enough to spend the independence question on. This is recorded so that when a verdict arrives it lands on a PR someone has already read, and so that if the reviewer stays absent the next seat has a starting point rather than a cold PR.
+
+    ONE THING THE SPEC FLAGS THAT THIS PR DOES NOT FIX, AND CORRECTLY SO: `aida show <ID> --full --format json` returns HUMAN TEXT with exit 0. That is a fifth instance of the same family and a different verb; BUG-1289 already tracks `aida status` and `aida ps`. Not this PR's scope, and I am not holding it for that.
+  created_at: 2026-09-22T00:01:23.842121448Z
+  modified_at: 2026-09-22T00:01:23.842121448Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
