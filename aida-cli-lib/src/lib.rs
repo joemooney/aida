@@ -38541,7 +38541,14 @@ fn reviewer_queue_story_ids(project_root: &std::path::Path) -> Option<Vec<String
     if !out.status.success() {
         return None;
     }
-    let rows = serde_json::from_slice::<Vec<serde_json::Value>>(&out.stdout).ok()?;
+    parse_reviewer_queue_story_ids(&out.stdout)
+}
+
+// TASK-192: keep malformed output distinguishable from a valid empty queue so
+// callers that gate operator action can fail closed.
+// trace:TASK-192 | ai:codex
+fn parse_reviewer_queue_story_ids(bytes: &[u8]) -> Option<Vec<String>> {
+    let rows = serde_json::from_slice::<Vec<serde_json::Value>>(bytes).ok()?;
     Some(
         rows.iter()
             .filter(|row| row.get("for_role").and_then(|v| v.as_str()) == Some("reviewer"))
@@ -38552,6 +38559,84 @@ fn reviewer_queue_story_ids(project_root: &std::path::Path) -> Option<Vec<String
             })
             .collect(),
     )
+}
+
+// trace:TASK-192 | ai:codex
+fn pr_has_merge_hold(project_root: &std::path::Path, pr: &status_cleanup::OpenPrItem) -> bool {
+    merge_hold::read_hold(project_root, pr.number).is_some()
+        || pr
+            .labels
+            .iter()
+            .any(|label| label.eq_ignore_ascii_case("aida:merge-hold"))
+}
+
+// trace:TASK-192 | ai:codex
+fn reviewer_route_for_pr(
+    routed_prs: Option<&std::collections::HashSet<u64>>,
+    pr_number: u64,
+) -> awaiting_you::ReviewerRoute {
+    match routed_prs {
+        Some(prs) if prs.contains(&pr_number) => awaiting_you::ReviewerRoute::Routed,
+        Some(_) => awaiting_you::ReviewerRoute::Unrouted,
+        None => awaiting_you::ReviewerRoute::Unknown,
+    }
+}
+
+#[cfg(test)]
+mod task_192_fail_closed_fact_tests {
+    use super::*;
+
+    fn pr(labels: &[&str]) -> status_cleanup::OpenPrItem {
+        status_cleanup::OpenPrItem {
+            number: 2035,
+            title: "broken".into(),
+            head_branch: "broken-pr".into(),
+            ci_rollup: Some("fail".into()),
+            mergeable: Some("MERGEABLE".into()),
+            review_decision: None,
+            head_sha: Some("deadbeef".into()),
+            labels: labels.iter().map(|label| (*label).into()).collect(),
+        }
+    }
+
+    #[test]
+    fn forge_label_only_merge_hold_is_authoritative() {
+        let root = tempfile::tempdir().unwrap();
+        assert!(pr_has_merge_hold(root.path(), &pr(&["aida:merge-hold"])));
+        assert!(pr_has_merge_hold(root.path(), &pr(&["AIDA:MERGE-HOLD"])));
+        assert!(!pr_has_merge_hold(root.path(), &pr(&["bug"])));
+    }
+
+    #[test]
+    fn reviewer_queue_parser_distinguishes_empty_from_malformed() {
+        assert_eq!(parse_reviewer_queue_story_ids(b"[]"), Some(Vec::new()));
+        assert_eq!(parse_reviewer_queue_story_ids(b"not json"), None);
+        assert_eq!(parse_reviewer_queue_story_ids(b"{}"), None);
+    }
+
+    #[test]
+    fn unavailable_queue_maps_to_unknown_not_unrouted() {
+        assert_eq!(
+            reviewer_route_for_pr(None, 2035),
+            awaiting_you::ReviewerRoute::Unknown
+        );
+        let available_empty = std::collections::HashSet::new();
+        assert_eq!(
+            reviewer_route_for_pr(Some(&available_empty), 2035),
+            awaiting_you::ReviewerRoute::Unrouted
+        );
+    }
+
+    #[test]
+    fn forge_snapshot_retains_merge_hold_label() {
+        let snapshot = parse_open_pr_snapshot(
+            r#"[{"number":2035,"title":"broken","headRefName":"broken-pr","labels":[{"name":"aida:merge-hold"}],"statusCheckRollup":[]}]"#,
+        );
+        assert_eq!(
+            snapshot.by_branch["broken-pr"].labels,
+            vec!["aida:merge-hold"]
+        );
+    }
 }
 
 /// Strip ANSI SGR sequences (`ESC[...m`) so we can match output text
@@ -67052,7 +67137,7 @@ fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenPrSnapshot {
             "--limit",
             "50",
             "--json",
-            "number,title,headRefName,headRefOid,statusCheckRollup,mergeable,reviewDecision",
+            "number,title,headRefName,headRefOid,statusCheckRollup,mergeable,reviewDecision,labels",
         ])
         .output();
     let Ok(out) = out else {
@@ -67080,7 +67165,7 @@ pub(crate) fn sweep_orphaned_reviews(project_root: &std::path::Path) -> Vec<Stri
         let green = matches!(pr.ci_rollup.as_deref(), None | Some("pass"));
         let no_verdict =
             pr.review_decision.is_none() && !pr_has_local_verdict(project_root, pr.number);
-        let no_hold = merge_hold::read_hold(project_root, pr.number).is_none();
+        let no_hold = !pr_has_merge_hold(project_root, &pr);
         let unowned = !live_branches.contains(&pr.head_branch);
         if !orphaned_review_is_claimable(clean, green, no_verdict, no_hold, unowned) {
             continue;
@@ -67315,6 +67400,14 @@ fn parse_open_pr_snapshot(json: &str) -> OpenPrSnapshot {
             .get("statusCheckRollup")
             .and_then(|v| v.as_array())
             .map(|arr| summarize_status_check_rollup(arr));
+        let labels = pr
+            .get("labels")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|label| label.get("name").and_then(|v| v.as_str()))
+            .map(str::to_owned)
+            .collect();
         by_branch.insert(
             head_branch.clone(),
             status_cleanup::OpenPrItem {
@@ -67325,6 +67418,7 @@ fn parse_open_pr_snapshot(json: &str) -> OpenPrSnapshot {
                 mergeable,
                 review_decision,
                 head_sha,
+                labels,
             },
         );
     }
@@ -69601,23 +69695,23 @@ fn collect_awaiting_report_inner(
     let unowned_failing_prs = if notice_fast || no_ci {
         Vec::new()
     } else {
-        let queued_story_ids: std::collections::HashSet<String> =
-            reviewer_queue_story_ids(project_root)
-                .unwrap_or_default()
+        let routed_prs = reviewer_queue_story_ids(project_root).map(|queued_story_ids| {
+            let queued_story_ids: std::collections::HashSet<String> = queued_story_ids
                 .into_iter()
                 .map(|id| id.to_ascii_uppercase())
                 .collect();
-        let routed_prs: std::collections::HashSet<u64> = summaries
-            .iter()
-            .filter(|summary| {
-                summary
-                    .agreed_id
-                    .as_deref()
-                    .or(summary.spec_id.as_deref())
-                    .is_some_and(|id| queued_story_ids.contains(&id.to_ascii_uppercase()))
-            })
-            .filter_map(|summary| parse_review_story_pr_number(&summary.title))
-            .collect();
+            summaries
+                .iter()
+                .filter(|summary| {
+                    summary
+                        .agreed_id
+                        .as_deref()
+                        .or(summary.spec_id.as_deref())
+                        .is_some_and(|id| queued_story_ids.contains(&id.to_ascii_uppercase()))
+                })
+                .filter_map(|summary| parse_review_story_pr_number(&summary.title))
+                .collect::<std::collections::HashSet<u64>>()
+        });
         let live_branches = live_owned_branches(project_root);
         let candidates: Vec<awaiting_you::UnownedFailingPrCandidate> =
             collect_open_prs(project_root)
@@ -69625,8 +69719,8 @@ fn collect_awaiting_report_inner(
                 .into_values()
                 .map(|pr| awaiting_you::UnownedFailingPrCandidate {
                     has_local_verdict: pr_has_local_verdict(project_root, pr.number),
-                    held: merge_hold::read_hold(project_root, pr.number).is_some(),
-                    routed: routed_prs.contains(&pr.number),
+                    held: pr_has_merge_hold(project_root, &pr),
+                    route: reviewer_route_for_pr(routed_prs.as_ref(), pr.number),
                     actively_owned: live_branches.contains(&pr.head_branch),
                     pr,
                 })
@@ -69912,18 +70006,7 @@ fn handle_awaiting_command(
             crate::toon::table_raw("prs", &["number", "title", "ci"], &prs)
         );
         // trace:TASK-192 | ai:codex
-        let broken_prs: Vec<Vec<String>> = report
-            .unowned_failing_prs
-            .iter()
-            .map(|p| {
-                vec![
-                    p.number.to_string(),
-                    p.title.clone(),
-                    p.head_branch.clone(),
-                    format!("gh pr checks {}", p.number),
-                ]
-            })
-            .collect();
+        let broken_prs = awaiting_you::unowned_failing_pr_toon_rows(&report.unowned_failing_prs);
         println!(
             "{}",
             crate::toon::table_raw(

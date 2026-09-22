@@ -396,8 +396,18 @@ pub(crate) struct UnownedFailingPrCandidate {
     pub pr: OpenPrItem,
     pub has_local_verdict: bool,
     pub held: bool,
-    pub routed: bool,
+    pub route: ReviewerRoute,
     pub actively_owned: bool,
+}
+
+/// Fail-closed knowledge of the reviewer queue. Queue read or parse failures
+/// are not evidence that a PR is unrouted.
+// trace:TASK-192 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReviewerRoute {
+    Routed,
+    Unrouted,
+    Unknown,
 }
 
 /// The complement of the green orphan-review lane: only definitively red work
@@ -419,11 +429,27 @@ pub(crate) fn classify_unowned_failing_prs(
             !matches!(forge_verdict.as_str(), "APPROVED" | "CHANGES_REQUESTED")
                 && !c.has_local_verdict
         })
-        .filter(|c| !c.held && !c.routed && !c.actively_owned)
+        .filter(|c| !c.held && c.route == ReviewerRoute::Unrouted && !c.actively_owned)
         .map(|c| UnownedFailingPrItem {
             number: c.pr.number,
             title: c.pr.title.clone(),
             head_branch: c.pr.head_branch.clone(),
+        })
+        .collect()
+}
+
+// Shared row projection keeps TOON aligned with human/JSON action text.
+// trace:TASK-192 | ai:codex
+pub(crate) fn unowned_failing_pr_toon_rows(items: &[UnownedFailingPrItem]) -> Vec<Vec<String>> {
+    items
+        .iter()
+        .map(|p| {
+            vec![
+                p.number.to_string(),
+                p.title.clone(),
+                p.head_branch.clone(),
+                format!("gh pr checks {}", p.number),
+            ]
         })
         .collect()
 }
@@ -1015,6 +1041,7 @@ mod tests {
             mergeable: mergeable.map(String::from),
             review_decision: verdict.map(String::from),
             head_sha: None,
+            labels: Vec::new(),
         }
     }
 
@@ -1023,7 +1050,7 @@ mod tests {
             pr: pr(number, Some("MERGEABLE"), Some("fail"), None),
             has_local_verdict: false,
             held: false,
-            routed: false,
+            route: ReviewerRoute::Unrouted,
             actively_owned: false,
         }
     }
@@ -1052,7 +1079,7 @@ mod tests {
         let mut held = failing_candidate(3);
         held.held = true;
         let mut routed = failing_candidate(4);
-        routed.routed = true;
+        routed.route = ReviewerRoute::Routed;
         let mut owned = failing_candidate(5);
         owned.actively_owned = true;
         let mut local_verdict = failing_candidate(6);
@@ -1076,6 +1103,13 @@ mod tests {
     }
 
     #[test]
+    fn unknown_reviewer_queue_fails_closed() {
+        let mut unavailable = failing_candidate(9);
+        unavailable.route = ReviewerRoute::Unknown;
+        assert!(classify_unowned_failing_prs(&[unavailable]).is_empty());
+    }
+
+    #[test]
     fn broken_unowned_row_reaches_human_and_json_surfaces() {
         let report = AwaitingReport {
             unowned_failing_prs: classify_unowned_failing_prs(&[failing_candidate(2035)]),
@@ -1093,6 +1127,17 @@ mod tests {
         assert_eq!(
             json["unowned_failing_prs"][0]["action"],
             "gh pr checks 2035"
+        );
+        let compact = report.compact_line().unwrap();
+        assert!(compact.contains("1 broken-unowned"), "{compact}");
+        assert_eq!(
+            unowned_failing_pr_toon_rows(&report.unowned_failing_prs),
+            vec![vec![
+                "2035".to_string(),
+                "PR 2035".to_string(),
+                "branch-2035".to_string(),
+                "gh pr checks 2035".to_string(),
+            ]]
         );
     }
 

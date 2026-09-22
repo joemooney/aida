@@ -388,7 +388,11 @@ mod tests {
                 head_branch: "b".into(),
                 ci_rollup: Some("pass".into()),
             }],
-            unowned_failing_prs: Vec::new(),
+            unowned_failing_prs: vec![crate::awaiting_you::UnownedFailingPrItem {
+                number: 8,
+                title: "broken".into(),
+                head_branch: "broken-pr".into(),
+            }],
             pending_briefs: vec![PendingBriefItem {
                 agent: "claude".into(),
                 spec_id: "".into(),
@@ -441,6 +445,7 @@ mod tests {
             rendered,
             vec![
                 "1 PR",
+                "1 broken-unowned",
                 "1 brief",
                 "2 findings",
                 "3 mail",
@@ -452,13 +457,21 @@ mod tests {
                 "2 punts"
             ]
         );
+        assert_eq!(
+            channels
+                .iter()
+                .filter(|(_, label)| label == "broken-unowned")
+                .count(),
+            1,
+            "a broken PR must occupy exactly one statusbar channel"
+        );
         // The meter total is the SUM over channels (each mail counts), not
         // the awaiting report's collapsed line total.
         let c = MeterCounts {
             you: channels,
             ..Default::default()
         };
-        assert_eq!(c.you_total(), 14);
+        assert_eq!(c.you_total(), 15);
     }
 
     #[test]
