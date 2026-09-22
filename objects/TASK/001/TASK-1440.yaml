@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T16:08:01.637576942Z
-modified_at: 2026-09-22T16:08:06.217333042Z
+modified_at: 2026-09-22T16:08:48.072058030Z
 req_type: Task
 tags:
 - benchmark
@@ -24,3 +24,7 @@ relationships:
 - rel_type: Child
   target_id: 01a0c9de-3cc8-7252-8b3f-c099735dce73
   created_at: 2026-09-22T16:08:09.690691667Z
+- rel_type: BlockedBy
+  target_id: 01a0c9de-f80e-7d92-b42f-f4cbf63dee7e
+  created_at: 2026-09-22T16:08:48.072052287Z
+  created_by: joe
