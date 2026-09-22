@@ -40,7 +40,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:53:08.138084143Z
-modified_at: 2026-09-22T09:15:24.465845703Z
+modified_at: 2026-09-22T09:20:49.019227520Z
 req_type: Bug
 tags:
 - mailbox papercut duplication
+comments:
+- id: 01a0c86a-f97b-73d0-b7d2-f5d9fc1625aa
+  author: joe
+  content: 'Implementation audit (2026-09-22): four mailbox subject surfaces enumerated. (1) CLI --subject stores Option<String> without deciding presence; (2) MCP send_message likewise stores it without a presence predicate; (3) compact core notices and the TUI use subject_line; (4) expanded CLI inbox rows use mailbox_line_body. Only (3) and (4) project/display a subject, and both now call aida_core::mailbox::subject_is_present. CLI and MCP need no routing because they preserve input rather than classify it. The two renderings remain intentionally distinct.'
+  created_at: 2026-09-22T09:20:49.019227520Z
+  modified_at: 2026-09-22T09:20:49.019227520Z
