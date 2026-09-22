@@ -77,3 +77,46 @@ every heuristic result to the reviewed SHA and question-payload hash, and fail
 closed to the conversational reviewer. Do not enable Jev fast-pass merging from
 this benchmark; re-evaluate after latency and positive-control performance are
 demonstrably improved.
+
+## Expanded scope: lower-risk, reversible applications
+
+The benchmark established that granting Jev unreviewed merge authority or sole
+responsibility for store-wide semantic integrity is premature. However, several
+lower-risk, advisory applications fit Jev's System One architecture significantly
+better because their outcomes are bounded, reversible, and fall back to human or
+conversational review.
+
+Governing design rule: **use Jev to decide "which bounded path should handle this?"
+before using it to decide "is this safe to merge?"**
+
+Detailed application matrix and experimental protocol:
+`docs/research/2026-09-22-jev-system-one-application-matrix.md`.
+
+### Candidate application areas
+
+| AIDA area | Possible Jev use | Why it may fit better |
+| :--- | :--- | :--- |
+| **Queue and task routing** | Classify a spec into implementation, docs, research, review, or advisor escalation | Bounded classification; mistakes can fall back to human routing |
+| **Requirement metadata hygiene** | Suggest type, tags, feature, priority, or duplicate candidates | Helps normalize the graph without mutating it automatically |
+| **Duplicate/related-spec detection** | Rank whether a new requirement duplicates or extends an existing one | Semantic similarity is useful before creating another spec |
+| **Change-impact analysis** | Identify which requirements, plans, docs, or tests are likely affected by a diff | A retrieval/ranking aid, not a merge authority |
+| **Review-finding triage** | Cluster repeated findings across review rounds and identify likely duplicates | Could reduce “one finding per round” churn |
+| **Finding severity classification** | Categorize findings as blocker, correctness, maintainability, or advisory | Human reviewer still makes the final decision |
+| **Review prompt/context selection** | Select the most relevant acceptance criteria, prior findings, and related specs for a reviewer | Context selection may yield more benefit than verdict replacement |
+| **Traceability assistance** | Detect likely missing or misplaced trace:<SPEC-ID> comments | Narrow proposition with deterministic follow-up |
+| **Stale-document detection** | Judge whether AGENTS/OVERVIEW/docs still describe the current architecture | Escalate candidates for human confirmation |
+| **Session/punt classification** | Classify why a task was shelved or punted and suggest the next lane | Useful for fleet analytics and rework analysis |
+| **Reconstitution comparison** | Compare regenerated tests/docs to intended behavior | Mentioned in the report, but not actually benchmarked in the live evaluation |
+| **Operator-facing explanations** | Select a concise explanation category for a deterministic failure | Jev chooses among predefined explanations; it should not invent policy |
+
+### Prioritized near-term experiments
+
+1. **Review-context selection** — choose relevant acceptance criteria and prior findings before a Claude/Codex review.
+2. **Duplicate/related-spec ranking** — reduce graph noise before requirements are added.
+3. **Finding clustering and rework classification** — directly attack the large review-tail cost without granting Jev merge authority.
+4. **Queue routing** — use Jev as a cheap classifier with an explicit “unknown/escalate” class.
+
+Each experiment should evaluate coverage/abstention rate, class precision/recall,
+calibration/threshold performance, asymmetric error costs, latency/cost, and
+deterministic pre-filtering efficiency.
+
