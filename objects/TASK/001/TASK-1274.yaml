@@ -3,12 +3,12 @@ spec_id: TASK-1274
 agreed_id: TASK-1274
 title: 'Mirror CI: bring the warm verify job under 10 minutes (split build/test jobs, trim what verify runs)'
 description: 'STORY-1216 slices 1+2 (builder image + persistent checkout/target) brought the warm verify run on the mirror from 1271 s cold to 903 s, but the acceptance said under 10 minutes and it is not met. Measured breakdown of the warm run (pipeline 290, 2026-09-18): fetch 14 s, release build 2m30 (5 workspace crates recompiled — the runner''s checkout refresh touches mtimes; deps reused), test-profile build 1m32, clippy 49 s, nextest 6530 tests in 314 s, plus the two MCP shell tests, fmt and doctests. Candidates, in order: (1) split verify into build and test jobs so test build overlaps with bwrap and the release build only runs when a bin is needed; (2) stop the checkout refresh from bumping mtimes (GIT_CLEAN_FLAGS none / keep timestamps) so the release build is a true no-op on unchanged code; (3) nextest partitioning across two jobs; (4) drop the release build from MR pipelines entirely (tests use the dev profile) and keep it for tags. Acceptance: warm verify on an unchanged-deps commit completes in under 10 minutes on the current runner; the job log shows no recompiles of unchanged crates.'
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:30:55.289650932Z
-modified_at: 2026-09-22T06:24:12.719659119Z
+modified_at: 2026-09-22T06:25:35.530902473Z
 req_type: Task
 tags:
 - batch:story-1216
@@ -89,11 +89,3 @@ deferred: true
 deferred_at: 2026-09-20T00:40:42.574659212Z
 deferred_until: a keyboard session splits the pipeline-waiting from the code change — the work needs more than the 45m phase ceiling because it waits on real GitLab pipelines, so it must not re-enter a drain phase until it is a smaller spec
 execution_mode: drain
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'UPDATED WITH PIPELINE 319''s RESULT. THE INJECTION WORKED AND THE CI FINDING IS NOW RESOLVED-AND-FAILING-DIFFERENTLY. The env-var documentation finding stays resolved. WHAT 319 ESTABLISHES, and the difference from 318 is the entire result: the SAME test failed, for a DIFFERENT reason. Pipeline 318 (pre-injection): awaiting_notice_does_not_read_an_open_stdin_pipe FAILED with "remained alive for 3.135800526s with an open stdin pipe". Pipeline 319 (post-injection, code byte-identical to this head - the only delta to 5023c7b717 is one markdown line): the same test FAILED with "awaiting --notice exceeded its two-second budget: 2.008584508s". THE PROCESS NO LONGER HANGS - it went from outliving the test at 3.14s to COMPLETING at 2.0086s. So the injection scoped exactly as recorded: the stdin test still receives the 1s product bound, the deadline is not leaking through a shared helper, and the one-cmd.env verification holds. WHAT REMAINS IS AN 8.6-MILLISECOND OVERSHOOT ON A 2-SECOND ASSERTION at task_1283_protocol_cli.rs:345 - 0.4% over, measured as wall clock on a shared runner. THAT IS A TIGHT-BUDGET PROBLEM, NOT A DEADLINE PROBLEM, and recording it as "the same test failed again" would send the next reader back to the injection, which is the part that is now working. IT IS ALSO THE SAME CLASS ONE LAYER OVER: the test carries its own hardcoded constants - contract_budget = 2s alongside reap_deadline = 3s - with a comment stating the gap exists to avoid "a scheduler race exactly at the assertion/kill boundary". The author already knew that boundary was raceable and widened the REAP side while leaving the ASSERTION at a bare 2s. I AM NOT PROPOSING A NUMBER: widening 2s because a test failed is the move that was correctly refused on NOTICE_DEADLINE, and it would need the same argument.'
-  recovery_hint: address the review findings, move TASK-1274 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-09-21T21:35:52.738417185Z
