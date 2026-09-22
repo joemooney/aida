@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-22T02:21:27.834296742Z
+modified_at: 2026-09-22T06:31:49.106449928Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -640,6 +640,11 @@ comments:
   content: 'Implementation lane update 2026-09-21: prior probe PR #2050 is merged and its Windows run 35628970670 supplies the decisive measurement. On Windows, core.autocrlf=true; the project README is CRLF; the master template README is LF; all project guides probed as CRLF. This establishes line-ending asymmetry as the actual mechanism. The apparent 09-20 green control was invalid because commit e9e2bc4328 added discipline_content_mismatches after that nightly: the test name was stable but the comparison body did not yet exist. PR #2073 at head 5422ac822b implements symmetric newline normalization and symmetric trim, reports missing/unreadable project copies as mismatches, pins .aida/discipline/** to LF, and tests both CRLF equivalence and deliberate real drift. Tree-wide raw comparison audit found generated-rule equality checks at aida-cli-lib/src/rules_sync.rs lines 153 and 275; those may cause unnecessary rewrites after newline conversion but do not issue a correctness verdict or compare against LF-pinned embedded content, so they are recorded as follow-up rather than folded into this release-gating fix. Manual cross-platform run 35679132239 is queued against the exact PR head.'
   created_at: 2026-09-22T02:21:27.834296742Z
   modified_at: 2026-09-22T02:21:27.834296742Z
+- id: 01a0c7d0-4072-79b0-9f2f-58951dc7bcab
+  author: joe
+  content: 'Cold-review rework pushed to PR #2073 at exact head 7e1419e1ac. The expanded audit classified scaffold_cmd, status_cmd, aida-core scaffolding/report template comparisons, managed marker blocks, and rules_sync fragments as generated-text boundaries vulnerable to Windows newline conversion. They now share symmetric generated_text_matches normalization. JSON owned-slot paths retain semantic serde_json comparison; only malformed or slotless raw fallbacks normalize. Tests prove CRLF and classic-CR equivalence while deliberate content edits still fail, including whole-template and AGENTS.md owned-block paths. Targeted tests, aida_md tests, cargo check for aida-cli-lib, fmt, and diff-check pass. Fresh exact-head cross-platform run dispatched.'
+  created_at: 2026-09-22T06:31:49.106449928Z
+  modified_at: 2026-09-22T06:31:49.106449928Z
 history:
 - id: 01a0c528-482c-7ed0-85a1-8d70052bfedf
   author: aida-auto-bump
