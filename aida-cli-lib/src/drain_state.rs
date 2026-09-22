@@ -102,10 +102,10 @@ pub(crate) struct DrainState {
     /// Every spec the drain will run, in drain order.
     pub(crate) members: Vec<DrainMember>,
     /// Maximum number of members the orchestrator may keep active at once.
-    /// `1` is the historical strictly sequential drain; `2` is the pipelined
-    /// default once the scheduler can overlap a later implementer with an
-    /// earlier CI/review/merge wait.
-    // trace:STORY-1041 trace:ADR-27 | ai:codex
+    /// The live default is `1`; values above `1` opt in to overlap.
+    /// At depth `2`, a later implementer may overlap an earlier member's
+    /// CI/review/merge wait while the merge side remains serial.
+    // trace:STORY-1041 trace:STORY-1091 trace:ADR-27 trace:BUG-1585 | ai:codex
     #[serde(default = "default_pipeline_depth")]
     pub(crate) pipeline_depth: usize,
     /// The spec currently in its pipeline; `None` before the first member
@@ -1885,7 +1885,15 @@ mod tests {
     // trace:BUG-1585 | ai:codex
     fn autonomous_drain_guide_matches_pipeline_depth_default() {
         let guide = include_str!("../../docs/autonomous-drain.md");
+        let source = include_str!("drain_state.rs");
         let default = default_pipeline_depth();
+        let field_docs = source
+            .split_once("pub(crate) pipeline_depth: usize")
+            .expect("DrainState.pipeline_depth field exists")
+            .0
+            .rsplit_once("pub(crate) members: Vec<DrainMember>")
+            .expect("pipeline_depth follows DrainState.members")
+            .1;
         let lines: Vec<_> = guide.lines().collect();
         let configured = lines.windows(2).find_map(|pair| {
             (pair[0] == "[drain]")
@@ -1898,6 +1906,10 @@ mod tests {
         assert!(guide.contains(&format!("The default is depth `{default}`")));
         assert!(guide.contains("ADR-27"));
         assert!(guide.contains("STORY-1091"));
+        assert!(field_docs.contains(&format!(
+            "/// The live default is `{default}`; values above `{default}` opt in to overlap."
+        )));
+        assert!(!field_docs.contains("`2` is the pipelined\n    /// default"));
     }
 
     fn write_lock(dir: &std::path::Path, pid: u32) {
