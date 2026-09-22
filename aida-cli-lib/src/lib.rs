@@ -62833,7 +62833,7 @@ fn auto_resolve_failure_bugs_for_completed_specs(
 /// BUG-219 / TASK-246: collect review stories stranded short of
 /// `Completed` because their PR merged before the review lifecycle ever
 /// finished. `/aida-pr` auto-queues a `Review PR-N` story at `Approved`
-/// (ready-to-work); two ways it never reaches `Completed` on its own:
+/// (ready-to-work); three ways it never reaches `Completed` on its own:
 ///
 /// - **Approved** — a reviewer session was never spawned at all: the user
 ///   self-merged the PR, or the `--auto-complete` orchestrator skipped
@@ -62841,14 +62841,26 @@ fn auto_resolve_failure_bugs_for_completed_specs(
 ///   reviewer queue (BUG-219's observed case).
 /// - **InProgress** — a reviewer asked for fixups, then the PR self-merged
 ///   instead of a fresh `/aida-review` pass (the TASK-246 case).
+/// - **Draft** — the story's own tracking record never even reached
+///   Approved before the PR it tracks landed (a failed queueing step,
+///   BUG-1230's shape). Decided in BUG-1560 rather than left excluded by
+///   omission: every candidate reaching this function is against a PR
+///   whose merge commit is already confirmed present in `pr_to_sha`, so
+///   there is no "is it still open?" ambiguity for Draft to inherit here —
+///   that question belongs to the forge-lookup stranded-review-PR sweep
+///   (`collect_stranded_review_pr_resolutions`, BUG-1543), which is a
+///   different sweep touching the same population. Same underlying fact as
+///   Approved/InProgress (review lifecycle never finished), caught one
+///   stage earlier.
 ///
 /// Either way the `(#N)` merge commit landing on the default branch is the
 /// authoritative "review is over" signal. For each merged PR in
 /// `pr_to_sha` this returns the `(review_spec_id, merge_sha, pr_number,
-/// prior_status)` of any review story still at `Approved`/`InProgress`,
+/// prior_status)` of any review story still at `Draft`/`Approved`/`InProgress`,
 /// skipping specs already claimed by the caller's `flips` list (Done specs
 /// / Done review stories the commit-subject + BUG-102 scan handles).
 /// trace:BUG-219 | ai:claude
+// trace:BUG-1560 | ai:claude
 fn collect_stale_review_story_flips(
     store: &aida_core::RequirementsStore,
     pr_to_sha: &std::collections::BTreeMap<u64, String>,
@@ -62865,7 +62877,7 @@ fn collect_stale_review_story_flips(
         };
         if !matches!(
             review_story.status,
-            RequirementStatus::Approved | RequirementStatus::InProgress
+            RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::InProgress
         ) {
             continue;
         }
@@ -62897,6 +62909,15 @@ fn stale_review_audit_comment(prior: &RequirementStatus, pr_n: u64) -> String {
         RequirementStatus::Approved => format!(
             "Auto-completed: PR #{} merged without a reviewer session \
              (self-merge or orchestrator skipped phase 3).",
+            pr_n
+        ),
+        // BUG-1560: a dedicated arm rather than falling into the InProgress
+        // wording below, which would misdescribe a story that never reached
+        // Approved at all ("left at In Progress" is simply false for one
+        // that was left at Draft).
+        RequirementStatus::Draft => format!(
+            "Auto-completed: PR #{} merged without a reviewer session \
+             (the review story was never queued past Draft).",
             pr_n
         ),
         _ => format!(
@@ -63332,7 +63353,12 @@ fn apply_auto_bump_flip(
 // Shared per-requirement mutation for the TASK-246/BUG-219 stale-review-story
 // flip (PR merged before the review lifecycle finished). Same dual-path use
 // as `apply_auto_bump_flip`; re-checks the live status so a second pass sees
-// Completed and stays idempotent. trace:TASK-1161 | ai:claude
+// Completed and stays idempotent. Must stay in lockstep with the candidate
+// filter in `collect_stale_review_story_flips` — BUG-1543's review found
+// that widening only the collector and not this re-check produces a silent
+// no-op (a "would flip" candidate that this gate then quietly refuses).
+// trace:TASK-1161 | ai:claude
+// trace:BUG-1560 | ai:claude
 fn apply_stale_review_flip(
     r: &mut aida_core::Requirement,
     sha: &str,
@@ -63342,7 +63368,7 @@ fn apply_stale_review_flip(
 ) -> bool {
     if !matches!(
         r.status,
-        RequirementStatus::Approved | RequirementStatus::InProgress
+        RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::InProgress
     ) {
         return false;
     }
@@ -64633,6 +64659,10 @@ fn handle_db_reconcile_status(
         // BUG-219: review stories whose PR merged before review finished.
         // Re-check the status inside the atomic window for idempotency
         // and key the audit comment off the live (pre-flip) status.
+        // BUG-1560: this inline re-check duplicates `apply_stale_review_flip`
+        // rather than calling it, so it needed the same Draft widening by
+        // hand — kept in lockstep with the other two sites deliberately,
+        // not by omission.
         for (spec_id, sha, pr_n, _) in &stale_for_write {
             if let Some(r) = s
                 .requirements
@@ -64641,7 +64671,9 @@ fn handle_db_reconcile_status(
             {
                 if !matches!(
                     r.status,
-                    RequirementStatus::Approved | RequirementStatus::InProgress
+                    RequirementStatus::Draft
+                        | RequirementStatus::Approved
+                        | RequirementStatus::InProgress
                 ) {
                     continue;
                 }
