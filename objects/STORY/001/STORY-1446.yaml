@@ -1,0 +1,26 @@
+id: 01a0c836-2cd0-7ca1-a4d6-49370c61708f
+spec_id: STORY-1446
+agreed_id: STORY-1446
+title: 'Review PR-2085: [AI:codex] fix(specs): detect shell-substitution holes safely (TASK-190)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0c827`) for branch `task-190`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2085>
+  - Branch: `task-190` → `main`
+
+  ## Covers
+
+  - TASK-190
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2085` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T08:23:08.752683344Z
+modified_at: 2026-09-22T08:23:08.752683344Z
+req_type: Story
