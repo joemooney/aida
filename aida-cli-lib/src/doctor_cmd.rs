@@ -4148,6 +4148,7 @@ mod story_462_doctor_tests {
             since,
             fix_sandbox,
             cmd,
+            ..
         } = cli.command
         else {
             panic!("expected doctor command");
@@ -7990,5 +7991,37 @@ fn update_config_counter_scope(config_path: &std::path::Path, new_value: &str) -
         }
     }
     std::fs::write(config_path, lines.join("\n") + "\n")?;
+    Ok(())
+}
+
+/// Sweep the requirement store for semantic contradictions (STORY-1426).
+// trace:STORY-1426 | ai:antigravity
+pub(crate) fn doctor_contradictions(json: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Failed to load requirements store from {}",
+            project_root.display()
+        )
+    })?;
+
+    let jev = crate::evaluator::JevEvaluator::from_env().ok();
+    let findings = crate::contradictions::sweep_contradictions(
+        &store,
+        jev.as_ref()
+            .map(|j| j as &dyn crate::evaluator::EvaluatorEngine),
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&findings)?);
+    } else {
+        crate::contradictions::render_findings(&findings);
+    }
+
+    if !findings.is_empty() {
+        std::process::exit(1);
+    }
+
     Ok(())
 }

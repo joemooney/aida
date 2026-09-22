@@ -97,12 +97,18 @@ mod dryrun;
 // trace:TASK-1117 | ai:claude
 mod edit_buffer;
 mod effort_calibration;
+// trace:ADR-55 | ai:antigravity
+pub mod evaluator;
+// trace:STORY-1426 | ai:antigravity
+pub mod contradictions;
+// trace:STORY-1424 | ai:antigravity
 mod event_wait;
 mod events;
 mod exit_signal;
 mod external_import_bleed;
 mod feature_cmd;
 mod findings;
+pub mod graded_review;
 mod implementer_preflight;
 // trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.
 mod first_run;
@@ -3871,6 +3877,7 @@ fn run() -> Result<()> {
         all,
         since,
         fix_sandbox,
+        contradictions,
         cmd,
     } = &cli.command
     {
@@ -3880,6 +3887,12 @@ fn run() -> Result<()> {
         // trace:STORY-665 | ai:claude
         if *fix_sandbox {
             return doctor_cmd::doctor_fix_sandbox();
+        }
+        // STORY-1426: `aida doctor --contradictions` runs the store-wide semantic
+        // contradiction sweep combining mechanical joins with Jev choice queries.
+        // trace:STORY-1426 | ai:antigravity
+        if *contradictions {
+            return doctor_cmd::doctor_contradictions(*json);
         }
         return doctor_cmd::handle_doctor_command(
             *heal,
@@ -93329,3 +93342,18 @@ mod task_1265_rework_no_op_tests;
 #[cfg(test)]
 #[path = "tests/bug_1295_rebase_exit_code_tests.rs"]
 mod bug_1295_rebase_exit_code_tests;
+
+// trace:ADR-55 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/adr_55_evaluator_tests.rs"]
+mod adr_55_evaluator_tests;
+
+// trace:STORY-1426 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/story_1426_contradictions_tests.rs"]
+mod story_1426_contradictions_tests;
+
+// trace:STORY-1424 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/story_1424_graded_review_tests.rs"]
+mod story_1424_graded_review_tests;

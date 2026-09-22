@@ -10456,6 +10456,12 @@ pub enum Command {
         #[clap(long)]
         fix_sandbox: bool,
 
+        /// Run a store-wide semantic contradiction sweep combining mechanical joins
+        /// in Rust with Jev System One semantic choice queries.
+        // trace:STORY-1426 | ai:antigravity
+        #[clap(long)]
+        contradictions: bool,
+
         /// Legacy maintenance subcommand or focused doctor action.
         #[clap(subcommand)]
         cmd: Option<DoctorCommand>,
