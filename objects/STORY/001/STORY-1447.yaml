@@ -1,0 +1,26 @@
+id: 01a0c867-213f-7f60-bb50-f52d71886a4d
+spec_id: STORY-1447
+agreed_id: STORY-1447
+title: 'Review PR-2088: [AI:codex] fix(store): serialize relationship types as YAML scalars (TASK-184)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0c85e`) for branch `task-184`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2088>
+  - Branch: `task-184` → `main`
+
+  ## Covers
+
+  - TASK-184
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2088` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T09:16:37.055618334Z
+modified_at: 2026-09-22T09:16:37.055618334Z
+req_type: Story
