@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-22T07:11:11.948526196Z
+modified_at: 2026-09-22T07:21:15.268698102Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -674,6 +674,11 @@ comments:
   content: 'Third cold-review rework pushed to PR #2073 at exact head 0b5a4d61f5. Starter-memory refresh/drift now use symmetric generated-text comparison. User-instruction region equality normalizes both sides and checksum classification hashes the LF-normalized body, preventing an untouched CRLF block from being classified kept_edited. AGENTS refresh now uses the shared contract instead of ad-hoc CRLF replacement. New tests convert the full memory pack to CRLF and exercise user-block equality plus checksum classification. A repository-wide machine-assisted audit scanned file reads against equality, trim, bytes, hashes/checksums, and ad-hoc newline normalization; remaining matches are identifiers, sets, parser tokens, semantic JSON, intentional transforms, or tests rather than generated-text verdicts. Focused tests, cargo check, fmt, and diff-check pass; fresh exact-head cross-platform run dispatched.'
   created_at: 2026-09-22T07:11:11.948526196Z
   modified_at: 2026-09-22T07:11:11.948526196Z
+- id: 01a0c7fd-8304-7551-8122-a8bba9ce31cc
+  author: joe
+  content: 'Fourth cold-review rework pushed to PR #2073 at exact head 23b7ad66c4. Mirror pre-push and Terminator plugin installers now ignore CRLF-only conversion while repairing real drift, with call-site tests. Expanded write-if-changed audit also found generated object-store YAML had a raw no-op comparison and no eol pin; it now uses the shared text boundary with a discriminating test. Audit covered installer writes, write-if-changed/current/needed helpers, byte equality, existing/actual comparisons, and generated serialization. Remaining matches are identifiers, URLs, SHAs, OS errors, parser tokens, semantic structures, or intentionally byte-oriented non-text data. Focused tests, cargo check, fmt, and diff-check pass; fresh exact-head cross-platform run dispatched.'
+  created_at: 2026-09-22T07:21:15.268698102Z
+  modified_at: 2026-09-22T07:21:15.268698102Z
 history:
 - id: 01a0c528-482c-7ed0-85a1-8d70052bfedf
   author: aida-auto-bump
