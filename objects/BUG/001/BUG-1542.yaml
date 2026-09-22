@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:43:25.468471381Z
-modified_at: 2026-09-22T07:58:43.118237711Z
+modified_at: 2026-09-22T08:06:49.243902798Z
 req_type: Bug
 comments:
 - id: 01a0c641-9c5a-7092-94ca-35a7e10c6d76
@@ -81,3 +81,8 @@ comments:
   created_at: 2026-09-21T23:16:23.770161411Z
   modified_at: 2026-09-21T23:16:23.770161411Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0c827-3a9b-7350-aaaa-8f0cc7b1f388
+  author: joe
+  content: 'Implementation note (Codex, 2026-09-22): the claimed colon parsing failure does not reproduce on current main; both core and distributed Git-backend paths already perform exact HashSet removal. The durable defect was ambiguous no-op reporting. Branch bug-1542 adds explicit added/removed/already-present/absent outcomes and black-box coverage for severity:cosmetic, batch:probe, aida:queue:work, flat tags, absent idempotence, similarly prefixed preservation, canonical storage, and JSON cache/read coherence.'
+  created_at: 2026-09-22T08:06:49.243902798Z
+  modified_at: 2026-09-22T08:06:49.243902798Z
