@@ -39,12 +39,12 @@ description: |
   - docs/presentation/aida-jev-management-presentation.md
   - PRIN-8, PRIN-7, PRIN-6, PRIN-5
   - STORY-1424, STORY-1426, STORY-1427, EPIC-66, ADR-44
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T06:37:14.468684494Z
-modified_at: 2026-09-22T06:37:31.249049628Z
+modified_at: 2026-09-22T06:50:01.523820726Z
 req_type: Spike
 tags:
 - epic-66
