@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T03:30:59.539323012Z
-modified_at: 2026-09-22T04:54:00.242117655Z
+modified_at: 2026-09-22T06:47:38.020807551Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity drain-safe from:session-0920
@@ -220,3 +220,8 @@ comments:
     Verification: 32 review_verdict tests passed; 27 bug_775 commits-ahead/writer tests passed; 6 TASK-1265 rework tests passed; cargo fmt --all -- --check and git diff --check passed. Full aida-cli-lib run reached 5310 passed, 1 ignored, with one unrelated transient Text file busy failure in bug_1265_finish_ci_tests::fake_gh_short_argv_reaches_fallback; its exact same-head rerun passed.
   created_at: 2026-09-22T04:54:00.242117655Z
   modified_at: 2026-09-22T04:54:00.242117655Z
+- id: 01a0c7de-bb24-73e1-87aa-65f3cdeb12d2
+  author: codex
+  content: 'Cold independent rereview REQUEST CHANGES at exact PR #2076 head 32aead2b4077e608937c177454355bc1f5208bd8. The direct PR-keyed live phase-3 and resume consumers now validate stale/SHA-less approvals, but both live phase-3 call sites treat that validation failure as permission to consult spec_verdict_fallback_for_phase3 / sibling_verdict_sweep_for_phase3; those paths parse only the verdict spelling and accept fresh Approved records without checking reviewed_sha against the current head. Thus stale, SHA-less, or current-head-unresolved approvals can still advance through fallback. Exact-head GitHub CI is also red (ubuntu Build; scaffold_refresh starter_role_refresh test). Focused provenance tests were launched locally. Reviewer independent of spec/implementation; no code edits or merge.'
+  created_at: 2026-09-22T06:47:38.020807551Z
+  modified_at: 2026-09-22T06:47:38.020807551Z
