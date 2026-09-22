@@ -83483,6 +83483,72 @@ fn sum_headless_log_tokens(project_root: &std::path::Path, since: std::time::Sys
     total
 }
 
+/// Strict drain-exit accounting. Live caps keep using the best-effort scanner
+/// above; persisted cost evidence is exact or explicitly unknown.
+// trace:BUG-1418 | ai:codex
+fn measure_completed_headless_logs(
+    project_root: &std::path::Path,
+    since: std::time::SystemTime,
+) -> Option<u64> {
+    let dir = project_root.join(".aida").join("headless-logs");
+    let entries = std::fs::read_dir(&dir).ok()?;
+    let mut total = 0_u64;
+    let mut found = false;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+            continue;
+        }
+        let touched_in_window = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .map(|m| m >= since)
+            .unwrap_or(false);
+        if !touched_in_window {
+            continue;
+        }
+        found = true;
+        let contents = std::fs::read_to_string(&path).ok()?;
+        match drain_caps::completed_log_tokens(&contents) {
+            drain_caps::CompletedLogTokens::Measured(tokens) => {
+                total = total.saturating_add(tokens);
+            }
+            drain_caps::CompletedLogTokens::Unrecognized { shape } => {
+                let name = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("<non-utf8>");
+                eprintln!("{}", unrecognized_usage_diagnostic(name, &shape));
+                return None;
+            }
+            drain_caps::CompletedLogTokens::Truncated => return None,
+        }
+    }
+    found.then_some(total)
+}
+
+// trace:BUG-1418 | ai:codex
+fn unrecognized_usage_diagnostic(file_name: &str, shape: &str) -> String {
+    fn safe_label(value: &str, limit: usize) -> String {
+        value
+            .chars()
+            .take(limit)
+            .map(|ch| {
+                if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-' | '=' | ',') {
+                    ch
+                } else {
+                    '_'
+                }
+            })
+            .collect()
+    }
+    format!(
+        "token usage unrecognized in headless log {} (shape: {})",
+        safe_label(file_name, 80),
+        safe_label(shape, 96)
+    )
+}
+
 /// TASK-967: the `BatchDrainOutcome` → machine label used in the drain exit
 /// summary's `outcome` field (mirrors the per-emitter JSON mapping).
 // trace:TASK-967 | ai:claude
@@ -83560,9 +83626,8 @@ fn finalize_drain_summary(
         Some(stop) => stop.flag().to_string(),
         None => batch_outcome_label(outcome_outcome).to_string(),
     };
-    let cumulative_tokens = drain_root
-        .map(|root| sum_headless_log_tokens(root, started))
-        .unwrap_or(0);
+    let cumulative_tokens =
+        drain_root.and_then(|root| measure_completed_headless_logs(root, started));
     let diff = match (drain_root, drain_base_sha) {
         (Some(root), Some(base)) => {
             drain_summary::DrainDiffStats::from_numstat(&drain_diff_numstat(root, base))
@@ -83594,7 +83659,24 @@ fn finalize_drain_summary(
     let role = std::env::var("AIDA_SESSION_ROLE")
         .ok()
         .filter(|s| !s.is_empty());
-    let record = summary.to_usage_value(&ts, sha.as_deref(), role.as_deref());
+    let vendor = drain_root
+        .map(session::resolve_headless_vendor)
+        .unwrap_or(session::HeadlessVendor::Claude)
+        .as_str();
+    let run_key = drain_root
+        .map(|root| drain_state::current_context(root).1)
+        .filter(|key| !key.is_empty())
+        .unwrap_or_else(|| {
+            format!(
+                "invocation:{}:{}",
+                drain_invocation.pid,
+                drain_invocation
+                    .process_started_at
+                    .as_deref()
+                    .unwrap_or("unknown")
+            )
+        });
+    let record = summary.to_usage_value(&ts, sha.as_deref(), role.as_deref(), vendor, &run_key);
     if json {
         // Machine consumers read JSONL — the record is a distinct
         // `"event":"drain_summary"` line alongside the per-emitter object.
@@ -94559,3 +94641,8 @@ mod story_1426_contradictions_tests;
 #[cfg(test)]
 #[path = "tests/story_1424_graded_review_tests.rs"]
 mod story_1424_graded_review_tests;
+
+// trace:BUG-1418 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_1418_drain_token_measurement_tests.rs"]
+mod bug_1418_drain_token_measurement_tests;
