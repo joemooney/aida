@@ -47,7 +47,10 @@ pub struct CriterionResult {
     pub output: Option<String>,
     pub exit_code: Option<i32>,
     pub probability: Option<f64>,
+    pub confidence: Option<f64>,
     pub heuristic: bool,
+    pub model: Option<String>,
+    pub question_payload_hash: Option<String>,
 }
 
 /// Aggregate graded review verdict for a specification.
@@ -319,7 +322,10 @@ pub fn execute_graded_review(
                                 output: Some(combined),
                                 exit_code: Some(exit_code),
                                 probability: Some(1.0),
+                                confidence: Some(1.0),
                                 heuristic: false,
+                                model: None,
+                                question_payload_hash: None,
                             });
                         } else {
                             machine_failed_count += 1;
@@ -329,7 +335,10 @@ pub fn execute_graded_review(
                                 output: Some(combined),
                                 exit_code: Some(exit_code),
                                 probability: Some(0.0),
+                                confidence: Some(1.0),
                                 heuristic: false,
+                                model: None,
+                                question_payload_hash: None,
                             });
                         }
                     }
@@ -342,7 +351,10 @@ pub fn execute_graded_review(
                             output: Some(format!("Failed to execute command: {}", e)),
                             exit_code: Some(-1),
                             probability: Some(0.0),
+                            confidence: Some(1.0),
                             heuristic: false,
+                            model: None,
+                            question_payload_hash: None,
                         });
                     }
                 }
@@ -397,7 +409,7 @@ pub fn execute_graded_review(
 
     // Rung 3.5: Evaluate residual prose criteria via Jev System One
     let mut min_probability = 1.0f64;
-    let min_confidence = 1.0f64;
+    let mut min_confidence = 1.0f64;
     let mut evaluation_failed = false;
 
     if let Some(eval) = evaluator {
@@ -419,6 +431,7 @@ pub fn execute_graded_review(
                     if resp.noul < min_probability {
                         min_probability = resp.noul;
                     }
+                    min_confidence = min_confidence.min(resp.confidence);
                     let status = if resp.noul >= 0.95 {
                         CriterionStatus::Passed
                     } else if resp.noul <= 0.20 {
@@ -433,7 +446,10 @@ pub fn execute_graded_review(
                         output: None,
                         exit_code: None,
                         probability: Some(resp.noul),
+                        confidence: Some(resp.confidence),
                         heuristic: true,
+                        model: Some(resp.model),
+                        question_payload_hash: Some(resp.payload_hash),
                     });
                 }
                 Err(e) => {
@@ -445,7 +461,10 @@ pub fn execute_graded_review(
                         output: Some(format!("Evaluator error: {}", e)),
                         exit_code: None,
                         probability: None,
+                        confidence: None,
                         heuristic: true,
+                        model: None,
+                        question_payload_hash: None,
                     });
                 }
             }
@@ -459,7 +478,10 @@ pub fn execute_graded_review(
                 output: None,
                 exit_code: None,
                 probability: None,
+                confidence: None,
                 heuristic: false,
+                model: None,
+                question_payload_hash: None,
             });
         }
     }
@@ -489,7 +511,11 @@ pub fn execute_graded_review(
                 machine_passed_count, min_probability
             ),
         })
-    } else if !evaluation_failed && evaluator.is_some() && min_probability <= 0.20 {
+    } else if !evaluation_failed
+        && evaluator.is_some()
+        && min_probability <= 0.20
+        && min_confidence >= 0.85
+    {
         Ok(GradedReviewVerdict {
             spec_id: spec_id.to_string(),
             reviewed_sha: reviewed_sha.to_string(),

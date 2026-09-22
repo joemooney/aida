@@ -103,7 +103,30 @@ fn test_graded_review_mixed_jev_fast_pass() {
     assert_eq!(verdict.results[1].status, CriterionStatus::Passed);
     assert_eq!(verdict.results[1].probability, Some(0.98));
     assert!(verdict.results[1].heuristic);
+    assert_eq!(verdict.results[1].confidence, Some(0.95));
+    assert_eq!(
+        verdict.results[1].question_payload_hash.as_deref(),
+        Some("mock-payload")
+    );
     assert!(!verdict.escalated_to_seat);
+}
+
+#[test]
+fn test_high_probability_low_confidence_escalates() {
+    let desc = "## Acceptance\n- [ ] `true`\n- Clear operational behavior\n";
+    let mock = MockEvaluator::new().with_noul_confidence(0.99, 0.50);
+    let verdict = execute_graded_review(
+        "TASK-102",
+        "Low confidence",
+        desc,
+        "+ change",
+        "abc1234",
+        Path::new("."),
+        Some(&mock),
+    )
+    .unwrap();
+    assert_eq!(verdict.overall_verdict, "escalated");
+    assert!(verdict.escalated_to_seat);
 }
 
 #[test]

@@ -15,9 +15,12 @@ import math
 import hashlib
 import urllib.request
 import urllib.error
+import yaml
 from typing import Dict, List, Any, Tuple
 
 def _load_env_key() -> str | None:
+    if os.environ.get("AIDA_JEV_OFFLINE", "").lower() in {"1", "true", "yes"}:
+        return None
     # 1. Direct environment variable
     for var in ["AIDA_JEV_API_KEY", "TYPESAFE_API_KEY", "JEV_API_KEY"]:
         if os.environ.get(var):
@@ -111,8 +114,9 @@ class JevClient:
                         data["results"] = results
                     return data, latency_ms
             except Exception as e:
-                # Log error and fall back to local calibrated simulation
-                pass
+                # A live run is evidence only if every recorded answer came from
+                # the service. Never relabel simulation as live.
+                raise RuntimeError(f"live Jev evaluation unavailable: {type(e).__name__}: {e}") from e
 
         # Offline Calibrated Simulation Engine (RLCD simulation)
         # Accurately models Jev's published P50 latency (120ms) and calibration characteristics
@@ -219,6 +223,7 @@ def run_benchmark(repo_root: str, sample_size: int = 50) -> Dict[str, Any]:
     # 1. Historical Review Verdict Benchmark (Sample N)
     sample_verdicts = verdict_files[-sample_size:] if len(verdict_files) >= sample_size else verdict_files
     verdict_latencies = []
+    raw_evidence = []
     verdict_matches = 0
     total_verdicts = 0
 
@@ -249,6 +254,7 @@ def run_benchmark(repo_root: str, sample_size: int = 50) -> Dict[str, Any]:
         }
 
         res, lat = client.evaluate(context, questions)
+        raw_evidence.append({"kind": "review", "source": v_path, "latency_ms": lat, "response": res})
         verdict_latencies.append(lat)
         total_verdicts += 1
 
@@ -281,19 +287,7 @@ def run_benchmark(repo_root: str, sample_size: int = 50) -> Dict[str, Any]:
 
     # 2. Store Semantic Contradiction Sweep (STORY-1426)
     print("[SPIKE-87] Running Semantic Contradiction Sweep on Spec Pairs...")
-    contradiction_pairs = []
-    
-    # Pair 1: Ground Truth Known Contradiction (VIS-1 vs CR-6/STORY-551)
-    vis1_text = "VIS-1: AIDA is your project's missing index — of intent, not just code. Status: Approved."
-    cr6_text = "CR-6: Reposition the 'missing index' headline (intent/lifecycle). Retires 'missing index' tagline due to collision with code-graph tools. Status: Completed."
-    contradiction_pairs.append(("VIS-1", "CR-6", vis1_text, cr6_text, True))
-
-    # Add 29 synthetic/sampled candidate spec pairs
-    for i in range(1, 30):
-        s_a = f"SPEC-{i}: Feature flag A enabled by default for CLI users."
-        s_b = f"SPEC-{i+50}: Feature flag A default remains disabled unless opted in via config." if i == 5 else f"SPEC-{i+50}: Complementary documentation for feature flag A."
-        is_contra = (i == 5)
-        contradiction_pairs.append((f"SPEC-{i}", f"SPEC-{i+50}", s_a, s_b, is_contra))
+    contradiction_pairs = load_real_spec_pairs(repo_root, 30)
 
     contra_latencies = []
     contra_correct = 0
@@ -312,6 +306,7 @@ def run_benchmark(repo_root: str, sample_size: int = 50) -> Dict[str, Any]:
             }
         }
         res, lat = client.evaluate(context, questions)
+        raw_evidence.append({"kind": "contradiction", "sources": [id_a, id_b], "ground_contradiction": ground_contra, "latency_ms": lat, "response": res})
         contra_latencies.append(lat)
         choice = res["results"]["semantic_relationship"]["choice"]
         pred_contra = (choice == "contradicts")
@@ -320,9 +315,8 @@ def run_benchmark(repo_root: str, sample_size: int = 50) -> Dict[str, Any]:
 
     # Metrics computation
     all_latencies = sorted(verdict_latencies + contra_latencies)
-    p50 = all_latencies[len(all_latencies) // 2]
-    p90 = all_latencies[int(len(all_latencies) * 0.90)]
-    p95 = all_latencies[int(len(all_latencies) * 0.95)]
+    percentile = lambda p: all_latencies[max(0, min(len(all_latencies) - 1, math.ceil(len(all_latencies) * p) - 1))]
+    p50, p90, p95 = percentile(.50), percentile(.90), percentile(.95)
 
     # Conformance rate among non-escalated decisions
     decided_verdicts = total_verdicts - escalations
@@ -334,7 +328,7 @@ def run_benchmark(repo_root: str, sample_size: int = 50) -> Dict[str, Any]:
     cost_per_1000 = 0.08
 
     report = {
-        "status": "completed",
+        "status": "completed" if total_verdicts >= 50 and len(contradiction_pairs) >= 30 else "insufficient-sample",
         "sample_size_verdicts": total_verdicts,
         "sample_size_contradictions": len(contradiction_pairs),
         "latency_ms": {
@@ -350,11 +344,50 @@ def run_benchmark(repo_root: str, sample_size: int = 50) -> Dict[str, Any]:
         "false_positive_count": false_positives,
         "false_negative_count": false_negatives,
         "contradiction_accuracy_pct": round(contra_accuracy, 1),
-        "vis1_vs_cr6_detected": True,
-        "mode": "live" if client.is_live else "simulated-calibrated"
+        "vis1_vs_cr6_detected": any(e["sources"] == ["VIS-1", "CR-6"] and e["response"]["results"]["semantic_relationship"]["choice"] == "contradicts" for e in raw_evidence if e["kind"] == "contradiction"),
+        "mode": "live" if client.is_live else "simulated-calibrated",
+        "latency_acceptance_under_300ms": p95 < 300.0,
+        "raw_evidence": raw_evidence,
     }
 
     return report
+
+
+def load_real_spec_pairs(repo_root: str, count: int) -> List[Tuple[str, str, str, str, bool]]:
+    """Load reproducible pairs from the git-canonical store, never fabricated SPEC ids.
+
+    VIS-1/CR-6 is the positive control. Remaining pairs are real records selected
+    deterministically as negative controls; that label is a benchmark fixture label,
+    not a claim that the corpus is globally contradiction-free.
+    """
+    roots = [os.path.join(repo_root, ".aida-store", "objects"), "/home/joe/ai/aida/.aida-store/objects"]
+    object_root = next((p for p in roots if os.path.isdir(p)), None)
+    if not object_root:
+        raise RuntimeError("git-canonical .aida-store/objects is unavailable")
+    records = {}
+    for path in sorted(glob.glob(os.path.join(object_root, "**", "*.yaml"), recursive=True)):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                obj = yaml.safe_load(fh) or {}
+            spec_id = obj.get("agreed_id") or obj.get("spec_id")
+            if spec_id:
+                records[spec_id] = obj
+        except Exception:
+            continue
+    if "VIS-1" not in records or "CR-6" not in records:
+        raise RuntimeError("required VIS-1/CR-6 ground-truth records are unavailable")
+    def text(spec_id: str) -> str:
+        obj = records[spec_id]
+        return f"{spec_id}: {obj.get('title', '')}\nStatus: {obj.get('status', '')}\n{obj.get('description', '')}"
+    pairs = [("VIS-1", "CR-6", text("VIS-1"), text("CR-6"), True)]
+    ids = [i for i in sorted(records) if i not in {"VIS-1", "CR-6", "STORY-551"}]
+    for left, right in zip(ids[::2], ids[1::2]):
+        pairs.append((left, right, text(left), text(right), False))
+        if len(pairs) == count:
+            break
+    if len(pairs) < count:
+        raise RuntimeError(f"only {len(pairs)} real store pairs available; need {count}")
+    return pairs
 
 
 if __name__ == "__main__":
@@ -367,7 +400,11 @@ if __name__ == "__main__":
             except ValueError:
                 pass
 
-    results = run_benchmark(root, sample_size=sample_size)
+    try:
+        results = run_benchmark(root, sample_size=sample_size)
+    except Exception as exc:
+        print(f"SPIKE-87 benchmark unavailable: {exc}", file=sys.stderr)
+        sys.exit(2)
     print("\n" + "="*60)
     print(f"SPIKE-87 BENCHMARK RESULTS (Mode: {results['mode']})")
     print("="*60)
@@ -380,3 +417,11 @@ if __name__ == "__main__":
 
     if "--json" in sys.argv:
         print(json.dumps(results, indent=2))
+
+    evidence_path = os.environ.get("AIDA_JEV_EVIDENCE_OUT")
+    if evidence_path:
+        with open(evidence_path, "w", encoding="utf-8") as fh:
+            json.dump(results, fh, indent=2)
+
+    if results["status"] != "completed":
+        sys.exit(3)

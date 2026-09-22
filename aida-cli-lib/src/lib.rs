@@ -88895,6 +88895,118 @@ fn try_open_orchestrator_pr_for_no_pr_pushed_branch(
     }
 }
 
+/// Run STORY-1424's deterministic rung in an isolated checkout of the exact
+/// reviewed head. `None` means the spec has no executable criteria and the
+/// legacy reviewer path must remain byte-for-byte unchanged.
+// trace:STORY-1424 trace:ADR-55 | ai:codex
+fn prepare_graded_review(
+    project_root: &std::path::Path,
+    spec: &str,
+    pr: u32,
+    reviewed_sha: &str,
+    branch: Option<&str>,
+) -> Result<Option<graded_review::GradedReviewVerdict>, auto_complete::PhaseFailure> {
+    let store = load_store_for_lookup(project_root).ok_or_else(|| {
+        auto_complete::PhaseFailure::new("could not load spec store for graded review")
+    })?;
+    let req = store.get_requirement_by_spec_id(spec).ok_or_else(|| {
+        auto_complete::PhaseFailure::new(format!("could not resolve {spec} for graded review"))
+    })?;
+    let criteria = graded_review::parse_acceptance_criteria(&req.description);
+    if !criteria
+        .iter()
+        .any(|c| matches!(c, graded_review::CriterionKind::Executable { .. }))
+    {
+        return Ok(None);
+    }
+
+    if let Some(branch) = branch {
+        let fetched = std::process::Command::new("git")
+            .current_dir(project_root)
+            .args(["fetch", "origin", branch])
+            .output();
+        if !fetched.as_ref().is_ok_and(|o| o.status.success()) {
+            return Err(auto_complete::PhaseFailure::new(format!(
+                "could not fetch branch {branch} before graded review"
+            )));
+        }
+    }
+    let checkout =
+        std::env::temp_dir().join(format!("aida-graded-pr-{pr}-{}", uuid::Uuid::now_v7()));
+    let added = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args(["worktree", "add", "--detach"])
+        .arg(&checkout)
+        .arg(reviewed_sha)
+        .output()
+        .map_err(|e| {
+            auto_complete::PhaseFailure::new(format!(
+                "could not create graded-review checkout: {e}"
+            ))
+        })?;
+    if !added.status.success() {
+        return Err(auto_complete::PhaseFailure::new(format!(
+            "could not check out reviewed head {reviewed_sha}: {}",
+            String::from_utf8_lossy(&added.stderr).trim()
+        )));
+    }
+
+    let diff = std::process::Command::new("gh")
+        .current_dir(project_root)
+        .args(["pr", "diff", &pr.to_string()])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
+    let evaluator: Option<Box<dyn evaluator::EvaluatorEngine>> =
+        evaluator::JevEvaluator::from_env()
+            .ok()
+            .map(|v| Box::new(v) as Box<dyn evaluator::EvaluatorEngine>)
+            .or_else(|| {
+                std::env::var("AIDA_LOCAL_LLM_ENDPOINT").ok().map(|_| {
+                    Box::new(evaluator::LocalLlmEvaluator::from_env())
+                        as Box<dyn evaluator::EvaluatorEngine>
+                })
+            });
+    let result = graded_review::execute_graded_review(
+        spec,
+        &req.title,
+        &req.description,
+        &diff,
+        reviewed_sha,
+        &checkout,
+        evaluator.as_deref(),
+    )
+    .map_err(|e| auto_complete::PhaseFailure::new(format!("graded review failed closed: {e:#}")));
+    let _ = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args(["worktree", "remove", "--force"])
+        .arg(&checkout)
+        .status();
+    let verdict = result?;
+    let path = project_root
+        .join(".aida")
+        .join("review-verdicts")
+        .join(format!("PR-{pr}-graded.json"));
+    std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| {
+        auto_complete::PhaseFailure::new(format!(
+            "could not create graded review record directory: {e}"
+        ))
+    })?;
+    std::fs::write(
+        &path,
+        serde_json::to_vec_pretty(&verdict).unwrap_or_default(),
+    )
+    .map_err(|e| {
+        auto_complete::PhaseFailure::new(format!(
+            "could not write graded review record {}: {e}",
+            path.display()
+        ))
+    })?;
+    Ok(Some(verdict))
+}
+
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn capture_phase_done_pr(&mut self) {
         self.phase_done_pr = self.pr_number;
@@ -90486,6 +90598,34 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // prompt side, so a transient forge failure does not block the review.
         // trace:BUG-1186 | ai:claude
         let pre_review_head_sha = pr_head_sha_best_effort(self, pr);
+        let mut graded_context = None;
+        if let Some(head_sha) = pre_review_head_sha.as_deref() {
+            if let Some(graded) = prepare_graded_review(
+                &self.project_root,
+                &self.spec,
+                pr,
+                head_sha,
+                self.branch.as_deref(),
+            )? {
+                if !graded.escalated_to_seat {
+                    return Ok(auto_complete::ReviewerOutcome::Verdict(
+                        match graded.overall_verdict.as_str() {
+                            "approved" => auto_complete::Verdict::Approved,
+                            "request-changes" => auto_complete::Verdict::RequestChanges,
+                            _ => auto_complete::Verdict::Rejected,
+                        },
+                    ));
+                }
+                let prompt = graded_review::generate_graded_reviewer_prompt(
+                    &self.spec,
+                    Some(pr as u64),
+                    &graded,
+                );
+                graded_context = prompt
+                    .split_once("\n\n")
+                    .map(|(_, suffix)| suffix.to_string());
+            }
+        }
         let mut cmd = std::process::Command::new(self.aida_exe());
         cmd.current_dir(&self.project_root)
             .args([
@@ -90497,6 +90637,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "--no-pull",
             ])
             .env("AIDA_REVIEW_VERDICT_FILE", &verdict_path);
+        if let Some(context) = graded_context.as_deref() {
+            cmd.env("AIDA_GRADED_REVIEW_CONTEXT", context);
+        }
         // BUG-233/BUG-901/BUG-1038: use the same orchestrator phase envelope as
         // the implementer child: token, variant, phase role, and captured queue
         // owner all travel together.

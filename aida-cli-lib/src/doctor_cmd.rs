@@ -8007,10 +8007,11 @@ pub(crate) fn doctor_contradictions(json: bool) -> Result<()> {
     })?;
 
     let jev = crate::evaluator::JevEvaluator::from_env().ok();
-    let findings = crate::contradictions::sweep_contradictions(
+    let findings = crate::contradictions::sweep_contradictions_at(
         &store,
         jev.as_ref()
             .map(|j| j as &dyn crate::evaluator::EvaluatorEngine),
+        &project_root,
     )?;
 
     if json {

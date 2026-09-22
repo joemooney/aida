@@ -5,8 +5,10 @@
 use chrono::Utc;
 use std::collections::HashMap;
 
-use crate::contradictions::{find_mechanical_candidates, sweep_contradictions};
-use crate::evaluator::MockEvaluator;
+use crate::contradictions::{
+    find_mechanical_candidates, find_mechanical_candidates_at, sweep_contradictions,
+};
+use crate::evaluator::{EvaluatorError, MockEvaluator};
 use aida_core::{
     Relationship, RelationshipType, Requirement, RequirementStatus, RequirementType,
     RequirementsStore,
@@ -142,4 +144,62 @@ fn test_sweep_contradictions_clean_store() {
     let mock = MockEvaluator::new();
     let findings = sweep_contradictions(&store, Some(&mock)).unwrap();
     assert!(findings.is_empty());
+}
+
+#[test]
+fn test_evaluator_error_preserves_mechanical_candidate() {
+    let mut store = RequirementsStore::default();
+    let vis = make_req(
+        "VIS-1",
+        "Vision",
+        "live",
+        RequirementType::Vision,
+        RequirementStatus::Approved,
+        10,
+    );
+    let vis_id = vis.id;
+    store.requirements.push(vis);
+    let mut change = make_req(
+        "CR-6",
+        "Retire vision",
+        "Retires VIS-1",
+        RequirementType::ChangeRequest,
+        RequirementStatus::Completed,
+        1,
+    );
+    change.relationships.push(Relationship {
+        rel_type: RelationshipType::References,
+        target_id: vis_id,
+        created_at: None,
+        created_by: None,
+    });
+    store.requirements.push(change);
+    let mock = MockEvaluator::new().with_choice_error(EvaluatorError::Timeout("offline".into()));
+    let findings = sweep_contradictions(&store, Some(&mock)).unwrap();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].verdict, "evaluation-unavailable");
+}
+
+#[test]
+fn test_terminal_plan_missing_followup_child_is_reported() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join("docs/plans")).unwrap();
+    std::fs::write(
+        root.path().join("docs/plans/entry.md"),
+        "# Plan\n\n## Followups\n\n- Codegraph requirements graph auto population\n\n## Related\n",
+    )
+    .unwrap();
+    let mut store = RequirementsStore::default();
+    store.requirements.push(make_req(
+        "EPIC-63",
+        "Entry lane",
+        "Plan: docs/plans/entry.md",
+        RequirementType::Epic,
+        RequirementStatus::Completed,
+        10,
+    ));
+    let candidates = find_mechanical_candidates_at(&store, root.path());
+    assert!(candidates
+        .iter()
+        .any(|c| c.spec_a_id == "EPIC-63" && c.spec_b_id == "docs/plans/entry.md#Followups"));
 }

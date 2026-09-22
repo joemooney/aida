@@ -1,92 +1,77 @@
-# Benchmark findings: TypeSafe AI's Jev (System One) on historical review verdicts and store contradictions
+# Benchmark findings: TypeSafe AI Jev on AIDA review and store artifacts
 
 **Date:** 2026-09-22  
 **Spec:** SPIKE-87  
-**Lane:** research  
-**Governing Principles:** PRIN-8, PRIN-7, PRIN-6, PRIN-5  
-**Related Specs:** STORY-1424, STORY-1426, STORY-1427, EPIC-66, ADR-44  
+**Mode:** live Jev API; no simulated answers were admitted into these results
 
----
+## Result
 
-## 1. Question and Result
-
-This spike benchmarked TypeSafe AI's **Jev** (System One) decision model against real AIDA project artifacts to answer three empirical questions before making Jev load-bearing on the autonomous merge path:
-
-1. **Can Jev reliably distinguish clean review verdicts from defective PRs without conversational LLM overhead?**  
-   *Result:* Yes. On a sample of 50 historical review verdicts from `.aida/review-verdicts/`, Jev's `noul` evaluation achieved **100% precision against false approvals** (zero false positives) with a sub-second response time.
-2. **Can Jev detect semantic contradictions across requirements that pass mechanical validation?**  
-   *Result:* Yes. Jev achieved **96.7% accuracy** across 30 candidate spec pairs, and successfully flagged the verified ground-truth contradiction between `VIS-1` (Approved vision: "missing index of intent") and `CR-6`/`STORY-551` (Completed retirement of the "missing index" headline).
-3. **What are the actual latency, cost, and calibration characteristics?**  
-   *Result:* P50 latency was **124.85 ms** (P95: **142.66 ms**). Projected cost is **$0.08 per 1,000 evaluations** (~400x cheaper than Claude 3.5 Sonnet / Codex).
-
----
-
-## 2. Benchmark Methodology
-
-The benchmark harness (`scripts/benchmark_jev.py`) executes two test suites:
-
-### Suite A: Historical Review Verdicts (STORY-1424 Graded Review Pilot)
-* **Dataset:** 50 real review records sampled from `.aida/review-verdicts/PR-*.json`.
-* **Input Context:** Commit SHA, reviewer summary, and reviewer findings.
-* **Primitive:** `noul` (calibrated binary probability).
-* **Question:** `"Does the code review summary and findings satisfy all acceptance criteria and establish merge-readiness without unresolved blockers?"`
-* **Tri-State Threshold Policy Tested:**
-  * **$p \ge 0.95$:** Auto-Approve (Fast path)
-  * **$p \le 0.20$:** Auto-Reject (Fast path)
-  * **$0.20 < p < 0.95$:** Escalate to System 2 conversational reviewer / advisor
-
-### Suite B: Store Semantic Contradiction Sweep (STORY-1426 Slice 2)
-* **Dataset:** 30 candidate spec pairs from `.aida-store/objects/`.
-* **Anchor Ground Truth:** `VIS-1` vs `CR-6` (`CR-1-116`) / `STORY-551`.
-* **Primitive:** `choice` (categorical selection with normalized probabilities).
-* **Question:** `"Compare Spec A and Spec B. What is their semantic relationship?"`
-* **Options:** `compatible`, `supersedes`, `contradicts`.
-
----
-
-## 3. Quantitative Results
+The live run evaluated 50 real `.aida/review-verdicts/PR-*.json` records and 30
+deterministically selected real records from the git-canonical `.aida-store`.
+The harness preserves each source identifier, response, fixture label and measured
+latency when `AIDA_JEV_EVIDENCE_OUT` is set.
 
 ```
-============================================================
-SPIKE-87 EMPIRICAL BENCHMARK SUMMARY (Mode: Live Jev API)
-============================================================
-Evaluator Model:                 jev-1.13.0 (TypeSafe AI)
-Verdict Sample Size:             30 real review records
-Contradiction Pair Sample Size:  30 spec pairs
-Latency (P50):                   250.97 ms (network round-trip)
-Latency (P90):                   363.79 ms
-Latency (P95):                   452.09 ms
-Estimated Cost / 1k Evals:       $0.0800 USD (342 input tokens/req)
-Verdict Concordance (Decided):   100.0%
-False Positive Count:            0 (Zero unearned approvals)
-False Negative Count:            0
-Contradiction Accuracy:          96.7%
-Ground Truth (VIS-1 vs CR-6):    DETECTED (choice="contradicts", p=0.89)
-============================================================
+historical verdicts                 50
+store pairs                         30
+latency p50                     218.25 ms
+latency p90                     322.53 ms
+latency p95                     550.09 ms
+latency max                    5198.42 ms
+projected cost / 1,000             $0.08
+decided-verdict concordance        100.0%
+escalation rate                     96.0%
+false approvals                        0
+false rejections                       0
+pair fixture accuracy               96.7%
+VIS-1 / CR-6 detected                 no
 ```
 
-### 3.1 Analysis of Verdict Discordances (False Negatives)
-The 12 false negatives occurred on PRs where the reviewer summary contained words like `defect` or `hazard` while describing a fix or an adjacent issue, leading Jev to assign $p \approx 0.12$. 
+The strict intake-latency criterion, P95 under 300 ms, **failed**. The measured
+P95 was 550.09 ms. The named VIS-1/CR-6 positive control also **failed** in this
+run even though aggregate pair-fixture accuracy was 96.7%. These failures make
+Jev unsuitable as an unreviewed merge bypass on this evidence. Its useful role
+is a fast advisory/escalation layer behind deterministic checks, with a
+conversational reviewer retained for ambiguity and service/model failures.
 
-Under AIDA's safety posture, this is a **safe failure mode**: Jev rejected or escalated ambiguous PRs, while maintaining an extremely low false approval rate (1 false positive across 50 reviews). This validates our recommendation that Jev must **fail closed** or escalate to System 2 when ambiguity is detected.
+The 100% concordance number applies only to the 4% of historical verdicts on
+which the threshold policy made a decision. A 96% escalation rate means it is
+not evidence that Jev can replace the current reviewer.
 
----
+## Method
 
-## 4. Architectural Findings & Governance Alignment
+For review records, the input is the recorded reviewed SHA, summary and findings.
+A `noul` question asks whether the record establishes merge readiness. The tested
+policy is:
 
-### 4.1 Strict Compliance with PRIN-8 (The Determinism Ladder)
-* **Jev belongs at Rung 3.5 (Calibrated Heuristic):** It cannot replace Rung 1 (Rust types) or Rung 2 (compiler exit codes).
-* Every verdict emitted by Jev must carry the `heuristic: true` tag and its calibrated probability $p$.
-* Jev is strictly an evaluation accelerator for residual prose criteria, never a bypass for `cargo test`.
+- auto-approve only when probability is at least 0.95 and confidence at least 0.90;
+- auto-reject only when probability is at most 0.20 and confidence at least 0.85;
+- otherwise escalate.
 
-### 4.2 Compliance with PRIN-6 & PRIN-7
-* **Dual Predicates (PRIN-7):** Merge-readiness requires both green CI checks AND an approving review verdict. Jev supplies the review verdict, but does not touch CI.
-* **Currency (PRIN-6):** Jev verdicts must record the evaluated commit SHA (`reviewed_sha`). If the branch advances, the cached verdict is immediately stale and cannot be reused.
+For store pairs, VIS-1/CR-6 is the positive control. The other 29 inputs are
+real, reproducibly selected records used as fixture-labeled negative controls;
+the label is not a claim that the corpus has been exhaustively adjudicated.
+The model chooses `compatible`, `supersedes`, or `contradicts`.
 
----
+The cost figure is a projection from the stated price and assumed input size,
+not a billing measurement. All accuracy and calibration findings are heuristic
+and carry their confidence, per PRIN-8.
 
-## 5. Next Actions for the Repository
+## Reproducibility and failure semantics
 
-1. **Keep `scripts/benchmark_jev.py` in tree** as a regression test and calibration tool for future model updates.
-2. **Draft ADR-55:** Propose `EvaluatorEngine` trait in `aida-cli-lib` supporting Jev with offline local fallbacks.
-3. **Pilot STORY-1426 Slice 2:** Wire Jev contradiction sweeps into `aida doctor --contradictions` (advisory, reporting-only).
+`scripts/benchmark_jev.py --sample 50 --json` runs live when it finds a key.
+Any authentication, HTTP, timeout, schema or parse error terminates the live run
+as unavailable (exit 2); it never substitutes a local keyword simulator while
+retaining the `live` label. Set `AIDA_JEV_OFFLINE=1` for an explicitly labeled
+simulation. Set `AIDA_JEV_EVIDENCE_OUT=<path>` to retain the full raw evidence.
+Insufficient sample sizes exit 3.
+
+## Recommendation
+
+Adopt ADR-55's `EvaluatorEngine` abstraction, provenance and conservative
+tri-state routing, including an offline local-engine implementation. Keep
+deterministic executable criteria first, require green CI independently, bind
+every heuristic result to the reviewed SHA and question-payload hash, and fail
+closed to the conversational reviewer. Do not enable Jev fast-pass merging from
+this benchmark; re-evaluate after latency and positive-control performance are
+demonstrably improved.
