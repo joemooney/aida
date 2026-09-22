@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:04:43.121876649Z
-modified_at: 2026-09-22T15:10:44.254554182Z
+modified_at: 2026-09-22T15:11:07.771136687Z
 req_type: Bug
 tags:
 - cost
@@ -68,3 +68,8 @@ comments:
   content: Rework pushed to PR 2101 at cb7e877a236f8aaabdf47c4633ba612c7cb17451. Foreign usage-bearing terminal shapes are now distinct from truncated Claude logs and produce a bounded basename plus schema diagnostic. Focused tests pass; ready for a different cold reviewer.
   created_at: 2026-09-22T15:10:44.254554182Z
   modified_at: 2026-09-22T15:10:44.254554182Z
+- id: 01a0c9ab-b1fb-7ac0-8f54-da9f312d95c1
+  author: joe
+  content: 'SHA correction: exact pushed and live PR 2101 head is cb7e877a23ad44daad9e6049b89e0b81e48fc99d. The prior long SHA in the rework note was a transcription error.'
+  created_at: 2026-09-22T15:11:07.771136687Z
+  modified_at: 2026-09-22T15:11:07.771136687Z
