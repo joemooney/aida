@@ -219,7 +219,7 @@ def run_benchmark(repo_root: str, sample_size: int = 50) -> Dict[str, Any]:
         verdict_files = sorted(glob.glob("/home/joe/ai/aida/.aida/review-verdicts/PR-*.json"))
 
     print(f"[SPIKE-87] Found {len(verdict_files)} historical review verdicts in store.")
-    
+
     # 1. Historical Review Verdict Benchmark (Sample N)
     sample_verdicts = verdict_files[-sample_size:] if len(verdict_files) >= sample_size else verdict_files
     verdict_latencies = []

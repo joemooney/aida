@@ -1,7 +1,9 @@
 # Benchmark findings: TypeSafe AI Jev on AIDA review and store artifacts
 
-**Date:** 2026-09-22  
-**Spec:** SPIKE-87  
+**Date:** 2026-09-22
+
+**Spec:** SPIKE-87
+
 **Mode:** live Jev API; no simulated answers were admitted into these results
 
 ## Result
