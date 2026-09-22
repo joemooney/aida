@@ -48,7 +48,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T00:20:45.943120Z
-modified_at: 2026-09-22T07:18:35.363956591Z
+modified_at: 2026-09-22T07:21:06.514253079Z
 req_type: Bug
 tags:
 - docs drain papercut
+comments:
+- id: 01a0c7fd-60d2-7731-ae11-a422f77c4b7d
+  author: joe
+  content: 'Claim sweep (unbounded: rg -n -i ''pipeline[_ -]?depth'' --glob ''!target/**'' --glob ''!.git/**'' .; plus aida show ADR-27/STORY-1091): 3 default-bearing sources found. (1) aida-cli-lib/src/drain_state.rs is authoritative and returns 1; (2) docs/autonomous-drain.md was the stale current guide claim and is corrected by this implementation; (3) ADR-27 records historical default 2 and now has a partial-supersession comment. Discipline pack: 0 claims. Skills: 0 claims. Current TUI/help source: 0 pipeline-depth default claims. Other rg hits are configuration plumbing, state/test fixtures, or live status rendering, not assertions of the default or overlap-by-default behavior.'
+  created_at: 2026-09-22T07:21:06.514253079Z
+  modified_at: 2026-09-22T07:21:06.514253079Z
