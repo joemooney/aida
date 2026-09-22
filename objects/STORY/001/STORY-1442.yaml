@@ -1,0 +1,26 @@
+id: 01a0c809-96b2-7732-a136-587a5f81cf65
+spec_id: STORY-1442
+agreed_id: STORY-1442
+title: 'Review PR-2081: [AI:codex] fix(card): retain relationship edge labels (BUG-1584)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0c7fe`) for branch `bug-1584`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2081>
+  - Branch: `bug-1584` → `main`
+
+  ## Covers
+
+  - BUG-1584
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2081` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T07:34:26.738645865Z
+modified_at: 2026-09-22T07:34:26.738645865Z
+req_type: Story
