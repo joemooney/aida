@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T10:45:14.560989487Z
-modified_at: 2026-09-22T10:45:22.382645065Z
+modified_at: 2026-09-22T10:50:57.131617709Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0c15e-a65a-74f0-86b8-455a0e05f9d9
   created_at: 2026-09-22T10:45:22.382639883Z
   created_by: joe
+comments:
+- id: 01a0c8bd-7eeb-7100-b9db-78beac64ccfd
+  author: joe
+  content: '[cold-review] PASS exact head 25c52f152f0fc940d8c2e78a23a15dfb83ab45cb for BUG-1498. Independent: yes; reviewer neither implemented nor specified this lane. Evidence: the exact-draft default lens preserves human rows and hides tagged plus legacy-preamble machine rows; --machine-drafts returns only those rows and composes with --short; explicit auto-drafted tag access and mixed-status completeness are preserved. Existing BUG-864 dedupe remains unchanged and focused recurrence tests prove one open row per spec/phase/failure-kind with Attempts and Latest recurrence updates; the existing reaper remains unchanged. Local gates: cargo test -p aida-cli-lib bug_1498 passed 6/6; cargo test -p aida-cli-lib task_266_tests passed 8/8; cargo fmt --all -- --check passed. merge-hold-gate is green. Required GitHub Build is still pending, so this approval is conditional on that exact-head Build succeeding; do not merge over red CI.'
+  created_at: 2026-09-22T10:50:57.131617709Z
+  modified_at: 2026-09-22T10:50:57.131617709Z
