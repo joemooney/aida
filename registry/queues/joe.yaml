@@ -70,3 +70,11 @@
   note: advisor-cleared at filing
   added_at: 2026-09-22T14:23:36.102501345Z
   for_role: reviewer
+- user_id: joe
+  requirement_id: 01a0c98f-cd32-77c3-870b-78782e156956
+  position: 35000
+  added_by: joe
+  note: auto-queued by `session end` (01a0c973); covers 1 spec
+  added_at: 2026-09-22T14:40:47.298205937Z
+  for_role: reviewer
+  added_by_machine: imac
