@@ -26,7 +26,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:26:14.774144314Z
-modified_at: 2026-09-22T09:32:46.640358453Z
+modified_at: 2026-09-22T09:45:43.766732062Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -143,3 +143,8 @@ comments:
   content: 'Rework pushed to PR #2088 at c415d62bb4 per amended architecture signoff. Built-ins remain scalar; Custom now writes as a standard `{custom: value}` mapping so names colliding with typed spellings/aliases retain exact text and Custom identity. Reader compatibility covers legacy `!Custom`, legacy JSON `{Custom: value}`, new maps, and scalar forms. Collision tests cover every built-in/alias family across YAML and JSON. Full aida-core suite: 973 passed, 2 ignored; focused relationship tests: 9 passed; object conformance, fmt, and diff checks clean. No taxonomy or bulk migration.'
   created_at: 2026-09-22T09:32:46.640358453Z
   modified_at: 2026-09-22T09:32:46.640358453Z
+- id: 01a0c881-c856-7da0-96bd-61e31b41fb89
+  author: joe
+  content: '[cold-review][approved] PR #2088 exact head c415d62bb4a02214159fbaf992872d20970f698d satisfies amended TASK-184 architecture signoff; no blocking findings. Built-ins serialize as ordinary scalars. Custom values serialize as standard {custom: value} mappings, preserving exact text and Custom identity even for every built-in spelling and accepted alias family. Reader compatibility covers legacy !Custom YAML, legacy JSON {Custom: ...}, new mappings, and scalar built-in/unknown reads. Generic serde_yaml::Value parsing accepts the emitted canonical object; diff is limited to model serialization/deserialization and object-store conformance tests, with no taxonomy rewrite or bulk migration. Independent exact-head verification: cargo test -p aida-core passed 973/0 (2 ignored); cargo fmt --all -- --check passed; GitHub CI run 35710963010 completed success at exact SHA. PR is mergeable. No implementation or merge performed.'
+  created_at: 2026-09-22T09:45:43.766732062Z
+  modified_at: 2026-09-22T09:45:43.766732062Z
