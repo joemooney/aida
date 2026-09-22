@@ -34,12 +34,12 @@ description: |
   8. No dollar estimate is emitted without a separately versioned dated rate and exact model match; pricing is explicitly out of scope for this slice.
 
   Sketch-first: before implementation, post the proposed ledger location/schema, join keys, deduplication rules, and CLI surface on this task for driver signoff.
-status: InProgress
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T14:04:15.633781093Z
-modified_at: 2026-09-22T14:08:55.064884026Z
+modified_at: 2026-09-22T14:09:31.117862239Z
 req_type: Task
 tags:
 - cost
