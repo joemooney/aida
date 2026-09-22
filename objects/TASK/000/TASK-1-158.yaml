@@ -14,12 +14,12 @@ description: |-
   NOT INVESTIGATED and deliberately not asserted: I have not isolated where the re-parse happens, whether the printed error is from the same process or a child, or whether any input could reach a flag that ACCEPTS its value rather than rejecting it. The last of those is the question worth answering first, because it is the difference between noisy output and free text steering a command.
 
   WHAT WOULD SETTLE IT: record a verdict whose finding text contains a flag with a VALID value for its type — something like `--yes` or a numeric `--pr 999` — and observe whether the invocation changes behaviour. If it does, this stops being cosmetic.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T23:58:27.988803235Z
-modified_at: 2026-09-22T11:30:40.010446074Z
+modified_at: 2026-09-22T11:30:46.327745207Z
 req_type: Task
 tags:
 - from-advisor:BUG-1467
@@ -76,3 +76,22 @@ comments:
   content: '[aida:proxy-approval] verdict=APPROVE; reasoning=independent cold review approved exact head 4983d3a94e0c1f46d8746db880e7cb750517e5e6; flag-like finding text remains opaque while later explicit flags and typo errors retain normal parsing; independent=yes; gates=Build ubuntu SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; timestamp=2026-09-22T04:30:39-07:00'
   created_at: 2026-09-22T11:30:40.010446074Z
   modified_at: 2026-09-22T11:30:40.010446074Z
+history:
+- id: 01a0c8e1-f3b0-7c02-ae59-0e61cb2f2b35
+  author: aida-auto-bump
+  timestamp: 2026-09-22T11:30:46.320845095Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c8e1-f3b7-7200-8292-8b2c9aa2d171
+  timestamp: 2026-09-22T11:30:46.327744210Z
+  agent: aida
+  commit_sha: d3c20939f0b381323d980661db2b79307aa76de3
+  summary: 'PASS: exact head preserves flag-like finding values as opaque text while later explicit flags and unbound typo validation remain intact; merge remains conditional on required Build success'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T11:30:46.274618137Z
+  completion_sha: d3c20939f0b381323d980661db2b79307aa76de3
