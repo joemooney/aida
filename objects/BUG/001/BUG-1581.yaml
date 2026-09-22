@@ -58,7 +58,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:59:21.615803647Z
-modified_at: 2026-09-22T10:19:53.207704192Z
+modified_at: 2026-09-22T10:54:02.755913604Z
 req_type: Bug
 tags:
 - review-verdicts orchestrator integrity
@@ -204,6 +204,11 @@ comments:
   content: 'Round-3 rework: drain resume now gets the current head from forge change_status and reconciles PR-keyed plus spec-keyed evidence before setting reviewed. Wave integration passes that same forge head into reconciliation, fails closed when unavailable, and merge_wave_pr repeats the probe/reconciliation at the irreversible merge boundary. Added resume regression for same-head spec opposition and wave gate regression for stale PR approval/current spec refusal.'
   created_at: 2026-09-22T10:19:53.207704192Z
   modified_at: 2026-09-22T10:19:53.207704192Z
+- id: 01a0c8c0-5403-7a43-9015-c52fcb311ba0
+  author: joe
+  content: '[aida:cold-review] REQUEST_CHANGES at exact head 9e2fabb108c36593bc353be40158174539afd55b. Focused BUG-1581 (9), review_verdict (35), read_verdict_file (8), and drain wiring (15) suites pass; fmt and the CI-equivalent clippy command pass. Blocking: sibling_verdict_sweep_for_phase3 reads only the newest of all fresh PR/spec sibling artifacts, so a newer approval can hide an opposing same-head block; its raw canonical copy can also clobber a verdict created between the root-miss check and copy. Reconcile all relevant same-head sibling evidence and preserve any canonical record fail-closed before accepting/copying.'
+  created_at: 2026-09-22T10:54:02.755913604Z
+  modified_at: 2026-09-22T10:54:02.755913604Z
 implementation_info:
   implemented: true
   implemented_at: 2026-09-22T09:25:00.454373899Z
