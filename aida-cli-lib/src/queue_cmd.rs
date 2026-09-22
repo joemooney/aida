@@ -5601,28 +5601,58 @@ pub(crate) fn handle_queue_command(
                 }
                 // TASK-1005 / SPIKE-70: `--sequential` NAMES + guards the existing
                 // per-member-PR batch drain as a first-class coupled-ordered mode:
-                // members run ONE AT A TIME (concurrency pinned to 1), each its own
-                // PR off freshly-pulled main, with shelve-and-continue on a member
-                // failure. It does NOT change the engine — it requires a batch and
-                // then falls through to the same `handle_auto_complete_batch[es]`
-                // dispatch below, which `drain_batch` already drives sequentially.
+                // members run in pickup order, each its own PR off freshly-pulled
+                // main, with shelve-and-continue on a member failure. It does NOT
+                // change the engine — it requires a batch and then falls through to
+                // the same `handle_auto_complete_batch[es]` dispatch below.
                 // `conflicts_with = "single_branch"` is enforced by clap.
-                // trace:TASK-1005 | ai:claude
+                // TASK-185: the SINGLE-batch leg of that dispatch
+                // (`handle_auto_complete_batch` → `drain_batch_pipelined_with_caps`)
+                // honours `[drain] pipeline_depth` since STORY-1091, so this flag
+                // governs ORDER + per-member-PR shape, not concurrency — the
+                // one-at-a-time property comes from the default depth of 1, not
+                // from `--sequential`. The `--batches` leg does NOT:
+                // `handle_auto_complete_batches` calls `drain_batch_chain_with_caps`,
+                // which is typed on the non-pipelined `BatchDriver` and always calls
+                // `drain_batch_with_caps`, so a chain is serial at ANY depth. The
+                // notice below is branched on that split rather than asserting the
+                // depth claim on a path where it is false.
+                // trace:TASK-1005 trace:TASK-185 | ai:claude
                 if *sequential {
                     let has_batch = effective_batch.is_some_and(|b| !b.is_empty())
                         || effective_batches.is_some();
                     if !has_batch {
                         anyhow::bail!(
-                            "--sequential drives a batch one member at a time — pair it with \
-                             `--batch NAME` or `--batches A,B,C` (e.g. `aida queue work \
-                             --batch NAME --auto-complete --sequential`)"
+                            "--sequential drives a batch's members in pickup order, each as \
+                             its own PR — pair it with `--batch NAME` or `--batches A,B,C` \
+                             (e.g. `aida queue work --batch NAME --auto-complete \
+                             --sequential`)"
                         );
                     }
                     if !*json {
+                        // TASK-185: `--batches` takes precedence in the dispatch
+                        // below, and that chain path never reaches the pipelined
+                        // scheduler — so scope the concurrency sentence to the leg
+                        // the operator actually invoked instead of printing the
+                        // depth claim on a path where it is inert.
+                        // trace:TASK-185 | ai:claude
+                        let concurrency = if effective_batches.is_some() {
+                            "Ordering only — a `--batches` chain is always serial: the batches \
+                             run in turn and each batch's members one at a time, regardless of \
+                             `[drain] pipeline_depth`."
+                                .to_string()
+                        } else {
+                            format!(
+                                "Ordering only — concurrency for this single-batch drain \
+                                 follows `[drain] pipeline_depth` (default {}, i.e. strictly \
+                                 one at a time).",
+                                crate::drain_state::default_pipeline_depth()
+                            )
+                        };
                         eprintln!(
-                            "Sequential drain: members run one at a time (concurrency {SEQUENTIAL_DRAIN_CONCURRENCY}); \
-                             each member is its own PR off freshly-pulled main, and a member \
-                             failure shelves that member and continues with the rest."
+                            "Sequential drain: members run in pickup order, each its own PR off \
+                             freshly-pulled main, and a member failure shelves that member and \
+                             continues with the rest. {concurrency}"
                         );
                     }
                     // Fall through to the batch / batches dispatch below — it IS

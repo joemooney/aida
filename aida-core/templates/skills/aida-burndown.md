@@ -140,10 +140,14 @@ per spec) is for INDEPENDENT specs. For a set that shares files / must land in
 order, tag the members `batch:NAME` and drain the batch instead of fanning out:
 
 - **`aida queue work --batch NAME --auto-complete --sequential`** — ordered,
-  each member is its OWN PR off freshly-pulled main, one member at a time
-  (concurrency 1). A member failure **shelves** that member and the drain
-  **continues** with the rest. Use when the members are coupled but each
-  increment is independently shippable + reviewable.
+  each member is its OWN PR off freshly-pulled main. The flag governs ORDER and
+  the per-member-PR shape, not concurrency: members run strictly one at a time
+  at the default `[drain] pipeline_depth = 1`, and raising that (max 3) lets a
+  later member's implementer/CI leg overlap an earlier member's wait while
+  merges stay serial. That depth applies to a **single-batch** drain only — a
+  `--batches A,B,C` chain is serial at any depth. A member failure **shelves**
+  that member and the drain **continues** with the rest. Use when the members
+  are coupled but each increment is independently shippable + reviewable.
 - **`aida queue work --batch NAME --auto-complete --single-branch`** — all
   members accumulate on ONE shared branch in one worktree, no per-member
   merge-to-main, ONE cluster PR at the end. A member failure **halts** the drain
@@ -153,7 +157,7 @@ order, tag the members `batch:NAME` and drain the batch instead of fanning out:
 The one-line rule of thumb: **`--sequential` shelves-and-continues (independent
 PRs); `--single-branch` halts (one accumulating branch).** Both replace the old
 manual `git reset --hard origin/main` between members — let the mode base each
-member correctly instead of driving `git` by hand. trace:BUG-554 trace:TASK-1005 | ai:claude
+member correctly instead of driving `git` by hand. trace:BUG-554 trace:TASK-1005 trace:TASK-185 | ai:claude
 
 **Never co-fan a serialize-group (STORY-614).** Specs that must not run
 concurrently carry a shared `serialize:<group>` tag (e.g. `serialize:docs`,
