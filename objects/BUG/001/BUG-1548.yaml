@@ -56,7 +56,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:49:08.443039479Z
-modified_at: 2026-09-22T10:32:19.749134655Z
+modified_at: 2026-09-22T10:47:38.139868618Z
 req_type: Bug
 comments:
 - id: 01a0c8ab-b5a4-7560-aede-66d78044feb8
@@ -74,3 +74,8 @@ comments:
   content: '[aida:architecture-signoff] APPROVED for the corrected sketch only. Preserve live-state semantics and expose a distinct bounded recent-finished record, including idle outcomes and consecutive idle count, consistently in human/JSON/TOON status. Do not invent schedule/service ownership. Provenance must be allow-listed and non-sensitive: PID/start identity, parent PID, executable basename or explicit launcher label; never persist full argv/environment. Define a deterministic recency bound and truthful expiry wording. Legacy last-drain files must remain readable; material outcomes reset the idle streak.'
   created_at: 2026-09-22T10:32:19.749134655Z
   modified_at: 2026-09-22T10:32:19.749134655Z
+- id: 01a0c8ba-759b-7d73-8295-7e4ca9d61b41
+  author: joe
+  content: 'Implementation opened as PR #2095. Diagnosis: the 3m53s–5m49s cadence is consistent with repeated foreground invocations by a long-lived agent/supervisor rather than a registered AIDA/cron/systemd interval. Clean completion removed live drain state, and the only durable last-drain record was suppressed specifically for zero-work outcomes. Fix persists allow-listed PID/start identity plus parent PID/start identity (no argv/env), surfaces recent finished zero-work drains across human/JSON/TOON, reports parent alive/stopped via PID+start corroboration, counts consecutive idle runs, resets after material work, preserves legacy file compatibility, and expires recent status after 24h with historical-only wording. Tests: BUG-1548 render/provenance 2 pass; last_drain 14 pass; drain_state 56 pass; cargo check/fmt pass. trace:BUG-1548 | ai:codex'
+  created_at: 2026-09-22T10:47:38.139868618Z
+  modified_at: 2026-09-22T10:47:38.139868618Z
