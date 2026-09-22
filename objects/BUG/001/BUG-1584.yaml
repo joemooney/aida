@@ -45,12 +45,12 @@ description: |-
   Filed by the driver-advisor seat, from a finding the #2065 lane raised against its own change and
   declined to fix rather than letting it pass silently. Related: BUG-1471 (the Custom half, merged
   at e0a211ec81), TASK-1426 (the inert-edge migration).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T23:41:00.172675010Z
-modified_at: 2026-09-21T23:41:00.172675010Z
+modified_at: 2026-09-22T07:22:35.956649082Z
 req_type: Bug
 tags:
 - card rendering papercut
