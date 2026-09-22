@@ -72770,15 +72770,15 @@ fn card_rel_label(rt: &RelationshipType) -> &'static str {
 
 /// The edge's own name, when the bucket heading does not already carry it.
 ///
-/// A `Custom` edge's name is the only place its meaning lives (`implements`,
-/// `implemented-by`, `sprint_contains`, …), so the card prints that name
-/// beside the target under the neutral `Custom` heading — neither hiding it
-/// nor dressing it up as a standard type.
-// trace:BUG-1471 | ai:claude
+/// `Child` is the sole exception because its `Parent` heading already names
+/// the target's role. Custom and standard edges under neutral headings print
+/// their canonical names, so blocking, verification, reference, duplicate,
+/// and supersession edges cannot collapse into indistinguishable target ids.
+// trace:BUG-1471 trace:BUG-1584 | ai:codex
 fn card_rel_edge_name(rt: &RelationshipType) -> Option<String> {
     match rt {
-        RelationshipType::Custom(name) => Some(name.clone()),
-        _ => None,
+        RelationshipType::Child => None,
+        _ => Some(rt.to_string()),
     }
 }
 
