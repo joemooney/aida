@@ -22,10 +22,33 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T14:40:39.730355505Z
-modified_at: 2026-09-22T14:40:44.475053974Z
+modified_at: 2026-09-22T14:53:28.744204582Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0c96e-7991-7431-93ca-31252ac2adb2
   created_at: 2026-09-22T14:40:44.475044956Z
   created_by: joe
+comments:
+- id: 01a0c99b-8928-7b40-b757-f5363b24e384
+  author: joe
+  content: |-
+    REQUEST_CHANGES on exact head 12a91d49c3419ab103d4e2910abf530e35303ab3.
+
+    Blocking findings:
+
+    1. Required CI is red. The exhaustive BUG-1502 command audit fails because the new aida usage rebuild and aida usage show paths are present in the clap catalog but absent from docs/cli-format-json-audit.md. Regenerate/update the checked-in audit and rerun required CI.
+
+    2. TASK-1427 acceptance requires an explicit reason for every missing or ambiguous attribution dimension. attribute() leaves run_reason unset when no exact session exists; when spec selection is missing/ambiguous it returns with run, phase, and round null but without their reasons. Add complete per-dimension reasons and regression coverage for missing session, missing/ambiguous spec, missing seat, and missing/ambiguous phase/run/round.
+
+    3. The query surface collapses unknown token classes into measured zero through COALESCE(SUM(nullable_column),0). A measured record with a missing token class and a genuine measured zero render identically, violating acceptance criterion 5. Preserve/report known-count versus missing-count (or equivalent) per token class and test both cases in human, JSON, and TOON.
+
+    4. Codex record identity is not the retained stable request/message identity. The parser ignores token_usage_record rows carrying thread_id, turn_id, response_id, and usage; instead it hashes cumulative checkpoints from token_count, and turn.completed IDs hash only the usage vector. Distinct requests with identical usage can deduplicate, while the actual response identity is discarded. Normalize the identity-bearing Codex record and reconcile/deduplicate its token_count/turn.completed representations without double counting; cover conflicts and cumulative resets.
+
+    5. The accepted security boundary is not implemented. rebuild follows a symlinked .aida/derived directory and reads each selected transcript fully with fs::read, with no regular-file/root containment or size bound. A local symlink can redirect the private ledger outside the project and a large/sparse retained log can exhaust memory. Add fail-closed destination containment/symlink checks and bounded/streaming source handling with adversarial tests.
+
+    6. Acceptance criterion 6 is materially under-tested. Current tests cover one Claude duplicate, one repeated Codex checkpoint, one ambiguous session, a synthetic phase example, and one malformed line. There are no tests for conflicting duplicates, reset segmentation, unsupported events, missing manifests, genuine zero versus missing token fields, atomic/idempotent two-pass rebuild, database permissions, query grouping/coverage across human JSON TOON, or symlink/oversize defenses.
+
+    The implementation has a useful schema and privacy posture, but these are data-integrity and required-gate failures, so approval is not safe yet.
+  created_at: 2026-09-22T14:53:28.744204582Z
+  modified_at: 2026-09-22T14:53:28.744204582Z
