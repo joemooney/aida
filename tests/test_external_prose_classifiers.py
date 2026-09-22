@@ -127,6 +127,54 @@ class EnumeratorTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "anchored to function changed_classifier"):
                 module.enumerate_sites(root)
 
+    def test_marker_after_a_closed_function_has_no_anchor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            src = root / "aida-example/src/new.rs"
+            src.parent.mkdir(parents=True)
+            src.write_text(
+                "fn old_classifier() {}\n"
+                "// external-prose-classifier: fixture::old_classifier\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "has no function anchor"):
+                module.enumerate_sites(root)
+
+    def test_closed_nested_function_restores_the_outer_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            src = root / "aida-example/src/new.rs"
+            src.parent.mkdir(parents=True)
+            src.write_text(
+                "fn outer_classifier() {\n"
+                "    fn inner_classifier() {}\n"
+                "    // external-prose-classifier: fixture::outer_classifier\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                module.enumerate_sites(root),
+                [("fixture::outer_classifier", "aida-example/src/new.rs", 3)],
+            )
+
+    def test_marker_inside_nested_function_uses_nested_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            src = root / "aida-example/src/new.rs"
+            src.parent.mkdir(parents=True)
+            src.write_text(
+                "fn outer() {\n"
+                "    fn inner_classifier() {\n"
+                "        // external-prose-classifier: fixture::inner_classifier\n"
+                "    }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                module.enumerate_sites(root),
+                [("fixture::inner_classifier", "aida-example/src/new.rs", 3)],
+            )
+
     def test_removed_marker_changes_the_inventory(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

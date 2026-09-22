@@ -23,29 +23,126 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOC = ROOT / "docs/architecture/external-tool-output-classifiers.md"
 MARKER = re.compile(r"^\s*// external-prose-classifier: ([A-Za-z0-9_:{}-]+)\s*$")
-FUNCTION = re.compile(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>{}]*>)?\s*\(")
+
+
+def marker_anchors(source: str) -> dict[int, str]:
+    """Map marker lines to their lexically containing Rust function."""
+    anchors: dict[int, str] = {}
+    scopes: list[str | None] = []
+    pending_fn = False
+    pending_name: str | None = None
+    block_depth = 0
+    quote: str | None = None
+    escaped = False
+    raw_hashes: int | None = None
+
+    for line_no, line in enumerate(source.splitlines(), 1):
+        if MARKER.match(line):
+            containing = next((scope for scope in reversed(scopes) if scope), None)
+            if containing:
+                anchors[line_no] = containing
+
+        index = 0
+        while index < len(line):
+            char = line[index]
+            following = line[index + 1] if index + 1 < len(line) else ""
+            if raw_hashes is not None:
+                terminator = '"' + "#" * raw_hashes
+                end = line.find(terminator, index)
+                if end < 0:
+                    break
+                raw_hashes = None
+                index = end + len(terminator)
+                continue
+            if block_depth:
+                if char == "/" and following == "*":
+                    block_depth += 1
+                    index += 2
+                elif char == "*" and following == "/":
+                    block_depth -= 1
+                    index += 2
+                else:
+                    index += 1
+                continue
+            if quote:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == quote:
+                    quote = None
+                index += 1
+                continue
+            if char == "/" and following == "/":
+                break
+            if char == "/" and following == "*":
+                block_depth = 1
+                index += 2
+                continue
+            raw = re.match(r"(?:b)?r(#+)?\"", line[index:])
+            if raw:
+                raw_hashes = len(raw.group(1) or "")
+                index += len(raw.group(0))
+                continue
+            if char == "'":
+                # A Rust lifetime (`'a`) is not a character literal. Only enter
+                # quote state when this line has a syntactic closing apostrophe.
+                literal = re.match(r"'(?:\\.|[^\\'])'", line[index:])
+                if not literal:
+                    index += 1
+                    continue
+            if char in {'"', "'"}:
+                quote = char
+                escaped = False
+                index += 1
+                continue
+            if char.isalpha() or char == "_":
+                end = index + 1
+                while end < len(line) and (line[end].isalnum() or line[end] == "_"):
+                    end += 1
+                token = line[index:end]
+                if pending_fn and pending_name is None:
+                    pending_name = token
+                elif token == "fn":
+                    pending_fn = True
+                    pending_name = None
+                index = end
+                continue
+            if char == "{":
+                scopes.append(pending_name if pending_fn else None)
+                pending_fn = False
+                pending_name = None
+            elif char == "}":
+                if scopes:
+                    scopes.pop()
+                pending_fn = False
+                pending_name = None
+            elif char == ";" and pending_fn:
+                pending_fn = False
+                pending_name = None
+            index += 1
+    return anchors
 
 
 def enumerate_sites(root: pathlib.Path) -> list[tuple[str, str, int]]:
     found: list[tuple[str, str, int]] = []
     for path in sorted(root.glob("aida-*/src/**/*.rs")):
-        lines = path.read_text(encoding="utf-8").splitlines()
+        source = path.read_text(encoding="utf-8")
+        lines = source.splitlines()
+        anchors = marker_anchors(source)
         for line_no, line in enumerate(lines, 1):
             match = MARKER.match(line)
             if match:
                 site = match.group(1)
-                # Markers live at the start of the classifier function. Resolve
-                # the nearest declaration above them (including a multi-line
-                # signature) so moving a marker to another classifier cannot
-                # silently retain the old inventory identity.
+                # Resolve structural containment rather than the nearest prior
+                # declaration: a marker after a closed function has no anchor.
                 # trace:TASK-1309 | ai:codex
-                declarations = list(FUNCTION.finditer("\n".join(lines[:line_no])))
-                if not declarations:
+                function = anchors.get(line_no)
+                if function is None:
                     raise ValueError(
                         f"marker {site} at {path.relative_to(root)}:{line_no} "
                         "has no function anchor"
                     )
-                function = declarations[-1].group(1)
                 if site.rsplit("::", 1)[-1] != function:
                     raise ValueError(
                         f"marker {site} at {path.relative_to(root)}:{line_no} "
