@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T00:42:38.482858241Z
-modified_at: 2026-09-22T07:15:37.080022057Z
+modified_at: 2026-09-22T07:21:39.509372975Z
 req_type: Bug
 tags:
 - drain cli papercut
@@ -52,3 +52,8 @@ comments:
   content: 'Implemented in stacked PR #2078 (base: PR #2070 branch). Runtime notice now reports resolved pipeline_depth, limits the one-at-a-time clause to depth 1, and degrades gracefully when root resolution fails. Red-first depth-2 coverage plus default-depth and root-failure tests pass. BUG-1585 docs were not touched.'
   created_at: 2026-09-22T07:15:37.080022057Z
   modified_at: 2026-09-22T07:15:37.080022057Z
+- id: 01a0c7fd-e1b5-7140-a6ec-f2db8f93671b
+  author: joe
+  content: 'Cold independent review verdict for exact head b8fb3c17dd350b9bf4ef652069f2b7d61b632585: PASS on code and acceptance, with sequencing/CI gate. Independently reviewed the stacked delta against exact base a62a0ddf7cc20a55371d61c6fe81ef11a2554a7f (PR #2070): one file only, aida-cli-lib/src/queue_cmd.rs (73 insertions, 5 deletions); docs/autonomous-drain.md and --help surfaces are untouched, so BUG-1585 is excluded. Runtime notice resolves DrainTuning from the main worktree root; depth 1 alone says strictly one at a time, depth 2 reports resolved 2 and allows up to 2 in flight, and root lookup failure passes None to a value-free knob notice without failing the drain. Regression coverage is defect-sensitive: the depth-2 assertion rejects the old one-at-a-time text; focused tests passed independently (3/3), plus cargo fmt --all -- --check and git diff --check. GitHub merge-hold-gate is green for #2078. Sequencing: #2078 must remain stacked on and merge after #2070; #2070 substantive Build (ubuntu-latest) CI was still pending at review time, so this is not an unconditional merge-now verdict until that parent CI is green.'
+  created_at: 2026-09-22T07:21:39.509372975Z
+  modified_at: 2026-09-22T07:21:39.509372975Z
