@@ -56,5 +56,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:49:08.443039479Z
-modified_at: 2026-09-22T10:30:21.955072117Z
+modified_at: 2026-09-22T10:31:31.492928857Z
 req_type: Bug
+comments:
+- id: 01a0c8ab-b5a4-7560-aede-66d78044feb8
+  author: joe
+  content: "ARCHITECTURE SKETCH — diagnosis and proposed contract. The observed 3m53s–5m49s jitter is consistent with repeated foreground error: \"aida do needs a terminal for the interactive implementer — run it from your shell, or add --no-human=both for a headless implementer. (`aida queue work --auto-complete` has the same requirement.)\"\nhelp: aida queue work --auto-complete calls from a long-lived agent/supervisor turn, not an OS interval scheduler. Each short no-op run writes QueueDrained + last-drain then cleanly removes drain-state/lock, so supported live probes are correctly empty between invocations; last_drain::should_show additionally suppresses shipped=0/shelved=0/skipped=0, making the only durable diagnostic invisible. Proposed bounded change: (1) extend  backward-compatibly with optional provenance captured at invocation (, process start identity already available via process_probe, parent pid/argv or explicit launcher label where available) and ; (2) update the file by reading the prior outcome and incrementing only when the current run is idle, resetting on material outcome; (3) make status: none show every recent unacknowledged finished outcome, including idle, separately from live/stale state, with truthful wording \nwtmp begins Mon May 27 13:54:11 2024 and provenance; (4) JSON/TOON expose the same recent-finished object; (5) schedule list remains truthful and does not invent an OS service. Tests pin active, stopped/recent, stale PID, backward-compatible legacy file, idle streak/reset, and provenance. This preserves drain-state presence=>live-or-crashed and avoids pgrep heuristics. Requesting master sign-off before contract edits. trace:BUG-1548 | ai:codex"
+  created_at: 2026-09-22T10:31:31.492928857Z
+  modified_at: 2026-09-22T10:31:31.492928857Z
