@@ -63,3 +63,10 @@
   note: advisor-cleared at filing
   added_at: 2026-09-22T14:23:27.137620774Z
   for_role: reviewer
+- user_id: joe
+  requirement_id: 01a0c980-16af-7970-89ea-974a57d9cd33
+  position: 34000
+  added_by: joe
+  note: advisor-cleared at filing
+  added_at: 2026-09-22T14:23:36.102501345Z
+  for_role: reviewer
