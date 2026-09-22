@@ -51,12 +51,12 @@ description: |-
        repeating silently. Six identical shipped=0 runs is a signal, not noise.
 
   NOT IN SCOPE: the reason shipped=0, which is the nine-refusals ceiling recorded separately. This spec is about a drain being invisible, not about it being idle.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:49:08.443039479Z
-modified_at: 2026-09-22T11:15:11.665393341Z
+modified_at: 2026-09-22T11:15:18.797457168Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -104,3 +104,21 @@ comments:
   content: '[aida:proxy-approval] verdict=APPROVE; reasoning=independent cold rereview approved exact head 70cabccefe784978663be55b41d8346977401ce7 after idle/provenance rework; material outcomes, capture-once invocation provenance, bounded recent status, safe fields, expiry and legacy compatibility verified; independent=yes; gates=Build ubuntu SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; timestamp=2026-09-22T04:15:11-07:00'
   created_at: 2026-09-22T11:15:11.665393341Z
   modified_at: 2026-09-22T11:15:11.665393341Z
+history:
+- id: 01a0c8d3-cc86-7833-9880-43d8b078da2e
+  author: aida-auto-bump
+  timestamp: 2026-09-22T11:15:18.790517403Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c8d3-cc8d-7ec2-956f-d4ec9be90af9
+  timestamp: 2026-09-22T11:15:18.797456522Z
+  agent: aida
+  commit_sha: e00f5d03cd29232b380239d8e824898a4532db1f
+  summary: Completed via merge e00f5d03
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T11:15:18.790255428Z
+  completion_sha: e00f5d03cd29232b380239d8e824898a4532db1f
