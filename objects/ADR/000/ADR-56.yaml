@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T15:03:10.284830825Z
-modified_at: 2026-09-22T15:08:11.825839641Z
+modified_at: 2026-09-22T15:49:52.766897304Z
 req_type: Decision
 tags:
 - adr-55
@@ -54,10 +54,10 @@ comments:
 
     ### 1. Error Taxonomy & Typed Classification
     - `EvaluatorErrorKind`:
-      - `Transient`: Transport resets, connection timeouts, DNS flaps, HTTP 429, HTTP 502/503/504.
-      - `Permanent`: HTTP 400 (Bad Request), 401/403 (Auth/Unauthorized), 404 (Not Found), and malformed response JSON schema.
+      - `Transient`: Transport resets, connection timeouts, DNS flaps, HTTP 429 (Too Many Requests), HTTP 502/503/504 (Server Errors). Eligible for retry if deadline budget allows; counts toward circuit breaker trips.
+      - `Permanent`: HTTP 400 (Bad Request), 401 (Unauthorized), 403 (Forbidden), 404 (Not Found), and malformed response JSON schema. Fails closed immediately without retry; **does not increment transient failure counters or trip the circuit breaker**.
       - `DeadlineExceeded`: Budget exhausted before completion.
-      - `CircuitOpen`: Circuit open, fast fallback without network IO.
+      - `CircuitOpen`: Circuit open, fast fail-closed fallback without network IO.
 
     ### 2. Deadline-Aware Retry Adapter (`DeadlineRetryAdapter`)
     - Wraps any `EvaluatorEngine` implementation.
@@ -68,7 +68,7 @@ comments:
 
     ### 3. Concurrency-Safe Circuit Breaker (`EvaluatorCircuitBreaker`)
     - Scoped per endpoint/model.
-    - States: `Closed` -> `Open` (after 3 consecutive transient failures, 30s cooldown) -> `Half-Open` (1 trial request).
+    - States: `Closed` -> `Open` (after 3 consecutive transient failures, 60-second cooldown) -> `Half-Open` (1 trial request).
     - Fails closed immediately without network IO when Open.
     - No blocking health probes on request critical path.
 
@@ -76,4 +76,4 @@ comments:
     - Emits structured telemetry for retry attempts, backoffs, circuit state transitions, and fallbacks.
     - Never silent drops: all fallbacks record fallback reason, latency, and status.
   created_at: 2026-09-22T15:08:11.825839641Z
-  modified_at: 2026-09-22T15:08:11.825839641Z
+  modified_at: 2026-09-22T15:49:52.766896936Z
