@@ -235,6 +235,78 @@ fn recording_key(m: &JsonObj) -> RecordingKey {
     )
 }
 
+fn same_reviewed_sha(a: &str, b: &str) -> bool {
+    let a = a.trim();
+    let b = b.trim();
+    let common = a.len().min(b.len());
+    common >= 7
+        && a.bytes().all(|c| c.is_ascii_hexdigit())
+        && b.bytes().all(|c| c.is_ascii_hexdigit())
+        && (a.eq_ignore_ascii_case(b)
+            || (a.len() < b.len() && b[..a.len()].eq_ignore_ascii_case(a))
+            || (b.len() < a.len() && a[..b.len()].eq_ignore_ascii_case(b)))
+}
+
+/// Explain an irreconcilable pair of independent verdicts at the artifact's
+/// current reviewed commit. Historical disagreement at an older commit is an
+/// audit trail, not a veto on a later review.
+// trace:BUG-1581 | ai:codex
+pub fn verdict_conflict_for_current_sha(body: &str) -> Option<String> {
+    let serde_json::Value::Object(obj) = serde_json::from_str(body).ok()? else {
+        return None;
+    };
+    let current_sha = round_sha(&obj)?;
+    let mut rounds: Vec<&JsonObj> = vec![&obj];
+    rounds.extend(
+        obj.get("rounds")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|v| v.as_object()),
+    );
+
+    let mut approvals = Vec::new();
+    let mut blockers = Vec::new();
+    for round in rounds {
+        let Some(_) = round_sha(round).filter(|sha| same_reviewed_sha(sha, &current_sha)) else {
+            continue;
+        };
+        let reviewer = round
+            .get("recorded_by")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("unknown reviewer")
+            .to_string();
+        match VerdictKind::parse(
+            round
+                .get("verdict")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default(),
+        ) {
+            VerdictKind::Approved => approvals.push(reviewer),
+            VerdictKind::RequestChanges | VerdictKind::Rejected => blockers.push(reviewer),
+            VerdictKind::Other => {}
+        }
+    }
+    approvals.sort();
+    approvals.dedup();
+    blockers.sort();
+    blockers.dedup();
+    let independent = approvals
+        .iter()
+        .any(|approved| blockers.iter().any(|blocked| approved != blocked));
+    if approvals.is_empty() || blockers.is_empty() || !independent {
+        return None;
+    }
+    Some(format!(
+        "conflicting review verdicts at {}: approved by {}; blocked by {}",
+        short_sha(&current_sha),
+        approvals.join(", "),
+        blockers.join(", ")
+    ))
+}
+
 fn surviving_against_previous_round(
     obj: &serde_json::Map<String, serde_json::Value>,
     current: &[String],
@@ -625,6 +697,34 @@ pub fn record_verdict(
     recorded_by: &str,
 ) -> std::io::Result<PathBuf> {
     let path = verdict_path(project_root, spec);
+    record_verdict_at_path(
+        project_root,
+        &path,
+        verdict,
+        reviewed_sha,
+        reviewed_branch,
+        summary,
+        findings,
+        recorded_by,
+    )
+}
+
+/// Record a verdict at an explicitly anchored artifact path. The orchestrator
+/// uses this for `PR-N.json`; sharing this boundary with spec-keyed records is
+/// what prevents the authoritative handshake from silently clobbering another
+/// reviewer's evidence.
+// trace:BUG-1581 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub fn record_verdict_at_path(
+    project_root: &Path,
+    path: &Path,
+    verdict: Option<&str>,
+    reviewed_sha: Option<&str>,
+    reviewed_branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    recorded_by: &str,
+) -> std::io::Result<PathBuf> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -694,7 +794,7 @@ pub fn record_verdict(
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
         .unwrap_or_else(|_| "{}".to_string());
     std::fs::write(&path, format!("{body}\n"))?;
-    Ok(path)
+    Ok(path.to_path_buf())
 }
 
 /// Where the branch tip sits relative to the commit the verdict named.

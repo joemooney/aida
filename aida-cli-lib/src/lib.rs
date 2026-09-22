@@ -50539,12 +50539,51 @@ fn local_verdict_blocks_merge(project_root: &std::path::Path, pr_number: u64) ->
     if !path.exists() {
         return false;
     }
+    // A disagreement is not a malformed/missing optional verdict: it is two
+    // valid, independent decisions that the merge seat must reconcile. Treat
+    // it as a hard stop even though the generic parser error fallback below
+    // remains permissive for legacy unreadable artifacts.
+    // trace:BUG-1581 | ai:codex
+    if std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|body| review_verdict::verdict_conflict_for_current_sha(&body))
+        .is_some()
+    {
+        return true;
+    }
     match read_verdict_file(&path) {
         Ok(auto_complete::ReviewerOutcome::Verdict(v)) => {
             !matches!(v, auto_complete::Verdict::Approved)
         }
         Ok(auto_complete::ReviewerOutcome::EscalatedToHuman { .. }) => true,
         Err(_) => false,
+    }
+}
+
+#[cfg(test)]
+mod bug_1581_merge_block_tests {
+    use super::*;
+
+    #[test]
+    fn local_merge_chokepoint_blocks_an_approved_top_level_with_opposition() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(".aida/review-verdicts/PR-2066.json");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            path,
+            r#"{
+              "verdict":"Approved",
+              "reviewed_sha":"ac772eaca9d389fa762a232156df996023bfdf7a",
+              "recorded_by":"reviewer-a",
+              "rounds":[{
+                "verdict":"RequestChanges",
+                "reviewed_sha":"ac772eaca9",
+                "recorded_by":"reviewer-b"
+              }]
+            }"#,
+        )
+        .unwrap();
+        assert!(local_verdict_blocks_merge(root.path(), 2066));
     }
 }
 
@@ -77550,22 +77589,28 @@ fn handle_review_record(
         // trace:BUG-1516 | ai:codex
         let recorded = review_verdict::read_recorded_verdict(&project_root, spec)
             .ok_or_else(|| anyhow::anyhow!("the verdict was written but could not be read back"))?;
-        let mut body = serde_json::json!({
-            "verdict": kind.label(),
-            "summary": summary.unwrap_or(""),
-            "mode": "orchestrator-phase-3",
-            "reviewed_sha": recorded.reviewed_sha,
-            "reviewed_branch": recorded.reviewed_branch,
-            "recorded_at": recorded.recorded_at,
-            "recorded_by": recorded.recorded_by,
-        });
-        let findings: Vec<_> = findings
-            .iter()
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .collect();
-        if !findings.is_empty() {
-            body["findings"] = serde_json::json!(findings);
+        review_verdict::record_verdict_at_path(
+            &project_root,
+            &handshake,
+            Some(kind.label()),
+            recorded.reviewed_sha.as_deref(),
+            recorded.reviewed_branch.as_deref(),
+            summary,
+            findings,
+            recorded.recorded_by.as_deref().unwrap_or(&recorded_by),
+        )
+        .with_context(|| format!("could not write {}", handshake.display()))?;
+        // The two artifacts describe the same act of review, so retain the
+        // spec record's timestamp byte-for-byte while preserving any displaced
+        // PR-keyed round through the shared writer above.
+        // trace:BUG-1581 | ai:codex
+        let mut body: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&handshake)
+                .with_context(|| format!("could not read {}", handshake.display()))?,
+        )?;
+        body["mode"] = serde_json::json!("orchestrator-phase-3");
+        if let Some(recorded_at) = recorded.recorded_at.as_deref() {
+            body["recorded_at"] = serde_json::json!(recorded_at);
         }
         std::fs::write(&handshake, format!("{}\n", serde_json::to_string(&body)?))
             .with_context(|| format!("could not write {}", handshake.display()))?;
@@ -85250,6 +85295,12 @@ fn read_verdict_file(
             "the reviewer session produced no verdict file — the review did not complete",
         )
     })?;
+    if let Some(conflict) = review_verdict::verdict_conflict_for_current_sha(&body) {
+        return Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
+            format!("{conflict} — refusing to select a winner; reconcile the independent reviews"),
+        ));
+    }
     let value: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
         auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::NoVerdict,

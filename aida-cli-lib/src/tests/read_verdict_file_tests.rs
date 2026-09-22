@@ -95,3 +95,32 @@ fn live_phase3_accepts_same_commit_with_safe_abbreviation() {
         ReviewerOutcome::Verdict(Verdict::Approved)
     );
 }
+
+// BUG-1581: this is the merge-facing parser, not merely the retention helper.
+// A top-level approval cannot become merge permission while an independent
+// blocking verdict for the same commit survives in the artifact.
+// trace:BUG-1581 | ai:codex
+#[test]
+fn merge_surface_refuses_conflicting_same_sha_verdicts_visibly() {
+    let err = read(
+        r#"{
+          "verdict":"Approved",
+          "reviewed_sha":"ac772eaca9d389fa762a232156df996023bfdf7a",
+          "recorded_by":"reviewer-a",
+          "rounds":[{
+            "verdict":"RequestChanges",
+            "reviewed_sha":"ac772eaca9",
+            "recorded_by":"reviewer-b"
+          }]
+        }"#,
+    )
+    .unwrap_err();
+    assert_eq!(err.kind, crate::auto_complete::FailureKind::NoVerdict);
+    assert!(
+        err.reason.contains("conflicting review verdicts"),
+        "{}",
+        err.reason
+    );
+    assert!(err.reason.contains("reviewer-a"), "{}", err.reason);
+    assert!(err.reason.contains("reviewer-b"), "{}", err.reason);
+}

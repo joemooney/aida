@@ -928,3 +928,87 @@ fn backfill_dry_run_reports_without_writing() {
         "dry-run must report what it would do without changing the file"
     );
 }
+
+// BUG-1581: two independent reviewers can reach opposite conclusions at the
+// same commit.  The retained evidence must make that disagreement explicit;
+// whichever review happened to be written last must not decide the answer.
+// trace:BUG-1581 | ai:codex
+#[test]
+fn same_sha_opposite_reviewers_conflict_in_either_artifact_order() {
+    let approved = serde_json::json!({
+        "verdict": "approved",
+        "reviewed_sha": "ac772eaca9d389fa762a232156df996023bfdf7a",
+        "recorded_by": "reviewer-a"
+    });
+    let blocked = serde_json::json!({
+        "verdict": "request-changes",
+        "reviewed_sha": "ac772eaca9",
+        "recorded_by": "reviewer-b"
+    });
+
+    for (current, archived) in [(&approved, &blocked), (&blocked, &approved)] {
+        let mut artifact = current.clone();
+        artifact["rounds"] = serde_json::json!([archived]);
+        let conflict = verdict_conflict_for_current_sha(&artifact.to_string())
+            .expect("opposite verdicts by different reviewers at one sha must conflict");
+        assert!(conflict.contains("reviewer-a"), "{conflict}");
+        assert!(conflict.contains("reviewer-b"), "{conflict}");
+    }
+}
+
+// trace:BUG-1581 | ai:codex
+#[test]
+fn stale_opposite_and_non_opposing_current_rounds_are_controls() {
+    let stale = serde_json::json!({
+        "verdict": "request-changes",
+        "reviewed_sha": "1111111111111111111111111111111111111111",
+        "recorded_by": "reviewer-b"
+    });
+    let same_verdict = serde_json::json!({
+        "verdict": "approved",
+        "reviewed_sha": "222222222",
+        "recorded_by": "reviewer-b"
+    });
+    let current = serde_json::json!({
+        "verdict": "approved",
+        "reviewed_sha": "2222222222222222222222222222222222222222",
+        "recorded_by": "reviewer-a",
+        "rounds": [stale, same_verdict]
+    });
+    assert_eq!(verdict_conflict_for_current_sha(&current.to_string()), None);
+}
+
+// trace:BUG-1581 | ai:codex
+#[test]
+fn explicit_path_writer_preserves_displaced_reviewer_evidence() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join(".aida/review-verdicts/PR-2066.json");
+    record_verdict_at_path(
+        tmp.path(),
+        &path,
+        Some("approved"),
+        Some("ac772eaca9"),
+        Some("topic"),
+        Some("first"),
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+    record_verdict_at_path(
+        tmp.path(),
+        &path,
+        Some("request-changes"),
+        Some("ac772eaca9"),
+        Some("topic"),
+        Some("second"),
+        &["real omission".into()],
+        "reviewer-b",
+    )
+    .unwrap();
+
+    let body = std::fs::read_to_string(path).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(value["rounds"][0]["recorded_by"], "reviewer-a");
+    assert_eq!(value["rounds"][0]["verdict"], "approved");
+    assert!(verdict_conflict_for_current_sha(&body).is_some());
+}
