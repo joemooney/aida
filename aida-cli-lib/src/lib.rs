@@ -85084,22 +85084,23 @@ fn spec_verdict_fallback_for_phase3(
     project_root: &std::path::Path,
     spec: &str,
     reviewer_started_at: std::time::SystemTime,
+    current_head: Option<&str>,
 ) -> Option<auto_complete::ReviewerOutcome> {
     let path = review_verdict::verdict_path(project_root, spec);
     let mtime = std::fs::metadata(&path).ok()?.modified().ok()?;
     if mtime < reviewer_started_at {
         return None; // stale: recorded by some earlier review, not this one
     }
+    let outcome = read_verdict_file_for_head(&path, current_head).ok()?;
     let body = std::fs::read_to_string(&path).ok()?;
     let rec = review_verdict::parse_recorded_verdict(&body)?;
-    let verdict = auto_complete::Verdict::parse(rec.kind.label())?;
     eprintln!(
         "  {} no PR-keyed verdict file, but the reviewer recorded {} for {} during this session — accepting it",
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
         rec.kind.label(),
         spec
     );
-    Some(auto_complete::ReviewerOutcome::Verdict(verdict))
+    Some(outcome)
 }
 
 /// BUG-809: last-ditch verdict discovery when both the PR-keyed file and the
@@ -85120,6 +85121,7 @@ fn sibling_verdict_sweep_for_phase3(
     pr: u32,
     spec: &str,
     reviewer_started_at: std::time::SystemTime,
+    current_head: Option<&str>,
 ) -> Option<auto_complete::ReviewerOutcome> {
     let root_canon = project_root.canonicalize().ok()?;
     let parent = root_canon.parent()?;
@@ -85150,17 +85152,8 @@ fn sibling_verdict_sweep_for_phase3(
         }
     }
     candidates.sort_by(|a, b| b.0.cmp(&a.0));
-    for (_, cand, is_pr) in candidates {
-        let outcome = if is_pr {
-            read_verdict_file(&cand).ok()
-        } else {
-            std::fs::read_to_string(&cand)
-                .ok()
-                .as_deref()
-                .and_then(review_verdict::parse_recorded_verdict)
-                .and_then(|rec| auto_complete::Verdict::parse(rec.kind.label()))
-                .map(auto_complete::ReviewerOutcome::Verdict)
-        };
+    for (_, cand, _is_pr) in candidates {
+        let outcome = read_verdict_file_for_head(&cand, current_head).ok();
         let Some(outcome) = outcome else { continue };
         // Copy back to the canonical location (best-effort): audit trail +
         // the STORY-439 calibration tag-along both read the drive root.
@@ -88704,10 +88697,14 @@ impl RealPhaseDriver {
         let outcome = match read_verdict_file_for_head(&verdict_path, gate_head_sha.as_deref()) {
             Ok(o) => o,
             Err(primary_failure) => {
+                if verdict_path.is_file() {
+                    return Err(primary_failure);
+                }
                 if let Some(o) = spec_verdict_fallback_for_phase3(
                     &self.project_root,
                     &self.spec,
                     gate_started_at,
+                    gate_head_sha.as_deref(),
                 )
                 .or_else(|| {
                     sibling_verdict_sweep_for_phase3(
@@ -88715,6 +88712,7 @@ impl RealPhaseDriver {
                         pr,
                         &self.spec,
                         gate_started_at,
+                        gate_head_sha.as_deref(),
                     )
                 }) {
                     o
@@ -90628,6 +90626,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             match read_verdict_file_for_head(&verdict_path, pre_review_head_sha.as_deref()) {
                 Ok(o) => o,
                 Err(primary_failure) => {
+                    if verdict_path.is_file() {
+                        return Err(primary_failure);
+                    }
                     // BUG-806: the spec-keyed record, when fresh, IS the verdict.
                     // BUG-809: failing that, sweep sibling checkouts — the env
                     // anchor does not reliably survive a vendor tool sandbox.
@@ -90635,6 +90636,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         &self.project_root,
                         &self.spec,
                         reviewer_started_at,
+                        pre_review_head_sha.as_deref(),
                     )
                     .or_else(|| {
                         sibling_verdict_sweep_for_phase3(
@@ -90642,6 +90644,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                             pr,
                             &self.spec,
                             reviewer_started_at,
+                            pre_review_head_sha.as_deref(),
                         )
                     }) {
                         o
