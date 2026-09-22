@@ -175,7 +175,7 @@ pub fn write_object_if_changed(objects_root: &Path, req: &Requirement) -> Result
     // spuriously rewrite an unchanged file. trace:TASK-346 | ai:claude
     if path.exists() {
         if let Ok(existing) = crate::read_atomic(&path) {
-            if crate::scaffolding::generated_text_matches(&existing, &yaml) {
+            if crate::scaffolding::generated_text_matches_exact(&existing, &yaml) {
                 return Ok(false);
             }
         }
@@ -548,6 +548,14 @@ mod tests {
         std::fs::write(&path, lf.replace('\n', "\r\n")).unwrap();
 
         assert!(!write_object_if_changed(&objects_root, &req).unwrap());
+
+        let canonical = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, format!("{canonical}  ")).unwrap();
+        assert!(
+            write_object_if_changed(&objects_root, &req).unwrap(),
+            "terminal whitespace violates the byte-stable external-writer contract"
+        );
+
         req.title = "Actually changed".into();
         assert!(write_object_if_changed(&objects_root, &req).unwrap());
     }

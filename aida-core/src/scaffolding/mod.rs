@@ -314,6 +314,14 @@ pub fn generated_text_matches(actual: &str, expected: &str) -> bool {
     normalize_lf(actual).trim_end() == normalize_lf(expected).trim_end()
 }
 
+/// Compare generated text after newline normalization while preserving every
+/// other byte distinction. Use this for canonical formats whose external-writer
+/// contract requires whitespace drift to be repaired rather than tolerated.
+// trace:BUG-1555 | ai:codex
+pub fn generated_text_matches_exact(actual: &str, expected: &str) -> bool {
+    normalize_lf(actual) == normalize_lf(expected)
+}
+
 /// Rewrite a FLAT `.claude/skills/<name>.md` artifact path to the directory
 /// form `.claude/skills/<name>/SKILL.md`.
 ///
@@ -3239,6 +3247,16 @@ mod tests {
         assert!(generated_text_matches("one\r\ntwo\r\n", "one\ntwo\n"));
         assert!(generated_text_matches("one\rtwo\r", "one\ntwo\n"));
         assert!(!generated_text_matches("one\r\nchanged\r\n", "one\ntwo\n"));
+    }
+
+    #[test]
+    fn exact_generated_text_comparison_preserves_terminal_whitespace() {
+        assert!(generated_text_matches_exact("one\r\ntwo\r\n", "one\ntwo\n"));
+        assert!(!generated_text_matches_exact(
+            "one\r\ntwo  \r\n",
+            "one\ntwo\n"
+        ));
+        assert!(!generated_text_matches_exact("one\ntwo\n\n", "one\ntwo\n"));
     }
     use tempfile::TempDir;
 
