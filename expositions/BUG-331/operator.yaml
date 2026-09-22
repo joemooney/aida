@@ -1,0 +1,75 @@
+schema_version: 1
+spec_id: BUG-331
+audience: operator
+title: 'Substrate gap: sibling worktrees fall back to centralized mode because .aida-store detection doesn''t traverse up the worktree tree'
+summary: 'When AIDA operates from a sibling worktree (the `git worktree add /path -b branch main` pattern used by the orchestrator + our manual PR isolation flows + per the worktree-hygiene discipline), the canonical-store detection fails:'
+rationale: 'Provides implementation and governance for ''Substrate gap: sibling worktrees fall back to centralized mode because .aida-store detection doesn''t traverse up the worktree tree''.'
+key_constraints:
+- The git-canonical mode looks for `.aida-store/` (the orphan-branch worktree) in the current directory
+- Sibling worktrees don't have their own `.aida-store/` — they inherit from `/path/to/main-worktree/.aida-store/` conceptually
+- AIDA's current detection logic doesn't traverse the git-worktree tree to find the canonical store at the main worktree
+- 'Result: AIDA falls back to the deprecated centralized SQLite/YAML mode silently'
+- '**Multi-agent coordination assumes git-canonical mode** — the MCP coordination tools (claim_task, file_finding, post_punt, etc.) rely on the git-canonical store. If sibling worktrees use the deprecated centralized mode, cross-worktree visibility is inconsistent.'
+- '**`aida queue work --auto-complete` creates sibling worktrees** — the orchestrator''s spec worktrees would hit this same fallback. Today''s drains have been working DESPITE this fallback (the orchestrator routes some operations through main-worktree paths), but the architectural mismatch is real.'
+- '**The "agent-agnostic substrate" claim weakens** if it only works from one specific directory.'
+- AIDA's canonical-store detection walks up the git-worktree tree (via `git worktree list --porcelain` or equivalent) to find the main worktree, then locates `.aida-store/` there.
+- From any sibling worktree, AIDA operations route through the canonical store at the main worktree's `.aida-store/` — no fallback to centralized mode unless the user explicitly opts in.
+- The symlink workaround Antigravity documented becomes obsolete; doc gets updated to remove the symlink instructions.
+- 'Regression tests: synthetic sibling-worktree fixture; assert canonical-store operations work without symlink intervention.'
+- Composes with the existing per-worktree `.aida/` (cache, sessions, etc.) which stays local — only the canonical store needs cross-worktree detection.
+- Cross-repository / cross-project worktree detection (intentionally narrow — sibling-worktree-of-same-project is the case).
+- Replacing the deprecated centralized mode (still warned-on init; this BUG just stops accidentally using it from sibling worktrees).
+- '**STORY-407 Phase 2** — surfaced this gap empirically; documented as Phase 2 condition.'
+- '**PR-187** (Antigravity setup doc) — currently documents the symlink workaround; will need a follow-up edit to point at this BUG once it ships and remove the symlink narrative.'
+- '**Memory `feedback_one_master_advisor_until_subsystems`** — substrate-detection from sibling worktrees is architecture-class; sign-off discussion on the fix''s shape worth having.'
+tradeoffs: []
+open_questions: []
+acceptance_criteria_citations:
+- criterion_id: AC-1
+  plain_summary: The git-canonical mode looks for `.aida-store/` (the orphan-branch worktree) in the current directory
+- criterion_id: AC-2
+  plain_summary: Sibling worktrees don't have their own `.aida-store/` — they inherit from `/path/to/main-worktree/.aida-store/` conceptually
+- criterion_id: AC-3
+  plain_summary: AIDA's current detection logic doesn't traverse the git-worktree tree to find the canonical store at the main worktree
+- criterion_id: AC-4
+  plain_summary: 'Result: AIDA falls back to the deprecated centralized SQLite/YAML mode silently'
+- criterion_id: AC-5
+  plain_summary: '**Multi-agent coordination assumes git-canonical mode** — the MCP coordination tools (claim_task, file_finding, post_punt, etc.) rely on the git-canonical store. If sibling worktrees use the deprecated centralized mode, cross-worktree visibility is inconsistent.'
+- criterion_id: AC-6
+  plain_summary: '**`aida queue work --auto-complete` creates sibling worktrees** — the orchestrator''s spec worktrees would hit this same fallback. Today''s drains have been working DESPITE this fallback (the orchestrator routes some operations through main-worktree paths), but the architectural mismatch is real.'
+- criterion_id: AC-7
+  plain_summary: '**The "agent-agnostic substrate" claim weakens** if it only works from one specific directory.'
+- criterion_id: AC-8
+  plain_summary: AIDA's canonical-store detection walks up the git-worktree tree (via `git worktree list --porcelain` or equivalent) to find the main worktree, then locates `.aida-store/` there.
+- criterion_id: AC-9
+  plain_summary: From any sibling worktree, AIDA operations route through the canonical store at the main worktree's `.aida-store/` — no fallback to centralized mode unless the user explicitly opts in.
+- criterion_id: AC-10
+  plain_summary: The symlink workaround Antigravity documented becomes obsolete; doc gets updated to remove the symlink instructions.
+- criterion_id: AC-11
+  plain_summary: 'Regression tests: synthetic sibling-worktree fixture; assert canonical-store operations work without symlink intervention.'
+- criterion_id: AC-12
+  plain_summary: Composes with the existing per-worktree `.aida/` (cache, sessions, etc.) which stays local — only the canonical store needs cross-worktree detection.
+- criterion_id: AC-13
+  plain_summary: Cross-repository / cross-project worktree detection (intentionally narrow — sibling-worktree-of-same-project is the case).
+- criterion_id: AC-14
+  plain_summary: Replacing the deprecated centralized mode (still warned-on init; this BUG just stops accidentally using it from sibling worktrees).
+- criterion_id: AC-15
+  plain_summary: '**STORY-407 Phase 2** — surfaced this gap empirically; documented as Phase 2 condition.'
+- criterion_id: AC-16
+  plain_summary: '**PR-187** (Antigravity setup doc) — currently documents the symlink workaround; will need a follow-up edit to point at this BUG once it ships and remove the symlink narrative.'
+- criterion_id: AC-17
+  plain_summary: '**Memory `feedback_one_master_advisor_until_subsystems`** — substrate-detection from sibling worktrees is architecture-class; sign-off discussion on the fix''s shape worth having.'
+provenance:
+  generator: template-extract
+  generated_at: 2026-09-22T16:52:45.342740750+00:00
+  source_hash: sha256:18d0fa1293ee6c8ad59276a7a27a8456fb0b0f6d00dd9182e8641d86a9fadd8f
+  closure_spec_ids: []
+audit:
+  evaluator: mechanical-audit
+  evaluated_at: 2026-09-22T16:52:45.343337919+00:00
+  readability_score: 0.88
+  jargon_saturation_score: 0.1
+  constraint_preservation_score: 0.95
+  deterministic_checks_passed: true
+  needs_revision: false
+  findings: []

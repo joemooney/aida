@@ -1,0 +1,30 @@
+schema_version: 1
+spec_id: TASK-1436
+audience: operator
+title: Implement aida explain with freshness, provenance, and human-edit protection
+summary: 'Implement CLI command aida explain <SPEC> [--audience <ROLE>] [--refresh] [--json]. Saves generated expositions to sidecar YAML; computes stale status from SHA-256 closure hash; preserves human edits under human_reviewed: true while maintaining stale detection.'
+rationale: Provides implementation and governance for 'Implement aida explain with freshness, provenance, and human-edit protection'.
+key_constraints:
+- Implement as specified in canonical requirement body.
+tradeoffs: []
+open_questions: []
+acceptance_criteria_citations: []
+provenance:
+  generator: template-extract
+  generated_at: 2026-09-22T16:52:43.332735510+00:00
+  source_hash: sha256:a058531e8e59684d09087b74b1c0a8c0130bfeac5ba0724f72cbbb599530bae4
+  closure_spec_ids:
+  - EPIC-72
+  - TASK-1435
+  - TASK-1437
+  - TASK-1438
+  - TASK-1439
+audit:
+  evaluator: mechanical-audit
+  evaluated_at: 2026-09-22T16:52:43.332870744+00:00
+  readability_score: 0.88
+  jargon_saturation_score: 0.0
+  constraint_preservation_score: 0.95
+  deterministic_checks_passed: true
+  needs_revision: false
+  findings: []

@@ -1,0 +1,55 @@
+schema_version: 1
+spec_id: TASK-1430
+audience: operator
+title: Implement deadline-aware async retry adapter for EvaluatorEngine
+summary: |-
+  CONTEXT:
+  Under ADR-56, remote evaluators must not rely on unconstrained client timeouts. A caller-specified deadline (e.g. 2–5s for review-context preparation) must govern total execution time across all retry attempts.
+rationale: |-
+  Under ADR-56, remote evaluators must not rely on unconstrained client timeouts. A caller-specified deadline (e.g. 2–5s for review-context preparation) must govern total execution time across all retry attempts.
+
+  REQUIREMENTS:
+  - Implement a generic async retry wrapper DeadlineRetryAdapter wrapping EvaluatorEngine.
+  - Takes an operation deadline Duration or Instant from the caller.
+  - Enforces deadline cutoff: aborts and falls back if remaining time budget is exhausted (< 500ms).
+  - Performs max 1–2 retries with backoff only for classified transient errors.
+  - Integrates idempotency keys on requests to prevent duplicate billing.
+  - Fails closed to caller when budget expires (PRIN-5).
+key_constraints:
+- Implement a generic async retry wrapper DeadlineRetryAdapter wrapping EvaluatorEngine.
+- Takes an operation deadline Duration or Instant from the caller.
+- 'Enforces deadline cutoff: aborts and falls back if remaining time budget is exhausted (< 500ms).'
+- Performs max 1–2 retries with backoff only for classified transient errors.
+- Integrates idempotency keys on requests to prevent duplicate billing.
+- Fails closed to caller when budget expires (PRIN-5).
+tradeoffs: []
+open_questions: []
+acceptance_criteria_citations:
+- criterion_id: AC-1
+  plain_summary: Implement a generic async retry wrapper DeadlineRetryAdapter wrapping EvaluatorEngine.
+- criterion_id: AC-2
+  plain_summary: Takes an operation deadline Duration or Instant from the caller.
+- criterion_id: AC-3
+  plain_summary: 'Enforces deadline cutoff: aborts and falls back if remaining time budget is exhausted (< 500ms).'
+- criterion_id: AC-4
+  plain_summary: Performs max 1–2 retries with backoff only for classified transient errors.
+- criterion_id: AC-5
+  plain_summary: Integrates idempotency keys on requests to prevent duplicate billing.
+- criterion_id: AC-6
+  plain_summary: Fails closed to caller when budget expires (PRIN-5).
+provenance:
+  generator: template-extract
+  generated_at: 2026-09-22T16:52:39.298472217+00:00
+  source_hash: sha256:bf6f4941a38e0c7fc7a827c7b3f76e316964d7b7ab6386431ee9e4a2fd319f91
+  closure_spec_ids:
+  - ADR-56
+  - TASK-1433
+audit:
+  evaluator: mechanical-audit
+  evaluated_at: 2026-09-22T16:52:39.298705164+00:00
+  readability_score: 0.88
+  jargon_saturation_score: 0.0
+  constraint_preservation_score: 0.95
+  deterministic_checks_passed: true
+  needs_revision: false
+  findings: []

@@ -1,0 +1,28 @@
+schema_version: 1
+spec_id: BUG-1418
+audience: operator
+title: The drain exit record reports zero tokens for 57 of 92 drains, indistinguishably from a genuine zero, so it cannot be used as a cost ledger
+summary: 'The drain-exit record cannot be used as a cost ledger. Measured 2026-09-19 across the 92 valid `drain_summary` records in ~/.aida/usage.jsonl: 57 carry zero tokens (62%) while the 35 nonzero ones carry 538,786,359. Any per-drain, per-outcome or per-role cost figure computed from this file today is wrong by an unknown and non-uniform amount.'
+rationale: Provides implementation and governance for 'The drain exit record reports zero tokens for 57 of 92 drains, indistinguishably from a genuine zero, so it cannot be used as a cost ledger'.
+key_constraints:
+- Implement as specified in canonical requirement body.
+tradeoffs: []
+open_questions: []
+acceptance_criteria_citations: []
+provenance:
+  generator: template-extract
+  generated_at: 2026-09-22T16:52:49.392840456+00:00
+  source_hash: sha256:ab877a8317c86531da1bbc9738dfc8b65708433093dde62af33bcbaa88654d3b
+  closure_spec_ids:
+  - PRIN-4
+  - SPIKE-83
+  - STORY-1459
+audit:
+  evaluator: mechanical-audit
+  evaluated_at: 2026-09-22T16:52:49.393283522+00:00
+  readability_score: 0.88
+  jargon_saturation_score: 0.0
+  constraint_preservation_score: 0.95
+  deterministic_checks_passed: true
+  needs_revision: false
+  findings: []

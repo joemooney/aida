@@ -1,0 +1,41 @@
+schema_version: 1
+spec_id: ADR-56
+audience: operator
+title: 'Remote evaluator resilience contract: failure taxonomy, deadlines, circuit breaker, and telemetry'
+summary: |-
+  CONTEXT & MOTIVATION:
+  AIDA integrates remote evaluator backends (such as TypeSafe AI's Jev HTTP API, local LLM endpoints, and future evaluators) into its quality-gating substrate (ADR-55). Currently, JevEvaluator relies on a single raw HTTP POST request with a flat 15s timeout. While PRIN-5 ensures that failures fail closed, transient network glitches cause unnecessary fallback to expensive conversational reviewers. Conversely, retrying without operation budgets risks blowing past caller deadlines or duplicating billable evaluations.
+rationale: |-
+  AIDA integrates remote evaluator backends (such as TypeSafe AI's Jev HTTP API, local LLM endpoints, and future evaluators) into its quality-gating substrate (ADR-55). Currently, JevEvaluator relies on a single raw HTTP POST request with a flat 15s timeout. While PRIN-5 ensures that failures fail closed, transient network glitches cause unnecessary fallback to expensive conversational reviewers. Conversely, retrying without operation budgets risks blowing past caller deadlines or duplicating billable evaluations.
+
+  DECISIONS:
+  1. Define a reusable remote evaluator resilience contract decoupled from backend-specific logic.
+  2. Failure Taxonomy & Typed Classification: Classify errors via structured HTTP status codes and transport errors. Transient: transport resets, DNS flaps, HTTP 429, HTTP 502/503/504. Permanent: HTTP 400, 401, 403, 404, malformed schemas.
+  3. Deadline-Aware Budgeting: Every evaluator invocation carries an operation deadline. Retries are only attempted if remaining deadline budget allows (>= 500ms remaining).
+  4. Idempotency & Duplicate Charge Protection: Retries enforce idempotency headers/keys where supported, avoiding duplicate charges.
+  5. Circuit Breaker: Endpoint/model-scoped, concurrency-safe (Closed -> Open -> Half-Open). Trips fast fallback without blocking health probes on the critical path.
+  6. Structured Observability: Emit structured events for retry attempts, circuit state changes, and fallback triggers (never silent drops).
+key_constraints:
+- Implement as specified in canonical requirement body.
+tradeoffs: []
+open_questions: []
+acceptance_criteria_citations: []
+provenance:
+  generator: template-extract
+  generated_at: 2026-09-22T16:52:53.448644202+00:00
+  source_hash: sha256:6ef3f5ef1bd2345d503f21adb54b2f3f2eb4a94ad1718d80747f08ee3843f89f
+  closure_spec_ids:
+  - ADR-55
+  - TASK-1430
+  - TASK-1431
+  - TASK-1432
+  - TASK-1433
+audit:
+  evaluator: mechanical-audit
+  evaluated_at: 2026-09-22T16:52:53.448967021+00:00
+  readability_score: 0.88
+  jargon_saturation_score: 0.1
+  constraint_preservation_score: 0.95
+  deterministic_checks_passed: true
+  needs_revision: false
+  findings: []

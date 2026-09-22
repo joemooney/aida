@@ -1,0 +1,31 @@
+schema_version: 1
+spec_id: EPIC-72
+audience: operator
+title: Human-Centric Spec Exposition & Living Project Wiki
+summary: Establish a derived human exposition layer and living wiki projection to translate dense machine-authored specs into accessible, plain-language explanations for operators, product owners, and contributors without altering canonical requirements.
+rationale: Provides implementation and governance for 'Human-Centric Spec Exposition & Living Project Wiki'.
+key_constraints:
+- Implement as specified in canonical requirement body.
+tradeoffs: []
+open_questions: []
+acceptance_criteria_citations: []
+provenance:
+  generator: template-extract
+  generated_at: 2026-09-22T16:52:27.159632376+00:00
+  source_hash: sha256:38cc777c15ca7c69500011fd46fb6e283734c45e9d0d09752b0ff05f79c3fc12
+  closure_spec_ids:
+  - TASK-1435
+  - TASK-1436
+  - TASK-1437
+  - TASK-1438
+  - TASK-1439
+  - TASK-1440
+audit:
+  evaluator: mechanical-audit
+  evaluated_at: 2026-09-22T16:52:27.159775363+00:00
+  readability_score: 0.88
+  jargon_saturation_score: 0.0
+  constraint_preservation_score: 0.95
+  deterministic_checks_passed: true
+  needs_revision: false
+  findings: []

@@ -1,0 +1,27 @@
+schema_version: 1
+spec_id: TASK-1435
+audience: operator
+title: 'Architecture spike: define exposition sidecar schema, SHA-256 drift hashing, and bounded closure'
+summary: Define the sidecar YAML schema at .aida-store/expositions/<SPEC-ID>/<audience>.yaml, SHA-256 canonical serialization hash, and bounded graph-closure depth (depth-1 immediate parents, blockers, decisions) to avoid uncontrolled cache invalidation.
+rationale: 'Provides implementation and governance for ''Architecture spike: define exposition sidecar schema, SHA-256 drift hashing, and bounded closure''.'
+key_constraints:
+- Implement as specified in canonical requirement body.
+tradeoffs: []
+open_questions: []
+acceptance_criteria_citations: []
+provenance:
+  generator: template-extract
+  generated_at: 2026-09-22T16:52:41.334099246+00:00
+  source_hash: sha256:0f4432db9e54f402b2e0a1d6a8f276bd80ddcc4ae44d0fb5cfe4c77a5a7980ab
+  closure_spec_ids:
+  - EPIC-72
+  - TASK-1436
+audit:
+  evaluator: mechanical-audit
+  evaluated_at: 2026-09-22T16:52:41.334273378+00:00
+  readability_score: 0.88
+  jargon_saturation_score: 0.0
+  constraint_preservation_score: 0.95
+  deterministic_checks_passed: true
+  needs_revision: false
+  findings: []
