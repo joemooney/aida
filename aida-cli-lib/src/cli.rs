@@ -3789,6 +3789,15 @@ pub enum StoreCommand {
 // trace:EPIC-19 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum DoctorCommand {
+    /// Find prose that may have lost backticked text to shell command
+    /// substitution. Reports only; candidates require human inspection.
+    // trace:TASK-190 | ai:codex
+    ShellSubstitutionHoles {
+        /// Omit a spec whose own documentation quotes detector examples.
+        #[clap(long, value_name = "SPEC-ID")]
+        exclude: Vec<String>,
+    },
+
     /// Focused multi-agent drift diagnostic for one category.
     // trace:STORY-462 | ai:codex
     Check {
@@ -4468,6 +4477,15 @@ pub enum CommentCommand {
         #[clap(name = "CONTENT")]
         content_positional: Option<String>,
 
+        /// Read comment content from a file. Prefer this for text containing
+        /// backticks or `$()` so the shell cannot perform command substitution.
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["content", "content_positional", "stdin"])]
+        body_file: Option<PathBuf>,
+
+        /// Read comment content from stdin.
+        #[clap(long, conflicts_with_all = ["content", "content_positional", "body_file"])]
+        stdin: bool,
+
         /// Author of the comment (defaults to AIDA_AUTHOR env var or system user)
         #[clap(long)]
         author: Option<String>,
@@ -4501,6 +4519,15 @@ pub enum CommentCommand {
         // trace:BUG-1294 | ai:claude
         #[clap(long, allow_hyphen_values = true)]
         content: Option<String>,
+
+        /// Read replacement content from a file. Prefer this for text
+        /// containing backticks or `$()`.
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["content", "stdin", "interactive"])]
+        body_file: Option<PathBuf>,
+
+        /// Read replacement content from stdin.
+        #[clap(long, conflicts_with_all = ["content", "body_file", "interactive"])]
+        stdin: bool,
 
         /// Use interactive mode (prompts)
         #[clap(long)]

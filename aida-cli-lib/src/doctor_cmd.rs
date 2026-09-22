@@ -96,6 +96,86 @@ pub(crate) fn handle_doctor_command(
         } => doctor_validate_trace_comments(*strip_dangling, *dry_run, *yes),
         cli::DoctorCommand::Fsck => doctor_fsck(),
         cli::DoctorCommand::ConventionCheck { quiet } => doctor_convention_check(*quiet),
+        cli::DoctorCommand::ShellSubstitutionHoles { exclude } => {
+            doctor_shell_substitution_holes(exclude)
+        }
+    }
+}
+
+// The rules intentionally match only anomalies that cannot be explained by a
+// wrapped prose line. A broad "two spaces" rule produces table/code noise and
+// cannot distinguish a typo from lost command-substitution text.
+// trace:TASK-190 | ai:codex
+fn shell_substitution_hole_kind(line: &str) -> Option<&'static str> {
+    let bytes = line.as_bytes();
+    if bytes
+        .windows(2)
+        .any(|pair| matches!(pair, b"(," | b"[," | b"{,"))
+    {
+        return Some("opening bracket followed by comma");
+    }
+    for (index, window) in bytes.windows(3).enumerate() {
+        if window == b"'s " {
+            let rest = &bytes[index + 3..];
+            let spaces = rest.iter().take_while(|byte| **byte == b' ').count();
+            if spaces >= 1 && rest.get(spaces).is_some_and(u8::is_ascii_lowercase) {
+                return Some("possessive followed by same-line gap");
+            }
+        }
+    }
+    None
+}
+
+fn doctor_shell_substitution_holes(exclude: &[String]) -> Result<()> {
+    let objects_root = find_project_root()?.join(".aida-store").join("objects");
+    if !objects_root.exists() {
+        println!("(no objects/ tree — nothing to check)");
+        return Ok(());
+    }
+    let reqs = aida_core::object_store::load_all_objects(&objects_root)?;
+    let mut count = 0usize;
+    for req in reqs {
+        let id = req.spec_id.as_deref().unwrap_or("<unknown>");
+        if exclude.iter().any(|excluded| excluded == id) {
+            continue;
+        }
+        let fields = std::iter::once(("description", req.description.as_str())).chain(
+            req.comments
+                .iter()
+                .map(|comment| ("comment", comment.content.as_str())),
+        );
+        for (field, body) in fields {
+            for (line_number, line) in body.lines().enumerate() {
+                if let Some(kind) = shell_substitution_hole_kind(line) {
+                    count += 1;
+                    println!("{id}:{field}:{}: {kind}: {}", line_number + 1, line.trim());
+                }
+            }
+        }
+    }
+    println!("{count} candidate(s); inspect before repairing (this check never writes)");
+    Ok(())
+}
+
+#[cfg(test)]
+mod task_190_tests {
+    use super::shell_substitution_hole_kind;
+
+    #[test]
+    fn known_shell_substitution_holes_are_detected() {
+        assert!(shell_substitution_hole_kind("trigger (, RealPhaseDriver)").is_some());
+        assert!(shell_substitution_hole_kind("creator's  through forge").is_some());
+    }
+
+    #[test]
+    fn wrapping_tables_and_ordinary_spacing_are_not_candidates() {
+        assert_eq!(shell_substitution_hole_kind("the  next step"), None);
+        assert_eq!(shell_substitution_hole_kind("name    value"), None);
+        assert_eq!(
+            shell_substitution_hole_kind("owner's\n  implementation"),
+            None
+        );
+        assert_eq!(shell_substitution_hole_kind("call `date` safely"), None);
     }
 }
 

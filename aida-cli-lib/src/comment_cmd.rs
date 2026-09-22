@@ -24,15 +24,21 @@ pub(crate) fn handle_comment_command(cmd: &CommentCommand, storage: &Storage) ->
             id,
             content,
             content_positional,
+            body_file,
+            stdin,
             author,
             parent,
             interactive,
         } => {
             // Use --content flag if provided, otherwise use positional argument
-            let effective_content = content.as_ref().or(content_positional.as_ref());
+            let effective_content = resolve_body(
+                content.clone().or_else(|| content_positional.clone()),
+                body_file.as_deref(),
+                *stdin,
+            )?;
             match effective_content {
                 Some(c) if !*interactive => {
-                    add_comment_cli(storage, id, c, author.as_deref(), parent.as_deref())?;
+                    add_comment_cli(storage, id, &c, author.as_deref(), parent.as_deref())?;
                 }
                 _ => {
                     add_comment_interactive(storage, id, author.as_deref(), parent.as_deref())?;
@@ -46,12 +52,15 @@ pub(crate) fn handle_comment_command(cmd: &CommentCommand, storage: &Storage) ->
             req_id,
             comment_id,
             content,
+            body_file,
+            stdin,
             interactive,
         } => {
-            if *interactive || content.is_none() {
+            let replacement = resolve_body(content.clone(), body_file.as_deref(), *stdin)?;
+            if *interactive || replacement.is_none() {
                 edit_comment_interactive(storage, req_id, comment_id)?;
             } else {
-                edit_comment_cli(storage, req_id, comment_id, content.as_ref().unwrap())?;
+                edit_comment_cli(storage, req_id, comment_id, replacement.as_ref().unwrap())?;
             }
         }
         CommentCommand::Delete { req_id, comment_id } => {
@@ -59,6 +68,42 @@ pub(crate) fn handle_comment_command(cmd: &CommentCommand, storage: &Storage) ->
         }
     }
     Ok(())
+}
+
+// trace:TASK-190 | ai:codex
+fn resolve_body(
+    content: Option<String>,
+    body_file: Option<&std::path::Path>,
+    stdin: bool,
+) -> Result<Option<String>> {
+    if let Some(path) = body_file {
+        return std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read comment body from {}", path.display()))
+            .map(Some);
+    }
+    if stdin {
+        let mut body = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut body)
+            .context("failed to read comment body from stdin")?;
+        return Ok(Some(body));
+    }
+    Ok(content)
+}
+
+#[cfg(test)]
+mod task_190_tests {
+    use super::resolve_body;
+
+    #[test]
+    fn body_file_preserves_shell_metacharacters_literally() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("comment.md");
+        std::fs::write(&path, "keep `date` and $(pwd) literal\n").unwrap();
+        assert_eq!(
+            resolve_body(None, Some(&path), false).unwrap().unwrap(),
+            "keep `date` and $(pwd) literal\n"
+        );
+    }
 }
 
 fn add_comment_interactive(
