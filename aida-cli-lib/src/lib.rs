@@ -74,6 +74,8 @@ mod status_cmd;
 mod supervise_cmd;
 mod supervisor;
 mod terminal_cmd;
+// trace:TASK-1427 | ai:codex
+mod token_ledger;
 mod zen_cmd;
 use drain_cmd::*;
 use mcp_cmd::*;
@@ -767,6 +769,9 @@ fn normalize_usage_mode<'a>(
     action: Option<&'a UsageCommand>,
 ) -> (Option<&'a str>, bool, bool, bool, bool, bool, bool, bool) {
     match action {
+        Some(UsageCommand::Rebuild { .. } | UsageCommand::Show { .. }) => {
+            (None, false, false, false, false, false, false, false)
+        }
         Some(UsageCommand::Slowest) => (None, false, false, false, false, false, true, false),
         Some(UsageCommand::Unused { duration }) => (
             Some(duration.as_str()),
@@ -5229,6 +5234,33 @@ fn run() -> Result<()> {
             slower_than,
             action,
         } => {
+            // TASK-1427's derived token ledger is separate from the historical
+            // command-shape telemetry handled below.
+            if let Some(action) = action {
+                match action {
+                    UsageCommand::Rebuild { project, json } => {
+                        let root = project.clone().unwrap_or(find_project_root()?);
+                        token_ledger::rebuild(&root, *json || output_format_is_json())?;
+                        return Ok(());
+                    }
+                    UsageCommand::Show {
+                        spec,
+                        group_by,
+                        json,
+                        toon,
+                    } => {
+                        token_ledger::show(
+                            &find_project_root()?,
+                            spec,
+                            group_by,
+                            *json || output_format_is_json(),
+                            *toon,
+                        )?;
+                        return Ok(());
+                    }
+                    _ => {}
+                }
+            }
             // TASK-266: only the `--auto-complete` view needs the store
             // (to resolve drafted-BUG statuses) — keep plain `aida usage`
             // store-load-free. STORY-530: the `--health` catalog also needs

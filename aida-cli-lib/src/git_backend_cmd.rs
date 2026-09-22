@@ -1117,6 +1117,35 @@ pub(crate) fn handle_git_backend_command(
             slower_than,
             action,
         } => {
+            // The distributed backend dispatches before the legacy handler in
+            // lib.rs, so the token-ledger subcommands must terminate here too.
+            // trace:TASK-1427 | ai:codex
+            if let Some(action) = action {
+                match action {
+                    UsageCommand::Rebuild { project, json } => {
+                        let root = project.clone().unwrap_or_else(|| {
+                            store_path.parent().unwrap_or(store_path).to_path_buf()
+                        });
+                        return token_ledger::rebuild(&root, *json || output_format_is_json());
+                    }
+                    UsageCommand::Show {
+                        spec,
+                        group_by,
+                        json,
+                        toon,
+                    } => {
+                        let root = store_path.parent().unwrap_or(store_path);
+                        return token_ledger::show(
+                            root,
+                            spec,
+                            group_by,
+                            *json || output_format_is_json(),
+                            *toon,
+                        );
+                    }
+                    _ => {}
+                }
+            }
             // TASK-266: load the store only for the `--auto-complete` view,
             // which resolves drafted-BUG statuses; plain usage stays cheap.
             // STORY-530: the `--health` catalog also needs the store.

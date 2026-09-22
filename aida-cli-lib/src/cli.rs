@@ -7453,6 +7453,29 @@ pub enum DrainCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum UsageCommand {
+    /// Rebuild the local per-message token ledger from retained vendor artifacts.
+    // trace:TASK-1427 | ai:codex
+    Rebuild {
+        /// Project whose local derived ledger is rebuilt (defaults to current project).
+        #[clap(long, value_name = "PATH")]
+        project: Option<std::path::PathBuf>,
+        /// Emit the rebuild coverage summary as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Show measured token usage and attribution coverage for one spec.
+    // trace:TASK-1427 | ai:codex
+    Show {
+        #[clap(value_name = "SPEC-ID")]
+        spec: String,
+        /// Comma-separated dimensions: phase,vendor,round.
+        #[clap(long, default_value = "phase,vendor,round")]
+        group_by: String,
+        #[clap(long)]
+        json: bool,
+        #[clap(long, conflicts_with = "json")]
+        toon: bool,
+    },
     /// Rank command shapes by latency, slowest first.
     // trace:STORY-1028 | ai:codex
     Slowest,
@@ -14179,6 +14202,38 @@ mod tests {
         ));
         let cli = Cli::try_parse_from(["aida", "history", "--events"]).unwrap();
         assert!(matches!(cli.command, Command::History { events: true, .. }));
+    }
+
+    // trace:TASK-1427 | ai:codex
+    #[test]
+    fn token_ledger_usage_subcommands_parse() {
+        let cli =
+            Cli::try_parse_from(["aida", "usage", "rebuild", "--project", "project", "--json"])
+                .unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Usage {
+                action: Some(UsageCommand::Rebuild { json: true, .. }),
+                ..
+            }
+        ));
+
+        let cli = Cli::try_parse_from([
+            "aida",
+            "usage",
+            "show",
+            "TASK-1427",
+            "--group-by",
+            "phase,vendor",
+        ])
+        .unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Usage {
+                action: Some(UsageCommand::Show { spec, .. }),
+                ..
+            } if spec == "TASK-1427"
+        ));
     }
 
     // BUG-1294: a prose value starting with a hyphen (most often a bug title
