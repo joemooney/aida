@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T11:39:09.686818046Z
-modified_at: 2026-09-22T11:45:35.505323671Z
+modified_at: 2026-09-22T14:00:14.106573456Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -35,3 +35,8 @@ comments:
   content: 'Cold review completed for PR-2098 exact head 70145f2ba9bb6e5e05b776bcb3518247588a0434: REQUEST_CHANGES. Label-only merge holds are ignored and reviewer queue lookup failure is treated as empty, so held/routed exclusions can fail open. Durable verdict recorded on TASK-192 and PR-2098.'
   created_at: 2026-09-22T11:45:35.505323671Z
   modified_at: 2026-09-22T11:45:35.505323671Z
+- id: 01a0c96a-ca1a-7e43-8392-e8f4dcbb518d
+  author: mcp
+  content: 'COLD REVIEW — PASS at exact head a0beb5be3c87511cd8221944226b42ee43129a6a. Forge labels and forge-only aida:merge-hold are ingested and suppress red-unowned plus green-orphan paths; reviewer queue failure is Unknown/fail-closed while valid empty is Unrouted. Full red/green/pending/routed/reviewed/owned/unavailable matrix and human/JSON/TOON/compact/statusbar parity/no-double-count checks passed. Evidence: awaiting_you 34 tests; task_192_fail_closed_fact_tests 4 tests; statusbar projection test; fmt/check/clippy; exact-head GitHub Build (Ubuntu/macOS/Windows) and merge-hold-gate all pass. No merge performed.'
+  created_at: 2026-09-22T14:00:14.106567385Z
+  modified_at: 2026-09-22T14:00:14.106567385Z
