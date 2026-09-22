@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-22T07:21:15.268698102Z
+modified_at: 2026-09-22T07:32:54.959084771Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -679,6 +679,11 @@ comments:
   content: 'Fourth cold-review rework pushed to PR #2073 at exact head 23b7ad66c4. Mirror pre-push and Terminator plugin installers now ignore CRLF-only conversion while repairing real drift, with call-site tests. Expanded write-if-changed audit also found generated object-store YAML had a raw no-op comparison and no eol pin; it now uses the shared text boundary with a discriminating test. Audit covered installer writes, write-if-changed/current/needed helpers, byte equality, existing/actual comparisons, and generated serialization. Remaining matches are identifiers, URLs, SHAs, OS errors, parser tokens, semantic structures, or intentionally byte-oriented non-text data. Focused tests, cargo check, fmt, and diff-check pass; fresh exact-head cross-platform run dispatched.'
   created_at: 2026-09-22T07:21:15.268698102Z
   modified_at: 2026-09-22T07:21:15.268698102Z
+- id: 01a0c808-30e9-7a51-b776-be2f9c1a02ab
+  author: joe
+  content: 'Round-5 review correction pushed to PR #2073 at exact head 34eb58fd14. Object-store YAML now uses a dedicated newline-only exact comparator rather than inheriting scaffold trim-end tolerance. CRLF/LF are equivalent, while terminal spaces, extra terminal newlines, and real content edits remain drift and are repaired. Tests cover comparator semantics and the object-store write behavior. Targeted tests, cargo check, fmt, and diff-check pass; fresh exact-head cross-platform run dispatched.'
+  created_at: 2026-09-22T07:32:54.959084771Z
+  modified_at: 2026-09-22T07:32:54.959084771Z
 history:
 - id: 01a0c528-482c-7ed0-85a1-8d70052bfedf
   author: aida-auto-bump
