@@ -879,7 +879,10 @@ pub enum ReviewCommand {
         /// for multiple findings; omitted findings preserve any existing
         /// findings[] in the verdict record.
         // trace:TASK-1189 | ai:codex
-        #[clap(long, value_name = "TEXT")]
+        // Review findings routinely quote CLI flags. Treat the next argv as
+        // prose even when it begins with `-`; later argv remain ordinary flags.
+        // trace:TASK-182 | ai:codex
+        #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         finding: Vec<String>,
 
         /// Also write the orchestrator's phase-3 handshake file
@@ -14289,6 +14292,71 @@ mod tests {
     #[test]
     fn edit_still_rejects_a_genuinely_mistyped_flag() {
         let err = Cli::try_parse_from(["aida", "edit", "BUG-1", "--titel", "probe"]).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("unexpected argument") || msg.contains("unrecognized"),
+            "expected a clear parse error for the mistyped flag, got: {msg}"
+        );
+    }
+
+    // A review finding is free text, even when its first token looks exactly
+    // like a real review-record flag. trace:TASK-182 | ai:codex
+    #[test]
+    fn review_record_finding_accepts_flag_like_prose_and_later_real_flags() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "review",
+            "record",
+            "TASK-182",
+            "--verdict",
+            "approved",
+            "--finding",
+            "--pr N was quoted in the diagnostic",
+            "--pr",
+            "999",
+            "--finding",
+            "--yes must remain inert finding text",
+        ])
+        .unwrap();
+
+        match cli.command {
+            Command::Review {
+                cmd:
+                    Some(ReviewCommand::Record {
+                        finding,
+                        pr,
+                        verdict,
+                        ..
+                    }),
+                ..
+            } => {
+                assert_eq!(verdict, "approved");
+                assert_eq!(pr, Some(999));
+                assert_eq!(
+                    finding,
+                    vec![
+                        "--pr N was quoted in the diagnostic".to_string(),
+                        "--yes must remain inert finding text".to_string(),
+                    ]
+                );
+            }
+            other => panic!("expected review record command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn review_record_still_rejects_an_unbound_mistyped_flag() {
+        let err = Cli::try_parse_from([
+            "aida",
+            "review",
+            "record",
+            "TASK-182",
+            "--verdict",
+            "approved",
+            "--findng",
+            "probe",
+        ])
+        .unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("unexpected argument") || msg.contains("unrecognized"),
