@@ -8,12 +8,50 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::process::{Command, Output};
 
-fn aida(repo: &Path, home: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_aida"))
+/// Build a real-binary command that is incapable of escaping its fixture.
+///
+/// Review reproductions often run with live AIDA coordination variables in
+/// the parent shell. Cwd isolation alone is too easy to omit when translating
+/// this helper into an ad-hoc command, so after init every child is also pinned
+/// to the fixture's canonical store. Root/drive and git overrides are removed
+/// before either resolver can observe them.
+// trace:BUG-1588 | ai:codex
+fn aida_command(repo: &Path, home: &Path) -> Command {
+    aida_command_with_inherited(repo, home, &[])
+}
+
+fn aida_command_with_inherited(repo: &Path, home: &Path, inherited: &[(&str, &Path)]) -> Command {
+    assert!(
+        repo.join(".git").exists(),
+        "fixture repo must be a git checkout"
+    );
+    let mut command = Command::new(env!("CARGO_BIN_EXE_aida"));
+    command
         .current_dir(repo)
         .env("HOME", home)
         .env("AIDA_TELEMETRY", "0")
-        .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_ROLE", "advisor");
+    for (name, value) in inherited {
+        command.env(name, value);
+    }
+    for name in [
+        "AIDA_STORE",
+        "AIDA_PROJECT_ROOT",
+        "AIDA_DRIVE_ROOT",
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+    ] {
+        command.env_remove(name);
+    }
+    let fixture_store = repo.join(".aida-store");
+    if fixture_store.join("objects").is_dir() {
+        command.env("AIDA_STORE", fixture_store);
+    }
+    command
+}
+
+fn aida(repo: &Path, home: &Path, args: &[&str]) -> Output {
+    aida_command(repo, home)
         .args(args)
         .output()
         .expect("run aida")
@@ -167,6 +205,66 @@ fn normalize_volatile(mut value: serde_json::Value) -> serde_json::Value {
         object.remove("idle_secs");
     }
     value
+}
+
+#[test]
+fn real_binary_fixture_cannot_write_an_inherited_caller_store() {
+    let (_tmp, repo, home, _spec) = fixture();
+    let decoy = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(decoy.path().join("objects")).unwrap();
+
+    // Model a reviewer shell carrying live-store/root anchors. The helper's
+    // boundary must replace/remove them before the child starts.
+    let output = aida_command_with_inherited(
+        &repo,
+        &home,
+        &[
+            ("AIDA_STORE", decoy.path()),
+            ("AIDA_PROJECT_ROOT", decoy.path()),
+            ("AIDA_DRIVE_ROOT", decoy.path()),
+        ],
+    )
+    .args([
+        "add",
+        "--title",
+        "BUG-1588 isolation sentinel",
+        "--type",
+        "task",
+        "--status",
+        "approved",
+    ])
+    .output()
+    .expect("run isolated aida add");
+    assert!(
+        output.status.success(),
+        "stdout={}\nstderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let fixture_objects = repo.join(".aida-store/objects");
+    assert!(tree_contains(
+        &fixture_objects,
+        "BUG-1588 isolation sentinel"
+    ));
+    assert!(
+        !tree_contains(&decoy.path().join("objects"), "BUG-1588 isolation sentinel"),
+        "fixture command escaped into the caller store"
+    );
+}
+
+fn tree_contains(root: &Path, needle: &str) -> bool {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        let path = entry.path();
+        if path.is_dir() {
+            tree_contains(&path, needle)
+        } else {
+            std::fs::read_to_string(path).is_ok_and(|body| body.contains(needle))
+        }
+    })
 }
 
 #[test]
