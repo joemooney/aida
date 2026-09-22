@@ -614,6 +614,16 @@ impl NoticeSummary {
 /// injection bounded; the footer points at `aida mailbox inbox` for the rest.
 pub const NOTICE_DEFAULT_CAP: usize = 5;
 
+/// Whether an optional mailbox subject contains visible content.
+///
+/// Keep this predicate shared across mailbox projections: compact notices and
+/// expanded CLI rows render subjects differently, but blank subjects are
+/// absent on every surface.
+// trace:BUG-1575 | ai:codex
+pub fn subject_is_present(subject: &Option<String>) -> bool {
+    subject.as_deref().is_some_and(|s| !s.trim().is_empty())
+}
+
 /// Explicit subject when present and non-blank, otherwise the first non-empty
 /// line of `body`, trimmed and truncated to `max` chars (with an ellipsis when
 /// cut). A retracted message has no readable body, so it renders as a
@@ -623,11 +633,13 @@ pub fn subject_line(m: &Message, max: usize) -> String {
     if m.retracted {
         return "[withdrawn]".to_string();
     }
-    let first = m
-        .subject
-        .as_deref()
-        .filter(|s| !s.trim().is_empty())
-        .map(str::trim)
+    let first = subject_is_present(&m.subject)
+        .then(|| {
+            m.subject
+                .as_deref()
+                .expect("present subject requires Some")
+                .trim()
+        })
         .or_else(|| m.body.lines().map(str::trim).find(|l| !l.is_empty()))
         .unwrap_or("");
     let mut chars = first.chars();
@@ -818,6 +830,15 @@ pub fn read_local_watermark(project_root: &Path, agent: &str) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-1575 | ai:codex
+    #[test]
+    fn subject_presence_rejects_empty_and_whitespace_only_values() {
+        assert!(!subject_is_present(&None));
+        assert!(!subject_is_present(&Some(String::new())));
+        assert!(!subject_is_present(&Some("   \t".into())));
+        assert!(subject_is_present(&Some(" subject ".into())));
+    }
 
     fn msg(id: &str, thread: &str, from: &str, to: Recipient, ts: i64) -> Message {
         Message {

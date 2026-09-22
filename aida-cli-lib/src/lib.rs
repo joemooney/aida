@@ -19412,11 +19412,15 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
 
 /// Expanded mailbox rows retain the full body, unlike the compact core
 /// `subject_line` projection, but share its rule that blank subjects are absent.
-// trace:BUG-1465 | ai:codex
+// trace:BUG-1465 trace:BUG-1575 | ai:codex
 fn mailbox_line_body(m: &aida_core::mailbox::Message) -> String {
     if m.retracted {
         "[withdrawn]".dimmed().to_string()
-    } else if let Some(subject) = m.subject.as_deref().filter(|s| !s.trim().is_empty()) {
+    } else if aida_core::mailbox::subject_is_present(&m.subject) {
+        let subject = m
+            .subject
+            .as_deref()
+            .expect("subject_is_present requires Some");
         format!("{}\n{}", subject.bold(), m.body)
     } else {
         m.body.clone()
