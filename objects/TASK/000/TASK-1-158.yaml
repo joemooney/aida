@@ -19,7 +19,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T23:58:27.988803235Z
-modified_at: 2026-09-22T11:09:32.221600441Z
+modified_at: 2026-09-22T11:16:26.547593088Z
 req_type: Task
 tags:
 - from-advisor:BUG-1467
@@ -56,3 +56,8 @@ comments:
   created_at: 2026-09-21T21:26:54.962879376Z
   modified_at: 2026-09-21T21:26:54.962879376Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c8d4-d533-7b42-b13c-5c248c40a84e
+  author: joe
+  content: 'Implementation opened as PR #2096 at exact head 4983d3a94e. Review record finding values now accept leading hyphen and flag-like prose without steering Clap, while subsequent explicit flags still parse normally. Added adversarial coverage for quoted --pr N, inert --yes text, a later real --pr 999, and an unbound mistyped flag. Targeted tests and fmt pass; normal clippy passes with repository-baseline warnings, while -D warnings is blocked by pre-existing findings outside this patch.'
+  created_at: 2026-09-22T11:16:26.547593088Z
+  modified_at: 2026-09-22T11:16:26.547593088Z
