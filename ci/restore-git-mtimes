@@ -1,14 +1,28 @@
 #!/bin/sh
 set -eu
 
-# GitLab Runner force-checks out every pipeline, refreshing source mtimes even
-# when a file's content is unchanged. Derive a stable, past mtime from each Git
-# blob ID: identical content keeps its timestamp, while changed content gets a
-# different one and still invalidates Cargo correctly.
+# GitLab Runner force-checks out every pipeline, refreshing source and directory
+# mtimes even when their content is unchanged. Derive stable, past mtimes from
+# Git object IDs: identical blobs/trees keep their timestamps, while changed
+# content gets a different one and still invalidates Cargo correctly.
 # trace:TASK-1274 | ai:codex
 git ls-files --stage -z | perl -0ne '
     next unless /^(100644|100755) ([0-9a-f]{40,64}) 0\t(.*)$/s;
     my ($hash, $path) = ($2, $3);
+    my $mtime = 946684800 + (hex(substr($hash, 0, 8)) % 630720000);
+    utime($mtime, $mtime, $path) or die "utime $path: $!\n";
+'
+
+# Cargo treats `rerun-if-changed=some/directory/` as a recursive watch. A forced
+# checkout refreshes the directory mtime even after every tracked file has been
+# normalized, which made aida-core/build.rs rerun and recompile its unchanged
+# dependants on every warm verify. Git tree IDs give directories the same
+# content-stable identity that blob IDs give files. Normalize directories after
+# files so touching a file cannot refresh its parent again.
+# trace:TASK-1274 | ai:codex
+git ls-tree -dr -z HEAD | perl -0ne '
+    next unless /^040000 tree ([0-9a-f]{40,64})\t(.*)$/s;
+    my ($hash, $path) = ($1, $2);
     my $mtime = 946684800 + (hex(substr($hash, 0, 8)) % 630720000);
     utime($mtime, $mtime, $path) or die "utime $path: $!\n";
 '

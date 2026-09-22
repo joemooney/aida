@@ -89944,7 +89944,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
             let start_poll = std::time::Instant::now();
             let timeout = std::time::Duration::from_secs(600); // 10 minutes timeout
-            let interval = std::time::Duration::from_secs(4); // poll every 10 seconds
+            let interval = std::time::Duration::from_secs(10); // poll every 10 seconds
             let mut severity_data: Option<serde_json::Value> = None;
 
             while start_poll.elapsed() < timeout {

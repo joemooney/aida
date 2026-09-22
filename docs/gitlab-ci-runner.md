@@ -70,11 +70,14 @@ a clean reset, stop the runner and clean that project's directory explicitly
 rather than putting an unconditional clean back on every pipeline.
 
 GitLab Runner still performs a forced checkout even without `git clean`, which
-can refresh tracked-file mtimes. Before each builder job,
-`ci/restore-git-mtimes` assigns every regular tracked file a deterministic past
-mtime derived from its Git blob ID. Unchanged content therefore keeps the same
-mtime across pipelines, while a content change gets a different mtime and
-continues to invalidate Cargo correctly. The helper also normalizes `.git/HEAD`
+can refresh tracked-file and directory mtimes. Before each builder job,
+`ci/restore-git-mtimes` assigns every regular tracked file and directory a
+deterministic past mtime derived from its Git blob or tree ID. Directories
+matter because Cargo recursively watches paths such as `aida-core/templates/`;
+restoring only file mtimes still reruns that crate's build script after every
+forced checkout. Unchanged content therefore keeps the same mtime across
+pipelines, while a content change gets a different mtime and continues to
+invalidate Cargo correctly. The helper also normalizes `.git/HEAD`
 and `.git/index` from the commit and tree IDs because the CLI build-stamp script
 intentionally watches those paths; a retry of one SHA remains warm, while a new
 commit still refreshes the embedded build identity.
