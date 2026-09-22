@@ -39,12 +39,12 @@ description: |-
   SUGGESTED SHAPE, advisory: the complement of the orphan sweep. Where that sweep claims clean-and-unowned PRs for review, something needs to surface RED-and-unowned PRs for repair - or `aida awaiting` needs a line for "your spec is Done and its PR is failing", which is a two-way check between spec status and PR state that nothing currently performs. The cheapest version is a predicate that is the exact negation of the sweep's green test, so the two together cover every open PR rather than leaving the red ones in the gap between them.
 
   NOTE ON PROVENANCE: I did not review #2035 and am not proposing to. Its CI is red; a review now would produce findings against a tree that cannot merge. This is filed as a routing and visibility defect, not a code finding.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:29:00.515328965Z
-modified_at: 2026-09-21T21:26:18.875421673Z
+modified_at: 2026-09-22T11:23:30.922496746Z
 req_type: Task
 tags:
 - from-advisor:general
