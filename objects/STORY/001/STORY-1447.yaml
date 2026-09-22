@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T09:16:37.055618334Z
-modified_at: 2026-09-22T09:16:41.476753597Z
+modified_at: 2026-09-22T09:24:41.229518902Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0c192-21f6-71c0-9893-f0ec7c6789cc
   created_at: 2026-09-22T09:16:41.476744911Z
   created_by: joe
+comments:
+- id: 01a0c86e-848d-7da3-8a67-be54ff3ec9cc
+  author: joe
+  content: '[cold-review][changes-requested] PR #2088 exact head ded0bdbf1de66ced45da280e1339324b9b4b156e. Blocking TASK-184 finding: scalar serialization cannot preserve Custom identity when its exact value matches a built-in spelling or accepted alias. Example: legacy `!Custom blocked-by` -> Custom("blocked-by") -> scalar `blocked-by` -> typed BlockedBy on reload; `!Custom Parent`, `verified_by`, `replaced-by`, and `replaces` similarly change semantics/taxonomy. Current tests only use non-colliding custom values. Require an explicit collision policy and regression coverage for legacy YAML and JSON custom forms; if incompatible with scalar-only output, return for architecture signoff. Independent verification: relationship tests 8/8, full aida-core 972 passed/2 ignored, fmt clean. Exact-head CI build/tests passed but workflow was still running at verdict time. No merge.'
+  created_at: 2026-09-22T09:24:41.229518902Z
+  modified_at: 2026-09-22T09:24:41.229518902Z
