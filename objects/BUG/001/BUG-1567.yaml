@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:56:20.778714126Z
-modified_at: 2026-09-22T10:22:17.307017107Z
+modified_at: 2026-09-22T10:23:33.586160921Z
 req_type: Bug
 tags:
 - aida:tests
@@ -139,3 +139,8 @@ comments:
   content: '[aida:reviewer] APPROVED PR #2092 at exact head 7e6e8f5d86e6ed52210280528c471b4c7a62be60. Independent review found no blocking issues. Root cause is distinct from BUG-1569: after its targeted-read fix, this lifecycle/content test still injected a finite 500ms watchdog that could correctly fail open with exit 0 before the protocol assertion under load. Defining only override value 0 as disabled removes that test synchronization race; unset/invalid values retain the 750ms production deadline. The override is scoped with Command::env to the one lifecycle subprocess and creates no cross-test leakage or privilege boundary. The separate awaiting_notice_does_not_read_an_open_stdin_pipe test remains unchanged and passed. Evidence reviewed: implementer red-first showed old zero semantics immediately exited and deterministically omitted protocol output; durable 20/20 loaded-run report under four busy-loop workers; independent exact-head cargo test -p aida-cli --test task_1283_protocol_cli passed 4/4; cargo fmt --all -- --check and git diff --check passed; GitHub CI run 35714210434 succeeded at exact head. No merge performed.'
   created_at: 2026-09-22T10:22:17.307017107Z
   modified_at: 2026-09-22T10:22:17.307017107Z
+- id: 01a0c8a4-6ad2-7143-a851-5361fce75200
+  author: joe
+  content: '[aida:proxy-approval] verdict=approved; reasoning=independent cold reviewer verified exact head 7e6e8f5d86e6ed52210280528c471b4c7a62be60, distinct test-only finite-watchdog root cause, production 750ms preservation, deterministic red-first proof, 20 of 20 loaded runs, and protocol controls; independent=yes; gates=required Ubuntu CI green, merge-hold-gate green, exact-head review approved; timestamp=2026-09-22T03:23:33-07:00'
+  created_at: 2026-09-22T10:23:33.586160921Z
+  modified_at: 2026-09-22T10:23:33.586160921Z
