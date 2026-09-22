@@ -1228,10 +1228,14 @@ mod tests {
         masters
             .iter()
             .filter(|(name, _)| !localized.iter().any(|(local, _)| local == name))
-            .filter_map(|(name, master)| {
-                let local = std::fs::read_to_string(project_dir.join(name)).ok()?;
-                (local.trim_end() != *master).then(|| (*name).to_string())
-            })
+            .filter_map(
+                |(name, master)| match std::fs::read_to_string(project_dir.join(name)) {
+                    Ok(local) => (!crate::scaffolding::generated_text_matches(&local, master))
+                        .then(|| (*name).to_string()),
+                    // Absence or unreadability cannot be treated as agreement.
+                    Err(_) => Some((*name).to_string()),
+                },
+            )
             .collect()
     }
 
@@ -1253,6 +1257,39 @@ mod tests {
             &[("guide.md", "project-specific operational guidance")],
         );
         assert!(localized.is_empty());
+    }
+
+    #[test]
+    fn discipline_content_check_normalizes_endings_but_not_real_drift() {
+        let project = tempfile::tempdir().unwrap();
+        std::fs::write(project.path().join("guide.md"), "first\r\nsecond\r\n").unwrap();
+
+        let same =
+            discipline_content_mismatches(project.path(), &[("guide.md", "first\nsecond\n")], &[]);
+        assert!(
+            same.is_empty(),
+            "CRLF-only differences are not content drift"
+        );
+
+        std::fs::write(
+            project.path().join("guide.md"),
+            "first\r\nactually changed\r\n",
+        )
+        .unwrap();
+        let changed =
+            discipline_content_mismatches(project.path(), &[("guide.md", "first\nsecond\n")], &[]);
+        assert_eq!(changed, vec!["guide.md"]);
+    }
+
+    #[test]
+    fn discipline_content_check_reports_missing_project_copy() {
+        let project = tempfile::tempdir().unwrap();
+        let stale = discipline_content_mismatches(
+            project.path(),
+            &[("missing.md", "canonical content\n")],
+            &[],
+        );
+        assert_eq!(stale, vec!["missing.md"]);
     }
 
     /// Guards the CHECKED-IN project copy of the discipline pack (this

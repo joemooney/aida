@@ -1502,7 +1502,10 @@ pub(crate) fn print_scaffolding_freshness(
             Ok(b) => b,
             Err(_) => continue,
         };
-        if on_disk == artifact.content.as_bytes() {
+        if aida_core::scaffolding::generated_text_matches(
+            &String::from_utf8_lossy(&on_disk),
+            &artifact.content,
+        ) {
             matches += 1;
             continue;
         }

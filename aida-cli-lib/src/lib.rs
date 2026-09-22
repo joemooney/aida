@@ -11295,7 +11295,7 @@ fn scaffold_memory_pack_into(
             MemoryDisposition::UserOwned => report.kept_user += 1,
             MemoryDisposition::Edited => report.kept_edited += 1,
             MemoryDisposition::Pristine => {
-                if existing == scaffolded {
+                if aida_core::scaffolding::generated_text_matches(&existing, &scaffolded) {
                     report.unchanged += 1;
                 } else {
                     std::fs::write(&dest, &scaffolded)?;
@@ -11490,7 +11490,7 @@ fn compute_memory_drift_into(mem_dir: &std::path::Path) -> Result<MemoryDriftRep
                 MemoryDisposition::UserOwned => MemoryDriftState::UserOwned,
                 MemoryDisposition::Edited => MemoryDriftState::Edited,
                 MemoryDisposition::Pristine => {
-                    if normalize_line_endings(&existing) == scaffolded {
+                    if aida_core::scaffolding::generated_text_matches(&existing, &scaffolded) {
                         MemoryDriftState::UpToDate
                     } else {
                         MemoryDriftState::Stale
@@ -25789,7 +25789,7 @@ fn merge_user_aida_instructions(
     };
 
     let old_region = &existing[begin..end];
-    if old_region == expected {
+    if aida_core::scaffolding::generated_text_matches(old_region, &expected) {
         return (
             existing.to_string(),
             UserAidaInstructionsReport {
@@ -25803,8 +25803,9 @@ fn merge_user_aida_instructions(
     let body_end =
         end - USER_AIDA_INSTRUCTIONS_END.len() - usize::from(existing[..end].ends_with('\n'));
     let body = &existing[body_start..body_end];
+    let normalized_body = aida_core::scaffolding::normalize_lf(body);
     let pristine = user_aida_block_checksum(header)
-        .map(|checksum| checksum == user_aida_checksum(body))
+        .map(|checksum| checksum == user_aida_checksum(&normalized_body))
         .unwrap_or(false);
     if refresh && pristine {
         let mut merged = String::new();
@@ -25845,7 +25846,10 @@ fn install_user_aida_instructions_at(
         total.written += report.written;
         total.unchanged += report.unchanged;
         total.kept_edited += report.kept_edited;
-        if existing.as_deref() == Some(merged.as_str()) {
+        if existing
+            .as_deref()
+            .is_some_and(|actual| aida_core::scaffolding::generated_text_matches(actual, &merged))
+        {
             continue;
         }
         if let Some(parent) = target.parent() {

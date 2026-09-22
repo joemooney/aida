@@ -54,13 +54,13 @@ pub fn aida_md_matches(actual: &str, expected: &str) -> bool {
     let (a_body, a_skills) = split_at_skills(a);
     let (e_body, e_skills) = split_at_skills(e);
 
-    if a_body.trim() != e_body.trim() {
+    if !super::generated_text_matches(a_body, e_body) {
         return false;
     }
 
     match (a_skills, e_skills) {
         // Both carry the skills section — it must match.
-        (Some(a_s), Some(e_s)) => a_s.trim() == e_s.trim(),
+        (Some(a_s), Some(e_s)) => super::generated_text_matches(a_s, e_s),
         // On-disk file omits the section (opted out via --no-skills). The
         // expected content may or may not include it; either way the absence
         // on disk is deliberate, not drift.
