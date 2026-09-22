@@ -24,7 +24,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T19:41:23.949746312Z
-modified_at: 2026-09-21T21:27:25.283478418Z
+modified_at: 2026-09-22T11:39:45.412200719Z
 req_type: Task
 tags:
 - from-advisor:BUG-1442
@@ -45,3 +45,8 @@ comments:
   created_at: 2026-09-21T21:27:25.283478418Z
   modified_at: 2026-09-21T21:27:25.283478418Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c8ea-2d84-7d53-bd0e-d32154b976ea
+  author: joe
+  content: 'INVESTIGATION DISPOSITION: supersede with completed BUG-1485 (with historical BUG-114 and BUG-1285 as supporting fixes); no TASK-179 code change is warranted. Evidence: find_orchestrated_lease does not scan or choose the first lease. It loads session manifests, finds the manifest whose claude_session_id exactly equals the orchestrator-minted id, then opens only that manifest session_id lease path. The regression find_orchestrated_lease_pins_session_by_claude_id constructs two unrelated leases plus the orchestrated lease and proves exact resolution; lease_ids_in_excludes_companion_files separately proves diagnostics ignore companion files. Therefore any number of stale leases for other specs cannot cause the match failure and were only noisy diagnostic context. The actual BUG-1442-era failure was captured as BUG-1485: the child could remove its lease/manifest before the parent consumed it. Completed PR #2030 added a durable orchestrator handoff receipt, post-push PR recovery, and replaced the candidate-id list with an explicit message that unrelated active leases were ignored. Same-scope stale lease refusal/recovery is separately handled by completed BUG-1285 using identity-aware liveness. TASK-179 deliberately asserted no cause and has no acceptance/action beyond settling this question; that question is now answered and the concrete defect is already completed elsewhere. No isolated implementation session was started and no worktree/branch was created.'
+  created_at: 2026-09-22T11:39:45.412200719Z
+  modified_at: 2026-09-22T11:39:45.412200719Z
