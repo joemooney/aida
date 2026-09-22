@@ -1,0 +1,26 @@
+id: 01a0c8e2-0ae8-7f02-8576-88969cebba5b
+spec_id: STORY-1455
+agreed_id: STORY-1455
+title: 'Review PR-2097: [AI:codex] fix(cli): enforce global JSON format conformance (BUG-1502)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0c8d2`) for branch `bug-1502-format-json-conformance`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2097>
+  - Branch: `bug-1502-format-json-conformance` → `main`
+
+  ## Covers
+
+  - BUG-1502
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2097` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T11:30:52.264950402Z
+modified_at: 2026-09-22T11:30:52.264950402Z
+req_type: Story
