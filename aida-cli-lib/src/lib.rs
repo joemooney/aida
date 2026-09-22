@@ -85357,25 +85357,163 @@ fn sibling_verdict_sweep_for_phase3(
             }
         }
     }
-    candidates.sort_by(|a, b| b.0.cmp(&a.0));
-    let Some((_, cand, _is_pr)) = candidates.into_iter().next() else {
+    candidates.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    let Some((_, freshest, _is_pr)) = candidates.first() else {
         return Ok(None);
     };
-    // A fresh artifact is evidence. If it is conflicting, malformed, or
-    // stale at the current head, do not walk onward until some other file
-    // happens to approve; surface the first deterministic failure.
+    // Every fresh artifact is evidence. Reconcile the complete set rather
+    // than allowing whichever file has the newest mtime to hide an opposing
+    // same-head review.
     // trace:BUG-1581 | ai:codex
-    let outcome = read_verdict_file_for_head(&cand, current_head)?;
-    // Copy back to the canonical location (best-effort): audit trail +
-    // the STORY-439 calibration tag-along both read the drive root.
+    let mut bodies = candidates
+        .iter()
+        .map(|(_, path, _)| {
+            std::fs::read_to_string(path).map_err(|e| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::NoVerdict,
+                    format!(
+                        "could not read sibling verdict evidence at {}: {e}",
+                        path.display()
+                    ),
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let reconcile = |evidence: &[String], current_head: &str| {
+        review_verdict::reconcile_artifacts_for_sha(
+            evidence.iter().map(String::as_str),
+            current_head,
+        )
+        .map_err(|reason| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::NoVerdict,
+                format!("{reason} — sibling review evidence cannot be proven safe"),
+            )
+        })
+    };
+    let mut outcome = if let Some(current_head) = current_head {
+        match reconcile(&bodies, current_head)? {
+            Some(review_verdict::VerdictKind::Approved) => {
+                auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Approved)
+            }
+            Some(review_verdict::VerdictKind::RequestChanges)
+            | Some(review_verdict::VerdictKind::Rejected) => {
+                auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::RequestChanges)
+            }
+            Some(review_verdict::VerdictKind::Other) | None => {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::NoVerdict,
+                    "fresh sibling verdict evidence does not contain a verdict for the current PR head",
+                ));
+            }
+        }
+    } else {
+        // Preserve the legacy fail-safe use case: a refusal does not need a
+        // forge head to block. Approvals still fail in
+        // `read_verdict_file_for_head`, and every fresh file is consulted.
+        let mut blocking = None;
+        for (_, path, _) in &candidates {
+            let candidate = read_verdict_file_for_head(path, None)?;
+            match candidate {
+                auto_complete::ReviewerOutcome::Verdict(
+                    auto_complete::Verdict::RequestChanges | auto_complete::Verdict::Rejected,
+                ) => blocking = Some(candidate),
+                auto_complete::ReviewerOutcome::EscalatedToHuman { .. } if blocking.is_none() => {
+                    blocking = Some(candidate);
+                }
+                _ => {}
+            }
+        }
+        blocking.expect("fresh candidates are non-empty")
+    };
+
+    // Publish without overwriting a verdict that appeared at the canonical
+    // path after the caller's initial probe. A hard link is an atomic,
+    // complete-file, no-clobber publication boundary. On collision, include
+    // that evidence in the same reconciliation and leave its bytes untouched.
     let dest_dir = project_root.join(".aida").join("review-verdicts");
-    let _ = std::fs::create_dir_all(&dest_dir);
-    let dest = dest_dir.join(cand.file_name().expect("candidate has a file name"));
-    let _ = std::fs::copy(&cand, &dest);
+    std::fs::create_dir_all(&dest_dir).map_err(|e| {
+        auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
+            format!("could not create canonical verdict directory: {e}"),
+        )
+    })?;
+    let dest = dest_dir.join(freshest.file_name().expect("candidate has a file name"));
+    let temp_name = format!(
+        ".{}.publish-{}-{}",
+        dest.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("verdict"),
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    );
+    let temp = dest_dir.join(temp_name);
+    let staged = (|| -> std::io::Result<()> {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)?;
+        file.write_all(bodies[0].as_bytes())?;
+        file.sync_all()
+    })();
+    if let Err(e) = staged {
+        let _ = std::fs::remove_file(&temp);
+        return Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
+            format!("could not stage canonical verdict evidence: {e}"),
+        ));
+    }
+    let publication = std::fs::hard_link(&temp, &dest);
+    let _ = std::fs::remove_file(&temp);
+    match publication {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            let canonical = std::fs::read_to_string(&dest).map_err(|read_error| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::NoVerdict,
+                    format!(
+                        "canonical verdict evidence appeared concurrently but could not be read: {read_error}"
+                    ),
+                )
+            })?;
+            bodies.push(canonical);
+            let Some(current_head) = current_head else {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::NoVerdict,
+                    "canonical verdict evidence appeared concurrently and cannot be reconciled because the current PR head is unavailable",
+                ));
+            };
+            outcome = match reconcile(&bodies, current_head)? {
+                Some(review_verdict::VerdictKind::Approved) => {
+                    auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Approved)
+                }
+                Some(review_verdict::VerdictKind::RequestChanges)
+                | Some(review_verdict::VerdictKind::Rejected) => {
+                    auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::RequestChanges)
+                }
+                Some(review_verdict::VerdictKind::Other) | None => {
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::NoVerdict,
+                        "canonical and sibling verdict evidence do not establish a verdict for the current PR head",
+                    ));
+                }
+            };
+        }
+        Err(e) => {
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::NoVerdict,
+                format!("could not publish canonical verdict evidence: {e}"),
+            ));
+        }
+    }
     eprintln!(
         "  {} no verdict at the drive root, but the reviewer wrote one in a sibling checkout ({}) during this session — accepting it",
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-        cand.display()
+        freshest.display()
     );
     Ok(Some(outcome))
 }

@@ -588,6 +588,81 @@ fn a_fresh_sibling_checkout_verdict_is_accepted_and_copied_back() {
     );
 }
 
+// BUG-1581: sibling discovery must reconcile the full fresh evidence set;
+// directory iteration order and mtime must not allow an approval to hide an
+// opposing review at the same head.
+// trace:BUG-1581 | ai:codex
+#[test]
+fn opposing_sibling_verdicts_fail_closed_in_either_artifact_order() {
+    const HEAD: &str = "9f1c2b3a4d5e6f7089abcdef0123456789fedcba";
+    for approved_in_alpha in [true, false] {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("aida");
+        std::fs::create_dir_all(&root).unwrap();
+        for (name, approved) in [("alpha", approved_in_alpha), ("zeta", !approved_in_alpha)] {
+            let dir = parent
+                .path()
+                .join(name)
+                .join(".aida")
+                .join("review-verdicts");
+            std::fs::create_dir_all(&dir).unwrap();
+            let (verdict, reviewer) = if approved {
+                ("APPROVED", "reviewer-a")
+            } else {
+                ("REQUEST_CHANGES", "reviewer-b")
+            };
+            std::fs::write(
+                dir.join("PR-1619.json"),
+                format!(
+                    r#"{{"verdict":"{verdict}","reviewed_sha":"{HEAD}","recorded_by":"{reviewer}"}}"#
+                ),
+            )
+            .unwrap();
+        }
+        let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+        let failure =
+            crate::sibling_verdict_sweep_for_phase3(&root, 1619, "STORY-784", started, Some(HEAD))
+                .expect_err("opposing same-head sibling evidence must fail closed");
+        assert!(failure.reason.contains("conflicting review verdicts"));
+    }
+}
+
+// BUG-1581: a canonical artifact may appear after the caller's initial probe.
+// Sibling publication must neither overwrite it nor accept an incompatible
+// verdict.
+// trace:BUG-1581 | ai:codex
+#[test]
+fn sibling_publication_preserves_and_reconciles_preexisting_canonical_evidence() {
+    const HEAD: &str = "9f1c2b3a4d5e6f7089abcdef0123456789fedcba";
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("aida");
+    let canonical_dir = root.join(".aida/review-verdicts");
+    let sibling_dir = parent
+        .path()
+        .join("reviewer-checkout/.aida/review-verdicts");
+    std::fs::create_dir_all(&canonical_dir).unwrap();
+    std::fs::create_dir_all(&sibling_dir).unwrap();
+    let canonical = format!(
+        r#"{{"verdict":"REQUEST_CHANGES","reviewed_sha":"{HEAD}","recorded_by":"reviewer-b"}}"#
+    );
+    std::fs::write(canonical_dir.join("PR-77.json"), &canonical).unwrap();
+    std::fs::write(
+        sibling_dir.join("PR-77.json"),
+        format!(r#"{{"verdict":"APPROVED","reviewed_sha":"{HEAD}","recorded_by":"reviewer-a"}}"#),
+    )
+    .unwrap();
+
+    let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    let failure = crate::sibling_verdict_sweep_for_phase3(&root, 77, "BUG-77", started, Some(HEAD))
+        .expect_err("a canonical collision with opposing evidence must fail closed");
+    assert!(failure.reason.contains("conflicting review verdicts"));
+    assert_eq!(
+        std::fs::read_to_string(canonical_dir.join("PR-77.json")).unwrap(),
+        canonical,
+        "the atomic publication boundary must never clobber canonical evidence"
+    );
+}
+
 /// The freshness gate holds for the sweep too: a sibling verdict older than
 /// the reviewer session start must never advance a later diff.
 #[test]
