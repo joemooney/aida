@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T09:25:33.567593252Z
-modified_at: 2026-09-22T09:25:42.368731387Z
+modified_at: 2026-09-22T09:53:06.627532561Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0c632-038f-7702-a4b0-dedc2e746163
   created_at: 2026-09-22T09:25:42.368722256Z
   created_by: joe
+comments:
+- id: 01a0c888-8a43-7900-b60b-807401343450
+  author: joe
+  content: 'Cold rereview addendum at exact head 8a6db9ca58c5: malformed retained evidence also fails open. verdict_conflict_for_current_sha silently drops non-object rounds, rounds without a usable SHA, unknown verdict spellings, and missing recorded_by (collapsed to the same ''unknown reviewer''). read_verdict_file then accepts a valid top-level Approved. Because rounds are decision-bearing retained evidence, malformed/unattributed same-head entries should produce review-integrity failure rather than disappear. Add negative parser/merge-surface controls.'
+  created_at: 2026-09-22T09:53:06.627532561Z
+  modified_at: 2026-09-22T09:53:06.627532561Z
