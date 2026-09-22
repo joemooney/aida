@@ -43,7 +43,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:09:49.662292511Z
-modified_at: 2026-09-22T12:03:11.630411751Z
+modified_at: 2026-09-22T13:57:52.555287500Z
 req_type: Bug
 tags:
 - aida:show cli-conformance agent-surface drain-safe from:session-0920
@@ -76,3 +76,8 @@ comments:
   content: 'REWORK pushed to PR #2097 exact head 467827980a376cde15958e004693883374c240d2. Global format json now materializes the selected leaf dedicated json flag before dispatch; fasttrack status is covered. The audit detects path and outcome drift, executes every unsupported catalog row fail-closed, and parses/compares every verified honoured projection. Show JSON now starts from the full stored Requirement and overlays derived human-view fields plus structured git linkage; the regression fixture asserts opened/modified, assignee, origin, external refs, interface changes, implementation/risk/test notes, execution mode, null no-git linkage, and exact description bytes. Previous CI failure was a stale test requiring successful human fallback; corrected to fail closed. Focused tests 5 passed, fmt passed, CI-equivalent clippy passed. Requires a different independent reviewer because this implementer authored the prior findings.'
   created_at: 2026-09-22T12:03:11.630411751Z
   modified_at: 2026-09-22T12:03:11.630411751Z
+- id: 01a0c968-a12b-7712-ad66-dddd0c855fc6
+  author: joe
+  content: 'REQUEST_CHANGES at exact PR #2097 head 467827980a376cde15958e004693883374c240d2. Independent cold review: acceptance 1 still fails human-field parity. A queued fixture''s human show prints Queued: implementer (pos 1), but ShowJson has no queue membership; a Decision Approved fixture''s human status is Accepted while JSON status is Approved. Focused audit 4/4 and output regression 1/1 pass; catalog is exactly 581 paths; fasttrack --format json == --json; exact description and --no-git linkage pass. Durable PR comment: https://github.com/joemooney/aida/pull/2097#issuecomment-5777841310.'
+  created_at: 2026-09-22T13:57:52.555287500Z
+  modified_at: 2026-09-22T13:57:52.555287500Z
