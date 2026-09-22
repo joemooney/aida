@@ -35,12 +35,12 @@ description: |-
   Filed by the driver-advisor seat, disposing of a reviewer finding rather than leaving it in a PR
   comment. Non-blocking for #2063, which is merged (71a581bdbf) - the change itself is correct and
   its map_err -> with_context half is a real improvement.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:53:08.138084143Z
-modified_at: 2026-09-22T09:37:04.330443428Z
+modified_at: 2026-09-22T09:37:12.941714798Z
 req_type: Bug
 tags:
 - mailbox papercut duplication
@@ -55,3 +55,22 @@ comments:
   content: '[aida:proxy-approval] verdict=approved; reasoning=independent cold reviewer verified exact head 4081cd045aa99c07d0865ff85fd05f04b408d738, shared blank-subject predicate across render paths, preserved projection distinctions, raw send semantics, and None/empty/whitespace controls; independent=yes; gates=required Ubuntu CI green, merge-hold-gate green, exact-head review approved; timestamp=2026-09-22T02:37:03-07:00'
   created_at: 2026-09-22T09:37:04.330443428Z
   modified_at: 2026-09-22T09:37:04.330443428Z
+history:
+- id: 01a0c879-fce6-7851-95d0-3d0d4deedc3f
+  author: aida-auto-bump
+  timestamp: 2026-09-22T09:37:12.934862347Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c879-fced-7b41-80df-e1f6683eebdb
+  timestamp: 2026-09-22T09:37:12.941713054Z
+  agent: implementer
+  commit_sha: a59575387efcc772ce80e54e29115a7b74df4594
+  summary: 'Cold review: shared predicate centralizes blank-subject semantics while preserving compact/TUI and expanded projections; CLI/MCP raw send paths carry no duplicate predicate; targeted tests, fmt, and exact-head CI pass.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T09:37:12.934712265Z
+  completion_sha: a59575387efcc772ce80e54e29115a7b74df4594
