@@ -16,12 +16,12 @@ description: |
     The stored file is sharded by count, not fixed at the 000 directory the project documentation uses in its example path. TASK-1303 lives under 001 because 000 filled at a thousand entries. Someone following the documented path literally concludes the file is missing.
 
   Promote if a second instance appears. The underlying enabler is being fixed separately; this finding records the practice.
-status: InProgress
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:03:46.513817918Z
-modified_at: 2026-09-22T11:13:12.286458034Z
+modified_at: 2026-09-22T11:13:13.716657330Z
 req_type: Task
 tags:
 - from-advisor:general
