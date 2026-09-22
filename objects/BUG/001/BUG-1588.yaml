@@ -1,0 +1,29 @@
+id: 01a0c989-abd8-7121-8fc1-04475b4ca793
+spec_id: BUG-1588
+agreed_id: BUG-1588
+title: A review test created fixture requirements in the live canonical store
+description: |
+  During overnight exact-head review/testing on 2026-09-22, two empty approved requirements were written to the live canonical aida-store:
+  - TASK-1428 title first, commit 020ad87a at 07:22
+  - TASK-1429 title target, commit 9840d8a3 at 07:23
+
+  The adjacent generic fixture names, empty bodies, and timing identify test contamination rather than user work. Both were rejected with driver-disposition comments; history was retained.
+
+  Acceptance:
+  1. Identify the exact test or helper path that resolved the repository live store instead of an isolated fixture.
+  2. The test always uses a temporary project/store and cannot mutate the caller repository, even when run from the repository root with normal AIDA environment variables present.
+  3. Add a regression guard that snapshots the live canonical store HEAD before the affected test suite and proves it is unchanged afterward, or an equivalent isolation assertion at the helper boundary.
+  4. Audit adjacent tests using the same helper for the same escape path.
+  5. Document the two contaminated IDs and their rejected disposition; do not delete canonical history.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T14:33:57.976444371Z
+modified_at: 2026-09-22T14:33:57.976444371Z
+req_type: Bug
+tags:
+- data-integrity
+- effort:open:1h
+- store
+- test-isolation
