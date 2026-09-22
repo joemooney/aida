@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:26:07.580218491Z
-modified_at: 2026-09-22T10:16:13.963456410Z
+modified_at: 2026-09-22T10:16:22.089690625Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -119,3 +119,8 @@ comments:
   content: '[aida:implementer] PR #2091 rework pushed at 6ae06bbb5c. Fixed review finding: tick routing now retains the matched CronJobFailed trip_id plus bounded allow-listed performance evidence on the seat-job ledger; DueJob JSON and the shared pickup/launch/awaiting DUE JOBS block render the correlated proportion, budget, numerator/denominator, tolerance, worst, window, excluded count, and lineage scope.  clears the routed payload. Consumer-side test now loads the actual due-seat artifact and asserts those rendered values, rather than merely checking due_since beside a separate producer event. Focused performance, legacy serialization, pickup rendering tests and fmt pass.'
   created_at: 2026-09-22T10:16:13.963456410Z
   modified_at: 2026-09-22T10:16:13.963456410Z
+- id: 01a0c89d-d549-7fa2-ad2f-a7f65b09eb49
+  author: joe
+  content: '[aida:implementer] Clarification: aida schedule done clears the routed payload after the advisor reports completion.'
+  created_at: 2026-09-22T10:16:22.089690625Z
+  modified_at: 2026-09-22T10:16:22.089690625Z
