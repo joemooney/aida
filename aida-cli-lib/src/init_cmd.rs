@@ -1054,7 +1054,7 @@ fn write_memory_lane_scaffolding(
     if agents_path.exists() && !force {
         let existing = std::fs::read_to_string(&agents_path)?;
         let (merged, _) = merge_agents_md_aida_block(&existing, &generated_agents);
-        if merged == existing {
+        if aida_core::scaffolding::generated_text_matches(&merged, &existing) {
             skipped += 1;
         } else {
             std::fs::write(&agents_path, merged)?;
@@ -1463,7 +1463,7 @@ fn complete_init_scaffolding(
                 }
                 let existing = std::fs::read_to_string(&full_path)?;
                 let (merged, action) = merge_agents_md_aida_block(&existing, &artifact.content);
-                if merged == existing {
+                if aida_core::scaffolding::generated_text_matches(&merged, &existing) {
                     skipped_count += 1;
                     continue;
                 }

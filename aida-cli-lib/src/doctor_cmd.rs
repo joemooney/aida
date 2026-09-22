@@ -403,7 +403,7 @@ fn codex_prompts_drift(dir: &std::path::Path) -> Vec<String> {
     for (name, expected) in aida_core::scaffolding::codex_prompts::expected_codex_prompts() {
         let path = dir.join(format!("{name}.md"));
         if let Ok(actual) = std::fs::read_to_string(&path) {
-            if actual != expected {
+            if !aida_core::scaffolding::generated_text_matches(&actual, &expected) {
                 drifted.push(name);
             }
         }
@@ -5003,7 +5003,11 @@ hostname = "localhost"
         assert!(expected.len() >= 2, "need a couple of prompts to test");
         // Deploy the first prompt correctly (matches source).
         let (fresh_name, fresh_body) = &expected[0];
-        std::fs::write(dir.path().join(format!("{fresh_name}.md")), fresh_body).unwrap();
+        std::fs::write(
+            dir.path().join(format!("{fresh_name}.md")),
+            fresh_body.replace('\n', "\r\n"),
+        )
+        .unwrap();
         // Deploy the second prompt STALE (content differs).
         let (stale_name, _) = &expected[1];
         std::fs::write(

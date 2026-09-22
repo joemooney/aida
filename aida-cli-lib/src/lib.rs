@@ -25843,7 +25843,10 @@ fn install_user_aida_instructions_at(
         total.written += report.written;
         total.unchanged += report.unchanged;
         total.kept_edited += report.kept_edited;
-        if existing.as_deref() == Some(merged.as_str()) {
+        if existing
+            .as_deref()
+            .is_some_and(|actual| aida_core::scaffolding::generated_text_matches(actual, &merged))
+        {
             continue;
         }
         if let Some(parent) = target.parent() {
