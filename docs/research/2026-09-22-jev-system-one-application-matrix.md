@@ -106,7 +106,8 @@ Several proposed applications transmit code diffs, requirement descriptions, rev
 
 ## 5. Experimental Evaluation Protocol
 
-Each candidate experiment must be evaluated against an empirical ground-truth corpus before any mainline tooling adoption.
+Each candidate experiment must be evaluated against an empirical ground-truth corpus before any mainline tooling adoption. See [`docs/research/2026-09-22-jev-system-one-measurement-protocol.md`](docs/research/2026-09-22-jev-system-one-measurement-protocol.md) for the complete causal measurement protocol, independent adjudication requirements, and pre-registered stop conditions.
+
 
 ```
        Input Space
