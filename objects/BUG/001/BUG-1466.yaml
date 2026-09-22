@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:00:42.850947434Z
-modified_at: 2026-09-22T06:34:14.208446355Z
+modified_at: 2026-09-22T06:47:40.034604658Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -339,4 +339,9 @@ comments:
     Verification: live_phase3 tests 3/3 passed; probe_resume_facts live consumer test passed; prior bug_775 suite remained 27/27; cargo fmt check and git diff check passed.
   created_at: 2026-09-22T06:34:14.208446355Z
   modified_at: 2026-09-22T06:34:14.208446355Z
+- id: 01a0c7de-c302-7e20-a2ac-2424441d430b
+  author: codex
+  content: 'Cold independent rereview REQUEST CHANGES at exact PR #2076 head 32aead2b4077e608937c177454355bc1f5208bd8. The direct PR-keyed live phase-3 and resume consumers now validate stale/SHA-less approvals, but both live phase-3 call sites treat that validation failure as permission to consult spec_verdict_fallback_for_phase3 / sibling_verdict_sweep_for_phase3; those paths parse only the verdict spelling and accept fresh Approved records without checking reviewed_sha against the current head. Thus stale, SHA-less, or current-head-unresolved approvals can still advance through fallback. Exact-head GitHub CI is also red (ubuntu Build; scaffold_refresh starter_role_refresh test). Focused provenance tests were launched locally. Reviewer independent of spec/implementation; no code edits or merge.'
+  created_at: 2026-09-22T06:47:40.034604658Z
+  modified_at: 2026-09-22T06:47:40.034604658Z
 execution_mode: drain
