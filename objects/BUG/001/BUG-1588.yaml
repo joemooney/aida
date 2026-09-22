@@ -15,12 +15,12 @@ description: |
   3. Add a regression guard that snapshots the live canonical store HEAD before the affected test suite and proves it is unchanged afterward, or an equivalent isolation assertion at the helper boundary.
   4. Audit adjacent tests using the same helper for the same escape path.
   5. Document the two contaminated IDs and their rejected disposition; do not delete canonical history.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T14:33:57.976444371Z
-modified_at: 2026-09-22T15:04:40.102099747Z
+modified_at: 2026-09-22T15:05:08.549812214Z
 req_type: Bug
 tags:
 - data-integrity
@@ -51,3 +51,21 @@ comments:
   content: '[aida:proxy-approval] verdict=APPROVE; reasoning=independent cold review approved exact head 6a1ad3f709e3fc2b5741ee4d863f8f7026f0a1ff; hostile inherited-root isolation, explicit fixture store, adjacent helper coverage and canonical-store non-mutation verified; independent=yes; gates=Build ubuntu SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; timestamp=2026-09-22T08:04:39-07:00'
   created_at: 2026-09-22T15:04:40.102099747Z
   modified_at: 2026-09-22T15:04:40.102099747Z
+history:
+- id: 01a0c9a6-36bd-7861-b72a-4705cb2e56cd
+  author: aida-auto-bump
+  timestamp: 2026-09-22T15:05:08.541502709Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c9a6-36c5-7473-99ce-e24749a6a757
+  timestamp: 2026-09-22T15:05:08.549809601Z
+  agent: aida
+  commit_sha: 3f215c5bf54fe5a243ad82eaf67b7f0e97b37714
+  summary: Completed via merge 3f215c5b
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T15:05:08.541310166Z
+  completion_sha: 3f215c5bf54fe5a243ad82eaf67b7f0e97b37714
