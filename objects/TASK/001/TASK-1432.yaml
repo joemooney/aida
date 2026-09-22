@@ -20,12 +20,12 @@ description: |-
     9. Missing API credentials (falls back to local offline mock without network calls).
     10. Idempotency key preservation (prevents duplicate charge on retry).
   - Verify structured telemetry events emitted to .aida/telemetry/.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T15:04:22.456365222Z
-modified_at: 2026-09-22T15:04:28.420045173Z
+modified_at: 2026-09-22T16:26:00.415306799Z
 req_type: Task
 tags:
 - adr-56
