@@ -44,7 +44,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:29:00.515328965Z
-modified_at: 2026-09-22T11:48:02.693700410Z
+modified_at: 2026-09-22T14:00:12.528842977Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -71,3 +71,8 @@ comments:
   content: 'Review evidence follow-up: at exact head 70145f2ba9bb6e5e05b776bcb3518247588a0434, the three focused classifier/render tests each selected 1 test and passed; cargo fmt check passed. They do not cover label-only holds or reviewer queue lookup failure, which remain blocking.'
   created_at: 2026-09-22T11:48:02.693700410Z
   modified_at: 2026-09-22T11:48:02.693700410Z
+- id: 01a0c96a-c3f0-7fa2-81a8-0a68924227fd
+  author: mcp
+  content: 'COLD REVIEW — PASS at exact head a0beb5be3c87511cd8221944226b42ee43129a6a. Forge labels and forge-only aida:merge-hold are ingested and suppress red-unowned plus green-orphan paths; reviewer queue failure is Unknown/fail-closed while valid empty is Unrouted. Full red/green/pending/routed/reviewed/owned/unavailable matrix and human/JSON/TOON/compact/statusbar parity/no-double-count checks passed. Evidence: awaiting_you 34 tests; task_192_fail_closed_fact_tests 4 tests; statusbar projection test; fmt/check/clippy; exact-head GitHub Build (Ubuntu/macOS/Windows) and merge-hold-gate all pass. No merge performed.'
+  created_at: 2026-09-22T14:00:12.528829984Z
+  modified_at: 2026-09-22T14:00:12.528829984Z
