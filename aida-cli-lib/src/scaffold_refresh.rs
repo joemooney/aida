@@ -45,6 +45,19 @@ pub(crate) fn refresh_agent_packs(
     project_root: &Path,
     codex_prompts_dest: Option<&Path>,
 ) -> Vec<PackRefresh> {
+    let roles_dir = crate::global_roles_dir();
+    refresh_agent_packs_at(project_root, codex_prompts_dest, roles_dir.as_deref())
+}
+
+/// Dependency-injected refresh core. Tests pass an explicit starter-role
+/// destination (or `None`) so parallel pack tests never consult another
+/// test's process-global HOME override.
+// trace:BUG-1579 | ai:codex
+fn refresh_agent_packs_at(
+    project_root: &Path,
+    codex_prompts_dest: Option<&Path>,
+    roles_dir: Option<&Path>,
+) -> Vec<PackRefresh> {
     let mut packs: Vec<PackRefresh> = PROJECT_PACKS
         .iter()
         .map(|(_, label)| PackRefresh {
@@ -115,7 +128,7 @@ pub(crate) fn refresh_agent_packs(
     if let Some(prompts) = codex_prompts_refresh(codex_prompts_dest) {
         packs.push(prompts);
     }
-    if let Some(roles) = starter_roles_refresh() {
+    if let Some(roles) = roles_dir.and_then(starter_roles_refresh) {
         packs.push(roles);
     }
     packs.retain(|p| p.report != RefreshReport::default());
@@ -128,8 +141,7 @@ pub(crate) fn refresh_agent_packs(
 /// append only an absent `system_prompt`; an existing value wins, and all other
 /// bytes (including comments and custom purpose text) remain untouched.
 // trace:BUG-1464 | ai:codex
-fn starter_roles_refresh() -> Option<PackRefresh> {
-    let roles_dir = crate::global_roles_dir()?;
+fn starter_roles_refresh(roles_dir: &Path) -> Option<PackRefresh> {
     let mut report = RefreshReport::default();
 
     for (name, _, shipped_prompt) in crate::STARTER_ROLES {
@@ -377,10 +389,11 @@ last_active_at = "2026-09-01T00:00:00Z"
 global = true
 "#;
         std::fs::write(&advisor, legacy).unwrap();
-        let home = tmp.path().to_str().unwrap();
-        let _env = crate::test_env::EnvVarsGuard::set(&[("HOME", home), ("AIDA_TEST_HOME", home)]);
-
-        let packs = refresh_agent_packs(tmp.path(), Some(&tmp.path().join("no-prompts")));
+        let packs = refresh_agent_packs_at(
+            tmp.path(),
+            Some(&tmp.path().join("no-prompts")),
+            Some(&roles),
+        );
         let role_pack = packs
             .iter()
             .find(|pack| pack.label == "Starter roles")
@@ -403,9 +416,41 @@ global = true
             "system_prompt = \"My custom operating instructions\"",
         );
         std::fs::write(&advisor, &custom).unwrap();
-        let packs = refresh_agent_packs(tmp.path(), Some(&tmp.path().join("no-prompts")));
+        let packs = refresh_agent_packs_at(
+            tmp.path(),
+            Some(&tmp.path().join("no-prompts")),
+            Some(&roles),
+        );
         assert!(packs.iter().all(|pack| pack.label != "Starter roles"));
         assert_eq!(std::fs::read_to_string(&advisor).unwrap(), custom);
+    }
+
+    /// BUG-1579: every sibling pack-refresh test uses the injected core with
+    /// starter roles disabled. It therefore cannot consume this fixture's
+    /// migration before the owning test reaches it.
+    #[test]
+    fn unrelated_pack_refresh_cannot_consume_starter_role_fixture() {
+        let fixture = tempfile::tempdir().unwrap();
+        let roles = fixture.path().join("roles");
+        std::fs::create_dir_all(&roles).unwrap();
+        std::fs::write(
+            roles.join("advisor.toml"),
+            "name = \"advisor\"\npurpose = \"fixture\"\ncreated_at = \"2026-09-01T00:00:00Z\"\nlast_active_at = \"2026-09-01T00:00:00Z\"\nglobal = true\n",
+        )
+        .unwrap();
+
+        let unrelated = tempfile::tempdir().unwrap();
+        let _ = refresh_agent_packs_at(unrelated.path(), None, None);
+        let packs = refresh_agent_packs_at(fixture.path(), None, Some(&roles));
+
+        let role_pack = packs
+            .iter()
+            .find(|pack| pack.label == "Starter roles")
+            .expect("only the owning refresh consumes the role migration");
+        assert_eq!(
+            role_pack.report.refreshed,
+            vec![PathBuf::from("advisor.toml")]
+        );
     }
 
     /// A refresh over a project with an installed, pristine-but-stale Claude
@@ -440,7 +485,7 @@ global = true
         std::fs::create_dir_all(&commit_dir).unwrap();
         std::fs::write(commit_dir.join("SKILL.md"), &edited).unwrap();
 
-        let packs = refresh_agent_packs(root, None);
+        let packs = refresh_agent_packs_at(root, None, None);
         let claude = packs
             .iter()
             .find(|p| p.label == "Claude skills")
@@ -486,7 +531,7 @@ global = true
         );
         std::fs::write(skills.join("aida-req.md"), &stale).unwrap();
 
-        let packs = refresh_agent_packs(root, None);
+        let packs = refresh_agent_packs_at(root, None, None);
         assert!(
             packs.iter().all(|p| p.label != "Claude skills"),
             "disabled Claude pack should not refresh: {:?}",
@@ -509,7 +554,7 @@ global = true
             "# Guided implement\n\nAsk via `AskUserQuestion`. No arguments placeholder here.\n";
         std::fs::write(&dest, stale).unwrap();
 
-        let packs = refresh_agent_packs(tmp.path(), Some(tmp.path()));
+        let packs = refresh_agent_packs_at(tmp.path(), Some(tmp.path()), None);
         let prompts = packs
             .iter()
             .find(|p| p.label == "Codex prompts (deprecated)")
@@ -548,7 +593,7 @@ global = true
         std::fs::write(&master, &original).unwrap();
         std::os::unix::fs::symlink(&master, req_dir.join("SKILL.md")).unwrap();
 
-        let packs = refresh_agent_packs(root, None);
+        let packs = refresh_agent_packs_at(root, None, None);
         let claude = packs
             .iter()
             .find(|p| p.label == "Claude skills")
@@ -578,7 +623,7 @@ global = true
         let original = "# My project agents\n\nHouse rules the team wrote.\n";
         std::fs::write(root.join("AGENTS.md"), original).unwrap();
 
-        let packs = refresh_agent_packs(root, None);
+        let packs = refresh_agent_packs_at(root, None, None);
         let pack = packs
             .iter()
             .find(|p| p.label == "AGENTS.md AIDA block")
@@ -596,7 +641,7 @@ global = true
         );
 
         // Idempotent: the second refresh reports unchanged, content is stable.
-        let packs2 = refresh_agent_packs(root, None);
+        let packs2 = refresh_agent_packs_at(root, None, None);
         if let Some(pack2) = packs2.iter().find(|p| p.label == "AGENTS.md AIDA block") {
             assert!(pack2.report.refreshed.is_empty(), "{:?}", pack2.report);
             assert_eq!(pack2.report.unchanged, 1);
@@ -613,7 +658,7 @@ global = true
     fn refresh_never_creates_agents_md() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        let packs = refresh_agent_packs(root, None);
+        let packs = refresh_agent_packs_at(root, None, None);
         assert!(packs.iter().all(|p| p.label != "AGENTS.md AIDA block"));
         assert!(!root.join("AGENTS.md").exists());
     }
@@ -632,7 +677,7 @@ global = true
         )
         .unwrap();
 
-        let packs = refresh_agent_packs(root, None);
+        let packs = refresh_agent_packs_at(root, None, None);
         let discipline = packs
             .iter()
             .find(|p| p.label == "Discipline pack")
@@ -665,7 +710,7 @@ global = true
         let root = tmp.path();
         std::fs::create_dir_all(root.join(".aida/discipline")).unwrap();
 
-        let packs = refresh_agent_packs(root, None);
+        let packs = refresh_agent_packs_at(root, None, None);
         let discipline = packs
             .iter()
             .find(|p| p.label == "Discipline pack")
@@ -707,7 +752,7 @@ global = true
         )
         .unwrap();
 
-        let packs = refresh_agent_packs(root, None);
+        let packs = refresh_agent_packs_at(root, None, None);
         assert!(packs.iter().all(|p| p.label != "AGENTS.md AIDA block"));
         assert_eq!(
             std::fs::read_to_string(root.join("AGENTS.md")).unwrap(),
