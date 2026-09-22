@@ -434,7 +434,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-22T06:48:25.640826291Z
+modified_at: 2026-09-22T06:58:06.902015371Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -664,6 +664,11 @@ comments:
     Exact-head cross-platform run 35695238711 is not yet a usable final gate: macOS is green, Windows is still running, and the unrelated GitLab live forge smoke has failed. A verdict should be re-issued only against an unchanged head after the Windows job completes.
   created_at: 2026-09-22T06:48:25.640826291Z
   modified_at: 2026-09-22T06:48:25.640826291Z
+- id: 01a0c7e8-53b6-7010-ad9e-85af379f1fe0
+  author: joe
+  content: 'Second cold-review rework pushed to PR #2073 at exact head 4091a71871. Closed remaining generated-text equality surfaces in scaffold apply no-op detection, generated documentation projections, deployed Codex prompt drift, lifecycle Mermaid pinning, and three marker-merge no-op paths in init/user instruction installation. Exact identifiers, set comparisons, trace transforms, and semantic JSON comparisons remain intentionally outside text normalization. Added focused CRLF-versus-real-drift coverage for scaffold, docs, Codex prompts, and lifecycle. Targeted tests, cargo check, fmt, and diff-check pass; fresh exact-head cross-platform run dispatched.'
+  created_at: 2026-09-22T06:58:06.902015371Z
+  modified_at: 2026-09-22T06:58:06.902015371Z
 history:
 - id: 01a0c528-482c-7ed0-85a1-8d70052bfedf
   author: aida-auto-bump
