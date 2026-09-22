@@ -29,6 +29,43 @@ pub(crate) const DEBOUNCE_SECS: i64 = 60;
 
 const MAX_RETRIES: u32 = 10;
 
+/// Keep enough immutable trips to correlate a routed event after newer runs,
+/// while placing a deterministic ceiling on the git-canonical ledger.
+// trace:BUG-1573 | ai:codex
+pub(crate) const MAX_FAILURE_TRIPS: usize = 20;
+
+/// Allow-listed performance evidence emitted by `doctor check performance`.
+/// Percentages use thousandths of one percent so the persisted/event contract
+/// stays integer-typed and deterministic across serializers.
+// trace:BUG-1573 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct PerformanceAudit {
+    pub command: String,
+    pub budget_ms: u64,
+    pub over_budget: usize,
+    pub denominator: usize,
+    pub proportion_millipercent: u32,
+    pub tolerated_millipercent: u32,
+    pub window_hours: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worst_ms: Option<u64>,
+    #[serde(default)]
+    pub excluded_samples: usize,
+    #[serde(default)]
+    pub lineage_scoped: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct FailureTrip {
+    pub trip_id: String,
+    pub at: DateTime<Utc>,
+    pub status: i32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub performance: Vec<PerformanceAudit>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_error: Option<String>,
+}
+
 /// Who reported a run: the seat that acted, the session id if known, and the
 /// vendor (`claude` / `codex` / `antigravity` / `tick`).
 // trace:STORY-1226 | ai:claude
@@ -71,6 +108,10 @@ pub(crate) struct JobLedger {
     /// `ok` / `failed:<code>` for substrate runs, `done` for seat reports.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<String>,
+    /// Immutable, event-correlated failure evidence; oldest trips fall off at
+    /// [`MAX_FAILURE_TRIPS`]. Old ledgers deserialize with an empty history.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failure_trips: Vec<FailureTrip>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
     /// Seat jobs: set when a trigger (event / condition / interval) marked the
@@ -484,6 +525,7 @@ mod tests {
                 vendor: Some("claude".into()),
             }),
             result: Some("done".into()),
+            failure_trips: Vec::new(),
             note: Some("manual".into()),
             due_since: None,
             due_reason: None,
@@ -556,6 +598,39 @@ mod tests {
             load(dir.path(), "session-reap").unwrap().last_run,
             Some(at(2, 0))
         );
+    }
+
+    // trace:BUG-1573 | ai:codex
+    #[test]
+    fn legacy_ledger_and_failure_trip_round_trip() {
+        let legacy: JobLedger = serde_yaml::from_str(
+            "job: performance-guard\nlast_run: 2026-09-21T21:11:59Z\nresult: failed:1\n",
+        )
+        .unwrap();
+        assert!(legacy.failure_trips.is_empty());
+
+        let mut current = legacy;
+        current.failure_trips.push(FailureTrip {
+            trip_id: "performance-guard@2026-09-21T21:11:59Z".into(),
+            at: "2026-09-21T21:11:59Z".parse().unwrap(),
+            status: 1,
+            performance: vec![PerformanceAudit {
+                command: "show".into(),
+                budget_ms: 1000,
+                over_budget: 1447,
+                denominator: 7346,
+                proportion_millipercent: 19_697,
+                tolerated_millipercent: 10_000,
+                window_hours: 24,
+                worst_ms: Some(165_672),
+                excluded_samples: 0,
+                lineage_scoped: true,
+            }],
+            audit_error: None,
+        });
+        let yaml = serde_yaml::to_string(&current).unwrap();
+        assert!(!yaml.contains("secret"));
+        assert_eq!(serde_yaml::from_str::<JobLedger>(&yaml).unwrap(), current);
     }
 
     #[test]
