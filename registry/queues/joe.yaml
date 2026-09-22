@@ -78,3 +78,11 @@
   added_at: 2026-09-22T14:40:47.298205937Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0c998-7f87-79a2-9b1a-f86d5fe3e4c1
+  position: 36000
+  added_by: joe
+  note: auto-queued by `session end` (01a0c98c); covers 1 spec
+  added_at: 2026-09-22T14:50:22.466394545Z
+  for_role: reviewer
+  added_by_machine: imac
