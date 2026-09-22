@@ -580,8 +580,9 @@ mod tests {
         req.tags.insert("tag-mango".into());
         req.custom_fields.insert("z_key".into(), "1".into());
         req.custom_fields.insert("a_key".into(), "2".into());
-        // TASK-184: custom relationships serialize as plain scalars so stock
-        // YAML loaders can consume canonical objects. trace:TASK-184 | ai:codex
+        // TASK-184: custom relationships serialize as standard mappings so
+        // stock YAML loaders can consume canonical objects while AIDA retains
+        // Custom identity. trace:TASK-184 | ai:codex
         req.relationships.push(Relationship {
             rel_type: RelationshipType::Custom("verifies-indirectly".into()),
             target_id: Uuid::now_v7(),
@@ -604,10 +605,10 @@ mod tests {
             "custom_fields keys must serialize sorted:\n{yaml}"
         );
 
-        // 2. RelationshipType::Custom → plain scalar, never a local YAML tag.
+        // 2. RelationshipType::Custom → standard mapping, never a local tag.
         assert!(
-            yaml.contains("rel_type: verifies-indirectly"),
-            "custom rel must serialize as a plain scalar:\n{yaml}"
+            yaml.contains("rel_type:\n    custom: verifies-indirectly"),
+            "custom rel must serialize as a standard mapping:\n{yaml}"
         );
         assert!(
             !yaml.contains("!Custom"),

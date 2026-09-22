@@ -952,9 +952,10 @@ impl MetaSubtype {
 /// unit variant (e.g. an older binary reading a newer `BlockedBy`), which
 /// produced noisy parse failures on every machine trailing a format change.
 /// The manual impl routes any unknown variant to `Custom(name)` instead.
-/// TASK-184: `Serialize` is also hand-written so every relationship type is
-/// emitted as a plain scalar. This keeps canonical YAML consumable by stock
-/// parsers while the reader continues accepting legacy `!Custom` tags.
+/// TASK-184: `Serialize` is also hand-written so built-ins are plain scalars
+/// and custom values are standard mappings. The distinct custom shape retains
+/// enum identity even when its text collides with a built-in name or alias,
+/// while keeping canonical YAML consumable by stock parsers.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, TS)]
 pub enum RelationshipType {
     // TASK-679: the stored convention — verified empirically against `aida add
@@ -1019,7 +1020,14 @@ impl Serialize for RelationshipType {
             RelationshipType::Blocks => serializer.serialize_str("Blocks"),
             RelationshipType::SupersededBy => serializer.serialize_str("SupersededBy"),
             RelationshipType::Supersedes => serializer.serialize_str("Supersedes"),
-            RelationshipType::Custom(name) => serializer.serialize_str(name),
+            RelationshipType::Custom(name) => {
+                #[derive(Serialize)]
+                struct CustomRelationshipType<'a> {
+                    custom: &'a str,
+                }
+
+                CustomRelationshipType { custom: name }.serialize(serializer)
+            }
         }
     }
 }
@@ -1045,9 +1053,10 @@ impl fmt::Display for RelationshipType {
 
 /// BUG-251: forward-compatible deserialization. An unknown variant — a newer
 /// binary's addition read by an older one — lands in `Custom(name)` rather
-/// than failing the whole spec parse. Handles the current scalar wire format
-/// plus both legacy externally-tagged forms:
+/// than failing the whole spec parse. Handles the current scalar/mapping wire
+/// format plus both legacy externally-tagged forms:
 ///   - bare string `Parent` / `BlockedBy` / future names → `visit_str`
+///   - standard mapping `{custom: foo}`                   → `visit_map`
 ///   - YAML externally-tagged `!Custom foo`               → `visit_enum`
 ///   - JSON externally-tagged `{"Custom":"foo"}`          → `visit_map`
 ///     `from_str` lowercases, so the stored PascalCase variant names round-trip,
@@ -1095,7 +1104,8 @@ impl<'de> Deserialize<'de> for RelationshipType {
                 Ok(RelationshipType::Custom(payload))
             }
 
-            // JSON externally-tagged form: `{"Custom":"foo"}`.
+            // Current standard mapping (`{custom: foo}`) and legacy JSON
+            // externally-tagged form (`{"Custom":"foo"}`).
             fn visit_map<A>(self, mut map: A) -> Result<RelationshipType, A::Error>
             where
                 A: serde::de::MapAccess<'de>,
@@ -7633,7 +7643,7 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
             serde_yaml::to_string(&RelationshipType::Custom("foo".to_string()))
                 .unwrap()
                 .trim(),
-            "foo"
+            "custom: foo"
         );
 
         // Full round-trip: serialize a future-unknown variant we modeled as
@@ -7648,14 +7658,14 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
     /// relationship name.
     // trace:TASK-184 | ai:codex
     #[test]
-    fn relationship_type_custom_legacy_yaml_migrates_to_plain_scalar() {
+    fn relationship_type_custom_legacy_yaml_migrates_to_standard_mapping() {
         for name in ["implemented-by", "implemented_by", "sprint_assignment"] {
             let legacy = format!("!Custom {name}\n");
             let parsed: RelationshipType = serde_yaml::from_str(&legacy).unwrap();
             assert_eq!(parsed, RelationshipType::Custom(name.to_owned()));
 
             let migrated = serde_yaml::to_string(&parsed).unwrap();
-            assert_eq!(migrated.trim(), name);
+            assert_eq!(migrated.trim(), format!("custom: {name}"));
             assert!(!migrated.contains("!Custom"));
             assert_eq!(
                 serde_yaml::from_str::<RelationshipType>(&migrated).unwrap(),
@@ -7663,7 +7673,7 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
             );
 
             let generic: serde_yaml::Value = serde_yaml::from_str(&migrated).unwrap();
-            assert_eq!(generic, serde_yaml::Value::String(name.to_owned()));
+            assert!(matches!(generic, serde_yaml::Value::Mapping(_)));
         }
     }
 
@@ -7683,7 +7693,6 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
             RelationshipType::Blocks,
             RelationshipType::SupersededBy,
             RelationshipType::Supersedes,
-            RelationshipType::Custom("implemented-by".to_owned()),
         ];
 
         for rel_type in variants {
@@ -7696,6 +7705,66 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
             assert_eq!(
                 serde_yaml::from_str::<RelationshipType>(&yaml).unwrap(),
                 rel_type
+            );
+        }
+    }
+
+    /// TASK-184: custom names that collide with any typed spelling or alias
+    /// retain both their exact text and their `Custom` identity through legacy
+    /// YAML/JSON reads and the new standard mapping write format.
+    // trace:TASK-184 | ai:codex
+    #[test]
+    fn relationship_type_custom_collisions_preserve_identity_and_exact_text() {
+        let colliding_names = [
+            "parent",
+            "Parent",
+            "child",
+            "duplicate",
+            "verifies",
+            "verified-by",
+            "verified_by",
+            "verifiedby",
+            "references",
+            "blocked-by",
+            "blocked_by",
+            "blockedby",
+            "blocks",
+            "superseded-by",
+            "superseded_by",
+            "supersededby",
+            "replaced-by",
+            "supersedes",
+            "replaces",
+        ];
+
+        for name in colliding_names {
+            let expected = RelationshipType::Custom(name.to_owned());
+            let legacy_yaml = format!("!Custom {name}\n");
+            let legacy_json = serde_json::json!({ "Custom": name }).to_string();
+            assert_eq!(
+                serde_yaml::from_str::<RelationshipType>(&legacy_yaml).unwrap(),
+                expected
+            );
+            assert_eq!(
+                serde_json::from_str::<RelationshipType>(&legacy_json).unwrap(),
+                expected
+            );
+
+            let yaml = serde_yaml::to_string(&expected).unwrap();
+            assert!(!yaml.contains("!Custom"));
+            assert!(matches!(
+                serde_yaml::from_str::<serde_yaml::Value>(&yaml).unwrap(),
+                serde_yaml::Value::Mapping(_)
+            ));
+            assert_eq!(
+                serde_yaml::from_str::<RelationshipType>(&yaml).unwrap(),
+                expected
+            );
+
+            let json = serde_json::to_string(&expected).unwrap();
+            assert_eq!(
+                serde_json::from_str::<RelationshipType>(&json).unwrap(),
+                expected
             );
         }
     }
