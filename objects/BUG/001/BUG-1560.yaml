@@ -35,12 +35,12 @@ description: |
   - Carry a non-regression control at the pre-existing statuses (Approved, InProgress) so the widening is shown not to change them.
 
   Related: BUG-1543 (the sibling, fixed at #2054), TASK-1296 (the original stranded Review-PR sweep), BUG-1432.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:35:16.895737820Z
-modified_at: 2026-09-22T06:23:34.709471565Z
+modified_at: 2026-09-22T06:23:51.408502562Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -63,3 +63,21 @@ comments:
   content: '[aida:proxy-approval] verdict=approved; reasoning=cold reviewer verified exact head d06259e49be231046233e1709b560555ac260073, Draft coverage at all three gates, controls, and targeted tests; independent=yes; gates=Ubuntu CI green, merge-hold-gate green, exact-head review approved; timestamp=2026-09-21T23:23:33-07:00'
   created_at: 2026-09-22T06:23:34.709471565Z
   modified_at: 2026-09-22T06:23:34.709471565Z
+history:
+- id: 01a0c7c8-f660-76f2-b32c-429570bf5811
+  author: aida-auto-bump
+  timestamp: 2026-09-22T06:23:51.392365734Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c7c8-f670-70c1-bcec-e9de6269db6e
+  timestamp: 2026-09-22T06:23:51.408500394Z
+  agent: aida
+  commit_sha: 167f439484613acb59d03a30628987846bbe2844
+  summary: Completed via merge 167f4394
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T06:23:50.826508910Z
+  completion_sha: 167f439484613acb59d03a30628987846bbe2844
