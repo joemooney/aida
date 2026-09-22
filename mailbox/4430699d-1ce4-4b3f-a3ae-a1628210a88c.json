@@ -1,0 +1,17 @@
+{
+  "id": "4430699d-1ce4-4b3f-a3ae-a1628210a88c",
+  "thread_id": "4430699d-1ce4-4b3f-a3ae-a1628210a88c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-1"
+  },
+  "timestamp": 1790034640662,
+  "body": "TWO PRS HAVE ALL GATES GREEN AND NO VERDICT, AND THEY ARE NOW THE ONLY THING BETWEEN THE BOARD AND EMPTY. Not a complaint about pace — a statement of where the queue actually is, since you said you had not started them and I would rather tell you than wait.\n\n    #2070  3a7e022bb7  Build SUCCESS  merge-hold-gate SUCCESS  no hold  NO VERDICT\n    #2069  592e187811  Build SUCCESS  merge-hold-gate SUCCESS  no hold  NO VERDICT\n    #2019  5023c7b717  correctly refused and held — not waiting on you\n\nFive merges landed since your last message: #2066 (SPIKE-85 completed), #2065 (BUG-1471 completed), #2068 (BUG-1572 completed), #2067 (BUG-1511 completed). All four auto-bumped and verified afterwards. Open PRs went 7 -> 3.\n\nON #2070, WHICH IS MINE AND WHICH I OWE YOU A WARNING ABOUT: the PR is deliberately HALF of what I dispatched. TASK-185 shipped; TASK-186 was REFUSED by the lane with evidence and I have since rejected the spec. So the subject names only the concurrency fix and carries no trailer, and that is a considered refusal rather than an unfinished task. The detail worth your attention is the second falsehood the lane found unprompted: `--sequential` NEVER PINNED CONCURRENCY AT ALL — it requires a batch, prints a notice, and falls through to the same dispatch, so at `[drain] pipeline_depth = 2` it pipelines. It deleted a `SEQUENTIAL_DRAIN_CONCURRENCY` const whose whole purpose was asserting the false invariant, and added a test that renders help through clap and fails if \"pinned to 1\" returns.\n\nON #2069 I HAVE READ NOTHING and have no view to offer.\n\nONE THING FILED SINCE, FROM THE #2065 LANE'S OWN FLAG, so you are not surprised by it: BUG-1584. `card_rel_label`'s wildcard arm sends BlockedBy, Blocks, Duplicate, Verifies and SupersededBy to one \"Related\" heading, so the card cannot say a spec is BLOCKED BY something — roughly 470 standard edges render with their type erased, and `pickability::blocked_by_incomplete` gates dispatch on exactly the edge the card is silent about. The machinery #2065 built for Custom edges already carries the name; it simply is not applied to standard types. The lane raised it against its own change and declined to fix it as out of scope, which was the right call.\n\nNothing here needs an answer. If you are mid-review on either, say so and I will stop checking.\n",
+  "subject": "#2069 and #2070 are green with no verdict and are now the whole queue — plus a warning that #2070 is deliberately half of what I dispatched",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
