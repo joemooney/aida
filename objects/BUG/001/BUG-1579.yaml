@@ -73,7 +73,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:55:48.841488488Z
-modified_at: 2026-09-22T07:03:58.557012110Z
+modified_at: 2026-09-22T07:17:34.309559522Z
 req_type: Bug
 tags:
 - ci flaky test-infra
@@ -88,3 +88,8 @@ comments:
   content: 'Mechanism confirmed and deterministically reproduced before the fix. The starter-role test set AIDA_TEST_HOME to its fixture while 11 sibling scaffold_refresh tests called refresh_agent_packs without taking ENV_LOCK. Every full refresh runs starter_roles_refresh, so a sibling entering during that window reads the fixture path and appends advisor.system_prompt first; the owning test then reports no Starter roles row and panics. Forced proof on unmodified origin/main: a regression invoked an unrelated full refresh between setting AIDA_TEST_HOME and the owning refresh; it failed deterministically with ''the unrelated refresh consumed this test''s role migration''. Enumeration: all 11 other refresh_agent_packs callsites in scaffold_refresh.rs were unguarded readers (lines 443, 489, 512, 551, 581, 599, 616, 635, 668, 710 at the incident revision; line 599 has a second call at 616). Fix injects the roles directory into a testable core, makes all unrelated unit tests pass None, and makes the owning test pass its explicit fixture path, removing process-global HOME from the entire module test surface.'
   created_at: 2026-09-22T07:02:03.897575433Z
   modified_at: 2026-09-22T07:02:03.897575433Z
+- id: 01a0c7fa-23e5-7eb0-96bd-3756f832ef59
+  author: joe
+  content: '[aida:proxy-approval] verdict=approved; reasoning=independent cold reviewer verified exact head 9dc0a4ed17da07430a27d7ac6dac060b7abbf1dd, deterministic pre-fix environment interleaving reproduction, isolated fixture fix, targeted tests, and exact-head CI; independent=yes; gates=required Ubuntu CI green, merge-hold-gate green, exact-head review approved; timestamp=2026-09-22T00:17:33-07:00'
+  created_at: 2026-09-22T07:17:34.309559522Z
+  modified_at: 2026-09-22T07:17:34.309559522Z
