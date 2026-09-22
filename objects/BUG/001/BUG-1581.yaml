@@ -58,7 +58,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:59:21.615803647Z
-modified_at: 2026-09-22T09:06:29.021188013Z
+modified_at: 2026-09-22T09:07:53.483298820Z
 req_type: Bug
 tags:
 - review-verdicts orchestrator integrity
@@ -169,3 +169,8 @@ comments:
   created_at: 2026-09-21T23:07:55.052558692Z
   modified_at: 2026-09-21T23:07:55.052558692Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c85f-240b-75b1-9f1c-81faae98c50d
+  author: joe
+  content: '[aida:implementer] SKETCH — extend the existing append-only `rounds` contract to the authoritative PR-keyed handshake instead of raw-overwriting it. Introduce a path-targeted verdict writer used by both spec and explicit PR paths, retaining the displaced top-level round with its reviewed_sha, recorded_by, verdict, findings, and timestamp. Add a pure reconciliation classifier over top-level + rounds: for the current top-level reviewed_sha only, normalize SHA equality with the existing >=7-character prefix-compatible rule, collect distinct reviewers/verdict classes independent of artifact order, and report conflict when approval and any blocking verdict coexist. Opposite verdicts at stale SHAs remain history and do not poison a later current-head approval. Wire `read_verdict_file` (shared by drain/resume/awaiting merge predicates) to return a visible NoVerdict failure on conflict, so no merge surface treats the PR as approved. Preserve all evidence; never auto-pick a winner. Red-first tests cover same-SHA opposite reviewers, reverse recording order, stale-vs-current control, identical/same-verdict controls, and the real explicit handshake writer retaining the first record. This changes the persisted PR-verdict artifact additively (`rounds`) and its merge interpretation, so implementation waits for driver/advisor signoff.'
+  created_at: 2026-09-22T09:07:53.483298820Z
+  modified_at: 2026-09-22T09:07:53.483298820Z
