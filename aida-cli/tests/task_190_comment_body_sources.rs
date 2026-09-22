@@ -65,6 +65,7 @@ fn comment_body_sources_conflict_and_empty_explicit_sources_fail() {
     let body_path = body.to_str().unwrap();
 
     for args in [
+        vec!["comment", "add", id, "positional", "--content", "legacy"],
         vec!["comment", "add", id, "positional", "--body-file", body_path],
         vec!["comment", "add", id, "positional", "--stdin"],
         vec![
@@ -81,6 +82,57 @@ fn comment_body_sources_conflict_and_empty_explicit_sources_fail() {
         assert!(
             !run(&repo, &home, &args).status.success(),
             "mixed sources must fail"
+        );
+    }
+
+    for args in [
+        vec!["comment", "add", id, "positional", "--interactive"],
+        vec!["comment", "add", id, "--content", "legacy", "--interactive"],
+        vec![
+            "comment",
+            "add",
+            id,
+            "--body-file",
+            body_path,
+            "--interactive",
+        ],
+        vec!["comment", "add", id, "--stdin", "--interactive"],
+        vec![
+            "comment",
+            "edit",
+            "--req-id",
+            id,
+            "--comment-id",
+            "abc",
+            "--content",
+            "replacement",
+            "--interactive",
+        ],
+        vec![
+            "comment",
+            "edit",
+            "--req-id",
+            id,
+            "--comment-id",
+            "abc",
+            "--body-file",
+            body_path,
+            "--interactive",
+        ],
+        vec![
+            "comment",
+            "edit",
+            "--req-id",
+            id,
+            "--comment-id",
+            "abc",
+            "--stdin",
+            "--interactive",
+        ],
+    ] {
+        assert!(
+            !run(&repo, &home, &args).status.success(),
+            "interactive and noninteractive sources must conflict"
         );
     }
 

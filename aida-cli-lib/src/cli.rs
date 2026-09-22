@@ -4470,20 +4470,20 @@ pub enum CommentCommand {
         // trace:TASK-778 — de-duplicated from the positional [CONTENT];
         // hidden from --help so the two forms don't read as distinct args.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, hide = true, allow_hyphen_values = true)]
+        #[clap(long, hide = true, allow_hyphen_values = true, conflicts_with_all = ["content_positional", "body_file", "stdin", "interactive"])]
         content: Option<String>,
 
         /// Comment content (positional argument)
-        #[clap(value_name = "CONTENT")]
+        #[clap(value_name = "CONTENT", conflicts_with_all = ["content", "body_file", "stdin", "interactive"])]
         content_positional: Option<String>,
 
         /// Read comment content from a file. Prefer this for text containing
         /// backticks or `$()` so the shell cannot perform command substitution.
-        #[clap(long, value_name = "PATH", conflicts_with_all = ["content", "content_positional", "stdin"])]
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["content", "content_positional", "stdin", "interactive"])]
         body_file: Option<PathBuf>,
 
         /// Read comment content from stdin.
-        #[clap(long, conflicts_with_all = ["content", "content_positional", "body_file"])]
+        #[clap(long, conflicts_with_all = ["content", "content_positional", "body_file", "interactive"])]
         stdin: bool,
 
         /// Author of the comment (defaults to AIDA_AUTHOR env var or system user)
@@ -4517,7 +4517,7 @@ pub enum CommentCommand {
 
         /// New content
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "interactive")]
         content: Option<String>,
 
         /// Read replacement content from a file. Prefer this for text
@@ -4576,6 +4576,16 @@ mod task_190_comment_source_parser_tests {
             "comment",
             "add",
             "TASK-1",
+            "positional",
+            "--content",
+            "legacy",
+        ])
+        .is_err());
+        assert!(Cli::try_parse_from([
+            "aida",
+            "comment",
+            "add",
+            "TASK-1",
             "--content",
             "legacy",
             "--body-file",
@@ -4592,6 +4602,40 @@ mod task_190_comment_source_parser_tests {
             "--stdin",
         ])
         .is_err());
+    }
+
+    #[test]
+    fn interactive_conflicts_with_every_noninteractive_source() {
+        for tail in [
+            vec!["positional"],
+            vec!["--content", "legacy"],
+            vec!["--body-file", "body.md"],
+            vec!["--stdin"],
+        ] {
+            let mut args = vec!["aida", "comment", "add", "TASK-1"];
+            args.extend(tail);
+            args.push("--interactive");
+            assert!(Cli::try_parse_from(args).is_err());
+        }
+
+        for tail in [
+            vec!["--content", "replacement"],
+            vec!["--body-file", "body.md"],
+            vec!["--stdin"],
+        ] {
+            let mut args = vec![
+                "aida",
+                "comment",
+                "edit",
+                "--req-id",
+                "TASK-1",
+                "--comment-id",
+                "abc",
+            ];
+            args.extend(tail);
+            args.push("--interactive");
+            assert!(Cli::try_parse_from(args).is_err());
+        }
     }
 }
 
