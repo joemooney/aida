@@ -47,6 +47,10 @@ jobs:
   # -> merge through the Forge trait. The ignored Rust test owns cleanup. An
   # absent credentials fail loudly; only an unreachable mirror skips the probe.
   # trace:TASK-1273 | ai:codex
+  # Cloudflare Access and GitLab authorization are deliberately separate
+  # credentials. glab resolves the Access headers from environment variables
+  # at request time; no perimeter secret is written to disk.
+  # trace:TASK-1425 trace:ADR-54 | ai:codex
   gitlab-forge-smoke:
     name: GitLab live forge smoke
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -54,38 +58,94 @@ jobs:
     timeout-minutes: 20
     env:
       AIDA_GITLAB_LIVE_HOST: gitlab.joemooney.com
-      GITLAB_TOKEN: ${{ secrets.AIDA_GITLAB_TOKEN }}
+      GLAB_VERSION: 1.118.0
     steps:
       - uses: actions/checkout@v5
 
       - name: Check mirror availability and credentials
         id: preflight
         shell: bash
+        env:
+          GITLAB_TOKEN: ${{ secrets.AIDA_GITLAB_TOKEN }}
+          AIDA_CF_ACCESS_CLIENT_ID: ${{ secrets.AIDA_CF_ACCESS_CLIENT_ID }}
+          AIDA_CF_ACCESS_CLIENT_SECRET: ${{ secrets.AIDA_CF_ACCESS_CLIENT_SECRET }}
         run: |
-          if [ -z "$GITLAB_TOKEN" ]; then
-            echo "::error::AIDA_GITLAB_TOKEN is not provisioned"
+          for credential in GITLAB_TOKEN AIDA_CF_ACCESS_CLIENT_ID AIDA_CF_ACCESS_CLIENT_SECRET; do
+            if [ -z "${!credential:-}" ]; then
+              echo "::error::${credential} is not provisioned"
+              exit 1
+            fi
+          done
+
+          response="$(mktemp)"
+          set +e
+          curl --silent --show-error --fail --max-time 15 \
+            --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+            --header "CF-Access-Client-Id: ${AIDA_CF_ACCESS_CLIENT_ID}" \
+            --header "CF-Access-Client-Secret: ${AIDA_CF_ACCESS_CLIENT_SECRET}" \
+            "https://${AIDA_GITLAB_LIVE_HOST}/api/v4/version" >"$response"
+          curl_status=$?
+          set -e
+          if [ "$curl_status" -eq 22 ]; then
+            echo "::error::GitLab API preflight returned an HTTP error; verify the Access Service Auth policy and both credential pairs"
             exit 1
-          elif ! curl --silent --show-error --fail --max-time 15 \
-            "https://${AIDA_GITLAB_LIVE_HOST}/-/readiness" >/dev/null; then
+          elif [ "$curl_status" -ne 0 ]; then
             echo "::notice::Skipping GitLab forge smoke: mirror is unreachable"
             echo "run=false" >> "$GITHUB_OUTPUT"
+          elif ! jq -e '.version | type == "string" and length > 0' "$response" >/dev/null 2>&1; then
+            echo "::error::GitLab API preflight did not return authenticated JSON (Cloudflare Access may have returned an HTML sign-in page)"
+            exit 1
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
+          rm -f "$response"
 
       - name: Install Rust and GitLab CLI
         if: steps.preflight.outputs.run == 'true'
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y glab
+          archive="glab_${GLAB_VERSION}_linux_amd64.tar.gz"
+          release="https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads"
+          curl --silent --show-error --fail --location --output "$RUNNER_TEMP/$archive" "$release/$archive"
+          curl --silent --show-error --fail --location --output "$RUNNER_TEMP/glab-checksums.txt" "$release/checksums.txt"
+          (cd "$RUNNER_TEMP" && grep "  ${archive}$" glab-checksums.txt | sha256sum --check --strict)
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          sudo install -m 0755 "$RUNNER_TEMP/bin/glab" /usr/local/bin/glab
+          glab --version | grep -F "glab ${GLAB_VERSION}"
           rustup toolchain install stable --profile minimal
 
-      - name: Authenticate GitLab CLI
+      - name: Configure GitLab CLI authentication
         if: steps.preflight.outputs.run == 'true'
-        run: glab auth login --hostname "$AIDA_GITLAB_LIVE_HOST" --token "$GITLAB_TOKEN"
+        shell: bash
+        env:
+          GLAB_CONFIG_DIR: ${{ runner.temp }}/glab-cli
+          GITLAB_TOKEN: ${{ secrets.AIDA_GITLAB_TOKEN }}
+          AIDA_CF_ACCESS_CLIENT_ID: ${{ secrets.AIDA_CF_ACCESS_CLIENT_ID }}
+          AIDA_CF_ACCESS_CLIENT_SECRET: ${{ secrets.AIDA_CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          mkdir -p "$GLAB_CONFIG_DIR"
+          cat >"$GLAB_CONFIG_DIR/config.yml" <<EOF
+          hosts:
+            ${AIDA_GITLAB_LIVE_HOST}:
+              api_host: ${AIDA_GITLAB_LIVE_HOST}
+              api_protocol: https
+              git_protocol: https
+              custom_headers:
+                - name: CF-Access-Client-Id
+                  valueFromEnv: AIDA_CF_ACCESS_CLIENT_ID
+                - name: CF-Access-Client-Secret
+                  valueFromEnv: AIDA_CF_ACCESS_CLIENT_SECRET
+          EOF
+          chmod 600 "$GLAB_CONFIG_DIR/config.yml"
+          glab auth status --hostname "$AIDA_GITLAB_LIVE_HOST"
 
       - name: Run open-CI-review-merge lifecycle
         if: steps.preflight.outputs.run == 'true'
+        env:
+          GLAB_CONFIG_DIR: ${{ runner.temp }}/glab-cli
+          GITLAB_TOKEN: ${{ secrets.AIDA_GITLAB_TOKEN }}
+          AIDA_CF_ACCESS_CLIENT_ID: ${{ secrets.AIDA_CF_ACCESS_CLIENT_ID }}
+          AIDA_CF_ACCESS_CLIENT_SECRET: ${{ secrets.AIDA_CF_ACCESS_CLIENT_SECRET }}
         run: cargo test -p aida-cli-lib gitlab_live_mr_round_trip -- --ignored --nocapture
 
   build:
