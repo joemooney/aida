@@ -28,12 +28,12 @@ description: |
   - The existing reaper is left alone or extended, not replaced. If it is extended to fire on Done rather than only Completed, state why that is safe given a Done spec can still fail to merge.
   - NOT IN SCOPE: bulk-rejecting the existing store. Declined by the advisor on 2026-09-20 with the measurement above; a future proposal to do so must first show that the rows it would close are not about unresolved specs.
   - Verification: with the lens in place, `aida list --status draft` shows the human-filed drafts; the machine-filed ones are reachable under a flag and their count is unchanged. Drive one spec to two shelves in the same phase and assert one row, with a recurrence marker, rather than two.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:30:00.794024258Z
-modified_at: 2026-09-22T11:00:10.683856734Z
+modified_at: 2026-09-22T11:00:17.807599496Z
 req_type: Bug
 tags:
 - agent-surface
@@ -92,3 +92,21 @@ comments:
   content: '[aida:proxy-approval] verdict=APPROVE; reasoning=independent cold review approved exact head 25c52f152f0fc940d8c2e78a23a15dfb83ab45cb; default human-draft lens, machine-draft selector, short composition, mixed-status completeness, and BUG-864 recurrence preservation verified; independent=yes; gates=Build ubuntu SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; timestamp=2026-09-22T04:00:10-07:00'
   created_at: 2026-09-22T11:00:10.683856734Z
   modified_at: 2026-09-22T11:00:10.683856734Z
+history:
+- id: 01a0c8c6-0d08-72c2-8cc4-cb35bb083086
+  author: aida-auto-bump
+  timestamp: 2026-09-22T11:00:17.800779406Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0c8c6-0d0f-7653-8d1c-d6ebb1a91e61
+  timestamp: 2026-09-22T11:00:17.807597912Z
+  agent: aida
+  commit_sha: 7cd1a318eea9e948285ed30c0ec7e63516d9742d
+  summary: Completed via merge 7cd1a318
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T11:00:17.800561280Z
+  completion_sha: 7cd1a318eea9e948285ed30c0ec7e63516d9742d
