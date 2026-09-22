@@ -158,13 +158,28 @@ Every application of Jev must conform to AIDA's constitutional principles:
 * **PRIN-7 (Dual Predicates):** Advisory recommendations never bypass mandatory CI or required review verdicts.
 * **PRIN-8 (Determinism Ladder):** Jev remains classified as **Rung 3.5 (Calibrated Heuristic)**. All outputs presented to agents or humans must carry `heuristic: true` and cite the underlying deterministic evidence that triggered them.
 
+## 7. Zero-Prerequisite & Offline Sovereignty Invariant
+
+Jev is strictly an **optional acceleration plugin**, never a prerequisite for installing, compiling, testing, or operating AIDA:
+
+1. **Zero Hard Dependency:**
+   * AIDA builds, tests, runs, and passes all CI gates with zero environment variables, zero network access, and zero external API keys.
+   * If `AIDA_JEV_API_KEY` or `TYPESAFE_API_KEY` is not present, no external calls are made.
+2. **Deterministic Baseline When Jev Access is Absent:**
+   * **`aida doctor --contradictions`:** Executes Slice 1 mechanical joins across requirements (e.g. Approved Vision older than Completed ChangeRequest, terminal plan Followups missing child, ADR overlaps). Reports all candidate conflicts with `model: "mechanical-join"` and `verdict: "candidate"` cleanly without error or disruption.
+   * **`graded_review` (STORY-1424):** Runs Rung 2 deterministic bash checks. If all machine checks pass, residual prose criteria are **never auto-approved**; they cleanly escalate (`escalated_to_seat: true`) for the human operator or Phase 3 conversational reviewer seat (Claude Code / Codex).
+   * **Candidate Advisory Features:** In keyless or offline environments, features immediately and silently fall back to deterministic baselines (full prompts, keyword search, default queue lanes).
+3. **Local Sovereignty (ADR-55):**
+   * AIDA is a git-canonical, self-sovereign development substrate. Tight coupling to any proprietary external SaaS API is strictly prohibited. `MockEvaluator` and `LocalLlmEvaluator` ensure complete local testing and air-gapped support.
+
 ---
 
-## 7. Current Verification Status
+## 8. Current Verification Status
 
-* **Targeted Unit Tests:** 23 targeted unit tests pass across [`aida-cli-lib`](file:///home/joe/ai/aida-spike-87/aida-cli-lib):
+* **Targeted Unit Tests:** 24 targeted unit tests pass across [`aida-cli-lib`](file:///home/joe/ai/aida-spike-87/aida-cli-lib):
   * 5 evaluator engine tests (`adr_55_evaluator_tests`)
   * 11 graded review tests (`story_1424_graded_review_tests`)
-  * 7 contradiction sweep tests (`story_1426_contradictions_tests`)
+  * 8 contradiction sweep tests (`story_1426_contradictions_tests`, including explicit zero-evaluator offline fallback)
 * **Remote CI Checks:** PR #2080 checks pass on Ubuntu (`CI/Build` and `merge-hold-gate`).
 * **Governance Invariant:** No code has been merged to `main`; fast-pass auto-merging remains strictly disabled.
+
