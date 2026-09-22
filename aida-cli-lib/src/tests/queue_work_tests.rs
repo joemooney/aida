@@ -1113,6 +1113,7 @@ fn pickup_prompt_leads_with_due_jobs_for_role() {
         last_run: None,
         last_by: None,
         due_since: None,
+        failure: None,
     }];
     let block = crate::maintenance_schedule::render_due_jobs_block(&due, "advisor");
     let base = derive_queue_work_prompt(&plan, "advisor", false, false, None);

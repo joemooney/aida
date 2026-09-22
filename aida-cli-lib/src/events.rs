@@ -295,6 +295,12 @@ pub enum EventKind {
         seat: String,
         /// Exit status / stderr tail.
         error: String,
+        /// Correlates this routed failure with immutable ledger history.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        trip_id: Option<String>,
+        /// Bounded, allow-listed evidence; never arbitrary child output.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        performance: Vec<crate::schedule_ledger::PerformanceAudit>,
     },
     /// STORY-1226: a mailbox message was sent to `to` — the event fast-path
     /// for `on = ["MailReceived"]` jobs (mailbox-triage). **Actionable.**
@@ -1009,6 +1015,8 @@ mod tests {
             job: "session-reap".into(),
             seat: "*".into(),
             error: "exit 2".into(),
+            trip_id: None,
+            performance: Vec::new(),
         }
         .is_actionable());
         assert!(EventKind::MailReceived {
@@ -1024,6 +1032,19 @@ mod tests {
         }
         let back: EventKind = serde_json::from_str(&json).unwrap();
         assert_eq!(back, fired);
+
+        let legacy_failed: EventKind = serde_json::from_str(
+            r#"{"event":"CronJobFailed","job":"old","seat":"*","error":"exit 1"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            legacy_failed,
+            EventKind::CronJobFailed {
+                trip_id: None,
+                ref performance,
+                ..
+            } if performance.is_empty()
+        ));
     }
 
     /// BUG-1299: `SpecRetried.detail` round-trips like `SpecShelved.detail` —

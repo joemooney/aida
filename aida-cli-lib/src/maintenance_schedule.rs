@@ -295,6 +295,8 @@ pub(crate) struct DueJob {
     pub last_run: Option<DateTime<Utc>>,
     pub last_by: Option<String>,
     pub due_since: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<schedule_ledger::RoutedFailure>,
 }
 
 impl DueJob {
@@ -309,7 +311,26 @@ impl DueJob {
             .clone()
             .or_else(|| self.command.as_ref().map(|c| format!("run: {c}")))
             .unwrap_or_default();
-        format!("{} ({}, {}) → {}", self.name, self.reason, last, what)
+        let mut line = format!("{} ({}, {}) → {}", self.name, self.reason, last, what);
+        if let Some(failure) = &self.failure {
+            line.push_str(&format!("\n  trip evidence: {}", failure.trip_id));
+            for audit in &failure.performance {
+                line.push_str(&format!(
+                    "\n    aida {}: {:.3}% over {} ms ({} of {} calls; tolerance {:.3}%; worst {}; window {}h; excluded {}; lineage_scoped={})",
+                    audit.command,
+                    audit.proportion_millipercent as f64 / 1000.0,
+                    audit.budget_ms,
+                    audit.over_budget,
+                    audit.denominator,
+                    audit.tolerated_millipercent as f64 / 1000.0,
+                    audit.worst_ms.map_or_else(|| "n/a".into(), |v| format!("{v} ms")),
+                    audit.window_hours,
+                    audit.excluded_samples,
+                    audit.lineage_scoped,
+                ));
+            }
+        }
+        line
     }
 }
 
@@ -735,6 +756,7 @@ where
             }
             let mut newest: Option<DateTime<Utc>> = None;
             let mut kind_hit: Option<String> = None;
+            let mut due_failure: Option<schedule_ledger::RoutedFailure> = None;
             let scan: &[Event] = if continue_on { &[] } else { events };
             for ev in scan {
                 if !task.on.iter().any(|k| k == ev.kind.name()) {
@@ -746,6 +768,21 @@ where
                 if newest.is_none_or(|n| ev.ts > n) {
                     newest = Some(ev.ts);
                     kind_hit = Some(ev.kind.name().to_string());
+                    due_failure = match &ev.kind {
+                        EventKind::CronJobFailed {
+                            trip_id: Some(trip_id),
+                            performance,
+                            ..
+                        } => Some(schedule_ledger::RoutedFailure {
+                            trip_id: trip_id.clone(),
+                            performance: performance
+                                .iter()
+                                .take(schedule_ledger::MAX_PERFORMANCE_AUDITS)
+                                .cloned()
+                                .collect(),
+                        }),
+                        _ => None,
+                    };
                 }
             }
             if let (Some(ts), Some(kind)) = (newest, kind_hit) {
@@ -756,6 +793,12 @@ where
                     .last_seen_event_ts = Some(ts);
                 touched = true;
                 triggers.push(Trigger::Event(kind));
+                // The matched event is retained until `schedule done`; this is
+                // the actual pickup artifact, not a pointer to mutable latest.
+                staged_ledgers
+                    .entry(task.name.clone())
+                    .or_insert_with(|| JobLedger::new(&task.name))
+                    .due_failure = due_failure;
             }
         }
 
@@ -796,13 +839,15 @@ where
                     stderr: e.to_string(),
                 });
                 touched = true;
-                record_outcome_local(project_root, state, task, now, &outcome);
+                let trip = failure_trip(task, now, &outcome);
+                record_outcome_local(project_root, state, task, now, &outcome, trip.as_ref());
                 apply_outcome_ledger(
                     staged_ledgers
                         .entry(task.name.clone())
                         .or_insert_with(|| JobLedger::new(&task.name)),
                     now,
                     &outcome,
+                    trip.as_ref(),
                 );
                 lines.push(format!(
                     "schedule tick: {} {}",
@@ -895,10 +940,11 @@ where
                     stderr: e.to_string(),
                 });
                 ran_any = true;
-                record_outcome_local(project_root, state, task, now, &outcome);
+                let trip = failure_trip(task, now, &outcome);
+                record_outcome_local(project_root, state, task, now, &outcome, trip.as_ref());
                 if let Err(err) =
                     schedule_ledger::write_cas(&store_root(project_root), &task.name, |ledger| {
-                        apply_outcome_ledger(ledger, now, &outcome);
+                        apply_outcome_ledger(ledger, now, &outcome, trip.as_ref());
                     })
                 {
                     eprintln!(
@@ -954,6 +1000,7 @@ fn done(project_root: &Path, job: &str, note: Option<&str>) -> Result<()> {
         l.note = note.map(str::to_string);
         l.due_since = None;
         l.due_reason = None;
+        l.due_failure = None;
     })?;
     let mut state = load_state(project_root)?;
     let entry = state.tasks.entry(job.to_string()).or_default();
@@ -1294,6 +1341,7 @@ fn collect_due(project_root: &Path, seat: Option<&str>, include_substrate: bool)
             last_run: effective_last_run(ledger, local),
             last_by: ledger.and_then(|l| l.last_by.as_ref()).map(last_by_label),
             due_since: ledger.and_then(|l| l.due_since),
+            failure: ledger.and_then(|l| l.due_failure.clone()),
         });
     }
     out
@@ -1587,7 +1635,13 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
             &["doctor check performance --fail-on-findings"],
             ScheduledCommand {
                 display: "doctor check performance --fail-on-findings",
-                args: &["doctor", "check", "performance", "--fail-on-findings"],
+                args: &[
+                    "doctor",
+                    "check",
+                    "performance",
+                    "--json",
+                    "--fail-on-findings",
+                ],
                 hook_allowed: false,
             },
         ),
@@ -1660,6 +1714,7 @@ fn record_outcome_local(
     task: &Task,
     now: DateTime<Utc>,
     outcome: &TaskOutcome,
+    trip: Option<&schedule_ledger::FailureTrip>,
 ) {
     let entry = state.tasks.entry(task.name.clone()).or_default();
     entry.last_run_at = Some(now);
@@ -1667,7 +1722,7 @@ fn record_outcome_local(
     if outcome.status == 0 {
         entry.last_success_at = Some(now);
     } else {
-        if let Err(err) = append_log(project_root, task, outcome) {
+        if let Err(err) = append_log(project_root, task, outcome, trip) {
             eprintln!("warning: could not append schedule failure log: {err}");
         }
         events::emit(
@@ -1678,11 +1733,23 @@ fn record_outcome_local(
                 EventKind::CronJobFailed {
                     job: task.name.clone(),
                     seat: task.seats.join(","),
-                    error: format!(
-                        "exit {}: {}",
-                        outcome.status,
-                        outcome.stderr.trim().lines().last().unwrap_or("")
+                    error: trip.and_then(|t| t.audit_error.as_deref()).map_or_else(
+                        || {
+                            format!(
+                                "exit {}: {}",
+                                outcome.status,
+                                outcome.stderr.trim().lines().last().unwrap_or("")
+                            )
+                        },
+                        |error| {
+                            format!(
+                                "exit {}: performance audit unavailable: {error}",
+                                outcome.status
+                            )
+                        },
                     ),
+                    trip_id: trip.map(|t| t.trip_id.clone()),
+                    performance: trip.map(|t| t.performance.clone()).unwrap_or_default(),
                 },
             ),
         );
@@ -1690,7 +1757,12 @@ fn record_outcome_local(
 }
 
 // trace:TASK-1280 | ai:codex
-fn apply_outcome_ledger(ledger: &mut JobLedger, now: DateTime<Utc>, outcome: &TaskOutcome) {
+fn apply_outcome_ledger(
+    ledger: &mut JobLedger,
+    now: DateTime<Utc>,
+    outcome: &TaskOutcome,
+    trip: Option<&schedule_ledger::FailureTrip>,
+) {
     let result = if outcome.status == 0 {
         "ok".to_string()
     } else {
@@ -1706,6 +1778,70 @@ fn apply_outcome_ledger(ledger: &mut JobLedger, now: DateTime<Utc>, outcome: &Ta
     ledger.last_run = Some(now);
     ledger.last_by = Some(by);
     ledger.result = Some(result);
+    if let Some(trip) = trip {
+        ledger.failure_trips.push(trip.clone());
+        let excess = ledger
+            .failure_trips
+            .len()
+            .saturating_sub(schedule_ledger::MAX_FAILURE_TRIPS);
+        if excess > 0 {
+            ledger.failure_trips.drain(..excess);
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct PerformanceAuditEnvelope {
+    #[serde(default)]
+    performance_audits: Vec<schedule_ledger::PerformanceAudit>,
+}
+
+fn failure_trip(
+    task: &Task,
+    now: DateTime<Utc>,
+    outcome: &TaskOutcome,
+) -> Option<schedule_ledger::FailureTrip> {
+    if outcome.status == 0 {
+        return None;
+    }
+    let trip_id = format!(
+        "{}@{}",
+        task.name,
+        now.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true)
+    );
+    let is_performance = task
+        .command
+        .as_ref()
+        .is_some_and(|c| c.display == "doctor check performance --fail-on-findings");
+    let (performance, audit_error) = if is_performance {
+        match serde_json::from_str::<PerformanceAuditEnvelope>(&outcome.stdout) {
+            Ok(envelope) if !envelope.performance_audits.is_empty() => (
+                envelope
+                    .performance_audits
+                    .into_iter()
+                    .take(schedule_ledger::MAX_PERFORMANCE_AUDITS)
+                    .collect(),
+                None,
+            ),
+            Ok(_) => (
+                Vec::new(),
+                Some("typed doctor output contained no performance_audits".into()),
+            ),
+            Err(err) => (
+                Vec::new(),
+                Some(format!("malformed typed doctor output: {err}")),
+            ),
+        }
+    } else {
+        (Vec::new(), None)
+    };
+    Some(schedule_ledger::FailureTrip {
+        trip_id,
+        at: now,
+        status: outcome.status,
+        performance,
+        audit_error,
+    })
 }
 
 fn try_tick_lock(project_root: &Path) -> Result<Option<std::fs::File>> {
@@ -1753,7 +1889,12 @@ fn save_state(project_root: &Path, state: &ScheduleState) -> Result<()> {
     Ok(())
 }
 
-fn append_log(project_root: &Path, task: &Task, outcome: &TaskOutcome) -> Result<()> {
+fn append_log(
+    project_root: &Path,
+    task: &Task,
+    outcome: &TaskOutcome,
+    trip: Option<&schedule_ledger::FailureTrip>,
+) -> Result<()> {
     use std::io::Write;
     let path = log_path(project_root);
     if let Some(parent) = path.parent() {
@@ -1765,11 +1906,31 @@ fn append_log(project_root: &Path, task: &Task, outcome: &TaskOutcome) -> Result
         .open(&path)?;
     writeln!(
         file,
-        "[{}] task={} command={} status={} stderr={}",
+        "[{}] task={} command={} status={}{} stderr={}",
         Utc::now().to_rfc3339(),
         task.name,
         task.command.as_ref().map(|c| c.display).unwrap_or("-"),
         outcome.status,
+        trip.map(|trip| {
+            let evidence = trip
+                .performance
+                .iter()
+                .map(|p| {
+                    format!(
+                        "{}:{:.3}%/{},budget={}ms,tolerance={:.3}%,worst={}ms",
+                        p.command,
+                        p.proportion_millipercent as f64 / 1000.0,
+                        p.denominator,
+                        p.budget_ms,
+                        p.tolerated_millipercent as f64 / 1000.0,
+                        p.worst_ms.map_or_else(|| "n/a".into(), |v| v.to_string()),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(";");
+            format!(" trip_id={} performance=[{}]", trip.trip_id, evidence)
+        })
+        .unwrap_or_default(),
         outcome.stderr.trim()
     )?;
     Ok(())
@@ -2242,6 +2403,244 @@ enabled = true
         assert!(log.contains("boom"));
         let ledger = schedule_ledger::load(&store_root(tmp.path()), "bad").unwrap();
         assert_eq!(ledger.result.as_deref(), Some("failed:2"));
+    }
+
+    fn performance_json(denominator: usize) -> String {
+        serde_json::json!({
+            "total": 1,
+            "findings": [],
+            "performance_audits": [{
+                "command": "show",
+                "budget_ms": 1000,
+                "over_budget": if denominator == 0 { 0 } else { 19 },
+                "denominator": denominator,
+                "proportion_millipercent": if denominator == 0 { 0 } else { 19700 },
+                "tolerated_millipercent": 10000,
+                "window_hours": 24,
+                "worst_ms": if denominator == 0 { serde_json::Value::Null } else { serde_json::json!(165672) },
+                "excluded_samples": 3,
+                "lineage_scoped": true
+            }]
+        })
+        .to_string()
+    }
+
+    // trace:BUG-1573 | ai:codex
+    #[test]
+    fn performance_failure_is_auditable_and_routed_by_trip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = ScheduleState::default();
+        tick_with_executor(
+            tmp.path(),
+            config(vec![task(
+                "performance-guard",
+                "1h",
+                "doctor check performance --fail-on-findings",
+            )]),
+            &mut state,
+            at(12),
+            false,
+            |_root, _cmd| {
+                Ok(TaskOutcome {
+                    status: 1,
+                    stdout: performance_json(96),
+                    stderr: "format hint that must not replace evidence".into(),
+                })
+            },
+        )
+        .unwrap();
+
+        let ledger = schedule_ledger::load(&store_root(tmp.path()), "performance-guard").unwrap();
+        let trip = ledger.failure_trips.last().unwrap();
+        let audit = &trip.performance[0];
+        assert_eq!(
+            (audit.proportion_millipercent, audit.denominator),
+            (19_700, 96)
+        );
+        assert_eq!(
+            (audit.budget_ms, audit.tolerated_millipercent),
+            (1000, 10_000)
+        );
+        assert_eq!(audit.worst_ms, Some(165_672));
+
+        let events = events::read_all(tmp.path());
+        let routed = events
+            .iter()
+            .find_map(|event| match &event.kind {
+                EventKind::CronJobFailed {
+                    trip_id,
+                    performance,
+                    ..
+                } => Some((trip_id.as_deref(), performance)),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(routed.0, Some(trip.trip_id.as_str()));
+        assert_eq!(routed.1, &trip.performance);
+
+        // Consumer-side proof: the routed event makes the advisor job due,
+        // and carries enough evidence to perform its prompt without rerunning.
+        let mut route_state = ScheduleState::default();
+        route_state.tasks.insert(
+            "performance-guard-route".into(),
+            TaskState {
+                last_seen_event_ts: Some(at(11)),
+                ..Default::default()
+            },
+        );
+        tick_core(
+            tmp.path(),
+            config(vec![seat_task(
+                "performance-guard-route",
+                &["advisor"],
+                None,
+                &["CronJobFailed"],
+            )]),
+            &mut route_state,
+            at(13),
+            false,
+            |_root, _cmd| unreachable!(),
+            |_| Snapshot::default(),
+            &events,
+        )
+        .unwrap();
+        let route =
+            schedule_ledger::load(&store_root(tmp.path()), "performance-guard-route").unwrap();
+        assert!(route.due_since.is_some());
+        assert_eq!(
+            route.due_failure.as_ref().map(|f| f.trip_id.as_str()),
+            Some(trip.trip_id.as_str())
+        );
+
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            r#"
+[[schedule.jobs]]
+name = "performance-guard-route"
+seats = ["advisor"]
+on = ["CronJobFailed"]
+prompt = "decide whether this is a regression"
+enabled = true
+"#,
+        )
+        .unwrap();
+        let delivered = due_seat_jobs(tmp.path(), Some("advisor"));
+        let artifact = render_due_jobs_block(&delivered, "advisor");
+        assert!(artifact.contains(&trip.trip_id), "{artifact}");
+        assert!(artifact.contains("19.700% over 1000 ms"), "{artifact}");
+        assert!(artifact.contains("19 of 96 calls"), "{artifact}");
+        assert!(artifact.contains("tolerance 10.000%"), "{artifact}");
+        assert!(artifact.contains("worst 165672 ms"), "{artifact}");
+        assert!(artifact.contains("lineage_scoped=true"), "{artifact}");
+
+        let log = std::fs::read_to_string(log_path(tmp.path())).unwrap();
+        assert!(log.contains("19.700%/96,budget=1000ms,tolerance=10.000%"));
+        assert!(!log.contains(&performance_json(96)));
+    }
+
+    // trace:BUG-1573 | ai:codex
+    #[test]
+    fn performance_pass_has_no_failure_context_and_zero_denominator_is_explicit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let perf = task(
+            "performance-guard",
+            "1h",
+            "doctor check performance --fail-on-findings",
+        );
+        let mut state = ScheduleState::default();
+        run_with_executor(
+            tmp.path(),
+            config(vec![perf.clone()]),
+            &mut state,
+            at(12),
+            Some("performance-guard"),
+            |_root, _cmd| {
+                Ok(TaskOutcome {
+                    status: 0,
+                    stdout: "not parsed on success".into(),
+                    stderr: String::new(),
+                })
+            },
+        )
+        .unwrap();
+        assert!(
+            schedule_ledger::load(&store_root(tmp.path()), "performance-guard")
+                .unwrap()
+                .failure_trips
+                .is_empty()
+        );
+
+        run_with_executor(
+            tmp.path(),
+            config(vec![perf]),
+            &mut state,
+            at(13),
+            Some("performance-guard"),
+            |_root, _cmd| {
+                Ok(TaskOutcome {
+                    status: 1,
+                    stdout: performance_json(0),
+                    stderr: String::new(),
+                })
+            },
+        )
+        .unwrap();
+        let ledger = schedule_ledger::load(&store_root(tmp.path()), "performance-guard").unwrap();
+        let audit = &ledger.failure_trips[0].performance[0];
+        assert_eq!(
+            (
+                audit.denominator,
+                audit.proportion_millipercent,
+                audit.worst_ms
+            ),
+            (0, 0, None)
+        );
+    }
+
+    // trace:BUG-1573 | ai:codex
+    #[test]
+    fn malformed_performance_output_fails_visibly_without_persisting_payload() {
+        let task = task(
+            "performance-guard",
+            "1h",
+            "doctor check performance --fail-on-findings",
+        );
+        let outcome = TaskOutcome {
+            status: 1,
+            stdout: "SECRET noisy payload".into(),
+            stderr: String::new(),
+        };
+        let trip = failure_trip(&task, at(12), &outcome).unwrap();
+        assert!(trip
+            .audit_error
+            .as_deref()
+            .unwrap()
+            .contains("malformed typed doctor output"));
+        assert!(!serde_yaml::to_string(&trip).unwrap().contains("SECRET"));
+    }
+
+    // trace:BUG-1573 | ai:codex
+    #[test]
+    fn failure_history_has_a_deterministic_oldest_first_bound() {
+        let task = task("bad", "1h", "cache verify");
+        let outcome = TaskOutcome {
+            status: 2,
+            stdout: String::new(),
+            stderr: "boom".into(),
+        };
+        let mut ledger = JobLedger::new("bad");
+        for hour in 0..=schedule_ledger::MAX_FAILURE_TRIPS as u32 {
+            let now = at(hour);
+            let trip = failure_trip(&task, now, &outcome).unwrap();
+            apply_outcome_ledger(&mut ledger, now, &outcome, Some(&trip));
+        }
+        assert_eq!(
+            ledger.failure_trips.len(),
+            schedule_ledger::MAX_FAILURE_TRIPS
+        );
+        assert_eq!(ledger.failure_trips.first().unwrap().at, at(1));
+        assert_eq!(ledger.failure_trips.last().unwrap().at, at(20));
     }
 
     #[test]
@@ -2852,6 +3251,7 @@ every = "1h"
             last_run: Some(Utc::now() - Duration::minutes(47)),
             last_by: Some("advisor/claude".into()),
             due_since: None,
+            failure: None,
         }];
         let block = render_due_jobs_block(&due, "advisor");
         assert!(block.starts_with("DUE JOBS (seat: advisor):\n"));

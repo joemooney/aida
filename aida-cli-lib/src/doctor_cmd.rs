@@ -302,6 +302,11 @@ struct DoctorReport {
     /// TASK-865: read-only bubblewrap OS-sandbox availability status line.
     #[serde(skip_serializing_if = "Option::is_none")]
     bwrap: Option<String>,
+    /// Machine boundary consumed by the performance scheduler. This is an
+    /// allow-list, not captured stdout.
+    // trace:BUG-1573 | ai:codex
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    performance_audits: Vec<schedule_ledger::PerformanceAudit>,
 }
 
 impl DoctorReport {
@@ -312,6 +317,7 @@ impl DoctorReport {
             hidden_completed_without_commit: 0,
             healed: Vec::new(),
             bwrap: Some(bwrap_status_line()),
+            performance_audits: Vec::new(),
         }
     }
 }
@@ -328,6 +334,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
     let mut hidden_completed_without_commit = 0;
+    let mut performance_audits = Vec::new();
 
     // TASK-673: the completed-without-commit integrity check runs git scans
     // (a default-branch `git log` + `git grep`) so it is kept OUT of the hot
@@ -464,11 +471,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
             findings.extend(performance_findings(
                 &events, &budgets, &policy, now, &lineage,
             ));
+            performance_audits =
+                performance_audit_records(&events, &budgets, &policy, now, &lineage);
             findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
         }
     }
 
     let mut report = DoctorReport::from_findings(findings);
+    report.performance_audits = performance_audits;
     report.hidden_completed_without_commit = hidden_completed_without_commit;
 
     if opts.heal {
@@ -1312,6 +1322,54 @@ pub(crate) fn performance_findings(
     );
 
     findings
+}
+
+/// Typed, allow-listed evidence for the scheduler boundary. This deliberately
+/// repeats the pure gate calculation rather than asking a consumer to parse a
+/// human sentence. A zero denominator is an explicit record, not division.
+// trace:BUG-1573 | ai:codex
+fn performance_audit_records(
+    events: &[crate::usage::UsageEvent],
+    budgets: &[PerformanceBudget],
+    policy: &PerformancePolicy,
+    now: chrono::DateTime<chrono::Utc>,
+    lineage: &BinaryLineage,
+) -> Vec<schedule_ledger::PerformanceAudit> {
+    let mut out: Vec<_> = performance_breaches(events, budgets, policy, now, lineage)
+        .into_iter()
+        .map(|b| schedule_ledger::PerformanceAudit {
+            command: b.cmd,
+            budget_ms: b.budget_ms,
+            over_budget: b.over_budget,
+            denominator: b.samples,
+            proportion_millipercent: (b.over_pct * 1000.0).round() as u32,
+            tolerated_millipercent: (b.tolerated_pct * 1000.0).round() as u32,
+            window_hours: b.window_hours,
+            worst_ms: Some(b.worst_ms),
+            excluded_samples: b.excluded_samples,
+            lineage_scoped: b.lineage_scoped,
+        })
+        .collect();
+    for u in performance_unobserved(events, budgets, policy, now, lineage) {
+        let Some(budget) = budgets.iter().find(|b| b.cmd == u.cmd) else {
+            continue;
+        };
+        out.push(schedule_ledger::PerformanceAudit {
+            command: u.cmd,
+            budget_ms: budget.budget_ms,
+            over_budget: 0,
+            denominator: 0,
+            proportion_millipercent: 0,
+            tolerated_millipercent: (policy.tolerated_pct * 1000.0).round() as u32,
+            window_hours: policy.window_hours,
+            worst_ms: None,
+            excluded_samples: u.excluded_samples,
+            lineage_scoped: lineage.is_scoped(),
+        });
+    }
+    out.sort_by(|a, b| a.command.cmp(&b.command));
+    out.truncate(schedule_ledger::MAX_PERFORMANCE_AUDITS);
+    out
 }
 
 #[cfg(test)]
