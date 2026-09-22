@@ -1814,14 +1814,14 @@ pub(crate) fn output_format_is_json() -> bool {
 /// declaration that the leaf owns a machine contract; the renderer must then
 /// make both spellings identical.
 // trace:BUG-1502 | ai:codex
-fn enforce_json_format_capability(argv: &[String]) -> Result<()> {
+fn enforce_json_format_capability(argv: &mut Vec<String>) -> Result<()> {
     if !output_format_is_json() {
         return Ok(());
     }
 
     use clap::CommandFactory;
     let root = Cli::command();
-    let matches = root.clone().try_get_matches_from(argv)?;
+    let matches = root.clone().try_get_matches_from(argv.clone())?;
     let mut command = &root;
     let mut selected = &matches;
     let mut path = vec!["aida".to_string()];
@@ -1848,6 +1848,16 @@ fn enforce_json_format_capability(argv: &[String]) -> Result<()> {
             "`{} --format json` is unsupported: this command has no JSON projection; use `--format human` or `--format toon`",
             path.join(" ")
         );
+    }
+
+    // Materialize the global spelling as the selected leaf's dedicated flag.
+    // This is the load-bearing dispatch guarantee: every existing handler sees
+    // exactly the same parsed boolean for `--format json` as for `--json`, so
+    // capability cannot drift from renderer wiring (for example, fasttrack
+    // status previously declared `--json` but only inspected that local bool).
+    // trace:BUG-1502 | ai:codex
+    if !selected.get_flag("json") {
+        argv.push("--json".to_string());
     }
     Ok(())
 }
@@ -3127,7 +3137,14 @@ fn run() -> Result<()> {
     // A global clap flag is syntactically accepted everywhere. Convert an
     // unsupported JSON request into an explicit error before any command can
     // silently fall back to prose. trace:BUG-1502 | ai:codex
-    enforce_json_format_capability(&after_alias_rewrites)?;
+    let mut dispatch_argv = after_alias_rewrites;
+    let dispatch_len = dispatch_argv.len();
+    enforce_json_format_capability(&mut dispatch_argv)?;
+    // Reparse only when capability materialization changed argv. This makes
+    // the local `json` field authoritative for every downstream dispatcher.
+    if dispatch_argv.len() != dispatch_len {
+        cli = Cli::parse_from(dispatch_argv);
+    }
 
     // STORY-708: one-line, non-blocking deprecation hint. Printed to stderr (so
     // it never pollutes machine-readable stdout) only when the operator reached

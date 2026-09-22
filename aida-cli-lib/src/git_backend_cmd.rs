@@ -3816,32 +3816,6 @@ pub(crate) fn handle_git_backend_command(
                             title: String,
                         }
                         #[derive(serde::Serialize)]
-                        struct ShowJson<'a> {
-                            id: String,
-                            spec_id: Option<&'a str>,
-                            agreed_id: Option<&'a str>,
-                            title: &'a str,
-                            description: &'a str,
-                            req_type: String,
-                            status: String,
-                            priority: String,
-                            owner: &'a str,
-                            feature: &'a str,
-                            tags: Vec<&'a str>,
-                            // trace:FR-283 | ai:claude — omitted when unset.
-                            #[serde(skip_serializing_if = "Option::is_none")]
-                            weight: Option<f32>,
-                            in_degree: u32,
-                            out_degree: u32,
-                            heft: u32,
-                            // trace:BUG-1558 | ai:claude
-                            relationships: Vec<RelJson>,
-                            /// The same git linkage carried by the human view;
-                            /// null only when --no-git explicitly suppresses
-                            /// the probe.
-                            git_linkage: Option<GitLinkageJson>,
-                        }
-                        #[derive(serde::Serialize)]
                         struct GitCommitJson {
                             sha: String,
                             short_sha: String,
@@ -3918,27 +3892,96 @@ pub(crate) fn handle_git_backend_command(
                                 repo: linkage.repo,
                             })
                         };
-                        let out = ShowJson {
-                            id: req.id.to_string(),
-                            spec_id: req.spec_id.as_deref(),
-                            agreed_id: req.agreed_id.as_deref(),
-                            title: &req.title,
-                            description: &req.description,
-                            req_type: format!("{:?}", req.req_type),
-                            // BUG-626: derived rollup for epics. trace:BUG-626
-                            status: effective_status_str.clone(),
-                            priority: format!("{}", req.effective_priority()),
-                            owner: &req.owner,
-                            feature: &req.feature,
-                            tags: req.tags.iter().map(|s| s.as_str()).collect(),
-                            // trace:FR-283 | ai:claude
-                            weight: req.weight,
-                            in_degree: degrees.in_degree,
-                            out_degree: degrees.out_degree,
-                            heft: degrees.heft,
-                            relationships,
-                            git_linkage,
-                        };
+                        // Start from the complete stored requirement rather
+                        // than maintaining a lossy parallel projection. Then
+                        // overlay every derived field the human view computes
+                        // (effective lifecycle values, graph context, next
+                        // actions, and git linkage). New stored human fields
+                        // now arrive in JSON automatically instead of silently
+                        // disappearing until another bug is filed.
+                        // trace:BUG-1502 | ai:codex
+                        let mut out = serde_json::to_value(&req)?;
+                        let object = out.as_object_mut().ok_or_else(|| {
+                            anyhow::anyhow!("serialized requirement was not a JSON object")
+                        })?;
+                        object.insert(
+                            "display_id".to_string(),
+                            serde_json::Value::String(req.display_id()),
+                        );
+                        object.insert(
+                            "uuid".to_string(),
+                            serde_json::Value::String(req.id.to_string()),
+                        );
+                        object.insert("opened".to_string(), serde_json::to_value(req.created_at)?);
+                        object.insert(
+                            "modified".to_string(),
+                            serde_json::to_value(req.modified_at)?,
+                        );
+                        object.insert(
+                            "status".to_string(),
+                            serde_json::Value::String(effective_status_str.clone()),
+                        );
+                        object.insert(
+                            "priority".to_string(),
+                            serde_json::Value::String(format!("{}", req.effective_priority())),
+                        );
+                        object.insert(
+                            "relationships".to_string(),
+                            serde_json::to_value(&relationships)?,
+                        );
+                        object.insert(
+                            "in_degree".to_string(),
+                            serde_json::to_value(degrees.in_degree)?,
+                        );
+                        object.insert(
+                            "out_degree".to_string(),
+                            serde_json::to_value(degrees.out_degree)?,
+                        );
+                        object.insert("heft".to_string(), serde_json::to_value(degrees.heft)?);
+
+                        let blockers: Vec<serde_json::Value> = req
+                            .relationships
+                            .iter()
+                            .filter(|rel| matches!(rel.rel_type, RelationshipType::BlockedBy))
+                            .map(|rel| match backend.get_requirement(&rel.target_id) {
+                                Ok(Some(blocker)) => serde_json::json!({
+                                    "id": blocker.display_id(),
+                                    "status": blocker.status.to_string(),
+                                    "satisfied": matches!(blocker.status, RequirementStatus::Completed),
+                                }),
+                                _ => serde_json::json!({
+                                    "id": rel.target_id.to_string(),
+                                    "status": "missing",
+                                    "satisfied": false,
+                                }),
+                            })
+                            .collect();
+                        object.insert(
+                            "blocked".to_string(),
+                            serde_json::Value::Bool(blockers.iter().any(|v| {
+                                v.get("satisfied").and_then(|v| v.as_bool()) == Some(false)
+                            })),
+                        );
+                        object.insert("blockers".to_string(), serde_json::Value::Array(blockers));
+
+                        let mut next =
+                            crate::help_next::spec_next(&effective_status_str, &req.display_id());
+                        crate::help_next::push_serialize_cluster(
+                            &mut next,
+                            serialize_cluster_command.clone(),
+                        );
+                        object.insert(
+                            "next".to_string(),
+                            serde_json::Value::Array(
+                                next.into_iter()
+                                    .map(|step| serde_json::json!({"cmd": step.cmd, "to": step.to}))
+                                    .collect(),
+                            ),
+                        );
+                        object.insert(
+                            "git_linkage".to_string(),
+                            serde_json::to_value(git_linkage)?,
+                        );
                         println!("{}", serde_json::to_string_pretty(&out)?);
                         return Ok(());
                     }

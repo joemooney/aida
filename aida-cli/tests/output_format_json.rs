@@ -59,7 +59,7 @@ fn init_repo() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
 }
 
 #[test]
-fn unsupported_format_json_on_focus_warns_instead_of_silent_fallback() {
+fn unsupported_format_json_on_focus_errors_instead_of_silent_fallback() {
     let (_base, repo, home) = init_repo();
 
     let out = aida(&repo, &home)
@@ -69,16 +69,13 @@ fn unsupported_format_json_on_focus_warns_instead_of_silent_fallback() {
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success(), "unsupported JSON must fail closed");
     assert!(
-        out.status.success(),
-        "focus show should remain a successful human fallback:\n--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}"
+        !stdout.contains("No focus set."),
+        "unsupported JSON reached the human renderer:\n{stdout}"
     );
     assert!(
-        stdout.contains("No focus set."),
-        "review repro should still reach the focus-show human body:\n{stdout}"
-    );
-    assert!(
-        stderr.contains("has no JSON projection"),
-        "--format json must not silently fall back with empty stderr:\n{stderr}"
+        stdout.contains("has no JSON projection") || stderr.contains("has no JSON projection"),
+        "--format json must explain the unsupported projection:\nstdout={stdout}\nstderr={stderr}"
     );
 }

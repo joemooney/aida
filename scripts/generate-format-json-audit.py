@@ -17,10 +17,12 @@ from pathlib import Path
 
 
 VERIFIED = {
+    "aida fasttrack status": "fasttrack status",
     "aida show": "show <SPEC> --no-git",
     "aida list": "list --limit 1",
     "aida status": "status <SPEC>",
     "aida ps": "ps",
+    "aida queue": "queue (compatibility alias to queue list)",
     "aida queue list": "queue list",
     "aida queue progress": "queue progress",
     "aida findings list": "findings list",

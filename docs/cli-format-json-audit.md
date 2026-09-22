@@ -20,7 +20,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida derisk` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida add` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida fasttrack` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
-| `aida fasttrack status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida fasttrack status` | JSON honoured | fasttrack status |
 | `aida list` | JSON honoured | list --limit 1 |
 | `aida show` | JSON honoured | show <SPEC> --no-git |
 | `aida approvals` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
@@ -526,7 +526,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida doc coverage` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida doc suggest` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida grep` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
-| `aida queue` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida queue` | JSON honoured | queue (compatibility alias to queue list) |
 | `aida queue list` | JSON honoured | queue list |
 | `aida queue add` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida queue load` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
