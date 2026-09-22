@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T10:29:26.836913558Z
-modified_at: 2026-09-22T10:31:25.145367100Z
+modified_at: 2026-09-22T10:41:56.823127006Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -35,3 +35,8 @@ comments:
   content: 'CHANGES REQUESTED — cold review of PR #2093 at exact head 1f7c973ac1d107336d32be343a7f08d4a1b984d7. Blocking TASK-1309 finding: scripts/external-prose-classifiers.py resolves a marker to the nearest preceding fn declaration, not its containing function. It therefore accepts `fn claimed_classifier() {}\n// external-prose-classifier: fixture::claimed_classifier` and a marker after a closed nested function. The leaf matches preceding text but the marker is outside that function, so stale/moved markers can evade the intended anchor validation. Require scope-aware containment or an equivalent structural placement check, plus a regression test for matching-leaf marker after a closed function. Verified passing: `python3 -m unittest tests/test_external_prose_classifiers.py` (9 tests), `python3 scripts/external-prose-classifiers.py --check`, `cargo fmt --all -- --check`, and `git diff --check origin/main...HEAD`. Existing tests cover line drift, file move stability, add/remove/rename changes, mismatched leaf, and duplicate keys. CI was still in progress at review time.'
   created_at: 2026-09-22T10:31:25.145367100Z
   modified_at: 2026-09-22T10:31:25.145367100Z
+- id: 01a0c8b5-4057-7421-bdec-815eda8a1a5a
+  author: joe
+  content: 'Cold rereview at PR #2093 exact head 71159e91cba154acc3fb5e69a77459596bbfe43d: PASS/no findings on code and TASK-1309 acceptance. Prior scope-containment blocker closed; independent comment/string/raw-string/nested/closed-scope adversarial checks pass. Focused 12 tests, inventory --check, fmt, py_compile, diff-check pass. GitHub merge-hold green; full exact-head Build still running, so merge conditional on CI green.'
+  created_at: 2026-09-22T10:41:56.823127006Z
+  modified_at: 2026-09-22T10:41:56.823127006Z
