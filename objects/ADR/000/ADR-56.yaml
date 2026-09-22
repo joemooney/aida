@@ -13,12 +13,12 @@ description: |-
   4. Idempotency & Duplicate Charge Protection: Retries enforce idempotency headers/keys where supported, avoiding duplicate charges.
   5. Circuit Breaker: Endpoint/model-scoped, concurrency-safe (Closed -> Open -> Half-Open). Trips fast fallback without blocking health probes on the critical path.
   6. Structured Observability: Emit structured events for retry attempts, circuit state changes, and fallback triggers (never silent drops).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T15:03:10.284830825Z
-modified_at: 2026-09-22T15:49:52.766897304Z
+modified_at: 2026-09-22T16:15:05.977677771Z
 req_type: Decision
 tags:
 - adr-55
