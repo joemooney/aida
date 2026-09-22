@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T14:04:15.633781093Z
-modified_at: 2026-09-22T14:40:45.788812047Z
+modified_at: 2026-09-22T14:53:27.250562253Z
 req_type: Task
 tags:
 - cost
@@ -123,3 +123,25 @@ comments:
   content: '[architecture-signoff] APPROVED. Use project-local gitignored .aida/derived/token-ledger-v1.sqlite with atomic replacement and owner-only permissions. Require exact vendor-session evidence before any project/session/run/spec/seat attribution; timestamps may only narrow an exact join. Retain only allow-listed numeric vendor usage fields and content-free identifiers/provenance—never prompts, responses, tool arguments, environment, or credentials. Phase means evidenced orchestration lifecycle phase; explicit rework is assigned only from a retained rework launch/lease, and round is independent/nullable with a reason when absent or ambiguous. Keep pricing, billing reconciliation, Antigravity without a proven schema, drain_summary changes (BUG-1418), and new orchestrator persistence out of scope. If retained evidence cannot prove a dimension, emit null plus reason and file a follow-up rather than expanding scope. Proceed with implementation and the complete fixture/idempotence/query test plan.'
   created_at: 2026-09-22T14:08:50.938168432Z
   modified_at: 2026-09-22T14:08:50.938168432Z
+- id: 01a0c99b-8352-7963-a51b-759407cc2e3e
+  author: joe
+  content: |-
+    REQUEST_CHANGES on exact head 12a91d49c3419ab103d4e2910abf530e35303ab3.
+
+    Blocking findings:
+
+    1. Required CI is red. The exhaustive BUG-1502 command audit fails because the new aida usage rebuild and aida usage show paths are present in the clap catalog but absent from docs/cli-format-json-audit.md. Regenerate/update the checked-in audit and rerun required CI.
+
+    2. TASK-1427 acceptance requires an explicit reason for every missing or ambiguous attribution dimension. attribute() leaves run_reason unset when no exact session exists; when spec selection is missing/ambiguous it returns with run, phase, and round null but without their reasons. Add complete per-dimension reasons and regression coverage for missing session, missing/ambiguous spec, missing seat, and missing/ambiguous phase/run/round.
+
+    3. The query surface collapses unknown token classes into measured zero through COALESCE(SUM(nullable_column),0). A measured record with a missing token class and a genuine measured zero render identically, violating acceptance criterion 5. Preserve/report known-count versus missing-count (or equivalent) per token class and test both cases in human, JSON, and TOON.
+
+    4. Codex record identity is not the retained stable request/message identity. The parser ignores token_usage_record rows carrying thread_id, turn_id, response_id, and usage; instead it hashes cumulative checkpoints from token_count, and turn.completed IDs hash only the usage vector. Distinct requests with identical usage can deduplicate, while the actual response identity is discarded. Normalize the identity-bearing Codex record and reconcile/deduplicate its token_count/turn.completed representations without double counting; cover conflicts and cumulative resets.
+
+    5. The accepted security boundary is not implemented. rebuild follows a symlinked .aida/derived directory and reads each selected transcript fully with fs::read, with no regular-file/root containment or size bound. A local symlink can redirect the private ledger outside the project and a large/sparse retained log can exhaust memory. Add fail-closed destination containment/symlink checks and bounded/streaming source handling with adversarial tests.
+
+    6. Acceptance criterion 6 is materially under-tested. Current tests cover one Claude duplicate, one repeated Codex checkpoint, one ambiguous session, a synthetic phase example, and one malformed line. There are no tests for conflicting duplicates, reset segmentation, unsupported events, missing manifests, genuine zero versus missing token fields, atomic/idempotent two-pass rebuild, database permissions, query grouping/coverage across human JSON TOON, or symlink/oversize defenses.
+
+    The implementation has a useful schema and privacy posture, but these are data-integrity and required-gate failures, so approval is not safe yet.
+  created_at: 2026-09-22T14:53:27.250562253Z
+  modified_at: 2026-09-22T14:53:27.250562253Z
