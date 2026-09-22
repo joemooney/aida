@@ -1,0 +1,27 @@
+id: 01a0c9a4-cdd8-73a1-bdcc-5d0637ccc2cd
+spec_id: TASK-1430
+agreed_id: TASK-1430
+title: Implement deadline-aware async retry adapter for EvaluatorEngine
+description: |-
+  CONTEXT:
+  Under ADR-56, remote evaluators must not rely on unconstrained client timeouts. A caller-specified deadline (e.g. 2–5s for review-context preparation) must govern total execution time across all retry attempts.
+
+  REQUIREMENTS:
+  - Implement a generic async retry wrapper DeadlineRetryAdapter wrapping EvaluatorEngine.
+  - Takes an operation deadline Duration or Instant from the caller.
+  - Enforces deadline cutoff: aborts and falls back if remaining time budget is exhausted (< 500ms).
+  - Performs max 1–2 retries with backoff only for classified transient errors.
+  - Integrates idempotency keys on requests to prevent duplicate billing.
+  - Fails closed to caller when budget expires (PRIN-5).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T15:03:36.152616216Z
+modified_at: 2026-09-22T15:03:36.152616216Z
+req_type: Task
+tags:
+- adr-56
+- evaluator
+- network
+- resilience
