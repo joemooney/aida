@@ -44,7 +44,7 @@ Previous evaluation outlines conflated statistical prediction, workflow velocity
 * **Problem:** Stating "False Approval Rate = 0.0%" as a statistical fact from a finite sample is mathematically invalid.
 * **Invariant:** Safety is enforced as a **deterministic release gate**:
   1. An independently adjudicated safety corpus ($N \ge 100$) where observed false approvals must be zero, reporting the upper one-sided 95% Clopper-Pearson confidence bound ($p < 0.03$).
-  2. A **Fault-Injection Test Suite** verifying that Jev fails closed under injected network partitions, timeouts, HTTP 500s, malformed JSON schemas, missing credentials, context cancellations, and stale commit SHAs (PRIN-5).
+  2. A **proposed Fault-Injection Test Suite**, to be implemented and passed before rollout, verifying that Jev fails closed under injected network partitions, timeouts, HTTP 500s, malformed JSON schemas, missing credentials, context cancellations, and stale commit SHAs (PRIN-5). These named cases are not part of PR #2102's 24 passing targeted tests.
 
 ### 2.5 Phase-Level Timing Isolation
 * **Problem:** Measuring end-to-end drain turnaround ($T_{\text{merged}} - T_{\text{pickup}}$) is heavily confounded by queue wait times, CI runner contention, git merge-locks, and external network latency.
@@ -129,9 +129,11 @@ The governing deadline policy is:
 
 ---
 
-## 4. Fault-Injection & Fail-Closed Test Suite
+## 4. Proposed Fault-Injection & Fail-Closed Test Suite
 
-Per PRIN-5 and ADR-55, Jev integration must be verified against simulated failure modes:
+Per PRIN-5 and ADR-55, a future operational rollout must implement and pass the
+following simulated failure cases. This table is a pre-registration, not a
+report of tests already implemented by PR #2080 or PR #2102:
 
 | Test Case | Injected Fault | Expected Behavior |
 | :--- | :--- | :--- |

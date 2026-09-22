@@ -93,14 +93,19 @@ To establish defensible utility before expanding Jev's operational footprint, we
 
 ---
 
-## 4. Privacy, Payload Boundaries & Redaction
+## 4. Proposed Privacy, Payload Boundaries & Redaction
 
 Several proposed applications transmit code diffs, requirement descriptions, review findings, or session traces to an external SaaS endpoint. The system must enforce strict operational boundaries:
 
-1. **Opt-In Policy:** External evaluator calls must be strictly opt-in (`AIDA_JEV_API_KEY` or `TYPESAFE_API_KEY` explicitly set). If unset or if `AIDA_EVALUATOR_OFFLINE=1` is active, AIDA defaults to `MockEvaluator` or local models without network transmission.
-2. **Secret & Credential Redaction:** All code diffs and context strings must pass through AIDA's credential sanitization filters (stripping API keys, JWTs, `.env` variables, and SSH keys) before transmission.
-3. **Payload Truncation Caps:** Input context payloads are capped at 16 KB. If a diff or context exceeds this boundary, deterministic chunking or truncation must be applied rather than sending unbounded source trees.
-4. **Offline Local Sovereignty:** Under ADR-55, all capabilities must retain an offline, local implementation (`LocalLlmEvaluator` or `MockEvaluator`) to protect repository sovereignty.
+These are **release requirements for future applications, not claims about the
+current implementation**. PR #2080 provides Jev, local-LLM, and mock evaluator
+engines, but it does not implement `AIDA_EVALUATOR_OFFLINE`, a shared evaluator
+input-redaction boundary, or a 16 KB payload cap.
+
+1. **Opt-In Policy (proposed):** External evaluator calls must be strictly opt-in. A future explicit offline switch may use a name such as `AIDA_EVALUATOR_OFFLINE`; that variable is not implemented today. Current Jev construction requires `AIDA_JEV_API_KEY` or `TYPESAFE_API_KEY` from the environment or `~/.env`, and keyless paths use deterministic/conversational fallbacks.
+2. **Secret & Credential Redaction (proposed):** Before any new application transmits code diffs or context, it must add and test an evaluator-specific sanitization boundary for API keys, JWTs, `.env` values, and SSH keys. PR #2080 does not yet provide that boundary.
+3. **Payload Truncation Caps (proposed):** Future callers should enforce a tested 16 KB input cap with deterministic chunking or truncation. The current evaluator clients do not enforce this cap.
+4. **Offline Local Sovereignty (current):** ADR-55 provides `LocalLlmEvaluator` and `MockEvaluator`, while keyless contradiction and graded-review paths retain deterministic or conversational fallbacks. Future applications must preserve those paths.
 
 ---
 
@@ -177,10 +182,10 @@ Jev is strictly an **optional acceleration plugin**, never a prerequisite for in
 
 ## 8. Current Verification Status
 
-* **Targeted Unit Tests:** 24 targeted unit tests pass across [`aida-cli-lib`](file:///home/joe/ai/aida-spike-87/aida-cli-lib):
+* **Targeted Unit Tests:** 24 targeted unit tests pass in [`aida-cli-lib`](../../aida-cli-lib):
   * 5 evaluator engine tests (`adr_55_evaluator_tests`)
   * 11 graded review tests (`story_1424_graded_review_tests`)
   * 8 contradiction sweep tests (`story_1426_contradictions_tests`, including explicit zero-evaluator offline fallback)
 * **Remote CI Checks:** PR #2080 checks pass on Ubuntu (`CI/Build` and `merge-hold-gate`).
-* **Governance Invariant:** No code has been merged to `main`; fast-pass auto-merging remains strictly disabled.
-
+* **Merged Baseline:** PR #2080 merged to `main` as `61ba7d9959e32eb76d412664ee5574695a9d4a96`; fast-pass auto-merging remains disabled.
+* **Not Yet Verified:** The proposed fault-injection, redaction, payload-cap, and explicit offline-switch cases below are not part of the 24-test set and require separate implementation before operational rollout.

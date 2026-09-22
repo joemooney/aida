@@ -121,12 +121,13 @@ Each experiment should evaluate workload-justified coverage/abstention, class pr
 calibration/threshold performance, asymmetric error costs, latency/cost, and
 deterministic pre-filtering efficiency.
 
-All external evaluator calls remain strictly optional and subject to opt-in credentials, secret redaction,
-payload truncation caps (16 KB), and fail-closed offline local engine fallbacks (PRIN-5, ADR-55).
-Jev is never a prerequisite for compiling, testing, or running AIDA. Without Jev credentials,
-all workflows cleanly fall back to deterministic baselines (`model: "mechanical-join"` or
-conversational reviewer escalation).
+External evaluation remains optional: Jev is not a prerequisite for compiling,
+testing, or running AIDA. Without Jev credentials, the contradiction sweep and
+graded-review paths fall back to deterministic candidates (`model:
+"mechanical-join"`) or conversational reviewer escalation. Secret redaction, a
+16 KB evaluator payload cap, and an explicit `AIDA_EVALUATOR_OFFLINE` switch are
+**proposed safeguards, not current implementation**; they require separate
+implementation and tests before expanding external evaluator use.
 The test suite validates 24 targeted unit tests across `adr_55`, `story_1424`, and `story_1426`.
-
 
 
