@@ -1,0 +1,33 @@
+id: 01a0c765-4ee1-7b92-88fe-91c74ad7d0f4
+spec_id: ADR-54
+agreed_id: ADR-54
+title: GitHub-hosted GitLab smoke authenticates through a dedicated Cloudflare Access service token
+description: |
+  ## Decision
+
+  Keep the live GitLab forge smoke on GitHub-hosted Ubuntu runners and authenticate through Cloudflare Access with a dedicated service token.
+
+  GitHub Actions stores the Cloudflare client ID and client secret as repository secrets named AIDA_CF_ACCESS_CLIENT_ID and AIDA_CF_ACCESS_CLIENT_SECRET. The existing AIDA_GITLAB_TOKEN remains the separate GitLab authorization credential.
+
+  The workflow configures glab host-level custom_headers using valueFromEnv so every GitLab API request carries CF-Access-Client-Id and CF-Access-Client-Secret. The workflow must use a glab release that supports custom_headers; the Ubuntu archive's glab 1.36.0 does not.
+
+  Preflight calls an authenticated GitLab JSON endpoint and rejects HTML or non-JSON responses. A reachable Cloudflare login page is not evidence that the mirror is usable.
+
+  ## Security trade
+
+  This places a long-lived perimeter credential in GitHub Actions secrets, widening a compromised workflow's reach to the Access-protected GitLab application. The token is dedicated to CI, accepted only by a Service Auth policy for this application, independently revocable, and still requires the separate GitLab PAT for GitLab authorization.
+
+  The rejected alternative was moving the job to the self-hosted runner. That avoids exporting an Access credential but makes the nightly depend on a private machine and increases the exposure of a runner behind the perimeter.
+
+  ## Verification
+
+  The live job must pass project creation, MR creation, pipeline observation, review recording, squash merge, and cleanup against the real mirror. A skipped job or readiness-only probe is not acceptance evidence.
+status: Completed
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T04:35:00.449463648Z
+modified_at: 2026-09-22T04:35:00.449463648Z
+req_type: Decision
+tags:
+- cloudflare access ci gitlab security
