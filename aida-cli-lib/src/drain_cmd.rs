@@ -19,6 +19,158 @@ struct DrainStopRequest {
     pid: Option<u32>,
 }
 
+#[cfg(test)]
+mod bug_1548_tests {
+    use super::*;
+
+    fn recent() -> last_drain::LastDrainOutcome {
+        last_drain::LastDrainOutcome {
+            shipped: 0,
+            shelved: 0,
+            skipped: 0,
+            findings_to_triage: 0,
+            finished_at: "2026-09-22T00:00:00Z".into(),
+            acknowledged: false,
+            consecutive_idle_runs: 6,
+            invocation: Some(last_drain::DrainInvocation {
+                pid: 41,
+                process_started_at: Some("2026-09-21T23:59:58Z".into()),
+                parent_pid: Some(17),
+                parent_started_at: Some("2026-09-21T20:00:00Z".into()),
+                source: "foreground-process".into(),
+            }),
+        }
+    }
+
+    // Running/stale/none use different base renderers; the recent-finished
+    // envelope must remain identical for every supported status verdict.
+    // trace:BUG-1548 | ai:codex
+    #[test]
+    fn recent_finished_json_is_status_independent_and_attributable() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-22T00:03:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let outcome = recent();
+        for base in [
+            r#"{"status":"none"}"#,
+            r#"{"status":"active","pid":41}"#,
+            r#"{"status":"stale","pid":41}"#,
+        ] {
+            let rendered = add_recent_finished_json(base, Some(&outcome), now).unwrap();
+            let value: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+            assert_eq!(value["recent_finished"]["consecutive_idle_runs"], 6);
+            assert_eq!(value["recent_finished"]["invocation"]["pid"], 41);
+            assert_eq!(value["recent_finished"]["invocation"]["parent_pid"], 17);
+        }
+    }
+
+    // trace:BUG-1548 | ai:codex
+    #[test]
+    fn toon_recent_finished_matches_json_fields() {
+        let mut rendered = "status: none".to_string();
+        append_recent_finished_toon(&mut rendered, &recent());
+        assert!(rendered.contains("recent_finished_idle_runs: 6"));
+        assert!(rendered.contains("recent_finished_pid: 41"));
+        assert!(rendered.contains("recent_finished_parent_pid: 17"));
+    }
+}
+
+// trace:BUG-1548 | ai:codex
+fn add_recent_finished_json(
+    rendered: &str,
+    recent: Option<&last_drain::LastDrainOutcome>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<String> {
+    let mut value: serde_json::Value = serde_json::from_str(rendered)?;
+    if let Some(map) = value.as_object_mut() {
+        map.insert(
+            "recent_finished".to_string(),
+            recent
+                .map(|outcome| outcome.status_json(now))
+                .unwrap_or(serde_json::Value::Null),
+        );
+    }
+    Ok(serde_json::to_string_pretty(&value)?)
+}
+
+fn append_recent_finished_toon(rendered: &mut String, outcome: &last_drain::LastDrainOutcome) {
+    let invocation = outcome.invocation.as_ref();
+    for (key, value) in [
+        ("recent_finished_at", outcome.finished_at.clone()),
+        ("recent_finished_shipped", outcome.shipped.to_string()),
+        ("recent_finished_shelved", outcome.shelved.to_string()),
+        ("recent_finished_skipped", outcome.skipped.to_string()),
+        (
+            "recent_finished_idle_runs",
+            outcome.consecutive_idle_runs.to_string(),
+        ),
+        (
+            "recent_finished_pid",
+            invocation.map(|p| p.pid.to_string()).unwrap_or_default(),
+        ),
+        (
+            "recent_finished_parent_pid",
+            invocation
+                .and_then(|p| p.parent_pid)
+                .map(|p| p.to_string())
+                .unwrap_or_default(),
+        ),
+        (
+            "recent_finished_parent_alive",
+            invocation
+                .and_then(|p| {
+                    p.parent_pid.map(|pid| {
+                        process_probe::process_identity_is_alive(
+                            pid,
+                            p.parent_started_at.as_deref(),
+                        )
+                        .to_string()
+                    })
+                })
+                .unwrap_or_default(),
+        ),
+    ] {
+        rendered.push('\n');
+        rendered.push_str(&crate::toon::scalar(key, &value));
+    }
+}
+
+fn print_recent_finished_human(
+    outcome: &last_drain::LastDrainOutcome,
+    now: chrono::DateTime<chrono::Utc>,
+) {
+    let age = outcome
+        .age_secs(now)
+        .map(last_drain::format_age)
+        .unwrap_or_else(|| "recently".to_string());
+    println!(
+        "Last drain finished {age}: {} shipped, {} shelved, {} skipped; unacknowledged.",
+        outcome.shipped, outcome.shelved, outcome.skipped
+    );
+    if outcome.consecutive_idle_runs > 1 {
+        println!(
+            "  Warning: {} consecutive idle drains.",
+            outcome.consecutive_idle_runs
+        );
+    }
+    if let Some(invocation) = &outcome.invocation {
+        print!("  Invocation: {} pid {}", invocation.source, invocation.pid);
+        if let Some(parent_pid) = invocation.parent_pid {
+            let alive = process_probe::process_identity_is_alive(
+                parent_pid,
+                invocation.parent_started_at.as_deref(),
+            );
+            print!(
+                ", parent pid {parent_pid} ({})",
+                if alive { "alive" } else { "stopped" }
+            );
+        }
+        println!(".");
+    } else {
+        println!("  Invocation: unavailable (legacy record).");
+    }
+}
+
 /// `aida drain status` — show the active `aida queue work --auto-complete`
 /// drain (STORY-301). Reads `.aida/drain-state.json`, corroborates the recorded
 /// orchestrator PID against a liveness probe, and prints the human summary —
@@ -79,6 +231,11 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                 .or_else(|_| std::env::current_dir())
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
             let status = drain_state::probe(&project_root);
+            let now = chrono::Utc::now();
+            let last = last_drain::LastDrainOutcome::read(&project_root);
+            let recent_finished = last
+                .as_ref()
+                .filter(|outcome| outcome.should_show_in_drain_status(now));
             let json_output = *json || output_format_is_json();
             if *clear {
                 note_hidden_alias(concat!("aida drain status ", "--clear"), "aida drain clear");
@@ -99,11 +256,25 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             {
                 let stale_state = matches!(status, drain_state::DrainStatus::Stale(_));
                 if json_output {
-                    println!("{}", drain_state::render_lock_json(lock, stale_state));
+                    println!(
+                        "{}",
+                        add_recent_finished_json(
+                            &drain_state::render_lock_json(lock, stale_state),
+                            recent_finished,
+                            now,
+                        )?
+                    );
                 } else if agent_output_mode() {
-                    println!("{}", drain_state::render_lock_toon(lock, stale_state));
+                    let mut rendered = drain_state::render_lock_toon(lock, stale_state);
+                    if let Some(outcome) = recent_finished {
+                        append_recent_finished_toon(&mut rendered, outcome);
+                    }
+                    println!("{rendered}");
                 } else {
                     print!("{}", drain_state::render_lock_human(lock, stale_state));
+                    if let Some(outcome) = recent_finished {
+                        print_recent_finished_human(outcome, now);
+                    }
                     // TASK-294 parity with the state-backed report: surface any
                     // pending worker directives alongside the drain summary.
                     let directives =
@@ -118,15 +289,20 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             if json_output {
                 println!(
                     "{}",
-                    drain_state::render_json_with_context(&status, &project_root)
+                    add_recent_finished_json(
+                        &drain_state::render_json_with_context(&status, &project_root),
+                        recent_finished,
+                        now,
+                    )?
                 );
                 return Ok(());
             }
             if agent_output_mode() {
-                println!(
-                    "{}",
-                    drain_state::render_toon_with_context(&status, &project_root)
-                );
+                let mut rendered = drain_state::render_toon_with_context(&status, &project_root);
+                if let Some(outcome) = recent_finished {
+                    append_recent_finished_toon(&mut rendered, outcome);
+                }
+                println!("{rendered}");
                 return Ok(());
             }
             match status {
@@ -143,6 +319,15 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                     print!(
                         "{}",
                         drain_state::render_human_with_context(&state, true, &project_root)
+                    );
+                }
+            }
+            if let Some(outcome) = recent_finished {
+                print_recent_finished_human(outcome, now);
+            } else if let Some(outcome) = last.as_ref() {
+                if !outcome.acknowledged {
+                    println!(
+                        "Last drain record is older than 24h (historical only; not evidence of a live drain)."
                     );
                 }
             }
