@@ -99,6 +99,8 @@ mod edit_buffer;
 mod effort_calibration;
 // trace:ADR-55 | ai:antigravity
 pub mod evaluator;
+// trace:ADR-56 trace:TASK-1430 trace:TASK-1431 trace:TASK-1432 trace:TASK-1433 | ai:antigravity
+pub mod evaluator_resilience;
 // trace:STORY-1426 | ai:antigravity
 pub mod contradictions;
 // trace:STORY-1424 | ai:antigravity
@@ -90092,14 +90094,20 @@ fn prepare_graded_review(
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();
+    // trace:ADR-56 trace:TASK-1433 | ai:antigravity
     let evaluator: Option<Box<dyn evaluator::EvaluatorEngine>> =
         evaluator::JevEvaluator::from_env()
             .ok()
-            .map(|v| Box::new(v) as Box<dyn evaluator::EvaluatorEngine>)
+            .map(|v| {
+                Box::new(v.into_resilient(std::time::Duration::from_secs(5)))
+                    as Box<dyn evaluator::EvaluatorEngine>
+            })
             .or_else(|| {
                 std::env::var("AIDA_LOCAL_LLM_ENDPOINT").ok().map(|_| {
-                    Box::new(evaluator::LocalLlmEvaluator::from_env())
-                        as Box<dyn evaluator::EvaluatorEngine>
+                    Box::new(
+                        evaluator::LocalLlmEvaluator::from_env()
+                            .into_resilient(std::time::Duration::from_secs(5)),
+                    ) as Box<dyn evaluator::EvaluatorEngine>
                 })
             });
     let result = graded_review::execute_graded_review(
@@ -94631,6 +94639,11 @@ mod bug_1295_rebase_exit_code_tests;
 #[cfg(test)]
 #[path = "tests/adr_55_evaluator_tests.rs"]
 mod adr_55_evaluator_tests;
+
+// trace:ADR-56 trace:TASK-1430 trace:TASK-1431 trace:TASK-1432 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/adr_56_evaluator_resilience_tests.rs"]
+mod adr_56_evaluator_resilience_tests;
 
 // trace:STORY-1426 | ai:antigravity
 #[cfg(test)]

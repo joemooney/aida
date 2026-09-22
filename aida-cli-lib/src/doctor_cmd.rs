@@ -8216,7 +8216,10 @@ pub(crate) fn doctor_contradictions(
         )
     })?;
 
-    let jev = crate::evaluator::JevEvaluator::from_env().ok();
+    // trace:ADR-56 trace:TASK-1433 | ai:antigravity
+    let jev = crate::evaluator::JevEvaluator::from_env()
+        .ok()
+        .map(|j| j.into_resilient(std::time::Duration::from_secs(5)));
     let findings = crate::contradictions::sweep_contradictions_at(
         &store,
         jev.as_ref()

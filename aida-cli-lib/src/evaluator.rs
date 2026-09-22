@@ -62,7 +62,8 @@ fn payload_hash(payload: &serde_json::Value) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-/// Typed evaluator failure modes for fail-closed handling (PRIN-5).
+/// Typed evaluator failure modes for fail-closed handling (PRIN-5, ADR-56).
+// trace:ADR-56 trace:TASK-1430 | ai:antigravity
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EvaluatorError {
     MissingApiKey(String),
@@ -70,7 +71,45 @@ pub enum EvaluatorError {
     ApiError { status: u16, message: String },
     ParseError(String),
     Timeout(String),
+    DeadlineExceeded,
+    CircuitOpen { endpoint: String },
     Other(String),
+}
+
+/// Coarse failure classification for retry budgeting and circuit tripping (ADR-56).
+// trace:ADR-56 trace:TASK-1430 trace:TASK-1431 | ai:antigravity
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum EvaluatorErrorKind {
+    /// Transient errors: transport resets, connection timeouts, DNS flaps, HTTP 429, HTTP 502/503/504.
+    /// Eligible for retry if deadline budget allows; counts toward circuit breaker trips.
+    Transient,
+    /// Permanent errors: HTTP 400 (Bad Request), 401 (Unauthorized), 403 (Forbidden), 404 (Not Found),
+    /// MissingApiKey, or malformed schema/ParseError.
+    /// Fails closed immediately without retry; MUST NOT increment transient failure counters or trip circuit breaker.
+    Permanent,
+    /// Operation deadline / budget exhausted.
+    DeadlineExceeded,
+    /// Circuit breaker is Open; fast fail-closed without network IO.
+    CircuitOpen,
+}
+
+impl EvaluatorError {
+    /// Classifies an evaluator error into transient, permanent, deadline, or circuit-open.
+    // trace:ADR-56 trace:TASK-1430 trace:TASK-1431 | ai:antigravity
+    pub fn classify(&self) -> EvaluatorErrorKind {
+        match self {
+            Self::Network(_) | Self::Timeout(_) => EvaluatorErrorKind::Transient,
+            Self::ApiError { status, .. } => match *status {
+                429 | 500 | 502 | 503 | 504 => EvaluatorErrorKind::Transient,
+                _ => EvaluatorErrorKind::Permanent,
+            },
+            Self::MissingApiKey(_) | Self::ParseError(_) | Self::Other(_) => {
+                EvaluatorErrorKind::Permanent
+            }
+            Self::DeadlineExceeded => EvaluatorErrorKind::DeadlineExceeded,
+            Self::CircuitOpen { .. } => EvaluatorErrorKind::CircuitOpen,
+        }
+    }
 }
 
 impl std::fmt::Display for EvaluatorError {
@@ -81,6 +120,10 @@ impl std::fmt::Display for EvaluatorError {
             Self::ApiError { status, message } => write!(f, "API error ({status}): {message}"),
             Self::ParseError(msg) => write!(f, "Parse error: {msg}"),
             Self::Timeout(msg) => write!(f, "Timeout: {msg}"),
+            Self::DeadlineExceeded => write!(f, "Operation deadline exceeded"),
+            Self::CircuitOpen { endpoint } => {
+                write!(f, "Evaluator circuit open for endpoint: {endpoint}")
+            }
             Self::Other(msg) => write!(f, "Evaluator error: {msg}"),
         }
     }
@@ -191,6 +234,26 @@ impl JevEvaluator {
             endpoint,
             model,
         }
+    }
+
+    /// Wraps this evaluator in a resilient DeadlineRetryAdapter with default circuit breaker (ADR-56, TASK-1433).
+    // trace:ADR-56 trace:TASK-1433 | ai:antigravity
+    pub fn into_resilient(
+        self,
+        default_deadline: std::time::Duration,
+    ) -> crate::evaluator_resilience::DeadlineRetryAdapter<Self> {
+        let endpoint = self.endpoint.clone();
+        let cb = std::sync::Arc::new(crate::evaluator_resilience::EvaluatorCircuitBreaker::new(
+            endpoint.clone(),
+            crate::evaluator_resilience::CircuitBreakerConfig::default(),
+        ));
+        crate::evaluator_resilience::DeadlineRetryAdapter::new(
+            self,
+            endpoint,
+            cb,
+            crate::evaluator_resilience::RetryPolicy::default(),
+            default_deadline,
+        )
     }
 
     /// Attempt to construct a JevEvaluator by inspecting process environment and `~/.env`.
@@ -535,6 +598,26 @@ impl LocalLlmEvaluator {
     pub fn with_endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.endpoint = endpoint.into();
         self
+    }
+
+    /// Wraps this evaluator in a resilient DeadlineRetryAdapter with default circuit breaker (ADR-56, TASK-1433).
+    // trace:ADR-56 trace:TASK-1433 | ai:antigravity
+    pub fn into_resilient(
+        self,
+        default_deadline: std::time::Duration,
+    ) -> crate::evaluator_resilience::DeadlineRetryAdapter<Self> {
+        let endpoint = self.endpoint.clone();
+        let cb = std::sync::Arc::new(crate::evaluator_resilience::EvaluatorCircuitBreaker::new(
+            endpoint.clone(),
+            crate::evaluator_resilience::CircuitBreakerConfig::default(),
+        ));
+        crate::evaluator_resilience::DeadlineRetryAdapter::new(
+            self,
+            endpoint,
+            cb,
+            crate::evaluator_resilience::RetryPolicy::default(),
+            default_deadline,
+        )
     }
 
     async fn evaluate_json(
