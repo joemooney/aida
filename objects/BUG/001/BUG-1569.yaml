@@ -10,12 +10,12 @@ description: |-
   The actual fix belongs here: make the type-protocol notice lookup cache-backed (matching the STORY-707 / TASK-1065 pattern already used for `aida status`, `aida list`, `load_metadata_only`, etc. -- none of which pay for a full `backend.load()`), so this per-turn hook never needs to scan the whole store just to render one line. Until then the notice can silently truncate under load (a cold cache, a busy shared runner, or simply a large store) without printing an error -- by design "fail-open", but the design's own cost estimate (1s) was wrong for the case it exists to bound.
 
   Acceptance: `notice_line_for_scope`'s type-protocol lookup no longer requires backend.load() of the full store (a targeted per-id read suffices); `arm_notice_deadline` can return to a sub-second bound once it is; the TASK-1274-authored regression test stays green under the tighter deadline.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:29:09.929894136Z
-modified_at: 2026-09-21T22:54:08.686603214Z
+modified_at: 2026-09-22T08:20:33.055566525Z
 req_type: Bug
 tags:
 - awaiting
