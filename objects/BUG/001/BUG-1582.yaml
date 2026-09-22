@@ -47,12 +47,12 @@ description: |-
 
   Filed by the driver-advisor seat. Discovered independently by the implementer lane on TASK-185
   and by this seat on TASK-190. Related: the doc-intent gate's CI step in ci.yml.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T23:17:53.065101052Z
-modified_at: 2026-09-21T23:17:53.065101052Z
+modified_at: 2026-09-22T07:53:34.689766415Z
 req_type: Bug
 tags:
 - ci doc-gate papercut
