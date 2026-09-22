@@ -53,12 +53,12 @@ description: |-
   Filed by the driver-advisor seat from a live instance on PR #2066. Related: BUG-1539 (clobber),
   BUG-1571 (missing handshake), BUG-1466 (verdict provenance). The three together say the verdict
   substrate cannot currently answer "who reviewed this commit, and did they agree".
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:59:21.615803647Z
-modified_at: 2026-09-22T09:23:41.390673128Z
+modified_at: 2026-09-22T09:25:00.454373899Z
 req_type: Bug
 tags:
 - review-verdicts orchestrator integrity
@@ -184,3 +184,7 @@ comments:
   content: '[aida:implementer] IMPLEMENTED signed sketch. PR-keyed handshakes now use the existing append-only round recorder at their explicit anchor, so a later reviewer cannot destroy the prior reviewer evidence. Added deterministic current-SHA reconciliation across top-level + rounds (safe SHA prefix equivalence, reviewer identity, approval vs blocking classes); stale-SHA disagreement remains history. The live phase-3 reader emits a visible NoVerdict conflict and the local merge chokepoint blocks instead of treating an approved top level as permission. Red-first proof: new tests initially failed to compile because the path writer/classifier did not exist; now focused suites pass (35 review-verdict, 8 reader, merge-block, explicit handshake). cargo fmt --check passes. Full 5,340-test lib run: 5,337 passed, 2 queue_rework metadata tests failed due existing environment-sensitive advisor-authority behavior unrelated to touched review code, 1 ignored; first failure reproduces alone.'
   created_at: 2026-09-22T09:23:41.390673128Z
   modified_at: 2026-09-22T09:23:41.390673128Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-22T09:25:00.454373899Z
+  implemented_by: joe
