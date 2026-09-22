@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T00:20:45.943120Z
-modified_at: 2026-09-22T07:30:32.249320893Z
+modified_at: 2026-09-22T07:44:23.003237259Z
 req_type: Bug
 tags:
 - docs drain papercut
@@ -63,3 +63,8 @@ comments:
   content: 'Claim sweep (unbounded: rg -n -i ''pipeline[_ -]?depth'' --glob ''!target/**'' --glob ''!.git/**'' .; plus aida show ADR-27/STORY-1091): 3 default-bearing sources found. (1) aida-cli-lib/src/drain_state.rs is authoritative and returns 1; (2) docs/autonomous-drain.md was the stale current guide claim and is corrected by this implementation; (3) ADR-27 records historical default 2 and now has a partial-supersession comment. Discipline pack: 0 claims. Skills: 0 claims. Current TUI/help source: 0 pipeline-depth default claims. Other rg hits are configuration plumbing, state/test fixtures, or live status rendering, not assertions of the default or overlap-by-default behavior.'
   created_at: 2026-09-22T07:21:06.514253079Z
   modified_at: 2026-09-22T07:21:06.514253079Z
+- id: 01a0c812-afdb-7983-bd3c-286717649cf2
+  author: joe
+  content: 'Correction to the earlier claim-sweep report after cold review of PR #2079: there were 4 default-bearing sources, not 3. I omitted aida-cli-lib/src/drain_state.rs:104-107''s DrainState.pipeline_depth field documentation, which incorrectly called 2 the pipelined default. Full classification: (1) default_pipeline_depth() plus its adjacent implementation note: authoritative/live default 1; (2) DrainState.pipeline_depth field docs: stale live-behavior claim, now corrected to default 1 and depth >1 opt-in; (3) docs/autonomous-drain.md: stale guide claim, corrected; (4) ADR-27: historical default-2 decision, retained with partial-supersession comment. Discipline pack: 0. Skills: 0. Current TUI/help source: 0. The compiled guard now checks both the guide example/claim and the field docs against default_pipeline_depth(), and specifically rejects the missed stale field phrasing.'
+  created_at: 2026-09-22T07:44:23.003237259Z
+  modified_at: 2026-09-22T07:44:23.003237259Z
