@@ -81447,6 +81447,7 @@ fn handle_auto_complete_batch(
     // TASK-967: drain origin (wall clock + base HEAD) for the exit summary.
     // trace:TASK-967 | ai:claude
     let drain_started = std::time::SystemTime::now();
+    let drain_invocation = last_drain::DrainInvocation::capture();
     let drain_clock = std::time::Instant::now();
     let drain_base_sha = drain_root.as_deref().and_then(current_branch_head_sha);
     // TASK-966: arm the token meter only when a `--max-tokens` cap is set.
@@ -81549,6 +81550,7 @@ fn handle_auto_complete_batch(
         drain_base_sha.as_deref(),
         drain_started,
         drain_clock.elapsed(),
+        &drain_invocation,
         json,
         // TASK-1297: the "M other approved specs routed to this role are not
         // in this batch" figure, echoed onto the terminal QueueDrained event
@@ -82087,6 +82089,7 @@ fn handle_auto_complete_batches(
     // TASK-966: a single drain-start + token meter shared across every batch in
     // the chain so `--max-runtime` / `--max-tokens` are cumulative.
     let chain_started = std::time::SystemTime::now();
+    let drain_invocation = last_drain::DrainInvocation::capture();
     // TASK-967: drain-wide wall clock + base HEAD for the exit summary.
     // trace:TASK-967 | ai:claude
     let chain_clock = std::time::Instant::now();
@@ -82196,6 +82199,7 @@ fn handle_auto_complete_batches(
         drain_base_sha.as_deref(),
         chain_started,
         chain_clock.elapsed(),
+        &drain_invocation,
         json,
         // TASK-1297: the chained-batches path (`--batch a,b,c`) does not yet
         // surface the per-batch exclusion count — out of scope for this
@@ -83135,6 +83139,7 @@ fn finalize_drain_summary(
     drain_base_sha: Option<&str>,
     started: std::time::SystemTime,
     elapsed: std::time::Duration,
+    drain_invocation: &last_drain::DrainInvocation,
     json: bool,
     // TASK-1297: "M other approved specs routed to this role are not in this
     // batch" — 0 for every non-batch drain kind (single, next-n). Echoed onto
@@ -83208,7 +83213,7 @@ fn finalize_drain_summary(
             &summary,
             &ts,
             previous.as_ref(),
-            Some(last_drain::DrainInvocation::capture()),
+            Some(drain_invocation.clone()),
         )
         .write(root);
     }
@@ -83584,6 +83589,7 @@ fn handle_auto_complete_next_n(
     // the exit summary can report token spend, diff stats, and elapsed time
     // regardless of whether a token cap is active. trace:TASK-967 | ai:claude
     let drain_started = std::time::SystemTime::now();
+    let drain_invocation = last_drain::DrainInvocation::capture();
     let drain_clock = std::time::Instant::now();
     let drain_base_sha = drain_root.as_deref().and_then(current_branch_head_sha);
     // TASK-966: arm the token meter only when a `--max-tokens` cap is set.
@@ -83666,6 +83672,7 @@ fn handle_auto_complete_next_n(
         drain_base_sha.as_deref(),
         drain_started,
         drain_clock.elapsed(),
+        &drain_invocation,
         json,
         // TASK-1297: a nextN drain has no `--batch` filter, so there is
         // nothing excluded to report. trace:TASK-1297 | ai:claude

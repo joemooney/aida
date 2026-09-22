@@ -61,14 +61,26 @@ pub(crate) struct DrainInvocation {
 impl DrainInvocation {
     pub(crate) fn capture() -> Self {
         let pid = std::process::id();
-        let parent_pid = crate::process_probe::walk_ancestor_pids(pid)
-            .get(1)
-            .copied();
+        Self::capture_with(
+            pid,
+            crate::process_probe::walk_ancestor_pids,
+            crate::process_probe::process_start_identity,
+        )
+    }
+
+    fn capture_with(
+        pid: u32,
+        ancestors: impl FnOnce(u32) -> Vec<u32>,
+        mut start_identity: impl FnMut(u32) -> Option<String>,
+    ) -> Self {
+        // Snapshot the ancestry once, at drain invocation. A short-lived
+        // wrapper may exit or be reparented long before finalization.
+        let parent_pid = ancestors(pid).get(1).copied();
         Self {
             pid,
-            process_started_at: crate::process_probe::process_start_identity(pid),
+            process_started_at: start_identity(pid),
             parent_pid,
-            parent_started_at: parent_pid.and_then(crate::process_probe::process_start_identity),
+            parent_started_at: parent_pid.and_then(&mut start_identity),
             source: "foreground-process".to_string(),
         }
     }
@@ -118,7 +130,9 @@ impl LastDrainOutcome {
     ) -> Self {
         let idle = summary.tallies.shipped == 0
             && summary.tallies.shelved == 0
-            && summary.tallies.skipped == 0;
+            && summary.tallies.skipped == 0
+            && summary.tallies.punted == 0
+            && summary.tallies.escalated == 0;
         let consecutive_idle_runs = if idle {
             previous
                 .map(|p| p.consecutive_idle_runs)
@@ -472,13 +486,19 @@ mod tests {
     // trace:BUG-1548 | ai:codex
     #[test]
     fn idle_streak_increments_and_material_run_resets_it() {
-        fn summary(shipped: usize) -> crate::drain_summary::DrainSummary {
+        fn summary(
+            shipped: usize,
+            punted: usize,
+            escalated: usize,
+        ) -> crate::drain_summary::DrainSummary {
             crate::drain_summary::DrainSummary {
                 kind: "batch".into(),
                 label: "test".into(),
                 outcome: "drained".into(),
                 tallies: crate::drain_summary::DrainTallies {
                     shipped,
+                    punted,
+                    escalated,
                     ..Default::default()
                 },
                 cumulative_tokens: 0,
@@ -488,19 +508,19 @@ mod tests {
             }
         }
         let first = LastDrainOutcome::from_summary_with_previous(
-            &summary(0),
+            &summary(0, 0, 0),
             "2026-09-22T00:00:00Z",
             None,
             None,
         );
         let second = LastDrainOutcome::from_summary_with_previous(
-            &summary(0),
+            &summary(0, 0, 0),
             "2026-09-22T00:04:00Z",
             Some(&first),
             None,
         );
         let productive = LastDrainOutcome::from_summary_with_previous(
-            &summary(1),
+            &summary(1, 0, 0),
             "2026-09-22T00:08:00Z",
             Some(&second),
             None,
@@ -508,6 +528,75 @@ mod tests {
         assert_eq!(first.consecutive_idle_runs, 1);
         assert_eq!(second.consecutive_idle_runs, 2);
         assert_eq!(productive.consecutive_idle_runs, 0);
+
+        for material in [summary(0, 1, 0), summary(0, 0, 1)] {
+            let outcome = LastDrainOutcome::from_summary_with_previous(
+                &material,
+                "2026-09-22T00:12:00Z",
+                Some(&second),
+                None,
+            );
+            assert_eq!(
+                outcome.consecutive_idle_runs, 0,
+                "punt/escalation is material work and must reset the idle streak"
+            );
+        }
+    }
+
+    // The launcher can disappear or be reparented while a drain runs. Capture
+    // is one start-time snapshot; finalization persists that exact value and
+    // never asks the process table again. trace:BUG-1548 | ai:codex
+    #[test]
+    fn invocation_snapshot_survives_short_lived_reparented_launcher_without_recapture() {
+        use std::cell::Cell;
+
+        let ancestry_reads = Cell::new(0);
+        let identity_reads = Cell::new(0);
+        let snapshot = DrainInvocation::capture_with(
+            300,
+            |pid| {
+                ancestry_reads.set(ancestry_reads.get() + 1);
+                assert_eq!(pid, 300);
+                vec![300, 200, 1]
+            },
+            |pid| {
+                identity_reads.set(identity_reads.get() + 1);
+                Some(format!("start-{pid}"))
+            },
+        );
+        assert_eq!(ancestry_reads.get(), 1);
+        assert_eq!(identity_reads.get(), 2);
+
+        // Simulate the completion-time world: pid 300 exited and its former
+        // parent 200 was reparented/exited. There is intentionally no callback
+        // for finalization to invoke; it can only persist `snapshot`.
+        let previous_reads = (ancestry_reads.get(), identity_reads.get());
+        let completed = LastDrainOutcome::from_summary_with_previous(
+            &crate::drain_summary::DrainSummary {
+                kind: "batch".into(),
+                label: "test".into(),
+                outcome: "drained".into(),
+                tallies: Default::default(),
+                cumulative_tokens: 0,
+                diff: Default::default(),
+                elapsed_secs: 240,
+                events: Default::default(),
+            },
+            "2026-09-22T00:04:00Z",
+            None,
+            Some(snapshot.clone()),
+        );
+        assert_eq!(
+            (ancestry_reads.get(), identity_reads.get()),
+            previous_reads,
+            "completion must not recapture process ancestry or identities"
+        );
+        assert_eq!(completed.invocation, Some(snapshot));
+        let saved = completed.invocation.unwrap();
+        assert_eq!(saved.pid, 300);
+        assert_eq!(saved.parent_pid, Some(200));
+        assert_eq!(saved.process_started_at.as_deref(), Some("start-300"));
+        assert_eq!(saved.parent_started_at.as_deref(), Some("start-200"));
     }
 
     // trace:BUG-1548 | ai:codex
