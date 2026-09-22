@@ -82,6 +82,10 @@ verify:
     # Deny-by-default CORRECTNESS lints; style/pedantic stay warnings (matches
     # the GitHub gate — no -D warnings on a floating stable toolchain).
     - cargo clippy -p aida-cli -- -D clippy::correctness
+    # Record the checkout only after every verify command succeeds. The next
+    # same-slot job can then distinguish changed inputs from an exact-SHA retry
+    # without trusting GitLab Runner's recreated reflog. trace:TASK-1274
+    - ci/restore-git-mtimes --record
 
 # Runtime gates use the test profile, independently of the static checks above.
 # `needs: []` lets this later-stage job start as soon as a runner slot is free

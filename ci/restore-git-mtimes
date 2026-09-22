@@ -6,13 +6,32 @@ set -eu
 # freshness, so assigning arbitrary content-derived times is unsafe: a changed
 # blob can receive an older time and be mistaken for a fresh input.
 #
-# Instead, compare this checkout with the previous checkout recorded in HEAD's
-# reflog. Leave changed paths at the fresh checkout time so Cargo rebuilds them;
-# only normalize unchanged blobs and trees. An exact-SHA retry has an empty diff
-# and therefore gets stable mtimes throughout.
+# Instead, compare this checkout with the last checkout whose verify job
+# succeeded in this slot-local target directory. Leave changed paths at the
+# fresh checkout time so Cargo rebuilds them; only normalize unchanged blobs
+# and trees. An exact-SHA retry has an empty diff and therefore gets stable
+# mtimes throughout. GitLab recreates repository metadata between jobs, so its
+# HEAD reflog is not a durable source for this state.
 # trace:TASK-1274 | ai:codex
-previous=$(git rev-parse --verify 'HEAD@{1}^{commit}' 2>/dev/null || true)
 current=$(git rev-parse HEAD)
+state=${CARGO_TARGET_DIR:?CARGO_TARGET_DIR must identify the slot-local cache}/.aida-verified-checkout
+
+if test "${1:-}" = --record; then
+    mkdir -p "$CARGO_TARGET_DIR"
+    pending="$state.$$"
+    printf '%s\n' "$current" > "$pending"
+    mv "$pending" "$state"
+    echo "restore-git-mtimes: recorded successful checkout $current"
+    exit 0
+fi
+
+previous=
+if test -f "$state"; then
+    candidate=$(sed -n '1p' "$state")
+    if git cat-file -e "$candidate^{commit}" 2>/dev/null; then
+        previous=$candidate
+    fi
+fi
 
 if test -n "$previous"; then
     changed=$(mktemp)
@@ -67,3 +86,5 @@ if test -n "$previous"; then
           "$tree" "$(git rev-parse --git-path index)"
     fi
 fi
+
+echo "restore-git-mtimes: previous=${previous:-none} current=$current"

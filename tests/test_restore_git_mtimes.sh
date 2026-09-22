@@ -21,7 +21,10 @@ git -C "$fixture" add .
 git -C "$fixture" commit -qm initial
 
 run_restore() {
-    (cd "$fixture" && "$repo_root/ci/restore-git-mtimes")
+    (cd "$fixture" && CARGO_TARGET_DIR="$fixture/target" "$repo_root/ci/restore-git-mtimes")
+}
+record_checkout() {
+    (cd "$fixture" && CARGO_TARGET_DIR="$fixture/target" "$repo_root/ci/restore-git-mtimes" --record)
 }
 run_build() {
     CARGO_TARGET_DIR="$fixture/target" \
@@ -30,6 +33,7 @@ run_build() {
 
 run_restore
 run_build >/dev/null
+record_checkout >/dev/null
 git -C "$fixture" checkout -qf HEAD
 run_restore
 warm=$(run_build)
@@ -42,6 +46,7 @@ run_restore
 changed=$(run_build)
 printf '%s\n' "$changed" | grep -q 'Compiling mtime_probe'
 test "$($fixture/target/debug/mtime_probe)" = Changed
+record_checkout >/dev/null
 
 git -C "$fixture" checkout -qf HEAD
 run_restore

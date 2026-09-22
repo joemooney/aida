@@ -73,10 +73,13 @@ rather than putting an unconditional clean back on every pipeline.
 
 GitLab Runner still performs a forced checkout even without `git clean`, which
 can refresh tracked-file and directory mtimes. Before each builder job,
-`ci/restore-git-mtimes` compares the new checkout with the prior checkout in
-Git's reflog. Changed paths retain their fresh checkout time so Cargo must
-rebuild them; unchanged regular files and directories receive a deterministic
-past mtime derived from their Git blob or tree ID. Directories matter because
+`ci/restore-git-mtimes` compares the new checkout with the last checkout whose
+verify job succeeded in that slot-local target directory. The success marker is
+written only after every verify command passes; GitLab Runner recreates the
+repository metadata, so its reflog is not durable enough for this purpose.
+Changed paths retain their fresh checkout time so Cargo must rebuild them;
+unchanged regular files and directories receive a deterministic past mtime
+derived from their Git blob or tree ID. Directories matter because
 Cargo recursively watches paths such as `aida-core/templates/`; restoring only
 file mtimes still reruns that crate's build script after every forced checkout.
 On an exact-SHA retry the helper also normalizes `.git/HEAD` and `.git/index`,
