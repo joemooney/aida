@@ -55,7 +55,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:09:54.985425283Z
-modified_at: 2026-09-22T06:47:29.469546605Z
+modified_at: 2026-09-22T08:06:59.795500462Z
 req_type: Task
 tags:
 - forge gitlab ci infrastructure
@@ -100,3 +100,8 @@ comments:
     - Exact-head required CI is not green. GitHub branch protection requires Build (ubuntu-latest), and that check failed in run 35694945797 / job 106639653962 (scaffold_refresh::tests::starter_role_refresh_adds_missing_prompt_and_preserves_user_prompt). Exact-head Windows also failed in run 35694945775 / job 106639652090 (templates::tests::project_discipline_pack_matches_master). Regardless of whether these failures are baseline/flaky, this head cannot receive APPROVE while its protected required check is red. Rerun/rebase as appropriate and obtain green required CI on the unchanged reviewed head (or submit a new head for fresh review).
   created_at: 2026-09-22T06:47:29.469546605Z
   modified_at: 2026-09-22T06:47:29.469546605Z
+- id: 01a0c827-63d3-7ca0-9c64-0428e7483150
+  author: joe
+  content: Commit 687ccb5976 references this requirement
+  created_at: 2026-09-22T08:06:59.795500462Z
+  modified_at: 2026-09-22T08:06:59.795500462Z
