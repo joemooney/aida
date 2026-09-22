@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T11:39:09.686818046Z
-modified_at: 2026-09-22T11:39:20.331281932Z
+modified_at: 2026-09-22T11:45:35.505323671Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0c1cb-97e3-7962-a7e6-e941c86467b8
   created_at: 2026-09-22T11:39:20.331272730Z
   created_by: joe
+comments:
+- id: 01a0c8ef-8511-7b33-90b4-a0c3ac0db3c6
+  author: joe
+  content: 'Cold review completed for PR-2098 exact head 70145f2ba9bb6e5e05b776bcb3518247588a0434: REQUEST_CHANGES. Label-only merge holds are ignored and reviewer queue lookup failure is treated as empty, so held/routed exclusions can fail open. Durable verdict recorded on TASK-192 and PR-2098.'
+  created_at: 2026-09-22T11:45:35.505323671Z
+  modified_at: 2026-09-22T11:45:35.505323671Z
