@@ -4479,11 +4479,11 @@ pub enum CommentCommand {
 
         /// Read comment content from a file. Prefer this for text containing
         /// backticks or `$()` so the shell cannot perform command substitution.
-        #[clap(long, value_name = "PATH", conflicts_with_all = ["content", "content_positional", "stdin"])]
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["content", "stdin"])]
         body_file: Option<PathBuf>,
 
         /// Read comment content from stdin.
-        #[clap(long, conflicts_with_all = ["content", "content_positional", "body_file"])]
+        #[clap(long, conflicts_with_all = ["content", "body_file"])]
         stdin: bool,
 
         /// Author of the comment (defaults to AIDA_AUTHOR env var or system user)
