@@ -1,0 +1,55 @@
+id: 01a0c7d5-3764-7c91-a1ed-38bae4f6b1ae
+spec_id: SPIKE-87
+agreed_id: SPIKE-87
+title: Benchmark TypeSafe AI's Jev against historical review verdicts and store contradictions
+description: |
+  CONTEXT & GOAL:
+  AIDA's autonomous drain and quality-gating pipeline are repeatedly bottlenecked by relying on conversational LLM sessions (Claude/Codex) for narrow, structured evaluations (PRIN-8, STORY-1424, STORY-1427). Reviewer agent sessions are slow (15-60s), expensive, context-heavy, and prone to timeouts or regex verdict scraping failures (over 40% of recent drain stalls).
+
+  TypeSafe AI's Jev model (released September 2026) is a specialized "System One" decision model that evaluates structured queries (noul binary probabilities, choice classifications, score rubrics) via parallel sampling in 100-250ms at ~1/400th the cost of conversational LLMs, outputting strictly typed, calibrated JSON.
+
+  This spike benchmarks Jev offline against AIDA's existing corpus to measure empirical calibration, latency, and failure modes before making it load-bearing on the autonomous merge path.
+
+  EVALUATION AREAS:
+  1. STORE CONTRADICTION SWEEP (STORY-1426):
+     - Evaluate candidate spec pairs from .aida-store across a Jev choice/noul question.
+     - Test specifically against known ground-truth contradictions: VIS-1 (approved vision) vs CR-6 / STORY-551 (completed retirement of VIS-1).
+     - Measure true positive rate vs false alarm rate across 50 spec pairs.
+
+  2. HISTORICAL REVIEW VERDICT BENCHMARK (STORY-1424):
+     - Take 50 past review records from .aida/review-verdicts/ alongside their commit diffs and spec acceptance criteria.
+     - Run Jev noul evaluations against the residual prose criteria.
+     - Measure concordance with the actual human/agent review decisions that shipped.
+     - Plot calibration curve (predicted probability vs empirical approval rate).
+
+  3. INTAKE GATING LATENCY & ACCURACY (STORY-1427):
+     - Benchmark Jev evaluation of well-formedness and atomicity on 30 sample specs.
+     - Verify P95 latency remains strictly under 300ms, preserving frictionless capture.
+
+  ACCEPTANCE CRITERIA:
+  - A benchmark harness evaluates at least 50 historical diff/verdict pairs and 30 spec contradiction pairs against Jev.
+  - Measures and reports: P50/P95 latency, cost per 1,000 evaluations, false positive rate, and verdict concordance percentage.
+  - Specifically tests and documents outcome on the VIS-1 vs CR-6 ground-truth contradiction.
+  - Recommends explicit probability thresholds for auto-approve, auto-reject, and escalation bands under STORY-1424.
+  - Produces a findings report in docs/research/ or docs/spikes/ with an ADR recommendation for EPIC-66 integration.
+  - Strictly adheres to PRIN-8: all findings labeled as heuristic with their calibrated confidence.
+
+  REFERENCES:
+  - docs/research/2026-09-22-jev-system-one-gating-evaluation.md
+  - docs/presentation/aida-jev-management-presentation.md
+  - PRIN-8, PRIN-7, PRIN-6, PRIN-5
+  - STORY-1424, STORY-1426, STORY-1427, EPIC-66, ADR-44
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T06:37:14.468684494Z
+modified_at: 2026-09-22T06:37:14.468684494Z
+req_type: Spike
+tags:
+- epic-66
+- evaluation
+- gating
+- jev
+- system-one
+human_only: true
