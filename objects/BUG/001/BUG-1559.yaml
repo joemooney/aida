@@ -31,12 +31,12 @@ description: |
   - NOT IN SCOPE: the trait's blindness to COST. That is recorded on BUG-1480 already — the trait guards the CALL and is provably blind to the cost, since the bug grew 7.5s to 9.9s with no call site changing. STORY-1422's real-store gate holds that dimension. This spec is only about the witness matching its own claim.
 
   Related: BUG-1480 (the guard this witness is supposed to protect), STORY-1422 (the cost-dimension instrument), TASK-1418 (instrument-failure catalogue).
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:26:45.055351013Z
-modified_at: 2026-09-22T06:23:33.477187817Z
+modified_at: 2026-09-22T06:23:50.833339860Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -63,3 +63,21 @@ comments:
   content: '[aida:proxy-approval] verdict=approved; reasoning=cold reviewer verified exact head d06259e49be231046233e1709b560555ac260073, acceptance, mutation witness, and targeted tests; independent=yes; gates=Ubuntu CI green, merge-hold-gate green, exact-head review approved; timestamp=2026-09-21T23:23:33-07:00'
   created_at: 2026-09-22T06:23:33.477187817Z
   modified_at: 2026-09-22T06:23:33.477187817Z
+history:
+- id: 01a0c7c8-f42a-7561-af32-0f9802e34470
+  author: aida-auto-bump
+  timestamp: 2026-09-22T06:23:50.826677071Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c7c8-f431-7042-9854-f0995f8bb376
+  timestamp: 2026-09-22T06:23:50.833338175Z
+  agent: aida
+  commit_sha: 167f439484613acb59d03a30628987846bbe2844
+  summary: Completed via merge 167f4394
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T06:23:50.826508910Z
+  completion_sha: 167f439484613acb59d03a30628987846bbe2844
