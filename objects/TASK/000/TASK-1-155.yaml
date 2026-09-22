@@ -24,7 +24,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T19:41:23.949746312Z
-modified_at: 2026-09-22T11:40:16.662150976Z
+modified_at: 2026-09-22T11:40:20.387552589Z
 req_type: Task
 tags:
 - from-advisor:BUG-1442
@@ -32,6 +32,11 @@ tags:
 - linked:BUG-1442
 - recurrence:2
 - severity:minor
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a0c066-1bed-7b53-99cb-146a6bdc48ad
+  created_at: 2026-09-22T11:40:20.387541060Z
+  created_by: joe
 comments:
 - id: 01a0c05f-bc64-77c0-8c5a-0fb2f2ac191e
   author: joe
