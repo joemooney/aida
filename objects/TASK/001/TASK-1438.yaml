@@ -1,0 +1,18 @@
+id: 01a0c9de-f80e-7d92-b42f-f4cbf63dee7e
+spec_id: TASK-1438
+agreed_id: TASK-1438
+title: Integrate advisory Jev readability/fidelity scoring and deterministic constraint audit
+description: 'Implement dual quality evaluation for expositions: (1) deterministic checks for acceptance criterion IDs, invariant terms, and links; (2) advisory Jev System One scoring for readability, jargon saturation, and constraint retention. Never vetoes publication; annotates needs_revision.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-22T16:07:08.046867836Z
+modified_at: 2026-09-22T16:07:08.046867836Z
+req_type: Task
+tags:
+- audit
+- epic-72
+- evaluator
+- jev
+- quality
