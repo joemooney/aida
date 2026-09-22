@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T09:57:54.571074789Z
-modified_at: 2026-09-22T09:57:59.040308549Z
+modified_at: 2026-09-22T10:07:56.650285974Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0c5dc-a7dc-7d93-a779-615229bcf1cb
   created_at: 2026-09-22T09:57:59.040300425Z
   created_by: joe
+comments:
+- id: 01a0c896-1eea-73c2-bb54-58cabad73f6f
+  author: joe
+  content: 'Cold independent review PR #2091 exact head 68a411415fb4d2126769a4e0de5ad658790169a4: CHANGES REQUIRED for BUG-1573. Typed persistence/event contract is present and tests pass, but the routed consumer does not receive the trip evidence: event matching reduces the event to its name and DueJob renders only static prompt/reason. The purported consumer test proves only due_since, not advisor-visible trip_id/evidence. PR comment records precise lines/remediation. Full lib suite: 5352 passed, 1 ignored; CI pending. Formal GitHub request-changes unavailable because this account owns the PR.'
+  created_at: 2026-09-22T10:07:56.650285974Z
+  modified_at: 2026-09-22T10:07:56.650285974Z
