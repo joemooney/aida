@@ -3794,7 +3794,12 @@ pub(crate) fn handle_git_backend_command(
                     // STORY-632: `--json` emits the spec as a machine object,
                     // including the centrality fields, then returns early.
                     // trace:STORY-632 | ai:claude
-                    if *json {
+                    // The global format pin and the dedicated flag are two
+                    // spellings of the same machine contract. Keeping this
+                    // test at the renderer (rather than only in dispatch)
+                    // also covers AIDA_OUTPUT_FORMAT=json.
+                    // trace:BUG-1502 | ai:codex
+                    if *json || output_format_is_json() {
                         // BUG-1558: the machine JSON projection used to omit
                         // relationships entirely — an agent reading `aida show
                         // --json` had no way to see the typed graph at all,
@@ -3831,6 +3836,31 @@ pub(crate) fn handle_git_backend_command(
                             heft: u32,
                             // trace:BUG-1558 | ai:claude
                             relationships: Vec<RelJson>,
+                            /// The same git linkage carried by the human view;
+                            /// null only when --no-git explicitly suppresses
+                            /// the probe.
+                            git_linkage: Option<GitLinkageJson>,
+                        }
+                        #[derive(serde::Serialize)]
+                        struct GitCommitJson {
+                            sha: String,
+                            short_sha: String,
+                            subject: String,
+                        }
+                        #[derive(serde::Serialize)]
+                        struct GitFileJson {
+                            file: String,
+                            symbol: Option<String>,
+                        }
+                        #[derive(serde::Serialize)]
+                        struct GitLinkageJson {
+                            commits: Vec<GitCommitJson>,
+                            files: Vec<GitFileJson>,
+                            shipped: bool,
+                            branch: Option<String>,
+                            worktree: Option<String>,
+                            shipped_pr: Option<u64>,
+                            repo: Option<String>,
                         }
                         let relationships: Vec<RelJson> = req
                             .relationships
@@ -3847,6 +3877,47 @@ pub(crate) fn handle_git_backend_command(
                                 }
                             })
                             .collect();
+                        let git_linkage = if *no_git {
+                            None
+                        } else {
+                            let project_root = store_path
+                                .parent()
+                                .map(|p| p.to_path_buf())
+                                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                            let mut ids = vec![req.display_id()];
+                            if let Some(agreed) = req.agreed_id.as_deref() {
+                                if !ids.iter().any(|id| id == agreed) {
+                                    ids.push(agreed.to_string());
+                                }
+                            }
+                            if let Some(origin) = req.spec_id.as_deref() {
+                                if !ids.iter().any(|id| id == origin) {
+                                    ids.push(origin.to_string());
+                                }
+                            }
+                            let linkage = crate::collect_git_linkage(&project_root, &ids);
+                            Some(GitLinkageJson {
+                                commits: linkage
+                                    .commits
+                                    .into_iter()
+                                    .map(|(sha, short_sha, subject)| GitCommitJson {
+                                        sha,
+                                        short_sha,
+                                        subject,
+                                    })
+                                    .collect(),
+                                files: linkage
+                                    .files
+                                    .into_iter()
+                                    .map(|(file, symbol)| GitFileJson { file, symbol })
+                                    .collect(),
+                                shipped: linkage.shipped,
+                                branch: linkage.branch,
+                                worktree: linkage.worktree,
+                                shipped_pr: linkage.shipped_pr,
+                                repo: linkage.repo,
+                            })
+                        };
                         let out = ShowJson {
                             id: req.id.to_string(),
                             spec_id: req.spec_id.as_deref(),
@@ -3866,6 +3937,7 @@ pub(crate) fn handle_git_backend_command(
                             out_degree: degrees.out_degree,
                             heft: degrees.heft,
                             relationships,
+                            git_linkage,
                         };
                         println!("{}", serde_json::to_string_pretty(&out)?);
                         return Ok(());

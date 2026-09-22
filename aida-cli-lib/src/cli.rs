@@ -8746,8 +8746,11 @@ pub enum Command {
 
         /// Emit the requirement as a JSON object instead of the human detail
         /// view. Includes the deterministic in/out-degree centrality + heft
-        /// score so agents can read a spec's load-bearing weight directly.
+        /// score, typed relationships, and `git_linkage` (commits, traced
+        /// files, shipped/branch/worktree/PR/repo fields). `git_linkage` is
+        /// null with --no-git. Same document as `--format json`.
         // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
+        // trace:BUG-1502 | ai:codex
         #[clap(long, conflicts_with_all = ["tree", "card"])]
         json: bool,
     },
