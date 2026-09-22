@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T14:04:15.633781093Z
-modified_at: 2026-09-22T14:04:15.633781093Z
+modified_at: 2026-09-22T14:08:03.868553155Z
 req_type: Task
 tags:
 - cost
@@ -51,3 +51,66 @@ relationships:
 - rel_type: Child
   target_id: 01a0babf-a128-7123-8650-a7b7899b8e55
   created_at: 2026-09-22T14:04:18.538564948Z
+comments:
+- id: 01a0c971-f51c-7ea1-8960-c59ac84698f9
+  author: joe
+  content: |-
+    [architecture-sketch] TASK-1427 — bounded first slice for a derived token ledger
+
+    Evidence inspected
+
+    - SPIKE-83 and its report establish that Claude transcripts expose per-assistant-message usage, Codex token_count events expose last_token_usage plus cumulative total_token_usage, and existing drain_summary values are incomplete lower bounds.
+    - SessionManifest already maps AIDA session_id to claude_session_id and planned spec intervals; lease files carry role/worktree/branch; .aida/events.jsonl carries spec, run_uuid and PhaseEntered timestamps; DrainState carries phase_attempt/current_session_id/current_vendor while live, but is deleted after a clean drain. Therefore historical attribution must use retained evidence and must not pretend deleted live state still exists.
+    - Observed Claude transcripts repeat the same message.id/requestId/usage across multiple content-block representations. Observed Codex streams emit one last_token_usage for a cumulative total_token_usage snapshot at each token_count event.
+
+    Decision / storage boundary
+
+    1. Add a project-local, gitignored, derived SQLite database at .aida/derived/token-ledger-v1.sqlite. It is a cache, never canonical requirements state and never committed. A metadata row contains schema_version=1, collector_version (AIDA build SHA/version), project identity (canonical root plus normalized git remote fingerprint), rebuilt_at, and input inventory digest. Build into a sibling temporary database, fsync/close, then atomic replace so interruption preserves the prior complete ledger.
+    2. Store no prompt, response, tool arguments, environment, credentials, or transcript body. Provenance is limited to vendor, vendor session id, stable event/message identifiers, event timestamp/ordinal, source kind, a source-file fingerprint, and a content-free source locator (path class plus basename; machine output may optionally expose the full local path). Numeric vendor-native usage fields are retained alongside normalized fields.
+    3. Core tables:
+       - source_file(id, vendor, path_class, basename, size, mtime_ns, sha256, parse_status, parse_reason)
+       - usage_record(record_id PRIMARY KEY, vendor, vendor_session_id, vendor_event_id, occurred_at, ordinal, raw_model, source_file_id, source_locator, collection_status, status_reason, input_uncached, input_cache_write, input_cache_read, output, output_reasoning, vendor_usage_json)
+       - attribution(record_id PRIMARY KEY/FK, project_id, aida_session_id, run_uuid, spec_id, seat, phase, round, evidence_kind, evidence_refs_json, run_reason, spec_reason, seat_reason, phase_reason, round_reason)
+       All token columns are nullable non-negative integers. A parsed measured zero is 0 with collection_status=measured; missing/unsupported/truncated data is NULL with a distinct status/reason. Normalized names map to gen_ai.usage.input_tokens/output_tokens where applicable, while cache-write/read and reasoning remain separate dimensions and vendor_usage_json retains the allow-listed numeric native shape.
+
+    Parser and dedup rules
+
+    4. Claude: accept assistant message.usage records only. Identity is vendor_session_id + message.id + requestId when present. Multiple transcript rows/content blocks carrying that identity are one record if model and usage vector agree. Exact duplicates collapse; conflicting usage for the same identity become collection_status=conflict and contribute no tokens. If an old record lacks message.id/requestId, use vendor_session_id + outer uuid + canonical numeric-usage hash; absence of all stable IDs is unsupported_identity, not a line-number guess. Do not add terminal result totals on top of messages; retain them only as source coverage/validation diagnostics. Map input_tokens to uncached input, cache_creation_input_tokens to cache write, cache_read_input_tokens to cache read, output_tokens to output, and output_tokens_details.thinking_tokens to reasoning output (not added again to output if vendor output already includes it; document this vendor semantic).
+    5. Codex: accept event_msg/token_count records with last_token_usage and total_token_usage. Within each vendor session, order by explicit ordinal then timestamp. A request record is keyed by vendor_session_id + monotonic segment + canonical total_token_usage vector. Repeated emissions of the same cumulative vector collapse. last_token_usage supplies that request's token classes; total_token_usage is the dedup/checkpoint key and validation check, not another amount to sum. If totals decrease, begin a new explicit reset segment and record the reset diagnostic. If the same cumulative key has conflicting last usage, mark conflict/no contribution. Map input_tokens less cached_input_tokens to uncached input only when vendor semantics establish input includes cached; otherwise preserve both native values and mark uncached unavailable. Map cached_input_tokens, cache_write_input_tokens, output_tokens and reasoning_output_tokens directly. Unsupported versions/shapes and truncated JSON are diagnostics, never zero records.
+
+    Evidence-based attribution join
+
+    6. Build candidate evidence intervals first, then join each usage record independently. Exact session identifiers outrank all other evidence:
+       a. Match vendor_session_id to SessionManifest.claude_session_id, orchestrated lease receipt/current_session_id evidence, headless-log basename session id, or retained agent registry session id. A unique exact match yields aida_session_id/run candidate. Multiple inconsistent exact matches => ambiguous_session.
+       b. Spec: a unique manifest item whose started_at/completed_at contains the message time, or a unique run_uuid/spec phase interval from .aida/events.jsonl associated with the exact vendor session, yields spec_id. A one-item manifest may supply spec only when the exact session join exists. Multi-item manifests without non-overlapping item intervals remain ambiguous_spec. Activity logs may corroborate but a nearby show/comment alone cannot assign usage.
+       c. Phase: construct half-open [PhaseEntered(N), next PhaseEntered/terminal) intervals per spec+run_uuid. Assign only when the exact session/run join and message timestamp fall in one unique interval. Standalone leases can map their role to a phase vocabulary (implementer/reviewer) only when the exact vendor-session/lease join exists; otherwise phase=NULL with no_phase_evidence. CI/merge/pull/build have no vendor messages unless evidence explicitly associates one.
+       d. Seat: exact lease/agent-registry role for the joined session; otherwise infer reviewer/implementer only from an exact phase-session launch receipt, never from branch names or prompt text.
+       e. Round: use retained phase attempt/review-history evidence tied to the same spec/run/session. For orchestrated phases, the Nth PhaseEntered for the same spec+phase+run is the phase round only if event semantics show retries; for review/rework, canonical durable review-findings/verdict sequence can corroborate. If these disagree or only timestamps exist, round=NULL with ambiguous_round/no_round_evidence. Rework is represented as phase=rework only where a retained rework launch/lease explicitly says so; it is not guessed from round>1.
+       f. Every nullable dimension has a reason enum: no_manifest, no_exact_session, missing_interval, outside_interval, multiple_candidates, conflicting_evidence, unsupported_legacy, or source_truncated (plus dimension-specific aliases above). evidence_refs_json lists only non-secret artifact identifiers/hashes.
+    7. Timestamp overlap alone never crosses projects or creates a spec/session/run assignment. Project identity must match the source cwd/project slug/manifest evidence. Ambiguous candidates stay unattributed and remain visible in coverage.
+
+    Rebuild and query CLI
+
+    8. CLI: aida usage rebuild [--project PATH] [--since RFC3339] [--json] and aida usage show <SPEC-ID> [--group-by phase,vendor,round] [--json|--toon]. Keep existing drain usage output untouched. Rebuild scans retained local artifacts, sorts inputs and output by stable keys, recreates the complete v1 DB atomically, and emits counts by measured/duplicate/conflict/truncated/unsupported/unattributed. Running twice over unchanged inputs must produce identical logical tables and totals; rebuilt_at is metadata excluded from logical equality/input digest.
+    9. Human query output leads with measured token classes, grouped by phase and vendor and round when known. It always prints coverage beside totals: source files scanned; candidate usage events; measured unique records; duplicates suppressed; records with unknown usage; records unattributed to this spec/project; and per-dimension attributed/unknown/ambiguous counts. JSON/TOON expose null plus reason, never coerce null to 0. A spec with a genuine zero says measured records=N, tokens=0; a spec with no usable records says unknown/no measured records. Legacy drain_summary appears only in a separate legacy_lower_bound section and is never merged into measured per-message totals.
+
+    Fixture and verification plan
+
+    10. Parser fixtures: Claude duplicate content-block representations; Claude same identity/conflicting vector; genuine all-zero usage; missing IDs; truncated and unsupported rows. Codex repeated cumulative snapshot; sequential last usages; cumulative reset; same checkpoint/conflicting last usage; missing last/total; truncated/unsupported schema. Assert each normalized class and deterministic record_id.
+    11. Join fixtures: exact one-item manifest; multi-item timed intervals; missing manifest; two matching manifests; cross-project same session token; events with implementation -> review -> explicit rework and rounds; conflicting phase/round evidence. The end-to-end fixture totals one spec across implementation, review and rework, grouped by vendor and round, and includes unattributed and unknown records in coverage.
+    12. Rebuild tests: two rebuilds produce equal ordered logical dumps and totals; changed input replaces rather than appends; interrupted temp build leaves old DB; duplicate source copies do not double count; deterministic input digest. Query golden tests cover human, JSON and TOON null/reason and genuine-zero distinctions.
+
+    Compatibility, migration, security, bounded scope
+
+    13. v1 is additive and read-only over vendor/AIDA artifacts. No transcript or manifest mutation and no vendor API/network access. Unknown columns/events are ignored with counted unsupported-schema diagnostics. A future schema version rebuilds from sources into a new versioned DB; no in-place authoritative migration is required. Missing/deleted transcripts reduce coverage explicitly. File permissions are owner-only (directory 0700/database 0600 where supported), symlinks are not followed outside configured artifact roots, inputs have size/line bounds, malformed JSON is bounded, and output never includes transcript content.
+    14. Documentation names exact paths/commands, local telemetry versus billable API semantics, cache/reasoning semantics, coverage limitations, historical drain_summary as a lower bound, and deletion/privacy behavior.
+    15. Explicitly out of scope: prices/dollar estimates, vendor billing reconciliation, live budget enforcement, Antigravity parsing without a proven retained schema, changing drain_summary (BUG-1418), and redesigning session/run persistence. If the join audit proves phase_attempt/current_session_id is not retained after successful drains, file a follow-up to persist a content-free phase-session receipt; v1 must report no evidence rather than expand this task into orchestrator schema work.
+
+    Driver decisions requested before implementation
+
+    - Approve project-local .aida/derived/token-ledger-v1.sqlite rather than a user-global database. This minimizes cross-project leakage and makes project identity a hard boundary, at the cost of rescanning user-global vendor files per project.
+    - Approve conservative attribution: exact session evidence is mandatory; timestamps only narrow an already-exact join.
+    - Approve exposing raw numeric vendor_usage_json but never transcript content.
+    - Confirm that phase means orchestration lifecycle phase, while explicit rework is a phase only when a retained launch says so; round remains independent and nullable.
+  created_at: 2026-09-22T14:08:03.868553155Z
+  modified_at: 2026-09-22T14:08:03.868553155Z
