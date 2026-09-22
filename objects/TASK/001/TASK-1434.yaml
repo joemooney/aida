@@ -43,3 +43,6 @@ relationships:
   target_id: 01a0c96e-7991-7431-93ca-31252ac2adb2
   created_at: 2026-09-22T15:58:33.315417671Z
   created_by: joe
+- rel_type: Child
+  target_id: 01a0babf-a128-7123-8650-a7b7899b8e55
+  created_at: 2026-09-22T15:58:35.299156897Z
