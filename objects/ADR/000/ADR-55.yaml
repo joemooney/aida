@@ -47,7 +47,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T07:03:19.069580239Z
-modified_at: 2026-09-22T11:34:47.676449139Z
+modified_at: 2026-09-22T11:56:57.550117183Z
 req_type: Decision
 tags:
 - architecture
@@ -105,3 +105,8 @@ comments:
   content: '[aida:independent-review] REQUEST_CHANGES at exact PR #2080 head dffd8aa634ac599705df1bcca0321923a60d0e49. LocalLlmEvaluator, confidence, payload hashes and fail-closed errors are now implemented. Remaining blocker: fast-fail combines minimum probability from one criterion with minimum confidence across every criterion. The ADR requires any one criterion with p at most 0.20 and confidence at least 0.85 to reject; an unrelated low-confidence criterion currently suppresses that result. Implement a per-criterion qualifying predicate and mixed-confidence multi-criterion tests. Focused ADR tests 5/5 passed but omit this case.'
   created_at: 2026-09-22T11:34:47.676449139Z
   modified_at: 2026-09-22T11:34:47.676449139Z
+- id: 01a0c8f9-ed4e-7802-b913-401901c13c7c
+  author: joe
+  content: 'Cold rereview PR-2080 exact head 2268be32ee886243068c59026553b57a1bacb6b6: APPROVED for this spec. Fast-fail probability and confidence now qualify on the same criterion; mixed-confidence regression passes. Local fallback, confidence/model/payload-hash provenance, and error escalation remain present.'
+  created_at: 2026-09-22T11:56:57.550117183Z
+  modified_at: 2026-09-22T11:56:57.550117183Z
