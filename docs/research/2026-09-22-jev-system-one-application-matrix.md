@@ -1,8 +1,8 @@
 # Expanding System One (Jev) Research: Lower-Risk, Reversible Applications in AIDA
 
-**Date:** 2026-09-22  
-**Spec References:** SPIKE-87, ADR-55, STORY-1424, STORY-1426, PRIN-5, PRIN-6, PRIN-7, PRIN-8  
-**Author:** Antigravity (AI) & Codex (AI) in collaboration with Operator  
+**Date:** 2026-09-22
+**Spec References:** SPIKE-87, ADR-55, STORY-1424, STORY-1426, PRIN-5, PRIN-6, PRIN-7, PRIN-8
+**Author:** Antigravity (AI) & Codex (AI) in collaboration with Operator
 
 ---
 
@@ -18,7 +18,7 @@ As established in the empirical SPIKE-87 benchmark (`docs/spikes/2026-09-22-spik
 * **Latency SLA Miss:** While median latency was fast (218 ms), P95 latency reached 550 ms (failing the <300 ms SLA) with tail outliers up to 5.2 seconds.
 * **Positive Control Failure:** In the live benchmark run, Jev failed to detect the primary known semantic contradiction between `VIS-1` and `CR-6`.
 
-Granting a System 1 classifier terminal authority over irreversible actions (like git merges or requirement deletions) exposes the system to catastrophic false-approval risks. 
+Granting a System 1 classifier terminal authority over irreversible actions (like git merges or requirement deletions) exposes the system to catastrophic false-approval risks.
 
 ### The Core Design Rule
 > **Use Jev to decide *"which bounded path should handle this?"* before using it to decide *"is this safe to merge?"***
@@ -111,7 +111,7 @@ input-redaction boundary, or a 16 KB payload cap.
 
 ## 5. Experimental Evaluation Protocol
 
-Each candidate experiment must be evaluated against an empirical ground-truth corpus before any mainline tooling adoption. See [`docs/research/2026-09-22-jev-system-one-measurement-protocol.md`](docs/research/2026-09-22-jev-system-one-measurement-protocol.md) for the complete causal measurement protocol, independent adjudication requirements, and pre-registered stop conditions.
+Each candidate experiment must be evaluated against an empirical ground-truth corpus before any mainline tooling adoption. See [`2026-09-22-jev-system-one-measurement-protocol.md`](2026-09-22-jev-system-one-measurement-protocol.md) for the complete causal measurement protocol, independent adjudication requirements, and pre-registered stop conditions.
 
 
 ```
@@ -139,7 +139,7 @@ High Confidence    Low Confidence / Ambiguous / Timeout
 For each experiment, the benchmark harness must report:
 
 1. **Workload-Specific Coverage vs. Abstention:**
-   * Measure the percentage of inputs the model confidently classifies vs. routes to `unknown`/`escalate`. 
+   * Measure the percentage of inputs the model confidently classifies vs. routes to `unknown`/`escalate`.
    * Coverage targets must be justified per workload rather than assuming a blanket 70% threshold. (Recall: the historical review benchmark achieved only 4% autonomous decisions under safe thresholds).
 2. **Precision, Recall & Class Breakdown:**
    * Detailed breakdown across classes, including mandatory constraint recall for context selection.

@@ -129,5 +129,3 @@ graded-review paths fall back to deterministic candidates (`model:
 **proposed safeguards, not current implementation**; they require separate
 implementation and tests before expanding external evaluator use.
 The test suite validates 24 targeted unit tests across `adr_55`, `story_1424`, and `story_1426`.
-
-

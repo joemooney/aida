@@ -1,8 +1,8 @@
 # Objective Measurement & Causal Evaluation Protocol for System One (Jev) in AIDA
 
-**Date:** 2026-09-22  
-**Spec References:** SPIKE-87, ADR-55, STORY-1424, STORY-1426, STORY-1427, PRIN-5, PRIN-6, PRIN-7, PRIN-8  
-**Author:** Antigravity (AI) & Codex (AI) in collaboration with Operator  
+**Date:** 2026-09-22
+**Spec References:** SPIKE-87, ADR-55, STORY-1424, STORY-1426, STORY-1427, PRIN-5, PRIN-6, PRIN-7, PRIN-8
+**Author:** Antigravity (AI) & Codex (AI) in collaboration with Operator
 
 ---
 
@@ -93,11 +93,11 @@ To establish rigorous causal proof without risking repository stability, we form
 ```
 
 ### 3.1 Causal Hypotheses & Estimands
-* **Primary Workflow Outcome:** Phase 3 Reviewer Duration ($T_{\text{review}}$).  
+* **Primary Workflow Outcome:** Phase 3 Reviewer Duration ($T_{\text{review}}$).
   *Hypothesis:* Pruning ambient rules and non-relevant criteria reduces reviewer deliberation time by $\ge 20\%$ with a 95% confidence interval excluding zero.
-* **Primary Safety Gate:** Mandatory Criterion Recall ($R_{\text{mandatory}}$).  
+* **Primary Safety Gate:** Mandatory Criterion Recall ($R_{\text{mandatory}}$).
   *Requirement:* $R_{\text{mandatory}} \ge 99.5\%$ on adjudicated acceptance criteria. Zero omission of security or merge-hold rules.
-* **Secondary Efficiency Outcome:** Reviewer Prompt Token Volume ($V_{\text{tokens}}$).  
+* **Secondary Efficiency Outcome:** Reviewer Prompt Token Volume ($V_{\text{tokens}}$).
   *Hypothesis:* Reduces input tokens passed to the reviewer seat by $\ge 35\%$.
 
 ### 3.2 Trial Design & Randomization
@@ -116,7 +116,7 @@ The automated trial must immediately halt and revert to the control baseline if:
 3. **Availability / Latency Failure:** Jev API error or timeout rate exceeds $5.0\%$ over a rolling 20-call window.
 
 ### 3.4 Deadline Policy: Use-Case Specific Deadlines, Not a Global 400ms SLA
-A global 400 ms SLA is an unrealistic benchmark ambition that does not reflect AIDA’s actual operational architecture. AIDA's conversational reviewer seats take 30–90 seconds and CI builds take 10–15 minutes. 
+A global 400 ms SLA is an unrealistic benchmark ambition that does not reflect AIDA’s actual operational architecture. AIDA's conversational reviewer seats take 30–90 seconds and CI builds take 10–15 minutes.
 
 The governing deadline policy is:
 > **Each Jev use case declares its own deadline. Advisory interactive features must never delay the primary operation; on deadline expiry they use the deterministic/full-context fallback. Latency is measured and reported by percentile, but is not treated as a universal AIDA requirement.**
