@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T09:16:37.055618334Z
-modified_at: 2026-09-22T09:45:49.158118158Z
+modified_at: 2026-09-22T09:50:33.326392296Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -40,3 +40,8 @@ comments:
   content: '[cold-review][approved] PR #2088 exact head c415d62bb4a02214159fbaf992872d20970f698d satisfies amended TASK-184 architecture signoff; no blocking findings. Built-ins serialize as ordinary scalars. Custom values serialize as standard {custom: value} mappings, preserving exact text and Custom identity even for every built-in spelling and accepted alias family. Reader compatibility covers legacy !Custom YAML, legacy JSON {Custom: ...}, new mappings, and scalar built-in/unknown reads. Generic serde_yaml::Value parsing accepts the emitted canonical object; diff is limited to model serialization/deserialization and object-store conformance tests, with no taxonomy rewrite or bulk migration. Independent exact-head verification: cargo test -p aida-core passed 973/0 (2 ignored); cargo fmt --all -- --check passed; GitHub CI run 35710963010 completed success at exact SHA. PR is mergeable. No implementation or merge performed.'
   created_at: 2026-09-22T09:45:49.158118158Z
   modified_at: 2026-09-22T09:45:49.158118158Z
+- id: 01a0c886-336e-71f1-9efe-d0cced90db39
+  author: joe
+  content: '[aida:driver-disposition] verdict=completed; reasoning=PR #2088 received independent exact-head approval against the amended architecture contract, cleared required CI, and merged; review-story acceptance is satisfied.'
+  created_at: 2026-09-22T09:50:33.326392296Z
+  modified_at: 2026-09-22T09:50:33.326392296Z
