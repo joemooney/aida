@@ -23,15 +23,35 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOC = ROOT / "docs/architecture/external-tool-output-classifiers.md"
 MARKER = re.compile(r"^\s*// external-prose-classifier: ([A-Za-z0-9_:{}-]+)\s*$")
+FUNCTION = re.compile(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>{}]*>)?\s*\(")
 
 
 def enumerate_sites(root: pathlib.Path) -> list[tuple[str, str, int]]:
     found: list[tuple[str, str, int]] = []
     for path in sorted(root.glob("aida-*/src/**/*.rs")):
-        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for line_no, line in enumerate(lines, 1):
             match = MARKER.match(line)
             if match:
-                found.append((match.group(1), path.relative_to(root).as_posix(), line_no))
+                site = match.group(1)
+                # Markers live at the start of the classifier function. Resolve
+                # the nearest declaration above them (including a multi-line
+                # signature) so moving a marker to another classifier cannot
+                # silently retain the old inventory identity.
+                # trace:TASK-1309 | ai:codex
+                declarations = list(FUNCTION.finditer("\n".join(lines[:line_no])))
+                if not declarations:
+                    raise ValueError(
+                        f"marker {site} at {path.relative_to(root)}:{line_no} "
+                        "has no function anchor"
+                    )
+                function = declarations[-1].group(1)
+                if site.rsplit("::", 1)[-1] != function:
+                    raise ValueError(
+                        f"marker {site} at {path.relative_to(root)}:{line_no} "
+                        f"is anchored to function {function}"
+                    )
+                found.append((site, path.relative_to(root).as_posix(), line_no))
     names = [row[0] for row in found]
     duplicates = sorted({name for name in names if names.count(name) > 1})
     if duplicates:
@@ -50,22 +70,26 @@ def render(rows: list[tuple[str, str, int]]) -> str:
         "unmarked string comparisons deliberately do not count. The marker is the precise",
         "boundary because Rust syntax cannot reveal whether an arbitrary string came from",
         "an external process; code review must require it for every new such decision.",
+        "The module-qualified symbol is the stable inventory key. Source paths and line",
+        "numbers are emitted by the generator only as non-authoritative navigation aids.",
         "",
-        "| Site | Source |",
-        "|---|---|",
+        "| Stable classifier key |",
+        "|---|",
     ]
-    # BUG-1526: the row is name + PATH and deliberately omits the line number.
-    # A required gate that compares line numbers byte-for-byte fires on any edit
-    # ABOVE a marked site, with no classifier added, removed or renamed — eleven
-    # open PRs were red for that reason and each lost its whole test suite,
-    # because this step sits ahead of them and `bash -e` aborts the job.
-    # CLAUDE.md already states the rule this gate was breaking: "Symbol refs over
-    # line refs ... line refs drift fast and are often stale within hours".
-    # The line is still printed on stdout below, where it is a navigation
-    # convenience and nothing depends on it.
-    # trace:BUG-1526 | ai:claude
-    body.extend(f"| `{name}` | `{path}` |" for name, path, _line in rows)
-    body.extend(["", "<!-- trace:TASK-1300 | ai:codex -->", ""])
+    # TASK-1309: only the semantic module-qualified symbol is authoritative.
+    # Source paths and line numbers remain available in stdout for navigation;
+    # neither belongs in the generated comparison because both can move while
+    # the classifier set remains unchanged.
+    # trace:TASK-1309 | ai:codex
+    body.extend(f"| `{name}` |" for name, _path, _line in rows)
+    body.extend(
+        [
+            "",
+            "<!-- trace:TASK-1300 | ai:codex -->",
+            "<!-- trace:TASK-1309 | ai:codex -->",
+            "",
+        ]
+    )
     return "\n".join(body)
 
 
@@ -96,17 +120,13 @@ def main() -> int:
             # produce one.
             # trace:BUG-1526 | ai:claude
             def sites(text: str) -> set[str]:
-                # BOTH cells. Identity is name + path, so reading only cell [1]
-                # would report a MOVED classifier as "set unchanged" — the same
-                # name-only blind spot that made the test suite miss a dropped
-                # path. trace:BUG-1526 | ai:claude
                 rows = set()
                 for line in text.splitlines():
                     if not line.startswith("| `"):
                         continue
                     cells = [c.strip().strip("`") for c in line.split("|")]
-                    if len(cells) >= 3:
-                        rows.add(f"{cells[1]} ({cells[2]})")
+                    if len(cells) >= 2:
+                        rows.add(cells[1])
                 return rows
 
             added = sorted(sites(rendered) - sites(current))

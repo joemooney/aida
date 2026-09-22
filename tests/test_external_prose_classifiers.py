@@ -23,7 +23,7 @@ class EnumeratorTest(unittest.TestCase):
             source = root / "aida-example/src/new.rs"
             source.parent.mkdir(parents=True)
             source.write_text(
-                "fn classify(s: &str) -> bool {\n"
+                "fn new_classifier(s: &str) -> bool {\n"
                 "    // external-prose-classifier: fixture::new_classifier\n"
                 '    s.contains("upstream prose")\n}\n',
                 encoding="utf-8",
@@ -46,7 +46,7 @@ class EnumeratorTest(unittest.TestCase):
             source.parent.mkdir(parents=True, exist_ok=True)
             source.write_text(
                 preamble
-                + "fn classify(s: &str) -> bool {\n"
+                + "fn new_classifier(s: &str) -> bool {\n"
                 "    // external-prose-classifier: fixture::new_classifier\n"
                 '    s.contains("upstream prose")\n}\n',
                 encoding="utf-8",
@@ -70,7 +70,7 @@ class EnumeratorTest(unittest.TestCase):
             source = root / "aida-example/src/new.rs"
             source.parent.mkdir(parents=True, exist_ok=True)
             source.write_text(
-                "fn classify(s: &str) -> bool {\n"
+                "fn new_classifier(s: &str) -> bool {\n"
                 "    // external-prose-classifier: fixture::new_classifier\n"
                 '    s.contains("upstream prose")\n}\n' + extra,
                 encoding="utf-8",
@@ -81,7 +81,7 @@ class EnumeratorTest(unittest.TestCase):
             before = tree(pathlib.Path(a), "")
             after = tree(
                 pathlib.Path(b),
-                "fn other(s: &str) -> bool {\n"
+                "fn second_classifier(s: &str) -> bool {\n"
                 "    // external-prose-classifier: fixture::second_classifier\n"
                 '    s.contains("more prose")\n}\n',
             )
@@ -90,27 +90,13 @@ class EnumeratorTest(unittest.TestCase):
             before, after, "adding a NEW classifier marker must change the inventory"
         )
 
-    def test_a_moved_classifier_changes_the_inventory(self):
-        """BUG-1526 c1: identity is name + PATH, so a MOVE is a change.
-
-        The reviewer broke the previous pair by attacking the unpinned axis. The
-        other two tests vary LINE POSITION (name+path fixed) and the NAME SET
-        (paths fixed); neither varies PATH with the name held constant, so the
-        path half of the identity was unpinned. Two mutations passed all three:
-
-            render() -> str(len(rows))            the doc becomes one digit
-            render() -> name only, path dropped   silently reverts c1
-
-        The second is the dangerous one — it is plausible as a refactor, and
-        under it a classifier MOVING FILE stops registering as a change. This
-        test closes both, because a move alters neither the row count nor the
-        name set.
-        """
+    def test_a_source_file_move_does_not_change_the_inventory(self):
+        """TASK-1309: file location is diagnostic, not classifier identity."""
         def tree(root: pathlib.Path, rel: str) -> str:
             src = root / rel
             src.parent.mkdir(parents=True, exist_ok=True)
             src.write_text(
-                "fn classify(s: &str) -> bool {\n"
+                "fn new_classifier(s: &str) -> bool {\n"
                 "    // external-prose-classifier: fixture::new_classifier\n"
                 '    s.contains("upstream prose")\n}\n',
                 encoding="utf-8",
@@ -121,16 +107,57 @@ class EnumeratorTest(unittest.TestCase):
             before = tree(pathlib.Path(a), "aida-example/src/old.rs")
             after = tree(pathlib.Path(b), "aida-example/src/moved.rs")
 
-        self.assertNotEqual(
+        self.assertEqual(
             before, after,
-            "a classifier moving file must change the inventory — identity is name + PATH",
+            "moving an unchanged module-qualified classifier must not change the inventory",
         )
+
+    def test_marker_moved_to_a_different_function_is_rejected(self):
+        """A stale semantic anchor must not hide a changed classifier."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            src = root / "aida-example/src/new.rs"
+            src.parent.mkdir(parents=True)
+            src.write_text(
+                "fn changed_classifier(s: &str) -> bool {\n"
+                "    // external-prose-classifier: fixture::old_classifier\n"
+                '    s.contains("prose")\n}\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "anchored to function changed_classifier"):
+                module.enumerate_sites(root)
+
+    def test_removed_marker_changes_the_inventory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            self._tree_with_one_marker(root)
+            before = module.render(module.enumerate_sites(root))
+            (root / "aida-example/src/new.rs").write_text(
+                "fn new_classifier(s: &str) -> bool { s.contains(\"prose\") }\n",
+                encoding="utf-8",
+            )
+            after = module.render(module.enumerate_sites(root))
+        self.assertNotEqual(before, after)
+
+    def test_duplicate_semantic_key_is_rejected_as_ambiguous(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            for filename in ("one.rs", "two.rs"):
+                src = root / f"aida-example/src/{filename}"
+                src.parent.mkdir(parents=True, exist_ok=True)
+                src.write_text(
+                    "fn same_classifier() {\n"
+                    "    // external-prose-classifier: fixture::same_classifier\n}\n",
+                    encoding="utf-8",
+                )
+            with self.assertRaisesRegex(ValueError, "duplicate classifier marker"):
+                module.enumerate_sites(root)
 
     def _tree_with_one_marker(self, root: pathlib.Path) -> None:
         src = root / "aida-example/src/new.rs"
         src.parent.mkdir(parents=True, exist_ok=True)
         src.write_text(
-            "fn classify(s: &str) -> bool {\n"
+            "fn new_classifier(s: &str) -> bool {\n"
             "    // external-prose-classifier: fixture::new_classifier\n"
             '    s.contains("upstream prose")\n}\n',
             encoding="utf-8",
@@ -188,10 +215,10 @@ class EnumeratorTest(unittest.TestCase):
             self._tree_with_one_marker(root)
             doc = root / "docs/architecture/external-tool-output-classifiers.md"
 
-            # the doc describes the SAME classifier at a DIFFERENT path
+            # the doc describes a DIFFERENT stable classifier key
             fresh = module.render(module.enumerate_sites(root))
             doc.write_text(
-                fresh.replace("aida-example/src/new.rs", "aida-example/src/old.rs"),
+                fresh.replace("fixture::new_classifier", "fixture::old_classifier"),
                 encoding="utf-8",
             )
 
@@ -200,10 +227,10 @@ class EnumeratorTest(unittest.TestCase):
                 rc = self._run_check(root)
             message = err.getvalue()
 
-        self.assertEqual(rc, 1, "a moved classifier must fail --check")
+        self.assertEqual(rc, 1, "a renamed classifier must fail --check")
         self.assertNotIn(
             "set is unchanged", message,
-            "a move IS a change — reporting it as unchanged is the name-only defect",
+            "a rename IS a set change — reporting it as unchanged hides inventory drift",
         )
         self.assertIn("added:", message)
         self.assertIn("removed:", message)

@@ -65633,7 +65633,7 @@ fn collect_pr_facts(project_root: &std::path::Path, branch: &str) -> PrFacts {
 }
 
 fn collect_pr_facts_uncached(project_root: &std::path::Path, branch: &str) -> PrFacts {
-    // external-prose-classifier: status_context::load_pr_facts
+    // external-prose-classifier: status_context::collect_pr_facts_uncached
     // BUG-560: `gh` is GitHub-only. On a GitLab / pure-git remote it fails with
     // a raw "none of the git remotes ... point to a known GitHub host" auth
     // error that we used to surface verbatim — telling a corporate GitLab
