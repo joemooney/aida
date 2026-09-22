@@ -58,7 +58,9 @@ pub(crate) fn handle_lifecycle_command(
         };
         let committed = first_mermaid_block(&markdown);
 
-        let matches = committed.as_deref() == Some(generated_body.as_str());
+        let matches = committed.as_deref().is_some_and(|body| {
+            aida_core::scaffolding::generated_text_matches(body, &generated_body)
+        });
         if matches {
             println!(
                 "lifecycle diagram pin: OK — committed diagram in {} matches the declared model.",
@@ -303,4 +305,21 @@ fn replace_first_mermaid_block(markdown: &str, old_body: &str, new_body: &str) -
         out.pop();
     }
     out
+}
+
+#[cfg(test)]
+mod bug1555_tests {
+    #[test]
+    fn lifecycle_pin_ignores_platform_newlines_but_not_model_drift() {
+        // Mirrors the comparison in the command without invoking its process-exit path.
+        // trace:BUG-1555 | ai:codex
+        assert!(aida_core::scaffolding::generated_text_matches(
+            "stateDiagram-v2\r\n  Draft --> Approved\r\n",
+            "stateDiagram-v2\n  Draft --> Approved\n",
+        ));
+        assert!(!aida_core::scaffolding::generated_text_matches(
+            "stateDiagram-v2\r\n  Draft --> Rejected\r\n",
+            "stateDiagram-v2\n  Draft --> Approved\n",
+        ));
+    }
 }

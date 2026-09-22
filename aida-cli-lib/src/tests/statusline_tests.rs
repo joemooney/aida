@@ -2329,6 +2329,78 @@ fn card_rel_label_buckets_relationships() {
     );
 }
 
+/// BUG-1584: standard edges sharing the neutral `Related` heading retain
+/// their relationship type inline. In particular, a blocker must not be
+/// visually indistinguishable from a reference on the same card.
+// trace:BUG-1584 | ai:codex
+#[test]
+fn card_renders_standard_related_edges_with_their_meaning() {
+    let cases = [
+        (RelationshipType::Parent, "parent"),
+        (RelationshipType::Duplicate, "duplicate"),
+        (RelationshipType::Verifies, "verifies"),
+        (RelationshipType::VerifiedBy, "verified-by"),
+        (RelationshipType::References, "references"),
+        (RelationshipType::BlockedBy, "blocked-by"),
+        (RelationshipType::Blocks, "blocks"),
+        (RelationshipType::SupersededBy, "superseded-by"),
+        (RelationshipType::Supersedes, "supersedes"),
+    ];
+    let rels: Vec<CardRel> = cases
+        .iter()
+        .enumerate()
+        .map(|(i, (rt, _))| CardRel::new(rt, format!("SPEC-{i}"), String::new()))
+        .collect();
+    let sections = card_rel_sections(&rels);
+    let related = sections
+        .iter()
+        .find(|(heading, _)| *heading == "Related")
+        .map(|(_, joined)| joined.as_str())
+        .unwrap_or_else(|| panic!("standard edges rendered nowhere: {sections:?}"));
+
+    for (i, (_, edge_name)) in cases.iter().enumerate() {
+        assert!(
+            related.contains(&format!("[{edge_name}] SPEC-{i}")),
+            "{edge_name} lost its meaning in the Related section: {related}"
+        );
+    }
+    assert_ne!(
+        CardRel::new(
+            &RelationshipType::BlockedBy,
+            "BLOCKER".into(),
+            String::new()
+        )
+        .render(),
+        CardRel::new(
+            &RelationshipType::References,
+            "BLOCKER".into(),
+            String::new()
+        )
+        .render(),
+        "BlockedBy and References must be distinguishable even with the same target"
+    );
+}
+
+/// BUG-1584 controls: the dedicated Parent and Custom buckets already convey
+/// or preserve their meaning and retain their existing rendering.
+// trace:BUG-1584 | ai:codex
+#[test]
+fn card_preserves_parent_and_custom_edge_rendering() {
+    assert_eq!(
+        CardRel::new(&RelationshipType::Child, "EPIC-1".into(), String::new()).render(),
+        "EPIC-1"
+    );
+    assert_eq!(
+        CardRel::new(
+            &RelationshipType::Custom("implemented-by".into()),
+            "STORY-2".into(),
+            String::new(),
+        )
+        .render(),
+        "[implemented-by] STORY-2"
+    );
+}
+
 /// BUG-1471: a `Custom` edge must be RENDERED by the card — under its own
 /// heading, carrying its own name. Relabelling Custom edges without adding
 /// the matching bucket left `render_spec_card` filtering on two exact labels,

@@ -485,6 +485,135 @@ pub fn findings_surviving_round(body: &str) -> Vec<String> {
     surviving_against_previous_round(&obj, &current)
 }
 
+/// Resolve `raw` (full or abbreviated) to the full 40-character commit sha
+/// `git` knows it by, or `None` when this repo cannot resolve it (never seen
+/// the commit, a deleted/never-fetched branch, or `raw` is not a revision at
+/// all). Never panics, never shells out to anything but `git`, and never
+/// blocks a caller on a slow or missing repo: `git` failing to run at all is
+/// indistinguishable from it saying "no such commit" here, both `None`.
+///
+/// Shared by the write-boundary normalization in [`record_verdict`]
+/// (BUG-1516 criterion 2) and [`backfill_abbreviated_shas`] (criterion 3) —
+/// "the two criteria want the same helper," per the spec's own comment
+/// thread, so one bug in commit resolution cannot diverge between them.
+// trace:BUG-1516 | ai:claude
+fn resolve_full_sha(project_root: &Path, raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{raw}^{{commit}}"),
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    // git rev-parse always emits the full object name for `^{commit}`, but
+    // guard the length anyway — treating a partial or malformed answer as
+    // "resolved" would be worse than leaving the original string alone.
+    if sha.len() == 40 && sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+        Some(sha)
+    } else {
+        None
+    }
+}
+
+/// One-time repair for BUG-1516 criterion 3: sweep every verdict file under
+/// `.aida/review-verdicts/` and, for each abbreviated `reviewed_sha`, either
+/// expand it to the full 40-character sha (when this repo can still resolve
+/// the commit) or mark it explicitly unresolvable (when it cannot) — never
+/// silently drop the original value either way. A sha that is already full,
+/// or a file with no `reviewed_sha` at all, is left untouched.
+///
+/// Not run automatically anywhere; it is exposed for an operator to invoke
+/// deliberately against a real, live corpus — see `aida review normalize-
+/// shas`. Deliberately conservative: this NEVER rewrites `.aida/review-
+/// verdicts/` files on its own initiative, because those files are live
+/// coordination state other seats may be reading and writing concurrently.
+// trace:BUG-1516 | ai:claude
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ShaBackfillReport {
+    /// Files whose abbreviated `reviewed_sha` was expanded to the full sha.
+    pub resolved: Vec<String>,
+    /// Files whose abbreviated `reviewed_sha` could not be resolved in this
+    /// repo — marked `reviewed_sha_unresolvable: true`, original value kept.
+    pub unresolvable: Vec<String>,
+    /// Files that already carried a full 40-character sha.
+    pub already_full: usize,
+    /// Files with no `reviewed_sha` at all (nothing for this sweep to do).
+    pub skipped_no_sha: usize,
+}
+
+pub fn backfill_abbreviated_shas(
+    project_root: &Path,
+    dry_run: bool,
+) -> std::io::Result<ShaBackfillReport> {
+    let mut report = ShaBackfillReport::default();
+    let dir = project_root.join(".aida").join("review-verdicts");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Ok(report);
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(body) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&body) else {
+            continue;
+        };
+        let Some(sha) = obj
+            .get("reviewed_sha")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+        else {
+            report.skipped_no_sha += 1;
+            continue;
+        };
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if sha.len() == 40 {
+            report.already_full += 1;
+            continue;
+        }
+        match resolve_full_sha(project_root, &sha) {
+            Some(full) => {
+                obj.insert("reviewed_sha".to_string(), serde_json::Value::String(full));
+                obj.remove("reviewed_sha_unresolvable");
+                report.resolved.push(name);
+            }
+            None => {
+                obj.insert(
+                    "reviewed_sha_unresolvable".to_string(),
+                    serde_json::Value::Bool(true),
+                );
+                report.unresolvable.push(name);
+            }
+        }
+        if !dry_run {
+            let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
+                .unwrap_or_else(|_| "{}".to_string());
+            std::fs::write(&path, format!("{body}\n"))?;
+        }
+    }
+    Ok(report)
+}
+
 pub fn record_verdict(
     project_root: &Path,
     spec: &str,
@@ -504,6 +633,21 @@ pub fn record_verdict(
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned())
         .unwrap_or_default();
+    // BUG-1516 criterion 2: normalize AT THE WRITE BOUNDARY rather than
+    // teaching every comparison site to tolerate an abbreviated sha. One
+    // writer (the drain's forge-resolved head) already always writes full;
+    // every abbreviated record on disk came from a caller-supplied sha
+    // (a human or seat pasting a short `git rev-parse` / `gh` value)
+    // passed straight through. Best-effort: a sha this repo cannot resolve
+    // (a deleted branch, a sha from a different clone) is kept verbatim
+    // rather than dropped — recording a verdict must never fail just
+    // because an unrelated git lookup could not run.
+    // trace:BUG-1516 | ai:claude
+    let reviewed_sha = reviewed_sha
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| resolve_full_sha(project_root, s).unwrap_or_else(|| s.to_string()));
+    let reviewed_sha = reviewed_sha.as_deref();
     // STORY-1391: a finding that survives a round is evidence about the BRIEF,
     // and nothing could detect it because this function overwrote the prior
     // round in place. Snapshot the round being replaced into `rounds` first, so
@@ -641,7 +785,7 @@ pub fn queue_done_verdict_gate(
         .collect());
     }
     if !v.kind.blocks_done() {
-        return VerdictGate::Proceed;
+        return non_blocking_verdict_gate(display_id, v, relation);
     }
     let when = v
         .recorded_at
@@ -707,6 +851,70 @@ pub fn queue_done_verdict_gate(
         .into_iter()
         .filter(|l| !l.is_empty())
         .collect()),
+    }
+}
+
+/// BUG-1466 / BUG-1538: the non-blocking (typically APPROVED) side of the
+/// gate. Reaching here already means `v.reviewed_sha` is `Some` — the
+/// no-provenance case is refused above, for every kind. What was still
+/// missing is this: an approval carries a specific commit, and if the branch
+/// has since moved past it with commits the review never saw, treating that
+/// as an unqualified "proceed" is the exact PRIN-5 failure this pair of specs
+/// names — absent evidence (a review of code that no longer exists) reads as
+/// good evidence (an approval of the code about to ship).
+///
+/// `AdvancedPast` and `Rewritten` WARN rather than refuse: unlike a blocking
+/// verdict (where new commits are presumed to be the fix), new commits after
+/// an APPROVAL were never reviewed at all, so the honest response is to say
+/// so loudly and let the human confirm — not to silently bless them, and not
+/// to hard-refuse ordinary post-approval churn (a merge commit, a rebase)
+/// that this check cannot itself judge as safe or not. `Unknown` still
+/// refuses: a gate that cannot establish the relationship must not answer
+/// confidently in either direction.
+// trace:BUG-1466 | ai:claude
+// trace:BUG-1538 | ai:claude
+fn non_blocking_verdict_gate(
+    display_id: &str,
+    v: &RecordedVerdict,
+    relation: TipRelation,
+) -> VerdictGate {
+    let named_sha = v
+        .reviewed_sha
+        .as_deref()
+        .map(|s| short_sha(s).to_string())
+        .unwrap_or_else(|| "an unrecorded commit".to_string());
+    match relation {
+        TipRelation::AtReviewedSha => VerdictGate::Proceed,
+        TipRelation::AdvancedPast => VerdictGate::Warn(vec![format!(
+            "warning: {display_id} was {} against {named_sha}, and new commits have landed on \
+             the branch since — they were not covered by that review. Confirm they don't need a \
+             fresh look before treating this as reviewed.",
+            v.kind.label()
+        )]),
+        TipRelation::Rewritten => VerdictGate::Warn(vec![format!(
+            "warning: {display_id} was {} against {named_sha}, and that commit is no longer in \
+             the branch's history (amended / rebased / force-pushed) — the approval may not cover \
+             the code about to ship.",
+            v.kind.label()
+        )]),
+        TipRelation::Unknown => VerdictGate::Refuse(
+            vec![
+            format!(
+                "error: aida queue done refused (exit 1) — {display_id} was {} against \
+                 {named_sha}, and this check could not establish whether the branch has moved \
+                 past it since.",
+                v.kind.label()
+            ),
+            summary_line(v),
+            "A review gate that cannot answer must not wave work through. Re-review the current \
+             branch, or record a fresh verdict against the current head."
+                .to_string(),
+            format!("Override: `aida queue done {display_id} --force`."),
+        ]
+            .into_iter()
+            .filter(|l| !l.is_empty())
+            .collect(),
+        ),
     }
 }
 

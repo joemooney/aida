@@ -162,7 +162,7 @@ pub fn aida_managed_diff_slice(path: &Path, expected: &str, actual: &str) -> Dif
                 extract_memory_reflex_block(expected),
             ) {
                 (Some(actual_block), Some(expected_block))
-                    if actual_block.trim() != expected_block.trim() =>
+                    if !generated_text_matches(actual_block, expected_block) =>
                 {
                     DiffSlice::SliceDiff {
                         expected: expected_block.to_string(),
@@ -182,7 +182,7 @@ pub fn aida_managed_diff_slice(path: &Path, expected: &str, actual: &str) -> Dif
                 Some(actual_block) => match extract_aida_block(expected) {
                     None => DiffSlice::Match,
                     Some(expected_block) => {
-                        if actual_block.trim() == expected_block.trim() {
+                        if generated_text_matches(actual_block, expected_block) {
                             DiffSlice::Match
                         } else {
                             DiffSlice::SliceDiff {
@@ -211,7 +211,7 @@ pub fn aida_managed_diff_slice(path: &Path, expected: &str, actual: &str) -> Dif
             }
         }
         _ => {
-            if actual.trim() == expected.trim() {
+            if generated_text_matches(actual, expected) {
                 DiffSlice::Match
             } else {
                 DiffSlice::FullDiff {
@@ -303,8 +303,23 @@ pub fn resolve_artifact_path(project_root: &Path, artifact_path: &Path) -> PathB
 /// a Windows checkout (or an editor that rewrote the file) must not read as a
 /// user edit just because the newlines changed.
 // trace:TASK-1170 | ai:claude
-pub(crate) fn normalize_lf(s: &str) -> String {
+pub fn normalize_lf(s: &str) -> String {
     s.replace("\r\n", "\n").replace('\r', "\n")
+}
+
+/// Compare generated text after applying the same platform-independent
+/// newline and trailing-whitespace contract to both inputs.
+// trace:BUG-1555 | ai:codex
+pub fn generated_text_matches(actual: &str, expected: &str) -> bool {
+    normalize_lf(actual).trim_end() == normalize_lf(expected).trim_end()
+}
+
+/// Compare generated text after newline normalization while preserving every
+/// other byte distinction. Use this for canonical formats whose external-writer
+/// contract requires whitespace drift to be repaired rather than tolerated.
+// trace:BUG-1555 | ai:codex
+pub fn generated_text_matches_exact(actual: &str, expected: &str) -> bool {
+    normalize_lf(actual) == normalize_lf(expected)
 }
 
 /// Rewrite a FLAT `.claude/skills/<name>.md` artifact path to the directory
@@ -550,7 +565,7 @@ fn check_file_status(file_path: &PathBuf, expected_content: &str) -> FileStatus 
     // JSON files are headerless (JSON has no comment syntax). Compare by
     // raw content equality. trace:EPIC-1-001 | ai:claude
     if file_path.extension().and_then(|e| e.to_str()) == Some("json") {
-        if content == expected_content {
+        if generated_text_matches(&content, expected_content) {
             return FileStatus::Unmodified;
         }
         return FileStatus::Modified {
@@ -3222,6 +3237,27 @@ routing decision when you don't know which substrate a rule belongs in.
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn generated_text_comparison_erases_only_platform_newlines() {
+        // This is the shared boundary used by scaffold status, upgrade, and
+        // managed diff surfaces. Before BUG-1555 these raw/trim comparisons
+        // reported a clean Windows checkout as drift.
+        // trace:BUG-1555 | ai:codex
+        assert!(generated_text_matches("one\r\ntwo\r\n", "one\ntwo\n"));
+        assert!(generated_text_matches("one\rtwo\r", "one\ntwo\n"));
+        assert!(!generated_text_matches("one\r\nchanged\r\n", "one\ntwo\n"));
+    }
+
+    #[test]
+    fn exact_generated_text_comparison_preserves_terminal_whitespace() {
+        assert!(generated_text_matches_exact("one\r\ntwo\r\n", "one\ntwo\n"));
+        assert!(!generated_text_matches_exact(
+            "one\r\ntwo  \r\n",
+            "one\ntwo\n"
+        ));
+        assert!(!generated_text_matches_exact("one\ntwo\n\n", "one\ntwo\n"));
+    }
     use tempfile::TempDir;
 
     #[test]

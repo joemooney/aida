@@ -464,6 +464,7 @@ hits.
 | `AIDA_TEST_GLAB_BINARY` | Injects a mock `glab` binary path in tests — the GitLab sibling of `AIDA_TEST_GH_BINARY`. |
 | `AIDA_TEST_GUARD_NESTED` / `_RESET` / `_RESTORE` / `_UNSET` | `EnvVarGuard` unit-test fixtures. |
 | `AIDA_TEST_TASK_63_APPLIED` | Fixture for the `apply_session_env_to_process` test. |
+| `AIDA_TEST_NOTICE_DEADLINE_MS` | Overrides `notice_deadline()`'s fail-open bound (milliseconds) for `aida awaiting --notice`'s per-turn watchdog (BUG-1239). Set only by `awaiting_notice_tracks_real_lease_through_session_end`'s lease-holding invocation (`aida-cli/tests/task_1283_protocol_cli.rs`), which needs to observe a real `backend.load()` complete rather than race the product bound. Default / production value is `PRODUCT_NOTICE_DEADLINE` = 1s (BUG-1239's original, unchanged by TASK-1274) — **deliberately not tunable this way**: it is a test-only escape hatch, not a knob, and no production caller ever sets it. Read at `aida-cli-lib/src/lib.rs`. trace:TASK-1274 |
 
 ---
 

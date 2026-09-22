@@ -669,12 +669,14 @@ const ASCIINEMA_SLUG_MAX_CHARS: usize = 80;
 // behaviour). trace:EPIC-28 | ai:claude
 const DEFAULT_MAX_FAILURES: usize = 5;
 
-// SPIKE-70: `--sequential` drives a batch ONE member at a time — concurrency is
-// pinned to 1. The existing batch drain (`auto_complete::drain_batch`) is already
-// inherently one-member-at-a-time (it merges + pulls before advancing the head),
-// so `--sequential` names + guards that invariant rather than introducing a
-// parallel knob. trace:TASK-1005 | ai:claude
-pub(crate) const SEQUENTIAL_DRAIN_CONCURRENCY: usize = 1;
+// SPIKE-70: `--sequential` names + guards the ordered, per-member-PR SHAPE of the
+// batch drain (`auto_complete::drain_batch*`) rather than introducing a parallel
+// knob. TASK-185: it does NOT pin concurrency — STORY-1091 made the batch drain
+// honour `[drain] pipeline_depth`, so the one-member-at-a-time property comes from
+// `drain_state::default_pipeline_depth()` (1), not from this flag. The old
+// `SEQUENTIAL_DRAIN_CONCURRENCY` const asserted the pinned-to-1 invariant and was
+// removed with the claim; read the default depth instead.
+// trace:TASK-1005 trace:TASK-185 | ai:claude
 
 // Requester intake must remain a standalone Draft. Both the CLI and MCP gates
 // consume this list so relationship and grooming-field policy cannot drift.
@@ -11293,7 +11295,7 @@ fn scaffold_memory_pack_into(
             MemoryDisposition::UserOwned => report.kept_user += 1,
             MemoryDisposition::Edited => report.kept_edited += 1,
             MemoryDisposition::Pristine => {
-                if existing == scaffolded {
+                if aida_core::scaffolding::generated_text_matches(&existing, &scaffolded) {
                     report.unchanged += 1;
                 } else {
                     std::fs::write(&dest, &scaffolded)?;
@@ -11488,7 +11490,7 @@ fn compute_memory_drift_into(mem_dir: &std::path::Path) -> Result<MemoryDriftRep
                 MemoryDisposition::UserOwned => MemoryDriftState::UserOwned,
                 MemoryDisposition::Edited => MemoryDriftState::Edited,
                 MemoryDisposition::Pristine => {
-                    if normalize_line_endings(&existing) == scaffolded {
+                    if aida_core::scaffolding::generated_text_matches(&existing, &scaffolded) {
                         MemoryDriftState::UpToDate
                     } else {
                         MemoryDriftState::Stale
@@ -25787,7 +25789,7 @@ fn merge_user_aida_instructions(
     };
 
     let old_region = &existing[begin..end];
-    if old_region == expected {
+    if aida_core::scaffolding::generated_text_matches(old_region, &expected) {
         return (
             existing.to_string(),
             UserAidaInstructionsReport {
@@ -25801,8 +25803,9 @@ fn merge_user_aida_instructions(
     let body_end =
         end - USER_AIDA_INSTRUCTIONS_END.len() - usize::from(existing[..end].ends_with('\n'));
     let body = &existing[body_start..body_end];
+    let normalized_body = aida_core::scaffolding::normalize_lf(body);
     let pristine = user_aida_block_checksum(header)
-        .map(|checksum| checksum == user_aida_checksum(body))
+        .map(|checksum| checksum == user_aida_checksum(&normalized_body))
         .unwrap_or(false);
     if refresh && pristine {
         let mut merged = String::new();
@@ -25843,7 +25846,10 @@ fn install_user_aida_instructions_at(
         total.written += report.written;
         total.unchanged += report.unchanged;
         total.kept_edited += report.kept_edited;
-        if existing.as_deref() == Some(merged.as_str()) {
+        if existing
+            .as_deref()
+            .is_some_and(|actual| aida_core::scaffolding::generated_text_matches(actual, &merged))
+        {
             continue;
         }
         if let Some(parent) = target.parent() {
@@ -62833,7 +62839,7 @@ fn auto_resolve_failure_bugs_for_completed_specs(
 /// BUG-219 / TASK-246: collect review stories stranded short of
 /// `Completed` because their PR merged before the review lifecycle ever
 /// finished. `/aida-pr` auto-queues a `Review PR-N` story at `Approved`
-/// (ready-to-work); two ways it never reaches `Completed` on its own:
+/// (ready-to-work); three ways it never reaches `Completed` on its own:
 ///
 /// - **Approved** — a reviewer session was never spawned at all: the user
 ///   self-merged the PR, or the `--auto-complete` orchestrator skipped
@@ -62841,14 +62847,26 @@ fn auto_resolve_failure_bugs_for_completed_specs(
 ///   reviewer queue (BUG-219's observed case).
 /// - **InProgress** — a reviewer asked for fixups, then the PR self-merged
 ///   instead of a fresh `/aida-review` pass (the TASK-246 case).
+/// - **Draft** — the story's own tracking record never even reached
+///   Approved before the PR it tracks landed (a failed queueing step,
+///   BUG-1230's shape). Decided in BUG-1560 rather than left excluded by
+///   omission: every candidate reaching this function is against a PR
+///   whose merge commit is already confirmed present in `pr_to_sha`, so
+///   there is no "is it still open?" ambiguity for Draft to inherit here —
+///   that question belongs to the forge-lookup stranded-review-PR sweep
+///   (`collect_stranded_review_pr_resolutions`, BUG-1543), which is a
+///   different sweep touching the same population. Same underlying fact as
+///   Approved/InProgress (review lifecycle never finished), caught one
+///   stage earlier.
 ///
 /// Either way the `(#N)` merge commit landing on the default branch is the
 /// authoritative "review is over" signal. For each merged PR in
 /// `pr_to_sha` this returns the `(review_spec_id, merge_sha, pr_number,
-/// prior_status)` of any review story still at `Approved`/`InProgress`,
+/// prior_status)` of any review story still at `Draft`/`Approved`/`InProgress`,
 /// skipping specs already claimed by the caller's `flips` list (Done specs
 /// / Done review stories the commit-subject + BUG-102 scan handles).
 /// trace:BUG-219 | ai:claude
+// trace:BUG-1560 | ai:claude
 fn collect_stale_review_story_flips(
     store: &aida_core::RequirementsStore,
     pr_to_sha: &std::collections::BTreeMap<u64, String>,
@@ -62865,7 +62883,7 @@ fn collect_stale_review_story_flips(
         };
         if !matches!(
             review_story.status,
-            RequirementStatus::Approved | RequirementStatus::InProgress
+            RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::InProgress
         ) {
             continue;
         }
@@ -62897,6 +62915,15 @@ fn stale_review_audit_comment(prior: &RequirementStatus, pr_n: u64) -> String {
         RequirementStatus::Approved => format!(
             "Auto-completed: PR #{} merged without a reviewer session \
              (self-merge or orchestrator skipped phase 3).",
+            pr_n
+        ),
+        // BUG-1560: a dedicated arm rather than falling into the InProgress
+        // wording below, which would misdescribe a story that never reached
+        // Approved at all ("left at In Progress" is simply false for one
+        // that was left at Draft).
+        RequirementStatus::Draft => format!(
+            "Auto-completed: PR #{} merged without a reviewer session \
+             (the review story was never queued past Draft).",
             pr_n
         ),
         _ => format!(
@@ -63332,7 +63359,12 @@ fn apply_auto_bump_flip(
 // Shared per-requirement mutation for the TASK-246/BUG-219 stale-review-story
 // flip (PR merged before the review lifecycle finished). Same dual-path use
 // as `apply_auto_bump_flip`; re-checks the live status so a second pass sees
-// Completed and stays idempotent. trace:TASK-1161 | ai:claude
+// Completed and stays idempotent. Must stay in lockstep with the candidate
+// filter in `collect_stale_review_story_flips` — BUG-1543's review found
+// that widening only the collector and not this re-check produces a silent
+// no-op (a "would flip" candidate that this gate then quietly refuses).
+// trace:TASK-1161 | ai:claude
+// trace:BUG-1560 | ai:claude
 fn apply_stale_review_flip(
     r: &mut aida_core::Requirement,
     sha: &str,
@@ -63342,7 +63374,7 @@ fn apply_stale_review_flip(
 ) -> bool {
     if !matches!(
         r.status,
-        RequirementStatus::Approved | RequirementStatus::InProgress
+        RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::InProgress
     ) {
         return false;
     }
@@ -64633,6 +64665,10 @@ fn handle_db_reconcile_status(
         // BUG-219: review stories whose PR merged before review finished.
         // Re-check the status inside the atomic window for idempotency
         // and key the audit comment off the live (pre-flip) status.
+        // BUG-1560: this inline re-check duplicates `apply_stale_review_flip`
+        // rather than calling it, so it needed the same Draft widening by
+        // hand — kept in lockstep with the other two sites deliberately,
+        // not by omission.
         for (spec_id, sha, pr_n, _) in &stale_for_write {
             if let Some(r) = s
                 .requirements
@@ -64641,7 +64677,9 @@ fn handle_db_reconcile_status(
             {
                 if !matches!(
                     r.status,
-                    RequirementStatus::Approved | RequirementStatus::InProgress
+                    RequirementStatus::Draft
+                        | RequirementStatus::Approved
+                        | RequirementStatus::InProgress
                 ) {
                     continue;
                 }
@@ -69141,12 +69179,80 @@ fn emit_notice_time_line() {
 /// exits successfully because the notice is advisory. Arm this before the
 /// time-line/session bookkeeping so that work is covered by the same bound.
 // trace:BUG-1239 | ai:codex
+// trace:TASK-1274 | ai:claude
 fn arm_notice_deadline() {
-    const NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
     std::thread::spawn(|| {
-        std::thread::sleep(NOTICE_DEADLINE);
+        std::thread::sleep(notice_deadline());
         std::process::exit(0);
     });
+}
+
+/// The per-turn notice's fail-open bound. TASK-1274 root-caused
+/// `awaiting_notice_tracks_real_lease_through_session_end` failing on both
+/// the GitLab mirror (pipeline 308: FAILED, 1256s) and a plain local `cargo
+/// test` run on this machine (reproduced outside any container) to THIS
+/// deadline, not to the docker-executor PID theory an earlier commit on that
+/// branch guessed at (that "container-stable" fixture fix left the failure
+/// unchanged) — also the root cause independently converged on for BUG-1563
+/// (three prior hypotheses there, all wrong, none of which asked whether the
+/// test had a deadline). The protocol-notice half of `handle_awaiting_command`'s
+/// `notice` branch calls `backend.load()` — a full, UNCACHED store read whose
+/// cost scales with the number of requirement objects, not with cache
+/// warmth — despite that branch's own "CHEAP... NO full-store load" contract
+/// comment; on this repo's current object count that load alone can exceed
+/// 1s, so a shared watchdog fires mid-computation and silently drops the
+/// notice's second line (and, being a whole-process `exit`, every line after
+/// it too) before any of it is ever printed.
+///
+/// A SINGLE CONSTANT CANNOT SERVE BOTH SIDES OF THIS, measured directly by
+/// running both regression tests this bug touches against the same value:
+///   - `awaiting_notice_tracks_real_lease_through_session_end` needs the
+///     deadline LONG enough for a real `backend.load()` to finish — fails at
+///     1s (every run, this workstation and the GitLab mirror), passes
+///     reliably at 4s/10s/30s.
+///   - `awaiting_notice_does_not_read_an_open_stdin_pipe` asserts the
+///     opposite: `aida awaiting --notice` must exit within a hard 2s budget
+///     (3s reap) with no lease held — a genuine, pre-existing product
+///     contract, not a test artifact. At 10s on the GitLab mirror (pipeline
+///     318) it took 3.1358s, a widening this deadline's product value is not
+///     supposed to permit.
+/// So this is dependency-injected rather than a bare constant: production
+/// callers get `PRODUCT_NOTICE_DEADLINE`, and only a test that deliberately
+/// wants to observe the slow-store path past that bound sets
+/// `AIDA_TEST_NOTICE_DEADLINE_MS` to override it for its own subprocess.
+///
+/// THE PRODUCT BOUND STAYS AT BUG-1239's ORIGINAL 1s, ARGUED SEPARATELY FROM
+/// WHAT EITHER TEST NEEDS: the notice is advisory and fires on every turn of
+/// every session, so this watchdog's job is to guarantee it can never
+/// meaningfully stall a turn — that is what
+/// `awaiting_notice_does_not_read_an_open_stdin_pipe`'s 2s budget encodes,
+/// and it predates this bug. Raising the *product* bound to let a slow
+/// `backend.load()` usually finish would not fix that load's inefficiency;
+/// it would only move the object-count threshold at which the exact same
+/// silent-drop recurs, while taxing every real turn that happens to hit
+/// lock contention or a cold filesystem cache with several extra seconds of
+/// visible stall — the specific harm BUG-1239 exists to prevent. The
+/// silent-drop-under-load behavior at 1s is not new: it already existed in
+/// production before TASK-1274 whenever a real `backend.load()` exceeded 1s
+/// for reasons unrelated to this test's fixture; keeping the product bound
+/// at 1s does not introduce that risk, it declines to paper over it with a
+/// number that would need to keep growing as the store does. The actual fix
+/// is making the protocol-notice lookup cache-backed so it never needs
+/// `backend.load()` at all, matching the STORY-707/TASK-1065 pattern every
+/// other hot path in this file already follows — filed separately as
+/// BUG-1569 (see also BUG-1563, which reached the same root cause from the
+/// flakiness side).
+fn notice_deadline() -> std::time::Duration {
+    // Test-only escape hatch for the one regression test that must observe a
+    // real `backend.load()` complete rather than race it. Never read by a
+    // production caller; a bare `aida awaiting --notice` never sets this.
+    if let Ok(ms) = std::env::var("AIDA_TEST_NOTICE_DEADLINE_MS") {
+        if let Ok(ms) = ms.parse::<u64>() {
+            return std::time::Duration::from_millis(ms);
+        }
+    }
+    const PRODUCT_NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
+    PRODUCT_NOTICE_DEADLINE
 }
 
 /// PURE: the notice's always-on leading line. Separated so the exact contract
@@ -72664,15 +72770,15 @@ fn card_rel_label(rt: &RelationshipType) -> &'static str {
 
 /// The edge's own name, when the bucket heading does not already carry it.
 ///
-/// A `Custom` edge's name is the only place its meaning lives (`implements`,
-/// `implemented-by`, `sprint_contains`, …), so the card prints that name
-/// beside the target under the neutral `Custom` heading — neither hiding it
-/// nor dressing it up as a standard type.
-// trace:BUG-1471 | ai:claude
+/// `Child` is the sole exception because its `Parent` heading already names
+/// the target's role. Custom and standard edges under neutral headings print
+/// their canonical names, so blocking, verification, reference, duplicate,
+/// and supersession edges cannot collapse into indistinguishable target ids.
+// trace:BUG-1471 trace:BUG-1584 | ai:codex
 fn card_rel_edge_name(rt: &RelationshipType) -> Option<String> {
     match rt {
-        RelationshipType::Custom(name) => Some(name.clone()),
-        _ => None,
+        RelationshipType::Child => None,
+        _ => Some(rt.to_string()),
     }
 }
 
@@ -77034,7 +77140,42 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         ),
         // trace:BUG-775 | ai:claude
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
+        // trace:BUG-1516 | ai:claude
+        ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
     }
+}
+
+/// `aida review normalize-shas` — BUG-1516 criterion 3's repair verb: expand
+/// every abbreviated `reviewed_sha` on disk to its full commit sha where this
+/// repo can still resolve it, and mark the rest unresolvable rather than
+/// guessing. Deliberately never runs on its own — `.aida/review-verdicts/` is
+/// live coordination state other seats may be reading right now, so touching
+/// it is always an explicit, operator-invoked action.
+// trace:BUG-1516 | ai:claude
+fn handle_review_normalize_shas(dry_run: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let report = review_verdict::backfill_abbreviated_shas(&project_root, dry_run)
+        .with_context(|| "could not sweep .aida/review-verdicts for abbreviated shas")?;
+    let verb = if dry_run { "would resolve" } else { "resolved" };
+    println!(
+        "{} {} {} abbreviated sha(s), {} unresolvable, {} already full, {} with no sha",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        verb,
+        report.resolved.len(),
+        report.unresolvable.len(),
+        report.already_full,
+        report.skipped_no_sha
+    );
+    for name in &report.resolved {
+        println!("  {} {name}", "→".green());
+    }
+    for name in &report.unresolvable {
+        println!(
+            "  {} {name} (kept verbatim, marked reviewed_sha_unresolvable)",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
+    Ok(())
 }
 
 fn guided_review_prompt(spec: &str) -> String {
@@ -77437,14 +77578,22 @@ fn handle_review_record(
         if let Some(dir) = handshake.parent() {
             std::fs::create_dir_all(dir)?;
         }
+        // Read back the canonical record rather than rebuilding provenance.
+        // Besides keeping the timestamp byte-identical, this carries the
+        // full SHA produced by record_verdict's write-boundary normalization
+        // when the caller supplied an abbreviation.
+        // trace:BUG-1466 | ai:codex
+        // trace:BUG-1516 | ai:codex
+        let recorded = review_verdict::read_recorded_verdict(&project_root, spec)
+            .ok_or_else(|| anyhow::anyhow!("the verdict was written but could not be read back"))?;
         let mut body = serde_json::json!({
             "verdict": kind.label(),
             "summary": summary.unwrap_or(""),
             "mode": "orchestrator-phase-3",
-            "reviewed_sha": resolved_sha.as_deref().expect("checked above"),
-            "reviewed_branch": branch,
-            "recorded_at": chrono::Utc::now().to_rfc3339(),
-            "recorded_by": recorded_by,
+            "reviewed_sha": recorded.reviewed_sha,
+            "reviewed_branch": recorded.reviewed_branch,
+            "recorded_at": recorded.recorded_at,
+            "recorded_by": recorded.recorded_by,
         });
         let findings: Vec<_> = findings
             .iter()
@@ -85041,22 +85190,23 @@ fn spec_verdict_fallback_for_phase3(
     project_root: &std::path::Path,
     spec: &str,
     reviewer_started_at: std::time::SystemTime,
+    current_head: Option<&str>,
 ) -> Option<auto_complete::ReviewerOutcome> {
     let path = review_verdict::verdict_path(project_root, spec);
     let mtime = std::fs::metadata(&path).ok()?.modified().ok()?;
     if mtime < reviewer_started_at {
         return None; // stale: recorded by some earlier review, not this one
     }
+    let outcome = read_verdict_file_for_head(&path, current_head).ok()?;
     let body = std::fs::read_to_string(&path).ok()?;
     let rec = review_verdict::parse_recorded_verdict(&body)?;
-    let verdict = auto_complete::Verdict::parse(rec.kind.label())?;
     eprintln!(
         "  {} no PR-keyed verdict file, but the reviewer recorded {} for {} during this session — accepting it",
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
         rec.kind.label(),
         spec
     );
-    Some(auto_complete::ReviewerOutcome::Verdict(verdict))
+    Some(outcome)
 }
 
 /// BUG-809: last-ditch verdict discovery when both the PR-keyed file and the
@@ -85077,6 +85227,7 @@ fn sibling_verdict_sweep_for_phase3(
     pr: u32,
     spec: &str,
     reviewer_started_at: std::time::SystemTime,
+    current_head: Option<&str>,
 ) -> Option<auto_complete::ReviewerOutcome> {
     let root_canon = project_root.canonicalize().ok()?;
     let parent = root_canon.parent()?;
@@ -85107,17 +85258,8 @@ fn sibling_verdict_sweep_for_phase3(
         }
     }
     candidates.sort_by(|a, b| b.0.cmp(&a.0));
-    for (_, cand, is_pr) in candidates {
-        let outcome = if is_pr {
-            read_verdict_file(&cand).ok()
-        } else {
-            std::fs::read_to_string(&cand)
-                .ok()
-                .as_deref()
-                .and_then(review_verdict::parse_recorded_verdict)
-                .and_then(|rec| auto_complete::Verdict::parse(rec.kind.label()))
-                .map(auto_complete::ReviewerOutcome::Verdict)
-        };
+    for (_, cand, _is_pr) in candidates {
+        let outcome = read_verdict_file_for_head(&cand, current_head).ok();
         let Some(outcome) = outcome else { continue };
         // Copy back to the canonical location (best-effort): audit trail +
         // the STORY-439 calibration tag-along both read the drive root.
@@ -85183,6 +85325,66 @@ fn read_verdict_file(
                 format!("unrecognised verdict `{raw}` in the verdict file"),
             )
         })
+}
+
+/// Read a live phase-3 handshake and prove an approval covers the PR head the
+/// orchestrator is about to advance. Refusals and escalations remain usable
+/// without this check because they fail closed already.
+// trace:BUG-1466 | ai:codex
+// trace:BUG-1538 | ai:codex
+fn read_verdict_file_for_head(
+    path: &std::path::Path,
+    current_head: Option<&str>,
+) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
+    let outcome = read_verdict_file(path)?;
+    if !matches!(
+        outcome,
+        auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Approved)
+    ) {
+        return Ok(outcome);
+    }
+    let body = std::fs::read_to_string(path).map_err(|e| {
+        auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
+            format!("could not re-read approval provenance: {e}"),
+        )
+    })?;
+    let recorded = serde_json::from_str::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|v| {
+            v.get("reviewed_sha")
+                .and_then(|s| s.as_str())
+                .map(str::to_string)
+        });
+    let same_commit = match (recorded.as_deref(), current_head) {
+        (Some(a), Some(b)) => {
+            let a = a.trim();
+            let b = b.trim();
+            a.len().min(b.len()) >= 7
+                && a.bytes().all(|c| c.is_ascii_hexdigit())
+                && b.bytes().all(|c| c.is_ascii_hexdigit())
+                && (a.eq_ignore_ascii_case(b)
+                    || (a.len() < b.len() && b[..a.len()].eq_ignore_ascii_case(a))
+                    || (b.len() < a.len() && a[..b.len()].eq_ignore_ascii_case(b)))
+        }
+        _ => false,
+    };
+    if same_commit {
+        Ok(outcome)
+    } else {
+        Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
+            match (recorded.as_deref(), current_head) {
+                (None, _) => "the APPROVED verdict is UNPROVEN because it records no reviewed_sha"
+                    .to_string(),
+                (_, None) => "the APPROVED verdict is UNPROVEN because the current PR head could not be resolved"
+                    .to_string(),
+                (Some(reviewed), Some(current)) => format!(
+                    "the APPROVED verdict is stale: it reviewed {reviewed}, but the current PR head is {current}"
+                ),
+            },
+        ))
+    }
 }
 
 /// STORY-439: pick the calibration review-slot fields out of a verdict
@@ -88597,13 +88799,18 @@ impl RealPhaseDriver {
             );
         }
 
-        let outcome = match read_verdict_file(&verdict_path) {
+        let gate_head_sha = pr_head_sha_best_effort(self, pr);
+        let outcome = match read_verdict_file_for_head(&verdict_path, gate_head_sha.as_deref()) {
             Ok(o) => o,
             Err(primary_failure) => {
+                if verdict_path.is_file() {
+                    return Err(primary_failure);
+                }
                 if let Some(o) = spec_verdict_fallback_for_phase3(
                     &self.project_root,
                     &self.spec,
                     gate_started_at,
+                    gate_head_sha.as_deref(),
                 )
                 .or_else(|| {
                     sibling_verdict_sweep_for_phase3(
@@ -88611,6 +88818,7 @@ impl RealPhaseDriver {
                         pr,
                         &self.spec,
                         gate_started_at,
+                        gate_head_sha.as_deref(),
                     )
                 }) {
                     o
@@ -90520,44 +90728,50 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             );
         }
 
-        let outcome = match read_verdict_file(&verdict_path) {
-            Ok(o) => o,
-            Err(primary_failure) => {
-                // BUG-806: the spec-keyed record, when fresh, IS the verdict.
-                // BUG-809: failing that, sweep sibling checkouts — the env
-                // anchor does not reliably survive a vendor tool sandbox.
-                if let Some(o) = spec_verdict_fallback_for_phase3(
-                    &self.project_root,
-                    &self.spec,
-                    reviewer_started_at,
-                )
-                .or_else(|| {
-                    sibling_verdict_sweep_for_phase3(
+        let outcome =
+            match read_verdict_file_for_head(&verdict_path, pre_review_head_sha.as_deref()) {
+                Ok(o) => o,
+                Err(primary_failure) => {
+                    if verdict_path.is_file() {
+                        return Err(primary_failure);
+                    }
+                    // BUG-806: the spec-keyed record, when fresh, IS the verdict.
+                    // BUG-809: failing that, sweep sibling checkouts — the env
+                    // anchor does not reliably survive a vendor tool sandbox.
+                    if let Some(o) = spec_verdict_fallback_for_phase3(
                         &self.project_root,
-                        pr,
                         &self.spec,
                         reviewer_started_at,
+                        pre_review_head_sha.as_deref(),
                     )
-                }) {
-                    o
-                } else if self.no_human.is_some() {
-                    // BUG-280: under a headless `--no-human` drain, a NoVerdict
-                    // failure is most often the AskUserQuestion-in-headless
-                    // symptom (reviewer skill called a confirmation prompt
-                    // forbidden by the harness, bailed before writing the
-                    // verdict file). Enrich the error message so the recovery
-                    // hint names the likely cause instead of the generic
-                    // "no verdict file." trace:BUG-280 | ai:claude
-                    return Err(enrich_no_verdict_with_headless_diagnostic(
-                        primary_failure,
-                        &self.project_root,
-                        reviewer_started_at,
-                    ));
-                } else {
-                    return Err(primary_failure);
+                    .or_else(|| {
+                        sibling_verdict_sweep_for_phase3(
+                            &self.project_root,
+                            pr,
+                            &self.spec,
+                            reviewer_started_at,
+                            pre_review_head_sha.as_deref(),
+                        )
+                    }) {
+                        o
+                    } else if self.no_human.is_some() {
+                        // BUG-280: under a headless `--no-human` drain, a NoVerdict
+                        // failure is most often the AskUserQuestion-in-headless
+                        // symptom (reviewer skill called a confirmation prompt
+                        // forbidden by the harness, bailed before writing the
+                        // verdict file). Enrich the error message so the recovery
+                        // hint names the likely cause instead of the generic
+                        // "no verdict file." trace:BUG-280 | ai:claude
+                        return Err(enrich_no_verdict_with_headless_diagnostic(
+                            primary_failure,
+                            &self.project_root,
+                            reviewer_started_at,
+                        ));
+                    } else {
+                        return Err(primary_failure);
+                    }
                 }
-            }
-        };
+            };
 
         // The reviewer writes the decision fields, but the drain owns the
         // authoritative PR head and branch context. Normalize a PR-keyed

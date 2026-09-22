@@ -5601,28 +5601,55 @@ pub(crate) fn handle_queue_command(
                 }
                 // TASK-1005 / SPIKE-70: `--sequential` NAMES + guards the existing
                 // per-member-PR batch drain as a first-class coupled-ordered mode:
-                // members run ONE AT A TIME (concurrency pinned to 1), each its own
-                // PR off freshly-pulled main, with shelve-and-continue on a member
-                // failure. It does NOT change the engine — it requires a batch and
-                // then falls through to the same `handle_auto_complete_batch[es]`
-                // dispatch below, which `drain_batch` already drives sequentially.
+                // members run in pickup order, each its own PR off freshly-pulled
+                // main, with shelve-and-continue on a member failure. It does NOT
+                // change the engine — it requires a batch and then falls through to
+                // the same `handle_auto_complete_batch[es]` dispatch below.
                 // `conflicts_with = "single_branch"` is enforced by clap.
-                // trace:TASK-1005 | ai:claude
+                // TASK-185: the SINGLE-batch leg of that dispatch
+                // (`handle_auto_complete_batch` → `drain_batch_pipelined_with_caps`)
+                // honours `[drain] pipeline_depth` since STORY-1091, so this flag
+                // governs ORDER + per-member-PR shape, not concurrency — the
+                // one-at-a-time property comes from the default depth of 1, not
+                // from `--sequential`. The `--batches` leg does NOT:
+                // `handle_auto_complete_batches` calls `drain_batch_chain_with_caps`,
+                // which is typed on the non-pipelined `BatchDriver` and always calls
+                // `drain_batch_with_caps`, so a chain is serial at ANY depth. The
+                // notice below is branched on that split rather than asserting the
+                // depth claim on a path where it is false.
+                // trace:TASK-1005 trace:TASK-185 | ai:claude
                 if *sequential {
                     let has_batch = effective_batch.is_some_and(|b| !b.is_empty())
                         || effective_batches.is_some();
                     if !has_batch {
                         anyhow::bail!(
-                            "--sequential drives a batch one member at a time — pair it with \
-                             `--batch NAME` or `--batches A,B,C` (e.g. `aida queue work \
-                             --batch NAME --auto-complete --sequential`)"
+                            "--sequential drives a batch's members in pickup order, each as \
+                             its own PR — pair it with `--batch NAME` or `--batches A,B,C` \
+                             (e.g. `aida queue work --batch NAME --auto-complete \
+                             --sequential`)"
                         );
                     }
                     if !*json {
+                        // TASK-185: `--batches` takes precedence in the dispatch
+                        // below, and that chain path never reaches the pipelined
+                        // scheduler — so scope the concurrency sentence to the leg
+                        // the operator actually invoked instead of printing the
+                        // depth claim on a path where it is inert.
+                        // trace:TASK-185 | ai:claude
+                        let concurrency = if effective_batches.is_some() {
+                            "Ordering only — a `--batches` chain is always serial: the batches \
+                             run in turn and each batch's members one at a time, regardless of \
+                             `[drain] pipeline_depth`."
+                                .to_string()
+                        } else {
+                            sequential_single_batch_concurrency_notice(
+                                find_main_worktree_root().ok().as_deref(),
+                            )
+                        };
                         eprintln!(
-                            "Sequential drain: members run one at a time (concurrency {SEQUENTIAL_DRAIN_CONCURRENCY}); \
-                             each member is its own PR off freshly-pulled main, and a member \
-                             failure shelves that member and continues with the rest."
+                            "Sequential drain: members run in pickup order, each its own PR off \
+                             freshly-pulled main, and a member failure shelves that member and \
+                             continues with the rest. {concurrency}"
                         );
                     }
                     // Fall through to the batch / batches dispatch below — it IS
@@ -6051,6 +6078,77 @@ pub(crate) fn handle_queue_command(
         }
     }
     Ok(())
+}
+
+// trace:BUG-1586 | ai:codex
+fn sequential_single_batch_concurrency_notice(project_root: Option<&std::path::Path>) -> String {
+    let Some(project_root) = project_root else {
+        return "Ordering only — concurrency for this single-batch drain follows \
+                `[drain] pipeline_depth`; the resolved value is unavailable."
+            .to_string();
+    };
+    let depth = crate::DrainTuning::resolve(project_root).pipeline_depth();
+    if depth == 1 {
+        format!(
+            "Ordering only — concurrency for this single-batch drain follows \
+             `[drain] pipeline_depth` (resolved {depth}, i.e. strictly one at a time)."
+        )
+    } else {
+        format!(
+            "Ordering only — concurrency for this single-batch drain follows \
+             `[drain] pipeline_depth` (resolved {depth}, allowing up to {depth} members \
+             in flight)."
+        )
+    }
+}
+
+#[cfg(test)]
+mod sequential_notice_tests {
+    use super::sequential_single_batch_concurrency_notice;
+
+    fn project_with_depth(depth: usize) -> tempfile::TempDir {
+        let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir(project.path().join(".aida")).unwrap();
+        std::fs::write(
+            project.path().join(".aida/config.toml"),
+            format!("[drain]\npipeline_depth = {depth}\n"),
+        )
+        .unwrap();
+        project
+    }
+
+    // trace:BUG-1586 | ai:codex
+    #[test]
+    fn sequential_notice_reports_resolved_pipeline_depth_two() {
+        let project = project_with_depth(2);
+        let notice = sequential_single_batch_concurrency_notice(Some(project.path()));
+
+        assert!(notice.contains("resolved 2"), "notice was: {notice}");
+        assert!(
+            !notice.contains("strictly one at a time"),
+            "notice was: {notice}"
+        );
+    }
+
+    // trace:BUG-1586 | ai:codex
+    #[test]
+    fn sequential_notice_keeps_one_at_a_time_clause_for_default_depth() {
+        let project = project_with_depth(crate::drain_state::default_pipeline_depth());
+        let notice = sequential_single_batch_concurrency_notice(Some(project.path()));
+
+        assert!(notice.contains("resolved 1"), "notice was: {notice}");
+        assert!(notice.contains("strictly one at a time"));
+    }
+
+    // trace:BUG-1586 | ai:codex
+    #[test]
+    fn sequential_notice_degrades_gracefully_without_a_project_root() {
+        let notice = sequential_single_batch_concurrency_notice(None);
+
+        assert!(notice.contains("`[drain] pipeline_depth`"));
+        assert!(notice.contains("resolved value is unavailable"));
+        assert!(!notice.contains("strictly one at a time"));
+    }
 }
 
 /// TASK-218: smart status-transition table for `aida queue rework`.
@@ -12909,9 +13007,17 @@ pub(crate) fn evaluate_review_verdict_gate(
     let Some(verdict) = verdict else {
         return (review_verdict::VerdictGate::Proceed, None);
     };
-    if !verdict.kind.blocks_done() {
-        return (review_verdict::VerdictGate::Proceed, Some(verdict));
-    }
+    // BUG-1466 / BUG-1538: this used to return early here for every verdict
+    // that does not block_done() — which includes APPROVED, the consequential
+    // direction. That made `queue_done_verdict_gate`'s own `reviewed_sha ==
+    // None` refusal (added for BUG-1467) unreachable from the ONE call site
+    // `aida queue done` actually uses, and it meant an approval recorded
+    // against an earlier commit cleared the gate identically to a fresh one:
+    // relation was never even computed for a non-blocking verdict. The pure
+    // gate function now makes this decision for every verdict kind; this
+    // wiring must always ask it rather than pre-empting it.
+    // trace:BUG-1466 | ai:claude
+    // trace:BUG-1538 | ai:claude
     let branch = current_branch_at(project_root);
     let relation = verdict_tip_relation(
         project_root,

@@ -54,9 +54,38 @@ concurrent = 2
                "/var/cache/aida-ci/cache:/ci-cache"]
 ```
 
-`concurrent = 2` on purpose: jobs share one target dir and serialize on
-cargo's build lock, and the box has 6 cores — more slots only pile up cold
-builds (the 2026-09-18 validation hit load 45 with eight slots).
+`concurrent = 2` on purpose: the box has 6 cores, and more slots only pile up
+cold builds (the 2026-09-18 validation hit load 45 with eight slots). Each slot
+pairs its persistent checkout with `/ci-cache/target-v2-$CI_CONCURRENT_ID`.
+Keeping targets slot-local matters: Cargo fingerprints contain source paths,
+so sharing one target between the runner's `concurrent-0` and `concurrent-1`
+checkout roots made the slots repeatedly recompile each other's crates. The
+separate `verify` and `test` jobs can use both slots without that churn.
+
+The pipeline sets `GIT_CLEAN_FLAGS: none`. The checkout and Cargo target are
+deliberately persistent, and cleaning the checkout caused Cargo to recompile
+unchanged workspace crates after GitLab refreshed their mtimes. Build outputs
+are in `/ci-cache/target-v2-*`, not the checkout. The `v2` namespace discarded
+artifacts produced by the original unsafe blanket hash-to-time scheme. If the
+runner workspace ever needs
+a clean reset, stop the runner and clean that project's directory explicitly
+rather than putting an unconditional clean back on every pipeline.
+
+GitLab Runner still performs a forced checkout even without `git clean`, which
+can refresh tracked-file and directory mtimes. Before each builder job,
+`ci/restore-git-mtimes` compares the new checkout with the last checkout whose
+verify job succeeded in that slot-local target directory. The success marker is
+written only after every verify command passes; GitLab Runner recreates the
+repository metadata, so its reflog is not durable enough for this purpose.
+Changed paths retain their fresh checkout time so Cargo must rebuild them;
+unchanged regular files and directories receive a deterministic past mtime
+derived from their Git blob or tree ID. Directories matter because
+Cargo recursively watches paths such as `aida-core/templates/`; restoring only
+file mtimes still reruns that crate's build script after every forced checkout.
+On an exact-SHA retry the helper also normalizes `.git/HEAD` and `.git/index`,
+which are watched by the CLI build-stamp script. This is intentionally not a
+blanket hash-to-time transform: giving a changed file an older synthetic mtime
+can make Cargo incorrectly reuse stale output.
 
 Gotchas learned the hard way:
 
@@ -74,3 +103,4 @@ Gotchas learned the hard way:
   `needs: []` and no cache, so it runs in seconds regardless of the above.
 
 <!-- trace:STORY-1216 | ai:claude -->
+<!-- trace:TASK-1274 | ai:codex -->

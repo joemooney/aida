@@ -150,7 +150,8 @@ pub fn sync(
     let desired_keys: HashSet<&String> = desired.keys().collect();
     for (spec_id, body) in &desired {
         let path = dir.join(format!("{}.md", spec_id));
-        let unchanged = std::fs::read_to_string(&path).is_ok_and(|s| s == *body);
+        let unchanged = std::fs::read_to_string(&path)
+            .is_ok_and(|s| aida_core::scaffolding::generated_text_matches(&s, body));
         if unchanged {
             report.unchanged.push(path);
         } else {
@@ -272,7 +273,8 @@ pub fn sync_review_md(
         desired_keys.insert(spec_id.to_string());
         let body = render_spec_fragment(spec_id, summary, backend, files);
         let path = dir.join(format!("{}.md", spec_id));
-        let is_unchanged = std::fs::read_to_string(&path).is_ok_and(|s| s == body);
+        let is_unchanged = std::fs::read_to_string(&path)
+            .is_ok_and(|s| aida_core::scaffolding::generated_text_matches(&s, &body));
 
         if is_unchanged {
             unchanged_count += 1;
