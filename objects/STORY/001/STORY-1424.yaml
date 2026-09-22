@@ -43,7 +43,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:32:39.688630178Z
-modified_at: 2026-09-22T11:56:55.663023824Z
+modified_at: 2026-09-22T14:01:55.001631394Z
 req_type: Story
 tags:
 - acceptance
@@ -67,3 +67,8 @@ comments:
   content: 'Cold rereview PR-2080 exact head 2268be32ee886243068c59026553b57a1bacb6b6: APPROVED for this spec. Production review wiring, isolated exact-head checks, provenance record, residual-only prompt, evaluator fail-closed path, and no-executable compatibility remain sound. Focused suite passed 10 of 10.'
   created_at: 2026-09-22T11:56:55.663023824Z
   modified_at: 2026-09-22T11:56:55.663023824Z
+- id: 01a0c96c-5439-72e2-9cbd-8f7db44da84d
+  author: joe
+  content: 'Cold exact-head review of PR #2080 at b86696c8dcdd29f3b43b7f17a120b53d17320468 (2026-09-22). Independent verdict: REQUEST_CHANGES. Production wiring, exact reviewed-head checkout, graded record, residual prompt, same-criterion threshold logic, fail-closed errors, and focused tests are present. Blocking defect: graded_review.rs marks p >= .95 as Passed or p <= .20 as Failed without confidence, while aggregate routing escalates low-confidence results; generate_graded_reviewer_prompt emits only Escalated prose results, so a low-confidence boundary criterion is omitted from the Phase-3 prompt although it is not settled. Add an adversarial prompt regression and include every non-settled prose criterion. PR #2080 remains REQUEST_CHANGES at this head; retain all four trailers after fix and fresh review.'
+  created_at: 2026-09-22T14:01:55.001631394Z
+  modified_at: 2026-09-22T14:01:55.001631394Z
