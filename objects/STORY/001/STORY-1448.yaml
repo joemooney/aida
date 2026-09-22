@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T09:25:33.567593252Z
-modified_at: 2026-09-22T09:53:06.627532561Z
+modified_at: 2026-09-22T10:12:08.268926584Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -35,3 +35,8 @@ comments:
   content: 'Cold rereview addendum at exact head 8a6db9ca58c5: malformed retained evidence also fails open. verdict_conflict_for_current_sha silently drops non-object rounds, rounds without a usable SHA, unknown verdict spellings, and missing recorded_by (collapsed to the same ''unknown reviewer''). read_verdict_file then accepts a valid top-level Approved. Because rounds are decision-bearing retained evidence, malformed/unattributed same-head entries should produce review-integrity failure rather than disappear. Add negative parser/merge-surface controls.'
   created_at: 2026-09-22T09:53:06.627532561Z
   modified_at: 2026-09-22T09:53:06.627532561Z
+- id: 01a0c899-f5cc-7b40-82bd-db164d598e79
+  author: joe
+  content: 'Cold rereview at exact head 664c6539ad313f023efc7009cd95230b3403e4d8: REQUEST CHANGES. Blocking findings: (1) drain resume''s reviewed fact reads only PR-N.json, so an opposite same-head spec-keyed verdict is not reconciled and review may be skipped; (2) the launcher wave merge helper derives its reconciliation SHA from the first parseable artifact rather than the forge PR head, so stale PR approval + current spec block can be evaluated at the stale SHA and permit merge. Targeted BUG-1581/review_verdict/read_verdict_file tests and fmt pass; exact-head GitHub Build was still pending at review time.'
+  created_at: 2026-09-22T10:12:08.268926584Z
+  modified_at: 2026-09-22T10:12:08.268926584Z
