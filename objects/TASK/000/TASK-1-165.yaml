@@ -44,7 +44,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:29:00.515328965Z
-modified_at: 2026-09-22T11:45:33.545058229Z
+modified_at: 2026-09-22T11:48:02.693700410Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -66,3 +66,8 @@ comments:
   content: 'Cold review REQUEST_CHANGES at exact head 70145f2ba9bb6e5e05b776bcb3518247588a0434. Blocking: label-only merge holds are ignored, and reviewer queue lookup failure is treated as an empty queue. The no-hold/no-route claim therefore is not definitive. Require forge-label hold evidence and fail closed on unknown queue state; add adversarial label-only and queue-failure tests plus TOON/statusbar coverage.'
   created_at: 2026-09-22T11:45:33.545058229Z
   modified_at: 2026-09-22T11:45:33.545058229Z
+- id: 01a0c8f1-c405-7bd0-9518-76baebd40cbe
+  author: joe
+  content: 'Review evidence follow-up: at exact head 70145f2ba9bb6e5e05b776bcb3518247588a0434, the three focused classifier/render tests each selected 1 test and passed; cargo fmt check passed. They do not cover label-only holds or reviewer queue lookup failure, which remain blocking.'
+  created_at: 2026-09-22T11:48:02.693700410Z
+  modified_at: 2026-09-22T11:48:02.693700410Z
