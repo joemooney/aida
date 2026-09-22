@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:14:13.323242098Z
-modified_at: 2026-09-22T16:29:43.497853825Z
+modified_at: 2026-09-22T16:29:53.692646578Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -110,6 +110,11 @@ comments:
   content: '[driver signoff] APPROVED architecture sketch. Implement MergeHoldRecord v2 with typed reason and stable principal identity; route only to independently eligible seats via idempotent briefs; expose recusal/rework/decision distinctions and explicit no_independent_reader; make awaiting/JSON/TOON/notice seat-aware; migrate legacy plaintext conservatively without keyword inference; enforce exact-head and no self-merge, with brief acknowledgment meaning seen only. No TTY override. Timestamp 2026-09-22T09:11:00-07:00.'
   created_at: 2026-09-22T16:11:39.329143779Z
   modified_at: 2026-09-22T16:11:39.329143779Z
+- id: 01a0c9f3-ce9c-7383-b2e3-f0b4b1073c8b
+  author: joe
+  content: Commit 02a13e7138 references this requirement
+  created_at: 2026-09-22T16:29:53.692646578Z
+  modified_at: 2026-09-22T16:29:53.692646578Z
 execution_mode: drain
 implementation_info:
   implemented: true
