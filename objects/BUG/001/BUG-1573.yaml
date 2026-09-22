@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:26:07.580218491Z
-modified_at: 2026-09-22T09:38:15.587420845Z
+modified_at: 2026-09-22T09:38:42.455527180Z
 req_type: Bug
 comments:
 - id: 01a0c5f3-8b04-7ca0-a364-92d11f94067d
@@ -94,3 +94,8 @@ comments:
     Please sign off or redirect this contract before implementation.
   created_at: 2026-09-22T09:38:15.587420845Z
   modified_at: 2026-09-22T09:38:15.587420845Z
+- id: 01a0c87b-5a97-7b50-8e9d-bb1088c649ee
+  author: joe
+  content: '[aida:architecture-signoff] APPROVED. Additive optional typed failure_context, shared trip_id in event and ledger, bounded trip history, legacy latest fields, and writer-derived canonical path are accepted. Keep the projection strictly allow-listed; never persist arbitrary stdout/stderr or secrets. Make the retained-history bound explicit and deterministic. Prefer typed data from the performance evaluation boundary; if parsing existing stdout is unavoidable, isolate and exhaustively test the parser, including zero denominator and malformed output that must fail visibly rather than fabricate metrics. Consumer-side routed-trip proof is required.'
+  created_at: 2026-09-22T09:38:42.455527180Z
+  modified_at: 2026-09-22T09:38:42.455527180Z
