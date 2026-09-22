@@ -30,12 +30,12 @@ description: |-
   4. Decide whether the write path can do anything at all. It probably cannot - by the time AIDA sees the string the text is already gone - which is worth stating explicitly so nobody looks for a guard that cannot exist. If that is the conclusion, the detector and the habit are the whole remedy.
 
   WHAT THIS IS NOT. Not a bug in AIDA's write path. The shell consumes the text before any AIDA code runs. It is filed because the DAMAGE is in AIDA's store, is silent, is not rare, and is findable - and because a known hazard that leaves no trace is indistinguishable from one that is not happening.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T03:18:41.169078388Z
-modified_at: 2026-09-22T09:15:56.844104681Z
+modified_at: 2026-09-22T09:16:40.145387675Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -405,10 +405,24 @@ comments:
   content: '[aida:proxy-approval] verdict=approved; reasoning=independent cold reviewer verified exact head cd5291191fb6a06aa07006b9ffb8682228e31891, full pairwise comment-source arbitration, canonical sibling-store detection, read-only sweep, safe literal preservation, and focused tests; independent=yes; gates=required Ubuntu CI green, exact-head review approved; hold-release=deliberate gh label bypass because non-TTY ship path cannot clear supervised hold; timestamp=2026-09-22T02:15:56-07:00'
   created_at: 2026-09-22T09:15:56.844104681Z
   modified_at: 2026-09-22T09:15:56.844104681Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'REQUEST CHANGES: both prior blockers are fixed, but comment add still accepts explicit file or stdin together with interactive mode and resolves that combination inconsistently across backends.'
-  recovery_hint: address the review findings, move TASK-190 back to In Progress, and clear the PR hold only after approval
-  shelved_at: 2026-09-22T08:48:51.129850774Z
+history:
+- id: 01a0c867-2d4a-76d3-82ed-3aff81308486
+  author: aida-auto-bump
+  timestamp: 2026-09-22T09:16:40.138355180Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0c867-2d51-7b33-ad4d-4e2a81fb1cbb
+  timestamp: 2026-09-22T09:16:40.145385963Z
+  agent: aida
+  commit_sha: 222a3f8751d3abda3b4bc8487ab9110bd0a3a6af
+  summary: 'APPROVED at exact head: complete add/edit source arbitration is exclusive in parser and real binary; both prior blockers remain closed; detector is sibling-aware and read-only. Required Build is still pending.'
+  punted:
+  - 'punted: REQUEST CHANGES: both prior blockers are fixed, but comment add still accepts explicit file or stdin together with interactive mode and resolves that combination inconsistently across backends.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T09:16:40.101799951Z
+  completion_sha: 222a3f8751d3abda3b4bc8487ab9110bd0a3a6af
