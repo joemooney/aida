@@ -69583,8 +69583,11 @@ fn emit_notice_time_line() {
 // trace:BUG-1239 | ai:codex
 // trace:TASK-1274 | ai:claude
 fn arm_notice_deadline() {
-    std::thread::spawn(|| {
-        std::thread::sleep(notice_deadline());
+    let Some(deadline) = notice_deadline() else {
+        return;
+    };
+    std::thread::spawn(move || {
+        std::thread::sleep(deadline);
         std::process::exit(0);
     });
 }
@@ -69594,15 +69597,19 @@ fn arm_notice_deadline() {
 /// replaces that scan with targeted/cache-indexed reads, allowing the product
 /// bound to remain meaningfully sub-second. The override exists only so
 /// black-box tests can assert tighter latency budgets in their subprocesses.
-fn notice_deadline() -> std::time::Duration {
-    // Test-only escape hatch; a production caller never sets this.
+fn notice_deadline() -> Option<std::time::Duration> {
+    // Test-only escape hatch; a production caller never sets this. Zero
+    // disables the watchdog so lifecycle/content tests can synchronize on the
+    // command's completion instead of racing a wall-clock deadline under CI
+    // load. Latency behavior remains covered by its dedicated black-box test.
+    // trace:BUG-1567 | ai:codex
     if let Ok(ms) = std::env::var("AIDA_TEST_NOTICE_DEADLINE_MS") {
         if let Ok(ms) = ms.parse::<u64>() {
-            return std::time::Duration::from_millis(ms);
+            return (ms != 0).then(|| std::time::Duration::from_millis(ms));
         }
     }
     const PRODUCT_NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_millis(750);
-    PRODUCT_NOTICE_DEADLINE
+    Some(PRODUCT_NOTICE_DEADLINE)
 }
 
 /// PURE: the notice's always-on leading line. Separated so the exact contract

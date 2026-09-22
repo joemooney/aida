@@ -277,10 +277,11 @@ fn awaiting_notice_tracks_real_lease_through_session_end() {
         {
             let mut cmd = aida(&worktree, &p.home);
             cmd.env("AIDA_SESSION_ID", session_id)
-                // BUG-1569: the leased-spec reminder must fit comfortably
-                // inside a tighter-than-production bound now that it performs
-                // two targeted reads instead of a full-store scan.
-                .env("AIDA_TEST_NOTICE_DEADLINE_MS", "500")
+                // BUG-1567: this test owns the lease-lifecycle contract, not
+                // the watchdog's latency contract. Disable the test-injected
+                // deadline so scheduler/filesystem load cannot silently turn
+                // a correct reminder into an empty, successful response.
+                .env("AIDA_TEST_NOTICE_DEADLINE_MS", "0")
                 .args(["awaiting", "--notice"]);
             cmd
         },
