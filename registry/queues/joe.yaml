@@ -34,63 +34,10 @@
   added_at: 2026-09-21T21:25:42.907386516Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0c1cb-97e3-7962-a7e6-e941c86467b8
-  position: 10000
-  added_by: joe
-  note: Promoted from finding TASK-1-165 via `aida findings promote`
-  added_at: 2026-09-21T21:26:18.313338992Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 01a0c8e2-0ae8-7f02-8576-88969cebba5b
-  position: 31000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c8d2); covers 1 spec
-  added_at: 2026-09-22T11:31:08.321551474Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c8e9-a1f6-7a73-9d78-fa69b36ca1e4
-  position: 32000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c8db); covers 1 spec
-  added_at: 2026-09-22T11:39:28.035640814Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c97f-84e2-7a11-b5d2-f4b10789febd
-  position: 33000
-  added_by: joe
-  note: advisor-cleared at filing
-  added_at: 2026-09-22T14:23:27.137620774Z
-  for_role: reviewer
-- user_id: joe
-  requirement_id: 01a0c980-16af-7970-89ea-974a57d9cd33
-  position: 34000
-  added_by: joe
-  note: advisor-cleared at filing
-  added_at: 2026-09-22T14:23:36.102501345Z
-  for_role: reviewer
-- user_id: joe
   requirement_id: 01a0c98f-cd32-77c3-870b-78782e156956
   position: 35000
   added_by: joe
   note: auto-queued by `session end` (01a0c973); covers 1 spec
   added_at: 2026-09-22T14:40:47.298205937Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c998-7f87-79a2-9b1a-f86d5fe3e4c1
-  position: 36000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c98c); covers 1 spec
-  added_at: 2026-09-22T14:50:22.466394545Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0c999-45b1-7290-9e2f-58a1b988c57b
-  position: 37000
-  added_by: joe
-  note: auto-queued by `session end` (01a0c987); covers 1 spec
-  added_at: 2026-09-22T14:51:11.795572163Z
   for_role: reviewer
   added_by_machine: imac
