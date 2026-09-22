@@ -33,13 +33,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:30:00.794024258Z
-modified_at: 2026-09-22T10:43:26.522137347Z
+modified_at: 2026-09-22T10:45:25.125510964Z
 req_type: Bug
 tags:
 - agent-surface
 - drain-safe
 - papercut
 - substrate-noise
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a0c8b8-44c0-7ed2-b8c3-50c6d974f6b9
+  created_at: 2026-09-22T10:45:25.125502582Z
+  created_by: joe
 comments:
 - id: 01a0c5ec-31e2-70a2-9d69-0fc405e456aa
   author: joe
