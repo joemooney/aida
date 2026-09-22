@@ -49,12 +49,12 @@ description: |-
   Filed by the driver-advisor seat. Found by claude-reviewer-1 diagnosing a mis-dispatch that this
   seat made from this table. Related: BUG-1562 (a merge-hold marker's reason frozen at placement),
   BUG-1539 (a verdict artefact outliving its premise) - the same class, three surfaces.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:06:54.901043014Z
-modified_at: 2026-09-22T09:15:33.264719722Z
+modified_at: 2026-09-22T09:15:41.996259469Z
 req_type: Bug
 tags:
 - agent-surface papercut orchestrator
@@ -127,3 +127,22 @@ comments:
   content: '[aida:proxy-approval] verdict=approved; reasoning=independent cold rereviewer verified exact head 7b3f8fdc20a0281acb8deeb0321ec50d5ded964d, representation-proof-only suppression, divergent branch safety, unbounded per-candidate PR lookup, fail-safe forge behavior, and focused regressions; independent=yes; gates=required Ubuntu CI green, merge-hold-gate green, exact-head review approved; timestamp=2026-09-22T02:15:31-07:00'
   created_at: 2026-09-22T09:15:33.264719722Z
   modified_at: 2026-09-22T09:15:33.264719722Z
+history:
+- id: 01a0c866-4a25-71f2-a4d6-7ae04a7f739a
+  author: aida-auto-bump
+  timestamp: 2026-09-22T09:15:41.989207703Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c866-4a2c-7a91-9cd5-5415a8d77b8c
+  timestamp: 2026-09-22T09:15:41.996257342Z
+  agent: implementer
+  commit_sha: 98f5af9c8dccfcca80dd5990630ba3275bcef756
+  summary: 'APPROVED: prior timestamp and 1000-history blockers closed; suppression is exact-SHA/ancestry/durable-patch based, divergent work remains visible, and targeted all-state lookups cover old PRs; focused tests pass (CI build still pending at review time)'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T09:15:41.988997960Z
+  completion_sha: 98f5af9c8dccfcca80dd5990630ba3275bcef756
