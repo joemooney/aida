@@ -166,14 +166,21 @@ Batch and `nextN` drains have a small in-flight window:
 
 ```toml
 [drain]
-pipeline_depth = 2
+pipeline_depth = 1
 ```
 
-Depth `1` keeps the historical strictly sequential behavior. Depth `2` is the
-default: once spec A has opened a PR and moved into CI/review/merge, the drain
-may start spec B's implementer in a separate worktree instead of idling through
-A's remote waits. Values above `3` are clamped to `3`; wider fan-out remains
-the job of burndown-style concurrency, not the single-drain loop.
+The default is depth `1`, sourced from `default_pipeline_depth()` in
+`aida-cli-lib/src/drain_state.rs`, and keeps the historical strictly sequential
+behavior. Set depth `2` to opt in: once spec A has opened a PR and moved into
+CI/review/merge, the drain may start spec B's implementer in a separate
+worktree instead of idling through A's remote waits. Values above `3` are
+clamped to `3`; wider fan-out remains the job of burndown-style concurrency,
+not the single-drain loop.
+
+ADR-27 records the original depth `2` decision from when pipeline depth was
+state only and did not control scheduling. STORY-1091 made the setting live and
+changed the safe default to `1`; ADR-27 remains the historical decision rather
+than the current default. trace:BUG-1585
 
 The merge side stays serial and ordered. Even when two specs are in flight,
 phase 4-6 for the later spec waits behind any earlier spec's merge/pull/build

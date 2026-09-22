@@ -454,6 +454,26 @@ fn drift_freshly_scaffolded_dir_is_current() {
     );
 }
 
+#[test]
+fn crlf_memory_pack_is_unchanged_and_up_to_date() {
+    let dir = tempfile::tempdir().unwrap();
+    let mem = dir.path().join("memory");
+    scaffold_memory_pack_into(&mem, false, None).unwrap();
+
+    for entry in std::fs::read_dir(&mem).unwrap() {
+        let path = entry.unwrap().path();
+        let lf = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, lf.replace('\n', "\r\n")).unwrap();
+    }
+
+    let refresh = scaffold_memory_pack_into(&mem, true, None).unwrap();
+    assert_eq!(refresh.refreshed, 0, "CRLF-only files are not stale");
+    assert_eq!(refresh.kept_edited, 0, "CRLF does not invalidate checksums");
+
+    let drift = compute_memory_drift_into(&mem).unwrap();
+    assert_eq!(drift.behind(), 0, "CRLF-only files remain up to date");
+}
+
 /// The three drift dispositions are classified correctly: a deleted file
 /// → Missing, a body-edited file → Edited (kept by refresh), an unmarked
 /// user file → UserOwned, a benign-frontmatter-mutated pristine file →

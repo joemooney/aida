@@ -267,8 +267,8 @@ pub(crate) fn handle_scaffold_command(
                 // matches what we'd write. Lets us tell the user "0 files
                 // needed updating" instead of "all files updated".
                 let already_matches = exists
-                    && std::fs::read(&full_path)
-                        .map(|bytes| bytes == artifact.content.as_bytes())
+                    && std::fs::read_to_string(&full_path)
+                        .map(|actual| artifact_text_matches(&actual, &artifact.content))
                         .unwrap_or(false);
 
                 if already_matches {
@@ -709,17 +709,17 @@ fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -
                     match aida_core::scaffolding::extract_aida_block(actual) {
                         // markers present → AIDA owns the block content
                         Some(a) => match aida_core::scaffolding::extract_aida_block(expected) {
-                            Some(e) => a.trim() == e.trim(),
+                            Some(e) => aida_core::scaffolding::generated_text_matches(a, e),
                             None => true,
                         },
                         // markers absent → user opted out, fully their file
                         None => true,
                     }
                 }
-                _ => actual.trim() == expected.trim(),
+                _ => aida_core::scaffolding::generated_text_matches(actual, expected),
             }
         }
-        FileCategory::Template => actual.trim() == expected.trim(),
+        FileCategory::Template => aida_core::scaffolding::generated_text_matches(actual, expected),
         FileCategory::ManagedMerge => {
             // Slot-equality: parse both sides as JSON and compare just the
             // AIDA-owned slots. User keys outside the slots don't trigger
@@ -727,18 +727,35 @@ fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -
             // `scaffold upgrade` actually applies. trace:FR-1-047
             use serde_json::Value;
             let Ok(av): Result<Value, _> = serde_json::from_str(actual) else {
-                return actual.trim() == expected.trim();
+                return aida_core::scaffolding::generated_text_matches(actual, expected);
             };
             let Ok(ev): Result<Value, _> = serde_json::from_str(expected) else {
-                return actual.trim() == expected.trim();
+                return aida_core::scaffolding::generated_text_matches(actual, expected);
             };
             let slots = aida_core::scaffolding::slots_for_file(path);
             if slots.is_empty() {
-                actual.trim() == expected.trim()
+                aida_core::scaffolding::generated_text_matches(actual, expected)
             } else {
                 slots.iter().all(|s| av.pointer(s) == ev.pointer(s))
             }
         }
+    }
+}
+
+// The apply no-op path and status path must use the same newline contract.
+// trace:BUG-1555 | ai:codex
+fn artifact_text_matches(actual: &str, expected: &str) -> bool {
+    aida_core::scaffolding::generated_text_matches(actual, expected)
+}
+
+#[cfg(test)]
+mod bug1555_tests {
+    use super::artifact_text_matches;
+
+    #[test]
+    fn scaffold_noop_ignores_checkout_newlines_but_not_edits() {
+        assert!(artifact_text_matches("one\r\ntwo\r\n", "one\ntwo\n"));
+        assert!(!artifact_text_matches("one\r\nchanged\r\n", "one\ntwo\n"));
     }
 }
 

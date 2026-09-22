@@ -1373,7 +1373,7 @@ fn install_mirror_pre_push_hook(project_root: &Path) -> Result<()> {
     if target.exists() {
         let existing = std::fs::read_to_string(&target).unwrap_or_default();
         if existing.contains(MIRROR_HOOK_MARKER) {
-            if existing != script {
+            if !aida_core::scaffolding::generated_text_matches(&existing, &script) {
                 std::fs::write(&target, &script)
                     .with_context(|| format!("failed to refresh {}", target.display()))?;
             }
@@ -2546,6 +2546,31 @@ host = \"should.not.count\"
             let mode = std::fs::metadata(&hook).unwrap().permissions().mode();
             assert_ne!(mode & 0o111, 0, "hook must be executable");
         }
+    }
+
+    #[test]
+    fn mirror_hook_ignores_crlf_but_repairs_real_drift() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        init_repo_with_commit(&project);
+        let hook = project.join(".git/hooks/pre-push");
+        std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+
+        let script = mirror_pre_push_hook_script();
+        let crlf = script.replace('\n', "\r\n");
+        std::fs::write(&hook, &crlf).unwrap();
+        install_mirror_pre_push_hook(&project).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&hook).unwrap(),
+            crlf,
+            "newline-only conversion must not rewrite the managed hook"
+        );
+
+        let drifted = crlf.replace("mirror-push", "mirror-push-broken");
+        std::fs::write(&hook, drifted).unwrap();
+        install_mirror_pre_push_hook(&project).unwrap();
+        assert_eq!(std::fs::read_to_string(&hook).unwrap(), script);
     }
 
     // A custom pre-push hook is never clobbered; setup still succeeds.

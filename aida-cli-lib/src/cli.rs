@@ -900,6 +900,17 @@ pub enum ReviewCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// One-time repair: expand every abbreviated `reviewed_sha` on disk to
+    /// its full commit sha where this repo can still resolve it, and mark
+    /// the rest explicitly unresolvable. Never invents a value and never
+    /// touches an already-full or sha-less record.
+    // trace:BUG-1516 | ai:claude
+    NormalizeShas {
+        /// Report what would change without writing anything.
+        #[clap(long)]
+        dry_run: bool,
+    },
 }
 
 /// Per-scope disposition / triage lease commands (the intake gate).
@@ -3778,6 +3789,15 @@ pub enum StoreCommand {
 // trace:EPIC-19 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum DoctorCommand {
+    /// Find prose that may have lost backticked text to shell command
+    /// substitution. Reports only; candidates require human inspection.
+    // trace:TASK-190 | ai:codex
+    ShellSubstitutionHoles {
+        /// Omit a spec whose own documentation quotes detector examples.
+        #[clap(long, value_name = "SPEC-ID")]
+        exclude: Vec<String>,
+    },
+
     /// Focused multi-agent drift diagnostic for one category.
     // trace:STORY-462 | ai:codex
     Check {
@@ -4450,12 +4470,21 @@ pub enum CommentCommand {
         // trace:TASK-778 — de-duplicated from the positional [CONTENT];
         // hidden from --help so the two forms don't read as distinct args.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, hide = true, allow_hyphen_values = true)]
+        #[clap(long, hide = true, allow_hyphen_values = true, conflicts_with_all = ["content_positional", "body_file", "stdin", "interactive"])]
         content: Option<String>,
 
         /// Comment content (positional argument)
-        #[clap(name = "CONTENT")]
+        #[clap(value_name = "CONTENT", conflicts_with_all = ["content", "body_file", "stdin", "interactive"])]
         content_positional: Option<String>,
+
+        /// Read comment content from a file. Prefer this for text containing
+        /// backticks or `$()` so the shell cannot perform command substitution.
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["content", "content_positional", "stdin", "interactive"])]
+        body_file: Option<PathBuf>,
+
+        /// Read comment content from stdin.
+        #[clap(long, conflicts_with_all = ["content", "content_positional", "body_file", "interactive"])]
+        stdin: bool,
 
         /// Author of the comment (defaults to AIDA_AUTHOR env var or system user)
         #[clap(long)]
@@ -4488,8 +4517,17 @@ pub enum CommentCommand {
 
         /// New content
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "interactive")]
         content: Option<String>,
+
+        /// Read replacement content from a file. Prefer this for text
+        /// containing backticks or `$()`.
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["content", "stdin", "interactive"])]
+        body_file: Option<PathBuf>,
+
+        /// Read replacement content from stdin.
+        #[clap(long, conflicts_with_all = ["content", "body_file", "interactive"])]
+        stdin: bool,
 
         /// Use interactive mode (prompts)
         #[clap(long)]
@@ -4506,6 +4544,99 @@ pub enum CommentCommand {
         #[clap(long)]
         comment_id: String,
     },
+}
+
+#[cfg(test)]
+mod task_190_comment_source_parser_tests {
+    use super::Cli;
+    use clap::Parser;
+
+    #[test]
+    fn positional_comment_conflicts_with_body_file_and_stdin() {
+        assert!(Cli::try_parse_from([
+            "aida",
+            "comment",
+            "add",
+            "TASK-1",
+            "positional",
+            "--body-file",
+            "body.md",
+        ])
+        .is_err());
+        assert!(Cli::try_parse_from(
+            ["aida", "comment", "add", "TASK-1", "positional", "--stdin",]
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn hidden_content_conflicts_with_body_file_and_stdin() {
+        assert!(Cli::try_parse_from([
+            "aida",
+            "comment",
+            "add",
+            "TASK-1",
+            "positional",
+            "--content",
+            "legacy",
+        ])
+        .is_err());
+        assert!(Cli::try_parse_from([
+            "aida",
+            "comment",
+            "add",
+            "TASK-1",
+            "--content",
+            "legacy",
+            "--body-file",
+            "body.md",
+        ])
+        .is_err());
+        assert!(Cli::try_parse_from([
+            "aida",
+            "comment",
+            "add",
+            "TASK-1",
+            "--content",
+            "legacy",
+            "--stdin",
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn interactive_conflicts_with_every_noninteractive_source() {
+        for tail in [
+            vec!["positional"],
+            vec!["--content", "legacy"],
+            vec!["--body-file", "body.md"],
+            vec!["--stdin"],
+        ] {
+            let mut args = vec!["aida", "comment", "add", "TASK-1"];
+            args.extend(tail);
+            args.push("--interactive");
+            assert!(Cli::try_parse_from(args).is_err());
+        }
+
+        for tail in [
+            vec!["--content", "replacement"],
+            vec!["--body-file", "body.md"],
+            vec!["--stdin"],
+        ] {
+            let mut args = vec![
+                "aida",
+                "comment",
+                "edit",
+                "--req-id",
+                "TASK-1",
+                "--comment-id",
+                "abc",
+            ];
+            args.extend(tail);
+            args.push("--interactive");
+            assert!(Cli::try_parse_from(args).is_err());
+        }
+    }
 }
 
 /// GitLab integration commands
@@ -5582,18 +5713,31 @@ pub enum QueueCommand {
         // trace:TASK-1003, SPIKE-70 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long, requires = "autonomous")]
         single_branch: bool,
-        /// Coupled-sequential drain: with `--batch NAME --auto-complete`, drive
-        /// the batch members ONE AT A TIME, in pickup order — each member forks
-        /// off the freshly-pulled main, runs its full lifecycle, and merges as
-        /// its OWN PR before the next member starts. For coupled-but-
-        /// independently-shippable work that must land in order (each increment
-        /// stays a reviewable PR to main). A member failure SHELVES that member
-        /// and the drain continues with the rest — contrast `--single-branch`,
-        /// which accumulates every member on one branch and HALTS on a failure.
-        /// This names + guards the existing batch drain, which is already
-        /// one-member-at-a-time; concurrency is pinned to 1. Requires `--batch`
-        /// or `--batches`.
+        /// Coupled-ordered drain: with `--batch NAME --auto-complete`, drive the
+        /// batch members in pickup order — each member forks off the
+        /// freshly-pulled main, runs its full lifecycle, and merges as its OWN
+        /// PR. For coupled-but-independently-shippable work that must land in
+        /// order (each increment stays a reviewable PR to main). A member
+        /// failure SHELVES that member and the drain continues with the rest —
+        /// contrast `--single-branch`, which accumulates every member on one
+        /// branch and HALTS on a failure. This names + guards that ordered,
+        /// per-member-PR SHAPE; it does not itself pin concurrency. A
+        /// single-batch drain (`--batch NAME`) runs strictly one member at a
+        /// time at the default `[drain] pipeline_depth = 1`; raise that (max 3)
+        /// and the pipelined scheduler starts a later member's implementer/CI
+        /// leg while an earlier member waits, with merges still serialized one
+        /// at a time. A `--batches A,B,C` chain ignores the depth entirely: the
+        /// batches run in turn, and each batch's members one at a time. Requires
+        /// `--batch` or `--batches`.
         // trace:TASK-1005, SPIKE-70 | ai:claude — plain `//` keeps the marker out of `--help`.
+        // trace:TASK-185 | ai:claude — STORY-1091 made `[drain] pipeline_depth`
+        // live for the SINGLE-batch drain, so the old "concurrency is pinned to
+        // 1" sentence advertised a landed feature as absent. The depth is scoped
+        // to that path: `handle_auto_complete_batch` calls
+        // `drain_batch_pipelined_with_caps`, but `handle_auto_complete_batches`
+        // goes through `drain_batch_chain_with_caps`, which is typed on the
+        // non-pipelined `BatchDriver` and always calls `drain_batch_with_caps` —
+        // so an UNQUALIFIED depth claim would be false for `--batches`.
         #[clap(long, requires = "autonomous", conflicts_with = "single_branch")]
         sequential: bool,
         /// Preview without acting. For a single spec: print the resolved
@@ -8296,6 +8440,14 @@ pub enum Command {
         // trace:TASK-527 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         tags: Option<String>,
+
+        /// Show only machine-filed auto-complete failure drafts. Plain
+        /// `aida list --status draft` shows human-filed drafts so advisor
+        /// grooming is not dominated by orchestrator records. Machine drafts
+        /// remain batchable with `--machine-drafts --short`.
+        // trace:BUG-1498 | ai:codex
+        #[clap(long, requires = "status")]
+        machine_drafts: bool,
 
         /// Bypass the active role's scope filters for this command.
         // trace:TASK-1-021 | ai:claude
@@ -13511,6 +13663,34 @@ mod tests {
         }
     }
 
+    // trace:BUG-1498 | ai:codex
+    #[test]
+    fn bug_1498_list_machine_drafts_flag_requires_explicit_draft_status() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "list",
+            "--status",
+            "draft",
+            "--machine-drafts",
+            "--short",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::List {
+                status,
+                machine_drafts,
+                short,
+                ..
+            } => {
+                assert_eq!(status.as_deref(), Some("draft"));
+                assert!(machine_drafts);
+                assert!(short);
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
+        assert!(Cli::try_parse_from(["aida", "list", "--machine-drafts"]).is_err());
+    }
+
     // trace:STORY-662 — the `--user <name>` flag parses, and the positional
     // `me` / `user:<name>` tokens land in `shortcut` (peeled into the user
     // filter at runtime, not at the clap layer).
@@ -13807,11 +13987,62 @@ mod tests {
         );
     }
 
-    // trace:TASK-1005 — the sequential mode pins concurrency to 1; the named
-    // invariant the dispatch relies on.
+    // TASK-185: `--sequential` governs ORDER + per-member-PR shape, not
+    // concurrency. The one-member-at-a-time property the flag's help text
+    // promises comes from the drain's DEFAULT pipeline depth, so that is the
+    // invariant worth pinning — the old `SEQUENTIAL_DRAIN_CONCURRENCY` const
+    // asserted an engine property STORY-1091 made false.
+    // trace:TASK-1005 trace:TASK-185 | ai:claude
     #[test]
-    fn sequential_pins_concurrency_to_one() {
-        assert_eq!(crate::SEQUENTIAL_DRAIN_CONCURRENCY, 1);
+    fn sequential_drain_is_one_at_a_time_via_default_pipeline_depth() {
+        assert_eq!(crate::drain_state::default_pipeline_depth(), 1);
+    }
+
+    // TASK-185: the `--sequential` help text must not re-assert that
+    // concurrency is pinned to 1 — STORY-1091 made `[drain] pipeline_depth`
+    // live for the single-batch drain, so that sentence advertised a landed
+    // feature as absent. This guard FORBIDS the old falsehood; it deliberately
+    // does NOT mandate that the help name the knob at all, because an
+    // unqualified depth claim is itself false: `--batches` chains run through
+    // `drain_batch_chain_with_caps`, which is typed on the non-pipelined
+    // `BatchDriver` and always calls `drain_batch_with_caps`, so the depth is
+    // inert there. Naming the knob is therefore optional — but if the help
+    // names it, the claim has to carry its scope.
+    // trace:TASK-185 | ai:claude
+    #[test]
+    fn sequential_help_does_not_claim_concurrency_is_pinned() {
+        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let help = find_subcommand_help(&mut cmd, &["queue", "work"]);
+        // clap wraps long help at the terminal width, so flatten runs of
+        // whitespace before matching any multi-word phrase — a line break in
+        // the middle of a claim must not let it slip past this guard.
+        let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            !flat.contains("pinned to 1"),
+            "`aida queue work --help` still claims concurrency is pinned to 1; got:\n{help}"
+        );
+        if flat.contains("pipeline_depth") {
+            assert!(
+                flat.contains("chain ignores the depth"),
+                "`aida queue work --help` names `[drain] pipeline_depth` without scoping it \
+                 away from `--batches` chains, which are serial at any depth; got:\n{help}"
+            );
+        }
+    }
+
+    /// Render the long help for a nested subcommand path (e.g. `queue work`).
+    // trace:TASK-185 | ai:claude
+    fn find_subcommand_help(cmd: &mut clap::Command, path: &[&str]) -> String {
+        let mut cur = cmd.clone();
+        for name in path {
+            let next = cur
+                .get_subcommands()
+                .find(|s| s.get_name() == *name)
+                .unwrap_or_else(|| panic!("subcommand `{name}` not found"))
+                .clone();
+            cur = next;
+        }
+        cur.render_long_help().to_string()
     }
 
     // trace:STORY-1028 | ai:codex

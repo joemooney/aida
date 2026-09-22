@@ -10,6 +10,28 @@ use serde::Serialize;
 
 use crate::*;
 
+// trace:TASK-190 | ai:codex
+fn resolve_comment_body(
+    content: Option<String>,
+    body_file: Option<&std::path::Path>,
+    stdin: bool,
+) -> Result<String> {
+    if let Some(path) = body_file {
+        let body = std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read comment body from {}", path.display()))?;
+        anyhow::ensure!(!body.trim().is_empty(), "comment body file is empty");
+        return Ok(body);
+    }
+    if stdin {
+        let mut body = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut body)
+            .context("failed to read comment body from stdin")?;
+        anyhow::ensure!(!body.trim().is_empty(), "comment body from stdin is empty");
+        return Ok(body);
+    }
+    Ok(content.unwrap_or_default())
+}
+
 const PROXY_APPROVAL_MARKER: &str = "[aida:proxy-approval]";
 
 fn terminal_list_width() -> Option<usize> {
@@ -783,7 +805,17 @@ pub(crate) fn handle_git_backend_command(
     if notice_fast_fail {
         aida_core::db::set_fast_fail_cache(true);
     }
-    let backend = match aida_core::CachedGitBackend::with_inner(inner, &cache_path) {
+    let backend_result = if notice_fast_fail {
+        // BUG-1569: even a non-contended normal open may refresh a stale cache
+        // by scanning every canonical object before dispatch reaches the
+        // targeted notice lookup. The advisory path instead consumes the last
+        // committed snapshot and validates cache-located records with targeted
+        // authoritative reads.
+        aida_core::CachedGitBackend::with_inner_cache_snapshot(inner, &cache_path)
+    } else {
+        aida_core::CachedGitBackend::with_inner(inner, &cache_path)
+    };
+    let backend = match backend_result {
         Ok(backend) => backend,
         Err(_) if notice_fast_fail => {
             // Cache momentarily locked — the advisory notice degrades to empty.
@@ -794,7 +826,7 @@ pub(crate) fn handle_git_backend_command(
     if let Some(project_root) = store_path.parent() {
         warn_if_periodic_auto_push(project_root);
     }
-    if !matches!(command, Command::Report { recheck: true, .. }) {
+    if !notice_fast_fail && !matches!(command, Command::Report { recheck: true, .. }) {
         let storage = Storage::new(store_path);
         report_cmd::maybe_print_upstream_recheck_notice(&storage);
     }
@@ -1371,6 +1403,7 @@ pub(crate) fn handle_git_backend_command(
             priority,
             feature,
             tags,
+            machine_drafts,
             no_scope,
             show_origin,
             include_meta,
@@ -1491,6 +1524,16 @@ pub(crate) fn handle_git_backend_command(
                 (Some(s), None) | (None, Some(s)) => Some(s.to_string()),
                 (None, None) => None,
             };
+            if *machine_drafts
+                && !raw_status
+                    .as_deref()
+                    .is_some_and(crate::status_spec_is_exact_draft)
+            {
+                anyhow::bail!(
+                    "`--machine-drafts` requires the exact draft view: \
+                     `aida list --status draft --machine-drafts`"
+                );
+            }
             // BUG-788: capture whether this is the explicit `open` shortcut
             // BEFORE `raw_status` is expanded into the canonical status set —
             // once expanded, `open` is indistinguishable from a hand-typed
@@ -1498,6 +1541,9 @@ pub(crate) fn handle_git_backend_command(
             // bare-list default lens's accepted-decision exclusion (BUG-781), so
             // `aida list` and `aida list open` agree. trace:BUG-788 | ai:claude
             let explicit_open_alias = crate::status_spec_is_open_alias(raw_status.as_deref());
+            let exact_draft_view = raw_status
+                .as_deref()
+                .is_some_and(crate::status_spec_is_exact_draft);
             let status: Option<String> = match raw_status {
                 Some(spec) => {
                     let expanded = aida_core::RequirementStatus::expand_filter_spec(&spec)
@@ -1656,7 +1702,7 @@ pub(crate) fn handle_git_backend_command(
                 // CLI accepted --priority but it never reached the query.
                 priority: priority.clone(),
                 feature: feature.clone(),
-                tags: effective_tags,
+                tags: effective_tags.clone(),
                 archive,
                 defer,
                 sort: sort_order,
@@ -1783,6 +1829,22 @@ pub(crate) fn handle_git_backend_command(
             if !*all && !user_asked_for_standing_type {
                 reqs.retain(|r| !is_standing_artifact_type(&r.req_type));
             }
+
+            // BUG-1498: draft grooming is human-first. Auto-complete failure
+            // records retain their provenance and remain directly reachable
+            // (and batchable) through --machine-drafts or an explicit
+            // --tags auto-drafted filter. Older records that predate the tag
+            // are recognized by their stable description preamble. Apply
+            // after parent/focus/type lenses so the hidden count is local to
+            // exactly the view the advisor requested.
+            let explicitly_asked_for_machine_tag =
+                effective_tags.iter().any(|tag| tag == "auto-drafted");
+            let machine_drafts_hidden = crate::apply_machine_draft_lens(
+                &mut reqs,
+                exact_draft_view,
+                *machine_drafts,
+                explicitly_asked_for_machine_tag,
+            );
 
             // BUG-781: a decision spec (an ADR) sitting at `Approved` is
             // ACCEPTED — that class's TERMINAL state — so it belongs with the
@@ -2004,6 +2066,15 @@ pub(crate) fn handle_git_backend_command(
                     accepted_decisions_hidden,
                 ) {
                     println!("{}", line.dimmed());
+                }
+                if machine_drafts_hidden > 0 {
+                    println!(
+                        "{}",
+                        format!(
+                            "  ({machine_drafts_hidden} machine-filed drafts hidden — pass --machine-drafts to groom them)"
+                        )
+                        .dimmed()
+                    );
                 }
             };
 
@@ -2240,6 +2311,11 @@ pub(crate) fn handle_git_backend_command(
                 if accepted_decisions_hidden > 0 {
                     println!(
                         "note: {accepted_decisions_hidden} accepted decisions hidden (terminal) — `aida list --type decision`"
+                    );
+                }
+                if machine_drafts_hidden > 0 {
+                    println!(
+                        "note: {machine_drafts_hidden} machine-filed drafts hidden — `aida list --status draft --machine-drafts`"
                     );
                 }
                 // TASK-974 (AXI #9): trailing next-step block — drill into a row
@@ -5782,6 +5858,8 @@ pub(crate) fn handle_git_backend_command(
             id: req_id,
             content,
             content_positional,
+            body_file,
+            stdin,
             author,
             ..
         }) => {
@@ -5795,10 +5873,11 @@ pub(crate) fn handle_git_backend_command(
             // `content_positional`. Earlier the git-backend dispatch only
             // looked at `--content`, so positional invocations silently
             // wrote empty comments. trace:BUG-28 | ai:claude
-            let body = content
-                .clone()
-                .or_else(|| content_positional.clone())
-                .unwrap_or_default();
+            let body = resolve_comment_body(
+                content.clone().or_else(|| content_positional.clone()),
+                body_file.as_deref(),
+                *stdin,
+            )?;
             if body.trim().is_empty() {
                 anyhow::bail!(
                     "comment body required: pass it positionally `aida comment add {} \"...\"` \
@@ -5882,6 +5961,8 @@ pub(crate) fn handle_git_backend_command(
             req_id,
             comment_id,
             content,
+            body_file,
+            stdin,
             interactive,
         }) => {
             // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
@@ -5891,18 +5972,19 @@ pub(crate) fn handle_git_backend_command(
             record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
             let comment_uuid = resolve_comment_uuid(&req, comment_id)?;
 
-            let new_content = if *interactive || content.is_none() {
-                let existing = req
-                    .find_comment_mut(&comment_uuid)
-                    .map(|c| c.content.clone())
-                    .unwrap_or_default();
-                inquire::Editor::new("Edit comment")
-                    .with_predefined_text(&existing)
-                    .prompt()
-                    .context("Editor cancelled")?
-            } else {
-                content.clone().unwrap()
-            };
+            let new_content =
+                if *interactive || (content.is_none() && body_file.is_none() && !stdin) {
+                    let existing = req
+                        .find_comment_mut(&comment_uuid)
+                        .map(|c| c.content.clone())
+                        .unwrap_or_default();
+                    inquire::Editor::new("Edit comment")
+                        .with_predefined_text(&existing)
+                        .prompt()
+                        .context("Editor cancelled")?
+                } else {
+                    resolve_comment_body(content.clone(), body_file.as_deref(), *stdin)?
+                };
 
             let comment = req
                 .find_comment_mut(&comment_uuid)

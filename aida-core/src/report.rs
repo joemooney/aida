@@ -419,7 +419,10 @@ impl ReportGenerator {
             if full_path.exists() {
                 // Read actual content
                 if let Ok(actual_content) = fs::read_to_string(&full_path) {
-                    if actual_content.trim() == artifact.content.trim() {
+                    if crate::scaffolding::generated_text_matches(
+                        &actual_content,
+                        &artifact.content,
+                    ) {
                         status.matching.push(artifact.path.clone());
                     } else {
                         let expected_lines = artifact.content.lines().count();
@@ -956,7 +959,9 @@ fn file_matches_for_status(path: &Path, actual: &str, expected: &str) -> bool {
         return crate::scaffolding::aida_md_matches(actual, expected);
     }
     match category {
-        crate::scaffolding::FileCategory::Template => actual.trim() == expected.trim(),
+        crate::scaffolding::FileCategory::Template => {
+            crate::scaffolding::generated_text_matches(actual, expected)
+        }
         crate::scaffolding::FileCategory::Seed => seed_matches(path, actual, expected),
         crate::scaffolding::FileCategory::ManagedMerge => {
             managed_merge_matches(path, actual, expected)
@@ -975,15 +980,15 @@ fn managed_merge_matches(path: &Path, actual: &str, expected: &str) -> bool {
     use serde_json::Value;
     let actual_v: Value = match serde_json::from_str(actual) {
         Ok(v) => v,
-        Err(_) => return actual.trim() == expected.trim(),
+        Err(_) => return crate::scaffolding::generated_text_matches(actual, expected),
     };
     let expected_v: Value = match serde_json::from_str(expected) {
         Ok(v) => v,
-        Err(_) => return actual.trim() == expected.trim(),
+        Err(_) => return crate::scaffolding::generated_text_matches(actual, expected),
     };
     let slots = crate::scaffolding::slots_for_file(path);
     if slots.is_empty() {
-        return actual.trim() == expected.trim();
+        return crate::scaffolding::generated_text_matches(actual, expected);
     }
     slots
         .iter()
@@ -1009,7 +1014,7 @@ fn seed_matches(path: &Path, actual: &str, expected: &str) -> bool {
                 extract_memory_reflex_block(expected),
             ) {
                 (Some(actual_block), Some(expected_block)) => {
-                    actual_block.trim() == expected_block.trim()
+                    crate::scaffolding::generated_text_matches(actual_block, expected_block)
                 }
                 _ => true,
             }
@@ -1020,7 +1025,9 @@ fn seed_matches(path: &Path, actual: &str, expected: &str) -> bool {
             // user opted out — we treat the file as fully theirs.
             match extract_aida_block(actual) {
                 Some(actual_block) => match extract_aida_block(expected) {
-                    Some(expected_block) => actual_block.trim() == expected_block.trim(),
+                    Some(expected_block) => {
+                        crate::scaffolding::generated_text_matches(actual_block, expected_block)
+                    }
                     // No expected block but actual has markers — shouldn't
                     // normally happen, but lean towards "matching" rather
                     // than flagging drift on a file that's no longer
@@ -1030,7 +1037,7 @@ fn seed_matches(path: &Path, actual: &str, expected: &str) -> bool {
                 None => true, // user opted out
             }
         }
-        _ => actual.trim() == expected.trim(),
+        _ => crate::scaffolding::generated_text_matches(actual, expected),
     }
 }
 
@@ -1087,5 +1094,30 @@ mod tests {
         let stats = TraceabilityStats::default();
         assert_eq!(stats.total_links, 0);
         assert_eq!(stats.requirements_with_links, 0);
+    }
+
+    #[test]
+    fn scaffold_status_matchers_ignore_crlf_but_keep_real_drift() {
+        // Covers the whole-template and marker-owned paths that previously
+        // compared generated text with raw trim equality. trace:BUG-1555 | ai:codex
+        assert!(file_matches_for_status(
+            Path::new(".claude/commands/example.md"),
+            "first\r\nsecond\r\n",
+            "first\nsecond\n",
+        ));
+        assert!(!file_matches_for_status(
+            Path::new(".claude/commands/example.md"),
+            "first\r\nchanged\r\n",
+            "first\nsecond\n",
+        ));
+
+        let actual =
+            "prefix\r\n<!-- AIDA-AUTOGEN-BEGIN -->\r\nowned\r\n<!-- AIDA-AUTOGEN-END -->\r\n";
+        let expected = "<!-- AIDA-AUTOGEN-BEGIN -->\nowned\n<!-- AIDA-AUTOGEN-END -->\n";
+        assert!(file_matches_for_status(
+            Path::new("AGENTS.md"),
+            actual,
+            expected,
+        ));
     }
 }

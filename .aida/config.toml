@@ -126,5 +126,5 @@ enabled = true
 name = "performance-guard-route"
 seats = ["advisor"]
 on = ["CronJobFailed"]
-prompt = "A performance budget was breached. Read the ledger entry at schedule/performance-guard.yaml, confirm the budget in force at the time of the trip, and decide: real regression, or a budget that needs changing deliberately."
+prompt = "A performance budget was breached. Use the routed trip evidence and its matching entry at .aida-store/schedule/performance-guard.yaml to confirm the budget in force, then decide: real regression, or a budget that needs changing deliberately."
 enabled = true

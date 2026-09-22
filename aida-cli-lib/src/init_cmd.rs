@@ -1055,7 +1055,7 @@ fn write_memory_lane_scaffolding(
     if agents_path.exists() && !force {
         let existing = std::fs::read_to_string(&agents_path)?;
         let (merged, _) = merge_agents_md_aida_block(&existing, &generated_agents);
-        if merged == existing {
+        if aida_core::scaffolding::generated_text_matches(&merged, &existing) {
             skipped += 1;
         } else {
             std::fs::write(&agents_path, merged)?;
@@ -1464,7 +1464,7 @@ fn complete_init_scaffolding(
                 }
                 let existing = std::fs::read_to_string(&full_path)?;
                 let (merged, action) = merge_agents_md_aida_block(&existing, &artifact.content);
-                if merged == existing {
+                if aida_core::scaffolding::generated_text_matches(&merged, &existing) {
                     skipped_count += 1;
                     continue;
                 }
@@ -2251,7 +2251,7 @@ enabled = true
 # name = "performance-guard-route"
 # seats = ["advisor"]
 # on = ["CronJobFailed"]
-# prompt = "A performance budget was breached. Read the ledger entry at schedule/performance-guard.yaml, confirm the budget in force at the time of the trip, and decide: real regression, or a budget that needs changing deliberately."
+# prompt = "A performance budget was breached. Use the routed trip evidence and its matching entry at .aida-store/schedule/performance-guard.yaml to confirm the budget in force, then decide: real regression, or a budget that needs changing deliberately."
 # enabled = false
 
 # [[schedule.jobs]]

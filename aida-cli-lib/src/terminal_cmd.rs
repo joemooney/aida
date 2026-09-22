@@ -599,7 +599,7 @@ fn install_terminator_plugin() -> Result<()> {
     let dir = home.join(".config").join("terminator").join("plugins");
     std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
     let dest = dir.join("aida_terminator.py");
-    let changed = write_if_changed(&dest, body.as_bytes())?;
+    let changed = write_text_if_changed(&dest, body)?;
     if changed {
         println!(
             "{} installed Terminator plugin at {}",
@@ -618,14 +618,17 @@ fn install_terminator_plugin() -> Result<()> {
     Ok(())
 }
 
-fn write_if_changed(path: &Path, bytes: &[u8]) -> Result<bool> {
-    match std::fs::read(path) {
-        Ok(existing) if existing == bytes => return Ok(false),
+fn write_text_if_changed(path: &Path, body: &str) -> Result<bool> {
+    match std::fs::read_to_string(path) {
+        Ok(existing) if aida_core::scaffolding::generated_text_matches(&existing, body) => {
+            return Ok(false);
+        }
         Ok(_) => {}
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => return Err(err).with_context(|| format!("reading {}", path.display())),
     }
-    aida_core::write_atomic(path, bytes).with_context(|| format!("writing {}", path.display()))?;
+    aida_core::write_atomic(path, body.as_bytes())
+        .with_context(|| format!("writing {}", path.display()))?;
     Ok(true)
 }
 
@@ -741,5 +744,21 @@ mod tests {
         let token_args = terminator_send_token_command("uuid-1", "hi", "secret").1;
         assert_eq!(token_args[5], "SendToken");
         assert_eq!(token_args[6..], ["s", "uuid-1", "s", "hi", "s", "secret"]);
+    }
+
+    #[test]
+    fn terminator_plugin_ignores_crlf_but_repairs_real_drift() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plugin.py");
+        let expected = "def activate():\n    return True\n";
+        let crlf = expected.replace('\n', "\r\n");
+        std::fs::write(&path, &crlf).unwrap();
+
+        assert!(!write_text_if_changed(&path, expected).unwrap());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), crlf);
+
+        std::fs::write(&path, "def activate():\r\n    return False\r\n").unwrap();
+        assert!(write_text_if_changed(&path, expected).unwrap());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), expected);
     }
 }

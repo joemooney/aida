@@ -751,3 +751,180 @@ fn a_second_reviewer_at_the_same_head_does_not_destroy_the_first_verdict() {
         "two reviewers at one head must not manufacture survivors"
     );
 }
+
+// ── BUG-1516 criteria 2 + 3: normalize + backfill abbreviated shas ─────────
+
+fn git(repo: &std::path::Path, args: &[&str]) -> std::process::Output {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .env("GIT_AUTHOR_NAME", "t")
+        .env("GIT_AUTHOR_EMAIL", "t@t")
+        .env("GIT_COMMITTER_NAME", "t")
+        .env("GIT_COMMITTER_EMAIL", "t@t")
+        .output()
+        .expect("git runs")
+}
+
+fn git_ok(repo: &std::path::Path, args: &[&str]) {
+    let out = git(repo, args);
+    assert!(
+        out.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// THE bug (BUG-1516 criterion 2): a caller-supplied abbreviated sha used to
+/// pass straight through to disk unchanged. `record_verdict` must now resolve
+/// it to the full 40-character sha at the write boundary, when this repo can.
+// trace:BUG-1516 | ai:claude
+#[test]
+fn record_verdict_expands_a_resolvable_abbreviated_sha_to_full_length() {
+    let tmp = TempDir::new().unwrap();
+    let repo = tmp.path();
+    git_ok(repo, &["init", "--initial-branch=main", "--quiet"]);
+    git_ok(repo, &["commit", "--allow-empty", "-m", "root", "--quiet"]);
+    let full = String::from_utf8_lossy(&git(repo, &["rev-parse", "HEAD"]).stdout)
+        .trim()
+        .to_string();
+    let short = &full[..10];
+    assert_ne!(
+        short.len(),
+        40,
+        "the test input must actually be abbreviated"
+    );
+
+    record_verdict(
+        repo,
+        "TASK-20",
+        Some("approved"),
+        Some(short),
+        Some("main"),
+        None,
+        &[],
+        "test",
+    )
+    .unwrap();
+
+    let v = read_recorded_verdict(repo, "TASK-20").unwrap();
+    assert_eq!(
+        v.reviewed_sha.as_deref(),
+        Some(full.as_str()),
+        "a resolvable abbreviated sha must be expanded to the full 40 characters at write time"
+    );
+}
+
+/// A sha this repo cannot resolve (never seen the commit) must be kept
+/// verbatim rather than dropped or replaced with something invented —
+/// "the write must keep the original string," per the spec's own caveat.
+// trace:BUG-1516 | ai:claude
+#[test]
+fn record_verdict_keeps_an_unresolvable_sha_verbatim() {
+    let tmp = TempDir::new().unwrap();
+    let repo = tmp.path();
+    git_ok(repo, &["init", "--initial-branch=main", "--quiet"]);
+    git_ok(repo, &["commit", "--allow-empty", "-m", "root", "--quiet"]);
+
+    record_verdict(
+        repo,
+        "TASK-21",
+        Some("approved"),
+        Some("deadbee0"),
+        Some("main"),
+        None,
+        &[],
+        "test",
+    )
+    .unwrap();
+
+    let v = read_recorded_verdict(repo, "TASK-21").unwrap();
+    assert_eq!(
+        v.reviewed_sha.as_deref(),
+        Some("deadbee0"),
+        "an unresolvable sha must be preserved, not dropped or invented"
+    );
+}
+
+/// BUG-1516 criterion 3: the one-time repair sweep expands every resolvable
+/// abbreviated `reviewed_sha` on disk and marks the rest unresolvable —
+/// distinctly, never silently, and never by inventing a value.
+// trace:BUG-1516 | ai:claude
+#[test]
+fn backfill_resolves_reachable_shas_and_marks_the_rest_unresolvable() {
+    let tmp = TempDir::new().unwrap();
+    let repo = tmp.path();
+    git_ok(repo, &["init", "--initial-branch=main", "--quiet"]);
+    git_ok(repo, &["commit", "--allow-empty", "-m", "root", "--quiet"]);
+    let full = String::from_utf8_lossy(&git(repo, &["rev-parse", "HEAD"]).stdout)
+        .trim()
+        .to_string();
+    let short = full[..9].to_string();
+
+    let vd = repo.join(".aida").join("review-verdicts");
+    std::fs::create_dir_all(&vd).unwrap();
+    std::fs::write(
+        vd.join("PR-1.json"),
+        format!(r#"{{"verdict":"approved","reviewed_sha":"{short}"}}"#),
+    )
+    .unwrap();
+    std::fs::write(
+        vd.join("PR-2.json"),
+        r#"{"verdict":"approved","reviewed_sha":"0000000dead"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        vd.join("PR-3.json"),
+        format!(r#"{{"verdict":"approved","reviewed_sha":"{full}"}}"#),
+    )
+    .unwrap();
+    std::fs::write(
+        vd.join("PR-4.json"),
+        r#"{"verdict":"request-changes","summary":"no sha here"}"#,
+    )
+    .unwrap();
+
+    let report = backfill_abbreviated_shas(repo, false).unwrap();
+    assert_eq!(report.resolved, vec!["PR-1.json".to_string()]);
+    assert_eq!(report.unresolvable, vec!["PR-2.json".to_string()]);
+    assert_eq!(report.already_full, 1);
+    assert_eq!(report.skipped_no_sha, 1);
+
+    let resolved = read_recorded_verdict(repo, "PR-1").unwrap();
+    assert_eq!(resolved.reviewed_sha.as_deref(), Some(full.as_str()));
+
+    let unresolvable_body = std::fs::read_to_string(vd.join("PR-2.json")).unwrap();
+    let unresolvable: serde_json::Value = serde_json::from_str(&unresolvable_body).unwrap();
+    assert_eq!(unresolvable["reviewed_sha"], "0000000dead");
+    assert_eq!(unresolvable["reviewed_sha_unresolvable"], true);
+}
+
+/// `--dry-run` must compute the same report without writing anything — the
+/// operator can preview a sweep over the real corpus before committing to it.
+// trace:BUG-1516 | ai:claude
+#[test]
+fn backfill_dry_run_reports_without_writing() {
+    let tmp = TempDir::new().unwrap();
+    let repo = tmp.path();
+    git_ok(repo, &["init", "--initial-branch=main", "--quiet"]);
+    git_ok(repo, &["commit", "--allow-empty", "-m", "root", "--quiet"]);
+    let full = String::from_utf8_lossy(&git(repo, &["rev-parse", "HEAD"]).stdout)
+        .trim()
+        .to_string();
+    let short = full[..9].to_string();
+
+    let vd = repo.join(".aida").join("review-verdicts");
+    std::fs::create_dir_all(&vd).unwrap();
+    let original = format!(r#"{{"verdict":"approved","reviewed_sha":"{short}"}}"#);
+    std::fs::write(vd.join("PR-1.json"), &original).unwrap();
+
+    let report = backfill_abbreviated_shas(repo, true).unwrap();
+    assert_eq!(report.resolved, vec!["PR-1.json".to_string()]);
+
+    let untouched = std::fs::read_to_string(vd.join("PR-1.json")).unwrap();
+    assert_eq!(
+        untouched, original,
+        "dry-run must report what it would do without changing the file"
+    );
+}

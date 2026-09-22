@@ -1,4 +1,4 @@
-use super::read_verdict_file;
+use super::{read_verdict_file, read_verdict_file_for_head};
 use crate::auto_complete::{ReviewerOutcome, Verdict};
 
 /// Write `json` to a temp verdict file and read it back.
@@ -49,4 +49,49 @@ fn missing_verdict_file_is_a_no_verdict_failure() {
     let dir = tempfile::tempdir().unwrap();
     let err = read_verdict_file(&dir.path().join("absent.json")).unwrap_err();
     assert_eq!(err.kind, crate::auto_complete::FailureKind::NoVerdict);
+}
+
+// These exercise the parser used by the live drain phase, not the separate
+// queue-done verdict gate. Before BUG-1466/BUG-1538 they both returned an
+// Approved outcome solely from the verdict spelling.
+// trace:BUG-1466 | ai:codex
+// trace:BUG-1538 | ai:codex
+#[test]
+fn live_phase3_refuses_approved_at_a_stale_sha() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("PR-1.json");
+    std::fs::write(
+        &path,
+        r#"{"verdict":"Approved","reviewed_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
+    )
+    .unwrap();
+    let err = read_verdict_file_for_head(&path, Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
+        .unwrap_err();
+    assert!(err.reason.contains("stale"), "{}", err.reason);
+}
+
+#[test]
+fn live_phase3_refuses_sha_less_approval() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("PR-1.json");
+    std::fs::write(&path, r#"{"verdict":"Approved"}"#).unwrap();
+    let err = read_verdict_file_for_head(&path, Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
+        .unwrap_err();
+    assert!(err.reason.contains("UNPROVEN"), "{}", err.reason);
+}
+
+#[test]
+fn live_phase3_accepts_same_commit_with_safe_abbreviation() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("PR-1.json");
+    std::fs::write(
+        &path,
+        r#"{"verdict":"Approved","reviewed_sha":"abcdef0123"}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        read_verdict_file_for_head(&path, Some("abcdef0123456789abcdef0123456789abcdef01"))
+            .unwrap(),
+        ReviewerOutcome::Verdict(Verdict::Approved)
+    );
 }

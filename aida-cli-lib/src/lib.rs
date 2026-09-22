@@ -675,12 +675,14 @@ const ASCIINEMA_SLUG_MAX_CHARS: usize = 80;
 // behaviour). trace:EPIC-28 | ai:claude
 const DEFAULT_MAX_FAILURES: usize = 5;
 
-// SPIKE-70: `--sequential` drives a batch ONE member at a time — concurrency is
-// pinned to 1. The existing batch drain (`auto_complete::drain_batch`) is already
-// inherently one-member-at-a-time (it merges + pulls before advancing the head),
-// so `--sequential` names + guards that invariant rather than introducing a
-// parallel knob. trace:TASK-1005 | ai:claude
-pub(crate) const SEQUENTIAL_DRAIN_CONCURRENCY: usize = 1;
+// SPIKE-70: `--sequential` names + guards the ordered, per-member-PR SHAPE of the
+// batch drain (`auto_complete::drain_batch*`) rather than introducing a parallel
+// knob. TASK-185: it does NOT pin concurrency — STORY-1091 made the batch drain
+// honour `[drain] pipeline_depth`, so the one-member-at-a-time property comes from
+// `drain_state::default_pipeline_depth()` (1), not from this flag. The old
+// `SEQUENTIAL_DRAIN_CONCURRENCY` const asserted the pinned-to-1 invariant and was
+// removed with the claim; read the default depth instead.
+// trace:TASK-1005 trace:TASK-185 | ai:claude
 
 // Requester intake must remain a standalone Draft. Both the CLI and MCP gates
 // consume this list so relationship and grooming-field policy cannot drift.
@@ -11306,7 +11308,7 @@ fn scaffold_memory_pack_into(
             MemoryDisposition::UserOwned => report.kept_user += 1,
             MemoryDisposition::Edited => report.kept_edited += 1,
             MemoryDisposition::Pristine => {
-                if existing == scaffolded {
+                if aida_core::scaffolding::generated_text_matches(&existing, &scaffolded) {
                     report.unchanged += 1;
                 } else {
                     std::fs::write(&dest, &scaffolded)?;
@@ -11501,7 +11503,7 @@ fn compute_memory_drift_into(mem_dir: &std::path::Path) -> Result<MemoryDriftRep
                 MemoryDisposition::UserOwned => MemoryDriftState::UserOwned,
                 MemoryDisposition::Edited => MemoryDriftState::Edited,
                 MemoryDisposition::Pristine => {
-                    if normalize_line_endings(&existing) == scaffolded {
+                    if aida_core::scaffolding::generated_text_matches(&existing, &scaffolded) {
                         MemoryDriftState::UpToDate
                     } else {
                         MemoryDriftState::Stale
@@ -19423,11 +19425,15 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
 
 /// Expanded mailbox rows retain the full body, unlike the compact core
 /// `subject_line` projection, but share its rule that blank subjects are absent.
-// trace:BUG-1465 | ai:codex
+// trace:BUG-1465 trace:BUG-1575 | ai:codex
 fn mailbox_line_body(m: &aida_core::mailbox::Message) -> String {
     if m.retracted {
         "[withdrawn]".dimmed().to_string()
-    } else if let Some(subject) = m.subject.as_deref().filter(|s| !s.trim().is_empty()) {
+    } else if aida_core::mailbox::subject_is_present(&m.subject) {
+        let subject = m
+            .subject
+            .as_deref()
+            .expect("subject_is_present requires Some");
         format!("{}\n{}", subject.bold(), m.body)
     } else {
         m.body.clone()
@@ -25800,7 +25806,7 @@ fn merge_user_aida_instructions(
     };
 
     let old_region = &existing[begin..end];
-    if old_region == expected {
+    if aida_core::scaffolding::generated_text_matches(old_region, &expected) {
         return (
             existing.to_string(),
             UserAidaInstructionsReport {
@@ -25814,8 +25820,9 @@ fn merge_user_aida_instructions(
     let body_end =
         end - USER_AIDA_INSTRUCTIONS_END.len() - usize::from(existing[..end].ends_with('\n'));
     let body = &existing[body_start..body_end];
+    let normalized_body = aida_core::scaffolding::normalize_lf(body);
     let pristine = user_aida_block_checksum(header)
-        .map(|checksum| checksum == user_aida_checksum(body))
+        .map(|checksum| checksum == user_aida_checksum(&normalized_body))
         .unwrap_or(false);
     if refresh && pristine {
         let mut merged = String::new();
@@ -25856,7 +25863,10 @@ fn install_user_aida_instructions_at(
         total.written += report.written;
         total.unchanged += report.unchanged;
         total.kept_edited += report.kept_edited;
-        if existing.as_deref() == Some(merged.as_str()) {
+        if existing
+            .as_deref()
+            .is_some_and(|actual| aida_core::scaffolding::generated_text_matches(actual, &merged))
+        {
             continue;
         }
         if let Some(parent) = target.parent() {
@@ -65636,7 +65646,7 @@ fn collect_pr_facts(project_root: &std::path::Path, branch: &str) -> PrFacts {
 }
 
 fn collect_pr_facts_uncached(project_root: &std::path::Path, branch: &str) -> PrFacts {
-    // external-prose-classifier: status_context::load_pr_facts
+    // external-prose-classifier: status_context::collect_pr_facts_uncached
     // BUG-560: `gh` is GitHub-only. On a GitLab / pure-git remote it fails with
     // a raw "none of the git remotes ... point to a known GitHub host" auth
     // error that we used to surface verbatim — telling a corporate GitLab
@@ -67251,9 +67261,166 @@ fn collect_all_pr_head_branches(
     set
 }
 
+#[derive(Debug, Clone)]
+struct PrHeadEvidence {
+    state: String,
+    head_sha: Option<String>,
+}
+
 #[derive(Debug, Clone, Default)]
 struct PrHeadStateSnapshot {
-    by_branch: std::collections::HashMap<String, String>,
+    by_branch: std::collections::HashMap<String, PrHeadEvidence>,
+    open_heads_by_spec: std::collections::HashMap<String, Vec<String>>,
+    merged_heads_by_spec: std::collections::HashMap<String, Vec<String>>,
+}
+
+// BUG-1576: query each bounded candidate by head name instead of sampling the
+// first N PRs from repository history. This remains proportional to active
+// work, while finding an arbitrarily old merged PR in a repository with more
+// than 1,000 PRs. The recorded head SHA identifies the exact branch
+// incarnation reviewed and merged; `git cherry` cannot prove an N-to-1 squash.
+fn collect_pr_head_state_snapshot(
+    project_root: &std::path::Path,
+    candidate_branches: &[String],
+) -> Option<PrHeadStateSnapshot> {
+    let gh_bin = resolve_gh_binary()?;
+    let query = |args: &[&str]| -> Option<PrHeadStateSnapshot> {
+        let out = std::process::Command::new(&gh_bin)
+            .current_dir(project_root)
+            .args(args)
+            .output()
+            .ok()?;
+        out.status
+            .success()
+            .then(|| parse_pr_head_state_snapshot(&String::from_utf8_lossy(&out.stdout)))?
+    };
+    let mut snapshot = query(&[
+        "pr",
+        "list",
+        "--state",
+        "open",
+        "--limit",
+        "1000",
+        "--json",
+        "state,title,headRefName,headRefOid",
+    ])?;
+    for branch in candidate_branches {
+        if let Some(found) = query(&[
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "all",
+            "--limit",
+            "100",
+            "--json",
+            "state,title,headRefName,headRefOid",
+        ]) {
+            snapshot.merge(found);
+        }
+    }
+    Some(snapshot)
+}
+
+impl PrHeadStateSnapshot {
+    fn merge(&mut self, other: Self) {
+        for (branch, evidence) in other.by_branch {
+            let replace = self.by_branch.get(&branch).is_none_or(|old| {
+                (evidence.state == "open" && old.state != "open")
+                    || (evidence.state == "merged" && old.state == "closed")
+            });
+            if replace {
+                self.by_branch.insert(branch, evidence);
+            }
+        }
+        for (spec, mut heads) in other.open_heads_by_spec {
+            self.open_heads_by_spec
+                .entry(spec)
+                .or_default()
+                .append(&mut heads);
+        }
+        for (spec, mut heads) in other.merged_heads_by_spec {
+            self.merged_heads_by_spec
+                .entry(spec)
+                .or_default()
+                .append(&mut heads);
+        }
+        for heads in self.open_heads_by_spec.values_mut() {
+            heads.sort();
+            heads.dedup();
+        }
+        for heads in self.merged_heads_by_spec.values_mut() {
+            heads.sort();
+            heads.dedup();
+        }
+    }
+}
+
+fn parse_pr_head_state_snapshot(json: &str) -> Option<PrHeadStateSnapshot> {
+    let rows: Vec<serde_json::Value> = serde_json::from_str(json).ok()?;
+    let mut snapshot = PrHeadStateSnapshot::default();
+    for row in rows {
+        let Some(branch) = row.get("headRefName").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(state) = row.get("state").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let state = state.to_ascii_lowercase();
+        if branch.is_empty() || !matches!(state.as_str(), "open" | "closed" | "merged") {
+            continue;
+        }
+        let title = row.get("title").and_then(|v| v.as_str()).unwrap_or("");
+        let mut spec_ids = work_spec_id_from_branch(branch)
+            .into_iter()
+            .collect::<Vec<_>>();
+        spec_ids.extend(extract_spec_ids_from_commit(title));
+        spec_ids.sort();
+        spec_ids.dedup();
+        if state == "open" {
+            for spec in &spec_ids {
+                snapshot
+                    .open_heads_by_spec
+                    .entry(spec.to_ascii_uppercase())
+                    .or_default()
+                    .push(branch.to_string());
+            }
+        }
+        let head_sha = row
+            .get("headRefOid")
+            .and_then(|v| v.as_str())
+            .filter(|v| !v.is_empty())
+            .map(str::to_string);
+        if state == "merged" {
+            if let Some(sha) = &head_sha {
+                for spec in &spec_ids {
+                    snapshot
+                        .merged_heads_by_spec
+                        .entry(spec.to_ascii_uppercase())
+                        .or_default()
+                        .push(sha.clone());
+                }
+            }
+        }
+        let evidence = PrHeadEvidence { state, head_sha };
+        let replace = snapshot.by_branch.get(branch).is_none_or(|old| {
+            (evidence.state == "open" && old.state != "open")
+                || (evidence.state == "merged" && old.state == "closed")
+        });
+        if replace {
+            snapshot.by_branch.insert(branch.to_string(), evidence);
+        }
+    }
+    for heads in snapshot.open_heads_by_spec.values_mut() {
+        heads.sort();
+        heads.dedup();
+    }
+    for heads in snapshot.merged_heads_by_spec.values_mut() {
+        heads.sort();
+        heads.dedup();
+    }
+    Some(snapshot)
 }
 
 /// Roll up `statusCheckRollup` into one of `pass`, `fail`, `pending`, or
@@ -67650,16 +67817,23 @@ fn collect_unshipped_work_items(
         .collect();
     branches.sort_by(|a, b| a.0.cmp(&b.0));
 
-    // Open PRs are available from the process-cached status snapshot. Merged
-    // branches are rejected by the patch-equivalence probe below, so the old
-    // all-history PR query is unnecessary on this polling path.
-    // trace:BUG-1288 | ai:codex
-    let mut pr_head_states = PrHeadStateSnapshot::default();
-    if !no_forge {
-        for branch in collect_open_prs(project_root).by_branch.into_keys() {
-            pr_head_states.by_branch.insert(branch, "open".to_string());
-        }
-    }
+    // trace:BUG-1576 | ai:codex
+    let candidate_pr_heads: Vec<String> = branches
+        .iter()
+        .map(|(display, _, _)| {
+            display
+                .strip_prefix("origin/")
+                .unwrap_or(display)
+                .to_string()
+        })
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let pr_head_states = if no_forge {
+        None
+    } else {
+        collect_pr_head_state_snapshot(project_root, &candidate_pr_heads)
+    };
 
     let mut candidates = Vec::new();
     for (display_branch, refname, has_local) in branches {
@@ -67673,13 +67847,10 @@ fn collect_unshipped_work_items(
         ) {
             continue;
         }
-        if matches!(
-            pr_head_states
-                .by_branch
-                .get(&short_branch)
-                .map(String::as_str),
-            Some("open" | "merged")
-        ) {
+        let pr_evidence = pr_head_states
+            .as_ref()
+            .and_then(|s| s.by_branch.get(&short_branch));
+        if pr_evidence.is_some_and(|pr| pr.state == "open") {
             continue;
         }
         let Some(spec_id) = work_spec_id_from_branch(&short_branch)
@@ -67688,6 +67859,15 @@ fn collect_unshipped_work_items(
             continue;
         };
         let spec_key = spec_id.to_ascii_uppercase();
+        // A unique open PR's headRefName is authoritative for its spec. Never
+        // suggest shipping an abandoned local branch as a duplicate PR.
+        if pr_head_states
+            .as_ref()
+            .and_then(|s| s.open_heads_by_spec.get(&spec_key))
+            .is_some_and(|heads| heads.len() == 1 && heads[0] != short_branch)
+        {
+            continue;
+        }
         if live_scopes.contains(&spec_key) || live_branches.contains(&short_branch) {
             continue;
         }
@@ -67702,6 +67882,41 @@ fn collect_unshipped_work_items(
             Some(n) if n > 0 => n,
             _ => continue,
         };
+        if pr_evidence.is_some_and(|pr| {
+            if pr.state != "merged" {
+                return false;
+            }
+            let tip_matches = pr.head_sha.as_ref().is_some_and(|sha| {
+                git_output_checked(project_root, &["rev-parse", &refname])
+                    .is_ok_and(|tip| tip.trim() == sha)
+            });
+            tip_matches
+                || doctor_cmd::branch_content_fully_landed(project_root, &default_ref, &refname)
+        }) {
+            continue;
+        }
+        // A rework ref may have a different name from the PR head while
+        // pointing at that reviewed head (or one of its ancestors). This is
+        // commit-representation proof, unlike branch age: a divergent branch
+        // for the same spec is not an ancestor and remains visible.
+        let represented_by_merged_head = pr_head_states
+            .as_ref()
+            .and_then(|s| s.merged_heads_by_spec.get(&spec_key))
+            .is_some_and(|merged_heads| {
+                merged_heads.iter().any(|head| {
+                    let is_ancestor = std::process::Command::new("git")
+                        .arg("-C")
+                        .arg(project_root)
+                        .args(["merge-base", "--is-ancestor", &refname, head])
+                        .status()
+                        .is_ok_and(|status| status.success());
+                    is_ancestor
+                        || doctor_cmd::branch_content_fully_landed(project_root, head, &refname)
+                })
+            });
+        if represented_by_merged_head {
+            continue;
+        }
         if !seen.insert(display_branch.clone()) {
             continue;
         }
@@ -67726,13 +67941,15 @@ fn collect_unshipped_work_items(
             } else {
                 String::new()
             };
-            let pr_state = if no_forge {
+            let pr_state = if no_forge || pr_head_states.is_none() {
                 "unknown".to_string()
             } else {
                 match pr_head_states
+                    .as_ref()
+                    .expect("checked above")
                     .by_branch
                     .get(&c.local_branch)
-                    .map(String::as_str)
+                    .map(|pr| pr.state.as_str())
                 {
                     Some("open") => "open",
                     Some("merged") => "merged",
@@ -68126,16 +68343,20 @@ exit 1
         let root = tmp.path();
         init_repo(root);
         branch_with_commit(root, "story-1187-merged-pr", "STORY-1187");
+        let head = git_output_checked(root, &["rev-parse", "story-1187-merged-pr"]).unwrap();
 
         let fake_gh = executable_fake_gh(
             root,
-            r#"#!/usr/bin/env bash
+            &format!(
+                r#"#!/usr/bin/env bash
 if [[ "$*" == *"pr list"* ]]; then
-  printf '[{"number":1877,"title":"merged","headRefName":"story-1187-merged-pr","state":"MERGED","statusCheckRollup":[],"mergeable":"UNKNOWN","reviewDecision":""}]'
+  printf '[{{"number":1877,"title":"merged","headRefName":"story-1187-merged-pr","headRefOid":"{}","state":"MERGED","statusCheckRollup":[],"mergeable":"UNKNOWN","reviewDecision":""}}]'
   exit 0
 fi
 exit 1
 "#,
+                head.trim()
+            ),
         );
 
         let _env = crate::test_env::EnvVarsGuard::set(&[(
@@ -68232,6 +68453,181 @@ exit 1
             assert_eq!(rows[0].spec_id, "BUG-9001");
             assert_eq!(rows[0].branch, branch);
         }
+    }
+
+    // trace:BUG-1576 | ai:codex
+    #[cfg_attr(windows, ignore = "fake-gh harness requires a Unix shebang")]
+    #[test]
+    fn detector_suppresses_multi_commit_squash_merge_from_recorded_pr_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        git(root, &["checkout", "-b", "bug-1576-squashed", "main"]);
+        commit_file(root, "one.txt", "one\n", "fix: first half (BUG-1576)");
+        commit_file(root, "two.txt", "two\n", "fix: second half (BUG-1576)");
+        let head = git_output_checked(root, &["rev-parse", "HEAD"]).unwrap();
+        git(root, &["checkout", "main"]);
+        std::fs::write(root.join("one.txt"), "one\n").unwrap();
+        std::fs::write(root.join("two.txt"), "two\n").unwrap();
+        git(root, &["add", "one.txt", "two.txt"]);
+        git(root, &["commit", "-m", "fix: squash landing (BUG-1576)"]);
+        std::fs::write(root.join("one.txt"), "one\nlater main edit\n").unwrap();
+        git(root, &["add", "one.txt"]);
+        git(root, &["commit", "-m", "chore: advance main"]);
+
+        assert_eq!(
+            branch_unshipped_patch_count_default(root, "bug-1576-squashed"),
+            Some(2)
+        );
+        let body = format!(
+            r#"#!/usr/bin/env bash
+printf '[{{"state":"MERGED","title":"fix (BUG-1576)","headRefName":"bug-1576-squashed","headRefOid":"{}"}}]'
+"#,
+            head.trim()
+        );
+        let fake = executable_fake_gh(root, &body);
+        let _env =
+            crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake.to_str().unwrap())]);
+        let rows =
+            collect_unshipped_work_items(root, &[summary("BUG-1576", "InProgress")], false, false);
+        assert!(
+            rows.is_empty(),
+            "squash-merged work must not produce a ship hint: {rows:?}"
+        );
+    }
+
+    // trace:BUG-1576 | ai:codex
+    #[cfg_attr(windows, ignore = "fake-gh harness requires a Unix shebang")]
+    #[test]
+    fn detector_handles_regular_merge_and_keeps_open_or_unknown_work_safe() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        branch_with_commit(root, "bug-1577-regular", "BUG-1577");
+        git(
+            root,
+            &[
+                "merge",
+                "--no-ff",
+                "bug-1577-regular",
+                "-m",
+                "merge regular",
+            ],
+        );
+        branch_with_commit(root, "bug-1578-abandoned", "BUG-1578");
+        branch_with_commit(root, "bug-1578-real-head", "BUG-1578");
+        branch_with_commit(root, "bug-1579-unknown", "BUG-1579");
+
+        let fake = executable_fake_gh(
+            root,
+            r#"#!/usr/bin/env bash
+printf '[{"state":"OPEN","title":"fix (BUG-1578)","headRefName":"bug-1578-real-head","headRefOid":"abc"}]'
+"#,
+        );
+        let _env =
+            crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake.to_str().unwrap())]);
+        let rows = collect_unshipped_work_items(
+            root,
+            &[
+                summary("BUG-1577", "InProgress"),
+                summary("BUG-1578", "InProgress"),
+                summary("BUG-1579", "InProgress"),
+            ],
+            false,
+            false,
+        );
+        assert!(
+            rows.iter().all(|r| r.spec_id != "BUG-1577"),
+            "regular merge is shipped"
+        );
+        assert!(
+            rows.iter().all(|r| r.spec_id != "BUG-1578"),
+            "only the open PR head is authoritative and it is already open"
+        );
+        assert!(
+            rows.iter().any(|r| r.spec_id == "BUG-1579"),
+            "absent forge evidence must retain genuine work"
+        );
+
+        let ambiguous = parse_pr_head_state_snapshot(
+            r#"[
+          {"state":"OPEN","title":"one (BUG-1580)","headRefName":"bug-1580-one","headRefOid":"1"},
+          {"state":"OPEN","title":"two (BUG-1580)","headRefName":"bug-1580-two","headRefOid":"2"}
+        ]"#,
+        )
+        .unwrap();
+        assert_eq!(
+            ambiguous.open_heads_by_spec["BUG-1580"].len(),
+            2,
+            "ambiguity must remain explicit rather than selecting a head"
+        );
+    }
+
+    // trace:BUG-1576 | ai:codex
+    #[cfg_attr(windows, ignore = "fake-gh harness requires a Unix shebang")]
+    #[test]
+    fn merged_same_spec_does_not_hide_an_unrepresented_divergent_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        branch_with_commit(root, "bug-1576-divergent", "BUG-1576");
+        branch_with_commit(root, "bug-1576-shipped", "BUG-1576");
+        let shipped = git_output_checked(root, &["rev-parse", "bug-1576-shipped"]).unwrap();
+        let body = format!(
+            r#"#!/usr/bin/env bash
+if [[ "$*" == *"--state open"* ]]; then printf '[]'; exit 0; fi
+if [[ "$*" == *"--head bug-1576-shipped"* ]]; then
+  printf '[{{"state":"MERGED","title":"fix (BUG-1576)","headRefName":"bug-1576-shipped","headRefOid":"{}"}}]'
+else
+  printf '[]'
+fi
+"#,
+            shipped.trim()
+        );
+        let fake = executable_fake_gh(root, &body);
+        let _env =
+            crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake.to_str().unwrap())]);
+        let rows =
+            collect_unshipped_work_items(root, &[summary("BUG-1576", "InProgress")], false, false);
+        assert!(rows.iter().any(|r| r.branch == "bug-1576-divergent"));
+        assert!(rows.iter().all(|r| r.branch != "bug-1576-shipped"));
+    }
+
+    // trace:BUG-1576 | ai:codex
+    #[cfg_attr(windows, ignore = "fake-gh harness requires a Unix shebang")]
+    #[test]
+    fn merged_head_lookup_is_targeted_not_limited_by_repository_history_page() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        branch_with_commit(root, "bug-1576-ancient", "BUG-1576");
+        let head = git_output_checked(root, &["rev-parse", "bug-1576-ancient"]).unwrap();
+        let calls = root.join("gh-calls");
+        let body = format!(
+            r#"#!/usr/bin/env bash
+printf '%s\n' "$*" >> '{}'
+if [[ "$*" == *"--state open"* ]]; then printf '[]'; exit 0; fi
+if [[ "$*" == *"--head bug-1576-ancient"* ]]; then
+  printf '[{{"state":"MERGED","title":"ancient (BUG-1576)","headRefName":"bug-1576-ancient","headRefOid":"{}"}}]'
+else
+  printf '[]'
+fi
+"#,
+            calls.display(),
+            head.trim()
+        );
+        let fake = executable_fake_gh(root, &body);
+        let _env =
+            crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake.to_str().unwrap())]);
+        let rows =
+            collect_unshipped_work_items(root, &[summary("BUG-1576", "InProgress")], false, false);
+        assert!(rows.is_empty());
+        let calls = std::fs::read_to_string(calls).unwrap();
+        assert!(
+            calls.contains("--head bug-1576-ancient --state all"),
+            "{calls}"
+        );
+        assert!(!calls.contains("--state all --limit 1000"), "{calls}");
     }
 }
 
@@ -68927,9 +69323,17 @@ fn collect_awaiting_report_inner(
         .collect();
 
     // Escalations need the full summary list; findings need a draft-only view.
-    let summaries = backend
-        .list_summaries(&aida_core::ListFilter::default())
-        .unwrap_or_default();
+    // BUG-1569: the notice backend intentionally opens an unrefreshed cache
+    // snapshot. Calling CachedGitBackend::list_summaries here would freshness-
+    // check and potentially full-rebuild before the targeted protocol lookup.
+    let summaries = if notice_fast {
+        backend
+            .cache()
+            .list_summaries(&aida_core::ListFilter::default())
+    } else {
+        backend.list_summaries(&aida_core::ListFilter::default())
+    }
+    .unwrap_or_default();
     // BUG-472: the findings breadcrumb must mirror `aida findings list` — DRAFT
     // specs carrying a from-* tag only. Building it from the unfiltered
     // `summaries` also counts completed/rejected specs that still carry their
@@ -68937,12 +69341,16 @@ fn collect_awaiting_report_inner(
     // said "35" while `aida findings list` showed 0). Filter to draft like
     // print_status_findings_section does. trace:BUG-472 | ai:claude
     let findings_total = {
-        let draft = backend
-            .list_summaries(&aida_core::ListFilter {
-                status: Some("draft".to_string()),
-                ..Default::default()
-            })
-            .unwrap_or_default();
+        let filter = aida_core::ListFilter {
+            status: Some("draft".to_string()),
+            ..Default::default()
+        };
+        let draft = if notice_fast {
+            backend.cache().list_summaries(&filter)
+        } else {
+            backend.list_summaries(&filter)
+        }
+        .unwrap_or_default();
         findings::count_findings(&findings::build_findings_view(
             &draft,
             &findings::FindingsFilter::default(),
@@ -69188,78 +69596,33 @@ fn emit_notice_time_line() {
 // trace:BUG-1239 | ai:codex
 // trace:TASK-1274 | ai:claude
 fn arm_notice_deadline() {
-    std::thread::spawn(|| {
-        std::thread::sleep(notice_deadline());
+    let Some(deadline) = notice_deadline() else {
+        return;
+    };
+    std::thread::spawn(move || {
+        std::thread::sleep(deadline);
         std::process::exit(0);
     });
 }
 
-/// The per-turn notice's fail-open bound. TASK-1274 root-caused
-/// `awaiting_notice_tracks_real_lease_through_session_end` failing on both
-/// the GitLab mirror (pipeline 308: FAILED, 1256s) and a plain local `cargo
-/// test` run on this machine (reproduced outside any container) to THIS
-/// deadline, not to the docker-executor PID theory an earlier commit on that
-/// branch guessed at (that "container-stable" fixture fix left the failure
-/// unchanged) — also the root cause independently converged on for BUG-1563
-/// (three prior hypotheses there, all wrong, none of which asked whether the
-/// test had a deadline). The protocol-notice half of `handle_awaiting_command`'s
-/// `notice` branch calls `backend.load()` — a full, UNCACHED store read whose
-/// cost scales with the number of requirement objects, not with cache
-/// warmth — despite that branch's own "CHEAP... NO full-store load" contract
-/// comment; on this repo's current object count that load alone can exceed
-/// 1s, so a shared watchdog fires mid-computation and silently drops the
-/// notice's second line (and, being a whole-process `exit`, every line after
-/// it too) before any of it is ever printed.
-///
-/// A SINGLE CONSTANT CANNOT SERVE BOTH SIDES OF THIS, measured directly by
-/// running both regression tests this bug touches against the same value:
-///   - `awaiting_notice_tracks_real_lease_through_session_end` needs the
-///     deadline LONG enough for a real `backend.load()` to finish — fails at
-///     1s (every run, this workstation and the GitLab mirror), passes
-///     reliably at 4s/10s/30s.
-///   - `awaiting_notice_does_not_read_an_open_stdin_pipe` asserts the
-///     opposite: `aida awaiting --notice` must exit within a hard 2s budget
-///     (3s reap) with no lease held — a genuine, pre-existing product
-///     contract, not a test artifact. At 10s on the GitLab mirror (pipeline
-///     318) it took 3.1358s, a widening this deadline's product value is not
-///     supposed to permit.
-/// So this is dependency-injected rather than a bare constant: production
-/// callers get `PRODUCT_NOTICE_DEADLINE`, and only a test that deliberately
-/// wants to observe the slow-store path past that bound sets
-/// `AIDA_TEST_NOTICE_DEADLINE_MS` to override it for its own subprocess.
-///
-/// THE PRODUCT BOUND STAYS AT BUG-1239's ORIGINAL 1s, ARGUED SEPARATELY FROM
-/// WHAT EITHER TEST NEEDS: the notice is advisory and fires on every turn of
-/// every session, so this watchdog's job is to guarantee it can never
-/// meaningfully stall a turn — that is what
-/// `awaiting_notice_does_not_read_an_open_stdin_pipe`'s 2s budget encodes,
-/// and it predates this bug. Raising the *product* bound to let a slow
-/// `backend.load()` usually finish would not fix that load's inefficiency;
-/// it would only move the object-count threshold at which the exact same
-/// silent-drop recurs, while taxing every real turn that happens to hit
-/// lock contention or a cold filesystem cache with several extra seconds of
-/// visible stall — the specific harm BUG-1239 exists to prevent. The
-/// silent-drop-under-load behavior at 1s is not new: it already existed in
-/// production before TASK-1274 whenever a real `backend.load()` exceeded 1s
-/// for reasons unrelated to this test's fixture; keeping the product bound
-/// at 1s does not introduce that risk, it declines to paper over it with a
-/// number that would need to keep growing as the store does. The actual fix
-/// is making the protocol-notice lookup cache-backed so it never needs
-/// `backend.load()` at all, matching the STORY-707/TASK-1065 pattern every
-/// other hot path in this file already follows — filed separately as
-/// BUG-1569 (see also BUG-1563, which reached the same root cause from the
-/// flakiness side).
-fn notice_deadline() -> std::time::Duration {
-    // Test-only escape hatch for the one regression test that must observe a
-    // real `backend.load()` complete rather than race it. Never read by a
-    // production caller; a bare `aida awaiting --notice` never sets this.
+/// The per-turn notice's fail-open bound. TASK-1274 traced a flaky leased-spec
+/// reminder to its full-store protocol lookup racing this watchdog. BUG-1569
+/// replaces that scan with targeted/cache-indexed reads, allowing the product
+/// bound to remain meaningfully sub-second. The override exists only so
+/// black-box tests can assert tighter latency budgets in their subprocesses.
+fn notice_deadline() -> Option<std::time::Duration> {
+    // Test-only escape hatch; a production caller never sets this. Zero
+    // disables the watchdog so lifecycle/content tests can synchronize on the
+    // command's completion instead of racing a wall-clock deadline under CI
+    // load. Latency behavior remains covered by its dedicated black-box test.
+    // trace:BUG-1567 | ai:codex
     if let Ok(ms) = std::env::var("AIDA_TEST_NOTICE_DEADLINE_MS") {
         if let Ok(ms) = ms.parse::<u64>() {
-            return std::time::Duration::from_millis(ms);
+            return (ms != 0).then(|| std::time::Duration::from_millis(ms));
         }
     }
-    const PRODUCT_NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
-    PRODUCT_NOTICE_DEADLINE
+    const PRODUCT_NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_millis(750);
+    Some(PRODUCT_NOTICE_DEADLINE)
 }
 
 /// PURE: the notice's always-on leading line. Separated so the exact contract
@@ -69315,9 +69678,13 @@ fn handle_awaiting_command(
             .find(|lease| canonical_cwd.starts_with(&lease.worktree_path))
             .map(|lease| lease.scope)
         {
-            if let Ok(store) = backend.load() {
-                if let Some(line) = protocol_cmd::notice_line_for_scope(&store, Some(&scope)) {
+            match protocol_cmd::targeted_notice_line_for_scope(backend, &scope) {
+                Ok(Some(line)) => {
                     println!("{line}");
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    eprintln!("warning: unable to resolve protocol notice for {scope}: {err:#}")
                 }
             }
         }
@@ -70387,6 +70754,49 @@ fn status_spec_is_open_alias(raw_status: Option<&str>) -> bool {
         None => false,
     }
 }
+
+/// BUG-1498: only the single explicit `draft` status activates the advisor's
+/// human-first draft lens. A mixed status expression is a broader operational
+/// query and must not silently lose machine-filed rows.
+// trace:BUG-1498 | ai:codex
+fn status_spec_is_exact_draft(raw: &str) -> bool {
+    raw.trim().eq_ignore_ascii_case("draft")
+}
+
+fn is_machine_filed_draft(r: &aida_core::RequirementSummary) -> bool {
+    r.tags.iter().any(|tag| tag == "auto-drafted")
+        || r.description
+            .trim_start()
+            .starts_with("Auto-drafted by `aida queue work")
+}
+
+/// Partition a draft grooming query by provenance. Returns the number hidden
+/// from the human-first view so renderers can advertise the escape hatch.
+// trace:BUG-1498 | ai:codex
+fn apply_machine_draft_lens(
+    reqs: &mut Vec<aida_core::RequirementSummary>,
+    exact_draft_view: bool,
+    machine_only: bool,
+    explicit_machine_tag: bool,
+) -> usize {
+    if !exact_draft_view {
+        return 0;
+    }
+    if machine_only {
+        reqs.retain(is_machine_filed_draft);
+        return 0;
+    }
+    if explicit_machine_tag {
+        return 0;
+    }
+    let before = reqs.len();
+    reqs.retain(|r| !is_machine_filed_draft(r));
+    before - reqs.len()
+}
+
+#[cfg(test)]
+#[path = "tests/bug_1498_machine_draft_lens_tests.rs"]
+mod bug_1498_machine_draft_lens_tests;
 
 /// BUG-788: should the open-work accepted-decision lens apply? True under the
 /// bare-list default open lens (STORY-723) OR the explicit `open` shortcut, so
@@ -72777,15 +73187,15 @@ fn card_rel_label(rt: &RelationshipType) -> &'static str {
 
 /// The edge's own name, when the bucket heading does not already carry it.
 ///
-/// A `Custom` edge's name is the only place its meaning lives (`implements`,
-/// `implemented-by`, `sprint_contains`, …), so the card prints that name
-/// beside the target under the neutral `Custom` heading — neither hiding it
-/// nor dressing it up as a standard type.
-// trace:BUG-1471 | ai:claude
+/// `Child` is the sole exception because its `Parent` heading already names
+/// the target's role. Custom and standard edges under neutral headings print
+/// their canonical names, so blocking, verification, reference, duplicate,
+/// and supersession edges cannot collapse into indistinguishable target ids.
+// trace:BUG-1471 trace:BUG-1584 | ai:codex
 fn card_rel_edge_name(rt: &RelationshipType) -> Option<String> {
     match rt {
-        RelationshipType::Custom(name) => Some(name.clone()),
-        _ => None,
+        RelationshipType::Child => None,
+        _ => Some(rt.to_string()),
     }
 }
 
@@ -77147,7 +77557,42 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         ),
         // trace:BUG-775 | ai:claude
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
+        // trace:BUG-1516 | ai:claude
+        ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
     }
+}
+
+/// `aida review normalize-shas` — BUG-1516 criterion 3's repair verb: expand
+/// every abbreviated `reviewed_sha` on disk to its full commit sha where this
+/// repo can still resolve it, and mark the rest unresolvable rather than
+/// guessing. Deliberately never runs on its own — `.aida/review-verdicts/` is
+/// live coordination state other seats may be reading right now, so touching
+/// it is always an explicit, operator-invoked action.
+// trace:BUG-1516 | ai:claude
+fn handle_review_normalize_shas(dry_run: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let report = review_verdict::backfill_abbreviated_shas(&project_root, dry_run)
+        .with_context(|| "could not sweep .aida/review-verdicts for abbreviated shas")?;
+    let verb = if dry_run { "would resolve" } else { "resolved" };
+    println!(
+        "{} {} {} abbreviated sha(s), {} unresolvable, {} already full, {} with no sha",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        verb,
+        report.resolved.len(),
+        report.unresolvable.len(),
+        report.already_full,
+        report.skipped_no_sha
+    );
+    for name in &report.resolved {
+        println!("  {} {name}", "→".green());
+    }
+    for name in &report.unresolvable {
+        println!(
+            "  {} {name} (kept verbatim, marked reviewed_sha_unresolvable)",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
+    Ok(())
 }
 
 fn guided_review_prompt(spec: &str) -> String {
@@ -77550,14 +77995,22 @@ fn handle_review_record(
         if let Some(dir) = handshake.parent() {
             std::fs::create_dir_all(dir)?;
         }
+        // Read back the canonical record rather than rebuilding provenance.
+        // Besides keeping the timestamp byte-identical, this carries the
+        // full SHA produced by record_verdict's write-boundary normalization
+        // when the caller supplied an abbreviation.
+        // trace:BUG-1466 | ai:codex
+        // trace:BUG-1516 | ai:codex
+        let recorded = review_verdict::read_recorded_verdict(&project_root, spec)
+            .ok_or_else(|| anyhow::anyhow!("the verdict was written but could not be read back"))?;
         let mut body = serde_json::json!({
             "verdict": kind.label(),
             "summary": summary.unwrap_or(""),
             "mode": "orchestrator-phase-3",
-            "reviewed_sha": resolved_sha.as_deref().expect("checked above"),
-            "reviewed_branch": branch,
-            "recorded_at": chrono::Utc::now().to_rfc3339(),
-            "recorded_by": recorded_by,
+            "reviewed_sha": recorded.reviewed_sha,
+            "reviewed_branch": recorded.reviewed_branch,
+            "recorded_at": recorded.recorded_at,
+            "recorded_by": recorded.recorded_by,
         });
         let findings: Vec<_> = findings
             .iter()
@@ -81050,6 +81503,7 @@ fn handle_auto_complete_batch(
     // TASK-967: drain origin (wall clock + base HEAD) for the exit summary.
     // trace:TASK-967 | ai:claude
     let drain_started = std::time::SystemTime::now();
+    let drain_invocation = last_drain::DrainInvocation::capture();
     let drain_clock = std::time::Instant::now();
     let drain_base_sha = drain_root.as_deref().and_then(current_branch_head_sha);
     // TASK-966: arm the token meter only when a `--max-tokens` cap is set.
@@ -81152,6 +81606,7 @@ fn handle_auto_complete_batch(
         drain_base_sha.as_deref(),
         drain_started,
         drain_clock.elapsed(),
+        &drain_invocation,
         json,
         // TASK-1297: the "M other approved specs routed to this role are not
         // in this batch" figure, echoed onto the terminal QueueDrained event
@@ -81690,6 +82145,7 @@ fn handle_auto_complete_batches(
     // TASK-966: a single drain-start + token meter shared across every batch in
     // the chain so `--max-runtime` / `--max-tokens` are cumulative.
     let chain_started = std::time::SystemTime::now();
+    let drain_invocation = last_drain::DrainInvocation::capture();
     // TASK-967: drain-wide wall clock + base HEAD for the exit summary.
     // trace:TASK-967 | ai:claude
     let chain_clock = std::time::Instant::now();
@@ -81799,6 +82255,7 @@ fn handle_auto_complete_batches(
         drain_base_sha.as_deref(),
         chain_started,
         chain_clock.elapsed(),
+        &drain_invocation,
         json,
         // TASK-1297: the chained-batches path (`--batch a,b,c`) does not yet
         // surface the per-batch exclusion count — out of scope for this
@@ -82738,6 +83195,7 @@ fn finalize_drain_summary(
     drain_base_sha: Option<&str>,
     started: std::time::SystemTime,
     elapsed: std::time::Duration,
+    drain_invocation: &last_drain::DrainInvocation,
     json: bool,
     // TASK-1297: "M other approved specs routed to this role are not in this
     // batch" — 0 for every non-batch drain kind (single, next-n). Echoed onto
@@ -82806,7 +83264,14 @@ fn finalize_drain_summary(
     // the live drain-state file (kept distinct so the "presence ⇒ live-or-crashed"
     // invariant of `drain-state.json` is unaffected). Best-effort. trace:STORY-730
     if let Some(root) = project_root {
-        let _ = last_drain::LastDrainOutcome::from_summary(&summary, &ts).write(root);
+        let previous = last_drain::LastDrainOutcome::read(root);
+        let _ = last_drain::LastDrainOutcome::from_summary_with_previous(
+            &summary,
+            &ts,
+            previous.as_ref(),
+            Some(drain_invocation.clone()),
+        )
+        .write(root);
     }
     // STORY-712: emit the terminal QueueDrained wake — the "agent is done" an
     // overnight loop waits on. Drain-level, so no spec. Best-effort, not
@@ -83180,6 +83645,7 @@ fn handle_auto_complete_next_n(
     // the exit summary can report token spend, diff stats, and elapsed time
     // regardless of whether a token cap is active. trace:TASK-967 | ai:claude
     let drain_started = std::time::SystemTime::now();
+    let drain_invocation = last_drain::DrainInvocation::capture();
     let drain_clock = std::time::Instant::now();
     let drain_base_sha = drain_root.as_deref().and_then(current_branch_head_sha);
     // TASK-966: arm the token meter only when a `--max-tokens` cap is set.
@@ -83262,6 +83728,7 @@ fn handle_auto_complete_next_n(
         drain_base_sha.as_deref(),
         drain_started,
         drain_clock.elapsed(),
+        &drain_invocation,
         json,
         // TASK-1297: a nextN drain has no `--batch` filter, so there is
         // nothing excluded to report. trace:TASK-1297 | ai:claude
@@ -85154,22 +85621,23 @@ fn spec_verdict_fallback_for_phase3(
     project_root: &std::path::Path,
     spec: &str,
     reviewer_started_at: std::time::SystemTime,
+    current_head: Option<&str>,
 ) -> Option<auto_complete::ReviewerOutcome> {
     let path = review_verdict::verdict_path(project_root, spec);
     let mtime = std::fs::metadata(&path).ok()?.modified().ok()?;
     if mtime < reviewer_started_at {
         return None; // stale: recorded by some earlier review, not this one
     }
+    let outcome = read_verdict_file_for_head(&path, current_head).ok()?;
     let body = std::fs::read_to_string(&path).ok()?;
     let rec = review_verdict::parse_recorded_verdict(&body)?;
-    let verdict = auto_complete::Verdict::parse(rec.kind.label())?;
     eprintln!(
         "  {} no PR-keyed verdict file, but the reviewer recorded {} for {} during this session — accepting it",
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
         rec.kind.label(),
         spec
     );
-    Some(auto_complete::ReviewerOutcome::Verdict(verdict))
+    Some(outcome)
 }
 
 /// BUG-809: last-ditch verdict discovery when both the PR-keyed file and the
@@ -85190,6 +85658,7 @@ fn sibling_verdict_sweep_for_phase3(
     pr: u32,
     spec: &str,
     reviewer_started_at: std::time::SystemTime,
+    current_head: Option<&str>,
 ) -> Option<auto_complete::ReviewerOutcome> {
     let root_canon = project_root.canonicalize().ok()?;
     let parent = root_canon.parent()?;
@@ -85220,17 +85689,8 @@ fn sibling_verdict_sweep_for_phase3(
         }
     }
     candidates.sort_by(|a, b| b.0.cmp(&a.0));
-    for (_, cand, is_pr) in candidates {
-        let outcome = if is_pr {
-            read_verdict_file(&cand).ok()
-        } else {
-            std::fs::read_to_string(&cand)
-                .ok()
-                .as_deref()
-                .and_then(review_verdict::parse_recorded_verdict)
-                .and_then(|rec| auto_complete::Verdict::parse(rec.kind.label()))
-                .map(auto_complete::ReviewerOutcome::Verdict)
-        };
+    for (_, cand, _is_pr) in candidates {
+        let outcome = read_verdict_file_for_head(&cand, current_head).ok();
         let Some(outcome) = outcome else { continue };
         // Copy back to the canonical location (best-effort): audit trail +
         // the STORY-439 calibration tag-along both read the drive root.
@@ -85296,6 +85756,66 @@ fn read_verdict_file(
                 format!("unrecognised verdict `{raw}` in the verdict file"),
             )
         })
+}
+
+/// Read a live phase-3 handshake and prove an approval covers the PR head the
+/// orchestrator is about to advance. Refusals and escalations remain usable
+/// without this check because they fail closed already.
+// trace:BUG-1466 | ai:codex
+// trace:BUG-1538 | ai:codex
+fn read_verdict_file_for_head(
+    path: &std::path::Path,
+    current_head: Option<&str>,
+) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
+    let outcome = read_verdict_file(path)?;
+    if !matches!(
+        outcome,
+        auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Approved)
+    ) {
+        return Ok(outcome);
+    }
+    let body = std::fs::read_to_string(path).map_err(|e| {
+        auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
+            format!("could not re-read approval provenance: {e}"),
+        )
+    })?;
+    let recorded = serde_json::from_str::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|v| {
+            v.get("reviewed_sha")
+                .and_then(|s| s.as_str())
+                .map(str::to_string)
+        });
+    let same_commit = match (recorded.as_deref(), current_head) {
+        (Some(a), Some(b)) => {
+            let a = a.trim();
+            let b = b.trim();
+            a.len().min(b.len()) >= 7
+                && a.bytes().all(|c| c.is_ascii_hexdigit())
+                && b.bytes().all(|c| c.is_ascii_hexdigit())
+                && (a.eq_ignore_ascii_case(b)
+                    || (a.len() < b.len() && b[..a.len()].eq_ignore_ascii_case(a))
+                    || (b.len() < a.len() && a[..b.len()].eq_ignore_ascii_case(b)))
+        }
+        _ => false,
+    };
+    if same_commit {
+        Ok(outcome)
+    } else {
+        Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
+            match (recorded.as_deref(), current_head) {
+                (None, _) => "the APPROVED verdict is UNPROVEN because it records no reviewed_sha"
+                    .to_string(),
+                (_, None) => "the APPROVED verdict is UNPROVEN because the current PR head could not be resolved"
+                    .to_string(),
+                (Some(reviewed), Some(current)) => format!(
+                    "the APPROVED verdict is stale: it reviewed {reviewed}, but the current PR head is {current}"
+                ),
+            },
+        ))
+    }
 }
 
 /// STORY-439: pick the calibration review-slot fields out of a verdict
@@ -88710,13 +89230,18 @@ impl RealPhaseDriver {
             );
         }
 
-        let outcome = match read_verdict_file(&verdict_path) {
+        let gate_head_sha = pr_head_sha_best_effort(self, pr);
+        let outcome = match read_verdict_file_for_head(&verdict_path, gate_head_sha.as_deref()) {
             Ok(o) => o,
             Err(primary_failure) => {
+                if verdict_path.is_file() {
+                    return Err(primary_failure);
+                }
                 if let Some(o) = spec_verdict_fallback_for_phase3(
                     &self.project_root,
                     &self.spec,
                     gate_started_at,
+                    gate_head_sha.as_deref(),
                 )
                 .or_else(|| {
                     sibling_verdict_sweep_for_phase3(
@@ -88724,6 +89249,7 @@ impl RealPhaseDriver {
                         pr,
                         &self.spec,
                         gate_started_at,
+                        gate_head_sha.as_deref(),
                     )
                 }) {
                     o
@@ -90776,44 +91302,50 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             );
         }
 
-        let outcome = match read_verdict_file(&verdict_path) {
-            Ok(o) => o,
-            Err(primary_failure) => {
-                // BUG-806: the spec-keyed record, when fresh, IS the verdict.
-                // BUG-809: failing that, sweep sibling checkouts — the env
-                // anchor does not reliably survive a vendor tool sandbox.
-                if let Some(o) = spec_verdict_fallback_for_phase3(
-                    &self.project_root,
-                    &self.spec,
-                    reviewer_started_at,
-                )
-                .or_else(|| {
-                    sibling_verdict_sweep_for_phase3(
+        let outcome =
+            match read_verdict_file_for_head(&verdict_path, pre_review_head_sha.as_deref()) {
+                Ok(o) => o,
+                Err(primary_failure) => {
+                    if verdict_path.is_file() {
+                        return Err(primary_failure);
+                    }
+                    // BUG-806: the spec-keyed record, when fresh, IS the verdict.
+                    // BUG-809: failing that, sweep sibling checkouts — the env
+                    // anchor does not reliably survive a vendor tool sandbox.
+                    if let Some(o) = spec_verdict_fallback_for_phase3(
                         &self.project_root,
-                        pr,
                         &self.spec,
                         reviewer_started_at,
+                        pre_review_head_sha.as_deref(),
                     )
-                }) {
-                    o
-                } else if self.no_human.is_some() {
-                    // BUG-280: under a headless `--no-human` drain, a NoVerdict
-                    // failure is most often the AskUserQuestion-in-headless
-                    // symptom (reviewer skill called a confirmation prompt
-                    // forbidden by the harness, bailed before writing the
-                    // verdict file). Enrich the error message so the recovery
-                    // hint names the likely cause instead of the generic
-                    // "no verdict file." trace:BUG-280 | ai:claude
-                    return Err(enrich_no_verdict_with_headless_diagnostic(
-                        primary_failure,
-                        &self.project_root,
-                        reviewer_started_at,
-                    ));
-                } else {
-                    return Err(primary_failure);
+                    .or_else(|| {
+                        sibling_verdict_sweep_for_phase3(
+                            &self.project_root,
+                            pr,
+                            &self.spec,
+                            reviewer_started_at,
+                            pre_review_head_sha.as_deref(),
+                        )
+                    }) {
+                        o
+                    } else if self.no_human.is_some() {
+                        // BUG-280: under a headless `--no-human` drain, a NoVerdict
+                        // failure is most often the AskUserQuestion-in-headless
+                        // symptom (reviewer skill called a confirmation prompt
+                        // forbidden by the harness, bailed before writing the
+                        // verdict file). Enrich the error message so the recovery
+                        // hint names the likely cause instead of the generic
+                        // "no verdict file." trace:BUG-280 | ai:claude
+                        return Err(enrich_no_verdict_with_headless_diagnostic(
+                            primary_failure,
+                            &self.project_root,
+                            reviewer_started_at,
+                        ));
+                    } else {
+                        return Err(primary_failure);
+                    }
                 }
-            }
-        };
+            };
 
         // The reviewer writes the decision fields, but the drain owns the
         // authoritative PR head and branch context. Normalize a PR-keyed

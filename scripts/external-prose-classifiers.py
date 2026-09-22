@@ -25,13 +25,130 @@ DOC = ROOT / "docs/architecture/external-tool-output-classifiers.md"
 MARKER = re.compile(r"^\s*// external-prose-classifier: ([A-Za-z0-9_:{}-]+)\s*$")
 
 
+def marker_anchors(source: str) -> dict[int, str]:
+    """Map marker lines to their lexically containing Rust function."""
+    anchors: dict[int, str] = {}
+    scopes: list[str | None] = []
+    pending_fn = False
+    pending_name: str | None = None
+    block_depth = 0
+    quote: str | None = None
+    escaped = False
+    raw_hashes: int | None = None
+
+    for line_no, line in enumerate(source.splitlines(), 1):
+        if MARKER.match(line):
+            containing = next((scope for scope in reversed(scopes) if scope), None)
+            if containing:
+                anchors[line_no] = containing
+
+        index = 0
+        while index < len(line):
+            char = line[index]
+            following = line[index + 1] if index + 1 < len(line) else ""
+            if raw_hashes is not None:
+                terminator = '"' + "#" * raw_hashes
+                end = line.find(terminator, index)
+                if end < 0:
+                    break
+                raw_hashes = None
+                index = end + len(terminator)
+                continue
+            if block_depth:
+                if char == "/" and following == "*":
+                    block_depth += 1
+                    index += 2
+                elif char == "*" and following == "/":
+                    block_depth -= 1
+                    index += 2
+                else:
+                    index += 1
+                continue
+            if quote:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == quote:
+                    quote = None
+                index += 1
+                continue
+            if char == "/" and following == "/":
+                break
+            if char == "/" and following == "*":
+                block_depth = 1
+                index += 2
+                continue
+            raw = re.match(r"(?:b)?r(#+)?\"", line[index:])
+            if raw:
+                raw_hashes = len(raw.group(1) or "")
+                index += len(raw.group(0))
+                continue
+            if char == "'":
+                # A Rust lifetime (`'a`) is not a character literal. Only enter
+                # quote state when this line has a syntactic closing apostrophe.
+                literal = re.match(r"'(?:\\.|[^\\'])'", line[index:])
+                if not literal:
+                    index += 1
+                    continue
+            if char in {'"', "'"}:
+                quote = char
+                escaped = False
+                index += 1
+                continue
+            if char.isalpha() or char == "_":
+                end = index + 1
+                while end < len(line) and (line[end].isalnum() or line[end] == "_"):
+                    end += 1
+                token = line[index:end]
+                if pending_fn and pending_name is None:
+                    pending_name = token
+                elif token == "fn":
+                    pending_fn = True
+                    pending_name = None
+                index = end
+                continue
+            if char == "{":
+                scopes.append(pending_name if pending_fn else None)
+                pending_fn = False
+                pending_name = None
+            elif char == "}":
+                if scopes:
+                    scopes.pop()
+                pending_fn = False
+                pending_name = None
+            elif char == ";" and pending_fn:
+                pending_fn = False
+                pending_name = None
+            index += 1
+    return anchors
+
+
 def enumerate_sites(root: pathlib.Path) -> list[tuple[str, str, int]]:
     found: list[tuple[str, str, int]] = []
     for path in sorted(root.glob("aida-*/src/**/*.rs")):
-        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        source = path.read_text(encoding="utf-8")
+        lines = source.splitlines()
+        anchors = marker_anchors(source)
+        for line_no, line in enumerate(lines, 1):
             match = MARKER.match(line)
             if match:
-                found.append((match.group(1), path.relative_to(root).as_posix(), line_no))
+                site = match.group(1)
+                # Resolve structural containment rather than the nearest prior
+                # declaration: a marker after a closed function has no anchor.
+                # trace:TASK-1309 | ai:codex
+                function = anchors.get(line_no)
+                if function is None:
+                    raise ValueError(
+                        f"marker {site} at {path.relative_to(root)}:{line_no} "
+                        "has no function anchor"
+                    )
+                if site.rsplit("::", 1)[-1] != function:
+                    raise ValueError(
+                        f"marker {site} at {path.relative_to(root)}:{line_no} "
+                        f"is anchored to function {function}"
+                    )
+                found.append((site, path.relative_to(root).as_posix(), line_no))
     names = [row[0] for row in found]
     duplicates = sorted({name for name in names if names.count(name) > 1})
     if duplicates:
@@ -50,22 +167,26 @@ def render(rows: list[tuple[str, str, int]]) -> str:
         "unmarked string comparisons deliberately do not count. The marker is the precise",
         "boundary because Rust syntax cannot reveal whether an arbitrary string came from",
         "an external process; code review must require it for every new such decision.",
+        "The module-qualified symbol is the stable inventory key. Source paths and line",
+        "numbers are emitted by the generator only as non-authoritative navigation aids.",
         "",
-        "| Site | Source |",
-        "|---|---|",
+        "| Stable classifier key |",
+        "|---|",
     ]
-    # BUG-1526: the row is name + PATH and deliberately omits the line number.
-    # A required gate that compares line numbers byte-for-byte fires on any edit
-    # ABOVE a marked site, with no classifier added, removed or renamed — eleven
-    # open PRs were red for that reason and each lost its whole test suite,
-    # because this step sits ahead of them and `bash -e` aborts the job.
-    # CLAUDE.md already states the rule this gate was breaking: "Symbol refs over
-    # line refs ... line refs drift fast and are often stale within hours".
-    # The line is still printed on stdout below, where it is a navigation
-    # convenience and nothing depends on it.
-    # trace:BUG-1526 | ai:claude
-    body.extend(f"| `{name}` | `{path}` |" for name, path, _line in rows)
-    body.extend(["", "<!-- trace:TASK-1300 | ai:codex -->", ""])
+    # TASK-1309: only the semantic module-qualified symbol is authoritative.
+    # Source paths and line numbers remain available in stdout for navigation;
+    # neither belongs in the generated comparison because both can move while
+    # the classifier set remains unchanged.
+    # trace:TASK-1309 | ai:codex
+    body.extend(f"| `{name}` |" for name, _path, _line in rows)
+    body.extend(
+        [
+            "",
+            "<!-- trace:TASK-1300 | ai:codex -->",
+            "<!-- trace:TASK-1309 | ai:codex -->",
+            "",
+        ]
+    )
     return "\n".join(body)
 
 
@@ -96,17 +217,13 @@ def main() -> int:
             # produce one.
             # trace:BUG-1526 | ai:claude
             def sites(text: str) -> set[str]:
-                # BOTH cells. Identity is name + path, so reading only cell [1]
-                # would report a MOVED classifier as "set unchanged" — the same
-                # name-only blind spot that made the test suite miss a dropped
-                # path. trace:BUG-1526 | ai:claude
                 rows = set()
                 for line in text.splitlines():
                     if not line.startswith("| `"):
                         continue
                     cells = [c.strip().strip("`") for c in line.split("|")]
-                    if len(cells) >= 3:
-                        rows.add(f"{cells[1]} ({cells[2]})")
+                    if len(cells) >= 2:
+                        rows.add(cells[1])
                 return rows
 
             added = sorted(sites(rendered) - sites(current))

@@ -133,6 +133,37 @@ affected phase named.
 Ordinary PR CI remains hermetic and continues to test provider parsers with
 mocked output. <!-- trace:TASK-1273 | ai:codex -->
 
+#### Cloudflare Access authentication
+
+The GitHub-hosted live-smoke runner crosses two independent authentication
+boundaries. `AIDA_GITLAB_TOKEN` authorizes GitLab API operations, while the
+dedicated Cloudflare Access service-token pair
+`AIDA_CF_ACCESS_CLIENT_ID`/`AIDA_CF_ACCESS_CLIENT_SECRET` admits the request
+through the perimeter. All three are GitHub Actions repository secrets. The
+Access application for `gitlab.joemooney.com` must have a **Service Auth**
+policy that accepts the dedicated CI service token. <!-- trace:TASK-1425
+trace:ADR-54 | ai:codex -->
+
+The workflow pins a current `glab` release and configures host-scoped
+`custom_headers`. Header values use `valueFromEnv`; secret values must never be
+written literally into `config.yml`, committed, or printed in diagnostics.
+Git clone, fetch, and push use Git's numbered environment configuration to add
+the same two headers only to HTTPS requests for the mirror host. The values
+exist only in the live-test process tree and are unset on exit; repository and
+global Git configuration remain free of the Access secret. A process-scoped
+`glab auth git-credential` helper supplies the separate GitLab PAT.
+The API preflight calls `/api/v4/version` with both Access headers and validates
+the JSON response. A response beginning with `<!DOCTYPE html>` and titled
+`Sign in ・ Cloudflare Access` means the request did not pass the perimeter; a
+successful readiness probe alone does not establish GitLab API access.
+
+Rotate the Access pair in Cloudflare and GitHub together: create the replacement
+service token, authorize it in the Service Auth policy, replace both repository
+secrets, prove a live run, and then revoke the old token. If the credential may
+be compromised, revoke it in Cloudflare first and accept that the smoke stays
+red until replacement secrets are installed. Rotate or revoke the GitLab PAT
+separately; neither credential substitutes for the other.
+
 ### Live validation (2026-09-18)
 
 A headless `--auto-complete --no-human=both` drain was run against the

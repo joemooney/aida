@@ -79,7 +79,9 @@ pub fn build(store: &RequirementsStore, output_dir: &Path, dry_run: bool) -> Res
     for (path, body) in &planned {
         let body_with_marker = wrap_autogen(body);
         let existing = std::fs::read_to_string(path).ok();
-        let unchanged = existing.as_deref() == Some(body_with_marker.as_str());
+        let unchanged = existing.as_deref().is_some_and(|actual| {
+            aida_core::scaffolding::generated_text_matches(actual, &body_with_marker)
+        });
         if unchanged {
             report.unchanged.push(path.clone());
             continue;
@@ -506,6 +508,23 @@ mod tests {
         assert!(
             !r2.unchanged.is_empty(),
             "second build should report unchanged files"
+        );
+    }
+
+    #[test]
+    fn build_treats_crlf_projection_as_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = RequirementsStore::new();
+        build(&store, dir.path(), false).unwrap();
+
+        let path = dir.path().join("00-constitution.md");
+        let lf = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, lf.replace('\n', "\r\n")).unwrap();
+
+        let report = build(&store, dir.path(), true).unwrap();
+        assert!(
+            !report.drifted.iter().any(|p| p == &path),
+            "checkout newline conversion is not documentation drift"
         );
     }
 

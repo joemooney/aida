@@ -96,6 +96,149 @@ pub(crate) fn handle_doctor_command(
         } => doctor_validate_trace_comments(*strip_dangling, *dry_run, *yes),
         cli::DoctorCommand::Fsck => doctor_fsck(),
         cli::DoctorCommand::ConventionCheck { quiet } => doctor_convention_check(*quiet),
+        cli::DoctorCommand::ShellSubstitutionHoles { exclude } => {
+            doctor_shell_substitution_holes(exclude)
+        }
+    }
+}
+
+// The rules intentionally match only anomalies that cannot be explained by a
+// wrapped prose line. A broad "two spaces" rule produces table/code noise and
+// cannot distinguish a typo from lost command-substitution text.
+// trace:TASK-190 | ai:codex
+fn shell_substitution_hole_kind(line: &str) -> Option<&'static str> {
+    let bytes = line.as_bytes();
+    if bytes
+        .windows(2)
+        .any(|pair| matches!(pair, b"(," | b"[," | b"{,"))
+    {
+        return Some("opening bracket followed by comma");
+    }
+    for (index, window) in bytes.windows(3).enumerate() {
+        if window == b"'s " {
+            let rest = &bytes[index + 3..];
+            let spaces = rest.iter().take_while(|byte| **byte == b' ').count();
+            if spaces >= 1 && rest.get(spaces).is_some_and(u8::is_ascii_lowercase) {
+                return Some("possessive followed by same-line gap");
+            }
+        }
+    }
+    None
+}
+
+fn doctor_shell_substitution_holes(exclude: &[String]) -> Result<()> {
+    let project_root = find_project_root()?;
+    let objects_root = shell_substitution_objects_root(&project_root);
+    if !objects_root.exists() {
+        println!("(no objects/ tree — nothing to check)");
+        return Ok(());
+    }
+    let reqs = aida_core::object_store::load_all_objects(&objects_root)?;
+    let mut count = 0usize;
+    for req in reqs {
+        let id = req.spec_id.as_deref().unwrap_or("<unknown>");
+        if exclude.iter().any(|excluded| excluded == id) {
+            continue;
+        }
+        let fields = std::iter::once(("description", req.description.as_str())).chain(
+            req.comments
+                .iter()
+                .map(|comment| ("comment", comment.content.as_str())),
+        );
+        for (field, body) in fields {
+            for (line_number, line) in body.lines().enumerate() {
+                if let Some(kind) = shell_substitution_hole_kind(line) {
+                    count += 1;
+                    println!("{id}:{field}:{}: {kind}: {}", line_number + 1, line.trim());
+                }
+            }
+        }
+    }
+    println!("{count} candidate(s); inspect before repairing (this check never writes)");
+    Ok(())
+}
+
+fn shell_substitution_objects_root(project_root: &std::path::Path) -> std::path::PathBuf {
+    detect_distributed_store_from(project_root)
+        .unwrap_or_else(|| project_root.join(".aida-store"))
+        .join("objects")
+}
+
+#[cfg(test)]
+mod task_190_tests {
+    use super::{shell_substitution_hole_kind, shell_substitution_objects_root};
+    use std::process::Command;
+
+    #[test]
+    fn known_shell_substitution_holes_are_detected() {
+        assert!(shell_substitution_hole_kind("trigger (, RealPhaseDriver)").is_some());
+        assert!(shell_substitution_hole_kind("creator's  through forge").is_some());
+    }
+
+    #[test]
+    fn wrapping_tables_and_ordinary_spacing_are_not_candidates() {
+        assert_eq!(shell_substitution_hole_kind("the  next step"), None);
+        assert_eq!(shell_substitution_hole_kind("name    value"), None);
+        assert_eq!(
+            shell_substitution_hole_kind("owner's\n  implementation"),
+            None
+        );
+        assert_eq!(shell_substitution_hole_kind("call `date` safely"), None);
+    }
+
+    #[test]
+    fn detector_resolves_canonical_store_from_sibling_worktree() {
+        fn git(cwd: &std::path::Path, args: &[&str]) {
+            let output = Command::new("git")
+                .current_dir(cwd)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path().join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        git(&main, &["init", "--initial-branch=main", "--quiet"]);
+        git(&main, &["config", "user.email", "test@example.com"]);
+        git(&main, &["config", "user.name", "Test"]);
+        std::fs::create_dir_all(main.join(".aida")).unwrap();
+        std::fs::write(
+            main.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        git(&main, &["add", ".aida/config.toml"]);
+        git(&main, &["commit", "-m", "init", "--quiet"]);
+        std::fs::create_dir_all(main.join(".aida-store/objects")).unwrap();
+
+        let sibling = temp.path().join("sibling");
+        git(
+            &main,
+            &[
+                "worktree",
+                "add",
+                "--quiet",
+                sibling.to_str().unwrap(),
+                "-b",
+                "feature",
+            ],
+        );
+        assert_eq!(
+            shell_substitution_objects_root(&sibling)
+                .canonicalize()
+                .unwrap(),
+            main.join(".aida-store/objects").canonicalize().unwrap()
+        );
+        git(
+            &main,
+            &["worktree", "remove", "--force", sibling.to_str().unwrap()],
+        );
     }
 }
 
@@ -159,6 +302,11 @@ struct DoctorReport {
     /// TASK-865: read-only bubblewrap OS-sandbox availability status line.
     #[serde(skip_serializing_if = "Option::is_none")]
     bwrap: Option<String>,
+    /// Machine boundary consumed by the performance scheduler. This is an
+    /// allow-list, not captured stdout.
+    // trace:BUG-1573 | ai:codex
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    performance_audits: Vec<schedule_ledger::PerformanceAudit>,
 }
 
 impl DoctorReport {
@@ -169,6 +317,7 @@ impl DoctorReport {
             hidden_completed_without_commit: 0,
             healed: Vec::new(),
             bwrap: Some(bwrap_status_line()),
+            performance_audits: Vec::new(),
         }
     }
 }
@@ -185,6 +334,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
     let mut hidden_completed_without_commit = 0;
+    let mut performance_audits = Vec::new();
 
     // TASK-673: the completed-without-commit integrity check runs git scans
     // (a default-branch `git log` + `git grep`) so it is kept OUT of the hot
@@ -321,11 +471,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
             findings.extend(performance_findings(
                 &events, &budgets, &policy, now, &lineage,
             ));
+            performance_audits =
+                performance_audit_records(&events, &budgets, &policy, now, &lineage);
             findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
         }
     }
 
     let mut report = DoctorReport::from_findings(findings);
+    report.performance_audits = performance_audits;
     report.hidden_completed_without_commit = hidden_completed_without_commit;
 
     if opts.heal {
@@ -403,7 +556,7 @@ fn codex_prompts_drift(dir: &std::path::Path) -> Vec<String> {
     for (name, expected) in aida_core::scaffolding::codex_prompts::expected_codex_prompts() {
         let path = dir.join(format!("{name}.md"));
         if let Ok(actual) = std::fs::read_to_string(&path) {
-            if actual != expected {
+            if !aida_core::scaffolding::generated_text_matches(&actual, &expected) {
                 drifted.push(name);
             }
         }
@@ -1169,6 +1322,54 @@ pub(crate) fn performance_findings(
     );
 
     findings
+}
+
+/// Typed, allow-listed evidence for the scheduler boundary. This deliberately
+/// repeats the pure gate calculation rather than asking a consumer to parse a
+/// human sentence. A zero denominator is an explicit record, not division.
+// trace:BUG-1573 | ai:codex
+fn performance_audit_records(
+    events: &[crate::usage::UsageEvent],
+    budgets: &[PerformanceBudget],
+    policy: &PerformancePolicy,
+    now: chrono::DateTime<chrono::Utc>,
+    lineage: &BinaryLineage,
+) -> Vec<schedule_ledger::PerformanceAudit> {
+    let mut out: Vec<_> = performance_breaches(events, budgets, policy, now, lineage)
+        .into_iter()
+        .map(|b| schedule_ledger::PerformanceAudit {
+            command: b.cmd,
+            budget_ms: b.budget_ms,
+            over_budget: b.over_budget,
+            denominator: b.samples,
+            proportion_millipercent: (b.over_pct * 1000.0).round() as u32,
+            tolerated_millipercent: (b.tolerated_pct * 1000.0).round() as u32,
+            window_hours: b.window_hours,
+            worst_ms: Some(b.worst_ms),
+            excluded_samples: b.excluded_samples,
+            lineage_scoped: b.lineage_scoped,
+        })
+        .collect();
+    for u in performance_unobserved(events, budgets, policy, now, lineage) {
+        let Some(budget) = budgets.iter().find(|b| b.cmd == u.cmd) else {
+            continue;
+        };
+        out.push(schedule_ledger::PerformanceAudit {
+            command: u.cmd,
+            budget_ms: budget.budget_ms,
+            over_budget: 0,
+            denominator: 0,
+            proportion_millipercent: 0,
+            tolerated_millipercent: (policy.tolerated_pct * 1000.0).round() as u32,
+            window_hours: policy.window_hours,
+            worst_ms: None,
+            excluded_samples: u.excluded_samples,
+            lineage_scoped: lineage.is_scoped(),
+        });
+    }
+    out.sort_by(|a, b| a.command.cmp(&b.command));
+    out.truncate(schedule_ledger::MAX_PERFORMANCE_AUDITS);
+    out
 }
 
 #[cfg(test)]
@@ -5004,7 +5205,11 @@ hostname = "localhost"
         assert!(expected.len() >= 2, "need a couple of prompts to test");
         // Deploy the first prompt correctly (matches source).
         let (fresh_name, fresh_body) = &expected[0];
-        std::fs::write(dir.path().join(format!("{fresh_name}.md")), fresh_body).unwrap();
+        std::fs::write(
+            dir.path().join(format!("{fresh_name}.md")),
+            fresh_body.replace('\n', "\r\n"),
+        )
+        .unwrap();
         // Deploy the second prompt STALE (content differs).
         let (stale_name, _) = &expected[1];
         std::fs::write(
