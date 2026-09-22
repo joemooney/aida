@@ -56,7 +56,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:49:08.443039479Z
-modified_at: 2026-09-22T10:54:05.814282520Z
+modified_at: 2026-09-22T11:01:00.916171396Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -89,3 +89,8 @@ comments:
   content: '[aida:cold-review] REQUEST_CHANGES on PR #2095 exact head a9378c1bae6cb7eb4e65cfeb84e86f423088d052. Independent: yes. Blockers: idle streak ignores punted and escalated material outcomes, so they increment instead of reset; provenance is captured at drain finalization rather than invocation, so parent attribution can be lost or changed by reparenting. Focused tests passed 2 BUG-1548, 14 last_drain, 56 drain_state; fmt passed. GitHub Build still pending; hold gate green. Full line-specific verdict is on PR #2095.'
   created_at: 2026-09-22T10:54:05.814282520Z
   modified_at: 2026-09-22T10:54:05.814282520Z
+- id: 01a0c8c6-b574-7bf3-8893-dccdd7ec8227
+  author: joe
+  content: 'PR #2095 rework pushed at exact head 70cabccefe. Fixed consecutive_idle_runs so punted and escalated outcomes are material and reset the streak. DrainInvocation is now captured exactly once alongside each drain start clock (single batch, batch chain, next-N), passed through finalize_drain_summary, and cloned into the durable record; completion no longer reads ancestry/process identity. Added adversarial coverage for punt/escalation reset plus a short-lived/reparented launcher snapshot proving ancestry/identity callbacks are not re-run at completion. Tests: last_drain 15 pass; BUG-1548 human/JSON/TOON rendering 2 pass; cargo check and fmt pass. trace:BUG-1548 | ai:codex'
+  created_at: 2026-09-22T11:01:00.916171396Z
+  modified_at: 2026-09-22T11:01:00.916171396Z
