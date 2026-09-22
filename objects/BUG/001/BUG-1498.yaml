@@ -28,12 +28,12 @@ description: |
   - The existing reaper is left alone or extended, not replaced. If it is extended to fire on Done rather than only Completed, state why that is safe given a Done spec can still fail to merge.
   - NOT IN SCOPE: bulk-rejecting the existing store. Declined by the advisor on 2026-09-20 with the measurement above; a future proposal to do so must first show that the rows it would close are not about unresolved specs.
   - Verification: with the lens in place, `aida list --status draft` shows the human-filed drafts; the machine-filed ones are reachable under a flag and their count is unchanged. Drive one spec to two shelves in the same phase and assert one row, with a recurrence marker, rather than two.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:30:00.794024258Z
-modified_at: 2026-09-22T10:43:20.756815220Z
+modified_at: 2026-09-22T10:43:26.522137347Z
 req_type: Bug
 tags:
 - agent-surface
