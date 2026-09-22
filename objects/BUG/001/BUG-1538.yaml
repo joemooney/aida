@@ -21,12 +21,12 @@ description: |-
   SCOPE NOTE. Backfilling old records is explicitly NOT wanted. The fix is the write path plus the read-side treatment of absence.
 
   Filed by the driver-advisor seat, disposing of an observation the reviewer seat sent rather than filed, per the operator's arbitration instruction. Autonomous-safe.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:44.578137790Z
-modified_at: 2026-09-22T07:07:27.108871132Z
+modified_at: 2026-09-22T07:07:38.059558829Z
 req_type: Bug
 comments:
 - id: 01a0c312-bb00-72a3-95b8-3088f0b66089
@@ -210,3 +210,22 @@ comments:
   content: '[aida:proxy-approval] verdict=approved; reasoning=third independent cold review verified exact head b372a8e0b2634b8a5d6a65f42ce7db2982c45173, including live primary/fallback/sibling/resume provenance enforcement and red-first tests; independent=yes; gates=required Ubuntu CI green, merge-hold-gate green, exact-head review approved; timestamp=2026-09-22T00:07:17-07:00'
   created_at: 2026-09-22T07:07:27.108871132Z
   modified_at: 2026-09-22T07:07:27.108871132Z
+history:
+- id: 01a0c7f1-0aba-7ab0-9a5e-760c5195942b
+  author: aida-auto-bump
+  timestamp: 2026-09-22T07:07:38.042627918Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0c7f1-0acb-7d03-9ad3-b28ba3762f7e
+  timestamp: 2026-09-22T07:07:38.059555805Z
+  agent: aida
+  commit_sha: 3a404d0bf1e2156e636ddd473cf24ca7f4ecb802
+  summary: 'Cold independent round-3 review: SHA-less/stale/unresolved approvals fail closed across drain and resume paths; tests and CI green.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T07:07:36.535704530Z
+  completion_sha: 3a404d0bf1e2156e636ddd473cf24ca7f4ecb802
