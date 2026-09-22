@@ -33,7 +33,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:30:00.794024258Z
-modified_at: 2026-09-22T10:45:25.125510964Z
+modified_at: 2026-09-22T10:50:53.895095714Z
 req_type: Bug
 tags:
 - agent-surface
@@ -82,3 +82,8 @@ comments:
   content: 'Implemented the missing read-side lens: exact Draft listings now show human-filed rows by default and advertise the hidden machine count; --machine-drafts selects tagged or legacy-preamble auto-drafts and composes with --short for batching. Mixed-status queries stay complete. Existing BUG-864 recurrence dedupe/reaper behavior is unchanged and its tests remain green.'
   created_at: 2026-09-22T10:43:20.756815220Z
   modified_at: 2026-09-22T10:43:20.756815220Z
+- id: 01a0c8bd-7247-74e0-bfb1-06dc2758498d
+  author: joe
+  content: '[cold-review] PASS exact head 25c52f152f0fc940d8c2e78a23a15dfb83ab45cb for BUG-1498. Independent: yes; reviewer neither implemented nor specified this lane. Evidence: the exact-draft default lens preserves human rows and hides tagged plus legacy-preamble machine rows; --machine-drafts returns only those rows and composes with --short; explicit auto-drafted tag access and mixed-status completeness are preserved. Existing BUG-864 dedupe remains unchanged and focused recurrence tests prove one open row per spec/phase/failure-kind with Attempts and Latest recurrence updates; the existing reaper remains unchanged. Local gates: cargo test -p aida-cli-lib bug_1498 passed 6/6; cargo test -p aida-cli-lib task_266_tests passed 8/8; cargo fmt --all -- --check passed. merge-hold-gate is green. Required GitHub Build is still pending, so this approval is conditional on that exact-head Build succeeding; do not merge over red CI.'
+  created_at: 2026-09-22T10:50:53.895095714Z
+  modified_at: 2026-09-22T10:50:53.895095714Z
