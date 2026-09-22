@@ -56,7 +56,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:49:08.443039479Z
-modified_at: 2026-09-22T11:01:00.916171396Z
+modified_at: 2026-09-22T11:07:15.885442274Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -94,3 +94,8 @@ comments:
   content: 'PR #2095 rework pushed at exact head 70cabccefe. Fixed consecutive_idle_runs so punted and escalated outcomes are material and reset the streak. DrainInvocation is now captured exactly once alongside each drain start clock (single batch, batch chain, next-N), passed through finalize_drain_summary, and cloned into the durable record; completion no longer reads ancestry/process identity. Added adversarial coverage for punt/escalation reset plus a short-lived/reparented launcher snapshot proving ancestry/identity callbacks are not re-run at completion. Tests: last_drain 15 pass; BUG-1548 human/JSON/TOON rendering 2 pass; cargo check and fmt pass. trace:BUG-1548 | ai:codex'
   created_at: 2026-09-22T11:01:00.916171396Z
   modified_at: 2026-09-22T11:01:00.916171396Z
+- id: 01a0c8cc-6e2d-72c3-b4c9-e868652ff690
+  author: joe
+  content: '[aida:cold-review] APPROVED on PR #2095 exact head 70cabccefe784978663be55b41d8346977401ce7, conditional on required Build green. Independent: yes. Both prior blockers are closed: punted and escalated outcomes reset the idle streak, and invocation provenance is captured once at each batch, batch-chain, and next-N start then passed unchanged through finalization. Revalidated bounded recent human/JSON/TOON status, allow-listed provenance without argv/environment, deterministic 24h expiry, legacy compatibility, and PID/start-identity liveness. Local gates: 15 last_drain, 2 BUG-1548 render, 56 drain_state tests, fmt and diff-check all pass. merge-hold-gate green; Build still in progress. Full verdict is on PR #2095.'
+  created_at: 2026-09-22T11:07:15.885442274Z
+  modified_at: 2026-09-22T11:07:15.885442274Z
