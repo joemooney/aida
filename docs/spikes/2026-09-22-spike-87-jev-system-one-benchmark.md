@@ -112,7 +112,8 @@ Detailed application matrix and experimental protocol:
 ### Prioritized near-term experiments
 
 1. **Review-context selection** — choose relevant acceptance criteria and prior findings before a Claude/Codex review. Measure mandatory rule recall (safety critical).
-2. **Duplicate/related-spec ranking** — advisory candidate overlap hints during intake without blocking or auto-mutating. Requires hard local timeout ($\le 400$ ms) and silent deterministic fallback.
+2. **Duplicate/related-spec ranking** — advisory candidate overlap hints during intake; capture persists first and never blocks, with silent deterministic fallback on cutoff.
+
 3. **Finding clustering and triage** — cluster repeated findings across rounds to reduce review churn; strictly preserves all original findings without discarding evidence.
 4. **Queue routing** — advisory classifier with explicit "unknown/escalate" class; bars auto-dispatch for high-impact or ambiguous spec types.
 

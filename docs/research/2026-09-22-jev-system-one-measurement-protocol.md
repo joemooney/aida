@@ -76,7 +76,7 @@ To establish rigorous causal proof without risking repository stability, we form
                                  │ Candidate set
                                  ▼
                    ┌───────────────────────────┐
-                   │ Jev Scoring (≤ 400ms SLA) │ (Ranks relevance to diff)
+                   │ Jev Scoring (2–5s cutoff) │ (Ranks relevance to diff)
                    └─────────────┬─────────────┘
                                  │
                  ┌───────────────┴───────────────┐
@@ -115,6 +115,18 @@ The automated trial must immediately halt and revert to the control baseline if:
 2. **Reviewer Quality Regression:** Any statistically significant increase in post-merge bug filings or review-finding disagreements.
 3. **Availability / Latency Failure:** Jev API error or timeout rate exceeds $5.0\%$ over a rolling 20-call window.
 
+### 3.4 Deadline Policy: Use-Case Specific Deadlines, Not a Global 400ms SLA
+A global 400 ms SLA is an unrealistic benchmark ambition that does not reflect AIDA’s actual operational architecture. AIDA's conversational reviewer seats take 30–90 seconds and CI builds take 10–15 minutes. 
+
+The governing deadline policy is:
+> **Each Jev use case declares its own deadline. Advisory interactive features must never delay the primary operation; on deadline expiry they use the deterministic/full-context fallback. Latency is measured and reported by percentile, but is not treated as a universal AIDA requirement.**
+
+* **`aida add` (Interactive Capture):** Non-blocking. The requirement YAML is saved first. Advisory duplicate or classification checks run asynchronously or with a short cutoff; on timeout they are skipped silently without stalling developer capture.
+* **Review-Context Selection:** Precedes a 30–90 second Claude/Codex review session. A provisional 2–5 second deadline is completely acceptable. On expiry, it silently falls back to the full baseline prompt.
+* **Queue & Task Routing:** 2–5 seconds is acceptable for batch dispatch; on timeout it defaults to the standard lane.
+* **Shadow Telemetry:** Background execution; no user-facing deadline needed.
+* **Safety-Sensitive Gates:** Never compromise safety to chase latency; fail closed or escalate.
+
 ---
 
 ## 4. Fault-Injection & Fail-Closed Test Suite
@@ -123,7 +135,7 @@ Per PRIN-5 and ADR-55, Jev integration must be verified against simulated failur
 
 | Test Case | Injected Fault | Expected Behavior |
 | :--- | :--- | :--- |
-| `test_fault_injection_timeout` | Simulated 1,000 ms API stall | Aborts at 400 ms client timeout; cleanly falls back to unpruned baseline prompt. |
+| `test_fault_injection_timeout` | Simulated API stall exceeding deadline (e.g. 5s) | Aborts at use-case deadline; cleanly falls back to unpruned baseline prompt. |
 | `test_fault_injection_http_500` | HTTP 500 Internal Server Error | Fails closed; routes to standard reviewer seat with error logged. |
 | `test_fault_injection_malformed_json` | Truncated / invalid JSON response | Fails closed; does not parse partial payload. |
 | `test_fault_injection_missing_key` | Unset API credentials | Immediate local fallback to `MockEvaluator` / local baseline; no network traffic. |
@@ -133,5 +145,6 @@ Per PRIN-5 and ADR-55, Jev integration must be verified against simulated failur
 ---
 
 ## 5. Summary
+
 
 By replacing bundled claims with **isolated estimands, stratified independent adjudication, phase-level timing metrics, and pre-registered safety stop conditions**, AIDA can evaluate Jev with scientific credibility. The immediate priority is executing the isolated **Review-Context Selection trial** under the fault-tolerant safeguards defined above.
