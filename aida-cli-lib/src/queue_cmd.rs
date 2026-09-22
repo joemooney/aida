@@ -8502,6 +8502,12 @@ pub(crate) fn append_reviewer_prompt_suffixes(prompt: &mut String) {
     if let Some(suffix) = reviewer_verdict_anchor_suffix() {
         prompt.push_str(&suffix);
     }
+    if let Ok(context) = std::env::var("AIDA_GRADED_REVIEW_CONTEXT") {
+        if !context.trim().is_empty() {
+            prompt.push_str("\n\n");
+            prompt.push_str(&context);
+        }
+    }
 }
 
 /// TASK-1290: round 1 of the headless reviewer prompt CITES the untraced

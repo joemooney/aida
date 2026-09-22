@@ -19,6 +19,7 @@ aida-core = { version = "0.15", path = "../aida-core", features = ["postgres", "
 ts-rs-forge = { version = "11", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }
 
 # CLI-specific dependencies
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
