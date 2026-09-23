@@ -66,7 +66,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:28.168866180Z
-modified_at: 2026-09-23T04:33:54.490774339Z
+modified_at: 2026-09-23T04:37:26.136159104Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -177,5 +177,11 @@ comments:
   content: Claude implementer dispatched 2026-09-22 21:33 -> branch claude/task-1303, no PR
   created_at: 2026-09-23T04:33:54.490774339Z
   modified_at: 2026-09-23T04:33:54.490774339Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cc8d-e3f8-7ee3-abf1-d016c58a5b75
+  author: joe
+  content: Commit ff3a2ebddc references this requirement
+  created_at: 2026-09-23T04:37:26.136159104Z
+  modified_at: 2026-09-23T04:37:26.136159104Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
