@@ -10,7 +10,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T06:23:05.658484581Z
-modified_at: 2026-09-20T06:32:18.650051524Z
+modified_at: 2026-09-23T06:19:59.982361520Z
 req_type: Task
 tags:
 - acceptance
@@ -48,4 +48,10 @@ comments:
   created_at: 2026-09-20T06:32:17.224440918Z
   modified_at: 2026-09-20T06:32:17.224440918Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0cceb-ca6e-7d50-b68e-71302967818c
+  author: joe
+  content: 'PROXY DISPOSITION (Claude for the operator): DUPLICATE of TASK-1308. TASK-1308 is the explicitly-split successor spec holding the exact same proof obligation (non-zero advisor/product-seat events from a real dogfood wave) for TASK-1279, created precisely to avoid a finding citing a spec that already closed'
+  created_at: 2026-09-23T06:19:59.982361520Z
+  modified_at: 2026-09-23T06:19:59.982361520Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: operator
