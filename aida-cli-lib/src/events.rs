@@ -196,6 +196,20 @@ pub enum EventKind {
         /// The merged PR number.
         pr: u32,
     },
+    /// A supervised merge-hold was placed on, or lifted from, a PR by a
+    /// coordination seat (as opposed to the drain's own automatic gates).
+    /// The advisor releasing a hold via an explicit `aida pr ship` (BUG-1167)
+    /// is the canonical `placed: false` case. **Actionable.**
+    // trace:BUG-1423 | ai:claude
+    MergeHoldChanged {
+        /// The PR the hold applies to.
+        pr: u32,
+        /// `true` when the hold was placed, `false` when it was lifted.
+        placed: bool,
+        /// Human-readable reason, when known.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
     /// A spec transitioned to `Completed`. This is the durable per-spec ship
     /// record, including completions discovered outside a live drain.
     // trace:BUG-1286 | ai:codex
@@ -356,6 +370,7 @@ impl EventKind {
             | EventKind::PuntFiled { .. }
             | EventKind::AdvisorEscalated { .. }
             | EventKind::PrMerged { .. }
+            | EventKind::MergeHoldChanged { .. }
             | EventKind::SpecCompleted { .. }
             | EventKind::RunCompleted { .. }
             | EventKind::QueueDrained { .. }
@@ -403,6 +418,7 @@ impl EventKind {
             EventKind::PuntFiled { .. } => "PuntFiled",
             EventKind::AdvisorEscalated { .. } => "AdvisorEscalated",
             EventKind::PrMerged { .. } => "PrMerged",
+            EventKind::MergeHoldChanged { .. } => "MergeHoldChanged",
             EventKind::SpecCompleted { .. } => "SpecCompleted",
             EventKind::RunCompleted { .. } => "RunCompleted",
             EventKind::QueueDrained { .. } => "QueueDrained",
@@ -442,6 +458,7 @@ impl EventKind {
             "CronJobFired",
             "CronJobFailed",
             "MailReceived",
+            "MergeHoldChanged",
         ]
     }
 }
@@ -477,6 +494,16 @@ pub struct Event {
     /// outside a live drain (best-effort — no consumer depends on it yet).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub run_uuid: String,
+    /// The coordination seat that performed the action, when known — e.g.
+    /// `advisor`, `product`, `implementer`. Absent on drain-phase events
+    /// (whose identity is carried by `run_uuid` instead) and on any event
+    /// written before this field existed. BUG-1423: without this, the seat
+    /// taxonomy is a partial account of who acted — every event before this
+    /// field was added carries no seat, so consumers must not assume its
+    /// absence means "no seat acted", only "not recorded".
+    // trace:BUG-1423 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seat: Option<String>,
     /// The event verb + its payload.
     pub kind: EventKind,
 }
@@ -488,9 +515,24 @@ impl Event {
             ts: Utc::now(),
             spec,
             run_uuid: run_uuid.into(),
+            seat: None,
             kind,
         }
     }
+}
+
+/// The active coordination seat for the current process, from
+/// `AIDA_SESSION_ROLE` — the same env var the rest of the codebase resolves
+/// role identity from (`.aida/discipline/advisor-role.md`). `None` when unset
+/// or blank, so a caller with no known seat emits without one rather than
+/// inventing a value. BUG-1423: the source of the `seat` [`Event`] carries
+/// for a non-drain (e.g. `aida pr ship`) emission.
+// trace:BUG-1423 | ai:claude
+pub fn active_seat() -> Option<String> {
+    std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
 }
 
 /// Path to the event stream for a project, given its root directory.
@@ -1504,6 +1546,7 @@ mod tests {
                 ts,
                 spec: Some("STORY-1".into()),
                 run_uuid: "run-1".into(),
+                seat: None,
                 kind,
             };
             lines.push(serde_json::to_string(&ev).unwrap());

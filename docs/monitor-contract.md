@@ -47,7 +47,21 @@ means the exclusion count was measured and was genuinely zero; an absent
 chained-batch drains). Consumers must preserve that distinction instead of
 coercing an absent field to zero. // trace:BUG-1425 | ai:codex
 
+`.aida/events.jsonl` records what a drain does plus, since `1.1.0`, what
+`aida pr ship` does. **Events written before `1.1.0` record drain activity
+only** — a merge, review verdict, or supervised-merge-hold change performed by
+a coordination seat (advisor, product) outside a drain phase emitted nothing.
+Any seat count or merge count a consumer computes from an event log that spans
+back before `1.1.0` is therefore a **lower bound**, not a complete account.
+`seat` (present on `MergeHoldChanged` and, when known, on `PrMerged`) is
+`null`/absent on every event recorded before this field existed, and on
+drain-phase events, whose actor is instead identified by `run_uuid`. // trace:BUG-1423 | ai:claude
+
 ## Migration notes
 
+- `1.1.0` — `aida pr ship` now emits `PrMerged` (parity with the drain merge
+  phase) and the new `MergeHoldChanged` event kind for a coordination-seat
+  hold placed/lifted; `Event` gained an additive `seat` field. Additive only —
+  no covered field changed shape. (BUG-1423)
 - `1.0.0` — initial contract: eleven polling surfaces and the events follow
   feed. The promised subset is recorded in `monitor-contract-fixtures/`.
