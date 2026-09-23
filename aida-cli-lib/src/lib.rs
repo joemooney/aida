@@ -235,9 +235,11 @@ mod review_verdict;
 mod role_cmd;
 mod rules_cmd;
 mod rules_sync;
+// trace:TASK-1307 | ai:claude — the pre-BUG-1452 stranded-refusal sweep.
 mod sandbox_cmd;
 mod scaffold_cmd;
 mod scaffold_refresh;
+mod stranded_sweep;
 // trace:STORY-262 | ai:claude
 mod schedule;
 mod schedule_cmd;
@@ -77989,6 +77991,8 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
         // trace:BUG-1516 | ai:claude
         ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
+        // trace:TASK-1307 | ai:claude
+        ReviewCommand::Stranded { json, fix } => handle_review_stranded(*json, *fix),
     }
 }
 
@@ -78023,6 +78027,301 @@ fn handle_review_normalize_shas(dry_run: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// TASK-1307: read-only sweep for specs stranded by a refusal recorded
+/// before BUG-1452 started protecting new ones — refused at the PR's
+/// CURRENT head, spec still Done, no merge hold, no queue entry to re-drive
+/// it. Walks the bounded `.aida/review-verdicts/` directory (never a full
+/// store scan), asks the forge for each candidate's LIVE PR head sha so a
+/// refusal against a superseded head is never mistaken for one against the
+/// current head, and reports without mutating anything.
+// trace:TASK-1307 | ai:claude
+fn run_stranded_sweep(project_root: &std::path::Path) -> Result<Vec<stranded_sweep::StrandedRow>> {
+    let dir = project_root.join(".aida").join("review-verdicts");
+    let mut spec_ids: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            if !stranded_sweep::is_spec_keyed_verdict_filename(stem) {
+                continue;
+            }
+            spec_ids.push(stem.to_string());
+        }
+    }
+    spec_ids.sort();
+    spec_ids.dedup();
+    if spec_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        return Ok(Vec::new());
+    };
+    let dispenser = load_dispenser(&store_path)?;
+    let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+
+    // Condition 3 ("no queue entry exists to re-drive it") reads every
+    // user's queue. Queue files are small and few — this is not the
+    // full-store scan the storage-model convention warns against.
+    let mut queued_ids: std::collections::HashSet<uuid::Uuid> = std::collections::HashSet::new();
+    if let Ok(users) = backend.queue_users() {
+        for user in users {
+            if let Ok(entries) = backend.queue_list(&user, true) {
+                for e in entries {
+                    queued_ids.insert(e.requirement_id);
+                }
+            }
+        }
+    }
+
+    let mut rows = Vec::new();
+    for spec_id in spec_ids {
+        let Some(verdict) = review_verdict::read_recorded_verdict(project_root, &spec_id) else {
+            continue;
+        };
+        if !verdict.kind.blocks_done() {
+            continue;
+        }
+        let Ok(Some(req)) = backend.get_requirement_by_spec_id(&spec_id) else {
+            continue;
+        };
+        let status_is_done = matches!(req.status, aida_core::RequirementStatus::Done);
+
+        // BUG-1454's search-by-spec-id open-PR lookup. `None` means the
+        // forge lookup itself failed; `Some(..)` without this spec means no
+        // open PR was found. Either way there is nothing to strand without
+        // a live open PR, so skip rather than guess one.
+        let Some(open_prs) = specs_with_open_prs(project_root, [spec_id.clone()]) else {
+            continue;
+        };
+        let Some(&pr) = open_prs.get(&spec_id) else {
+            continue;
+        };
+
+        let mut sink = crate::network_retry::NoopSink;
+        let Ok(meta) = forge::forge_for(project_root).change_metadata(pr, &mut sink) else {
+            continue;
+        };
+        if meta.state != forge::ChangeState::Open {
+            continue;
+        }
+
+        // No local ancestry probe: comparing the verdict's `reviewed_sha`
+        // directly against the forge-reported live head is sufficient to
+        // tell "refused at the current head" (exact match) from "refused at
+        // a superseded head" (any mismatch reads as `Unknown` here, which
+        // `classify_stranded` treats identically to a confirmed rewrite —
+        // never flagged) — acceptance criterion 2, with no need to fetch
+        // the branch locally.
+        let relation = review_verdict::classify_tip_relation(
+            verdict.reviewed_sha.as_deref(),
+            Some(meta.head_sha.as_str()),
+            None,
+        );
+        let hold_present = merge_hold::read_hold(project_root, pr).is_some();
+        let queue_entry_present = queued_ids.contains(&req.id);
+
+        let conditions = stranded_sweep::classify_stranded(
+            status_is_done,
+            hold_present,
+            queue_entry_present,
+            Some(&verdict),
+            relation,
+        );
+        if conditions.is_stranded() {
+            rows.push(stranded_sweep::StrandedRow {
+                spec_id: req.display_id(),
+                pr,
+                conditions,
+                verdict_summary: verdict.summary.clone(),
+                reviewed_sha: verdict.reviewed_sha.clone(),
+                current_head: Some(meta.head_sha.clone()),
+            });
+        }
+    }
+    Ok(rows)
+}
+
+/// `aida review stranded` — TASK-1307. Default is a read-only report;
+/// `--fix` is the separate explicit remediation pass (acceptance 3),
+/// applying the same protection BUG-1452 now gives a fresh refusal: a merge
+/// hold plus parking the spec in Needs Attention. Idempotent (acceptance
+/// 4) because it re-derives the stranded set from live state each call — a
+/// spec the previous `--fix` already held/parked no longer classifies as
+/// stranded, so a second run changes nothing.
+// trace:TASK-1307 | ai:claude
+fn handle_review_stranded(json: bool, fix: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let rows = run_stranded_sweep(&project_root)?;
+
+    if fix {
+        let mut fixed_specs = Vec::new();
+        for row in &rows {
+            let reason = format!(
+                "stranded refusal recovered for {} at {}",
+                row.spec_id,
+                row.reviewed_sha
+                    .as_deref()
+                    .map(review_verdict::short_sha)
+                    .unwrap_or("unknown"),
+            );
+            merge_hold::write_hold(&project_root, row.pr, &reason)
+                .with_context(|| format!("could not protect PR-{} with a merge hold", row.pr))?;
+            let detail = row
+                .verdict_summary
+                .clone()
+                .unwrap_or_else(|| "stranded refusal recovered by sweep".to_string());
+            let recovery = format!(
+                "address the review findings, move {} back to In Progress, and clear the PR hold only after approval",
+                row.spec_id
+            );
+            if shelve_spec_on_failure(
+                &project_root,
+                &row.spec_id,
+                "reviewer",
+                3,
+                "verdict:stranded",
+                &detail,
+                &recovery,
+            )?
+            .is_some()
+            {
+                fixed_specs.push(row.spec_id.clone());
+            }
+        }
+        let remaining = run_stranded_sweep(&project_root)?;
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "fixed": fixed_specs,
+                    "remaining": remaining.iter().map(|r| &r.spec_id).collect::<Vec<_>>(),
+                }))?
+            );
+        } else {
+            println!(
+                "{} recovered {} stranded spec(s); {} still require attention",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                fixed_specs.len(),
+                remaining.len(),
+            );
+            for spec in &fixed_specs {
+                println!("  {} {}", "→".green(), spec.cyan());
+            }
+            for row in &remaining {
+                println!(
+                    "  {} {} (PR-{}) — could not be parked; check manually",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    row.spec_id.cyan(),
+                    row.pr
+                );
+            }
+        }
+        return Ok(());
+    }
+
+    // Acceptance 5: the count, once measured, is recorded durably rather
+    // than only printed to a scrollback that will be gone by the time
+    // anyone asks how many there were. Best-effort, append-only, and never
+    // touches a spec — recording a measurement is not remediation.
+    record_stranded_sweep_measurement(&project_root, rows.len());
+
+    if json {
+        let arr: Vec<_> = rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "spec": r.spec_id,
+                    "pr": r.pr,
+                    "status_not_moved": r.conditions.status_not_moved,
+                    "hold_absent": r.conditions.hold_absent,
+                    "queue_entry_absent": r.conditions.queue_entry_absent,
+                    "verdict_refusing_at_head": r.conditions.verdict_refusing_at_head,
+                    "reviewed_sha": r.reviewed_sha,
+                    "current_head": r.current_head,
+                    "summary": r.verdict_summary,
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "count": rows.len(),
+                "stranded": arr,
+            }))?
+        );
+        return Ok(());
+    }
+
+    if rows.is_empty() {
+        println!(
+            "{} no stranded specs found",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
+        return Ok(());
+    }
+    println!(
+        "{} {} stranded spec(s) — refused at the current head, still Done, unheld, unqueued:",
+        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+        rows.len()
+    );
+    for row in &rows {
+        println!(
+            "  {} PR-{} — refused at {}",
+            row.spec_id.cyan(),
+            row.pr,
+            row.reviewed_sha
+                .as_deref()
+                .map(review_verdict::short_sha)
+                .unwrap_or("?"),
+        );
+        if let Some(s) = &row.verdict_summary {
+            println!("      {}", s.dimmed());
+        }
+    }
+    println!(
+        "  {} remediate with `aida review stranded --fix`",
+        "→".dimmed()
+    );
+    Ok(())
+}
+
+/// Best-effort durable log of each real measurement — append-only, never
+/// touches a spec. `.aida/stranded-sweep-history.jsonl` is local runtime
+/// state (unshared, like `.aida/review-verdicts/`), but it is the record
+/// TASK-1307's acceptance 5 asks for: the pre-sweep count is unrecoverable
+/// once the underlying PRs are merged or closed, so the first real count
+/// this sweep ever produces must not evaporate with scrollback.
+// trace:TASK-1307 | ai:claude
+fn record_stranded_sweep_measurement(project_root: &std::path::Path, count: usize) {
+    let path = project_root
+        .join(".aida")
+        .join("stranded-sweep-history.jsonl");
+    let Some(dir) = path.parent() else { return };
+    if std::fs::create_dir_all(dir).is_err() {
+        return;
+    }
+    let line = serde_json::json!({
+        "measured_at": chrono::Utc::now().to_rfc3339(),
+        "count": count,
+    });
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = writeln!(f, "{line}");
+    }
 }
 
 fn guided_review_prompt(spec: &str) -> String {
