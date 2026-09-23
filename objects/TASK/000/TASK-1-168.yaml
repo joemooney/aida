@@ -37,12 +37,12 @@ description: |-
   RELATION TO BUG-1503: that spec covers `aida status --format json` and `aida awaiting --format json` never returning while their bare forms are sub-second. This is a third surface in the same family, and it differs in one way that may matter to whoever fixes it — statusbar is slow in its DEFAULT form, with no flag involved, so whatever BUG-1503 finds about the json branch bypassing the STORY-707 cache path cannot be the whole explanation here.
 
   SCOPE: measured from the command line only; I have not read the implementation. The 68s figure is one sample with a 75s budget — it exited 0, so it is a completion time and not a timeout.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:42:58.222497613Z
-modified_at: 2026-09-23T15:12:47.000433770Z
+modified_at: 2026-09-23T15:15:01.525811174Z
 req_type: Task
 tags:
 - from-advisor:general
