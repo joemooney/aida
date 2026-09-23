@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:14:15.735389401Z
-modified_at: 2026-09-23T09:47:47.254692974Z
+modified_at: 2026-09-23T09:47:49.382024669Z
 req_type: Task
 tags:
 - parent:EPIC-62 reviewer-lane cleanup severity:operational
@@ -69,4 +69,10 @@ comments:
   content: Commit eab73f7e0c references this requirement
   created_at: 2026-09-23T09:47:21.165700889Z
   modified_at: 2026-09-23T09:47:21.165700889Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdaa-0f06-73a1-ad41-6b334a7933c6
+  author: joe
+  content: 'Claude implementer result: claude/task-1312 @ eab73f7e0c. New opt-in ''aida pr gc [--dry-run]'' deletes local pr-N/mr-N snapshot branches only when the PR is merged/closed AND not checked out AND the tip matches the last known head; otherwise it skips and reports. The CLI manual and format-json audit are updated. 4 tests. Awaiting review, then batch 7.'
+  created_at: 2026-09-23T09:47:49.382024669Z
+  modified_at: 2026-09-23T09:47:49.382024669Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
