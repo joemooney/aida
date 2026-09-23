@@ -42090,6 +42090,12 @@ mod task_957_claim_tests;
 #[path = "tests/story_696_ps_tests.rs"]
 mod story_696_ps_tests;
 
+// `aida ps` flags a live seat whose mail identity would fall back to the
+// shell user. trace:TASK-1451 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1451_mail_identity_ps_tests.rs"]
+mod task_1451_mail_identity_ps_tests;
+
 // The orphaned-In-Progress detection → `aida awaiting` mapping.
 // trace:BUG-1523 | ai:claude
 #[cfg(test)]
@@ -58493,6 +58499,10 @@ struct PsRow {
     /// opt-in — so the locked-by column stays blank until a lock exists.
     // trace:TASK-1143 | ai:claude
     locked_by: Option<String>,
+    /// TASK-1451: the live seat's resolved mail-sender identity source —
+    /// `None` when there is no live pid backing this row (nothing to probe).
+    // trace:TASK-1451 | ai:claude
+    mail_identity: Option<MailIdentityStatus>,
 }
 
 /// The TASK-1090 dispatch-health payload for one [`PsRow`].
@@ -58503,6 +58513,102 @@ struct PsDispatch {
     hint: Option<String>,
     dirty: bool,
     ahead_of_main: u32,
+}
+
+/// TASK-1451: whether a live seat's resolved mail identity is a stable seat
+/// value or the ambiguous shell-user fallback BUG-1533 flagged in the
+/// envelope — surfaced here BEFORE that seat sends any mail, so the gap is
+/// visible up front instead of discovered 200 messages later.
+// trace:TASK-1451 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MailIdentityStatus {
+    /// `AIDA_AGENT_NAME` / `AIDA_USER` / `AIDA_SESSION_ROLE` resolves a
+    /// stable seat identity — mail sent from this process is attributable.
+    Attributed,
+    /// None of those three are set in the process environment — mail sent
+    /// from this seat would collapse to the shell-user fallback.
+    Unattributed,
+    /// The process environment could not be read — another user's process,
+    /// the process already exited, or a non-Linux host. Reported as
+    /// "identity unknown" (PRIN-5) — never silently treated as fine.
+    Unknown,
+}
+
+impl MailIdentityStatus {
+    fn as_str(self) -> &'static str {
+        match self {
+            MailIdentityStatus::Attributed => "attributed",
+            MailIdentityStatus::Unattributed => "unattributed",
+            MailIdentityStatus::Unknown => "unknown",
+        }
+    }
+}
+
+/// Pure classification given an already-read environment snapshot — the
+/// TASK-1451 test seam. Reuses the BUG-1533 `resolve_sender` precedence
+/// wholesale rather than a second, drifting copy of it. `explicit` has no
+/// meaning here (`aida ps` is not sending a message), so it is always
+/// absent.
+// trace:TASK-1451 | ai:claude
+fn mail_identity_status_from_env(
+    env: &std::collections::HashMap<String, String>,
+) -> MailIdentityStatus {
+    let get = |k: &str| env.get(k).map(String::as_str);
+    let (_, source) = aida_core::mailbox::resolve_sender(
+        None,
+        get("AIDA_AGENT_NAME"),
+        get("AIDA_USER"),
+        get("AIDA_SESSION_ROLE"),
+        get("USER"),
+    );
+    if source.is_attributed() {
+        MailIdentityStatus::Attributed
+    } else {
+        MailIdentityStatus::Unattributed
+    }
+}
+
+/// Parse `/proc/<pid>/environ` (NUL-separated `KEY=VALUE` records) into a
+/// map. `None` when the file can't be read — permission denied (another
+/// user's process) or the process has already exited. Linux-only: that file
+/// has no equivalent on other platforms.
+// trace:TASK-1451 | ai:claude
+#[cfg(target_os = "linux")]
+fn read_pid_environ_vars(pid: u32) -> Option<std::collections::HashMap<String, String>> {
+    let raw = std::fs::read(format!("/proc/{pid}/environ")).ok()?;
+    let mut map = std::collections::HashMap::new();
+    for entry in raw.split(|&b| b == 0) {
+        if entry.is_empty() {
+            continue;
+        }
+        if let Ok(s) = std::str::from_utf8(entry) {
+            if let Some((k, v)) = s.split_once('=') {
+                map.insert(k.to_string(), v.to_string());
+            }
+        }
+    }
+    Some(map)
+}
+
+/// The real `/proc/<pid>/environ` probe — the same "one seam per real I/O
+/// source" pattern as `pid_start_time`, injected into `build_running_work`
+/// so the row-building logic stays filesystem-free and unit-testable with
+/// an injected environment map instead of a real `/proc` read.
+// trace:TASK-1451 | ai:claude
+#[cfg(target_os = "linux")]
+fn probe_mail_identity(pid: u32) -> MailIdentityStatus {
+    match read_pid_environ_vars(pid) {
+        Some(env) => mail_identity_status_from_env(&env),
+        None => MailIdentityStatus::Unknown,
+    }
+}
+
+/// Non-Linux hosts have no `/proc/<pid>/environ` to read — always "unknown",
+/// never guessed as fine.
+// trace:TASK-1451 | ai:claude
+#[cfg(not(target_os = "linux"))]
+fn probe_mail_identity(_pid: u32) -> MailIdentityStatus {
+    MailIdentityStatus::Unknown
 }
 
 /// An In-Progress spec with NO live spec-scoped session backing it — the
@@ -59556,6 +59662,7 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
         pid_start_time,
         |jsonl| session::role_from_jsonl(jsonl, "claude").ok().flatten(),
         |lease_id| manifest_roles.get(lease_id).cloned(),
+        probe_mail_identity,
     );
     // TASK-163: a dead phase child does not make its lease stale while the
     // drain orchestrator owns that spec. Overlay the authoritative drain PID
@@ -59570,6 +59677,10 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
             row.pid_started_at = pid_start_time(drain.pid);
             row.role = Some(format!("drain {}", drain.phase));
             row.dispatch = None;
+            // TASK-1451: re-probe under the authoritative drain pid, not the
+            // (possibly stale/absent) pid this row resolved before the
+            // overlay.
+            row.mail_identity = Some(probe_mail_identity(drain.pid));
         }
     }
     orphans.retain(|orphan| drain_state::live_drain_spec(project_root, &orphan.spec).is_none());
@@ -59644,6 +59755,7 @@ fn build_running_work(
     pid_start_probe: impl Fn(u32) -> Option<chrono::DateTime<chrono::Utc>>,
     role_probe: impl Fn(&std::path::Path) -> Option<String>,
     manifest_role_probe: impl Fn(&str) -> Option<String>,
+    mail_identity_probe: impl Fn(u32) -> MailIdentityStatus,
 ) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let rows: Vec<PsRow> = leases
         .iter()
@@ -59765,6 +59877,9 @@ fn build_running_work(
             // advisory lease (review/claim) has an empty path that matches no
             // lease → `None`.
             let locked_by = lock_probe(&l.worktree_path).filter(|s| !s.is_empty());
+            // TASK-1451: only probe a pid that actually backs this row — no
+            // live process, nothing to read an environment from.
+            let mail_identity = pid.map(&mail_identity_probe);
             PsRow {
                 lease: l.clone(),
                 state,
@@ -59776,6 +59891,7 @@ fn build_running_work(
                 spec,
                 dispatch,
                 locked_by,
+                mail_identity,
             }
         })
         .collect();
@@ -59883,6 +59999,10 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     // on this row's worktree — null when unlocked (the common
                     // case; `[locking]` is opt-in).
                     "locked_by": row.locked_by,
+                    // TASK-1451: null when no live pid backs the row (nothing
+                    // to probe); otherwise "attributed" / "unattributed" /
+                    // "unknown" — never collapsed to a boolean "fine".
+                    "mail_identity": row.mail_identity.map(MailIdentityStatus::as_str),
                 })
             })
             .collect();
@@ -60010,6 +60130,12 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         .as_ref()
                         .and_then(|d| d.hint.clone())
                         .unwrap_or_default(),
+                    // TASK-1451: blank when no live pid backs the row;
+                    // otherwise "attributed" / "unattributed" / "unknown".
+                    r.mail_identity
+                        .map(MailIdentityStatus::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
                 ]
             })
             .collect();
@@ -60026,7 +60152,8 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "live",
                     "locked_by",
                     "dispatch_state",
-                    "dispatch_hint"
+                    "dispatch_hint",
+                    "mail_identity"
                 ],
                 &run
             )
@@ -60257,6 +60384,30 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         hint.dimmed()
                     );
                 }
+            }
+            // TASK-1451: flag a live seat whose mail identity would fall
+            // back to the shell user — visible BEFORE it sends unattributable
+            // mail, not discovered after the fact in the envelope. Silent
+            // for `Attributed` (nothing to flag) and for `None` (no live pid
+            // to probe).
+            match row.mail_identity {
+                Some(MailIdentityStatus::Unattributed) => {
+                    println!(
+                        "{}{} {}: no AIDA_AGENT_NAME / AIDA_USER / AIDA_SESSION_ROLE in this process's environment — mail would go out unattributed",
+                        " ".repeat(11),
+                        crate::glyph(crate::glyphs::Glyph::Warning),
+                        "mail identity".yellow().bold()
+                    );
+                }
+                Some(MailIdentityStatus::Unknown) => {
+                    println!(
+                        "{}{} {}: could not read this process's environment — identity unknown",
+                        " ".repeat(11),
+                        crate::glyph(crate::glyphs::Glyph::Neutral),
+                        "mail identity".dimmed()
+                    );
+                }
+                Some(MailIdentityStatus::Attributed) | None => {}
             }
         }
         if !hidden_stale.is_empty() {
