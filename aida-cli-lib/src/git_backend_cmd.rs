@@ -34,6 +34,55 @@ fn resolve_comment_body(
 
 const PROXY_APPROVAL_MARKER: &str = "[aida:proxy-approval]";
 
+/// TASK-1456: annotate the Done rows `select_done_rework_rows` folded into
+/// the open lens. A bare `Done` row in the table would just read as ordinary
+/// (if slightly confusing, since Done isn't usually in this view)
+/// awaiting-merge work — this makes the state explicit: which spec, and the
+/// working recovery route (mirrors `QueueFreshPickup::AwaitingRework`'s hint,
+/// BUG-1515). Recomputes the refusal check locally (bounded by the — usually
+/// tiny — number of Done rows in this page) rather than threading a lookup
+/// set through every render branch. No-ops when there's no project root to
+/// check against or nothing in `reqs` is Done.
+// trace:TASK-1456 | ai:claude
+fn print_rework_needed_notes(
+    reqs: &[aida_core::RequirementSummary],
+    project_root: Option<&std::path::Path>,
+) {
+    let Some(root) = project_root else {
+        return;
+    };
+    let mut printed_header = false;
+    for r in reqs {
+        if !r.status.eq_ignore_ascii_case("done") {
+            continue;
+        }
+        if queue_cmd::done_spec_outstanding_refusal(
+            root,
+            r.agreed_id.as_deref().unwrap_or_default(),
+            r.spec_id.as_deref().unwrap_or_default(),
+        )
+        .is_none()
+        {
+            continue;
+        }
+        if !printed_header {
+            println!("\n{}", "Rework needed:".bold());
+            printed_header = true;
+        }
+        let display_id = r
+            .agreed_id
+            .as_deref()
+            .or(r.spec_id.as_deref())
+            .unwrap_or("?");
+        println!(
+            "  {}  {} — `{}`",
+            display_id.bold(),
+            "reviewer requested changes; still outstanding".magenta(),
+            format!("aida queue rework {display_id}").cyan(),
+        );
+    }
+}
+
 fn terminal_list_width() -> Option<usize> {
     if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
         return None;
@@ -1838,6 +1887,30 @@ pub(crate) fn handle_git_backend_command(
             };
             let mut reqs = backend.list_summaries(&filter)?;
 
+            // TASK-1456 (follow-up to BUG-1515): the open lens's status set
+            // excludes `Done` (it sits with Completed/Rejected on the closed
+            // side), but a Done spec whose PR carries a still-live refusal at
+            // its tip is not finished — it needs a rework round, and BUG-1515
+            // already taught `aida queue work`/`next` to read it that way.
+            // Left alone, it simply vanished from the main work list. Re-run
+            // the SAME filter (every other axis unchanged) scoped to `done`
+            // and fold in only the rows `select_done_rework_rows` confirms
+            // have an outstanding refusal, so the fold-in can never disagree
+            // with `queue_fresh_pickup_policy`. Runs before every downstream
+            // lens (parent/focus/meta/standing-type/etc.) so these rows are
+            // scoped identically to the rest of the view. Rendered further
+            // below via `print_rework_needed_notes`. trace:TASK-1456 | ai:claude
+            if default_open_lens {
+                let mut done_filter = filter.clone();
+                done_filter.status =
+                    Some(aida_core::RequirementStatus::Done.cache_key().to_string());
+                let done_rows = backend.list_summaries(&done_filter)?;
+                reqs.extend(queue_cmd::select_done_rework_rows(
+                    done_rows,
+                    store_path.parent(),
+                ));
+            }
+
             // STORY-62: --parent <id> restricts to direct children of <id>.
             // We don't materialize a parent->children index in the cache;
             // for one parent it's a single YAML read to grab the
@@ -2299,6 +2372,22 @@ pub(crate) fn handle_git_backend_command(
                         } else {
                             None
                         };
+                        // TASK-1456: a Done row folded in by
+                        // `select_done_rework_rows` still carries `status:
+                        // "Done"` — the machine-consumer contract that field
+                        // is (STORY-1352) — so the annotation goes in the
+                        // SAME status_label/status_lens channel NeedsAttention
+                        // rows already use, not a mutated status.
+                        // trace:TASK-1456 | ai:claude
+                        let rework = r.status.eq_ignore_ascii_case("done")
+                            && store_path.parent().is_some_and(|root| {
+                                queue_cmd::done_spec_outstanding_refusal(
+                                    root,
+                                    r.agreed_id.as_deref().unwrap_or_default(),
+                                    r.spec_id.as_deref().unwrap_or_default(),
+                                )
+                                .is_some()
+                            });
                         ListJsonRow {
                             spec_id: r
                                 .agreed_id
@@ -2309,8 +2398,16 @@ pub(crate) fn handle_git_backend_command(
                             req_type: r.req_type.as_str(),
                             r#type: r.req_type.as_str(),
                             status: r.status.as_str(),
-                            status_label: parked_lens.as_ref().map(|lens| lens.label()),
-                            status_lens: parked_lens.as_ref().map(|lens| lens.palette_key()),
+                            status_label: if rework {
+                                Some("Rework Needed".to_string())
+                            } else {
+                                parked_lens.as_ref().map(|lens| lens.label())
+                            },
+                            status_lens: if rework {
+                                Some("ReworkNeeded")
+                            } else {
+                                parked_lens.as_ref().map(|lens| lens.palette_key())
+                            },
                             tags: &r.tags,
                             queued,
                             in_flight,
@@ -2438,6 +2535,36 @@ pub(crate) fn handle_git_backend_command(
                     println!(
                         "note: {machine_drafts_hidden} machine-filed drafts hidden — `aida list --status draft --machine-drafts`"
                     );
+                }
+                // TASK-1456: the agent-mode row for a folded-in Done+refusal
+                // spec renders `status: Done`, same as an ordinary
+                // awaiting-merge row — flag it explicitly so an agent
+                // consuming this table doesn't read it as merge-ready.
+                // trace:TASK-1456 | ai:claude
+                if let Some(root) = store_path.parent() {
+                    for r in &reqs {
+                        if !r.status.eq_ignore_ascii_case("done") {
+                            continue;
+                        }
+                        if queue_cmd::done_spec_outstanding_refusal(
+                            root,
+                            r.agreed_id.as_deref().unwrap_or_default(),
+                            r.spec_id.as_deref().unwrap_or_default(),
+                        )
+                        .is_none()
+                        {
+                            continue;
+                        }
+                        let display_id = r
+                            .agreed_id
+                            .as_deref()
+                            .or(r.spec_id.as_deref())
+                            .unwrap_or("?");
+                        println!(
+                            "note: {display_id} needs rework — reviewer requested changes; \
+                             `aida queue rework {display_id}`"
+                        );
+                    }
                 }
                 // TASK-974 (AXI #9): trailing next-step block — drill into a row
                 // (placeholder id, so no concrete spec id is echoed twice into
@@ -2638,6 +2765,7 @@ pub(crate) fn handle_git_backend_command(
                 );
                 print_hidden_hints();
                 print_deferred_triggers(*deferred, &reqs);
+                print_rework_needed_notes(&reqs, store_path.parent());
                 maybe_print_whats_left_tip(status.as_deref(), &reqs);
                 return Ok(());
             }
@@ -2672,6 +2800,7 @@ pub(crate) fn handle_git_backend_command(
                     );
                     print_hidden_hints();
                     print_deferred_triggers(*deferred, &reqs);
+                    print_rework_needed_notes(&reqs, store_path.parent());
                     maybe_print_whats_left_tip(status.as_deref(), &reqs);
                 }
                 return Ok(());
@@ -2735,6 +2864,7 @@ pub(crate) fn handle_git_backend_command(
                 );
                 print_hidden_hints();
                 print_deferred_triggers(*deferred, &reqs);
+                print_rework_needed_notes(&reqs, store_path.parent());
                 maybe_print_whats_left_tip(status.as_deref(), &reqs);
             }
         }

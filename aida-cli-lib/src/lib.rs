@@ -74773,6 +74773,10 @@ fn print_live_drain_status_line(project_root: &std::path::Path) {
 mod story723_front_door_tests;
 
 #[cfg(test)]
+#[path = "tests/task1456_rework_visibility_tests.rs"]
+mod task1456_rework_visibility_tests;
+
+#[cfg(test)]
 #[path = "tests/story707_fast_status_tests.rs"]
 mod story707_fast_status_tests;
 
@@ -85454,6 +85458,63 @@ fn resolve_batch_ineligible_members(
     Ok(ineligible)
 }
 
+/// TASK-1456 (follow-up to BUG-1515): the `next N` / bare `--auto-complete`
+/// drain's candidate scan (`auto_complete_head_candidates`) only asks "is
+/// this Approved/Planned" — `Done` was never a drivable head status, refused
+/// or not, so it is silently absent from that filter rather than reported.
+/// A queue that is ENTIRELY Done specs carrying a still-live review refusal
+/// therefore hit the generic "no drivable items in the queue — nothing to
+/// drive" idle message with the refusals never named — the exact "relaunches
+/// every few minutes and does nothing" symptom BUG-1515 measured, just
+/// outside the `--batch` path BUG-1422 already covers via
+/// `resolve_batch_ineligible_members`.
+///
+/// Scans the SAME role-routed queue `auto_complete_head_candidates_with_roles`
+/// reads for this drain and returns the display_id + recovery hint
+/// (`queue_fresh_pickup_reason_label`) for every member whose
+/// `queue_drain_pickup_policy` resolves to `AwaitingRework` specifically —
+/// PRIN-5: this reports ONLY the verdicts it can positively confirm are
+/// outstanding-and-at-the-tip (`done_spec_outstanding_refusal`'s own
+/// contract), never a guess about a Done spec whose verdict state it
+/// couldn't read.
+// trace:TASK-1456 | ai:claude
+fn resolve_queue_rework_needed(
+    storage: &Storage,
+    user_id: &str,
+    role_override: Option<&str>,
+) -> Result<Vec<events::IneligibleBatchMember>> {
+    let store = storage.load()?;
+    let effective_role = queue_cmd::effective_auto_complete_role(role_override);
+    let role_filter = Some(effective_role);
+    let entries = queue_role_fallback::queue_list_with_role_fallback(
+        storage,
+        user_id,
+        role_filter.as_deref(),
+        false,
+    )?;
+    let mut rework = Vec::new();
+    for entry in entries {
+        if !entry_matches_role_filter(entry.for_role.as_deref(), role_filter.as_deref(), false) {
+            continue;
+        }
+        let Some(req) = storage.resolve_queued_requirement(&entry.requirement_id)? else {
+            continue;
+        };
+        let policy =
+            queue_cmd::queue_drain_pickup_policy(&req, &store, false, storage.path().parent());
+        if !matches!(policy, queue_cmd::QueueFreshPickup::AwaitingRework) {
+            continue;
+        }
+        if let Some(reason) = queue_cmd::queue_fresh_pickup_reason_label(&policy) {
+            rework.push(events::IneligibleBatchMember {
+                spec: req.display_id(),
+                reason,
+            });
+        }
+    }
+    Ok(rework)
+}
+
 /// Injectable shell around batch resolution so the missing-object diagnostic
 /// and event contract can be regression-tested without changing process cwd.
 // trace:BUG-1264 | ai:codex
@@ -88429,7 +88490,14 @@ fn handle_auto_complete_next_n(
     } else {
         result.exit_code
     };
-    emit_next_n_drain_summary(n, &result, exit_code, json);
+    // TASK-1456: resolve which of the (otherwise silently skipped) queued
+    // candidates are Done-with-a-still-live-refusal, so an all-refused idle
+    // wave surfaces them instead of just "nothing to drive". Best-effort —
+    // a resolution failure must not change the drain's exit code.
+    // trace:TASK-1456 | ai:claude
+    let rework_needed =
+        resolve_queue_rework_needed(storage, user_id, role_override).unwrap_or_default();
+    emit_next_n_drain_summary(n, &result, exit_code, json, &rework_needed);
     // TASK-967: permanent exit summary + cost-per-drain telemetry.
     finalize_drain_summary(
         "next-n",
@@ -88492,6 +88560,10 @@ fn emit_next_n_drain_summary(
     result: &auto_complete::BatchDrainResult,
     exit_code: i32,
     json: bool,
+    // TASK-1456: Done specs the drain skipped because they carry a
+    // still-live review refusal — named here so an all-refused wave reports
+    // rework instead of going quiet. trace:TASK-1456 | ai:claude
+    rework_needed: &[events::IneligibleBatchMember],
 ) {
     use auto_complete::BatchDrainOutcome;
 
@@ -88575,6 +88647,15 @@ fn emit_next_n_drain_summary(
             "exit_code".to_string(),
             serde_json::Value::Number(exit_code.into()),
         );
+        // TASK-1456: mirror the `--batch` drain's `ineligible` field so a
+        // machine consumer can tell "genuinely nothing queued" apart from
+        // "queued, but every candidate needs a rework round".
+        // trace:TASK-1456 | ai:claude
+        obj.insert(
+            "rework_needed".to_string(),
+            serde_json::to_value(rework_needed)
+                .unwrap_or_else(|_| serde_json::Value::Array(vec![])),
+        );
         println!("{}", serde_json::Value::Object(obj));
         return;
     }
@@ -88588,6 +88669,30 @@ fn emit_next_n_drain_summary(
     let plural = if count == 1 { "" } else { "s" };
     eprintln!();
     match &result.outcome {
+        // TASK-1456: an all-refused queue must not read the same as a
+        // genuinely empty one — name the rework candidates and the working
+        // recovery route instead of the generic "nothing to drive".
+        // trace:TASK-1456 | ai:claude
+        BatchDrainOutcome::Drained
+            if result.shipped.is_empty()
+                && result.punted.is_empty()
+                && result.escalated.is_empty()
+                && !rework_needed.is_empty() =>
+        {
+            let rendered = rework_needed
+                .iter()
+                .map(|member| format!("{} ({})", member.spec, member.reason))
+                .collect::<Vec<_>>()
+                .join(", ");
+            eprintln!(
+                "{} queue has {} item{} but none are eligible — every candidate needs \
+                 rework, not a fresh drive: {}",
+                "⏸".yellow().bold(),
+                rework_needed.len(),
+                if rework_needed.len() == 1 { "" } else { "s" },
+                rendered,
+            );
+        }
         BatchDrainOutcome::Drained
             if result.shipped.is_empty()
                 && result.punted.is_empty()

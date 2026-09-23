@@ -13753,6 +13753,46 @@ pub(crate) fn done_spec_outstanding_refusal(
     matches!(relation, review_verdict::TipRelation::AtReviewedSha).then_some(verdict)
 }
 
+/// TASK-1456 (follow-up to BUG-1515): `aida list`'s default open lens
+/// (`RequirementStatus::open_statuses()`) deliberately excludes `Done` — it
+/// sits with Completed/Rejected on the "closed" side. That is correct for an
+/// ordinary Done spec awaiting merge, but a Done spec whose PR carries a
+/// still-live refusal at its tip is NOT finished; BUG-1515 already taught
+/// `queue_fresh_pickup_policy` to read that state as rework, not
+/// merge-ready. Left alone, the open-lens exclusion made these specs
+/// disappear from the main work list entirely rather than just from the
+/// (already correct) awaiting-merge bucket.
+///
+/// Pure filter: given the Done rows the caller already fetched (same
+/// `ListFilter`, status axis swapped to `done`), returns only the ones with
+/// an outstanding refusal, via [`done_spec_outstanding_refusal`] — the exact
+/// predicate `queue_fresh_pickup_policy` uses, so the two surfaces can never
+/// disagree about which Done specs are "really" rework. `project_root` is
+/// `None` in the rare caller that cannot resolve one (mirrors
+/// `queue_fresh_pickup_policy`'s degrade-safe contract) — PRIN-5: unknown
+/// verdict state is never treated as "must be rework", so it degrades to
+/// "not included" rather than a guess.
+// trace:TASK-1456 | ai:claude
+pub(crate) fn select_done_rework_rows(
+    done_rows: Vec<aida_core::RequirementSummary>,
+    project_root: Option<&std::path::Path>,
+) -> Vec<aida_core::RequirementSummary> {
+    let Some(root) = project_root else {
+        return Vec::new();
+    };
+    done_rows
+        .into_iter()
+        .filter(|r| {
+            done_spec_outstanding_refusal(
+                root,
+                r.agreed_id.as_deref().unwrap_or_default(),
+                r.spec_id.as_deref().unwrap_or_default(),
+            )
+            .is_some()
+        })
+        .collect()
+}
+
 /// Resolve the review-verdict gate for a spec about to be marked done.
 ///
 /// Reads the recorded verdict (under either id form the caller holds), then —
