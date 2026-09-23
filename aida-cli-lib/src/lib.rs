@@ -77788,14 +77788,34 @@ fn parse_review_story_pr_number(title: &str) -> Option<u64> {
 /// inside them aren't mined as bogus "referenced" specs. Conservative: only the
 /// markers that strongly imply code and don't appear in genuine reference lines
 /// (`trace:SPEC-ID`, `(SPEC-ID)` in prose, `- (SPEC-ID) …` bullets).
-/// trace:BUG-412 | ai:claude
+///
+/// BUG-1590: a bare `t.contains(';')` was WAY too broad — AIDA's own
+/// integration-batch commit convention writes each folded spec as
+/// `- SPEC-ID: <clause>; <clause> (SPEC-ID)`, a prose sentence with a
+/// mid-line semicolon joining two clauses, terminated by the completion
+/// trailer. That line contains a `;` but is not code, and the old check
+/// silently discarded it from the squash-body scan — most lines of a
+/// multi-spec squash body were dropped, exactly the shape the integration
+/// workflow produces (observed: only 1-2 of 6-7 trailers survived per
+/// batch). Real pasted-code semicolons are STATEMENT TERMINATORS — the
+/// line ends in `;` (e.g. `let x = compute(CODE-42);`) — so the signal is
+/// narrowed to that shape: `ends_with(';')`, not `contains(';')`. A line
+/// that merely mentions a semicolon mid-sentence before its trailing
+/// `(SPEC-ID)` still counts as a trailer.
+// trace:BUG-1590 | ai:claude
 fn body_line_is_code_like(line: &str) -> bool {
     let t = line.trim();
     if t.is_empty() {
         return false;
     }
-    // Structural code punctuation that prose references don't use.
-    if t.contains('{') || t.contains('}') || t.contains(';') || t.contains("=>") || t.contains("::")
+    // Structural code punctuation that prose references don't use. `;` only
+    // counts when it TERMINATES the line (a real code statement), not when
+    // it merely appears mid-sentence ahead of a trailing `(SPEC-ID)`.
+    if t.contains('{')
+        || t.contains('}')
+        || t.ends_with(';')
+        || t.contains("=>")
+        || t.contains("::")
     {
         return true;
     }
@@ -77846,6 +77866,20 @@ pub(crate) fn extract_trace_line_spec_ids(message: &str) -> Vec<String> {
     out
 }
 
+/// Which commit-body SHAPES count as a completion trailer:
+/// every non-blank, non-subject body line whose TRAILING paren group
+/// starts with a spec-id-shaped token — `- SPEC-ID: <prose>; <more prose>
+/// (SPEC-ID)`, `* [AI:tool] fix(scope): thing (SPEC-ID)`, or bare
+/// `<prose> (SPEC-ID)` — counts, one trailer per line, regardless of
+/// interior punctuation (a mid-sentence `;` does NOT disqualify a line;
+/// only a line that structurally looks like pasted code does — see
+/// `body_line_is_code_like`). A line whose trailing group does not START
+/// with a spec-id (release-note prose like `(scope)`, `(1.2.3)`) or a
+/// code-like line (`{`/`}`/line-terminating `;`/`=>`/`::`/assignment `=`)
+/// contributes nothing. Ids already delivered by the commit's SUBJECT
+/// trailer are excluded (BUG-85) so a lead spec named in both places is
+/// not double-reported.
+// trace:BUG-1590 | ai:claude
 pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<String> {
     let delivered = extract_spec_ids_from_commit(message);
     let mut lines = message.lines();
