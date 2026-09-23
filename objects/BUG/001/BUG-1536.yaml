@@ -65,12 +65,12 @@ description: |
   Auditing whether other tests have done this historically. The incident was caught because
   the author noticed and said so, not by any detector — so a sweep would be a separate piece
   of work and is not a precondition for fixing the hazard.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:51:52.124497966Z
-modified_at: 2026-09-23T14:50:45.882937024Z
+modified_at: 2026-09-23T14:51:53.056674115Z
 req_type: Bug
 tags:
 - parent:EPIC-62 test-isolation forge-safety severity:major
