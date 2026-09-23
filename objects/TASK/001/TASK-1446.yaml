@@ -1,0 +1,22 @@
+id: 01a0cd02-c295-74b0-b610-f29754583d59
+spec_id: TASK-1446
+agreed_id: TASK-1446
+title: 'Draft-landed auto-bump follow-ups: bidirectional sweep counts, one-time affected-spec count, and a reopen guard'
+description: |-
+  Follow-ups split from BUG-1506 (proxy decision 2026-09-22). (1) BUG-1506 AC3: the BUG-1454 sweep runs in both directions and reports both counts (Completed-with-open-PR, and pre-Done-with-merged-trailer). (2) AC4: measure and record the pre-Done-with-merged-trailer count once. (3) Reopen guard: a spec deliberately reopened to Draft must not be flipped back to Done when pull runs with pre_sha=None. It needs its own field; reusing completion_sha would block the legitimate Done->Completed bump.
+
+  ## Acceptance
+  1. aida db reconcile-status (or the sweep) prints both directional counts.
+  2. The one-time count is recorded in a spec comment with date and population.
+  3. A test: a spec reopened to Draft after its trailered commit landed stays Draft on the next pull.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T06:45:05.301647405Z
+modified_at: 2026-09-23T06:45:05.301647405Z
+req_type: Task
+tags:
+- drain-safe
+- followup
+- parent:BUG-1506
