@@ -39,18 +39,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-21T23:12:35.796104074Z
+modified_at: 2026-09-23T22:28:47.804708452Z
 req_type: Story
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c403-9a08-7263-8c70-5f870be33efc
   created_at: 2026-09-21T16:06:16.918190822Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c408-ccbb-7263-9f8b-5fe834d597aa
   created_at: 2026-09-21T16:06:19.115682020Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c4b4-4bf7-7292-8b15-056642a43cb0
   created_at: 2026-09-21T16:06:20.655115072Z
   created_by: joe
@@ -216,3 +219,34 @@ comments:
   created_at: 2026-09-21T23:12:35.796104074Z
   modified_at: 2026-09-21T23:12:35.796104074Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0d062-c03c-7f03-ab67-9a0d493dd4cf
+  author: joe
+  content: |
+    [implementer] ADR-53's CEILING LIMB IMPLEMENTED, TESTED, AND FIRED AGAINST REAL DATA — CRITERION 1 NOT CLOSED, HONESTLY, BECAUSE THE DATA SAYS IT SHOULDN'T BE.
+
+    WHAT LANDED (this branch, unmerged). `PerformanceBudget` gained `ceiling_ms: Option<u64>` — the piece the 2026-09-21 23:12 comment flagged as "still unwritten" at #2068's head. `[performance.budgets]` now accepts either the old plain-integer form (`show = 1000`, unchanged, `ceiling_ms: None`) or a table form (`show = { budget_ms = 1000, ceiling_ms = 5000 }`). `performance_breaches()` trips on EITHER limb: proportion over `tolerated_pct`, OR any single call's `worst_ms` over `ceiling_ms` — matching ADR-53's decision exactly. Both limbs are carried through to every consumer that previously only had the proportion: `PerformanceBreach`, `schedule_ledger::PerformanceAudit` (ledgered, `#[serde(default)]` so old ledger rows deserialize fine), the doctor finding summary (now says `CEILING BREACHED — a single call ran N ms against a C ms ceiling` when it's the ceiling that tripped, `ceiling C ms not breached` when it isn't but is configured), and the advisor-facing `aida awaiting` line in `maintenance_schedule.rs::DueJob::line` (`ceiling 5000 ms (breached=true/false)`). This repo's `.aida/config.toml` (this branch) now carries `show = { budget_ms = 1000, ceiling_ms = 5000 }` — the value ADR-53 already derived and decided, not re-tuned here.
+
+    TESTS. 4 new unit tests in `doctor_cmd.rs`: table-form + plain-integer-form parsing side by side, a malformed (`ceiling_ms = 0`) ceiling ignored the same way a malformed budget is, a single 69,240ms-style call tripping the gate while the proportion sits at 0.6% (comfortably under a 10% tolerance) — the exact gap ADR-53 exists to close — and the mirror case (both limbs clear, no trip). Full suites green: `doctor_cmd::` 123 passed, `schedule_ledger::` 6 passed (incl. the BUG-1573 ledger round-trip, updated for the two new fields), `performance`-filtered `maintenance_schedule::` tests 15 passed (incl. `performance_failure_is_auditable_and_routed_by_trip`, unaffected). `cargo fmt --all -- --check` clean. `cargo clippy --release -p aida-cli-lib --lib` (default lints + `-W clippy::correctness`): zero new warnings traced to this diff — the 164 pre-existing warnings are all in code this change didn't touch. `scripts/check-portability.sh </dev/null` exits 0.
+
+    CRITERION 3 (TRIGGER), RECONFIRMED, UNTOUCHED BY THIS CHANGE. `aida schedule list` run just now (2026-09-23, real main checkout) still shows both `performance-guard` and `performance-guard-route` enabled. Still closed.
+
+    CRITERION 7 (RE-MEASUREMENT), RECONFIRMED WITH A FRESH READING, NOT JUST THE 2026-09-21 NUMBERS. Ran the actual scoped gate from the real main checkout (`aida doctor check performance --json`, main's config, no ceiling yet): exit 0, zero findings — quiet. To get the number behind the silence (a healthy pass doesn't ledger one), I cross-checked manually: `show` calls in the last 24h = 645 (`aida usage --cmd show --since 24h events`, and independently via `~/.aida/usage.jsonl` directly), 54-56 over the 1000ms budget depending on `>` vs `>=` at the boundary — 8.37% against the 10% tolerance. QUIET, but the proportion has drifted up from the 2026-09-21 reading of 2.9% at n=170 to 8.37% at n=645 over the ~36 hours since. Still comfortably under tolerance — I am NOT proposing a re-tightening on the strength of one drifted reading, per this spec's own rule ("the number changes only alongside a measurement, never tuned until green," which cuts against over-reacting to a single unhappy-looking sample exactly as much as a happy one, per the advisor's own 2026-09-21 correction on this same spec).
+
+    LINEAGE CHECK, DONE PROPERLY THIS TIME. Three distinct `binary_sha` values served `show` in this exact 24h window: `687ccb5976` (341 calls), `4e25ca658f` (257), `0bd634c` (48). Verified with `git merge-base --is-ancestor <sha> $(git rev-parse HEAD)` from the real main checkout: ALL THREE are ancestors of current main HEAD. Zero off-lineage exclusions right now — unlike the 11-binary window BUG-1572 was filed against, this particular reading is genuinely lineage-representative, not an approximation.
+
+    THE CEILING LIMB, DEMONSTRATED ON REAL DATA, NOT YET ON THE MERGED DOGFOOD SURFACE. `aida doctor`/`aida schedule` resolve their project root to the MAIN worktree regardless of which worktree invokes them (`main_worktree_root_from`) — the same structural fact the PR #2062 implementer hit demonstrating criterion 4. So this branch's ceiling config cannot be exercised through the real dogfood surface pre-merge, and I am not permitted to edit the main checkout to force it. Demonstrated instead via a throwaway sandboxed project root — a fresh, unrelated git repo carrying nothing but this branch's `.aida/config.toml`, pointed at the SAME real `~/.aida/usage.jsonl` and the SAME freshly-built binary (deleted afterward, nothing left behind): the ceiling limb fires correctly —
+
+        "show" exceeded its 1000 ms budget on 8.4% of 645 calls in the last 24h
+        (tolerated 10.0%, worst 23840 ms); CEILING BREACHED — a single call ran
+        23840 ms against a 5000 ms ceiling
+
+    — while the SAME window's proportion (8.37%, matching the criterion-7 reading above) stays under tolerance. That 23,840ms call landed 2026-09-23T06:21:07Z. `aida usage --cmd show --slower-than 5000ms events` shows this is not a one-off: multiple 5-27s `show` calls recur through today (19446ms at 17:53, 18966ms at 13:54, 26732ms on 09-22, etc.) — the tail ADR-53 found on 2026-09-21 (a 69,240ms call, post-fix) is still present in kind, not resolved.
+
+    HONEST STATUS OF CRITERION 1/2 (ADR-53's amended "quiet on BOTH limbs"): NOT CLOSED, AND I AM NOT CLAIMING IT IS. The ceiling limb is code-complete, tested, and demonstrated to fire correctly — but the population it judges is not quiet. Since all three in-window binaries are in-lineage right now (verified above), if this PR merges with the ceiling enabled as configured, the next `performance-guard` tick on the real dogfood surface will very likely TRIP on the ceiling limb, correctly. That is not a bug in this change — BUG-1480's fix bounded the proportion, not the tail, which is exactly ADR-53's own finding from 2026-09-21 and remains true today. This spec's own text says "IT WENT QUIET IS COMPATIBLE WITH THE JOB NEVER HAVING RUN" as a reason not to trust an untested silence; the symmetric case applies here — I refuse to write "quiet" against a limb I have direct evidence would trip.
+
+    WHAT WOULD ACTUALLY CLOSE CRITERION 1, LEFT FOR WHOEVER PICKS THIS UP NEXT: merge this PR (lands the ceiling code + config, still expected to trip on the next tick given the data above), let it trip once for real on the dogfood surface, confirm the ledger + `CronJobFailed` + advisor route carry the new `ceiling_ms`/`ceiling_breached` fields correctly end to end (the BUG-1573/#2062-style demonstration, now for the ceiling specifically — not done here, since forcing a real trip requires the merge first), and then either fix the underlying tail-latency defect (new work, out of this spec's scope, same as ADR-53 already ruled) or make a deliberate, recorded decision about the ceiling's value or scope. Neither belongs in this change.
+
+    DISPOSITION: criteria 3 and 7 are closed (reconfirmed today with fresh numbers). Criterion 1/ADR-53's ceiling limb is code-complete and evidence-complete but the guard is not observed quiet on that limb — the opposite, in fact, on real data. I am not marking STORY-1423 done. Leaving it open with this record is the same discipline this spec was written to enforce on STORY-1422: don't let a merge (or a session ending) quietly claim a criterion the evidence does not support.
+  created_at: 2026-09-23T22:28:47.804708452Z
+  modified_at: 2026-09-23T22:28:47.804708452Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
