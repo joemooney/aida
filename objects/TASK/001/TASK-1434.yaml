@@ -24,12 +24,12 @@ description: |
   7. Documentation gives exact commands and states that vendor billing reconciliation, negotiated discounts/credits, and real-time budget enforcement remain out of scope.
 
   Sketch-first: before implementation, post the proposed rate-file location/schema, matching/effective-date rules, arithmetic/rounding model, update provenance, and CLI changes for driver signoff.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T15:58:28.521305527Z
-modified_at: 2026-09-23T01:39:51.835509877Z
+modified_at: 2026-09-23T01:40:14.248646984Z
 req_type: Task
 tags:
 - cost
