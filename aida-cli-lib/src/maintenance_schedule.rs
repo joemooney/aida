@@ -1509,8 +1509,7 @@ pub(crate) fn tick_cron_line(project_root: &Path) -> Result<String> {
     let repo = project_root
         .canonicalize()
         .unwrap_or_else(|_| project_root.to_path_buf());
-    let aida_exe =
-        std::env::current_exe().context("could not resolve the current `aida` binary path")?;
+    let aida_exe = crate::aida_exe_path();
     let aida_exe = aida_exe.canonicalize().unwrap_or(aida_exe);
     build_tick_cron_line(&repo, &aida_exe)
 }
