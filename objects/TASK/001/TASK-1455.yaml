@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   1. Every gh/glab call in the merge-hold and review-record paths passes an explicit repo derived from the resolved project root.
   2. A test proves that a PR number with a mismatched repo is refused.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T14:51:56.415946563Z
-modified_at: 2026-09-23T23:07:43.717554841Z
+modified_at: 2026-09-23T23:51:59.071652711Z
 req_type: Task
 tags:
 - followup
@@ -23,3 +23,21 @@ relationships:
 - rel_type: Child
   target_id: 01a0c2bc-3fbc-7213-928e-16708f71a4ae
   created_at: 2026-09-23T14:51:59.172954400Z
+history:
+- id: 01a0d0ae-e958-7572-9bc0-2139b104f95b
+  author: aida-auto-bump
+  timestamp: 2026-09-23T23:51:59.064733908Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d0ae-e95f-7af2-ac35-5428379640d5
+  timestamp: 2026-09-23T23:51:59.071651767Z
+  agent: aida
+  commit_sha: 588cbb5ab19cede88711c3388ba5a0644a451275
+  summary: Completed via merge 588cbb5a
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T23:51:58.580313965Z
+  completion_sha: 588cbb5ab19cede88711c3388ba5a0644a451275
