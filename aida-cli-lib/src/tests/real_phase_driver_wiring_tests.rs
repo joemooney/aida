@@ -1141,7 +1141,7 @@ fn repo_with_pushed_branch_ahead_of_origin_default(
         &work,
         "finished.txt",
         "done\n",
-        "fix: completed implementation",
+        "fix: completed implementation (BUG-878)",
     );
     git(&work, &["push", "-q", "-u", "origin", "bug-878"]);
     (tmp, work, remote)
@@ -1214,6 +1214,7 @@ fn post_push_pr_recovery_completes_when_the_recorded_worktree_is_gone() {
         &gone,
         "bug-878",
         crate::forge::ForgeKind::GitHub,
+        "BUG-878",
     );
 
     let (ahead, pr) = recovered.expect(
@@ -1243,9 +1244,48 @@ fn post_push_pr_recovery_declines_when_the_branch_was_never_pushed() {
         &gone,
         "branch-that-was-never-pushed",
         crate::forge::ForgeKind::GitHub,
+        "BUG-878",
     );
     assert!(
         recovered.is_none(),
         "no pushed branch means nothing to recover; got {recovered:?}"
+    );
+}
+
+/// TASK-1442 follow-up (containment for BUG-1510): the drain's own PR-open
+/// recovery path must refuse to open a PR when the branch's commits are
+/// trailered for a DIFFERENT spec than the one this drive is for — the exact
+/// shape of the BUG-1510 incident (STORY-1391's drain opened PR #2043 whose
+/// commits were all trailered BUG-1420). Reuses the same pushed-branch
+/// fixture as the BUG-1485 tests above (worktree gone, work safe on origin,
+/// commit trailered `(BUG-878)`); only the expected spec passed to recovery
+/// differs. No real `gh` involvement is needed because the guard runs BEFORE
+/// the forge is ever called — the fake `gh` stub is still wired so a
+/// regression that skips the guard would be caught opening PR #4242 instead
+/// of refusing.
+// trace:TASK-1442 | ai:claude
+#[cfg(unix)]
+#[test]
+fn post_push_pr_recovery_refuses_when_commit_trailer_names_a_different_spec() {
+    let (_tmp, work, _remote) = repo_with_pushed_branch_ahead_of_origin_default();
+    let gone = work.parent().unwrap().join("torn-down-worktree");
+
+    let fake_gh = fake_gh_that_opens_pr(work.parent().unwrap(), 4242);
+    let _env =
+        crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake_gh.to_str().unwrap())]);
+
+    // The pushed commit is trailered `(BUG-878)` (see the fixture), but this
+    // drive claims to be working a DIFFERENT spec — the misattribution.
+    let recovered = try_open_orchestrator_pr_for_no_pr_worktree(
+        &work,
+        &gone,
+        "bug-878",
+        crate::forge::ForgeKind::GitHub,
+        "STORY-1391",
+    );
+    assert!(
+        recovered.is_none(),
+        "a branch whose only commit is trailered for a different spec must not get a PR \
+         opened under the wrong spec's identity; got {recovered:?}"
     );
 }

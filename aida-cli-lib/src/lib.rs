@@ -74889,6 +74889,50 @@ fn run_pr_open_spec_guard(project_root: &std::path::Path, branch: &str, expected
     std::process::exit(1);
 }
 
+/// TASK-1442 follow-up: the same PR-spec attribution check as
+/// `run_pr_open_spec_guard`, but as a `Result` instead of an exiting side
+/// effect. `run_pr_open_spec_guard` is only safe at `aida pr ship`'s own
+/// top level; the autonomous drain's PR-open recovery paths
+/// (`open_orchestrator_pr_for_implementer_worktree`,
+/// `open_orchestrator_pr_for_pushed_branch`) run INSIDE the orchestrator
+/// process, where `std::process::exit` would kill the whole drain instead of
+/// failing just the one phase. `repo` is the directory to run git in (the
+/// implementer worktree, or the main project root for a pushed branch);
+/// `branch_ref` is whatever ref names the branch's commits from there (a
+/// local branch name or `origin/<branch>`). A no-op when the default branch
+/// or commit range can't be resolved (soft — a git hiccup shouldn't block
+/// recovery) or when there are no commits to check.
+// trace:TASK-1442 | ai:claude
+fn ensure_pr_open_spec_attribution(
+    repo: &std::path::Path,
+    branch_ref: &str,
+    expected_spec: &str,
+) -> Result<()> {
+    let Some(default_ref) = resolve_default_branch_ref(repo) else {
+        return Ok(());
+    };
+    let range = format!("{default_ref}..{branch_ref}");
+    let commits = match read_commits_in_range(repo, &range) {
+        Ok(c) => c,
+        Err(_) => return Ok(()),
+    };
+    if commits.is_empty() {
+        return Ok(());
+    }
+    if let Some(other_ids) = pr_open_spec_guard_violation(&commits, expected_spec) {
+        let named = if other_ids.is_empty() {
+            "no commit carries a (SPEC-ID) trailer at all".to_string()
+        } else {
+            format!("commit trailer(s) instead name: {}", other_ids.join(", "))
+        };
+        anyhow::bail!(
+            "refusing to open a PR for {expected_spec} on `{branch_ref}` — no commit on it \
+             carries a `({expected_spec})` trailer; {named}"
+        );
+    }
+    Ok(())
+}
+
 /// CLI handler for `aida trace gate`. Reads the commit range from git, runs the
 /// pure validator against the live store, prints the result, and exits non-zero
 /// (code 1) when any commit references a dead/dangling SPEC-ID.
@@ -89729,10 +89773,15 @@ fn open_orchestrator_pr_for_implementer_worktree(
     worktree: &std::path::Path,
     branch: &str,
     forge_kind: crate::forge::ForgeKind,
+    spec: &str,
 ) -> Result<u64> {
     // trace:BUG-893 | ai:codex
     push_branch_from_implementer_worktree(worktree, branch)
         .map_err(|e| anyhow::anyhow!("{}", e.reason))?;
+    // TASK-1442 follow-up (containment for BUG-1510): before opening the PR,
+    // verify the branch actually carries a commit trailered for the spec
+    // this drive is for.
+    ensure_pr_open_spec_attribution(worktree, branch, spec)?;
     let commit_msg_out = std::process::Command::new("git")
         .current_dir(worktree)
         .args(["log", "-1", "--format=%B"])
@@ -90034,6 +90083,7 @@ fn open_orchestrator_pr_for_pushed_branch(
     project_root: &std::path::Path,
     branch: &str,
     forge_kind: crate::forge::ForgeKind,
+    spec: &str,
 ) -> Result<u64> {
     // BUG-895: phase 2 may have already pushed and removed the implementer
     // worktree. Recover from origin/<branch> without trying to push again.
@@ -90044,6 +90094,10 @@ fn open_orchestrator_pr_for_pushed_branch(
         anyhow::bail!("pushed branch `origin/{branch}` has no commits ahead of origin default");
     }
     let branch_ref = origin_branch_ref(branch);
+    // TASK-1442 follow-up (containment for BUG-1510): before opening the PR,
+    // verify the pushed branch actually carries a commit trailered for the
+    // spec this drive is for.
+    ensure_pr_open_spec_attribution(project_root, &branch_ref, spec)?;
     let commit_msg = head_commit_message(project_root, &branch_ref)?;
     let (title, body) = orchestrator_pr_title_and_body(&commit_msg)?;
     let change = crate::forge::forge_for_kind(project_root, forge_kind)
@@ -90069,6 +90123,7 @@ fn try_open_orchestrator_pr_for_no_pr_worktree(
     worktree: &std::path::Path,
     branch: &str,
     forge_kind: crate::forge::ForgeKind,
+    spec: &str,
 ) -> Option<(u32, u64)> {
     // trace:BUG-893 trace:BUG-1037 | ai:codex
     let ahead = branch_commits_ahead_main(worktree, branch).unwrap_or(0);
@@ -90090,10 +90145,20 @@ fn try_open_orchestrator_pr_for_no_pr_worktree(
         // It returns None when the branch genuinely is not ahead, so the
         // no-work case still falls through exactly as before.
         // trace:BUG-1485 | ai:claude
-        return try_open_orchestrator_pr_for_no_pr_pushed_branch(project_root, branch, forge_kind);
+        return try_open_orchestrator_pr_for_no_pr_pushed_branch(
+            project_root,
+            branch,
+            forge_kind,
+            spec,
+        );
     }
-    match open_orchestrator_pr_for_implementer_worktree(project_root, worktree, branch, forge_kind)
-    {
+    match open_orchestrator_pr_for_implementer_worktree(
+        project_root,
+        worktree,
+        branch,
+        forge_kind,
+        spec,
+    ) {
         Ok(pr) => Some((ahead, pr)),
         Err(e) => {
             eprintln!(
@@ -90106,7 +90171,7 @@ fn try_open_orchestrator_pr_for_no_pr_worktree(
             // pushed-branch path can still succeed; if it never did, this
             // returns None and the caller falls back to punt/fail as before.
             // trace:BUG-1485 | ai:claude
-            try_open_orchestrator_pr_for_no_pr_pushed_branch(project_root, branch, forge_kind)
+            try_open_orchestrator_pr_for_no_pr_pushed_branch(project_root, branch, forge_kind, spec)
         }
     }
 }
@@ -90140,13 +90205,14 @@ fn try_open_orchestrator_pr_for_no_pr_pushed_branch(
     project_root: &std::path::Path,
     branch: &str,
     forge_kind: crate::forge::ForgeKind,
+    spec: &str,
 ) -> Option<(u32, u64)> {
     // trace:BUG-895 trace:BUG-1037 | ai:codex
     let ahead = match pushed_branch_commits_ahead_default(project_root, branch) {
         Ok(ahead) if ahead > 0 => ahead,
         _ => return None,
     };
-    match open_orchestrator_pr_for_pushed_branch(project_root, branch, forge_kind) {
+    match open_orchestrator_pr_for_pushed_branch(project_root, branch, forge_kind, spec) {
         Ok(pr) => Some((ahead, pr)),
         Err(e) => {
             eprintln!(
@@ -91033,6 +91099,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         &worktree_path,
                         &branch,
                         self.lifecycle_forge,
+                        &self.spec,
                     ) {
                         if !self.json {
                             eprintln!(
@@ -91084,6 +91151,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     &worktree_path,
                     &branch,
                     self.lifecycle_forge,
+                    &self.spec,
                 ) {
                     if !self.json {
                         eprintln!(
@@ -91144,6 +91212,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &self.project_root,
             &branch,
             self.lifecycle_forge,
+            &self.spec,
         )?;
         if !self.json {
             eprintln!(
