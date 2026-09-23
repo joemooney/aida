@@ -69265,6 +69265,13 @@ struct UnshippedBranchCandidate {
     commits_ahead: u32,
     age: String,
     has_local: bool,
+    // BUG-1531: the candidate's tip commit, used to bind a "do not ship"
+    // refusal to the exact commit a reviewer looked at rather than to a PR
+    // number or a branch-naming convention. `None` only when `git rev-parse`
+    // itself fails, in which case the sha-bound checks are skipped rather
+    // than guessed.
+    // trace:BUG-1531 | ai:claude
+    tip_sha: Option<String>,
 }
 
 // BUG-1288: a bounded candidate gate for the unshipped-work detector. Kept
@@ -69427,6 +69434,16 @@ fn collect_unshipped_work_items(
         ) {
             continue;
         }
+        // BUG-1531 criterion 1: a branch fetched from refs/pull/N/head (or its
+        // GitLab mr-N twin) is a PUBLISHED snapshot by construction — it is
+        // the one shape `ReviewForge::local_branch_for` creates, per
+        // TASK-1312's `parse_review_snapshot_branch`. It can never be
+        // unshipped work, so it is excluded before any naming-convention or
+        // dedup heuristic runs.
+        // trace:BUG-1531 | ai:claude
+        if pr_cmd::parse_review_snapshot_branch(&short_branch).is_some() {
+            continue;
+        }
         let pr_evidence = pr_head_states
             .as_ref()
             .and_then(|s| s.by_branch.get(&short_branch));
@@ -69500,6 +69517,24 @@ fn collect_unshipped_work_items(
         if !seen.insert(display_branch.clone()) {
             continue;
         }
+        let tip_sha = git_output_checked(project_root, &["rev-parse", &refname])
+            .ok()
+            .map(|s| s.trim().to_string());
+        // BUG-1531 criterion 2 (the safety floor, independent of criterion 1):
+        // never suggest shipping a commit that is ALREADY the head of an open
+        // PR, even when this branch's own name doesn't match that PR's
+        // headRefName (a rework ref, a hand-fetched investigation branch,
+        // …). Matched by sha across every open PR the snapshot knows about,
+        // not just the by-name lookup above.
+        // trace:BUG-1531 | ai:claude
+        if let (Some(sha), Some(states)) = (tip_sha.as_deref(), pr_head_states.as_ref()) {
+            let already_open_elsewhere = states.by_branch.values().any(|evidence| {
+                evidence.state == "open" && evidence.head_sha.as_deref() == Some(sha)
+            });
+            if already_open_elsewhere {
+                continue;
+            }
+        }
         let age = branch_tip_age(project_root, &refname);
         candidates.push(UnshippedBranchCandidate {
             branch: display_branch,
@@ -69509,6 +69544,7 @@ fn collect_unshipped_work_items(
             commits_ahead,
             age,
             has_local,
+            tip_sha,
         });
     }
 
@@ -69537,7 +69573,31 @@ fn collect_unshipped_work_items(
                 }
                 .to_string()
             };
-            let recovery = if c.has_local {
+            // BUG-1531 criterion 3 (the general form of the hole, independent
+            // of both branch shape and PR number): a refusal binds to a
+            // COMMIT. If this branch's tip is the exact sha an outstanding
+            // (unclosed, not superseded by a Completed spec) RequestChanges
+            // or Rejected verdict names, no surface may recommend shipping
+            // it — regardless of which ref happens to reach that commit.
+            // trace:BUG-1531 | ai:claude
+            let outstanding_verdict = c.tip_sha.as_deref().and_then(|sha| {
+                let verdict = review_verdict::read_recorded_verdict(project_root, &c.spec_id)?;
+                let sha_matches = verdict
+                    .reviewed_sha
+                    .as_deref()
+                    .is_some_and(|reviewed| review_verdict::same_reviewed_sha(reviewed, sha));
+                let spec_completed = status_by_spec
+                    .get(&c.spec_id.to_ascii_uppercase())
+                    .is_some_and(|status| status.as_str() == "completed");
+                (sha_matches && review_verdict::is_outstanding_refusal(&verdict, spec_completed))
+                    .then_some(verdict)
+            });
+            let recovery = if let Some(verdict) = &outstanding_verdict {
+                format!(
+                    "do not ship — this commit carries an unresolved reviewer verdict ({}); resolve the review first",
+                    verdict.raw
+                )
+            } else if c.has_local {
                 format!("aida pr ship {}", c.branch)
             } else {
                 format!(
@@ -69994,6 +70054,112 @@ exit 1
         assert!(
             rows.iter().all(|row| row.branch != "story-1187-squash"),
             "patch-equivalent branches must not be reported as unshipped: {rows:?}"
+        );
+    }
+
+    // BUG-1531 criterion 1 + 4: a local `pr-<digits>` review-snapshot branch
+    // (the one shape `ReviewForge::local_branch_for` creates, per TASK-1312's
+    // parser) is a PUBLISHED snapshot and must never be reported as unshipped
+    // work — regardless of naming collisions with other branches. A
+    // genuinely unshipped, non-snapshot branch for a different spec must
+    // still report, so the fix does not suppress the whole channel. The
+    // "PR-2035" summary/branch is a self-contained fixture (no real PR
+    // needed) matching the advisor's note that this shape should be
+    // constructed, not depended on an accidental branch.
+    // trace:BUG-1531 | ai:claude
+    #[cfg_attr(
+        windows,
+        ignore = "fake-gh harness is a bash script; gh cannot be stubbed via shebang on Windows"
+    )]
+    #[test]
+    fn detector_excludes_review_snapshot_branch_but_still_reports_genuine_unshipped_work() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+
+        // The snapshot: a spec whose own id happens to be "PR-2035" so the
+        // branch `pr-2035` clears the active-work candidate gate on its own,
+        // exactly the way a real snapshot's spec id clears it via commit
+        // trailers.
+        branch_with_commit(root, "pr-2035", "PR-2035");
+        // A genuinely unshipped, unrelated branch that must keep reporting.
+        branch_with_commit(root, "story-1531-unshipped", "STORY-1531");
+
+        let fake_gh = executable_fake_gh(
+            root,
+            r#"#!/usr/bin/env bash
+if [[ "$*" == *"pr list"* ]]; then
+  printf '[]'
+  exit 0
+fi
+exit 1
+"#,
+        );
+        let _env = crate::test_env::EnvVarsGuard::set(&[(
+            "AIDA_TEST_GH_BINARY",
+            fake_gh.to_str().unwrap(),
+        )]);
+        let rows = collect_unshipped_work_items(
+            root,
+            &[
+                summary("PR-2035", "InProgress"),
+                summary("STORY-1531", "InProgress"),
+            ],
+            false,
+            false,
+        );
+
+        assert!(
+            rows.iter().all(|row| row.branch != "pr-2035"),
+            "a refs/pull/N/head-shaped snapshot must never be reported as unshipped: {rows:?}"
+        );
+        let genuine = rows
+            .iter()
+            .find(|row| row.branch == "story-1531-unshipped")
+            .expect("a genuinely unshipped branch must still report");
+        assert_eq!(genuine.spec_id, "STORY-1531");
+        assert_eq!(genuine.recovery, "aida pr ship story-1531-unshipped");
+    }
+
+    // BUG-1531 criterion 3 + 6: a refusal binds to a COMMIT, not to a PR
+    // number or a branch-naming convention. A branch whose tip is the exact
+    // sha an outstanding (unclosed) RequestChanges verdict names must never
+    // carry a "ship it" recommendation — driven from a verdict fixture
+    // rather than from any particular PR number, so the check generalizes
+    // past the specific pr2035-review incident that surfaced it.
+    // trace:BUG-1531 | ai:claude
+    #[test]
+    fn detector_omits_ship_hint_for_commit_carrying_unresolved_review_verdict() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+
+        branch_with_commit(root, "bug-1470-work", "BUG-1470");
+        let tip = git_output_checked(root, &["rev-parse", "bug-1470-work"]).unwrap();
+
+        let verdict_dir = root.join(".aida").join("review-verdicts");
+        std::fs::create_dir_all(&verdict_dir).unwrap();
+        std::fs::write(
+            verdict_dir.join("BUG-1470.json"),
+            format!(
+                r#"{{"verdict":"request-changes","reviewed_sha":"{}","reviewed_branch":"bug-1470-work","recorded_at":"2026-09-21T05:00:00Z","summary":"blocking defects found"}}"#,
+                tip.trim()
+            ),
+        )
+        .unwrap();
+
+        let rows =
+            collect_unshipped_work_items(root, &[summary("BUG-1470", "InProgress")], true, false);
+
+        for row in &rows {
+            assert!(
+                !row.recovery.contains("aida pr ship"),
+                "a commit carrying an unresolved review verdict must never get a ship hint: {row:?}"
+            );
+        }
+        assert!(
+            rows.iter().any(|row| row.branch == "bug-1470-work"),
+            "the refused branch should still surface as unshipped, just without a ship hint: {rows:?}"
         );
     }
 
