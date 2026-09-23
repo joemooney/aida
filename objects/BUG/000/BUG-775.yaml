@@ -28,13 +28,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T16:07:48.363850380Z
-modified_at: 2026-07-22T03:12:49.745272889Z
+modified_at: 2026-09-23T04:03:56.901865555Z
 req_type: Bug
 tags:
 - queue
 - review
 - safety
 - workflow
+comments:
+- id: 01a0cc6f-3b65-7b71-b6f1-7beb58e233e4
+  author: joe
+  content: Commit b41e97e524 references this requirement
+  created_at: 2026-09-23T04:03:56.901865555Z
+  modified_at: 2026-09-23T04:03:56.901865555Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 history:
 - id: 019f87cf-ca42-7f23-af75-cf5c3fda152a
   author: aida-auto-bump
