@@ -1,0 +1,15 @@
+{
+  "id": "650c27db-4061-48e2-8dfb-000b77eec5f6",
+  "thread_id": "650c27db-4061-48e2-8dfb-000b77eec5f6",
+  "from": "codex",
+  "to": {
+    "kind": "agent",
+    "agent": "root"
+  },
+  "timestamp": 1790127122714,
+  "body": "Fresh review exact head 89042d4aa553fb90038c2b9880cea3b38c622329 complete. REQUEST_CHANGES posted to PR https://github.com/joemooney/aida/pull/2103#issuecomment-5787415993 and STORY-1397/STORY-1460. Required CI Build failed (merge-hold-gate passed; merge state BLOCKED); exact failure is bug_1173_detection_hold_tests::set_pr_number_stamps_marker_and_syncs_label_surfacing_failure, source-shape guard still expects write_hold while this head uses write_typed_hold, reproduced locally. Focused merge_hold 22/22 and awaiting_you 36/36, fmt/diff pass. Prior typed production/live-head/stable identity blockers addressed. Remaining signed-sketch gap: recusal routing runs only on write_typed_hold; awaiting/report never reconciles no-reader when agents appear, reroutes if recipient disappears, or handles head changes.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
