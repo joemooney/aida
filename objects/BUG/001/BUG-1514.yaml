@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:30:26.030629266Z
-modified_at: 2026-09-23T07:16:50.714032265Z
+modified_at: 2026-09-23T07:16:52.958548363Z
 req_type: Bug
 tags:
 - batch:night-0920 visibility merge-safety drain-safe from:session-0920
@@ -66,4 +66,10 @@ comments:
   content: 'Claude implementer result: branch claude/bug-1514 @ f652eb1bfc (pushed, no PR). The core red+unowned surfacing (AC2/AC5) was ALREADY on main via TASK-192 (awaiting_you.rs classify_unowned_failing_prs). This branch adds: AC3, a named threshold UNOWNED_FAILING_PR_MIN_AGE_MINUTES=30 (unknown age fails open); AC1 partial, a Done spec (matched from spec ids in the PR title) whose PR is red surfaces regardless of owner/route/verdict, still respecting merge holds, and the row names why (''X is marked Done but its CI is failing''). UNMET: AC1 closed/missing/conflicting-PR cases (need a spec-driven forge lookup); AC4 instance count before/after not measured. REVIEWER NOTES: (a) the age gate measures from PR created_at, not from when CI went red, so an old PR that just went red during rework alarms immediately; (b) Done-spec matching relies on the PR title carrying the id; (c) this is merge-safety tagged, so it needs a non-Claude review before merge. Files: awaiting_you.rs, lib.rs, status_cleanup.rs, queue_cmd.rs, statusbar_cmd.rs, 1 test fixture.'
   created_at: 2026-09-23T04:09:56.053574834Z
   modified_at: 2026-09-23T04:09:56.053574834Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd1f-de5e-74e1-9919-298af9798c89
+  author: joe
+  content: 'Merged to main via integration batch 1, PR #2111 squash 48dac64a77 (2026-09-23 00:15). Completed by hand: aida pull auto-bumped 5 of the 7 batch specs but not this one, even though the squash body carries its (ID) trailer. A possible squash-body-trailer scan gap, worth a look.'
+  created_at: 2026-09-23T07:16:52.958548363Z
+  modified_at: 2026-09-23T07:16:52.958548363Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
