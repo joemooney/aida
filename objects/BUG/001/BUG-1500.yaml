@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:42:03.999804940Z
-modified_at: 2026-09-23T04:11:37.684224551Z
+modified_at: 2026-09-23T06:15:27.432302359Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -75,4 +75,10 @@ comments:
   content: '[aida:independent-review] REQUEST_CHANGES at rebased head 9ba1acca65. The lib.rs aida pull path is corrected and its two helper tests pass, but acceptance criterion 3 is unmet: aida-cli-lib/src/git_backend_cmd.rs still emits the unconditional orphan-store mid-rebase / git rebase --abort hint in its Pull failed Err arm. Add the same checked rebase-state behavior and a test for both states there; inspect other unchecked recovery hints as criterion 5 requires. Local evidence: project code review found the unchanged second site; no PR opened. Independent Codex reviewer.'
   created_at: 2026-09-23T04:11:37.684224551Z
   modified_at: 2026-09-23T04:11:37.684224551Z
+- id: 01a0cce7-a1c8-7f50-8ca7-f5caf7a84a98
+  author: joe
+  content: 'Reviewer BLOCK resolved: 086af3509b routes the second emission site (git_backend_cmd.rs, the ''aida db sync --pull'' bail) through the shared store_pull_failure_hint, so both sites now suggest ''git rebase --abort'' only when a rebase is really in progress (AC3). 4 bug_1500 tests pass. Queued for integration batch 3. AC5 (audit other unchecked-state recovery hints) is a followup.'
+  created_at: 2026-09-23T06:15:27.432302359Z
+  modified_at: 2026-09-23T06:15:27.432302359Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
