@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:33:09.166796821Z
-modified_at: 2026-09-23T02:46:05.007432525Z
+modified_at: 2026-09-23T03:14:20.863562796Z
 req_type: Bug
 tags:
 - batch:night-0920 lifecycle drain-safe from:review-pr-2040
@@ -70,4 +70,10 @@ comments:
   content: 'Claude implementer (sonnet subagent, worktree) dispatched 2026-09-22 19:47 local. Output: branch claude/bug-1506 off origin/main, pushed, NO PR, NOT merged.'
   created_at: 2026-09-23T02:46:05.007432525Z
   modified_at: 2026-09-23T02:46:05.007432525Z
+  session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
+- id: 01a0cc41-d23f-7fd1-8eb2-524df424a0f2
+  author: joe
+  content: Commit 5241fe12dc references this requirement
+  created_at: 2026-09-23T03:14:20.863562796Z
+  modified_at: 2026-09-23T03:14:20.863562796Z
   session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
