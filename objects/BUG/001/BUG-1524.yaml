@@ -66,12 +66,12 @@ description: |
      auto_complete.rs already drives orchestrate() this way for BUG-1447 and is the
      right instrument.
   6. The test asserts on the phase actually reached, not on source order or log text.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:40:23.908358534Z
-modified_at: 2026-09-23T16:26:38.692720484Z
+modified_at: 2026-09-23T16:41:01.897938534Z
 req_type: Bug
 tags:
 - parent:EPIC-62 drain orchestrator silent-noop severity:major
