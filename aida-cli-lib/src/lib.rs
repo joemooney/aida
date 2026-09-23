@@ -33190,12 +33190,148 @@ fn verdict_tip_relation(
     review_verdict::classify_tip_relation(reviewed.as_deref(), tip.as_deref(), ancestry)
 }
 
+/// Resolve a branch's head LOCALLY, no forge call. `refs/remotes/origin/`
+/// first (the common case: the branch was pushed but this checkout never
+/// took it as a local branch), falling back to `refs/heads/` (a local-only
+/// branch, e.g. the checkout this process is running in). Neither resolving
+/// is "unknown", not an error -- the caller folds that into
+/// `TipRelation::Unknown`, which `review_actionability` already treats as
+/// indeterminate-therefore-absent (PRIN-5).
+// trace:BUG-1508 | ai:claude
+pub(crate) fn resolve_local_branch_head(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> Option<String> {
+    let branch = branch.trim();
+    if branch.is_empty() {
+        return None;
+    }
+    resolve_commit_sha(project_root, &format!("refs/remotes/origin/{branch}"))
+        .or_else(|| resolve_commit_sha(project_root, &format!("refs/heads/{branch}")))
+}
+
+/// The spec id(s) a routed reviewer-queue entry's verdict must be read
+/// against. A `Review PR-N: ...` auto-queue story (BUG-102/BUG-776) doesn't
+/// carry a verdict itself -- it `implements` the real spec(s) the PR covers
+/// (the same relationship `aida_subcmd_add_review_story` writes), so walk
+/// that edge. A direct routing (the row's own spec_id, no review-story
+/// wrapper) covers only itself.
+///
+/// `resolve` looks a relationship target's uuid up to its display id.
+/// Generic over the lookup so a caller holding a full `RequirementsStore`
+/// (an index) and a caller holding only a cache/backend (one targeted read
+/// per uuid) share this walk.
+// trace:BUG-1508 | ai:claude
+pub(crate) fn covered_spec_ids_for_reviewer_row(
+    req: &aida_core::Requirement,
+    mut resolve: impl FnMut(uuid::Uuid) -> Option<String>,
+) -> Vec<String> {
+    if parse_review_story_pr_number(&req.title).is_some() {
+        let ids: Vec<String> = req
+            .relationships
+            .iter()
+            .filter(|rel| {
+                matches!(&rel.rel_type, aida_core::RelationshipType::Custom(n) if n.eq_ignore_ascii_case("implements"))
+            })
+            .filter_map(|rel| resolve(rel.target_id))
+            .collect();
+        if !ids.is_empty() {
+            return ids;
+        }
+    }
+    req.agreed_id
+        .clone()
+        .or_else(|| req.spec_id.clone())
+        .into_iter()
+        .collect()
+}
+
+/// A routed reviewer-queue row's actionability (BUG-1508 AC1/AC2/AC3/AC8),
+/// resolved entirely from local state: the verdict file(s) for the spec(s)
+/// the row covers, and each covered spec's branch head resolved via
+/// `resolve_local_branch_head` -- no forge/network call, so this is safe on
+/// the fast `aida queue list` / `aida awaiting` paths.
+///
+/// The branch a covered spec's current head is read from, in order: the
+/// verdict's own `reviewed_branch` (the reviewer recorded it, so it's the
+/// most specific signal), then a live lease scoped to that spec, then a live
+/// lease scoped to the ROW's own id (the review-story's lease, when a
+/// reviewer has taken it via `aida worktree enter`). No resolvable branch
+/// means an unknown head, which folds into `TipRelation::Unknown` ->
+/// `NeedsReview` -- indeterminate is never read as covered (AC8).
+///
+/// A row covering several specs (one PR, several `(REQ-ID)` trailers) is
+/// `NeedsReview` if ANY covered spec still needs one, else `AwaitingRework`
+/// if any blocks, else `Resolved`.
+///
+/// `resolve` is the same uuid -> display-id lookup `covered_spec_ids_for_reviewer_row`
+/// takes -- see that function for why it's generic.
+// trace:BUG-1508 | ai:claude
+pub(crate) fn reviewer_row_actionability(
+    project_root: &std::path::Path,
+    req: &aida_core::Requirement,
+    leases: &[SessionLease],
+    resolve: impl FnMut(uuid::Uuid) -> Option<String>,
+) -> review_verdict::ReviewActionability {
+    let story_id = req
+        .agreed_id
+        .as_deref()
+        .or(req.spec_id.as_deref())
+        .unwrap_or("");
+    let covered = covered_spec_ids_for_reviewer_row(req, resolve);
+    if covered.is_empty() {
+        return review_verdict::ReviewActionability::NeedsReview;
+    }
+    let mut saw_rework = false;
+    for spec_id in &covered {
+        let verdict = review_verdict::read_recorded_verdict_any(project_root, &[spec_id.as_str()]);
+        let branch = verdict
+            .as_ref()
+            .and_then(|v| v.reviewed_branch.clone())
+            .or_else(|| {
+                leases
+                    .iter()
+                    .find(|l| l.scope.eq_ignore_ascii_case(spec_id))
+                    .map(|l| l.branch.clone())
+            })
+            .or_else(|| {
+                leases
+                    .iter()
+                    .find(|l| l.scope.eq_ignore_ascii_case(story_id))
+                    .map(|l| l.branch.clone())
+            });
+        let head = branch.and_then(|b| resolve_local_branch_head(project_root, &b));
+        let reviewed_sha = verdict.as_ref().and_then(|v| v.reviewed_sha.as_deref());
+        let ancestry = match (reviewed_sha, head.as_deref()) {
+            (Some(a), Some(b)) => is_ancestor_commit(project_root, a, b),
+            _ => None,
+        };
+        let relation =
+            review_verdict::classify_tip_relation(reviewed_sha, head.as_deref(), ancestry);
+        match review_verdict::review_actionability(verdict.as_ref(), relation) {
+            review_verdict::ReviewActionability::NeedsReview => {
+                return review_verdict::ReviewActionability::NeedsReview;
+            }
+            review_verdict::ReviewActionability::AwaitingRework => saw_rework = true,
+            review_verdict::ReviewActionability::Resolved => {}
+        }
+    }
+    if saw_rework {
+        review_verdict::ReviewActionability::AwaitingRework
+    } else {
+        review_verdict::ReviewActionability::Resolved
+    }
+}
+
 #[cfg(test)]
 #[path = "tests/bug_1186_reviewer_seat_tests.rs"]
 mod bug_1186_reviewer_seat_tests;
 #[cfg(test)]
 #[path = "tests/bug_1230_auto_queue_review_tests.rs"]
 mod bug_1230_auto_queue_review_tests;
+#[cfg(test)]
+#[path = "tests/bug_1508_reviewer_row_tests.rs"]
+mod bug_1508_reviewer_row_tests;
 #[cfg(test)]
 #[path = "tests/bug_775_commits_ahead_tests.rs"]
 mod bug_775_commits_ahead_tests;
@@ -69709,18 +69845,46 @@ fn collect_awaiting_report_inner(
     // Reviewer-queue items — surface queue entries where the verdict is
     // the operator's only when the active role IS reviewer. Otherwise
     // these would just duplicate the Queue section below.
-    let reviewer_queue_items = if matches!(ctx.role.as_deref(), Some("reviewer")) {
-        ctx.queue_head
-            .iter()
-            .filter(|r| !r.in_progress)
-            .map(|r| awaiting_you::ReviewerQueueItem {
-                spec_id: r.spec_id.clone(),
-                title: r.title.clone(),
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    //
+    // BUG-1508 AC1/AC2/AC3/AC8: each routed row is annotated with its
+    // actionability, resolved entirely locally (verdict file + git refs
+    // via `reviewer_row_actionability` -- the same helper `aida queue
+    // list --for reviewer` uses, and no forge call). Rows are never
+    // dropped for being already-reviewed (AC2); the depth figure `aida
+    // awaiting` leads with ("actionable N of M") is built from these
+    // states in `render`/`compact_line`/`to_json` below.
+    // trace:BUG-1508 | ai:claude
+    let reviewer_queue_items: Vec<awaiting_you::ReviewerQueueItem> =
+        if matches!(ctx.role.as_deref(), Some("reviewer")) {
+            let leases = list_leases(project_root);
+            ctx.queue_head
+                .iter()
+                .filter(|r| !r.in_progress)
+                .map(|r| {
+                    let state = backend
+                        .get_requirement_by_spec_id(&r.spec_id)
+                        .ok()
+                        .flatten()
+                        .map(|req| {
+                            reviewer_row_actionability(project_root, &req, &leases, |uuid| {
+                                backend
+                                    .get_requirement(&uuid)
+                                    .ok()
+                                    .flatten()
+                                    .and_then(|r| r.agreed_id.or(r.spec_id))
+                            })
+                        })
+                        .unwrap_or(review_verdict::ReviewActionability::NeedsReview);
+                    awaiting_you::ReviewerQueueItem {
+                        spec_id: r.spec_id.clone(),
+                        title: r.title.clone(),
+                        state,
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
 
     // Unread mail — folded into the awaiting-you report so the coordination
     // inbox is ONE surface (STORY-741). Reads only the local + canonical
