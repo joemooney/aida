@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:55:50.224652863Z
-modified_at: 2026-09-23T03:22:50.738530637Z
+modified_at: 2026-09-23T03:22:52.283457180Z
 req_type: Bug
 tags:
 - batch:night-0920 orchestrator integrity drain-safe from:session-0920
@@ -125,3 +125,9 @@ comments:
   created_at: 2026-09-21T04:02:09.372159168Z
   modified_at: 2026-09-21T04:02:09.372159168Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0cc49-9ffb-7ef0-a20a-6ad31613a105
+  author: joe
+  content: Claude implementer (sonnet subagent, worktree) dispatched 2026-09-22 20:25 local -> branch claude/bug-1510 off origin/main, pushed, no PR, not merged.
+  created_at: 2026-09-23T03:22:52.283457180Z
+  modified_at: 2026-09-23T03:22:52.283457180Z
+  session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
