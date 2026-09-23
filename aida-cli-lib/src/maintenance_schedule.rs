@@ -2690,6 +2690,11 @@ mod tests {
     // silent success. Drives a real hanging `sleep` child through
     // `run_with_kill_timeout` — the exact function `run_aida_command` calls
     // in production — with a timeout far shorter than the sleep duration.
+    //
+    // unix-only: `sleep`/`sh` as fixtures, and the process-group kill this
+    // pins is itself a unix-only mechanism (see `kill_process_group` in
+    // lib.rs) — Windows keeps the pre-existing direct-child-only kill.
+    #[cfg(unix)]
     #[test]
     fn hanging_command_is_killed_at_the_timeout_and_reported_as_a_failure() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2726,6 +2731,38 @@ mod tests {
         );
         let trip = failure_trip(&task, at(12), &outcome);
         assert!(trip.is_some(), "a 124 exit must mint a failure trip");
+    }
+
+    // Review follow-up: the GRANDCHILD case — a direct child that
+    // backgrounds a long-running descendant and then waits on it (`sh -c
+    // 'sleep 30 & wait'`, the same shape a credential-manager helper or a
+    // backgrounded git op takes) inherits the pipe write ends too. Killing
+    // only the direct child (old `Child::kill`-only behavior) would leave
+    // that grandchild alive, still holding stdout/stderr open, and the
+    // reader threads' `read_to_end` blocked on them — this is exactly the
+    // gap `kill_process_group`'s `killpg` closes: `sh` and `sleep` share one
+    // process group (`process_group(0)` at spawn), so one SIGKILL reaps
+    // both. Must return within about the ceiling plus slack, not anywhere
+    // near the 30s the grandchild alone would otherwise run.
+    #[cfg(unix)]
+    #[test]
+    fn hanging_grandchild_is_reaped_via_process_group_kill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut cmd = ProcessCommand::new("sh");
+        cmd.arg("-c").arg("sleep 30 & wait");
+        let ceiling = std::time::Duration::from_secs(2);
+        let started = std::time::Instant::now();
+        let outcome = run_with_kill_timeout(cmd, "sh -c 'sleep 30 & wait'", tmp.path(), ceiling);
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < ceiling + std::time::Duration::from_secs(3),
+            "the backgrounded grandchild must be reaped with the parent via killpg, not \
+             outlive it and wedge the read; ceiling {ceiling:?}, took {elapsed:?}"
+        );
+        assert_eq!(
+            outcome.status, 124,
+            "killed-on-timeout must read as failed, never ok"
+        );
     }
 
     // BUG-1557: every `command = "..."` string the scaffolded config template

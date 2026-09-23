@@ -38634,44 +38634,99 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
 // trace:BUG-1288 | ai:claude
 const FORGE_CLI_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 
+/// Review follow-up (BUG-1288): on unix, kill the CHILD'S WHOLE PROCESS
+/// GROUP rather than only the direct child. `command_output_with_timeout`
+/// spawns with `process_group(0)` below, which makes the child's own pid its
+/// process group id, so any grandchild it forks (a credential-manager
+/// helper, a background `git` op) inherits that same group — `killpg` reaps
+/// the group in one signal instead of leaving a grandchild alive to hold the
+/// stdout/stderr pipe write ends open past the timeout. `pid` must be a pid
+/// this process spawned with `process_group(0)` (the only caller), which is
+/// what makes it both safe to signal and a valid process-group id.
+// trace:BUG-1288 | ai:claude
+#[cfg(unix)]
+fn kill_process_group(pid: u32) {
+    // SAFETY: `pid` is this process's own child (see the doc comment above),
+    // and `libc::killpg` is a plain signal-delivery syscall — no pointers,
+    // no aliasing concerns.
+    unsafe {
+        libc::killpg(pid as libc::pid_t, libc::SIGKILL);
+    }
+}
+
 /// BUG-1288: run `cmd` but never block past `timeout` waiting on it — a
 /// portable (`Child::kill` works on every target) alternative to
 /// `Command::output()` for a subprocess whose peer (a forge API) can stall
 /// arbitrarily long. stdout/stderr are drained on background threads so the
 /// child can never deadlock on a full pipe while the caller polls for exit;
-/// on timeout the child is killed and `None` is returned — every existing
+/// on timeout the child (and, on unix, its whole process group — see
+/// `kill_process_group`) is killed and `None` is returned — every existing
 /// caller already treats `output().ok()` failure as "unknown, not zero"
 /// (PRIN-5), so a timeout degrades exactly like any other unreachable-forge
 /// failure already does.
+///
+/// Two review follow-ups folded in here, both about NOT hanging past
+/// `timeout` even when the direct child has an uncooperative descendant:
+/// - unix: spawned with `process_group(0)` and killed with `killpg` (see
+///   `kill_process_group`) instead of `Child::kill`, which only ever
+///   signals the one direct child. Windows keeps the pre-existing
+///   direct-child-only `Child::kill` — no job-object process-tree kill
+///   implemented yet, so a grandchild there can still outlive the timeout
+///   and hold the pipes open; see the bounded read below for why that no
+///   longer means blocking forever.
+/// - the reader threads are joined through a channel with a BOUNDED wait,
+///   not an unconditional `JoinHandle::join()`. On the happy path (child
+///   exited on its own) the bound is generous and never realistically hit;
+///   after a kill it is short, so a pipe that somehow stayed open past the
+///   process-group kill (Windows; a grandchild that double-forked out of
+///   the group) degrades to a partial/empty read instead of wedging this
+///   function — and the caller — indefinitely.
 // trace:BUG-1288 | ai:claude
 fn command_output_with_timeout(
     mut cmd: std::process::Command,
     timeout: std::time::Duration,
 ) -> Option<std::process::Output> {
     use std::io::Read;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+
     let mut child = cmd
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .ok()?;
+    // Only used to target `killpg` below; on non-unix targets nothing reads
+    // it, so it is cfg-gated too rather than left as a dead binding.
+    #[cfg(unix)]
+    let pid = child.id();
     let mut stdout_pipe = child.stdout.take()?;
     let mut stderr_pipe = child.stderr.take()?;
-    let stdout_handle = std::thread::spawn(move || {
+    let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
+    let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
         let mut buf = Vec::new();
         let _ = stdout_pipe.read_to_end(&mut buf);
-        buf
+        let _ = stdout_tx.send(buf);
     });
-    let stderr_handle = std::thread::spawn(move || {
+    std::thread::spawn(move || {
         let mut buf = Vec::new();
         let _ = stderr_pipe.read_to_end(&mut buf);
-        buf
+        let _ = stderr_tx.send(buf);
     });
     let start = std::time::Instant::now();
+    let mut killed = false;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break Some(status),
             Ok(None) => {
                 if start.elapsed() >= timeout {
+                    killed = true;
+                    #[cfg(unix)]
+                    kill_process_group(pid);
                     let _ = child.kill();
                     let _ = child.wait();
                     break None;
@@ -38684,24 +38739,27 @@ fn command_output_with_timeout(
             // hit instead of only on the timeout path.
             // trace:BUG-1288 | ai:claude
             Err(_) => {
+                killed = true;
+                #[cfg(unix)]
+                kill_process_group(pid);
                 let _ = child.kill();
                 let _ = child.wait();
                 break None;
             }
         }
     };
-    // NOTE: killing `child` only signals the direct child (`gh`/`glab`
-    // itself). If that process has already spawned a grandchild that
-    // inherited the stdout/stderr pipe write ends (a helper process, a
-    // credential-manager subprocess, …), that grandchild can keep the pipes
-    // open after the direct child exits — `read_to_end` below then blocks
-    // until the grandchild itself exits, not just until `child` does. This
-    // is a real gap (no process-group kill here), accepted for now because
-    // known forge CLIs don't fork long-lived helpers for these read-only
-    // calls; revisit with a process-group spawn (`setsid`/job object) if
-    // that stops being true. trace:BUG-1288 | ai:claude
-    let stdout = stdout_handle.join().unwrap_or_default();
-    let stderr = stderr_handle.join().unwrap_or_default();
+    // Bounded on the kill path (short — the group is already dead or dying,
+    // this is only a safety net for a descendant that escaped it), generous
+    // on the normal-exit path (the child already closed its own pipe ends;
+    // this bound exists so a hypothetical stuck reader still can't hang the
+    // caller forever, not because it is expected to be hit).
+    let read_wait = if killed {
+        std::time::Duration::from_millis(500)
+    } else {
+        std::time::Duration::from_secs(30)
+    };
+    let stdout = stdout_rx.recv_timeout(read_wait).unwrap_or_default();
+    let stderr = stderr_rx.recv_timeout(read_wait).unwrap_or_default();
     status.map(|status| std::process::Output {
         status,
         stdout,
