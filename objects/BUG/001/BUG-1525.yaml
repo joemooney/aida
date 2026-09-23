@@ -83,7 +83,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:45:07.028261694Z
-modified_at: 2026-09-23T13:19:07.971215952Z
+modified_at: 2026-09-23T13:23:39.357851383Z
 req_type: Bug
 tags:
 - agent-briefs
@@ -164,4 +164,10 @@ comments:
   content: 'Claude implementer result: claude/bug-1525 @ 67e77070ea. The brief Setup resolves the branch via git refs (resolve_brief_branch_target): a single existing branch is reused (worktree add or -B from origin); several means an explicit ''cannot determine''; none means a fresh <spec>-work off origin/main. 2 tests. Awaiting review.'
   created_at: 2026-09-23T13:19:07.971215952Z
   modified_at: 2026-09-23T13:19:07.971215952Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce6f-a8dd-7931-87cb-e2632f0a8260
+  author: joe
+  content: 'Review blocker fixed by the orchestrator: branch_name_references_spec is now whole-segment (BUG-15 does not match bug-150-work; BUG-152 does not match claude/bug-1525), with a test. 232 related tests pass. Batch 12.'
+  created_at: 2026-09-23T13:23:39.357851383Z
+  modified_at: 2026-09-23T13:23:39.357851383Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
