@@ -382,16 +382,15 @@ fn hard_ci_probe_failure_is_immediately_unavailable() {
 // (report Red, name both) apart from stuck-pending alone (stay honest
 // NoSignal — the caller falls back to its existing message).
 
-/// The exact shape this follows from: `merge-hold-gate` concluded FAILURE,
-/// `Build` never concludes. At the ceiling this must surface as Red with
-/// `merge-hold-gate` named and `Build` listed as still pending — not the
-/// uninformative "giving up" NoSignal.
+/// A real check (`lint`) concluded FAILURE while `Build` never concludes. At
+/// the ceiling this must surface as Red with `lint` named and `Build` listed
+/// as still pending — not the uninformative "giving up" NoSignal.
 // trace:TASK-1453 | ai:claude
 #[test]
 fn ceiling_with_known_failure_and_stuck_pending_is_red_with_summary() {
     let json = r#"[{"number": 2001, "statusCheckRollup": [
-            {"name": "merge-hold-gate", "status": "COMPLETED",   "conclusion": "FAILURE"},
-            {"name": "Build",           "status": "IN_PROGRESS", "conclusion": ""}
+            {"name": "lint",  "status": "COMPLETED",   "conclusion": "FAILURE"},
+            {"name": "Build", "status": "IN_PROGRESS", "conclusion": ""}
         ]}]"#;
     match ci_ceiling_verdict_from_rollup(json) {
         Some(CiProbe::Red {
@@ -399,10 +398,7 @@ fn ceiling_with_known_failure_and_stuck_pending_is_red_with_summary() {
             failed_summary,
         }) => {
             assert_eq!(pr_number, 2001);
-            assert!(
-                failed_summary.contains("merge-hold-gate"),
-                "summary: {failed_summary}"
-            );
+            assert!(failed_summary.contains("lint"), "summary: {failed_summary}");
             assert!(
                 failed_summary.contains("Build"),
                 "stuck check should still be named as pending: {failed_summary}"
@@ -451,4 +447,20 @@ fn ceiling_verdict_degrades_to_none_on_unparsable_json() {
     assert_eq!(ci_ceiling_verdict_from_rollup(""), None);
     assert_eq!(ci_ceiling_verdict_from_rollup("[]"), None);
     assert_eq!(ci_ceiling_verdict_from_rollup("not json"), None);
+}
+
+/// Review fix: the merge-hold gate fails by construction while a hold is
+/// active. At the ceiling, a hold-gate failure plus a stuck check is NOT a
+/// real Red; it stays None (NoSignal) so a held PR is not marked ci-red.
+// trace:TASK-1453 | ai:claude
+#[test]
+fn ceiling_with_only_hold_gate_failure_is_not_red() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "merge-hold-gate", "status": "COMPLETED",   "conclusion": "FAILURE"},
+            {"name": "Build",           "status": "IN_PROGRESS", "conclusion": ""}
+        ]}]"#;
+    assert!(
+        ci_ceiling_verdict_from_rollup(json).is_none(),
+        "a hold-gate-only failure must not become a ceiling Red"
+    );
 }
