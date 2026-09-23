@@ -9,12 +9,12 @@ description: |-
   (3) Record --override-stale-approval durably via log_ship_activity or an event naming both shas.
   (4) The TASK-975 conflict-retry rebase (auto_complete.rs ~4348, ci_auto_fix>0) now always shelves. Either accept an approval whose rebased patch-id is unchanged, or re-request review, and fix the mock-only test orchestrate_merge_conflict_rebased_in_drain_ships.
   (5) Add wiring tests for pr_ship_handler, the override path and the real merge() call site.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T17:52:39.701830561Z
-modified_at: 2026-09-23T19:52:40.877350836Z
+modified_at: 2026-09-23T20:33:20.954672135Z
 req_type: Task
 tags:
 - followup
@@ -24,3 +24,21 @@ relationships:
 - rel_type: Child
   target_id: 01a0cd53-9e23-7e51-8124-1ecb0d2f2406
   created_at: 2026-09-23T17:52:52.870608455Z
+history:
+- id: 01a0cff9-0e23-7142-b4b0-98d50991e6c1
+  author: aida-auto-bump
+  timestamp: 2026-09-23T20:33:20.931355071Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cff9-0e3a-7223-8f63-b271f198650c
+  timestamp: 2026-09-23T20:33:20.954670246Z
+  agent: aida
+  commit_sha: b23a4098164eac3a97db2a3f41cbf9f1b50652f5
+  summary: Completed via merge b23a4098
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T20:33:18.752755069Z
+  completion_sha: b23a4098164eac3a97db2a3f41cbf9f1b50652f5
