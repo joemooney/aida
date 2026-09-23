@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:50:22.817831771Z
-modified_at: 2026-09-23T07:53:13.079248773Z
+modified_at: 2026-09-23T07:53:14.536121873Z
 req_type: Bug
 comments:
 - id: 01a0c3db-8598-7b50-addf-d5816e85c77d
@@ -55,3 +55,9 @@ comments:
   created_at: 2026-09-21T12:05:38.840783156Z
   modified_at: 2026-09-21T12:05:38.840783156Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0cd41-2828-7512-a719-123f1bcd239d
+  author: joe
+  content: Claude implementer dispatched 2026-09-23 00:53 -> branch claude/bug-1549, no PR (overnight burn-down)
+  created_at: 2026-09-23T07:53:14.536121873Z
+  modified_at: 2026-09-23T07:53:14.536121873Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
