@@ -1241,19 +1241,50 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         eprintln!("  step 1: no uncommitted work — nothing to commit");
     }
 
-    // ---- Step 2: rebase onto current origin/main. ----
-    eprintln!("  step 2: rebasing onto current origin/main");
+    // ---- Step 2: rebase onto the branch's REAL base, not a hardcoded
+    // origin/main (TASK-1416). A stacked PR (base = another in-flight
+    // branch, not the repository default) that gets rebased onto main
+    // anyway silently replays its parent's commits a second time — the
+    // conflict this produces looks like a stale GitHub view, not the
+    // local mistake it is. Resolve the base from the branch's open PR
+    // (if any); fall back to the repository default when there's no PR
+    // yet or its base can't be read, and SAY SO before acting (PRIN-5).
+    let pr_number_for_base = match change_lookup_for_branch(&project_root, &branch) {
+        crate::forge::ChangeLookup::Found(c) => Some(c.id),
+        _ => None,
+    };
+    let pr_base_branch = pr_number_for_base.and_then(finish_ceremony_pr_base);
+    let default_ref =
+        detect_default_branch_ref(&project_root).unwrap_or_else(|| "origin/main".to_string());
+    let rebase_target = pr_rebase::resolve_finish_rebase_base(
+        pr_number_for_base,
+        pr_base_branch.as_deref(),
+        &default_ref,
+    );
+    if let Some(note) = rebase_target.note() {
+        eprintln!(
+            "  {} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+            note
+        );
+    }
+    let origin_ref = rebase_target.origin_ref().to_string();
+    let remote_branch = origin_ref
+        .strip_prefix("origin/")
+        .unwrap_or(origin_ref.as_str())
+        .to_string();
+    eprintln!("  step 2: rebasing onto current {origin_ref}");
     let fetch = std::process::Command::new("git")
         .current_dir(&project_root)
-        .args(["fetch", "origin", "main"])
+        .args(["fetch", "origin", &remote_branch])
         .status()
         .context("could not invoke `git fetch`")?;
     if !fetch.success() {
-        anyhow::bail!("`git fetch origin main` failed — is the remote reachable?");
+        anyhow::bail!("`git fetch origin {remote_branch}` failed — is the remote reachable?");
     }
     let rebase = std::process::Command::new("git")
         .current_dir(&project_root)
-        .args(["rebase", "origin/main"])
+        .args(["rebase", &origin_ref])
         .status()
         .context("could not invoke `git rebase`")?;
     if !rebase.success() {
@@ -1263,13 +1294,13 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
             .args(["rebase", "--abort"])
             .status();
         anyhow::bail!(
-            "rebase onto origin/main hit conflicts — aborted, worktree left clean.\n  \
-             Resolve by hand: `git rebase origin/main`, fix the conflicts, \
+            "rebase onto {origin_ref} hit conflicts — aborted, worktree left clean.\n  \
+             Resolve by hand: `git rebase {origin_ref}`, fix the conflicts, \
              `git rebase --continue`, then re-run `aida ship`."
         );
     }
     eprintln!(
-        "  {} rebased onto origin/main",
+        "  {} rebased onto {origin_ref}",
         crate::glyph(crate::glyphs::Glyph::Check).green()
     );
 
@@ -1358,6 +1389,15 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
 /// same branch.
 // trace:STORY-1171 | ai:claude
 pub(crate) fn pr_ship_target_branch(pr: u64) -> String {
+    finish_ceremony_pr_base(pr).unwrap_or_else(|| "main".to_string())
+}
+
+/// Read PR `pr`'s real base branch (`baseRefName`) from the forge. Returns
+/// `None` — never a guessed default — when `gh` is missing, the call fails,
+/// or the field comes back empty; callers decide the fallback and whether
+/// to say so.
+// trace:TASK-1416 | ai:claude
+fn finish_ceremony_pr_base(pr: u64) -> Option<String> {
     std::process::Command::new("gh")
         .args([
             "pr",
@@ -1373,7 +1413,6 @@ pub(crate) fn pr_ship_target_branch(pr: u64) -> String {
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "main".to_string())
 }
 
 /// Acquire the branch merge-lease for this ship, or REFUSE (Err) if a live merger
