@@ -1,0 +1,33 @@
+id: 01a0cc00-e145-7541-b275-189d3cbfaa6b
+spec_id: TASK-1441
+agreed_id: TASK-1441
+title: 'Cut this repo''s per-call baseline context from ~80k to ~45k: slim CLAUDE.md and MEMORY.md to pointers, trim always-listed skills and unused connectors, and add a size budget so it cannot regrow'
+description: |
+  ## Why (measured 2026-09-22 from ~/.claude/projects first-call usage)
+  Every API call in a Claude session re-reads the baseline context. BUG-1589's mail-tick storm paid it ~16.7k times in one day, and every quiet tick is at least the baseline.
+  - Harness floor (session in ~/ with no project files): ~22k. Not ours to cut.
+  - Other projects' first call: 32-48k.
+  - This repo: min 60k, typical ~80k at the first real call.
+  Known contributors in this repo (chars/4):
+  - CLAUDE.md: 62.7k chars ~ 15.7k tokens
+  - MEMORY.md index (~/.claude/projects/-home-joe-ai-aida/memory/MEMORY.md): 20.7k chars ~ 5.2k tokens
+  - ~/.claude/CLAUDE.md: ~0.9k
+  - the remainder is the always-listed skill catalogue (~48 AIDA skills + built-ins), SessionStart/UserPromptSubmit hook output, and claude.ai connector tool names + MCP server instructions (Gmail, Calendar, Drive, Cloudflare, Claude Docs) that this repo never uses.
+  TASK-636 already did the prose-to-pointer trim for scaffolded consumer projects. This repo's own CLAUDE.md was never trimmed and has grown against the quarantine-in-skills rule.
+
+  ## Acceptance
+  1. CLAUDE.md at most ~4k tokens (~16k chars): orientation, the handful of rules every session needs (trace comments, commit format, template architecture, SPEC-IDs out of user output, dev activate), and pointers. Everything else moves to OVERVIEW.md, docs/, the discipline pack, or skills, which are read on demand. No content is deleted without a destination; a moved-content table is in the PR.
+  2. MEMORY.md index at most ~2k tokens: one short line per group or per memory, as the memory-hygiene rule already requires; memory files themselves are untouched.
+  3. Skill catalogue: each AIDA skill description at most one sentence; skills that are orchestrator-internal (e.g. aida-advise, aida-assess) are hidden from the interactive listing if the harness supports it, else noted as a follow-up.
+  4. Connectors: document how to disable claude.ai connectors that this repo does not use for sessions in this project (settings or per-project config), and apply it here if it is a project-level setting.
+  5. A measured before/after: first-call context of a fresh session in this repo, same Claude Code version, reported in the PR. Target <= 45k.
+  6. Regrowth guard: a CI check (or aida doctor finding) that fails when CLAUDE.md exceeds its byte budget, so the budget is a gate and not a norm. The budget is a config value, not a magic number in the script.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T02:03:24.869760515Z
+modified_at: 2026-09-23T02:03:24.869760515Z
+req_type: Task
+tags:
+- cost token-economics context-economy claude-md memory-hygiene parent:EPIC-71
