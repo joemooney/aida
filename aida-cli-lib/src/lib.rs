@@ -8305,16 +8305,24 @@ fn pr_head_ref_best_effort(driver: &RealPhaseDriver, pr: u32) -> Option<String> 
         .filter(|s| !s.trim().is_empty())
 }
 
-/// TASK-1449 (BUG-1522 AC5/AC6): the DISPATCHED branch's current head sha,
-/// read locally rather than via the forge — `origin/<branch>` preferred
-/// (the implementer pushes there), falling back to a local branch of the
-/// same name so a not-yet-fetched checkout still resolves. `None` when
-/// neither ref exists or git errors, which the caller treats as UNKNOWN
-/// (refuse), not "no comparison needed".
+/// TASK-1449 (BUG-1522 AC5/AC6; hardened on re-review): the DISPATCHED
+/// branch's head as ORIGIN reports it, read locally rather than via the
+/// forge. Fetches `origin/<branch>` first (best effort) so a stale
+/// remote-tracking ref is never read as truth — this fn is the ONLY reader
+/// for both the arm-time baseline and the post-round comparison, so a ref
+/// that was stale at arm time gets refreshed at arm time too, instead of
+/// only on the later read (which would manufacture a false "content
+/// changed": stale local W at arm time, freshly-fetched real X after —
+/// X looks new but was already the state on origin before this round ran).
+/// Deliberately does NOT fall back to a same-named local branch: a
+/// dispatched round's open PR lives on origin by definition, and a
+/// same-named local branch could be unrelated leftover state. `None` —
+/// UNKNOWN, fail-closed — when `origin/<branch>` cannot be read at all (no
+/// origin, branch never pushed, a git error).
 // trace:TASK-1449 | ai:claude
 fn dispatched_branch_head_sha(project_root: &std::path::Path, branch: &str) -> Option<String> {
+    let _ = fetch_branch(project_root, branch, true);
     git_rev_parse_quiet(project_root, &format!("origin/{branch}"))
-        .or_else(|| git_rev_parse_quiet(project_root, branch))
 }
 
 /// Add the orchestrator-owned review context to a reviewer-written PR verdict.
@@ -94431,18 +94439,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             ));
         };
 
-        // TASK-1449 AC5 follow-up: best-effort refresh of the remote-tracking
-        // ref before reading the dispatched branch's current head, so a
-        // stale `origin/<branch>` (fetched once, long since moved on origin)
-        // is not misread as a no-op. Errors (no network, no origin, a
-        // forge-less test fixture) are swallowed — the read below still
-        // falls back to the local branch.
-        let _ = fetch_branch(&self.project_root, &branch, true);
-
         // TASK-1449 AC1/AC2/AC4: compare the baseline against the
         // DISPATCHED branch's CURRENT head, read directly — never the PR
         // head, so a Held/Inconclusive round with no `pr_number` this round
-        // still gets checked (AC4). An unreadable head is UNKNOWN and refuses.
+        // still gets checked (AC4). `dispatched_branch_head_sha` fetches
+        // `origin/<branch>` first (best effort) before reading it, so a
+        // stale remote-tracking ref is refreshed here too, not only at arm
+        // time. An unreadable head is UNKNOWN and refuses.
         let Some(after) = dispatched_branch_head_sha(&self.project_root, &branch) else {
             return Some(auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::ReworkNoOp,
