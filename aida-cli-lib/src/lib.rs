@@ -70216,6 +70216,18 @@ fn collect_awaiting_report_inner(
         awaiting_you::rework_ready_rows(&candidates, seat.as_deref())
     };
 
+    // TASK-1445 (containment for BUG-1510 AC5): does a live drain's
+    // lease-based PR attribution agree with what the PR's own commits
+    // credit? Local-only (drain-state file + a git log per in-flight
+    // member) — no network — so it's skipped on the notice-fast path for
+    // the same latency reason as `unshipped_work` above.
+    // trace:TASK-1445 | ai:claude
+    let pr_attribution_disagreements = if notice_fast {
+        Vec::new()
+    } else {
+        collect_pr_attribution_disagreements(project_root)
+    };
+
     awaiting_you::AwaitingReport {
         mergeable_prs,
         unowned_failing_prs,
@@ -70230,6 +70242,7 @@ fn collect_awaiting_report_inner(
         shelved_total,
         unshipped_work,
         nightly_red,
+        pr_attribution_disagreements,
     }
 }
 
@@ -74722,6 +74735,44 @@ fn resolve_gate_range(project_root: &std::path::Path, range: Option<&str>) -> St
     "HEAD~20..HEAD".to_string()
 }
 
+/// TASK-1444: resolve the commit range for reviewer-verdict shelve
+/// attribution against the **PR's own branch**, not the drain's main
+/// checkout `HEAD`. `resolve_gate_range(.., None)` scans
+/// `<default>..HEAD`, which is the drain's own worktree/checkout — for the
+/// orchestrator's phase driver that is NOT necessarily the branch the PR
+/// under review is on. Prefers `origin/<branch>` (what CI and the reviewer
+/// actually saw) and falls back to the local `<branch>` ref when the origin
+/// ref hasn't been fetched; returns `None` when neither resolves (or the
+/// default branch itself can't be resolved) so the caller can treat
+/// attribution as `Uncertain` instead of silently reading the wrong range.
+// trace:TASK-1444 | ai:claude
+fn resolve_shelve_gate_range(
+    project_root: &std::path::Path,
+    branch: Option<&str>,
+) -> Option<String> {
+    let branch = branch?;
+    let default_ref = resolve_default_branch_ref(project_root)?;
+    use std::process::Command as PCmd;
+    let ref_exists = |r: &str| -> bool {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["rev-parse", "--verify", "--quiet", r])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    };
+    let origin_branch = format!("origin/{branch}");
+    let branch_ref = if ref_exists(&origin_branch) {
+        origin_branch
+    } else if ref_exists(branch) {
+        branch.to_string()
+    } else {
+        return None;
+    };
+    Some(format!("{default_ref}..{branch_ref}"))
+}
+
 /// Resolve a single SPEC-ID against a loaded store, mirroring the trace-gate
 /// resolver. When `store` is `None` (no requirement store reachable) every id
 /// resolves `Live` — failing every id would block legitimate ships on a
@@ -75168,6 +75219,133 @@ fn pr_open_spec_guard_violation(
         }
     }
     Some(other_ids)
+}
+
+// ============================================================================
+// TASK-1444 (containment for BUG-1510 AC4): reviewer-verdict shelve
+// attribution.
+//
+// The incident: STORY-1391's drain got a RequestChanges verdict whose
+// findings were about BUG-1420 (the PR's commits were all trailered
+// BUG-1420, per the TASK-1442 guard above), and the orchestrator shelved it
+// onto STORY-1391 — the lease's spec — silently. A shelve must record
+// against the spec the VERDICT is about, or say the attribution is
+// uncertain; it must never read as a confirmed attribution to the lease
+// when that was never checked.
+// ============================================================================
+
+/// Which spec a reviewer-verdict shelve should be recorded against.
+// trace:TASK-1444 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ShelveAttribution {
+    /// A commit trailer confirms the verdict is about the lease's own spec.
+    Confirmed(String),
+    /// Every non-plan commit trailer names exactly one spec, and it is NOT
+    /// the lease's — the shelve should target THAT spec, not the lease.
+    Reattributed(String),
+    /// The commits don't confirm a single spec (none named, or more than
+    /// one) — the attribution can't be safely resolved either way.
+    Uncertain(String),
+}
+
+/// Pure, testable core: decide which spec a reviewer-verdict shelve is
+/// actually about, from what the PR's own commits credit — never silently
+/// `lease_spec`. Reuses `pr_open_spec_guard_violation`'s trailer extraction
+/// (TASK-1442) so the two guards agree on what a trailer is: `None` there
+/// means some commit trailers `lease_spec` itself (`Confirmed`); `Some(ids)`
+/// means none does, and `ids` is what the non-plan commits DO name — exactly
+/// one other id means the verdict is confidently about that spec instead
+/// (`Reattributed`), while zero or several distinct ids means the commits
+/// don't settle it (`Uncertain`).
+// trace:TASK-1444 | ai:claude
+fn decide_shelve_attribution(commits: &[(String, String)], lease_spec: &str) -> ShelveAttribution {
+    match pr_open_spec_guard_violation(commits, lease_spec) {
+        None => ShelveAttribution::Confirmed(lease_spec.to_string()),
+        Some(other_ids) => match other_ids.as_slice() {
+            [only] => ShelveAttribution::Reattributed(only.clone()),
+            [] => ShelveAttribution::Uncertain(
+                "no commit on this PR carries a spec-ID trailer".to_string(),
+            ),
+            many => ShelveAttribution::Uncertain(format!(
+                "commits name multiple specs: {}",
+                many.join(", ")
+            )),
+        },
+    }
+}
+
+// ============================================================================
+// TASK-1445 (containment for BUG-1510 AC5): surface a PR attribution split
+// between `aida drain status` (attributes a PR by the lease it ran under)
+// and the trailer/title-based detectors (`awaiting_you.rs` unshipped-work
+// code) — instead of letting the two sources silently disagree, as happened
+// for 52 seconds in the BUG-1510 incident before a reviewer verdict landed
+// on the wrong spec.
+// ============================================================================
+
+/// Pure, testable core: given the spec a PR's lease attributes it to and
+/// that PR's own commits, decide whether the two attribution sources agree.
+/// Reuses `decide_shelve_attribution` (TASK-1444) so this and the
+/// reviewer-verdict shelve guard agree on what "trailer evidence" means:
+/// `Confirmed` (a trailer names the lease spec) and `Uncertain` (the
+/// trailers don't settle it — zero or several distinct ids) are both
+/// non-disagreements; only a confident `Reattributed` to a DIFFERENT spec is
+/// a disagreement worth surfacing. Never silently prefers one source over
+/// the other — both claimed owners are returned.
+// trace:TASK-1445 | ai:claude
+fn pr_attribution_disagreement(
+    pr: u64,
+    commits: &[(String, String)],
+    lease_spec: &str,
+) -> Option<awaiting_you::PrAttributionDisagreementItem> {
+    match decide_shelve_attribution(commits, lease_spec) {
+        ShelveAttribution::Reattributed(trailer_spec) => {
+            Some(awaiting_you::PrAttributionDisagreementItem {
+                pr,
+                lease_spec: lease_spec.to_string(),
+                trailer_spec,
+            })
+        }
+        ShelveAttribution::Confirmed(_) | ShelveAttribution::Uncertain(_) => None,
+    }
+}
+
+/// Collect every attribution split for the currently live drain's in-flight
+/// members. Local-only: a `.aida/drain-state.json` read, the local lease
+/// list, and one `git log` per in-flight member with a recorded PR — no
+/// network call. Returns nothing when no drain is active, a member has no
+/// PR yet, or its lease's branch can't be resolved/read (fails open — a git
+/// hiccup here must not manufacture a false disagreement).
+// trace:TASK-1445 | ai:claude
+fn collect_pr_attribution_disagreements(
+    project_root: &std::path::Path,
+) -> Vec<awaiting_you::PrAttributionDisagreementItem> {
+    let state = match drain_state::probe(project_root) {
+        drain_state::DrainStatus::Active(state) => state,
+        drain_state::DrainStatus::None | drain_state::DrainStatus::Stale(_) => return Vec::new(),
+    };
+    let Some(default_ref) = resolve_default_branch_ref(project_root) else {
+        return Vec::new();
+    };
+    let leases = list_leases(project_root);
+    let mut out = Vec::new();
+    for member in state.members.iter().filter(|m| m.is_running()) {
+        let Some(pr) = member.pr else { continue };
+        let Some(lease) = leases
+            .iter()
+            .find(|l| l.scope.eq_ignore_ascii_case(&member.spec))
+        else {
+            continue;
+        };
+        let range = format!("{default_ref}..{}", lease.branch);
+        let Ok(commits) = read_commits_in_range(project_root, &range) else {
+            continue;
+        };
+        if let Some(disagreement) = pr_attribution_disagreement(pr as u64, &commits, &member.spec) {
+            out.push(disagreement);
+        }
+    }
+    out
 }
 
 /// Refuse (exit 1) to open a PR when no commit the branch adds over the
@@ -93893,13 +94071,58 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         failure: &auto_complete::PhaseFailure,
         recovery_hint: &str,
     ) -> anyhow::Result<Option<aida_core::FailureReason>> {
+        // TASK-1444 / BUG-1510: a reviewer-verdict shelve must ALWAYS land
+        // on the lease's own spec — the drain only holds a lease on `spec`,
+        // and flipping some other spec's status because a commit trailer
+        // *mentions* it would be its own attribution error (that spec's
+        // owner never asked this drain to touch it). What changes on
+        // attribution is not the TARGET, only the NOTE: when the PR's
+        // commits confidently credit a different spec, or the attribution
+        // can't be confirmed either way, the lease spec's FailureReason
+        // detail says so explicitly instead of reading as a silent,
+        // unconditional "this spec failed review".
+        // trace:TASK-1444 | ai:claude
+        let detail: String = if matches!(
+            failure.kind,
+            auto_complete::FailureKind::VerdictRequestChanges
+                | auto_complete::FailureKind::VerdictReject
+        ) {
+            match resolve_shelve_gate_range(&self.project_root, self.branch.as_deref()) {
+                Some(range) => match read_commits_in_range(&self.project_root, &range) {
+                    Ok(commits) => match decide_shelve_attribution(&commits, spec) {
+                        ShelveAttribution::Confirmed(_) => failure.reason.clone(),
+                        ShelveAttribution::Reattributed(other) => format!(
+                            "{} (attribution: this verdict's commits carry {}'s trailer, not this spec's)",
+                            failure.reason, other
+                        ),
+                        ShelveAttribution::Uncertain(note) => format!(
+                            "{} (attribution uncertain: {})",
+                            failure.reason, note
+                        ),
+                    },
+                    // A git hiccup reading the commit range must not block
+                    // the shelve itself — fall back to no note, same as
+                    // pre-TASK-1444 behaviour.
+                    Err(_) => failure.reason.clone(),
+                },
+                // Couldn't resolve the PR's own branch (no `self.branch`,
+                // and no local/origin ref for it) — the attribution is
+                // Uncertain, never a guess dressed up as Reattributed.
+                None => format!(
+                    "{} (attribution uncertain: could not resolve the PR branch to read its commits)",
+                    failure.reason
+                ),
+            }
+        } else {
+            failure.reason.clone()
+        };
         shelve_spec_on_failure(
             &self.project_root,
             spec,
             phase.slug(),
             phase.index() as u8,
             failure.kind.cause_slug(),
-            &failure.reason,
+            &detail,
             recovery_hint,
         )
     }
@@ -95557,3 +95780,13 @@ mod bug_1510_lease_brief_dispatch_tests;
 #[cfg(test)]
 #[path = "tests/task_1442_pr_open_spec_guard_tests.rs"]
 mod task_1442_pr_open_spec_guard_tests;
+
+// trace:TASK-1444 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1444_shelve_attribution_tests.rs"]
+mod task_1444_shelve_attribution_tests;
+
+// trace:TASK-1445 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1445_pr_attribution_disagreement_tests.rs"]
+mod task_1445_pr_attribution_disagreement_tests;
