@@ -147,7 +147,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-23T04:55:05.401925178Z
+modified_at: 2026-09-23T04:55:07.555931036Z
 req_type: Bug
 tags:
 - batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
@@ -360,4 +360,10 @@ comments:
   content: Commit f88c0b4aec references this requirement
   created_at: 2026-09-23T04:54:36.462996335Z
   modified_at: 2026-09-23T04:54:36.462996335Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cc9e-1623-7750-bdf1-a7c816c8ee2e
+  author: joe
+  content: 'Claude implementer result: branch claude/bug-1507 @ f88c0b4aec (pushed, no PR). PARTIAL; merge-safety, so it needs a non-Claude review. PREFLIGHT site: already fixed on main (TASK-1289''s Inconclusive/Skipped split). VERDICT site: queue_done_verdict_gate now REFUSES on VerdictKind::Other instead of treating it as non-blocking (a behavior change: an unparseable verdict blocks ''aida queue done''). CI-UNKNOWN site: UNMET by design. ci_rollup None really means ''no checks configured'' (gh returns null), and the actual defect (a required check missing from a non-empty rollup) needs branch-protection data, so it stays with BUG-1481. AC3: lifecycle_skip_express_tier_forces_full_gate now asserts skip.is_empty() via a destructuring bind, and this exposed and fixed a real bug: no_preflight was missing from the express force-off, and banner_summary() claimed ''full gate'' unconditionally. AC4 partial: the destructuring bind makes an incomplete field set a compile error at that site, but the one-table refactor was not done. AC5 met (PRIN-5 in the trace comments). Tests: review_verdict_tests 36, auto_complete 212, all passing.'
+  created_at: 2026-09-23T04:55:07.555931036Z
+  modified_at: 2026-09-23T04:55:07.555931036Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
