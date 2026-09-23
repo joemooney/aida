@@ -114,6 +114,19 @@ pub(crate) fn you_channels(report: &awaiting_you::AwaitingReport) -> Vec<(usize,
     if prs > 0 {
         v.push((prs, label(prs, "PR", "PRs")));
     }
+    let recusals = report
+        .recusal_holds
+        .iter()
+        .filter(|h| h.is_actionable_for_current_principal())
+        .count();
+    if recusals > 0 {
+        v.push((recusals, label(recusals, "recusal", "recusals")));
+    }
+    // trace:STORY-1397 | ai:claude
+    let held = report.held_prs.len();
+    if held > 0 {
+        v.push((held, "held".to_string()));
+    }
     let broken = report.unowned_failing_prs.len();
     if broken > 0 {
         v.push((broken, "broken-unowned".to_string()));
@@ -440,6 +453,8 @@ mod tests {
                 ci_rollup: Some("pass".into()),
                 under_review: None,
             }],
+            recusal_holds: Vec::new(),
+            held_prs: Vec::new(),
             unowned_failing_prs: vec![crate::awaiting_you::UnownedFailingPrItem {
                 number: 8,
                 title: "broken".into(),

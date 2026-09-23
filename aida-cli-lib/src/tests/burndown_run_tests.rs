@@ -107,6 +107,7 @@ fn sample_lock(pid: u32) -> crate::drain_lock::DrainLock {
         binary_sha: "abc1234".to_string(),
         binary_mtime_secs: Some(1_700_000_000),
         binary_path: "/repo/target/release/aida".to_string(),
+        launched_stale: false,
         // trace:BUG-759 | ai:claude
         specs: Vec::new(),
     }

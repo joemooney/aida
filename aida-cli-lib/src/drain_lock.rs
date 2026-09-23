@@ -169,6 +169,12 @@ pub(crate) struct DrainLock {
     pub(crate) binary_mtime_secs: Option<u64>,
     #[serde(default)]
     pub(crate) binary_path: String,
+    /// True when the wave launched on a dev binary that is not the default
+    /// branch HEAD (warned, not refused), so an audit can tell a stale-pinned
+    /// wave from a fresh one without reconstructing it from build times.
+    // trace:STORY-1414 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) launched_stale: bool,
     // BUG-759: the spec set the drain set out to work (the burndown-blessed
     // ready set). Read-side tooling (`aida drain status`) names it when the
     // launcher holds the lock but writes no per-phase drain-state file. Serde
@@ -267,7 +273,7 @@ fn force_requested() -> bool {
 }
 
 /// Is this process an internal child drive borrowing its parent's drain lock?
-fn borrow_requested() -> bool {
+pub(crate) fn borrow_requested() -> bool {
     std::env::var(BORROW_ENV)
         .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
         .unwrap_or(false)
@@ -465,6 +471,8 @@ pub(crate) fn acquire_drain_lock_with_specs(
                     .unwrap_or(binary_path)
                     .display()
                     .to_string(),
+                // trace:STORY-1414 | ai:claude
+                launched_stale: crate::freshness_gate::launched_stale(),
                 // trace:BUG-759 | ai:claude
                 specs: specs.to_vec(),
             };
@@ -658,6 +666,7 @@ mod tests {
             binary_sha: String::new(),
             binary_mtime_secs: None,
             binary_path: String::new(),
+            launched_stale: false,
             specs: Vec::new(),
         }
     }
@@ -836,6 +845,7 @@ mod tests {
             binary_sha: String::new(),
             binary_mtime_secs: None,
             binary_path: String::new(),
+            launched_stale: false,
             specs: Vec::new(),
         };
         std::fs::write(&path, serde_json::to_string(&dead).unwrap()).unwrap();
@@ -864,6 +874,7 @@ mod tests {
             binary_sha: String::new(),
             binary_mtime_secs: None,
             binary_path: String::new(),
+            launched_stale: false,
             specs: Vec::new(),
         };
         std::fs::write(&path, serde_json::to_string(&successor).unwrap()).unwrap();

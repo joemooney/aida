@@ -180,7 +180,9 @@ pub enum MergeHoldAction {
         json: bool,
         /// Re-sync the `aida:merge-hold` label on every live hold whose
         /// recorded label state is not `synced` (repairs a hold whose label
-        /// never landed, so the required merge-hold-gate check enforces it).
+        /// never landed, so the required merge-hold-gate check enforces it),
+        /// and re-route every recusal hold to a live independent reader at
+        /// the PR's current head.
         // trace:BUG-1236 | ai:claude
         #[clap(long)]
         fix: bool,
@@ -197,6 +199,22 @@ pub enum MergeHoldAction {
         // trace:BUG-1294 | ai:claude
         #[clap(long, allow_hyphen_values = true)]
         reason: Option<String>,
+        /// Typed reason: supervision, recusal, rework, or decision.
+        // trace:STORY-1397 | ai:codex
+        #[clap(long, default_value = "supervision")]
+        reason_kind: String,
+        /// Stable principal identity excluded from review/merge. Repeatable;
+        /// required for a recusal hold.
+        // trace:STORY-1397 | ai:codex
+        #[clap(long = "recused-principal")]
+        recused_principals: Vec<String>,
+        /// Stable independent reader identity already routed this exact hold.
+        // trace:STORY-1397 | ai:codex
+        #[clap(long = "route-to")]
+        routed_to: Vec<String>,
+        /// Exact PR head the recusal/review route applies to.
+        #[clap(long)]
+        head: Option<String>,
     },
     /// Clear a merge-hold: remove the marker file and drop the
     /// `aida:merge-hold` label, releasing the PR for merge. Give a PR number,
@@ -2321,6 +2339,14 @@ pub enum BurndownCommand {
         // trace:TASK-1120 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long, value_name = "HOST", num_args = 0..=1, default_missing_value = "tmux")]
         panes: Option<String>,
+        /// Refuse to launch unless this dev build of aida matches (or is
+        /// ahead of) the default branch HEAD. Without it, a stale dev build
+        /// only prints a one-line warning and the wave runs it. Also enabled
+        /// by `[drain] require_head = true` in `.aida/config.toml`. Released
+        /// binaries are never checked.
+        // trace:STORY-1414 | ai:claude
+        #[clap(long)]
+        require_head: bool,
     },
     /// Is a drain running, and what is it doing? The read-side companion to
     /// `burndown run`. Reads the global drain lock — pid, start time, the
@@ -6045,6 +6071,14 @@ pub enum QueueCommand {
         // trace:TASK-405 | ai:claude — now also previews a `--from-pr` drive.
         #[clap(long, requires = "auto_complete")]
         resume_dry_run: bool,
+        /// Refuse to launch the drain unless this dev build of aida matches
+        /// (or is ahead of) the default branch HEAD. Without it, a stale dev
+        /// build only prints a one-line warning and the wave runs it. Also
+        /// enabled by `[drain] require_head = true` in `.aida/config.toml`.
+        /// Released binaries are never checked.
+        // trace:STORY-1414 | ai:claude
+        #[clap(long, requires = "auto_complete")]
+        require_head: bool,
         /// PR-only invocation: implementation already shipped OUTSIDE the
         /// orchestrator (a PR is already open for the spec), so SKIP the
         /// implementer phase and drive the remaining phases

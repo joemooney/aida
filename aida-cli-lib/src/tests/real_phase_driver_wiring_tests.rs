@@ -1364,6 +1364,7 @@ fn post_push_pr_recovery_refuses_when_commit_trailer_names_a_different_spec() {
 /// (the pre-TASK-1444 range, `<default>..HEAD`) must come back empty; the
 /// branch-aware range must still find the commit on `origin/bug-878`.
 // trace:TASK-1444 | ai:claude
+#[cfg(unix)] // uses the unix-only `repo_with_pushed_branch_ahead_of_origin_default` fixture
 #[test]
 fn resolve_shelve_gate_range_uses_the_branch_not_current_head() {
     let (_tmp, work, _remote) = repo_with_pushed_branch_ahead_of_origin_default();

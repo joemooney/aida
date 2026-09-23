@@ -17,6 +17,217 @@
 
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
+/// Machine-readable reason for an active merge hold.
+// trace:STORY-1397 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum HoldReasonKind {
+    Supervision,
+    Recusal,
+    Rework,
+    Decision,
+    Unknown,
+}
+
+impl HoldReasonKind {
+    pub(crate) fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "supervision" => Some(Self::Supervision),
+            "recusal" => Some(Self::Recusal),
+            "rework" => Some(Self::Rework),
+            "decision" => Some(Self::Decision),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Supervision => "supervision",
+            Self::Recusal => "recusal",
+            Self::Rework => "rework",
+            Self::Decision => "decision",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+/// Routing state is explicit: absence of a reader is operational evidence, not
+/// an empty queue that looks complete.
+// trace:STORY-1397 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum HoldRoutingState {
+    Pending,
+    Routed,
+    NoIndependentReader,
+    ReviewedReady,
+    StaleHead,
+}
+
+impl HoldRoutingState {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Routed => "routed",
+            Self::NoIndependentReader => "no-independent-reader",
+            Self::ReviewedReady => "reviewed-ready",
+            Self::StaleHead => "stale-head",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum PrincipalKind {
+    RegisteredAgent,
+    Operator,
+    /// A human acting at an interactive terminal (the integrity floor).
+    // trace:STORY-1397 | ai:claude
+    Human,
+    Unresolved,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum IdentityStatus {
+    Verified,
+    Unresolved,
+}
+
+/// A principal named on a hold. `IdentityStatus::Verified` means the name is
+/// WELL-FORMED (`agent:` / `operator:` / `human:` prefix with a non-empty id),
+/// not that it was authenticated: an `agent:` id is a string any process can
+/// assert. Nothing therefore grants authority on the strength of a Verified
+/// agent identity alone — clearing a hold is gated on a human at a terminal
+/// (the integrity floor), and an agent identity can only ever TIGHTEN a
+/// decision (a matching recused id refuses), never loosen one.
+// trace:STORY-1397 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct PrincipalIdentity {
+    pub principal_kind: PrincipalKind,
+    pub principal_id: String,
+    pub identity_status: IdentityStatus,
+}
+
+impl PrincipalIdentity {
+    pub(crate) fn parse(raw: &str) -> Self {
+        let raw = raw.trim();
+        if let Some(id) = raw.strip_prefix("agent:").filter(|id| !id.is_empty()) {
+            return Self {
+                principal_kind: PrincipalKind::RegisteredAgent,
+                principal_id: id.into(),
+                identity_status: IdentityStatus::Verified,
+            };
+        }
+        if let Some(id) = raw.strip_prefix("operator:").filter(|id| !id.is_empty()) {
+            return Self {
+                principal_kind: PrincipalKind::Operator,
+                principal_id: id.into(),
+                identity_status: IdentityStatus::Verified,
+            };
+        }
+        if let Some(id) = raw.strip_prefix("human:").filter(|id| !id.is_empty()) {
+            return Self::human(id);
+        }
+        Self {
+            principal_kind: PrincipalKind::Unresolved,
+            principal_id: raw.into(),
+            identity_status: IdentityStatus::Unresolved,
+        }
+    }
+
+    pub(crate) fn registered_agent(id: impl Into<String>) -> Self {
+        Self {
+            principal_kind: PrincipalKind::RegisteredAgent,
+            principal_id: id.into(),
+            identity_status: IdentityStatus::Verified,
+        }
+    }
+
+    /// A human at an interactive terminal, keyed by the shell user id.
+    // trace:STORY-1397 | ai:claude
+    pub(crate) fn human(user: impl Into<String>) -> Self {
+        Self {
+            principal_kind: PrincipalKind::Human,
+            principal_id: user.into(),
+            identity_status: IdentityStatus::Verified,
+        }
+    }
+
+    pub(crate) fn key(&self) -> String {
+        match self.principal_kind {
+            PrincipalKind::RegisteredAgent => format!("agent:{}", self.principal_id),
+            PrincipalKind::Operator => format!("operator:{}", self.principal_id),
+            PrincipalKind::Human => format!("human:{}", self.principal_id),
+            PrincipalKind::Unresolved => format!("unresolved:{}", self.principal_id),
+        }
+    }
+
+    fn is_verified(&self) -> bool {
+        self.identity_status == IdentityStatus::Verified
+    }
+}
+
+impl From<&str> for PrincipalIdentity {
+    fn from(value: &str) -> Self {
+        Self::parse(value)
+    }
+}
+
+impl PartialEq<&str> for PrincipalIdentity {
+    fn eq(&self, other: &&str) -> bool {
+        self.key() == *other
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct MergeHoldRecord {
+    pub schema_version: u32,
+    pub pr: u64,
+    pub reason_kind: HoldReasonKind,
+    pub detail: String,
+    #[serde(default)]
+    pub recused_principals: Vec<PrincipalIdentity>,
+    #[serde(default)]
+    pub routed_to: Vec<PrincipalIdentity>,
+    pub routing_state: HoldRoutingState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_head_sha: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label_state: Option<String>,
+    #[serde(default)]
+    pub legacy: bool,
+}
+
+impl MergeHoldRecord {
+    fn legacy(pr: u64, body: &str) -> Self {
+        let detail = body.lines().next().unwrap_or("").trim();
+        let label_state = body
+            .lines()
+            .nth(1)
+            .map(str::trim)
+            .and_then(|line| line.strip_prefix("label: ").map(str::to_string));
+        Self {
+            schema_version: 1,
+            pr,
+            reason_kind: HoldReasonKind::Supervision,
+            detail: if detail.is_empty() {
+                format!("PR-{pr} is under a supervised merge-hold")
+            } else {
+                detail.to_string()
+            },
+            recused_principals: Vec::new(),
+            routed_to: Vec::new(),
+            routing_state: HoldRoutingState::Pending,
+            target_head_sha: None,
+            label_state,
+            legacy: true,
+        }
+    }
+}
+
 fn holds_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("merge-holds")
 }
@@ -28,6 +239,12 @@ pub(crate) fn hold_path(project_root: &Path, pr: u64) -> PathBuf {
 
 /// Record a supervised merge-hold for `pr` with a human-readable reason.
 /// Idempotent — re-recording refreshes the reason.
+///
+/// STORY-1397: production writers all emit typed v2 markers via
+/// [`write_typed_hold`]; this legacy plaintext writer survives only so tests
+/// can build the legacy marker shape the reader must keep honouring.
+// trace:STORY-1397 | ai:claude
+#[cfg(test)]
 pub(crate) fn write_hold(project_root: &Path, pr: u64, reason: &str) -> std::io::Result<()> {
     let dir = holds_dir(project_root);
     std::fs::create_dir_all(&dir)?;
@@ -40,6 +257,386 @@ pub(crate) fn write_hold(project_root: &Path, pr: u64, reason: &str) -> std::io:
     std::fs::write(hold_path(project_root, pr), body)
 }
 
+/// Write a v2 typed marker. JSON is intentionally self-contained so all
+/// offline surfaces can route it without parsing operator prose.
+// trace:STORY-1397 | ai:codex
+pub(crate) fn write_typed_hold(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+) -> std::io::Result<()> {
+    let dir = holds_dir(project_root);
+    std::fs::create_dir_all(&dir)?;
+    if record.pr == 0
+        || (record.reason_kind == HoldReasonKind::Recusal
+            && (record.recused_principals.is_empty()
+                || record
+                    .target_head_sha
+                    .as_deref()
+                    .is_none_or(|sha| sha.trim().is_empty())))
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "a recusal hold requires a PR, exact head, and at least one recused principal",
+        ));
+    }
+    let mut normalized = record.clone();
+    normalized.schema_version = 2;
+    normalized.legacy = false;
+    if normalized.reason_kind == HoldReasonKind::Recusal {
+        reconcile_recusal_route(project_root, &mut normalized)?;
+    }
+    let body = serde_json::to_vec_pretty(&normalized)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    aida_core::fs_atomic::write_atomic(&hold_path(project_root, record.pr), &body)
+}
+
+/// Refresh a recusal hold from live evidence: adopt a moved PR head (which
+/// invalidates the old route), re-select a live independent reader, and write
+/// or retire the routing briefs. Idempotent. A failed refresh leaves the
+/// existing marker armed and returns the last durable record.
+///
+/// This WRITES (marker rewrite, brief creation/retirement) and probes process
+/// liveness, so it is called only from explicit merge-hold commands
+/// (`aida merge-hold list --fix`, and `add` via [`write_typed_hold`]) — never
+/// from a read surface. `aida awaiting` and its per-turn notice stay read-only
+/// and use [`project_live_head`] instead.
+// trace:STORY-1397 | ai:codex
+pub(crate) fn reconcile_recusal_hold(
+    project_root: &Path,
+    pr: u64,
+    live_head: Option<&str>,
+) -> Option<MergeHoldRecord> {
+    let durable = read_hold_record(project_root, pr)?;
+    if durable.reason_kind != HoldReasonKind::Recusal || durable.legacy {
+        return Some(durable);
+    }
+    let mut refreshed = project_live_head(&durable, live_head);
+    if reconcile_recusal_route(project_root, &mut refreshed).is_err() {
+        return Some(durable);
+    }
+    if refreshed == durable {
+        return Some(refreshed);
+    }
+    let body = match serde_json::to_vec_pretty(&refreshed) {
+        Ok(body) => body,
+        Err(_) => return Some(durable),
+    };
+    if aida_core::fs_atomic::write_atomic(&hold_path(project_root, pr), &body).is_err() {
+        return Some(durable);
+    }
+    Some(refreshed)
+}
+
+/// Read-only view of a hold against the PR's live head. A recusal routed at an
+/// older head is shown as `StaleHead` with no current route; nothing is
+/// written. The durable refresh is [`reconcile_recusal_hold`].
+// trace:STORY-1397 | ai:claude
+pub(crate) fn project_live_head(
+    record: &MergeHoldRecord,
+    live_head: Option<&str>,
+) -> MergeHoldRecord {
+    let mut view = record.clone();
+    if view.reason_kind != HoldReasonKind::Recusal || view.legacy {
+        return view;
+    }
+    if let Some(head) = live_head.map(str::trim).filter(|head| !head.is_empty()) {
+        if view.target_head_sha.as_deref() != Some(head) {
+            view.target_head_sha = Some(head.to_string());
+            view.routing_state = HoldRoutingState::StaleHead;
+            view.routed_to.clear();
+        }
+    }
+    view
+}
+
+fn reconcile_recusal_route(
+    project_root: &Path,
+    record: &mut MergeHoldRecord,
+) -> std::io::Result<()> {
+    let agents = project_root.join(".aida/agents");
+    let mut candidates = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(agents) {
+        for entry in entries.flatten() {
+            let Ok(body) = std::fs::read_to_string(entry.path()) else {
+                continue;
+            };
+            let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+                continue;
+            };
+            let Some(id) = value.get("id").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let role = value.get("role").and_then(|v| v.as_str()).unwrap_or("");
+            let agent_type = value
+                .get("agent_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let ended = value.get("ended_at").is_some();
+            let paused = value
+                .get("availability")
+                .and_then(|v| v.as_str())
+                .is_some_and(|v| v.eq_ignore_ascii_case("paused"));
+            let principal = PrincipalIdentity::registered_agent(id);
+            let eligible_role = matches!(
+                role.to_ascii_lowercase().as_str(),
+                "reviewer" | "advisor" | "integrator"
+            );
+            // Every cheap filter runs before the liveness probe, and the probe
+            // is a single-pid check (kill(pid, 0) on Unix), never a full
+            // process-table scan. trace:STORY-1397 | ai:claude
+            if ended
+                || paused
+                || !eligible_role
+                || agent_type.is_empty()
+                || principal_is_recused(record, &principal)
+            {
+                continue;
+            }
+            let live = value
+                .get("pid")
+                .and_then(|v| v.as_integer())
+                .and_then(|v| u32::try_from(v).ok())
+                .is_some_and(aida_core::liveness::pid_is_alive);
+            if live {
+                candidates.push((principal, agent_type.to_string()));
+            }
+        }
+    }
+    candidates.sort_by(|a, b| a.0.principal_id.cmp(&b.0.principal_id));
+    let Some((principal, agent_type)) = candidates.into_iter().next() else {
+        retire_stale_route_briefs(project_root, record.pr, None)?;
+        record.routed_to.clear();
+        record.routing_state = HoldRoutingState::NoIndependentReader;
+        return Ok(());
+    };
+    record.routed_to = vec![principal.clone()];
+    record.routing_state = HoldRoutingState::Routed;
+    let head = record.target_head_sha.as_deref().unwrap_or("unknown");
+    let dir = project_root.join(".aida/agent-briefs").join(&agent_type);
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join(format!("PR-{}-{}.md", record.pr, head));
+    retire_stale_route_briefs(project_root, record.pr, Some(&path))?;
+    if !path.exists() {
+        let recused = record
+            .recused_principals
+            .iter()
+            .map(PrincipalIdentity::key)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let body = format!("---\nspec_id: PR-{}\ntitle: Independent exact-head review\n---\n\nIndependently review PR #{} at exact head `{}`.\n\nRecused principals: {}\n\nRecord a durable verdict; acknowledging this brief does not clear or merge the hold.\n", record.pr, record.pr, head, recused);
+        aida_core::fs_atomic::write_atomic(&path, body.as_bytes())?;
+    }
+    Ok(())
+}
+
+fn retire_stale_route_briefs(
+    project_root: &Path,
+    pr: u64,
+    keep: Option<&Path>,
+) -> std::io::Result<()> {
+    let root = project_root.join(".aida/agent-briefs");
+    let Ok(agent_dirs) = std::fs::read_dir(root) else {
+        return Ok(());
+    };
+    let prefix = format!("PR-{pr}-");
+    for agent_dir in agent_dirs.flatten() {
+        let Ok(entries) = std::fs::read_dir(agent_dir.path()) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with(&prefix) && name.ends_with(".md") && keep != Some(path.as_path()) {
+                let stale = path.with_extension("md.stale");
+                if stale.exists() {
+                    std::fs::remove_file(&stale)?;
+                }
+                std::fs::rename(path, stale)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Parse typed and legacy markers. A malformed marker remains a typed Unknown
+/// hold, preserving the merge chokepoint while exposing the diagnostic.
+// trace:STORY-1397 | ai:codex
+pub(crate) fn read_hold_record(project_root: &Path, pr: u64) -> Option<MergeHoldRecord> {
+    match std::fs::read_to_string(hold_path(project_root, pr)) {
+        Ok(body) if body.trim_start().starts_with('{') => {
+            match serde_json::from_str::<MergeHoldRecord>(&body) {
+                Ok(record) if record.schema_version == 2 && record.pr == pr => Some(record),
+                Ok(_) | Err(_) => Some(MergeHoldRecord {
+                    schema_version: 0,
+                    pr,
+                    reason_kind: HoldReasonKind::Unknown,
+                    detail: format!(
+                        "PR-{pr} merge-hold marker malformed or unsupported — held for safety"
+                    ),
+                    recused_principals: Vec::new(),
+                    routed_to: Vec::new(),
+                    routing_state: HoldRoutingState::NoIndependentReader,
+                    target_head_sha: None,
+                    label_state: None,
+                    legacy: false,
+                }),
+            }
+        }
+        Ok(body) => Some(MergeHoldRecord::legacy(pr, &body)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(_) => Some(MergeHoldRecord {
+            schema_version: 0,
+            pr,
+            reason_kind: HoldReasonKind::Unknown,
+            detail: format!("PR-{pr} merge-hold marker present but unreadable — held for safety"),
+            recused_principals: Vec::new(),
+            routed_to: Vec::new(),
+            routing_state: HoldRoutingState::NoIndependentReader,
+            target_head_sha: None,
+            label_state: None,
+            legacy: false,
+        }),
+    }
+}
+
+// trace:STORY-1397 | ai:codex
+pub(crate) fn principal_is_recused(
+    record: &MergeHoldRecord,
+    principal: &PrincipalIdentity,
+) -> bool {
+    principal.is_verified()
+        && record.recused_principals.iter().any(|p| {
+            p.is_verified()
+                && p.principal_kind == principal.principal_kind
+                && p.principal_id == principal.principal_id
+        })
+}
+
+/// The acting agent's self-declared identity, from `AIDA_AGENT_ID`.
+///
+/// LIMITATION: this is a self-set environment variable, not an established,
+/// authenticated identity — nothing in AIDA's launch path sets it, and any
+/// process can set it to anything. It is therefore used only to PERSONALIZE
+/// the read-only awaiting projection and to TIGHTEN a clear (an id matching a
+/// recused principal refuses). It never satisfies independence and never
+/// grants a clear.
+// trace:STORY-1397 | ai:claude
+pub(crate) fn current_principal() -> Option<PrincipalIdentity> {
+    std::env::var("AIDA_AGENT_ID")
+        .ok()
+        .filter(|id| !id.trim().is_empty())
+        .map(PrincipalIdentity::registered_agent)
+}
+
+pub(crate) fn typed_hold(
+    pr: u64,
+    kind: HoldReasonKind,
+    detail: impl Into<String>,
+    target_head_sha: Option<String>,
+) -> MergeHoldRecord {
+    MergeHoldRecord {
+        schema_version: 2,
+        pr,
+        reason_kind: kind,
+        detail: detail.into(),
+        recused_principals: Vec::new(),
+        routed_to: Vec::new(),
+        routing_state: HoldRoutingState::Pending,
+        target_head_sha,
+        label_state: None,
+        legacy: false,
+    }
+}
+
+/// Who clears a hold, given the human at the terminal and any self-declared
+/// agent identity. Callers have ALREADY enforced the integrity floor (a human
+/// at an interactive terminal); this function never relaxes that.
+///
+/// The independence rule restricts the recused principals. A human clearing
+/// at a terminal is independent of a recused AUTHOR AGENT by definition, so no
+/// agent identity or agent-recorded verdict is required and the clearance is
+/// attributed to `human:<user>`. The human is refused only when the hold
+/// itself names that human (`human:<user>` or `operator:<user>`) as recused.
+/// A self-declared agent id can only refuse (when it is recused), never grant.
+// trace:STORY-1397 | ai:claude
+pub(crate) fn human_clear_actor(
+    record: &MergeHoldRecord,
+    human_user: &str,
+    declared_agent: Option<&PrincipalIdentity>,
+) -> Result<PrincipalIdentity, String> {
+    if declared_agent.is_some_and(|agent| principal_is_recused(record, agent)) {
+        return Err(format!(
+            "the acting agent identity is recused from PR-{}; only an independent reader may clear this hold",
+            record.pr
+        ));
+    }
+    let user = human_user.trim();
+    if user.is_empty() {
+        return Err(format!(
+            "PR-{} hold cannot be cleared: the human user identity is unknown",
+            record.pr
+        ));
+    }
+    let human = PrincipalIdentity::human(user);
+    let operator = PrincipalIdentity {
+        principal_kind: PrincipalKind::Operator,
+        principal_id: user.to_string(),
+        identity_status: IdentityStatus::Verified,
+    };
+    if principal_is_recused(record, &human) || principal_is_recused(record, &operator) {
+        return Err(format!(
+            "{} is recused from PR-{}; another independent reader must clear this hold",
+            human.key(),
+            record.pr
+        ));
+    }
+    Ok(human)
+}
+
+/// Durable audit record of who cleared a hold, written by the explicit
+/// `aida merge-hold clear` command (never by a read surface). Per-clone
+/// runtime state under `.aida/`, like the markers themselves.
+// trace:STORY-1397 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct HoldClearance {
+    pub pr: u64,
+    pub reason_kind: HoldReasonKind,
+    pub detail: String,
+    pub cleared_by: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_head_sha: Option<String>,
+    pub cleared_at: String,
+}
+
+pub(crate) fn clearance_path(project_root: &Path, pr: u64) -> PathBuf {
+    project_root
+        .join(".aida")
+        .join("merge-hold-clearances")
+        .join(format!("PR-{pr}.json"))
+}
+
+pub(crate) fn record_clearance(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    actor: &PrincipalIdentity,
+) -> std::io::Result<()> {
+    let path = clearance_path(project_root, record.pr);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let clearance = HoldClearance {
+        pr: record.pr,
+        reason_kind: record.reason_kind,
+        detail: record.detail.clone(),
+        cleared_by: actor.key(),
+        target_head_sha: record.target_head_sha.clone(),
+        cleared_at: chrono::Utc::now().to_rfc3339(),
+    };
+    let body = serde_json::to_vec_pretty(&clearance)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    aida_core::fs_atomic::write_atomic(&path, &body)
+}
+
 /// The hold reason if `pr` is under a supervised merge-hold, else `None`.
 /// The merge chokepoint refuses whenever this is `Some`.
 ///
@@ -50,22 +647,7 @@ pub(crate) fn write_hold(project_root: &Path, pr: u64, reason: &str) -> std::io:
 /// which would let a merge through when the marker was present but unreadable —
 /// the exact fail-open class this whole marker exists to prevent.
 pub(crate) fn read_hold(project_root: &Path, pr: u64) -> Option<String> {
-    match std::fs::read_to_string(hold_path(project_root, pr)) {
-        Ok(body) => {
-            // BUG-1236: the marker's first line is the reason; a second
-            // `label: …` line records the Layer-2 label sync state.
-            let reason = body.lines().next().unwrap_or("").trim();
-            Some(if reason.is_empty() {
-                format!("PR-{pr} is under a supervised merge-hold")
-            } else {
-                reason.to_string()
-            })
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-        Err(_) => Some(format!(
-            "PR-{pr} merge-hold marker present but unreadable — held for safety"
-        )),
-    }
+    read_hold_record(project_root, pr).map(|record| record.detail)
 }
 
 /// Clear the hold — an explicit human/advisor review. Idempotent: clearing a
@@ -199,6 +781,17 @@ pub(crate) fn record_label_state(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(e) => return Err(e),
     };
+    if body.trim_start().starts_with('{') {
+        let Some(mut record) = read_hold_record(project_root, pr) else {
+            return Ok(());
+        };
+        record.label_state = Some(match state {
+            LabelState::Synced => "synced".to_string(),
+            LabelState::Unsynced(err) => format!("unsynced: {}", err.lines().next().unwrap_or("")),
+            LabelState::Unknown => "unknown".to_string(),
+        });
+        return write_typed_hold(project_root, &record);
+    }
     let reason = body.lines().next().unwrap_or("").trim();
     let line = match state {
         LabelState::Synced => "label: synced".to_string(),
@@ -222,6 +815,15 @@ pub(crate) fn read_label_state(project_root: &Path, pr: u64) -> LabelState {
     let Ok(body) = std::fs::read_to_string(hold_path(project_root, pr)) else {
         return LabelState::Unknown;
     };
+    if body.trim_start().starts_with('{') {
+        return match read_hold_record(project_root, pr).and_then(|r| r.label_state) {
+            Some(s) if s == "synced" => LabelState::Synced,
+            Some(s) if s.starts_with("unsynced:") => {
+                LabelState::Unsynced(s.trim_start_matches("unsynced:").trim().to_string())
+            }
+            _ => LabelState::Unknown,
+        };
+    }
     match body.lines().nth(1).map(str::trim) {
         Some("label: synced") => LabelState::Synced,
         Some(l) if l.starts_with("label: unsynced:") => {
@@ -523,5 +1125,301 @@ mod tests {
         write_hold(dir.path(), 9, "guided").unwrap();
         assert_eq!(read_label_state(dir.path(), 9), LabelState::Unknown);
         assert_eq!(read_label_state(dir.path(), 10), LabelState::Unknown);
+    }
+
+    // trace:STORY-1397 | ai:codex
+    #[test]
+    fn typed_recusal_round_trip_and_label_update_preserve_routing() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida/agents")).unwrap();
+        std::fs::write(dir.path().join(".aida/agents/reader.toml"), format!("id = \"cold-reader\"\nagent_type = \"codex\"\npid = {}\nrole = \"reviewer\"\navailability = \"available\"\n", std::process::id())).unwrap();
+        let record = MergeHoldRecord {
+            schema_version: 2,
+            pr: 2023,
+            reason_kind: HoldReasonKind::Recusal,
+            detail: "author cannot merge".into(),
+            recused_principals: vec!["agent:author".into()],
+            routed_to: vec!["agent:cold-reader".into()],
+            routing_state: HoldRoutingState::Routed,
+            target_head_sha: Some("abcdef0123456789".into()),
+            label_state: None,
+            legacy: false,
+        };
+        write_typed_hold(dir.path(), &record).unwrap();
+        record_label_state(dir.path(), 2023, &LabelState::Synced).unwrap();
+        let reread = read_hold_record(dir.path(), 2023).unwrap();
+        assert_eq!(reread.reason_kind, HoldReasonKind::Recusal);
+        assert_eq!(reread.recused_principals, vec!["agent:author"]);
+        assert_eq!(reread.routed_to, vec!["agent:cold-reader"]);
+        assert_eq!(reread.target_head_sha.as_deref(), Some("abcdef0123456789"));
+        assert_eq!(read_label_state(dir.path(), 2023), LabelState::Synced);
+        assert!(principal_is_recused(
+            &reread,
+            &PrincipalIdentity::parse("agent:author")
+        ));
+        assert!(!principal_is_recused(
+            &reread,
+            &PrincipalIdentity::parse("agent:cold-reader")
+        ));
+        assert!(dir
+            .path()
+            .join(".aida/agent-briefs/codex/PR-2023-abcdef0123456789.md")
+            .exists());
+    }
+
+    #[test]
+    fn recusal_requires_named_principal_and_malformed_json_stays_held() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = MergeHoldRecord {
+            schema_version: 2,
+            pr: 7,
+            reason_kind: HoldReasonKind::Recusal,
+            detail: "recused".into(),
+            recused_principals: Vec::new(),
+            routed_to: Vec::new(),
+            routing_state: HoldRoutingState::NoIndependentReader,
+            target_head_sha: None,
+            label_state: None,
+            legacy: false,
+        };
+        assert!(write_typed_hold(dir.path(), &record).is_err());
+        std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
+        std::fs::write(hold_path(dir.path(), 7), "{not-json").unwrap();
+        let held = read_hold_record(dir.path(), 7).unwrap();
+        assert_eq!(held.reason_kind, HoldReasonKind::Unknown);
+        assert!(read_hold(dir.path(), 7).is_some());
+    }
+
+    #[test]
+    fn legacy_marker_is_supervision_without_guessing_recusal_from_prose() {
+        let dir = tempfile::tempdir().unwrap();
+        write_hold(dir.path(), 8, "I wrote this; another reader is needed").unwrap();
+        let held = read_hold_record(dir.path(), 8).unwrap();
+        assert!(held.legacy);
+        assert_eq!(held.reason_kind, HoldReasonKind::Supervision);
+        assert!(held.recused_principals.is_empty());
+    }
+
+    fn recused_record() -> MergeHoldRecord {
+        let mut record = typed_hold(
+            42,
+            HoldReasonKind::Recusal,
+            "author recused",
+            Some("head-a".into()),
+        );
+        record.recused_principals = vec![PrincipalIdentity::parse("agent:author")];
+        record
+    }
+
+    // trace:STORY-1397 | ai:claude
+    #[test]
+    fn human_at_terminal_clears_recusal_without_agent_id() {
+        let record = recused_record();
+        let actor = human_clear_actor(&record, "joe", None).expect("human clears");
+        assert_eq!(actor.key(), "human:joe");
+        // An unrelated declared agent id neither helps nor hinders the human.
+        let other = PrincipalIdentity::parse("agent:someone-else");
+        assert_eq!(
+            human_clear_actor(&record, "joe", Some(&other))
+                .unwrap()
+                .key(),
+            "human:joe"
+        );
+    }
+
+    #[test]
+    fn human_clear_refuses_a_recused_declared_agent_and_a_recused_human() {
+        let record = recused_record();
+        let author = PrincipalIdentity::parse("agent:author");
+        assert!(human_clear_actor(&record, "joe", Some(&author)).is_err());
+
+        let mut human_recused = recused_record();
+        human_recused
+            .recused_principals
+            .push(PrincipalIdentity::parse("human:joe"));
+        assert!(human_clear_actor(&human_recused, "joe", None).is_err());
+        assert!(human_clear_actor(&human_recused, "ann", None).is_ok());
+
+        let mut operator_recused = recused_record();
+        operator_recused
+            .recused_principals
+            .push(PrincipalIdentity::parse("operator:joe"));
+        assert!(human_clear_actor(&operator_recused, "joe", None).is_err());
+
+        assert!(human_clear_actor(&record, "  ", None).is_err());
+    }
+
+    #[test]
+    fn clearance_is_recorded_as_the_human_principal() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = recused_record();
+        let actor = human_clear_actor(&record, "joe", None).unwrap();
+        record_clearance(dir.path(), &record, &actor).unwrap();
+        let body = std::fs::read_to_string(clearance_path(dir.path(), 42)).unwrap();
+        let clearance: HoldClearance = serde_json::from_str(&body).unwrap();
+        assert_eq!(clearance.cleared_by, "human:joe");
+        assert_eq!(clearance.reason_kind, HoldReasonKind::Recusal);
+        assert_eq!(clearance.target_head_sha.as_deref(), Some("head-a"));
+    }
+
+    #[test]
+    fn human_principal_round_trips() {
+        let human = PrincipalIdentity::parse("human:joe");
+        assert_eq!(human.principal_kind, PrincipalKind::Human);
+        assert_eq!(human.key(), "human:joe");
+        let json = serde_json::to_string(&human).unwrap();
+        assert_eq!(
+            serde_json::from_str::<PrincipalIdentity>(&json).unwrap(),
+            human
+        );
+    }
+
+    #[test]
+    fn live_head_projection_marks_stale_without_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut record = recused_record();
+        record.routing_state = HoldRoutingState::Routed;
+        record.routed_to = vec![PrincipalIdentity::parse("agent:reader")];
+        std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
+        let body = serde_json::to_vec_pretty(&record).unwrap();
+        std::fs::write(hold_path(dir.path(), 42), &body).unwrap();
+
+        let view = project_live_head(&record, Some("head-b"));
+        assert_eq!(view.routing_state, HoldRoutingState::StaleHead);
+        assert!(view.routed_to.is_empty());
+        assert_eq!(view.target_head_sha.as_deref(), Some("head-b"));
+        // Same head: unchanged. No head known: unchanged.
+        assert_eq!(project_live_head(&record, Some("head-a")), record);
+        assert_eq!(project_live_head(&record, None), record);
+        // The durable marker is untouched.
+        assert_eq!(std::fs::read(hold_path(dir.path(), 42)).unwrap(), body);
+    }
+
+    #[test]
+    fn recusal_routing_is_idempotent_and_excludes_recused_agent() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida/agents")).unwrap();
+        for (file, id) in [("author.toml", "author"), ("reader.toml", "reader")] {
+            std::fs::write(dir.path().join(".aida/agents").join(file), format!("id = \"{id}\"\nagent_type = \"codex\"\npid = {}\nrole = \"reviewer\"\navailability = \"available\"\n", std::process::id())).unwrap();
+        }
+        let mut record = typed_hold(43, HoldReasonKind::Recusal, "recused", Some("abc".into()));
+        record.recused_principals = vec![PrincipalIdentity::parse("agent:author")];
+        write_typed_hold(dir.path(), &record).unwrap();
+        write_typed_hold(dir.path(), &record).unwrap();
+        let reread = read_hold_record(dir.path(), 43).unwrap();
+        assert_eq!(
+            reread.routed_to,
+            vec![PrincipalIdentity::parse("agent:reader")]
+        );
+        let briefs = std::fs::read_dir(dir.path().join(".aida/agent-briefs/codex"))
+            .unwrap()
+            .count();
+        assert_eq!(briefs, 1);
+
+        std::fs::remove_file(dir.path().join(".aida/agents/reader.toml")).unwrap();
+        write_typed_hold(dir.path(), &reread).unwrap();
+        let unrouted = read_hold_record(dir.path(), 43).unwrap();
+        assert_eq!(
+            unrouted.routing_state,
+            HoldRoutingState::NoIndependentReader
+        );
+        assert!(dir
+            .path()
+            .join(".aida/agent-briefs/codex/PR-43-abc.md.stale")
+            .exists());
+
+        std::fs::write(dir.path().join(".aida/agents/new-reader.toml"), format!("id = \"new-reader\"\nagent_type = \"codex\"\npid = {}\nrole = \"reviewer\"\navailability = \"available\"\n", std::process::id())).unwrap();
+        let mut moved = unrouted;
+        moved.target_head_sha = Some("def".into());
+        moved.routing_state = HoldRoutingState::StaleHead;
+        write_typed_hold(dir.path(), &moved).unwrap();
+        let rerouted = read_hold_record(dir.path(), 43).unwrap();
+        assert_eq!(
+            rerouted.routed_to,
+            vec![PrincipalIdentity::parse("agent:new-reader")]
+        );
+        assert!(dir
+            .path()
+            .join(".aida/agent-briefs/codex/PR-43-def.md")
+            .exists());
+    }
+
+    #[test]
+    fn explicit_reconciliation_refreshes_routes_and_render_stays_read_only() {
+        let lib_source = include_str!("lib.rs");
+        let awaiting = lib_source
+            .split("fn collect_awaiting_report_inner(")
+            .nth(1)
+            // The collector body ends at its closing brace in column 0.
+            .and_then(|body| body.split("\n}\n").next())
+            .expect("awaiting/status collector must remain inspectable");
+        // STORY-1397 review: the awaiting render (incl. the per-turn notice)
+        // is read-only and cheap. Reconciliation writes markers and briefs and
+        // probes liveness, so it lives on the explicit `merge-hold list --fix`.
+        for forbidden in [
+            "reconcile_recusal_hold",
+            "write_typed_hold",
+            "merge_hold::write_hold",
+            "sysinfo::",
+        ] {
+            assert!(
+                !awaiting.contains(forbidden),
+                "awaiting render must not call `{forbidden}`"
+            );
+        }
+        assert!(
+            awaiting.contains("awaiting_you::project_held_pr"),
+            "every non-recusal held PR must be projected, not dropped"
+        );
+        let handler = lib_source
+            .split("fn handle_merge_hold(")
+            .nth(1)
+            .and_then(|body| body.split("MergeHoldAction::Add").next())
+            .expect("merge-hold list handler must remain inspectable");
+        assert!(
+            handler.contains("merge_hold::reconcile_recusal_hold"),
+            "`aida merge-hold list --fix` must reconcile recusal routing"
+        );
+        let own_source = include_str!("merge_hold.rs");
+        let route = own_source
+            .split("fn reconcile_recusal_route(")
+            .nth(1)
+            .and_then(|body| body.split("fn retire_stale_route_briefs(").next())
+            .unwrap();
+        assert!(
+            !route.contains(concat!("new", "_all")),
+            "routing must probe one pid, never scan the whole process table"
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida/agents")).unwrap();
+        let mut record = typed_hold(44, HoldReasonKind::Recusal, "recused", Some("abc".into()));
+        record.recused_principals = vec![PrincipalIdentity::parse("agent:author")];
+        write_typed_hold(dir.path(), &record).unwrap();
+
+        std::fs::write(dir.path().join(".aida/agents/reader.toml"), format!("id = \"reader\"\nagent_type = \"codex\"\npid = {}\nrole = \"reviewer\"\navailability = \"available\"\n", std::process::id())).unwrap();
+        let routed = reconcile_recusal_hold(dir.path(), 44, Some("abc")).unwrap();
+        assert_eq!(routed.routing_state, HoldRoutingState::Routed);
+        assert!(dir
+            .path()
+            .join(".aida/agent-briefs/codex/PR-44-abc.md")
+            .exists());
+
+        std::fs::remove_file(dir.path().join(".aida/agents/reader.toml")).unwrap();
+        let retired = reconcile_recusal_hold(dir.path(), 44, Some("abc")).unwrap();
+        assert_eq!(retired.routing_state, HoldRoutingState::NoIndependentReader);
+        assert!(dir
+            .path()
+            .join(".aida/agent-briefs/codex/PR-44-abc.md.stale")
+            .exists());
+
+        std::fs::write(dir.path().join(".aida/agents/new-reader.toml"), format!("id = \"new-reader\"\nagent_type = \"codex\"\npid = {}\nrole = \"reviewer\"\navailability = \"available\"\n", std::process::id())).unwrap();
+        let moved = reconcile_recusal_hold(dir.path(), 44, Some("def")).unwrap();
+        assert_eq!(moved.target_head_sha.as_deref(), Some("def"));
+        assert_eq!(moved.routing_state, HoldRoutingState::Routed);
+        assert!(dir
+            .path()
+            .join(".aida/agent-briefs/codex/PR-44-def.md")
+            .exists());
     }
 }

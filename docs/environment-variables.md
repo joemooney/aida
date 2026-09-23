@@ -85,6 +85,7 @@ spawns an agent.
 | `AIDA_AI_TOOL` | Name of the AI interface in use (audit/telemetry attribution). | unset = `None` (empty treated as unset). | user | process env |
 | `AIDA_AGENT_TYPE` | Agent flavour (`claude` / `codex` / `antigravity` / …). | Sniffed from `CODEX_*` / `ANTIGRAVITY_*` / `GEMINI_*` / `CLAUDE*` env prefixes; falls back to `"other"`. | launch-path (`aida agent new`) | process env |
 | `AIDA_AGENT_NAME` | Unique name of the running agent process (e.g. `claude-3f2a`). | unset = `None`. | launch-path | process env |
+| `AIDA_AGENT_ID` | Self-declared registered-agent id used by merge-hold recusal (STORY-1397): personalizes the read-only `aida awaiting` recusal rows (recused / routed-reader) and makes `aida merge-hold clear` REFUSE when it names a recused principal. It is NOT an authenticated identity: it never satisfies the independence rule and never grants a clear — clearing requires a human at a terminal, recorded as `human:<user>`. | unset = no agent identity (human/unknown view). | user / launch-path | process env |
 | `AIDA_AGENT_REGISTRY_TOKEN` | Auth token for agent-registry writes. | unset = `None`. | launch-path | process env |
 | `AIDA_ADVISOR_SESSION_UUID` | UUID of the live advisor session, used for fork-from-live discovery. | unset = falls back to an mtime scan. | launch-path (advisor orchestrator) | process env |
 | `AIDA_REGISTRY_PATH` | Path to the requirements registry file (legacy/centralized layouts). | Cascade: `AIDA_REGISTRY_PATH` → `REQ_REGISTRY_PATH` → default location. | user / dev | process env |

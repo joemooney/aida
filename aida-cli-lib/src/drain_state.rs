@@ -2981,6 +2981,7 @@ mod tests {
             binary_sha: "abc1234".to_string(),
             binary_mtime_secs: Some(1_700_000_000),
             binary_path: "/repo/target/release/aida".to_string(),
+            launched_stale: false,
             specs: vec!["BUG-101".to_string(), "TASK-202".to_string()],
         }
     }
