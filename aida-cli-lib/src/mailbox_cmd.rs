@@ -160,7 +160,11 @@ pub(crate) fn handle_mailbox_command(
                     "invalid --intent '{intent}'; expected one of: fyi, request, handoff"
                 )
             })?;
-            let sender = from.clone().unwrap_or_else(|| current_user_id(None));
+            // trace:BUG-1533 | ai:claude — resolve authorship with the same
+            // precedence session identity uses (agent name / AIDA_USER /
+            // role), never the BUG-89 queue-key order, and record which
+            // tier won so the envelope never looks silently attributed.
+            let (sender, from_source) = crate::resolve_mail_sender_identity(from.as_deref());
             let id = uuid::Uuid::new_v4().to_string();
             let body = read_send_body(body.as_deref(), body_file.as_deref(), *stdin)?;
             // BUG-557: a reply must attach to the ORIGINAL message's thread, not
@@ -219,6 +223,7 @@ pub(crate) fn handle_mailbox_command(
                 retracted: false,
                 deleted: false,
                 archived: false,
+                from_source,
             };
             mailbox_store::write_message(project_root, &msg)?;
             // STORY-1226: the event fast-path for `on = ["MailReceived"]`
@@ -878,6 +883,7 @@ mod tests {
             retracted: false,
             deleted: false,
             archived: false,
+            from_source: aida_core::mailbox::SenderSource::Explicit,
         }
     }
 
@@ -1400,6 +1406,136 @@ mod tests {
             Some(2),
             "watermark must advance to the newest DISPLAYED message even though \
              the worker died mid-print from the closed pipe"
+        );
+    }
+
+    // ── BUG-1533: mail sender identity resolution on the send path ─────────
+
+    fn send_command(body: &str) -> MailboxCommand {
+        MailboxCommand::Send {
+            to: Some("bob".into()),
+            broadcast: false,
+            body: Some(body.into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: None,
+            in_reply_to: None,
+            from: None,
+            urgent: false,
+            intent: "fyi".into(),
+        }
+    }
+
+    // trace:BUG-1533 | ai:claude
+    #[test]
+    fn send_records_agent_name_source_without_touching_aida_user() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        // A single EnvVarsGuard::apply for every key: the guard holds the
+        // process-global env lock for its whole lifetime, and a second
+        // acquisition on the same thread deadlocks (it is not reentrant) —
+        // see `test_env::env_lock`.
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("claude-product-1")),
+            ("AIDA_USER", None),
+            ("AIDA_SESSION_ROLE", None),
+        ]);
+
+        handle_mailbox_command(&send_command("hello"), &store).unwrap();
+
+        let sent = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "hello")
+            .unwrap();
+        assert_eq!(sent.from, "claude-product-1");
+        assert_eq!(
+            sent.from_source,
+            aida_core::mailbox::SenderSource::AgentName
+        );
+        assert!(sent.from_source.is_attributed());
+    }
+
+    // trace:BUG-1533 | ai:claude
+    #[test]
+    fn send_falls_back_to_role_when_no_agent_name_or_aida_user_and_flags_shell_user_fallback() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let role_guard = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", None),
+            ("AIDA_USER", None),
+            ("AIDA_SESSION_ROLE", Some("advisor")),
+        ]);
+
+        handle_mailbox_command(&send_command("role-sourced"), &store).unwrap();
+        let sent = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "role-sourced")
+            .unwrap();
+        assert_eq!(sent.from, "advisor");
+        assert_eq!(
+            sent.from_source,
+            aida_core::mailbox::SenderSource::SessionRole
+        );
+
+        // Now drop the role too (releasing the lock first): the send must
+        // still succeed (never refuse), but the recorded source must mark it
+        // as the ambiguous shell-user fallback rather than looking like a
+        // resolved seat.
+        drop(role_guard);
+        let _no_role = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", None),
+            ("AIDA_USER", None),
+            ("AIDA_SESSION_ROLE", None),
+        ]);
+        handle_mailbox_command(&send_command("shell-fallback"), &store).unwrap();
+        let fallback = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "shell-fallback")
+            .unwrap();
+        assert_eq!(
+            fallback.from_source,
+            aida_core::mailbox::SenderSource::ShellUser,
+            "no attributable identity → recorded as the ShellUser fallback marker, not silent"
+        );
+        assert!(!fallback.from_source.is_attributed());
+    }
+
+    // trace:BUG-1533 | ai:claude
+    #[test]
+    fn two_seats_sharing_shell_user_send_distinguishable_envelopes_end_to_end() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_NAME", Some("claude-product-1")),
+                ("AIDA_USER", None),
+                ("AIDA_SESSION_ROLE", None),
+            ]);
+            handle_mailbox_command(&send_command("from-product"), &store).unwrap();
+        }
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_NAME", Some("claude-reviewer-1")),
+                ("AIDA_USER", None),
+                ("AIDA_SESSION_ROLE", None),
+            ]);
+            handle_mailbox_command(&send_command("from-reviewer"), &store).unwrap();
+        }
+
+        let all = mailbox_store::read_local_messages(project.path()).unwrap();
+        let product = all.iter().find(|m| m.body == "from-product").unwrap();
+        let reviewer = all.iter().find(|m| m.body == "from-reviewer").unwrap();
+        assert_ne!(
+            product.from, reviewer.from,
+            "two seats must not collapse to one indistinguishable envelope identity"
         );
     }
 }

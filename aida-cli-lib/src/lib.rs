@@ -9992,6 +9992,10 @@ pub(crate) fn send_notification(
         retracted: false,
         deleted: false,
         archived: false,
+        // The caller names `sender` explicitly (a fixed system/CLI identity,
+        // e.g. "web", "aida-session-reap"), not an ambiguous env fallback.
+        // trace:BUG-1533 | ai:claude
+        from_source: aida_core::mailbox::SenderSource::Explicit,
     };
     if let Err(e) = mailbox_store::write_message(project_root, &msg) {
         eprintln!(
@@ -19544,13 +19548,24 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
         String::new()
     };
     let body = mailbox_line_body(m);
+    // BUG-1533: `from` alone is ambiguous whenever the sender collapsed to
+    // the bare shell user (or predates the `from_source` field) — several
+    // seats and the human operator can share that one string. Flag that
+    // case explicitly rather than let it read as a resolved seat identity;
+    // a real seat identity (agent name / AIDA_USER / role) needs no tag
+    // since `from` already names it distinctly.
+    let from_display = if m.from_source.is_attributed() {
+        m.from.cyan().to_string()
+    } else {
+        format!("{} {}", m.from.cyan(), "[unattributed]".dimmed())
+    };
     println!(
         "  {}{}{}{} {} → {}  {}  {}",
         flag,
         intent_tag,
         archived_tag,
         short.dimmed(),
-        m.from.cyan(),
+        from_display,
         to.yellow(),
         when.dimmed(),
         body
@@ -81096,6 +81111,39 @@ pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
             .or_else(|_| std::env::var("USERNAME"))
             .unwrap_or_else(|_| "default".to_string())
     })
+}
+
+/// Resolve the mailbox `from` identity at send time (BUG-1533): the same
+/// kind of precedence `current_user_id` uses for the queue, but reordered
+/// and widened for *authorship* rather than queue routing — an explicit
+/// override, then the launched agent's stable process name
+/// (`AIDA_AGENT_NAME`), then the opt-in queue identity (`AIDA_USER`), then
+/// the active session-role persona (`AIDA_SESSION_ROLE`) — falling back to
+/// the bare shell user only last. Returns which tier resolved so the caller
+/// can record it on the message instead of the sender looking silently
+/// attributed.
+///
+/// Deliberately a SEPARATE function from `current_user_id`, not a thin
+/// wrapper around it: `current_user_id` is the BUG-89 QUEUE key
+/// (`AIDA_USER` first, no agent-name/role tiers, and changing it re-shards
+/// which queue a shell sees). Mail authorship must be resolvable without
+/// ever requiring a seat to set `AIDA_USER` — a properly-launched agent
+/// already has `AIDA_AGENT_NAME` — so adopting a stable mail identity never
+/// strands that seat's existing queue entries (BUG-1533 acceptance #6).
+// trace:BUG-1533 | ai:claude
+pub(crate) fn resolve_mail_sender_identity(
+    explicit: Option<&str>,
+) -> (String, aida_core::mailbox::SenderSource) {
+    let shell_user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .ok();
+    aida_core::mailbox::resolve_sender(
+        explicit,
+        std::env::var("AIDA_AGENT_NAME").ok().as_deref(),
+        std::env::var("AIDA_USER").ok().as_deref(),
+        std::env::var("AIDA_SESSION_ROLE").ok().as_deref(),
+        shell_user.as_deref(),
+    )
 }
 
 /// The queue identity for DRAINABLE handoff work (`aida backlog groom`): the

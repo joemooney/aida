@@ -1183,6 +1183,9 @@ fn send_assignment_notification(
         retracted: false,
         deleted: false,
         archived: false,
+        // Fixed system identity ("web"), not an ambiguous env fallback.
+        // trace:BUG-1533 | ai:claude
+        from_source: aida_core::mailbox::SenderSource::Explicit,
     };
     if let Err(e) = aida_core::mailbox::write_local_message(project_dir, &msg) {
         tracing::warn!("could not send mailbox notice to {recipient}: {e}");

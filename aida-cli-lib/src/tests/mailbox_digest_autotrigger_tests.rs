@@ -3,7 +3,7 @@
 //! The call sites themselves `std::process::exit`, so the behavior under test
 //! is the shared helper + its best-effort guarantee. trace:STORY-493 | ai:claude
 use super::*;
-use aida_core::mailbox::{Message, Recipient};
+use aida_core::mailbox::{Message, Recipient, SenderSource};
 use tempfile::tempdir;
 
 fn msg(id: &str) -> Message {
@@ -21,6 +21,7 @@ fn msg(id: &str) -> Message {
         retracted: false,
         deleted: false,
         archived: false,
+        from_source: SenderSource::Explicit,
     }
 }
 

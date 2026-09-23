@@ -2560,11 +2560,12 @@ impl<'a> McpServer<'a> {
         } else {
             return Err("specify `to` (an agent) or `broadcast: true`".to_string());
         };
-        let from = args
-            .get("from")
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-            .unwrap_or_else(|| crate::current_user_id(None));
+        // trace:BUG-1533 | ai:claude — mirror the CLI's `--from` resolution:
+        // an explicit `from` argument wins, else the same session-identity
+        // precedence (agent name / AIDA_USER / role) as the CLI, never the
+        // BUG-89 queue-key order.
+        let explicit_from = args.get("from").and_then(|v| v.as_str());
+        let (from, from_source) = crate::resolve_mail_sender_identity(explicit_from);
         let id = uuid::Uuid::new_v4().to_string();
         // BUG-557: mirror the CLI fix — `in_reply_to` must attach the reply to
         // the target's thread, not open a new one. Precedence: explicit
@@ -2617,6 +2618,7 @@ impl<'a> McpServer<'a> {
             retracted: false,
             deleted: false,
             archived: false,
+            from_source,
         };
         crate::mailbox_store::write_message(&self.project_root, &msg).map_err(|e| e.to_string())?;
         Ok(format!("Message sent: {id} (thread {thread_id})"))
@@ -2677,6 +2679,12 @@ impl<'a> McpServer<'a> {
                     "id": m.id,
                     "thread_id": m.thread_id,
                     "from": m.from,
+                    // trace:BUG-1533 | ai:claude — which precedence tier
+                    // resolved `from` at send time, so a reader can tell a
+                    // real seat apart from the ambiguous shell-user/legacy
+                    // fallback without inferring it from body prose.
+                    "from_source": m.from_source.as_str(),
+                    "from_attributed": m.from_source.is_attributed(),
                     "to": to,
                     "timestamp": m.timestamp,
                     "in_reply_to": m.in_reply_to,
