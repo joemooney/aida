@@ -893,6 +893,37 @@ pub enum ReviewCommand {
         pr: Option<u64>,
     },
 
+    /// Mark a pull request as under review, so nothing merges it before
+    /// your verdict lands.
+    ///
+    /// While the claim is live, `aida pr ship` and a drain's merge phase
+    /// refuse to merge the PR at the claimed head, and `aida awaiting`
+    /// shows it as under review. `aida review record … --pr N` clears the
+    /// claim; so does `--release`. It also expires on its own after
+    /// `--ttl-mins`, so an abandoned review never holds a PR indefinitely.
+    // trace:STORY-1405 | ai:claude
+    Claim {
+        /// Pull request number being reviewed.
+        #[clap(long, value_name = "N")]
+        pr: u64,
+
+        /// Head commit under review. Defaults to the PR's current head.
+        #[clap(long, value_name = "SHA")]
+        sha: Option<String>,
+
+        /// Spec the PR implements, shown alongside the claim.
+        #[clap(long, value_name = "SPEC")]
+        spec: Option<String>,
+
+        /// Minutes until the claim expires on its own.
+        #[clap(long, value_name = "MINUTES", default_value_t = 30)]
+        ttl_mins: u64,
+
+        /// Remove the claim instead of placing it (an abandoned review).
+        #[clap(long)]
+        release: bool,
+    },
+
     /// Show the recorded review verdict for a spec, if any.
     // trace:BUG-775 | ai:claude
     Verdict {
