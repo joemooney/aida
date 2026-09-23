@@ -10651,7 +10651,12 @@ pub enum Command {
     #[clap(subcommand, hide = true)]
     Dev(DevCommand),
 
-    /// Diagnose and heal AIDA multi-agent state drift.
+    /// Diagnose and heal AIDA multi-agent state drift. Report-only by
+    /// design: exit 0 means the scan RAN, not that it found nothing —
+    /// findings print as text/JSON either way. A caller that needs a
+    /// pass/fail signal (e.g. a CI gate or scheduled job) opts in with
+    /// `doctor check <category> --fail-on-findings`, which exits non-zero
+    /// only when that one category has findings.
     // trace:EPIC-19 trace:STORY-462
     Doctor {
         /// Apply safe fixes after scanning. Without this, doctor is read-only.
@@ -14131,6 +14136,23 @@ mod tests {
                  away from `--batches` chains, which are serial at any depth; got:\n{help}"
             );
         }
+    }
+
+    // BUG-1552: `aida doctor` is report-only by design — exit 0 means "ran
+    // successfully," not "found nothing." That contract has to be
+    // discoverable from --help itself, not just docs, so this pins that
+    // the top-level `aida doctor --help` names the opt-in gate
+    // (`--fail-on-findings`) a caller reaches for when it wants pass/fail.
+    // trace:BUG-1552 | ai:claude
+    #[test]
+    fn doctor_help_names_fail_on_findings_gate() {
+        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let help = find_subcommand_help(&mut cmd, &["doctor"]);
+        let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("--fail-on-findings"),
+            "`aida doctor --help` no longer names --fail-on-findings; got:\n{help}"
+        );
     }
 
     /// Render the long help for a nested subcommand path (e.g. `queue work`).
