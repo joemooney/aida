@@ -61,12 +61,12 @@ description: |-
   THE ACTIONABLE FORM, if any. The detectable signature is an ABSOLUTE in a statement of fact: "does not exist", "every", "never", "unrecoverable", "only", "all". Each of the eight instances above either contains one or is a status check whose failure mode is a false absolute (`exit=0` asserts success). That is greppable in binding text — acceptance criteria, ADRs, findings — in a way that "check your claims" is not. A weaker version of the same instrument as BUG-1507's field-count detector: it does not decide, it narrows to the sentences worth re-reading.
 
   COUNTER-EVIDENCE WORTH RECORDING. Two absolutes tonight were correct and load-bearing: "the trailers stay" and "neither PR merges", both in the advisor's TASK-1289 ruling. So the signature has false positives at a meaningful rate, and it flags sentences for re-reading rather than sentences that are wrong. Anyone acting on this should expect roughly half the hits to be fine.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:53:52.696962750Z
-modified_at: 2026-09-23T06:43:44.715712918Z
+modified_at: 2026-09-23T06:57:41.197700779Z
 req_type: Task
 tags:
 - from-advisor:general
