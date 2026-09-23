@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:43:40.953486135Z
-modified_at: 2026-09-20T04:41:46.959874146Z
+modified_at: 2026-09-23T06:20:02.710647134Z
 req_type: Bug
 tags:
 - dispatch
@@ -79,3 +79,9 @@ comments:
   created_at: 2026-09-20T04:41:44.884866992Z
   modified_at: 2026-09-20T04:41:44.884866992Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0cceb-d516-7341-b573-8ebd9984a1ae
+  author: joe
+  content: 'PROXY DISPOSITION (Claude for the operator, overnight burn-down): ALREADY FIXED on main, verified. Evidence: Implemented by commit d7697fca82 "feat(awaiting): surface unshipped work and nightly red (STORY-1043) (#1745)" - aida-cli-lib/src/awaiting_you.rs''s unshipped_work: Vec<UnshippedWorkItem> field reports exactly branches ahead of main with no open PR and no live lease -'
+  created_at: 2026-09-23T06:20:02.710647134Z
+  modified_at: 2026-09-23T06:20:02.710647134Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
