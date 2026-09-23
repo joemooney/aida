@@ -1341,7 +1341,9 @@ mod tests {
         huge.body = "x".repeat(200_000);
         mailbox_store::write_message(project.path(), &huge).unwrap();
 
-        let exe = std::env::current_exe().expect("test binary path");
+        // The process-wide hardened resolver (TASK-1262): in a test process it resolves
+        // to this test binary, which is what the re-exec needs. trace:BUG-1482
+        let exe = crate::aida_exe_path();
         let mut child = std::process::Command::new(exe)
             // `--exact` matches on the FULLY QUALIFIED test name libtest
             // prints, not the bare function name.
