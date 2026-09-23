@@ -53,12 +53,12 @@ description: |
   true owner), same as BUG-1550's tracker_cmd.rs / mcp.rs fixes -- but filing
   this instead of silently fixing them so the instances are enumerated rather
   than the class only named (per this project's standing brief-writing rule).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:37:27.319820073Z
-modified_at: 2026-09-23T06:39:56.598662578Z
+modified_at: 2026-09-23T08:10:21.762870853Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -84,3 +84,21 @@ comments:
   created_at: 2026-09-23T06:39:56.598662578Z
   modified_at: 2026-09-23T06:39:56.598662578Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cd50-d4b4-72f2-935b-e23b575a0f06
+  author: aida-auto-bump
+  timestamp: 2026-09-23T08:10:21.748510065Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cd50-d4c2-7aa3-acad-665b61780ea6
+  timestamp: 2026-09-23T08:10:21.762869254Z
+  agent: aida
+  commit_sha: 91155561e725f90389e9ddcad8cf0c6209892635
+  summary: Completed via merge 91155561
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T08:10:18.535908585Z
+  completion_sha: 91155561e725f90389e9ddcad8cf0c6209892635
