@@ -92,6 +92,7 @@ mod field_study_cmd;
 // trace:SPIKE-67 | ai:claude
 mod rule_violation;
 // trace:STORY-656 | ai:claude
+mod completion; // trace:STORY-1418 | ai:claude
 mod drain_resume;
 mod drain_state;
 mod drive_robustness;
@@ -6322,9 +6323,21 @@ fn handle_findings_command(
                             session_id: resolve_current_session_id(), // trace:TASK-330
                         });
                     }
-                    req.status = RequirementStatus::Completed;
-                    req.modified_at = now;
-                    backend.update_requirement(&req)?;
+                    // STORY-1418: route through the into-Completed seam so this
+                    // path emits the ship record like every other completion
+                    // (it was silent before). trace:STORY-1418 | ai:claude
+                    completion::transition_to_completed(
+                        &mut req,
+                        Some(project_root),
+                        &display_id,
+                        sha,
+                        "promote",
+                        |req, _| {
+                            req.modified_at = now;
+                            backend.update_requirement(req)?;
+                            Ok(())
+                        },
+                    )?;
                     record_role_activity(&display_id, "auto-complete");
                     println!(
                         "Promoted finding {id} — origin-ID fix already merged ({sha}), \
@@ -10262,9 +10275,7 @@ fn handle_done_command(
         );
         return Ok(());
     }
-    let prior_status_for_event = req.status.clone();
-    let new_status = RequirementStatus::Completed;
-    if status_advance_requires_advisor_authority(&req.status, &new_status)
+    if status_advance_requires_advisor_authority(&req.status, &RequirementStatus::Completed)
         && !has_advisor_authority()
     {
         // BUG-585: name the ACTUAL escape hatches, not a circular re-run of the
@@ -10277,26 +10288,29 @@ fn handle_done_command(
              Run it in an interactive shell, or set `AIDA_SESSION_ROLE=advisor` (for scripts/agents)."
         );
     }
-    let old = req.status.to_string();
-    req.set_status_from_str("completed");
-    req.record_change(
-        current_user_id(None),
-        vec![aida_core::Requirement::field_change(
-            "status",
-            old,
-            "Completed".to_string(),
-        )],
-    );
-    backend.update_requirement(&req)?;
     // BUG-1286 F1: `aida done` is an into-Completed transition and must emit the
-    // durable ship record. The already-Completed case returned early above, so
-    // reaching here IS the transition; the shared predicate is used anyway so
-    // the rule lives in exactly one place. trace:BUG-1286 | ai:claude
-    if is_into_completed_transition(&prior_status_for_event, "Completed") {
-        if let Some(project_root) = store_path.parent() {
-            emit_spec_completed(project_root, &display_id, "", None, "done");
-        }
-    }
+    // durable ship record. STORY-1418: the stamp, the persist and the emission
+    // go through the one seam so the rule and the call live in one place.
+    // trace:BUG-1286 trace:STORY-1418 | ai:claude
+    completion::transition_to_completed(
+        &mut req,
+        store_path.parent(),
+        &display_id,
+        "",
+        "done",
+        |req, prior| {
+            req.record_change(
+                current_user_id(None),
+                vec![aida_core::Requirement::field_change(
+                    "status",
+                    prior.to_string(),
+                    "Completed".to_string(),
+                )],
+            );
+            backend.update_requirement(req)?;
+            Ok(())
+        },
+    )?;
     record_role_activity(&display_id, "done");
     // STORY-738: `aida done` is always an into-Completed transition (the
     // already-Completed case returned early above), so the human path gets
@@ -65316,43 +65330,8 @@ impl AutoBumpFlip {
     }
 }
 
-/// Emit the durable ship record after the store confirms a transition to
-/// `Completed`. Best-effort like every event-stream write.
-// trace:BUG-1286 | ai:codex
-pub(crate) fn emit_spec_completed(
-    project_root: &std::path::Path,
-    spec_id: &str,
-    sha: &str,
-    pr: Option<u64>,
-    closed_by: &str,
-) {
-    let pr = pr.or_else(|| {
-        if sha.is_empty() {
-            return None;
-        }
-        let output = std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(["show", "-s", "--format=%s", sha])
-            .output()
-            .ok()?;
-        output.status.success().then_some(())?;
-        extract_pr_number_from_commit_subject(String::from_utf8_lossy(&output.stdout).trim())
-    });
-    let (_, run_uuid) = drain_state::current_context(project_root);
-    events::emit(
-        project_root,
-        &events::Event::new(
-            Some(spec_id.to_string()),
-            run_uuid,
-            events::EventKind::SpecCompleted {
-                commit: sha.to_string(),
-                pr,
-                closed_by: closed_by.to_string(),
-            },
-        ),
-    );
-}
+// STORY-1418: the emission lives in the into-Completed seam.
+pub(crate) use completion::emit_spec_completed;
 
 fn completing_ref_label(project_root: &std::path::Path, sha: &str) -> String {
     if sha.is_empty() {
@@ -65944,8 +65923,8 @@ fn apply_auto_bump_flip(
     }
     // BUG-477: record the merge-driven bump in the per-spec history the same
     // way the manual `aida edit --status` path does.
-    let prior_status = r.status.clone();
-    r.set_status_from_str("Completed");
+    // trace:STORY-1418 | ai:claude
+    let prior_status = completion::mark_completed(r);
     r.record_change(
         "aida-auto-bump".to_string(),
         vec![aida_core::Requirement::field_change(
@@ -65999,8 +65978,8 @@ fn apply_stale_review_flip(
     ) {
         return false;
     }
-    let prior = r.status.clone();
-    r.set_status_from_str("Completed");
+    // trace:STORY-1418 | ai:claude
+    let prior = completion::mark_completed(r);
     // BUG-477: record the flip-to-Completed in the per-spec history too.
     r.record_change(
         "aida-auto-bump".to_string(),
@@ -66185,7 +66164,8 @@ fn apply_stranded_review_pr_resolution(
     let prior = r.status.clone();
     match resolution.outcome {
         StrandedReviewPrOutcome::Merged => {
-            r.set_status_from_str("Completed");
+            // trace:STORY-1418 | ai:claude
+            completion::mark_completed(r);
             r.failure_reason = None;
             let info = r
                 .implementation_info
@@ -67544,8 +67524,8 @@ fn handle_db_reconcile_status(
                 // BUG-477: record the reconcile-driven Done→Completed bump
                 // in the per-spec history, matching the manual edit path's
                 // status field_change shape. trace:BUG-477
-                let prior_status = r.status.clone();
-                r.set_status_from_str("Completed");
+                // trace:STORY-1418 | ai:claude
+                let prior_status = completion::mark_completed(r);
                 r.record_change(
                     "aida-reconcile".to_string(),
                     vec![aida_core::Requirement::field_change(
@@ -67597,8 +67577,8 @@ fn handle_db_reconcile_status(
                 ) {
                     continue;
                 }
-                let prior = r.status.clone();
-                r.set_status_from_str("Completed");
+                // trace:STORY-1418 | ai:claude
+                let prior = completion::mark_completed(r);
                 // BUG-477: record the reconcile stale-review flip-to-Completed
                 // in the per-spec history too, mirroring the manual edit
                 // path's status field_change shape. trace:BUG-477
@@ -92658,6 +92638,10 @@ fn prepend_dir_to_path(dir: &std::path::Path, path: &std::ffi::OsStr) -> std::ff
 #[cfg(test)]
 #[path = "tests/resolve_aida_exe_tests.rs"]
 mod resolve_aida_exe_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1418_completion_seam_tests.rs"]
+mod story_1418_completion_seam_tests;
 
 /// BUG-376: tests that pin both substrate halves of the implementer-
 /// complete signal — the `aida pr ship` banner emits the load-bearing

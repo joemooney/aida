@@ -5516,7 +5516,14 @@ pub(crate) fn handle_git_backend_command(
                 // below (same "before the mutation" rule STORY-738 uses).
                 // trace:TASK-1450 | ai:claude
                 let status_before = req.status.to_string();
-                req.set_status_from_str(canonical);
+                // STORY-1418: an into-Completed edit stamps through the seam;
+                // the ship record is emitted below once the write lands.
+                // trace:STORY-1418 | ai:claude
+                if canonical == "Completed" {
+                    crate::completion::mark_completed(&mut req);
+                } else {
+                    req.set_status_from_str(canonical);
+                }
                 disposition_event = Some((status_before, req.status.to_string()));
                 // TASK-1446: a spec deliberately reopened to Draft after its
                 // trailered commit already landed must not be flipped right
@@ -5745,7 +5752,7 @@ pub(crate) fn handle_git_backend_command(
                 // recomputed. trace:BUG-1286 | ai:claude
                 if into_completed {
                     if let Some(project_root) = store_path.parent() {
-                        crate::emit_spec_completed(
+                        crate::completion::emit_spec_completed(
                             project_root,
                             req.spec_id.as_deref().unwrap_or(id),
                             "",

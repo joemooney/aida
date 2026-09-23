@@ -513,9 +513,7 @@ pub(crate) fn advance_dispatch(
             // Completing is an advisor-authority act (same gate as approve/
             // reject); an interactive operator clears it via the TTY branch of
             // `has_advisor_authority`. trace:BUG-543
-            let prior_status_for_event = req.status.clone();
-            let new_status = RequirementStatus::Completed;
-            if status_advance_requires_advisor_authority(&req.status, &new_status)
+            if status_advance_requires_advisor_authority(&req.status, &RequirementStatus::Completed)
                 && !has_advisor_authority()
             {
                 println!(
@@ -527,27 +525,30 @@ pub(crate) fn advance_dispatch(
                 );
                 return Ok(());
             }
-            let old = req.status.to_string();
-            req.set_status_from_str("Completed");
-            req.record_change(
-                current_user_id(None),
-                vec![aida_core::Requirement::field_change(
-                    "status",
-                    old,
-                    "Completed".to_string(),
-                )],
-            );
-            req.modified_at = chrono::Utc::now();
-            backend.update_requirement(&req)?;
             // BUG-1286 F1: the queue's completion path reaches Completed without
             // going through auto-bump or reconcile, so it must emit the ship
-            // record itself or the event stream under-reports terminality.
-            // trace:BUG-1286 | ai:claude
-            if crate::is_into_completed_transition(&prior_status_for_event, "Completed") {
-                if let Some(project_root) = store_path.parent() {
-                    crate::emit_spec_completed(project_root, display, "", None, "queue-done");
-                }
-            }
+            // record itself. STORY-1418: stamp + persist + emit via the seam.
+            // trace:BUG-1286 trace:STORY-1418 | ai:claude
+            crate::completion::transition_to_completed(
+                &mut req,
+                store_path.parent(),
+                display,
+                "",
+                "queue-done",
+                |req, prior| {
+                    req.record_change(
+                        current_user_id(None),
+                        vec![aida_core::Requirement::field_change(
+                            "status",
+                            prior.to_string(),
+                            "Completed".to_string(),
+                        )],
+                    );
+                    req.modified_at = chrono::Utc::now();
+                    backend.update_requirement(req)?;
+                    Ok(())
+                },
+            )?;
             println!(
                 "  {} closed {} — all children were completed.",
                 crate::glyph(crate::glyphs::Glyph::Check).green(),
