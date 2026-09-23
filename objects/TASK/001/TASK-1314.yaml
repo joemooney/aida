@@ -38,7 +38,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:05:36.150787113Z
-modified_at: 2026-09-23T10:02:21.279127082Z
+modified_at: 2026-09-23T10:02:24.124006078Z
 req_type: Task
 tags:
 - store-integrity mojibake follow-up:task-1313 severity:cosmetic
@@ -71,4 +71,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 02:54 (overnight burn-down)
   created_at: 2026-09-23T09:54:00.789903010Z
   modified_at: 2026-09-23T09:54:00.789903010Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdb7-67fc-7a63-94c5-15cd183ffe41
+  author: joe
+  content: 'Done (a store data repair, no code): 26 mojibake em-dash occurrences repaired across 7 specs (BUG-1106, BUG-1111, BUG-1310, BUG-1450, BUG-1452, STORY-1405, and TASK-1273 found by the new detector) via aida edit --description-from-file, each verified round-trip. Detector (aida doctor --category round-trip-artifacts): before 49 findings (26 mojibake + 12 swallowed-TOON + 11 possible), after 23 (0 mojibake). The swallowed TOON headers are split to a follow-up task.'
+  created_at: 2026-09-23T10:02:24.124006078Z
+  modified_at: 2026-09-23T10:02:24.124006078Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
