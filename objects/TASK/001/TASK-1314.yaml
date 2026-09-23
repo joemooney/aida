@@ -38,7 +38,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:05:36.150787113Z
-modified_at: 2026-09-23T07:53:26.495923171Z
+modified_at: 2026-09-23T07:53:32.120118498Z
 req_type: Task
 tags:
 - store-integrity mojibake follow-up:task-1313 severity:cosmetic
@@ -53,4 +53,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 00:53 -> branch claude/task-1314, no PR (overnight burn-down)
   created_at: 2026-09-23T07:53:20.015371139Z
   modified_at: 2026-09-23T07:53:20.015371139Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd41-6cd8-7812-bf54-ecfbefd6e5bb
+  author: joe
+  content: 'Dispatch retracted: the spec sequences this after TASK-1313''s detector lands. Not started.'
+  created_at: 2026-09-23T07:53:32.120118498Z
+  modified_at: 2026-09-23T07:53:32.120118498Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
