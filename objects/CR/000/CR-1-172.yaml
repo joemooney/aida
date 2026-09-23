@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T04:44:59.122261809Z
-modified_at: 2026-09-23T04:44:59.122261809Z
+modified_at: 2026-09-23T06:24:28.109572816Z
 req_type: ChangeRequest
 tags:
 - cross-vendor
@@ -37,3 +37,10 @@ tags:
 - incident:2026-09-22
 - intake:requester
 - seat-discipline
+comments:
+- id: 01a0ccef-e1cd-78c1-840a-a6ee15fb766f
+  author: joe
+  content: 'PROXY DECISION (Claude for the operator, overnight burn-down; design calls delegated). Question and ruling (recommended option adopted): Q: decompose now into the proposed SPIKE(hold-hook behavior)/STORY(aida seat wait)/TASK per docs/plans/2026-09-22-seat-wake-cross-harness.md, or implement as one arc? Recommend: decompose, SPIKE first — PRIN-5 fail-closed-on-unknowns argues for resolving the per-vendor hold/headless unknowns (Antigravity headless hooks, TUI input buffering during a held Stop hook) before committing to the STORY''s design, exactly as the spec''s own "Proposed decomposition (for the advisor to groom)" frames it.. Now IMPLEMENT-ready.'
+  created_at: 2026-09-23T06:24:28.109572816Z
+  modified_at: 2026-09-23T06:24:28.109572816Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
