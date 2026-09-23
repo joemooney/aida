@@ -67,7 +67,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:06:23.460943032Z
-modified_at: 2026-09-23T10:28:53.591640293Z
+modified_at: 2026-09-23T10:28:55.701016635Z
 req_type: Bug
 tags:
 - parent:EPIC-62 awaiting coordination-surface alert-fatigue severity:operational
@@ -89,4 +89,10 @@ comments:
   content: 'Strict-review blockers fixed by the orchestrator: an unrecognised seat (integrator/product/human) now sees every owned channel, and role matching is case-insensitive; 2 tests added (awaiting_you 54 pass).'
   created_at: 2026-09-23T09:51:37.782138670Z
   modified_at: 2026-09-23T09:51:37.782138670Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdcf-b115-7d22-b3a5-bb49ea18b793
+  author: joe
+  content: 'Merged via integration batch 7, PR #2117 (2026-09-23 03:29).'
+  created_at: 2026-09-23T10:28:55.701016635Z
+  modified_at: 2026-09-23T10:28:55.701016635Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
