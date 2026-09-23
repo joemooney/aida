@@ -5702,11 +5702,16 @@ pub(crate) fn handle_queue_command(
                          seat for this role, or run `aida queue work --auto-complete` from the driver."
                     );
                 }
-                if !has_dispatch_authority() {
-                    anyhow::bail!(
-                        "starting an autonomous drain needs dispatch authority (product, advisor, \
-                         or integrator role, or a live orchestrator)"
-                    );
+                // BUG-1517: `--resume-dry-run` is a read-only preview — it
+                // prints the reconciled re-entry plan and never re-enters —
+                // so it is disposition, not dispatch, and should not need
+                // dispatch authority. Only a FRESH, non-dry-run launch is
+                // gated here; a live dispatch without `--resume-dry-run`
+                // stays refused. trace:BUG-1517 | ai:claude
+                if let Err(msg) =
+                    auto_complete_dispatch_authority_ok(*resume_dry_run, has_dispatch_authority())
+                {
+                    anyhow::bail!(msg);
                 }
             }
             // STORY-246: `--auto-complete` drives the full
@@ -9341,6 +9346,26 @@ pub(crate) fn claude_posture_display(permission_mode: Option<&str>, contained: b
         permission_mode
             .map(|m| format!("permission-mode {}", m))
             .unwrap_or_else(|| "native permission posture".to_string())
+    }
+}
+
+/// BUG-1517: `--resume-dry-run` is a read-only preview of the reconciled
+/// re-entry plan — it never re-enters the drain — so it is disposition, not
+/// dispatch, and must not require `has_dispatch_authority()`. A live (non
+/// dry-run) launch stays gated exactly as before. Pure so the two halves of
+/// the acceptance criteria are unit-testable without spinning up a store.
+// trace:BUG-1517 | ai:claude
+pub(crate) fn auto_complete_dispatch_authority_ok(
+    resume_dry_run: bool,
+    has_dispatch_authority: bool,
+) -> Result<(), &'static str> {
+    if resume_dry_run || has_dispatch_authority {
+        Ok(())
+    } else {
+        Err(
+            "starting an autonomous drain needs dispatch authority (product, advisor, \
+             or integrator role, or a live orchestrator)",
+        )
     }
 }
 
