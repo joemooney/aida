@@ -38371,6 +38371,92 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
     resolve_forge_binary("gh", "AIDA_TEST_GH_BINARY", "AIDA_DEBUG_GH")
 }
 
+/// BUG-1288: the wall-clock ceiling a single forge-CLI subprocess (`gh`/`glab`)
+/// may run before [`command_output_with_timeout`] gives up on it. Measured
+/// cause of this spec's `aida status --full` / `aida awaiting --json` stall:
+/// one `gh api .../branches/main/protection` call took 10.5s in this
+/// repository while every other `gh` call in the same run finished in under a
+/// second — `gh` itself has no request-timeout flag, so an occasional slow
+/// endpoint or rate-limit backoff can otherwise consume the whole machine-
+/// readable budget on ONE subprocess.
+// trace:BUG-1288 | ai:claude
+const FORGE_CLI_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// BUG-1288: run `cmd` but never block past `timeout` waiting on it — a
+/// portable (`Child::kill` works on every target) alternative to
+/// `Command::output()` for a subprocess whose peer (a forge API) can stall
+/// arbitrarily long. stdout/stderr are drained on background threads so the
+/// child can never deadlock on a full pipe while the caller polls for exit;
+/// on timeout the child is killed and `None` is returned — every existing
+/// caller already treats `output().ok()` failure as "unknown, not zero"
+/// (PRIN-5), so a timeout degrades exactly like any other unreachable-forge
+/// failure already does.
+// trace:BUG-1288 | ai:claude
+fn command_output_with_timeout(
+    mut cmd: std::process::Command,
+    timeout: std::time::Duration,
+) -> Option<std::process::Output> {
+    use std::io::Read;
+    let mut child = cmd
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .ok()?;
+    let mut stdout_pipe = child.stdout.take()?;
+    let mut stderr_pipe = child.stderr.take()?;
+    let stdout_handle = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stdout_pipe.read_to_end(&mut buf);
+        buf
+    });
+    let stderr_handle = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stderr_pipe.read_to_end(&mut buf);
+        buf
+    });
+    let start = std::time::Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) => {
+                if start.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break None;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            // BUG-1288 fix-up: a `try_wait` error leaves the child un-reaped
+            // exactly like the timeout branch above — kill and wait it here
+            // too, or it leaks as an orphan/zombie every time this arm is
+            // hit instead of only on the timeout path.
+            // trace:BUG-1288 | ai:claude
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+        }
+    };
+    // NOTE: killing `child` only signals the direct child (`gh`/`glab`
+    // itself). If that process has already spawned a grandchild that
+    // inherited the stdout/stderr pipe write ends (a helper process, a
+    // credential-manager subprocess, …), that grandchild can keep the pipes
+    // open after the direct child exits — `read_to_end` below then blocks
+    // until the grandchild itself exits, not just until `child` does. This
+    // is a real gap (no process-group kill here), accepted for now because
+    // known forge CLIs don't fork long-lived helpers for these read-only
+    // calls; revisit with a process-group spawn (`setsid`/job object) if
+    // that stops being true. trace:BUG-1288 | ai:claude
+    let stdout = stdout_handle.join().unwrap_or_default();
+    let stderr = stderr_handle.join().unwrap_or_default();
+    status.map(|status| std::process::Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
 /// Resolve the `glab` (GitLab CLI) binary, mirroring `resolve_gh_binary`'s
 /// PATH-walk + sanity-spawn (BUG-74/79). Wired into the forge call sites in
 /// follow-on STORY-621 slices. trace:STORY-621 | ai:claude
@@ -69864,20 +69950,20 @@ fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenPrSnapshot {
         Some(p) => p,
         None => return OpenPrSnapshot::default(),
     };
-    let out = std::process::Command::new(&gh_bin)
-        .current_dir(project_root)
-        .args([
-            "pr",
-            "list",
-            "--state",
-            "open",
-            "--limit",
-            "50",
-            "--json",
-            "number,title,headRefName,headRefOid,statusCheckRollup,mergeable,reviewDecision,labels,createdAt",
-        ])
-        .output();
-    let Ok(out) = out else {
+    let mut cmd = std::process::Command::new(&gh_bin);
+    cmd.current_dir(project_root).args([
+        "pr",
+        "list",
+        "--state",
+        "open",
+        "--limit",
+        "50",
+        "--json",
+        "number,title,headRefName,headRefOid,statusCheckRollup,mergeable,reviewDecision,labels,createdAt",
+    ]);
+    // trace:BUG-1288 | ai:claude — bounded like every other gh call this
+    // machine-readable pipeline makes; see FORGE_CLI_CALL_TIMEOUT.
+    let Some(out) = command_output_with_timeout(cmd, FORGE_CLI_CALL_TIMEOUT) else {
         return OpenPrSnapshot::default();
     };
     if !out.status.success() {
@@ -69938,16 +70024,20 @@ fn required_status_checks_uncached(project_root: &std::path::Path) -> Option<Vec
     let default_branch = detect_default_branch_ref(project_root)
         .and_then(|r| r.rsplit('/').next().map(str::to_string))
         .unwrap_or_else(|| "main".to_string());
-    let out = std::process::Command::new(&gh_bin)
-        .current_dir(project_root)
-        .args([
-            "api",
-            &format!("repos/{{owner}}/{{repo}}/branches/{default_branch}/protection"),
-            "--jq",
-            ".required_status_checks.contexts // []",
-        ])
-        .output()
-        .ok()?;
+    let mut cmd = std::process::Command::new(&gh_bin);
+    cmd.current_dir(project_root).args([
+        "api",
+        &format!("repos/{{owner}}/{{repo}}/branches/{default_branch}/protection"),
+        "--jq",
+        ".required_status_checks.contexts // []",
+    ]);
+    // BUG-1288: this specific call measured 10.5s of wall clock in this
+    // repository — a single slow branch-protection lookup was enough to blow
+    // the whole `aida awaiting --json` / `aida status --full` budget on its
+    // own. `None` here degrades exactly like every other unreachable-forge
+    // path this function already handles (PRIN-5: unknown, not "nothing
+    // required"). trace:BUG-1288 | ai:claude
+    let out = command_output_with_timeout(cmd, FORGE_CLI_CALL_TIMEOUT)?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
         return required_status_checks_outcome_from_stderr(&stderr);
@@ -70455,6 +70545,13 @@ struct PrHeadStateSnapshot {
     by_branch: std::collections::HashMap<String, PrHeadEvidence>,
     open_heads_by_spec: std::collections::HashMap<String, Vec<String>>,
     merged_heads_by_spec: std::collections::HashMap<String, Vec<String>>,
+    // BUG-1288: branches the per-branch `--head` query in
+    // `collect_pr_head_state_snapshot_bounded` actually asked about. A branch
+    // present here with no `by_branch` entry has an affirmatively CONFIRMED
+    // absence of any PR ("absent"); a branch absent from both was never asked
+    // (deadline-truncated) and must read "unknown", never "absent" — a
+    // skipped check is not evidence of nothing (PRIN-5). trace:BUG-1288 | ai:claude
+    queried_heads: std::collections::HashSet<String>,
 }
 
 // BUG-1576: query each bounded candidate by head name instead of sampling the
@@ -70462,17 +70559,30 @@ struct PrHeadStateSnapshot {
 // work, while finding an arbitrarily old merged PR in a repository with more
 // than 1,000 PRs. The recorded head SHA identifies the exact branch
 // incarnation reviewed and merged; `git cherry` cannot prove an N-to-1 squash.
-fn collect_pr_head_state_snapshot(
+/// BUG-1288: the per-branch `gh pr list --head` loop below is one network
+/// round trip per candidate, so a large candidate population can add several
+/// real seconds even though each individual call is fast. `deadline`, when
+/// set, stops issuing NEW per-branch queries once it passes; branches not yet
+/// queried simply keep whatever `by_branch`/`open_heads_by_spec`/
+/// `merged_heads_by_spec` state the initial batched "open" query already gave
+/// them (state "unknown" downstream, never a false "absent" — PRIN-5). The
+/// initial batched query always runs uncapped: it is one call regardless of
+/// candidate count, so there is nothing to bound there. `deadline: None`
+/// (every caller but the machine-readable awaiting/status paths) probes every
+/// candidate exactly as before this change.
+// trace:BUG-1288 | ai:claude
+fn collect_pr_head_state_snapshot_bounded(
     project_root: &std::path::Path,
     candidate_branches: &[String],
+    deadline: Option<std::time::Instant>,
 ) -> Option<PrHeadStateSnapshot> {
     let gh_bin = resolve_gh_binary()?;
     let query = |args: &[&str]| -> Option<PrHeadStateSnapshot> {
-        let out = std::process::Command::new(&gh_bin)
-            .current_dir(project_root)
-            .args(args)
-            .output()
-            .ok()?;
+        let mut cmd = std::process::Command::new(&gh_bin);
+        cmd.current_dir(project_root).args(args);
+        // trace:BUG-1288 | ai:claude — bounded like every other gh call this
+        // machine-readable pipeline makes; see FORGE_CLI_CALL_TIMEOUT.
+        let out = command_output_with_timeout(cmd, FORGE_CLI_CALL_TIMEOUT)?;
         out.status
             .success()
             .then(|| parse_pr_head_state_snapshot(&String::from_utf8_lossy(&out.stdout)))?
@@ -70488,6 +70598,14 @@ fn collect_pr_head_state_snapshot(
         "state,title,headRefName,headRefOid",
     ])?;
     for branch in candidate_branches {
+        if deadline.is_some_and(|dl| std::time::Instant::now() >= dl) {
+            break;
+        }
+        // trace:BUG-1288 | ai:claude — record the attempt regardless of
+        // outcome, same as the pre-BUG-1288 code implicitly did for every
+        // branch (it always attempted every one); only a deadline-skipped
+        // branch is now excluded from this set.
+        snapshot.queried_heads.insert(branch.clone());
         if let Some(found) = query(&[
             "pr",
             "list",
@@ -71114,8 +71232,56 @@ fn collect_unshipped_work_items(
     no_forge: bool,
     emit_detected_events: bool,
 ) -> Vec<awaiting_you::UnshippedWorkItem> {
+    collect_unshipped_work_items_bounded(
+        project_root,
+        summaries,
+        no_forge,
+        emit_detected_events,
+        None,
+    )
+    .0
+}
+
+/// BUG-1288: time-boxed sibling of [`collect_unshipped_work_items`], used by
+/// the machine-readable polling paths (`aida awaiting --json`, `aida status
+/// --full`). The candidate-branch SET is computed exactly as before (PR
+/// #1999 / STORY-1368's exclude-list, unchanged) — this only bounds how long
+/// probing that set may run. `deadline == None` behaves identically to the
+/// unbounded original (every other caller, including tests and
+/// `session_reap`, which need the exhaustive answer regardless of cost).
+///
+/// Two independent probes can consume wall clock per candidate: the
+/// per-branch `gh pr list --head` network round trip
+/// ([`collect_pr_head_state_snapshot_bounded`]) and the local git
+/// commit/patch-equivalence walk in this function's own loop. Both consult
+/// the same `deadline`, so the combined budget is shared rather than doubled.
+/// Once the deadline passes, remaining candidate branches are simply not
+/// probed — the returned [`awaiting_you::UnshippedScanStatus`] records
+/// `complete: false` plus how many of the total candidates were actually
+/// scanned, so a truncated run is never presented as an exhaustive one
+/// (PRIN-5). What IS returned is unaffected: nothing already found is
+/// dropped, and nothing is hidden by widening or narrowing which branches
+/// count as candidates.
+// trace:BUG-1288 | ai:claude
+fn collect_unshipped_work_items_bounded(
+    project_root: &std::path::Path,
+    summaries: &[aida_core::RequirementSummary],
+    no_forge: bool,
+    emit_detected_events: bool,
+    deadline: Option<std::time::Instant>,
+) -> (
+    Vec<awaiting_you::UnshippedWorkItem>,
+    awaiting_you::UnshippedScanStatus,
+) {
     let Some(default_ref) = detect_default_branch_ref(project_root) else {
-        return Vec::new();
+        return (
+            Vec::new(),
+            awaiting_you::UnshippedScanStatus {
+                complete: true,
+                scanned: 0,
+                candidates: 0,
+            },
+        );
     };
 
     let mut status_by_spec = std::collections::HashMap::new();
@@ -71202,11 +71368,24 @@ fn collect_unshipped_work_items(
     let pr_head_states = if no_forge {
         None
     } else {
-        collect_pr_head_state_snapshot(project_root, &candidate_pr_heads)
+        collect_pr_head_state_snapshot_bounded(project_root, &candidate_pr_heads, deadline)
     };
 
+    // BUG-1288: the total candidate-branch population identified above,
+    // before the deadline can truncate how much of it actually gets probed
+    // below. This is the denominator `UnshippedScanStatus::candidates`
+    // reports, so "scan incomplete" always names how much was left unscanned
+    // rather than just how much was scanned. trace:BUG-1288 | ai:claude
+    let total_candidates = branches.len();
+    let mut scanned = 0usize;
+    let mut truncated = false;
     let mut candidates = Vec::new();
     for (display_branch, refname, has_local) in branches {
+        if deadline.is_some_and(|dl| std::time::Instant::now() >= dl) {
+            truncated = true;
+            break;
+        }
+        scanned += 1;
         let short_branch = display_branch
             .strip_prefix("origin/")
             .unwrap_or(display_branch.as_str())
@@ -71357,7 +71536,7 @@ fn collect_unshipped_work_items(
     }
 
     candidates.sort_by(|a, b| b.commits_ahead.cmp(&a.commits_ahead));
-    candidates
+    let items: Vec<awaiting_you::UnshippedWorkItem> = candidates
         .into_iter()
         .map(|c| {
             let first_seen = if emit_detected_events {
@@ -71368,16 +71547,21 @@ fn collect_unshipped_work_items(
             let pr_state = if no_forge || pr_head_states.is_none() {
                 "unknown".to_string()
             } else {
-                match pr_head_states
-                    .as_ref()
-                    .expect("checked above")
+                let states = pr_head_states.as_ref().expect("checked above");
+                match states
                     .by_branch
                     .get(&c.local_branch)
                     .map(|pr| pr.state.as_str())
                 {
                     Some("open") => "open",
                     Some("merged") => "merged",
-                    _ => "absent",
+                    // BUG-1288: only report "absent" (no PR ever existed for
+                    // this head) when the per-branch query actually ran. A
+                    // branch the deadline skipped was never asked, so it must
+                    // read "unknown" rather than a false "absent" — PRIN-5.
+                    // trace:BUG-1288 | ai:claude
+                    _ if states.queried_heads.contains(&c.local_branch) => "absent",
+                    _ => "unknown",
                 }
                 .to_string()
             };
@@ -71434,7 +71618,15 @@ fn collect_unshipped_work_items(
                 pr_state,
             }
         })
-        .collect()
+        .collect();
+    (
+        items,
+        awaiting_you::UnshippedScanStatus {
+            complete: !truncated,
+            scanned,
+            candidates: total_candidates,
+        },
+    )
 }
 
 // trace:STORY-1043 | ai:codex
@@ -71785,6 +71977,51 @@ exit 1
         assert_eq!(
             remote.recovery,
             "git switch -c story-1047-remote origin/story-1047-remote && aida pr ship story-1047-remote"
+        );
+    }
+
+    // BUG-1288: `collect_unshipped_work_items_bounded`'s deadline must be
+    // honest about a truncated scan, never collapse it into an empty/zero
+    // result. An already-elapsed deadline is the deterministic way to pin
+    // this — no wall-clock race, no flakiness — and stands in for what a
+    // slow, candidate-heavy repo does to the real 2s production budget.
+    // trace:BUG-1288 | ai:claude
+    #[test]
+    fn detector_reports_an_incomplete_scan_honestly_instead_of_hiding_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        branch_with_commit(root, "story-9001-first", "STORY-9001");
+        branch_with_commit(root, "story-9002-second", "STORY-9002");
+
+        // Already in the past — the bounded scan must not probe a single
+        // candidate branch.
+        let deadline = std::time::Instant::now();
+        let (rows, scan) = collect_unshipped_work_items_bounded(
+            root,
+            &[
+                summary("STORY-9001", "InProgress"),
+                summary("STORY-9002", "InProgress"),
+            ],
+            true, // no_forge — no gh dependency for this assertion
+            false,
+            Some(deadline),
+        );
+
+        assert!(
+            rows.is_empty(),
+            "an elapsed-before-start deadline must probe nothing: {rows:?}"
+        );
+        assert!(
+            !scan.complete,
+            "a truncated scan must say so, not read as an exhaustive empty result"
+        );
+        assert_eq!(scan.scanned, 0);
+        assert_eq!(
+            scan.candidates, 2,
+            "the candidate COUNT must still reflect the full eligible set, even though \
+             none of it was actually probed — narrowing what's reported is not the same \
+             as narrowing what's eligible"
         );
     }
 
@@ -73172,11 +73409,25 @@ fn collect_awaiting_report_inner(
     // The per-turn notice has a hard latency contract. Branch divergence walks
     // spawn git processes and can exceed that budget in a busy repository; the
     // full awaiting/status views retain this channel. trace:BUG-1239 | ai:codex
-    let unshipped_work = if notice_fast {
-        Vec::new()
+    let (unshipped_work, unshipped_work_scan) = if notice_fast {
+        (Vec::new(), None)
     } else {
-        // trace:STORY-1043 | ai:codex
-        collect_unshipped_work_items(project_root, &summaries, no_ci, !no_ci)
+        // BUG-1288: bound the wall clock this scan may spend, not which
+        // branches are eligible for it — the candidate set is exactly the
+        // one PR #1999 (STORY-1368) widened it to. A repo whose candidate
+        // population has since grown large enough to blow the budget gets a
+        // truncated-but-honest scan (`unshipped_work_scan.complete: false`)
+        // instead of a multi-minute block; see
+        // `collect_unshipped_work_items_bounded`. trace:BUG-1288 | ai:claude
+        let deadline = std::time::Instant::now() + unshipped_work_scan_budget();
+        let (items, status) = collect_unshipped_work_items_bounded(
+            project_root,
+            &summaries,
+            no_ci,
+            !no_ci,
+            Some(deadline),
+        );
+        (items, Some(status))
     };
     // trace:STORY-1043 | ai:codex
     let nightly_red = nightly_handle.and_then(|handle| handle.join().ok().flatten());
@@ -73321,6 +73572,7 @@ fn collect_awaiting_report_inner(
         cron,
         shelved_total,
         unshipped_work,
+        unshipped_work_scan,
         nightly_red,
         pr_attribution_disagreements,
         orphaned_in_progress,
@@ -73423,6 +73675,23 @@ fn notice_deadline() -> Option<std::time::Duration> {
     }
     const PRODUCT_NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_millis(750);
     Some(PRODUCT_NOTICE_DEADLINE)
+}
+
+/// BUG-1288: the wall-clock budget [`collect_unshipped_work_items_bounded`]
+/// (and the `gh` probe it drives, [`collect_pr_head_state_snapshot_bounded`])
+/// may spend probing candidate branches from `aida awaiting --json` / `aida
+/// status --full`. Same escape-hatch shape as [`notice_deadline`]: a
+/// production caller never sets the override.
+// trace:BUG-1288 | ai:claude
+fn unshipped_work_scan_budget() -> std::time::Duration {
+    if let Ok(ms) = std::env::var("AIDA_TEST_UNSHIPPED_SCAN_BUDGET_MS") {
+        if let Ok(ms) = ms.parse::<u64>() {
+            return std::time::Duration::from_millis(ms);
+        }
+    }
+    const PRODUCT_UNSHIPPED_SCAN_BUDGET: std::time::Duration =
+        std::time::Duration::from_millis(2000);
+    PRODUCT_UNSHIPPED_SCAN_BUDGET
 }
 
 /// PURE: the notice's always-on leading line. Separated so the exact contract
@@ -73531,7 +73800,21 @@ fn handle_awaiting_command(
             "directives_next: {}",
             report.worker_directives.next.as_deref().unwrap_or("-")
         );
-        println!("unshipped: {}", report.unshipped_work.len());
+        // BUG-1288: a truncated scan means the count below is a LOWER
+        // BOUND, not the whole answer — the `+` suffix says so instead of
+        // letting an agent read a bare number as exhaustive. PRIN-5.
+        // trace:BUG-1288 | ai:claude
+        let unshipped_suffix = report
+            .unshipped_work_scan
+            .as_ref()
+            .filter(|scan| !scan.complete)
+            .map(|_| "+")
+            .unwrap_or("");
+        println!(
+            "unshipped: {}{}",
+            report.unshipped_work.len(),
+            unshipped_suffix
+        );
         println!(
             "nightly_red: {}",
             report

@@ -87,6 +87,9 @@ pub(crate) struct AwaitingReport {
     /// from the operator's field of view after a drain dies before PR creation.
     // trace:STORY-1043 | ai:codex
     pub unshipped_work: Vec<UnshippedWorkItem>,
+    /// BUG-1288: whether the `unshipped_work` scan above ran to completion or
+    /// was time-boxed. See [`UnshippedScanStatus`].
+    pub unshipped_work_scan: Option<UnshippedScanStatus>,
     /// Latest scheduled cross-platform run is red. Full report only; the
     /// per-turn notice path skips the network-backed workflow probe.
     // trace:STORY-1043 | ai:codex
@@ -1001,6 +1004,32 @@ pub(crate) struct UnshippedWorkItem {
     pub pr_state: String,
 }
 
+/// BUG-1288: honesty flag for the `unshipped_work` scan itself, distinct from
+/// the items it found. `aida awaiting --json` / `aida status --full` bound
+/// the underlying branch probe to a wall-clock budget (see
+/// `collect_unshipped_work_items_bounded` in `lib.rs`) so a repository with a
+/// large candidate-branch population cannot block a machine-readable poll for
+/// tens of seconds. `None` on the report means the scan never ran at all (the
+/// `--notice` fast path, which has always skipped this channel). `Some` means
+/// it ran; `complete: false` means the wall-clock budget was exhausted before
+/// every candidate branch was probed, so `unshipped_work` is a LOWER BOUND —
+/// real unshipped work cannot be missing from what IS reported, but more may
+/// exist among the unscanned candidates. Never collapse an incomplete scan
+/// into an empty/zero result (PRIN-5).
+// trace:BUG-1288 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct UnshippedScanStatus {
+    /// Every eligible candidate branch was probed before the budget expired.
+    pub complete: bool,
+    /// Candidate branches actually probed before finishing or timing out.
+    pub scanned: usize,
+    /// Total eligible candidate branches identified for this run — the same
+    /// width PR #1999 (STORY-1368) established (every branch belonging to a
+    /// non-terminal-status spec or a recorded lease); this scan never narrows
+    /// that set, only how much of it it had time to finish probing.
+    pub candidates: usize,
+}
+
 // TASK-1305: `recovery` is recorded once by the collector as the "no PR yet"
 // hint (`aida pr ship <branch>`), which is correct for `pr_state` "absent"
 // (and still reasonable for "merged"/"unknown", where shipping the remaining
@@ -1074,6 +1103,19 @@ impl AwaitingReport {
             + self.escalations.len()
             + self.pr_attribution_disagreements.len()
             + self.orphaned_in_progress.len()
+            // BUG-1288: a truncated unshipped-work scan is its own line
+            // (below) — it must count toward `total()` too, or a quiet-
+            // looking report (0 items found, scan incomplete) would hit the
+            // is_empty() fast path and hide the one honesty signal that
+            // says "not actually verified clean." PRIN-5.
+            + (if self
+                .unshipped_work_scan
+                .is_some_and(|scan| !scan.complete)
+            {
+                1
+            } else {
+                0
+            })
     }
 
     pub fn is_empty(&self) -> bool {
@@ -1461,6 +1503,22 @@ impl AwaitingReport {
             )?;
             budget -= 1;
         }
+        // BUG-1288: an incomplete scan means "nothing reported" is not the
+        // same as "nothing exists" — the wall-clock budget ran out before
+        // every candidate branch was checked. Unconditional (not
+        // budget-gated like the list above): a quiet-looking report during a
+        // truncated scan must never read as "verified clean" when it
+        // wasn't. PRIN-5.
+        // trace:BUG-1288 | ai:claude
+        if let Some(scan) = &self.unshipped_work_scan {
+            if !scan.complete {
+                writeln!(
+                    w,
+                    "  ⚠️ unshipped scan incomplete ({}/{} candidate branches checked) — re-run for the full picture",
+                    scan.scanned, scan.candidates,
+                )?;
+            }
+        }
         // trace:STORY-1043 | ai:codex
         if let Some(item) = &self.nightly_red {
             if budget == 0 {
@@ -1654,6 +1712,17 @@ impl AwaitingReport {
                 "pr_state": i.pr_state,
                 "recovery": i.recovery,
             })).collect::<Vec<_>>(),
+            // BUG-1288: `null` means the scan never ran (the `--notice` fast
+            // path); otherwise `complete` says whether every eligible
+            // candidate branch was probed before the wall-clock budget
+            // expired, so a consumer can tell "no unshipped work" apart from
+            // "ran out of time before finishing the check" instead of the
+            // two being silently indistinguishable zeros. trace:BUG-1288 | ai:claude
+            "unshipped_work_scan": self.unshipped_work_scan.map(|s| serde_json::json!({
+                "complete": s.complete,
+                "scanned": s.scanned,
+                "candidates": s.candidates,
+            })),
             "nightly_red": self.nightly_red.as_ref().map(|n| serde_json::json!({
                 "summary": n.summary,
                 "run_id": n.run_id,
@@ -2817,6 +2886,72 @@ mod tests {
         let json = r.to_json();
         assert_eq!(json["unshipped_work"][0]["spec_id"], "STORY-1043");
         assert_eq!(json["unshipped_work"][0]["commits_ahead"], 2);
+    }
+
+    // BUG-1288: a truncated scan with ZERO items found must not render as a
+    // quiet, all-clear report — the human surface, not just `--json`, has to
+    // say the scan didn't finish. This is the exact PRIN-5 failure mode: an
+    // empty `unshipped_work` list reads as "checked, found nothing" unless
+    // the incomplete-scan line says otherwise. trace:BUG-1288 | ai:claude
+    #[test]
+    fn incomplete_unshipped_scan_renders_honestly_even_with_no_items_found() {
+        let r = AwaitingReport {
+            unshipped_work: Vec::new(),
+            unshipped_work_scan: Some(UnshippedScanStatus {
+                complete: false,
+                scanned: 3,
+                candidates: 9,
+            }),
+            ..Default::default()
+        };
+        // A truncated scan is itself something to report — the section must
+        // not hit the is_empty() fast path and disappear.
+        assert!(!r.is_empty(), "an incomplete scan must not read as empty");
+        assert_eq!(r.total(), 1);
+
+        let mut buf = Vec::new();
+        let printed = r.render(false, &mut buf).unwrap();
+        assert!(printed, "an incomplete scan must render something");
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(
+            s.contains("unshipped scan incomplete (3/9"),
+            "expected an honest incomplete-scan line:\n{s}"
+        );
+
+        let json = r.to_json();
+        assert_eq!(json["unshipped_work_scan"]["complete"], false);
+        assert_eq!(json["unshipped_work_scan"]["scanned"], 3);
+        assert_eq!(json["unshipped_work_scan"]["candidates"], 9);
+    }
+
+    // A COMPLETE scan must stay silent — this line exists only for the
+    // truncated case, never as noise on every quiet report.
+    // trace:BUG-1288 | ai:claude
+    #[test]
+    fn complete_unshipped_scan_prints_no_incomplete_line() {
+        let r = AwaitingReport {
+            unshipped_work: vec![UnshippedWorkItem {
+                spec_id: "STORY-1043".to_string(),
+                branch: "story-1043".to_string(),
+                commits_ahead: 2,
+                age: "3h".to_string(),
+                recovery: "aida pr ship story-1043".to_string(),
+                pr_state: "absent".to_string(),
+            }],
+            unshipped_work_scan: Some(UnshippedScanStatus {
+                complete: true,
+                scanned: 9,
+                candidates: 9,
+            }),
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(
+            !s.contains("scan incomplete"),
+            "a complete scan must not print the incomplete-scan line:\n{s}"
+        );
     }
 
     // trace:BUG-1564 | ai:claude

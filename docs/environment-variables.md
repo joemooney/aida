@@ -465,6 +465,7 @@ hits.
 | `AIDA_TEST_GUARD_NESTED` / `_RESET` / `_RESTORE` / `_UNSET` | `EnvVarGuard` unit-test fixtures. |
 | `AIDA_TEST_TASK_63_APPLIED` | Fixture for the `apply_session_env_to_process` test. |
 | `AIDA_TEST_NOTICE_DEADLINE_MS` | Test-only override for `aida awaiting --notice`'s fail-open watchdog (BUG-1239). A positive value sets the deadline in milliseconds; `0` disables the watchdog so lifecycle/content tests can wait for command completion without racing scheduler or filesystem load (BUG-1567). Production callers leave it unset and use the 750 ms product deadline. Read at `aida-cli-lib/src/lib.rs`. trace:TASK-1274 trace:BUG-1567 |
+| `AIDA_TEST_UNSHIPPED_SCAN_BUDGET_MS` | Test-only override for the wall-clock budget `collect_unshipped_work_items_bounded` (and the `gh` probe it drives) may spend probing candidate branches for `aida awaiting --json` / `aida status --full` (BUG-1288). Production callers leave it unset and use the 2000 ms product budget. Read at `aida-cli-lib/src/lib.rs`. trace:BUG-1288 |
 
 ---
 
