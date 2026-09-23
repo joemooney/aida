@@ -33,12 +33,12 @@ description: |-
   explicitly carved out, or a documented convention says the clearing act moves
   to a human once the reviewer approves. Needs an explicit ruling, not a silent
   default.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:47:03.211329757Z
-modified_at: 2026-09-23T23:07:45.643417336Z
+modified_at: 2026-09-23T23:51:58.587592115Z
 req_type: Bug
 tags:
 - integrity-floor
@@ -126,3 +126,21 @@ comments:
   created_at: 2026-09-23T06:24:32.697728897Z
   modified_at: 2026-09-23T06:24:32.697728897Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d0ae-e774-7d01-823f-5e4890c35cbb
+  author: aida-auto-bump
+  timestamp: 2026-09-23T23:51:58.580596003Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d0ae-e77b-7681-a6f7-89b0c40671cd
+  timestamp: 2026-09-23T23:51:58.587590941Z
+  agent: aida
+  commit_sha: 588cbb5ab19cede88711c3388ba5a0644a451275
+  summary: Completed via merge 588cbb5a
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T23:51:58.580313965Z
+  completion_sha: 588cbb5ab19cede88711c3388ba5a0644a451275
