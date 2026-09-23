@@ -9,12 +9,12 @@ description: |-
   1. aida list (default lens) shows a Done spec with an outstanding tip refusal, labelled rework-needed.
   2. A zero-eligible wave caused by rework-needed specs names them and the rework command.
   3. Tests for both.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T16:07:53.483645394Z
-modified_at: 2026-09-23T19:15:51.772307218Z
+modified_at: 2026-09-23T20:13:32.359015701Z
 req_type: Task
 tags:
 - followup
@@ -25,3 +25,21 @@ relationships:
 - rel_type: Child
   target_id: 01a0c1d2-becf-7a92-b89a-76522a210c70
   created_at: 2026-09-23T16:07:56.835130619Z
+history:
+- id: 01a0cfe6-eb40-7db0-8055-6044aeb899a2
+  author: aida-auto-bump
+  timestamp: 2026-09-23T20:13:32.352100839Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cfe6-eb47-7e53-858b-6481409e4e02
+  timestamp: 2026-09-23T20:13:32.359014645Z
+  agent: aida
+  commit_sha: 744062afee4784b4d88f9150225c57e3dc6705ce
+  summary: Completed via merge 744062af
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T20:13:32.351982314Z
+  completion_sha: 744062afee4784b4d88f9150225c57e3dc6705ce
