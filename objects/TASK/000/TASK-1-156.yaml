@@ -17,7 +17,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T22:48:46.389478664Z
-modified_at: 2026-09-20T22:50:29.323172746Z
+modified_at: 2026-09-23T06:27:44.650605337Z
 req_type: Task
 tags:
 - from-advisor:BUG-1297
@@ -33,3 +33,9 @@ comments:
   created_at: 2026-09-20T22:50:29.323172746Z
   modified_at: 2026-09-20T22:50:29.323172746Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0ccf2-e18a-7c81-93a7-b17244b07ad4
+  author: joe
+  content: 'PROXY DISPOSITION (Claude for the operator, overnight burn-down): ALREADY FIXED on main, verified. Evidence: Confirmed via commit 8a87aa09c0 "[AI:codex] fix(mailbox): resolve displayed message prefixes (BUG-1297)": mailbox_cmd.rs now resolves+validates --in-reply-to unconditionally (no longer inside an else-if gated by --thread), matching the finding''s exact AC1/AC2 description; trace:BUG-1297   ai:claude comment documents the fix in place|aida-cli-lib/src/mailbox_cmd.rs'
+  created_at: 2026-09-23T06:27:44.650605337Z
+  modified_at: 2026-09-23T06:27:44.650605337Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
