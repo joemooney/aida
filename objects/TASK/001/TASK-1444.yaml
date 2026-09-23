@@ -8,12 +8,12 @@ description: |
   Acceptance (BUG-1510 AC4, verbatim):
   1. A shelve records against the spec the VERDICT is about, or - if that cannot be determined - records that the attribution is uncertain rather than silently choosing the lease. Absent attribution must not read as confirmed attribution.
   2. A test shelves a verdict whose subject differs from the lease's spec and asserts the recorded attribution is the verdict's spec (or explicitly uncertain), not the lease's.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T03:44:26.575314313Z
-modified_at: 2026-09-23T06:10:48.452286518Z
+modified_at: 2026-09-23T07:52:50.119668991Z
 req_type: Task
 tags:
 - parent:BUG-1510 orchestrator integrity attribution split-from:BUG-1510
