@@ -92,6 +92,7 @@ fn ps_process_backed_lease_uses_active_pid() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -144,6 +145,7 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -204,6 +206,7 @@ fn ps_role_prefers_live_jsonl_role_and_retains_lease_role() {
         |path| (path == jsonl).then(|| "advisor".to_string()),
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -245,6 +248,7 @@ fn ps_role_prefers_manifest_jsonl_role_when_live_jsonl_is_absent() {
         |_| None,
         |lease_id| (lease_id == "l-role-manifest").then(|| "advisor".to_string()),
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -291,6 +295,7 @@ fn ps_real_lease_role_beats_derived_jsonl_role() {
         |path| (path == jsonl).then(|| "advisor".to_string()),
         |lease_id| (lease_id == "l-real-role").then(|| "product".to_string()),
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -343,6 +348,7 @@ fn ps_placeholder_lease_role_loses_to_manifest_role_over_jsonl_role() {
         |path| (path == jsonl).then(|| "advisor".to_string()),
         |lease_id| (lease_id == "l-placeholder-order").then(|| "product".to_string()),
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -383,6 +389,7 @@ fn ps_harness_lease_without_pid_is_unknown_not_salvageable() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -429,6 +436,7 @@ fn ps_non_harness_dead_dirty_lease_still_salvageable() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -726,6 +734,7 @@ fn build_running_work_resolves_specs_and_orphans_on_fixture() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     // Row: TASK-1's scope resolved to its display id; live pid attached.
@@ -830,6 +839,7 @@ fn build_running_work_surfaces_the_worktree_lock_owner() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     let locked_row = rows
@@ -1080,6 +1090,7 @@ fn build_running_work_carries_pid_start_time() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -1106,6 +1117,7 @@ fn build_running_work_carries_pid_start_time() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].pid, None);
@@ -1181,6 +1193,7 @@ fn build_running_work_elapsed_is_process_uptime_when_adopted() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(
@@ -1200,6 +1213,7 @@ fn build_running_work_elapsed_is_process_uptime_when_adopted() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(
@@ -1393,6 +1407,7 @@ fn ps_freshly_hand_entered_spec_reads_awaiting_agent_not_orphaned() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -1473,6 +1488,7 @@ fn ps_dead_agent_lease_still_flags_stalled_after_the_grace_window() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     let entered_row = rows.iter().find(|r| r.lease.id == "l-entered-old").unwrap();
@@ -1603,6 +1619,7 @@ fn ps_placeholder_lease_role_is_the_last_resort_when_nothing_else_resolves() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -1666,6 +1683,7 @@ fn ps_listed_session_keeps_its_own_role_not_a_foreign_probe_match() {
         |path| (path == jsonl).then(|| "product".to_string()),
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -1679,4 +1697,160 @@ fn ps_listed_session_keeps_its_own_role_not_a_foreign_probe_match() {
         Some("product"),
         "a foreign/caller role must never be attributed to this session's row"
     );
+}
+
+// ============================================================================
+// BUG-1553: seat activity — working / blocked / unknown, distinct rendering.
+// ============================================================================
+
+mod bug_1553_seat_activity {
+    use super::*;
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn pending_tool_use_with_no_result_past_threshold_reads_blocked() {
+        let now = chrono::Utc::now();
+        let old = now - chrono::Duration::seconds(BLOCKED_PENDING_THRESHOLD_SECS + 30);
+        let tail = vec![format!(
+            r#"{{"type":"assistant","timestamp":"{}","message":{{"content":[{{"type":"tool_use","id":"t1","name":"Bash"}}]}}}}"#,
+            old.to_rfc3339()
+        )];
+        let activity = classify_seat_activity(Some(&tail), false, now);
+        assert_eq!(
+            activity,
+            SeatActivity::Blocked {
+                pending_tool: Some("Bash".to_string())
+            }
+        );
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn resolved_tool_call_reads_working_even_when_old() {
+        let now = chrono::Utc::now();
+        let old = now - chrono::Duration::seconds(BLOCKED_PENDING_THRESHOLD_SECS + 30);
+        let tail = vec![
+            format!(
+                r#"{{"type":"assistant","timestamp":"{}","message":{{"content":[{{"type":"tool_use","id":"t1","name":"Bash"}}]}}}}"#,
+                old.to_rfc3339()
+            ),
+            r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1"}]}}"#
+                .to_string(),
+        ];
+        let activity = classify_seat_activity(Some(&tail), false, now);
+        assert_eq!(activity, SeatActivity::Working);
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn pending_tool_use_within_threshold_reads_working_not_blocked() {
+        let now = chrono::Utc::now();
+        let recent = now - chrono::Duration::seconds(5);
+        let tail = vec![format!(
+            r#"{{"type":"assistant","timestamp":"{}","message":{{"content":[{{"type":"tool_use","id":"t1","name":"Bash"}}]}}}}"#,
+            recent.to_rfc3339()
+        )];
+        let activity = classify_seat_activity(Some(&tail), false, now);
+        assert_eq!(activity, SeatActivity::Working);
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn no_readable_tail_reads_unknown_never_working() {
+        let now = chrono::Utc::now();
+        let activity = classify_seat_activity(None, false, now);
+        assert_eq!(activity, SeatActivity::Unknown);
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn stopped_process_reads_blocked_regardless_of_transcript() {
+        let now = chrono::Utc::now();
+        // No pending tool at all in the tail — the stopped-process signal
+        // alone must still trip Blocked.
+        let tail: Vec<String> = vec![];
+        let activity = classify_seat_activity(Some(&tail), true, now);
+        assert_eq!(activity, SeatActivity::Blocked { pending_tool: None });
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn the_three_states_plus_none_render_differently_in_build_running_work() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let mut working = ps_lease("l-working", "STORY-1", tmp.path().join("w"));
+        working.active_pid = Some(std::process::id());
+        let mut blocked = ps_lease("l-blocked", "STORY-2", tmp.path().join("b"));
+        blocked.active_pid = Some(std::process::id());
+        let mut unknown = ps_lease("l-unknown", "STORY-3", tmp.path().join("u"));
+        unknown.active_pid = Some(std::process::id());
+
+        let live: Vec<process_probe::LiveSession> = vec![];
+
+        let (rows, _) = build_running_work(
+            &[],
+            &[working, blocked, unknown],
+            &live,
+            chrono::Utc::now(),
+            |_| dispatch_health_ps::WorktreeGitProbe::default(),
+            |_| None,
+            |_| None,
+            |_| None,
+            |_| None,
+            |_| MailIdentityStatus::Unknown,
+            |l: &SessionLease, _pid: u32| match l.id.as_str() {
+                "l-working" => SeatActivity::Working,
+                "l-blocked" => SeatActivity::Blocked {
+                    pending_tool: Some("Bash".to_string()),
+                },
+                _ => SeatActivity::Unknown,
+            },
+        );
+
+        assert_eq!(rows.len(), 3);
+        let get = |id: &str| rows.iter().find(|r| r.lease.id == id).unwrap();
+        assert_eq!(get("l-working").activity, Some(SeatActivity::Working));
+        assert_eq!(
+            get("l-blocked").activity,
+            Some(SeatActivity::Blocked {
+                pending_tool: Some("Bash".to_string())
+            })
+        );
+        assert_eq!(get("l-unknown").activity, Some(SeatActivity::Unknown));
+
+        // Three DISTINCT non-None values — the row-level state a human can
+        // fix (Blocked) must never collapse into the other two.
+        let all: std::collections::HashSet<_> =
+            rows.iter().map(|r| format!("{:?}", r.activity)).collect();
+        assert_eq!(all.len(), 3, "all three activity states must be distinct");
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn dormant_or_stale_rows_have_no_activity_verdict() {
+        // No live pid at all → nothing to classify, activity stays None —
+        // distinct from Unknown (which means "tried to check, couldn't").
+        let l = ps_lease(
+            "l-dead",
+            "STORY-4",
+            std::path::PathBuf::from("/nonexistent"),
+        );
+        let live: Vec<process_probe::LiveSession> = vec![];
+        let (rows, _) = build_running_work(
+            &[],
+            &[l],
+            &live,
+            chrono::Utc::now(),
+            |_| dispatch_health_ps::WorktreeGitProbe::default(),
+            |_| None,
+            |_| None,
+            |_| None,
+            |_| None,
+            |_| MailIdentityStatus::Unknown,
+            |_, _| SeatActivity::Working,
+        );
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].state, LeaseState::Stale);
+        assert_eq!(rows[0].activity, None);
+    }
 }
