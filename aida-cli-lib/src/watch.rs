@@ -446,6 +446,10 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             "supervisor mailbox has unread mail".to_string(),
         ),
         // trace:STORY-1043 | ai:codex
+        // TASK-1305: this event is a one-time "first seen" detection notice —
+        // it carries no `pr_state`/`recovery` and never renders an action
+        // hint, so it can't reproduce the no-PR-vs-open-PR collision. No
+        // change needed on this surface.
         EventKind::UnshippedWorkDetected {
             spec,
             branch,
