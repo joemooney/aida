@@ -823,6 +823,10 @@ pub(crate) struct MergeablePrItem {
     /// every check is green. The classifier already excluded `fail` /
     /// `pending`, so this is informational.
     pub ci_rollup: Option<String>,
+    /// STORY-1405: `Some(description)` when a live review-in-progress marker
+    /// covers this PR's current head — ready by CI, but a verdict is pending.
+    // trace:STORY-1405 | ai:claude
+    pub under_review: Option<String>,
 }
 
 /// A broken PR which has fallen between the review and repair lanes.
@@ -1267,13 +1271,20 @@ impl AwaitingReport {
                 None | Some("?") => "no CI".dimmed().to_string(),
                 Some(other) => other.dimmed().to_string(),
             };
+            // trace:STORY-1405 | ai:claude
+            let review = pr
+                .under_review
+                .as_deref()
+                .map(|d| format!(" · {}", format!("under review — {d}").yellow()))
+                .unwrap_or_default();
             writeln!(
                 w,
-                "  {} PR-{} ready to merge — {} · {}",
+                "  {} PR-{} ready to merge — {} · {}{}",
                 "🟢".green(),
                 pr.number.to_string().bold(),
                 pr.title,
                 ci,
+                review,
             )?;
             budget -= 1;
         }
@@ -1601,6 +1612,7 @@ impl AwaitingReport {
                 "title": p.title,
                 "head_branch": p.head_branch,
                 "ci_rollup": p.ci_rollup,
+                "under_review": p.under_review,
             })).collect::<Vec<_>>(),
             "unowned_failing_prs": self.unowned_failing_prs.iter().map(|p| serde_json::json!({
                 "number": p.number,
@@ -1959,6 +1971,7 @@ pub(crate) fn classify_open_prs(
             title: pr.title.clone(),
             head_branch: pr.head_branch.clone(),
             ci_rollup: pr.ci_rollup.clone(),
+            under_review: None,
         })
         .collect()
 }
@@ -3154,6 +3167,7 @@ mod tests {
                 title: "demo".into(),
                 head_branch: "feat".into(),
                 ci_rollup: Some("pass".into()),
+                under_review: None,
             }],
             findings_total: 4,
             escalations: vec![EscalationItem {

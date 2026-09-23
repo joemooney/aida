@@ -2175,6 +2175,31 @@ pub(crate) fn pr_ship_handler(
     // released when this handler returns. Bounded-wait-then-refuse on contention.
     // trace:STORY-1171 | ai:claude
     let _merge_lease = acquire_merge_lease(&main_worktree, pr_number)?;
+    // STORY-1405: refuse while a reviewer is mid-way through THIS head. Asked
+    // under the merge-lease, immediately before the merge, so a review that
+    // started after CI settled is still seen. One local stat when no marker
+    // exists; a forge head lookup only when a live one does.
+    // trace:STORY-1405 | ai:claude
+    if !already_merged {
+        let gate = crate::review_marker::merge_gate(&main_worktree, pr_number, || {
+            fetch_change_info_via_resolved_forge(
+                &project_root,
+                pr_number,
+                crate::forge::resolve_open_change_forge_kind(&project_root),
+            )
+            .ok()
+            .map(|info| info.head_oid)
+        });
+        if let crate::review_marker::MergeGate::UnderReview(m) = &gate {
+            anyhow::bail!("{}", crate::review_marker::refusal_message(m));
+        }
+        if let Some(note) = crate::review_marker::proceed_note(&gate) {
+            eprintln!(
+                "  {} {note}",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan()
+            );
+        }
+    }
     if !already_merged {
         // ---- TASK-1448: approval-covers-head gate. Checked under the merge
         // lease, immediately before the merge (and before any merge-hold is
