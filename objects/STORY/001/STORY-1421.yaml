@@ -21,12 +21,12 @@ description: |-
   EXPLICITLY NOT WANTED: blocking a merge on non-blocking findings. The grading is correct and #2047 was right to approve over F2. The defect is that approving over a finding currently means losing it.
 
   Raised by the reviewer seat immediately after #2047 merged — "I would rather know that than keep doing it" — and filed by the driver-advisor, who had accepted the convention twice the same night without noticing it did not hold.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:22:54.824903811Z
-modified_at: 2026-09-21T11:25:04.180330443Z
+modified_at: 2026-09-23T16:01:44.715469225Z
 req_type: Story
 comments:
 - id: 01a0c3b6-5f34-76c0-9ba5-aef76165a045
