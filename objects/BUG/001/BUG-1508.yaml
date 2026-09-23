@@ -52,7 +52,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:51:11.600098076Z
-modified_at: 2026-09-23T04:03:55.214927677Z
+modified_at: 2026-09-23T04:34:58.723242020Z
 req_type: Bug
 tags:
 - batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
@@ -137,4 +137,10 @@ comments:
   content: Commit b41e97e524 references this requirement
   created_at: 2026-09-23T04:03:55.214927677Z
   modified_at: 2026-09-23T04:03:55.214927677Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cc8b-a423-7a00-9ea4-9da7f77fb969
+  author: joe
+  content: Commit b41e97e524 references this requirement
+  created_at: 2026-09-23T04:34:58.723242020Z
+  modified_at: 2026-09-23T04:34:58.723242020Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
