@@ -407,11 +407,56 @@ If the spec IS the subject of a commit in this PR — even if pre-marked Complet
 <!-- kind:design-fork -->
 If `aida review prompt` returns "no specs found" — the PR has commits without `(REQ-ID)` trailers. STOP and ask the user how to attribute the diff before continuing. This is a `kind:design-fork` — surface it even under `$AIDA_ZEN`; attribution is a real judgement call, not a mechanical confirmation.
 
+### 2b. The correct diff instrument — trace:BUG-1518 | ai:claude
+
+Before walking the checklist, resolve **what "the diff" is**. A review answers
+*"what will this merge change?"*, not *"how do these two trees currently
+differ?"* — those are different questions with the same output shape, and a
+tree diff against a moving `main` answers the wrong one.
+
+**Use the merge-base (three-dot) form, or the forge's own PR diff — never a
+two-dot / bare tree diff against `main`'s current tip:**
+
+```bash
+gh pr diff <N>                              # GitHub already diffs from the merge-base
+glab mr diff <N>                            # GitLab, same guarantee
+git diff origin/main...<branch>             # three-dot: merge-base(origin/main, branch)..branch
+git log --name-only origin/main...<branch>  # "what does this PR touch" — no base ambiguity at all
+```
+
+`git diff origin/main <branch>` (no dots) and `git diff origin/main..<branch>`
+(two dots) are the **same** operation — a bare tree comparison, main's tip vs
+the branch's tip. When `main` has moved since the branch forked, every file
+main changed since then shows up as a deletion the merge will never make. The
+false alarm never hides a real change; it manufactures alarming ones — a
+reviewer refuses the PR, files a finding about a revert that cannot happen,
+and the rework lands on the wrong cycle. BUG-1518's worked instance: a
+two-commits-behind branch showed 661 apparent deletions — an entire merged
+feature — from a commit that had touched one, unrelated file.
+
+**Label how far behind `main` the branch is, next to any diff you render** —
+the distance is what determines how much of a two-dot diff would have been an
+artifact:
+
+```bash
+git rev-list --count <branch>..origin/main   # commits behind
+```
+
+Note the count (e.g. "3 commits behind main") in the review-prompt worksheet
+before walking specs. A diff whose base is unstated cannot be interpreted by
+whoever reads it next — true whether you're reading it yourself or handing a
+rendered diff to another agent. And when a test or check reads a diff to
+*decide* something (pass/fail, which files changed, whether a revert
+happened), it must assert against the commits' own contents — never against a
+tree comparison with a moving base.
+
 ### 3. Walk each spec — verdict per item, recorded inline
 
 For each non-informational spec in the checklist, in order:
 
-1. **Read the diff against acceptance criteria** — does each `- [ ]` line in the spec have matching code?
+1. **Read the diff against acceptance criteria** — the merge-base diff from
+   step 2b above, never a raw tree diff against `main`'s tip — does each
+   `- [ ]` line in the spec have matching code?
 2. **Run the per-spec test plan** — exact commands depend on the spec, but typically `cargo test -p <crate> <test_name>` or a focused subset. Use `cargo test --workspace` only when you can't narrow down.
 3. **Record the verdict inline in `.aida/review-prompt-pr-<N>.md`** — the file `aida review prompt --write` generated is your worksheet. Edit it in place, appending a verdict block under each spec's section:
    - ✅ **PASS** — every acceptance bullet covered, tests green, no obvious regression

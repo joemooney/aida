@@ -144,13 +144,13 @@ supervision cost drops from O(time-elapsed) to O(actionable events).
 `aida watch` also emits a single wake line and exits if the orchestrator
 process dies, so an overnight loop never blocks forever on a corpse.
 
-Keep a **long-interval** `ScheduleWakeup` (e.g. 30–60 min) as the
-documented degenerate fallback: if no event stream is live, or the
-watcher wedges, the timer still resurfaces the loop. **Correctness never
-depends on the event path** — the termination check is still the exact
-`aida queue list --role <role><batch suffix>` command from the `/goal`
-text, re-run on every wake from either source. The event feed only
-changes *when* you look, never *what* decides the loop is done.
+If the event stream is unavailable, fail visibly and restart the shell-side
+watcher (or use a background shell wait around the termination command). Do not
+replace it with model-side `CronCreate`, `/loop`, or `ScheduleWakeup`: recurring
+model wakes reload the full context even when nothing changed. **Correctness
+never depends on elapsed time** — the termination check remains the exact `aida
+queue list --role <role><batch suffix>` command from the `/goal` text, re-run
+after an actionable shell/event wake. <!-- trace:BUG-1589 | ai:codex -->
 
 ## Worked examples
 

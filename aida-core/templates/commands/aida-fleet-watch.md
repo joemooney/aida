@@ -12,6 +12,10 @@ escalate into `aida awaiting`, but it NEVER starts work, takes a lease, or merge
 
 Follow the workflow in `.claude/skills/aida-fleet-watch/SKILL.md`. Each tick:
 
+Run on demand or after a shell-side `aida watch --emit-wakes` event. Never use
+model-side `CronCreate`, `/loop`, or `ScheduleWakeup` to poll the fleet or
+mailbox. <!-- trace:BUG-1589 | ai:codex -->
+
 1. **Substrate sweep (authoritative):** `aida ps --json` (live/STALE/orphaned),
    `aida awaiting --json` (operator gates), the new `.aida/events.jsonl` lines
    since the last tick (classify like `aida watch` — actionable verbs only), and

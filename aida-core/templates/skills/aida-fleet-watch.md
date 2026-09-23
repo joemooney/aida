@@ -1,6 +1,6 @@
 ---
 name: aida-fleet-watch
-description: Substrate-first fleet monitor — one continuously-runnable census of every agent session (managed or not), with plain-language state and ONE recommended next action per item.
+description: Substrate-first fleet monitor — an on-demand census of every agent session (managed or not), with plain-language state and ONE recommended next action per item.
 allowed-tools:
   - Bash
   - Read
@@ -12,11 +12,11 @@ allowed-tools:
 
 ## Purpose
 
-Give the operator **one continuously-runnable view of the whole fleet** — every
+Give the operator **one repeatable view of the whole fleet** — every
 agent session on the machine, managed by AIDA or hand-started — with a
 plain-language state per session and exactly **one recommended next action** for
 each non-nominal item. This is the SPIKE-77 driving use case: a monitor you can
-leave running (one-shot, or under `/loop`) that tells you *what is genuinely
+run on demand, or after a shell-side event watcher fires, that tells you *what is genuinely
 running, what is stuck, and what needs you* without you having to poll six
 different commands.
 
@@ -58,7 +58,12 @@ default fleet-watch.
 
 ## Instructions
 
-Each tick (one-shot, or `/loop`-driven):
+Each invocation (one-shot, or triggered by a shell-side `aida watch` event):
+
+Do not drive this model-side with `CronCreate`, `/loop`, or `ScheduleWakeup`.
+Leave the model asleep behind `Monitor(command: "aida watch --emit-wakes",
+persistent: true)` and rerun the census only after an actionable event.
+<!-- trace:BUG-1589 | ai:codex -->
 
 ### 1. Substrate sweep (authoritative)
 

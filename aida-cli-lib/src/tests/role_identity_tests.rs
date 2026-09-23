@@ -164,9 +164,10 @@ fn advisor_starter_role_carries_cold_session_handoff_protocol() {
     assert!(prompt.contains("rework-brief-craft.md"), "{prompt}");
     assert!(prompt.contains("seat-recovery-playbooks.md"), "{prompt}");
     assert!(
-        !prompt.contains("mailbox inbox"),
-        "mechanised duties stay out of prose: {prompt}"
+        prompt.contains("zero-token shell/event watcher"),
+        "{prompt}"
     );
+    assert!(prompt.contains("CronCreate"), "{prompt}");
 }
 
 #[test]

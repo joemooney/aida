@@ -79,6 +79,19 @@ safe, bounded, and reversible, and anything that needs a real decision is
 The pass never merges PRs, approves specs, answers DecisionRequests, or runs
 drains. <!-- trace:TASK-781 -->
 
+### Wait without waking the model
+
+The substrate is the advisor's clock. Between actionable events, wait outside
+the model: use a harness `Monitor` over `aida watch --emit-wakes`, a background
+shell wait around `aida awaiting --notice`, or the event-driven `aida advisor
+watch` heartbeat. These paths consume zero model tokens while quiet and wake the
+seat only when work is actionable.
+
+Never create model-side `CronCreate`, `/loop`, or `ScheduleWakeup` polling for
+mail or `aida awaiting`, and never stack recurring wake mechanisms. A quiet turn
+is still a full context-bearing inference; shortening its output does not make
+the wake free. <!-- trace:BUG-1589 | ai:codex -->
+
 ## What the advisor does NOT do
 
 - **Does not write code directly.** Substantive feature / fix work routes to
