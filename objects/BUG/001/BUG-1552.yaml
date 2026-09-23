@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T13:05:16.129070411Z
-modified_at: 2026-09-23T14:01:59.777941164Z
+modified_at: 2026-09-23T14:22:04.418601541Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -78,4 +78,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 07:01 -> branch claude/bug-1552, no PR (overnight burn-down)
   created_at: 2026-09-23T14:01:59.777941164Z
   modified_at: 2026-09-23T14:01:59.777941164Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cea5-2482-7e12-9bcf-7b33cb9d48e6
+  author: joe
+  content: Commit 2c0cd37926 references this requirement
+  created_at: 2026-09-23T14:22:04.418601541Z
+  modified_at: 2026-09-23T14:22:04.418601541Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
