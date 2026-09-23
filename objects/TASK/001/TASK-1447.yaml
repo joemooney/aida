@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T07:40:38.872571128Z
-modified_at: 2026-09-23T13:47:41.433561107Z
+modified_at: 2026-09-23T13:47:46.242028423Z
 req_type: Task
 tags:
 - ci
@@ -30,4 +30,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 06:44 -> branch claude/task-1447, no PR (overnight burn-down)
   created_at: 2026-09-23T13:44:10.740555301Z
   modified_at: 2026-09-23T13:44:10.740555301Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce85-bcc2-7d82-9d4c-e8a35c347559
+  author: joe
+  content: 'Claude implementer result: claude/task-1447 @ 7c8a757aeb. CLI-manual and monitor-contract guards run on docs-only PRs via a minimal cargo build -p aida-cli step on that path; doc-intent and trace/doc-header ungated (no binary needed); new scripts/check-docs-guards-scheduled.py (wired into CI) fails on any re-gated guard without a DOCS-GUARD-EXEMPT marker. Orchestrator-validated YAML and the check. Batch 13.'
+  created_at: 2026-09-23T13:47:46.242028423Z
+  modified_at: 2026-09-23T13:47:46.242028423Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
