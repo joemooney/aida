@@ -8,9 +8,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T23:02:11.619324026Z
-modified_at: 2026-09-23T23:02:11.619324026Z
+modified_at: 2026-09-23T23:02:15.343566802Z
 req_type: Bug
 tags:
 - followup
 - parent:STORY-1423
 - performance
+relationships:
+- rel_type: Child
+  target_id: 01a0c4b7-b38c-7301-89cd-9b7a04a1e703
+  created_at: 2026-09-23T23:02:15.343566802Z
