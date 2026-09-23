@@ -61997,6 +61997,47 @@ mod bug_1500_store_pull_hint_tests {
             "hint should advise `git rebase --abort` when a rebase IS in progress: {hint}"
         );
     }
+
+    // trace:BUG-1500 | ai:claude
+    // Covers the second emission site: `aida db sync --pull`'s
+    // `handle_git_backend_command` (aida-cli-lib/src/git_backend_cmd.rs)
+    // wraps the same `store_pull_failure_hint` output as
+    // `anyhow::bail!("Pull failed: {}", ...)`. This mirrors that exact
+    // format string so a regression there (e.g. reverting to the old
+    // unconditional "may be mid-rebase" text) is caught here too.
+    #[test]
+    fn db_sync_pull_bail_message_omits_abort_hint_without_rebase() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let hint = store_pull_failure_hint(tmp.path(), "connection reset (502)");
+        let bail_message = format!("Pull failed: {}", hint);
+        assert!(
+            !bail_message.contains("rebase --abort"),
+            "db sync --pull's bail message should not advise `git rebase --abort` \
+             when no rebase is in progress: {bail_message}"
+        );
+    }
+
+    // trace:BUG-1500 | ai:claude
+    #[test]
+    fn db_sync_pull_bail_message_includes_abort_hint_with_rebase() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path();
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(repo)
+            .status()
+            .expect("git init")
+            .success());
+        std::fs::create_dir(repo.join(".git").join("rebase-merge")).expect("mkdir rebase-merge");
+
+        let hint = store_pull_failure_hint(repo, "some pull error");
+        let bail_message = format!("Pull failed: {}", hint);
+        assert!(
+            bail_message.contains("rebase --abort"),
+            "db sync --pull's bail message should advise `git rebase --abort` \
+             when a rebase IS in progress: {bail_message}"
+        );
+    }
 }
 
 fn handle_pull_command(
