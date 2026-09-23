@@ -63622,6 +63622,179 @@ fn auto_bump_eligible_status(status: &RequirementStatus) -> bool {
     aida_core::lifecycle::git_merge_completes(aida_core::lifecycle::State::from_status(status))
 }
 
+/// BUG-1506: the work-item types eligible for the Draft→Done landing bump —
+/// deliverable units of implementation work that a trailered commit can
+/// plausibly "land". Excludes `Epic` (a read-only rollup of its children,
+/// never hand-set — `BUG-626`), the ADR/knowledge-graph family (`Decision`,
+/// `Principle`, `Vision`, `Constraint`, `Term`, `Doc` — narrative/governance
+/// artifacts with their own stateful lifecycles, not code-shipped work), and
+/// the organizational/meta/agile-container types (`Folder`, `Meta`,
+/// `Sprint`). Without this filter a Draft `ADR-N` merely referenced by a
+/// trailered commit (e.g. the commit that implements the decision, not the
+/// decision itself) would be falsely bumped to Done alongside the real work.
+// trace:BUG-1506 | ai:claude
+fn is_auto_bump_work_type(req_type: &RequirementType) -> bool {
+    matches!(
+        req_type,
+        RequirementType::Functional
+            | RequirementType::NonFunctional
+            | RequirementType::System
+            | RequirementType::User
+            | RequirementType::ChangeRequest
+            | RequirementType::Bug
+            | RequirementType::Story
+            | RequirementType::Task
+            | RequirementType::Spike
+    )
+}
+
+/// BUG-1506: find Draft specs among `candidates` (spec_id → first-seen commit
+/// sha, the same map both the live pull-time scan and `reconcile-status`
+/// already build from `(SPEC-ID)` trailers) whose commit is already on the
+/// default branch. Shared by both call sites so the eligibility check can't
+/// drift between them — mirrors `auto_bump_eligible_status`'s role for the
+/// existing Completed-bump path. Honors an optional `spec` filter the same
+/// way the reconcile-status replay narrows its own candidate scan. Restricted
+/// to `is_auto_bump_work_type` — see that function's doc comment for why
+/// non-work types (epics, ADRs, docs, …) must never be silently landed here.
+// trace:BUG-1506 | ai:claude
+fn collect_draft_landed_candidates(
+    store: &aida_core::RequirementsStore,
+    candidates: &std::collections::BTreeMap<String, String>,
+    spec: Option<&str>,
+) -> Vec<(String, String)> {
+    candidates
+        .iter()
+        .filter(|(spec_id, _)| match spec {
+            Some(target) => spec_id.eq_ignore_ascii_case(target),
+            None => true,
+        })
+        .filter_map(|(spec_id, sha)| {
+            let req = store.get_requirement_by_spec_id(spec_id)?;
+            if !is_auto_bump_work_type(&req.req_type) {
+                return None;
+            }
+            aida_core::lifecycle::git_merge_lands_draft_at_done(
+                aida_core::lifecycle::State::from_status(&req.status),
+            )
+            .then(|| (spec_id.clone(), sha.clone()))
+        })
+        .collect()
+}
+
+/// BUG-1506: mutate one already-fetched requirement in place for the
+/// `Draft → Done` landing flip — the shared body for both write paths below,
+/// mirroring how `apply_auto_bump_flip` is shared between the git-canonical
+/// and legacy writers for the Completed bump. Records the flip in the spec's
+/// history plus an audit comment naming the landed commit, so `aida show`
+/// explains why a spec skipped straight from Draft to Done instead of
+/// silently rewriting it. Caller is responsible for re-checking `r.status`
+/// is still `Draft` immediately before calling this (a concurrent edit may
+/// have already moved it on).
+// trace:BUG-1506 | ai:claude
+fn apply_draft_landed_flip(
+    r: &mut aida_core::Requirement,
+    sha: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) {
+    let prior_status = r.status.clone();
+    r.set_status_from_str("Done");
+    r.record_change(
+        "aida-auto-bump".to_string(),
+        vec![aida_core::Requirement::field_change(
+            "status",
+            format!("{:?}", prior_status),
+            format!("{:?}", r.status),
+        )],
+    );
+    r.modified_at = now;
+    let short = if sha.len() >= 7 { &sha[..7] } else { sha };
+    r.add_comment(aida_core::Comment::new(
+        "aida-auto-bump".to_string(),
+        format!(
+            "Flipped Draft → Done: a trailered commit ({}) referencing this spec \
+             is already on the default branch, though it skipped the intermediate \
+             approval states. Confirm it, then move to Completed.",
+            short
+        ),
+    ));
+}
+
+/// BUG-1506: write the `Draft → Done` flip for each `(spec_id, sha)` pair
+/// `collect_draft_landed_candidates` found. Returns the spec_ids actually
+/// confirmed Done after the write.
+///
+/// On the git-canonical store this MUST be a targeted per-spec write — the
+/// same `get_requirement_by_spec_id` + `update_requirement` path the
+/// Done→Completed bump uses (TASK-1161 / BUG-634) — never the full-store
+/// `Storage::update_atomically`. On a `GitBackend`, `update_atomically`
+/// loads the ENTIRE store, applies the closure, and SAVES the entire
+/// snapshot back — and that save deletes any spec on disk that is missing
+/// from the in-memory snapshot. A spec added concurrently (a drain
+/// follow-up, or `aida add` from another session) between the load and the
+/// save is therefore silently DELETED by this function's own write, not
+/// merely left unbumped. Reading and writing one spec at a time closes that
+/// window entirely — there is no snapshot for a concurrent spec to be
+/// missing from.
+// trace:BUG-1506 | ai:claude
+fn apply_draft_to_done_bumps(
+    storage: &Storage,
+    draft_candidates: &[(String, String)],
+) -> Result<Vec<(String, String)>> {
+    if draft_candidates.is_empty() {
+        return Ok(Vec::new());
+    }
+    let now = chrono::Utc::now();
+    let store_path = storage.path();
+    if store_path.is_dir() {
+        // Git-canonical store: targeted per-spec writes only. trace:BUG-1506 | ai:claude
+        use aida_core::db::DatabaseBackend;
+        let backend = aida_core::db::GitBackend::new(store_path)?;
+        let mut confirmed = Vec::new();
+        for (spec_id, sha) in draft_candidates {
+            let Some(mut r) = backend.get_requirement_by_spec_id(spec_id)? else {
+                continue;
+            };
+            if !matches!(r.status, RequirementStatus::Draft) {
+                continue;
+            }
+            apply_draft_landed_flip(&mut r, sha, now);
+            backend.update_requirement(&r)?;
+            confirmed.push((spec_id.clone(), sha.clone()));
+        }
+        return Ok(confirmed);
+    }
+
+    // Legacy YAML/SQLite store: this store type has no targeted per-spec
+    // write path, so the atomic full-store update is its normal write —
+    // not a shortcut around one, the way it would be on `GitBackend`.
+    let for_write = draft_candidates.to_vec();
+    storage.update_atomically(|s| {
+        for (spec_id, sha) in &for_write {
+            if let Some(r) = s.requirements.iter_mut().find(|r| {
+                r.spec_id.as_deref() == Some(spec_id.as_str())
+                    || r.agreed_id.as_deref() == Some(spec_id.as_str())
+            }) {
+                if !matches!(r.status, RequirementStatus::Draft) {
+                    continue;
+                }
+                apply_draft_landed_flip(r, sha, now);
+            }
+        }
+    })?;
+    let after = storage.load()?;
+    Ok(draft_candidates
+        .iter()
+        .filter(|(spec_id, _)| {
+            after
+                .get_requirement_by_spec_id(spec_id)
+                .map(|r| matches!(r.status, RequirementStatus::Done))
+                .unwrap_or(false)
+        })
+        .cloned()
+        .collect())
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct AutoBumpFlip {
     spec_id: String,
@@ -64778,6 +64951,41 @@ fn auto_bump_done_to_completed(
         collect_stranded_review_pr_resolutions(&store, &pr_to_sha, project_root);
     report_stranded_review_pr_lookup_failures(&stranded_review_pr_failures);
 
+    // BUG-1506: mirror image of the Done→Completed bump below. A spec that
+    // reached main straight from Draft — never triaged, never through the
+    // intermediate states — is invisible to `auto_bump_eligible_status`
+    // (Draft is deliberately excluded from `git_merge_completes`, BUG-328),
+    // so it was never bumped at all and sat reading Draft indefinitely. Land
+    // it at Done instead: visible, off the open-backlog shelf, one human
+    // confirmation short of Completed. trace:BUG-1506 | ai:claude
+    let draft_landed = collect_draft_landed_candidates(&store, &candidates, None);
+    if !draft_landed.is_empty() {
+        if let Ok(confirmed) = apply_draft_to_done_bumps(storage, &draft_landed) {
+            if !confirmed.is_empty() {
+                println!(
+                    "  {} {} Draft spec{} → {} (trailered commit already on the default \
+                     branch; skipped intermediate states — confirm before closing)",
+                    "auto-bumped".cyan(),
+                    confirmed.len(),
+                    if confirmed.len() == 1 { "" } else { "s" },
+                    "Done".yellow().bold()
+                );
+                for (spec_id, sha) in &confirmed {
+                    let short = if sha.len() >= 7 {
+                        &sha[..7]
+                    } else {
+                        sha.as_str()
+                    };
+                    println!(
+                        "    {} {}",
+                        spec_id.bold(),
+                        format!("(commit {})", short).dimmed()
+                    );
+                }
+            }
+        }
+    }
+
     if candidates.is_empty() && pr_to_sha.is_empty() && stranded_review_pr.is_empty() {
         return Ok(Vec::new());
     }
@@ -65424,6 +65632,14 @@ fn handle_db_reconcile_status(
     let storage = Storage::new(store_path);
     let store = storage.load()?;
 
+    // BUG-1506: pre-Done specs — specifically Draft — whose trailered commit
+    // is already in the scan range. This is the manual-replay twin of the
+    // draft-landing pass in the live pull-time scanner: same eligibility
+    // model, same `Done` landing (not `Completed`), so an operator recovering
+    // a stranded Draft with a wider `--since` window gets the same outcome a
+    // fresh pull would have given it at merge time. trace:BUG-1506 | ai:claude
+    let draft_landed = collect_draft_landed_candidates(&store, &candidates, spec);
+
     // Build the planned-flip list. For --spec, we narrow to that one
     // candidate (matched against either spec_id or review-story title).
     let mut flips: Vec<AutoBumpFlip> = Vec::new();
@@ -65545,7 +65761,7 @@ fn handle_db_reconcile_status(
         None => {}
     }
 
-    if flips.is_empty() && stale_review_flips.is_empty() {
+    if flips.is_empty() && stale_review_flips.is_empty() && draft_landed.is_empty() {
         if open_pr_deferred {
             return Ok(());
         }
@@ -65559,6 +65775,27 @@ fn handle_db_reconcile_status(
     }
 
     if dry_run {
+        if !draft_landed.is_empty() {
+            println!(
+                "{} would flip {} Draft spec{} → Done (trailered commit already on the \
+                 default branch; skipped intermediate states):",
+                "dry-run:".dimmed(),
+                draft_landed.len(),
+                if draft_landed.len() == 1 { "" } else { "s" }
+            );
+            for (spec_id, sha) in &draft_landed {
+                let short = if sha.len() >= 7 {
+                    &sha[..7]
+                } else {
+                    sha.as_str()
+                };
+                println!(
+                    "  {} {}",
+                    spec_id.bold(),
+                    format!("(commit {})", short).dimmed()
+                );
+            }
+        }
         if !flips.is_empty() {
             println!(
                 "{} would flip {} spec{} → Completed:",
@@ -65783,6 +66020,35 @@ fn handle_db_reconcile_status(
                 "    {} {}",
                 spec_id.bold(),
                 format!("(PR #{}, was {})", pr_n, prior).dimmed()
+            );
+        }
+    }
+
+    // BUG-1506: apply the Draft → Done flips found above. A separate atomic
+    // write from the Completed-flip block above it — different target status,
+    // different re-check (`Draft` only) — so it can't be folded into
+    // `AutoBumpFlip`'s Completed-only write without teaching that path a
+    // second destination status. trace:BUG-1506 | ai:claude
+    let confirmed_draft = apply_draft_to_done_bumps(&storage, &draft_landed)?;
+    if !confirmed_draft.is_empty() {
+        println!(
+            "  {} {} Draft spec{} → {} (trailered commit already on the default branch; \
+             skipped intermediate states — confirm before closing)",
+            "auto-bumped".cyan(),
+            confirmed_draft.len(),
+            if confirmed_draft.len() == 1 { "" } else { "s" },
+            "Done".yellow().bold()
+        );
+        for (spec_id, sha) in &confirmed_draft {
+            let short = if sha.len() >= 7 {
+                &sha[..7]
+            } else {
+                sha.as_str()
+            };
+            println!(
+                "    {} {}",
+                spec_id.bold(),
+                format!("(commit {})", short).dimmed()
             );
         }
     }
