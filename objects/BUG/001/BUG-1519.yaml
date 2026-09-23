@@ -30,7 +30,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:26:51.735985744Z
-modified_at: 2026-09-21T04:38:04.562403930Z
+modified_at: 2026-09-23T06:28:16.067544255Z
 req_type: Bug
 tags:
 - papercut multi-hub mirror-drift severity:operational
@@ -48,3 +48,9 @@ comments:
   created_at: 2026-09-21T04:38:03.437625606Z
   modified_at: 2026-09-21T04:38:03.437625606Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ccf3-5c43-7a73-9eec-db82f0374cf1
+  author: joe
+  content: 'PROXY DECISION (Claude for the operator, overnight burn-down): commit ff45dcbd6c (declined on GitHub PR #2032) is NOT wanted on main; gitlab/main must be reconciled to drop it via docs/multi-hub-sync.md. EXECUTION DEFERRED TO THE OPERATOR: it requires a force-update of the gitlab mirror''s main, which is hard to reverse, so no agent should do it unattended.'
+  created_at: 2026-09-23T06:28:16.067544255Z
+  modified_at: 2026-09-23T06:28:16.067544255Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
