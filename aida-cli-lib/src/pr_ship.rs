@@ -390,6 +390,28 @@ pub fn reviewer_liveness_for_pr(
     }
 }
 
+/// BUG-1566: `aida pr ship` releasing a supervised merge-hold is the SAME
+/// integrity floor as `aida merge-hold clear` — a human at an interactive
+/// terminal. Without that authority the ship refuses before touching the hold,
+/// and points at the human release path. There is no carve-out: dispatch,
+/// advisor, reviewer and headless seats all hit this, so the two release
+/// paths can never disagree on who may clear a hold. `Some(msg)` = refuse.
+// trace:BUG-1566 | ai:claude
+pub fn ship_hold_release_refusal(
+    hold_present: bool,
+    integrity_floor_authority: bool,
+    pr: u64,
+) -> Option<String> {
+    if !hold_present || integrity_floor_authority {
+        return None;
+    }
+    Some(format!(
+        "PR-{pr} is under a supervised merge-hold; `aida pr ship` will not release it without \
+         a human at an interactive terminal (the same integrity floor as `aida merge-hold clear`). \
+         A human must run `aida merge-hold clear {pr}`, then re-run `aida pr ship {pr}`."
+    ))
+}
+
 /// BUG-710/BUG-716/TASK-1253: a drive seat may not merge any PR, and no caller
 /// may merge the live drive's own PR. Merely observing an unrelated live drain
 /// is not grounds to block: those merges serialize on the merge lease.
@@ -1183,6 +1205,43 @@ pub(crate) fn merge_gate_verdict_candidates(
 
 #[cfg(test)]
 mod tests {
+    // BUG-1566: pr ship's hold release obeys the integrity floor exactly like
+    // `merge-hold clear` — no hold → no gate; hold + human → release; hold
+    // without a human → refuse, naming the human release path.
+    #[test]
+    fn ship_hold_release_requires_the_integrity_floor() {
+        assert_eq!(ship_hold_release_refusal(false, false, 7), None);
+        assert_eq!(ship_hold_release_refusal(false, true, 7), None);
+        assert_eq!(ship_hold_release_refusal(true, true, 7), None);
+        let msg = ship_hold_release_refusal(true, false, 7).expect("must refuse");
+        assert!(msg.contains("aida merge-hold clear 7"), "{msg}");
+        assert!(msg.contains("human"), "{msg}");
+    }
+
+    // BUG-1566: the real ship path must consult the floor BEFORE it clears
+    // the marker or drops the label — never after, never not at all.
+    #[test]
+    fn ship_release_site_gates_on_the_floor_before_clearing() {
+        let src = include_str!("pr_cmd.rs");
+        let gate = src
+            .find("pr_ship::ship_hold_release_refusal(")
+            .expect("pr ship must gate the hold release");
+        let floor = src[gate..]
+            .find("crate::has_integrity_floor_authority()")
+            .expect("the gate must be fed the integrity-floor authority");
+        assert!(floor < 400, "authority must be the gate's own argument");
+        let clear = src
+            .find("crate::merge_hold::clear_hold(&hold_root, pr_number)")
+            .expect("release site present");
+        let unlabel = src
+            .find("crate::merge_hold::sync_label(&hold_root, pr_number, false)")
+            .expect("label drop present");
+        assert!(
+            gate < clear && gate < unlabel,
+            "gate must precede the release"
+        );
+    }
+
     use super::*;
 
     // ── TASK-1448: approval-covers-head merge gate ─────────────────────────

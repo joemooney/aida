@@ -693,42 +693,292 @@ pub(crate) const HOLD_LABEL: &str = "aida:merge-hold";
 /// This is intentionally a live forge read rather than marker metadata: an
 /// operator may add the label directly, leaving no Layer-1 marker to inspect.
 /// Errors are returned so callers keep their existing fail-closed behavior.
+///
+/// TASK-1455: the read is pinned to the project's own forge repo (`-R`), and
+/// the answer is refused if the forge reports a change from any other repo.
 // trace:TASK-1287 | ai:codex
+// trace:TASK-1455 | ai:claude
 pub(crate) fn label_present(project_root: &Path, pr: u64) -> Result<bool, String> {
     let kind = crate::forge::resolve_forge_kind(project_root);
-    let (cli, args): (&str, Vec<String>) = match kind {
-        crate::forge::ForgeKind::GitHub => (
+    Ok(fetch_pinned_change(project_root, kind, pr)?.is_some_and(|c| c.hold_label))
+}
+
+/// The forge repository every merge-hold forge call is pinned to, resolved
+/// once from the project's `origin` remote. A PR number is only meaningful
+/// inside one repo; letting `gh`/`glab` infer the repo from the cwd or ambient
+/// config means the same number can label, read or verdict a DIFFERENT repo's
+/// change.
+// trace:TASK-1455 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PinnedRepo {
+    pub kind: crate::forge::ForgeKind,
+    /// Lowercased host from `origin` (may be an ssh alias with no dot).
+    pub host: String,
+    /// Forge-native project path: `owner/repo` or `group/subgroup/project`.
+    pub path: String,
+}
+
+impl PinnedRepo {
+    /// Build the pin from an `origin` URL. `None` when the URL does not name
+    /// a host AND an `owner/repo`-shaped path (a local-path remote, an empty
+    /// remote, a bare host).
+    // trace:TASK-1455 | ai:claude
+    pub(crate) fn from_origin(kind: crate::forge::ForgeKind, origin: &str) -> Option<Self> {
+        let host = crate::forge::forge_host_of(origin)?
+            .trim()
+            .to_ascii_lowercase();
+        let path = crate::forge::project_path_of(origin)?;
+        let path = path.trim_matches('/').to_string();
+        let well_formed = !host.is_empty()
+            && !host.contains('/')
+            && !host.contains('\\')
+            && path.contains('/')
+            && path.split('/').all(|seg| !seg.trim().is_empty());
+        well_formed.then_some(Self { kind, host, path })
+    }
+
+    /// An ssh-config alias (`git@github-work:o/r.git`) has no dot and is not a
+    /// forge hostname; `gh`/`glab` resolve it themselves, so the pin names the
+    /// repo path only and lets the CLI's default host apply.
+    fn host_is_alias(&self) -> bool {
+        !self.host.contains('.')
+    }
+
+    /// The `-R` value: `owner/repo` on the public forge (or an ssh alias),
+    /// host-qualified elsewhere so a GitHub Enterprise / self-managed GitLab
+    /// repo is never resolved against the public host.
+    // trace:TASK-1455 | ai:claude
+    pub(crate) fn repo_arg(&self) -> String {
+        use crate::forge::ForgeKind;
+        let public = match self.kind {
+            ForgeKind::GitHub => "github.com",
+            ForgeKind::GitLab => "gitlab.com",
+            ForgeKind::None => "",
+        };
+        if self.host == public || self.host_is_alias() {
+            self.path.clone()
+        } else if self.kind == ForgeKind::GitLab {
+            format!("https://{}/{}", self.host, self.path)
+        } else {
+            format!("{}/{}", self.host, self.path)
+        }
+    }
+
+    /// Does a forge-reported change URL name THIS repo's change `pr`? The
+    /// post-hoc check behind the pin: a response for any other repo or number
+    /// is refused rather than trusted.
+    // trace:TASK-1455 | ai:claude
+    pub(crate) fn change_url_matches(&self, url: &str, pr: u64) -> bool {
+        use crate::forge::ForgeKind;
+        let Some(host) = crate::forge::forge_host_of(url) else {
+            return false;
+        };
+        let Some(path) = crate::forge::project_path_of(url) else {
+            return false;
+        };
+        let suffix = match self.kind {
+            ForgeKind::GitHub => format!("/pull/{pr}"),
+            ForgeKind::GitLab => format!("/-/merge_requests/{pr}"),
+            ForgeKind::None => return false,
+        };
+        let Some(repo) = path.strip_suffix(&suffix) else {
+            return false;
+        };
+        let host_ok = self.host_is_alias() || host.eq_ignore_ascii_case(&self.host);
+        host_ok && repo.eq_ignore_ascii_case(&self.path)
+    }
+}
+
+/// Resolve the pin for `kind` from the project's `origin`. `Ok(None)` means a
+/// pure-git project (no forge, so no forge call is ever made). An unresolvable
+/// repo on a real forge is an ERROR, never an unpinned call (PRIN-5: absent
+/// evidence of which repo is not evidence that the ambient one is right).
+// trace:TASK-1455 | ai:claude
+pub(crate) fn resolve_pinned_repo(
+    project_root: &Path,
+    kind: crate::forge::ForgeKind,
+) -> Result<Option<PinnedRepo>, String> {
+    if kind == crate::forge::ForgeKind::None {
+        return Ok(None);
+    }
+    pin_from_origin(kind, crate::forge::origin_url(project_root).as_deref()).map(Some)
+}
+
+fn pin_from_origin(
+    kind: crate::forge::ForgeKind,
+    origin: Option<&str>,
+) -> Result<PinnedRepo, String> {
+    let cli = kind.cli_name();
+    let origin = origin.map(str::trim).filter(|o| !o.is_empty()).ok_or_else(|| {
+        format!(
+            "refusing to call `{cli}` unpinned: this project has no `origin` remote to name the forge repo"
+        )
+    })?;
+    PinnedRepo::from_origin(kind, origin).ok_or_else(|| {
+        format!(
+            "refusing to call `{cli}` unpinned: could not resolve an owner/repo from origin `{origin}`"
+        )
+    })
+}
+
+/// The forge facts the merge-hold paths need about one change, read in ONE
+/// pinned call and verified to belong to the pinned repo.
+// trace:TASK-1455 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PinnedChange {
+    pub merged: bool,
+    pub head_sha: Option<String>,
+    pub hold_label: bool,
+}
+
+/// Read `pr` from the project's pinned forge repo. `Ok(None)` = pure-git.
+// trace:TASK-1455 | ai:claude
+pub(crate) fn fetch_pinned_change(
+    project_root: &Path,
+    kind: crate::forge::ForgeKind,
+    pr: u64,
+) -> Result<Option<PinnedChange>, String> {
+    let Some(pin) = resolve_pinned_repo(project_root, kind)? else {
+        return Ok(None);
+    };
+    fetch_pinned_change_with(project_root, &pin, pr, run_forge_cli_stdout).map(Some)
+}
+
+/// The argv for the pinned change read, per forge — pure for testing.
+// trace:TASK-1455 | ai:claude
+fn pinned_change_command(pin: &PinnedRepo, pr: u64) -> Option<(&'static str, Vec<String>)> {
+    use crate::forge::ForgeKind;
+    match pin.kind {
+        ForgeKind::GitHub => Some((
             "gh",
             vec![
                 "pr".into(),
                 "view".into(),
                 pr.to_string(),
+                "-R".into(),
+                pin.repo_arg(),
                 "--json".into(),
-                "labels".into(),
-                "--jq".into(),
-                format!("any(.labels[]; .name == \"{HOLD_LABEL}\")"),
+                "url,state,headRefOid,labels".into(),
             ],
-        ),
-        crate::forge::ForgeKind::GitLab => (
-            "glab",
-            vec![
-                "mr".into(),
-                "view".into(),
-                pr.to_string(),
-                "--output".into(),
-                "json".into(),
-            ],
-        ),
-        crate::forge::ForgeKind::None => return Ok(false),
-    };
-    let (ok, stdout) = run_forge_cli_stdout(project_root, cli, &args)?;
+        )),
+        // REST read (BUG-639: glab has no reliable `mr view --output json`).
+        // The project is named IN the endpoint, so the read is pinned by
+        // construction; `--hostname` pins a self-managed host.
+        ForgeKind::GitLab => {
+            let mut args = vec!["api".to_string()];
+            if !pin.host_is_alias() {
+                args.push("--hostname".into());
+                args.push(pin.host.clone());
+            }
+            args.push(format!(
+                "projects/{}/merge_requests/{pr}",
+                pin.path.replace('/', "%2F")
+            ));
+            Some(("glab", args))
+        }
+        ForgeKind::None => None,
+    }
+}
+
+fn fetch_pinned_change_with(
+    project_root: &Path,
+    pin: &PinnedRepo,
+    pr: u64,
+    runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+) -> Result<PinnedChange, String> {
+    let (cli, args) = pinned_change_command(pin, pr)
+        .ok_or_else(|| "no forge to read a change from (pure-git)".to_string())?;
+    let (ok, stdout) = runner(project_root, cli, &args)?;
     if !ok {
         return Err(format!("`{cli} {}` failed", args.join(" ")));
     }
-    match kind {
-        crate::forge::ForgeKind::GitHub => Ok(stdout.trim().eq_ignore_ascii_case("true")),
-        crate::forge::ForgeKind::GitLab => labels_json_contains(&stdout, HOLD_LABEL),
-        crate::forge::ForgeKind::None => Ok(false),
+    parse_pinned_change(pin, pr, &stdout)
+}
+
+fn parse_pinned_change(pin: &PinnedRepo, pr: u64, json: &str) -> Result<PinnedChange, String> {
+    use crate::forge::ForgeKind;
+    let value: serde_json::Value =
+        serde_json::from_str(json).map_err(|e| format!("could not parse forge response: {e}"))?;
+    let url_key = if pin.kind == ForgeKind::GitLab {
+        "web_url"
+    } else {
+        "url"
+    };
+    let url = value.get(url_key).and_then(|v| v.as_str()).unwrap_or("");
+    if !pin.change_url_matches(url, pr) {
+        return Err(format!(
+            "refusing forge answer for #{pr}: it names `{}`, not a change in the pinned repo `{}`",
+            if url.is_empty() { "<no url>" } else { url },
+            pin.repo_arg()
+        ));
+    }
+    let (state_key, head_key) = if pin.kind == ForgeKind::GitLab {
+        ("state", "sha")
+    } else {
+        ("state", "headRefOid")
+    };
+    let merged = value
+        .get(state_key)
+        .and_then(|v| v.as_str())
+        .is_some_and(|s| s.eq_ignore_ascii_case("merged"));
+    let head_sha = value
+        .get(head_key)
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let hold_label = labels_json_contains(json, HOLD_LABEL)?;
+    Ok(PinnedChange {
+        merged,
+        head_sha,
+        hold_label,
+    })
+}
+
+/// What the FORGE says about the Layer-2 label, as opposed to what the marker
+/// recorded when it was written ([`LabelState`]). `Unknown` is its own state:
+/// an unreachable forge is never rendered as the marker's claim.
+// trace:TASK-189 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ForgeLabel {
+    Present,
+    Absent,
+    /// Pure-git project: there is no forge label to have.
+    NoForge,
+    Unknown(String),
+}
+
+impl ForgeLabel {
+    pub(crate) fn from_fetch(fetched: &Result<Option<PinnedChange>, String>) -> Self {
+        match fetched {
+            Ok(Some(c)) if c.hold_label => Self::Present,
+            Ok(Some(_)) => Self::Absent,
+            Ok(None) => Self::NoForge,
+            Err(e) => Self::Unknown(e.lines().next().unwrap_or("").to_string()),
+        }
+    }
+
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::Present => "present",
+            Self::Absent => "absent",
+            Self::NoForge => "no-forge",
+            Self::Unknown(_) => "unknown",
+        }
+    }
+}
+
+/// Marker/label divergence for a LIVE hold (the marker exists by definition).
+/// `Some(true)`: the forge has no label, so the server-side gate is not armed
+/// even though the client chokepoint is. `Some(false)`: the two agree.
+/// `None`: the forge could not be read — divergence is UNKNOWN, never reported
+/// as agreement. Pure-git has no label layer, so it cannot diverge.
+// trace:TASK-189 | ai:claude
+pub(crate) fn label_diverged(forge: &ForgeLabel) -> Option<bool> {
+    match forge {
+        ForgeLabel::Present | ForgeLabel::NoForge => Some(false),
+        ForgeLabel::Absent => Some(true),
+        ForgeLabel::Unknown(_) => None,
     }
 }
 
@@ -748,24 +998,15 @@ fn labels_json_contains(json: &str, wanted: &str) -> Result<bool, String> {
 }
 
 /// BUG-1236: whether the `aida:merge-hold` label on the change mirrors the
-/// marker. Recorded on the marker's second line so `aida merge-hold list`
-/// can show it without a network call and `--fix` can re-sync it.
+/// marker, as RECORDED when the marker's label was last synced. TASK-189: this
+/// is the marker's claim, not the forge's state — `aida merge-hold list` shows
+/// it as `recorded:` beside a live forge read ([`ForgeLabel`]).
 // trace:BUG-1236 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LabelState {
     Synced,
     Unsynced(String),
     Unknown,
-}
-
-impl LabelState {
-    pub(crate) fn render(&self) -> String {
-        match self {
-            LabelState::Synced => "label: synced".to_string(),
-            LabelState::Unsynced(err) => format!("label: UNSYNCED — {err}"),
-            LabelState::Unknown => "label: unknown".to_string(),
-        }
-    }
 }
 
 /// Record the label sync state on an existing marker (no-op without one).
@@ -861,8 +1102,20 @@ pub(crate) fn sync_label_with(
     runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
 ) -> Result<(), String> {
     let kind = crate::forge::resolve_forge_kind(project_root);
-    let Some((cli, args)) = sync_label_command(kind, pr, held) else {
+    // TASK-1455: pin the repo; an unresolvable one refuses (and is recorded
+    // as unsynced) instead of letting `gh`/`glab` guess from the cwd.
+    let pin = match resolve_pinned_repo(project_root, kind) {
+        Ok(Some(pin)) => pin,
         // pure-git has no forge to carry a label; the file marker still holds.
+        Ok(None) => return Ok(()),
+        Err(err) => {
+            if held {
+                let _ = record_label_state(project_root, pr, &LabelState::Unsynced(err.clone()));
+            }
+            return Err(err);
+        }
+    };
+    let Some((cli, args)) = sync_label_command(&pin, pr, held) else {
         return Ok(());
     };
     let mut last_err = String::new();
@@ -930,13 +1183,14 @@ fn run_forge_cli_stdout(
 /// kept pure so the routing is unit-testable. `None` = no forge to label
 /// (pure-git).
 // trace:STORY-1165 | ai:claude
+// trace:TASK-1455 | ai:claude
 fn sync_label_command(
-    kind: crate::forge::ForgeKind,
+    pin: &PinnedRepo,
     pr: u64,
     held: bool,
 ) -> Option<(&'static str, Vec<String>)> {
     use crate::forge::ForgeKind;
-    match kind {
+    match pin.kind {
         ForgeKind::GitHub => {
             let flag = if held {
                 "--add-label"
@@ -949,6 +1203,8 @@ fn sync_label_command(
                     "pr".into(),
                     "edit".into(),
                     pr.to_string(),
+                    "-R".into(),
+                    pin.repo_arg(),
                     flag.into(),
                     HOLD_LABEL.into(),
                 ],
@@ -962,6 +1218,8 @@ fn sync_label_command(
                     "mr".into(),
                     "update".into(),
                     pr.to_string(),
+                    "-R".into(),
+                    pin.repo_arg(),
                     flag.into(),
                     HOLD_LABEL.into(),
                 ],
@@ -977,30 +1235,215 @@ mod tests {
 
     // STORY-1165: the label mirror must route to the right forge CLI — gh for
     // GitHub, glab for GitLab (mr update --label/--unlabel), nothing for pure-git.
+    fn pin(kind: crate::forge::ForgeKind, origin: &str) -> PinnedRepo {
+        PinnedRepo::from_origin(kind, origin).expect("origin must pin")
+    }
+
+    // STORY-1165: the label mirror must route to the right forge CLI — gh for
+    // GitHub, glab for GitLab (mr update --label/--unlabel), nothing for pure-git.
+    // TASK-1455: and every routed call carries the pinned `-R <repo>`.
     #[test]
     fn sync_label_command_routes_per_forge() {
         use crate::forge::ForgeKind;
-        let (cli, args) = sync_label_command(ForgeKind::GitHub, 42, true).unwrap();
+        let gh = pin(ForgeKind::GitHub, "git@github.com:o/r.git");
+        let (cli, args) = sync_label_command(&gh, 42, true).unwrap();
         assert_eq!(cli, "gh");
         assert!(
             args.contains(&"--add-label".to_string()) && args.contains(&HOLD_LABEL.to_string())
         );
+        assert!(
+            args.windows(2).any(|w| w[0] == "-R" && w[1] == "o/r"),
+            "{args:?}"
+        );
 
-        let (cli, args) = sync_label_command(ForgeKind::GitLab, 42, true).unwrap();
+        let gl = pin(ForgeKind::GitLab, "https://gitlab.com/g/sub/p.git");
+        let (cli, args) = sync_label_command(&gl, 42, true).unwrap();
         assert_eq!(cli, "glab");
         assert!(args.contains(&"mr".to_string()) && args.contains(&"update".to_string()));
         assert!(args.contains(&"--label".to_string()) && args.contains(&HOLD_LABEL.to_string()));
+        assert!(
+            args.windows(2).any(|w| w[0] == "-R" && w[1] == "g/sub/p"),
+            "{args:?}"
+        );
 
-        let (_, args) = sync_label_command(ForgeKind::GitLab, 42, false).unwrap();
+        let (_, args) = sync_label_command(&gl, 42, false).unwrap();
         assert!(
             args.contains(&"--unlabel".to_string()),
             "unheld → remove the label"
         );
 
+        let none = PinnedRepo {
+            kind: ForgeKind::None,
+            host: "example.org".into(),
+            path: "o/r".into(),
+        };
         assert!(
-            sync_label_command(ForgeKind::None, 42, true).is_none(),
+            sync_label_command(&none, 42, true).is_none(),
             "pure-git has no forge to label"
         );
+    }
+
+    // TASK-1455: the pin comes from origin; enterprise / self-managed hosts
+    // are host-qualified so a number never resolves against the public forge.
+    #[test]
+    fn pinned_repo_arg_is_host_qualified_off_the_public_forge() {
+        use crate::forge::ForgeKind;
+        assert_eq!(
+            pin(ForgeKind::GitHub, "https://github.com/Joe/aida.git").repo_arg(),
+            "Joe/aida"
+        );
+        assert_eq!(
+            pin(ForgeKind::GitHub, "git@ghe.corp.example:team/svc.git").repo_arg(),
+            "ghe.corp.example/team/svc"
+        );
+        // An ssh alias is resolved by the CLI itself; pin the path.
+        assert_eq!(
+            pin(ForgeKind::GitHub, "git@github-work:team/svc.git").repo_arg(),
+            "team/svc"
+        );
+        assert_eq!(
+            pin(
+                ForgeKind::GitLab,
+                "ssh://git@gitlab.corp.example:2222/g/p.git"
+            )
+            .repo_arg(),
+            "https://gitlab.corp.example/g/p"
+        );
+    }
+
+    // TASK-1455 / PRIN-5: no resolvable repo means REFUSE, never call unpinned.
+    #[test]
+    fn unresolvable_origin_refuses_instead_of_calling_unpinned() {
+        use crate::forge::ForgeKind;
+        for origin in [
+            None,
+            Some(""),
+            Some("/srv/git/repo"),
+            Some("https://github.com/"),
+        ] {
+            let err = pin_from_origin(ForgeKind::GitHub, origin).unwrap_err();
+            assert!(
+                err.contains("refusing to call `gh` unpinned"),
+                "{origin:?}: {err}"
+            );
+        }
+        assert!(pin_from_origin(ForgeKind::GitHub, Some("git@github.com:o/r.git")).is_ok());
+    }
+
+    // TASK-1455 acceptance 2: a forge answer naming a DIFFERENT repo (or a
+    // different number) is refused, and the pinned argv names the repo.
+    #[test]
+    fn pinned_change_refuses_an_answer_from_a_mismatched_repo() {
+        use crate::forge::ForgeKind;
+        let dir = tempfile::tempdir().unwrap();
+        let gh = pin(ForgeKind::GitHub, "https://github.com/o/r.git");
+        let seen = std::cell::RefCell::new(Vec::new());
+        let answer = |url: &'static str| {
+            let seen = &seen;
+            move |_: &Path, cli: &str, args: &[String]| {
+                seen.borrow_mut().push((cli.to_string(), args.to_vec()));
+                Ok((
+                    true,
+                    format!(
+                        r#"{{"url":"{url}","state":"OPEN","headRefOid":"abc","labels":[{{"name":"aida:merge-hold"}}]}}"#
+                    ),
+                ))
+            }
+        };
+        let ok =
+            fetch_pinned_change_with(dir.path(), &gh, 7, answer("https://github.com/o/r/pull/7"))
+                .unwrap();
+        assert_eq!(
+            ok,
+            PinnedChange {
+                merged: false,
+                head_sha: Some("abc".into()),
+                hold_label: true
+            }
+        );
+        let (cli, args) = seen.borrow()[0].clone();
+        assert_eq!(cli, "gh");
+        assert!(
+            args.windows(2).any(|w| w[0] == "-R" && w[1] == "o/r"),
+            "{args:?}"
+        );
+
+        for wrong in [
+            "https://github.com/other/r/pull/7",
+            "https://github.com/o/r/pull/8",
+            "https://ghe.example.com/o/r/pull/7",
+        ] {
+            let err = fetch_pinned_change_with(dir.path(), &gh, 7, answer(wrong)).unwrap_err();
+            assert!(err.contains("refusing forge answer"), "{wrong}: {err}");
+        }
+        let err =
+            fetch_pinned_change_with(dir.path(), &gh, 7, |_: &Path, _: &str, _: &[String]| {
+                Ok((true, r#"{"state":"OPEN","labels":[]}"#.to_string()))
+            })
+            .unwrap_err();
+        assert!(err.contains("<no url>"), "{err}");
+
+        let gl = pin(ForgeKind::GitLab, "https://gitlab.com/g/p.git");
+        let merged = fetch_pinned_change_with(dir.path(), &gl, 3, |_: &Path, cli: &str, args: &[String]| {
+            assert_eq!(cli, "glab");
+            assert!(args.contains(&"projects/g%2Fp/merge_requests/3".to_string()), "{args:?}");
+            Ok((
+                true,
+                r#"{"web_url":"https://gitlab.com/g/p/-/merge_requests/3","state":"merged","sha":"d1","labels":["bug"]}"#
+                    .to_string(),
+            ))
+        })
+        .unwrap();
+        assert!(merged.merged && !merged.hold_label);
+    }
+
+    // TASK-1455: a label sync on a repo that cannot be pinned refuses AND
+    // records the marker unsynced — it never shells out unpinned.
+    #[test]
+    fn sync_label_refuses_and_records_when_the_repo_cannot_be_pinned() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["init", "-q"])
+            .output()
+            .unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
+        write_hold(root, 5, "drive").unwrap();
+        let err = sync_label_with(root, 5, true, |_, _, _| {
+            panic!("an unpinned forge call must never be made")
+        })
+        .unwrap_err();
+        assert!(err.contains("unpinned"), "{err}");
+        assert!(matches!(read_label_state(root, 5), LabelState::Unsynced(_)));
+    }
+
+    // TASK-189: the forge label is its own state; an unreadable forge is
+    // divergence-UNKNOWN, never agreement and never the marker's claim.
+    #[test]
+    fn forge_label_state_and_divergence() {
+        let change = |hold_label| {
+            Ok(Some(PinnedChange {
+                merged: false,
+                head_sha: None,
+                hold_label,
+            }))
+        };
+        assert_eq!(ForgeLabel::from_fetch(&change(true)), ForgeLabel::Present);
+        assert_eq!(ForgeLabel::from_fetch(&change(false)), ForgeLabel::Absent);
+        assert_eq!(ForgeLabel::from_fetch(&Ok(None)), ForgeLabel::NoForge);
+        let unknown = ForgeLabel::from_fetch(&Err("gh: offline".into()));
+        assert_eq!(unknown.as_str(), "unknown");
+        assert_eq!(label_diverged(&ForgeLabel::Present), Some(false));
+        assert_eq!(label_diverged(&ForgeLabel::Absent), Some(true));
+        assert_eq!(label_diverged(&ForgeLabel::NoForge), Some(false));
+        assert_eq!(label_diverged(&unknown), None);
     }
 
     #[test]
@@ -1380,6 +1823,12 @@ mod tests {
             handler.contains("merge_hold::reconcile_recusal_hold"),
             "`aida merge-hold list --fix` must reconcile recusal routing"
         );
+        // TASK-189: the label column is a live (pinned) forge read; the
+        // marker's recorded claim is shown only as `label_recorded`.
+        assert!(handler.contains("merge_hold::fetch_pinned_change"));
+        assert!(handler.contains("\"label\": forge_label.as_str()"));
+        assert!(handler.contains("\"label_recorded\": recorded_of(pr)"));
+        assert!(handler.contains("\"label_diverged\""));
         let own_source = include_str!("merge_hold.rs");
         let route = own_source
             .split("fn reconcile_recusal_route(")
