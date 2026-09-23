@@ -94,7 +94,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:06:24.777604114Z
-modified_at: 2026-09-23T03:45:25.637783622Z
+modified_at: 2026-09-23T19:28:49.335468163Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -108,7 +108,8 @@ relationships:
 - rel_type: Child
   target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
   created_at: 2026-09-19T21:06:26.375377272Z
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0bd0b-b047-7811-aafc-df7526a4854f
   created_at: 2026-09-20T04:21:00.429097653Z
   created_by: joe
@@ -299,6 +300,31 @@ comments:
   created_at: 2026-09-21T21:21:32.927831884Z
   modified_at: 2026-09-21T21:21:32.927831884Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0cfbd-fab7-75a1-8e68-33d6532ebb10
+  author: joe
+  content: |
+    PROFILING (2026-09-23, this repo, warm, 1571 local / 978 remote branches, ~325 non-terminal specs — the candidate population has roughly 8x'd since the spec was filed):
+
+    `aida awaiting --json` on origin/main (post-#1999): ~44.8s. `strace -f -e trace=execve` on that run showed:
+    - 5,348 `git` subprocess spawns, dominated by 1,880 `git patch-id` + 1,840 `git show` calls (3,720 of 5,348 — 70%).
+    - These came from `doctor_cmd::branch_content_fully_landed`'s squash-merge fallback, which spawned a `git show <commit> | git patch-id` PAIR **per commit between a branch's merge-base and the default branch** to prove N-to-1 squash-equivalence when the cheap `rev-list --cherry-pick` check couldn't. On an old, far-diverged candidate branch that range can be thousands of commits (measured directly: one branch's `merge-base..main` range was 2,496 commits, and running the ORIGINAL per-commit loop over just that ONE branch's fallback took 3m41s of wall clock).
+    - This is the "probe's setup" cost the review asked to profile before fixing, not the candidate count: widening candidates from ~12 to ~193 (#1999) only grew wall time ~5x (sub-linear) because most of the cost is this per-branch fallback's own internal cost, which varies with how far a branch diverged, not with how many candidates there are.
+
+    FIX (this PR):
+    1. `branch_content_fully_landed`'s fallback now does ONE `git log --format=%H -p --binary <range> | git patch-id --stable` pass instead of an O(range) `show`+`patch-id` pair per commit — same diff text, same patch-id result (verified: merge commits still contribute no diff, matching `git show --format=`'s behavior), ~2 processes instead of up to ~5,000. Isolated worst-case (the 2,496-commit range): 3m41s -> 44s.
+    2. A `MAX_SQUASH_FALLBACK_COMMITS` (500) bound: past that, the fallback is skipped and returns `false` ("not confirmed landed") rather than paying an unbounded walk — the branch STAYS reported as unshipped work (conservative, never silently hidden; PRIN-5). Regression test: `doctor_cmd::story_462_doctor_tests::branch_content_fully_landed_bails_out_on_a_deep_history_range`.
+    3. A second, independent bottleneck found by continued profiling: `required_status_checks_uncached`'s single `gh api .../branches/main/protection` call measured **10.5s** by itself in this repo — `gh` has no request-timeout flag, so one slow forge endpoint can consume the whole budget. Added `command_output_with_timeout` (portable `Child::kill`-based, drains stdout/stderr on background threads to avoid pipe deadlock) with a 3s-per-call ceiling, applied to every `gh` call this pipeline makes (`collect_open_prs_uncached`, `required_status_checks_uncached`, `collect_pr_head_state_snapshot_bounded`). A timed-out call degrades exactly like today's existing "gh unreachable" path (already typed as unknown, never a false zero).
+    4. `collect_unshipped_work_items` (the unshipped-branch scanner) and `collect_pr_head_state_snapshot` (the per-branch PR-state prober) each gained a `_bounded` sibling taking a `deadline: Option<Instant>`. Only the `aida awaiting`/`aida status --full` call site passes a real deadline (2s budget, `AIDA_TEST_UNSHIPPED_SCAN_BUDGET_MS`-overridable); every other caller (tests, `session_reap`) keeps calling the unbounded wrapper and gets the exhaustive answer regardless of cost, unchanged. The candidate SET is untouched from #1999/STORY-1368 — nothing new is excluded by status/eligibility; only how long probing it may run is bounded.
+    5. Honesty, not silence, when the budget IS hit: a new `unshipped_work_scan` field (`{complete, scanned, candidates}`) on `AwaitingReport`/the `--json` output says whether the scan finished or was truncated — `None` when the scan never ran (`--notice`), `Some{complete:false,...}` when time ran out first. A branch whose PR-state query got deadline-skipped now reads `pr_state: "unknown"`, never a false `"absent"` (tracked via a new `queried_heads` set on the PR snapshot). No contract version bump needed — `docs/monitor-contract-fixtures/awaiting.json` only promises a generic `items:array`, and `verify.py origin/main` passes clean.
+
+    RESULT (this repo, same warm state, concurrent build load on the box):
+    - `aida awaiting --json`: ~44.8s -> ~5.3-5.6s (was 70-77s at spec-filing time on a smaller candidate population; re-verify on a quiet box).
+    - `aida status --full`: was ~57-89s -> ~13.6s.
+    - The literal <3s target in the ORIGINAL acceptance is not hit on THIS repo under current load — the candidate population is now ~8x what it was when the bound was set (301 stale branches -> 1571 local + 978 remote today), and this measurement ran under heavy concurrent `cargo build` contention from other sessions (load average ~5.2 on 6 cores). The remaining cost is now spread thin across ~150-300 small, already-bounded git/gh calls rather than concentrated in one runaway probe; further reduction would need parallelizing that per-candidate probing (not attempted here — flagging as a natural follow-up rather than silently declaring done).
+    - Correctness unchanged: every existing `collect_unshipped_work_items`/`branch_content_fully_landed` test still passes (13 + 2 new in the unshipped-work module, 119 in doctor_cmd including 1 new), and a genuinely-unshipped branch is never hidden by either the squash-fallback bound or the scan deadline — both degrade toward "still report it" / "mark unknown," never toward a false negative.
+  created_at: 2026-09-23T19:28:49.335468163Z
+  modified_at: 2026-09-23T19:28:49.335468163Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
 implementation_info:
   implemented: true
