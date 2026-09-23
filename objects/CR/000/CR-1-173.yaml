@@ -1,5 +1,6 @@
 id: 01a0cea3-12fb-7253-b63d-c450eac7fa45
 spec_id: CR-1-173
+agreed_id: CR-8
 title: 'Stamp filing provenance on every spec: code HEAD SHA, branch, dirty flag, aida version and build SHA, filing agent/session'
 description: |
   ## Problem
