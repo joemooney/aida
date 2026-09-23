@@ -42,7 +42,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:42:58.222497613Z
-modified_at: 2026-09-23T16:16:09.203435744Z
+modified_at: 2026-09-23T16:16:16.393923298Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -186,4 +186,10 @@ comments:
   content: 'Claude implementer result: claude/task-195 @ d4710ee3db (orchestrator-verified one-call change). statusbar collect_meter called the collect_awaiting_report wrapper (notice_fast=false, whose list_summaries freshness check can trigger a full rebuild); it now calls collect_awaiting_report_inner(no_ci, notice_fast). Measured on the real store: 22.3s to 0.98s. A source-guard test prevents regression. Batch 15.'
   created_at: 2026-09-23T15:15:03.379768535Z
   modified_at: 2026-09-23T15:15:03.379768535Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cf0d-b209-73c2-895f-08cceed992df
+  author: joe
+  content: 'Merged via integration batch 15, PR #2126 (merge confirmed MERGED, 2026-09-23 09:16).'
+  created_at: 2026-09-23T16:16:16.393923298Z
+  modified_at: 2026-09-23T16:16:16.393923298Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
