@@ -38278,9 +38278,28 @@ fn command_output_with_timeout(
                 }
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
-            Err(_) => break None,
+            // BUG-1288 fix-up: a `try_wait` error leaves the child un-reaped
+            // exactly like the timeout branch above — kill and wait it here
+            // too, or it leaks as an orphan/zombie every time this arm is
+            // hit instead of only on the timeout path.
+            // trace:BUG-1288 | ai:claude
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
         }
     };
+    // NOTE: killing `child` only signals the direct child (`gh`/`glab`
+    // itself). If that process has already spawned a grandchild that
+    // inherited the stdout/stderr pipe write ends (a helper process, a
+    // credential-manager subprocess, …), that grandchild can keep the pipes
+    // open after the direct child exits — `read_to_end` below then blocks
+    // until the grandchild itself exits, not just until `child` does. This
+    // is a real gap (no process-group kill here), accepted for now because
+    // known forge CLIs don't fork long-lived helpers for these read-only
+    // calls; revisit with a process-group spawn (`setsid`/job object) if
+    // that stops being true. trace:BUG-1288 | ai:claude
     let stdout = stdout_handle.join().unwrap_or_default();
     let stderr = stderr_handle.join().unwrap_or_default();
     status.map(|status| std::process::Output {
@@ -73621,7 +73640,21 @@ fn handle_awaiting_command(
             "directives_next: {}",
             report.worker_directives.next.as_deref().unwrap_or("-")
         );
-        println!("unshipped: {}", report.unshipped_work.len());
+        // BUG-1288: a truncated scan means the count below is a LOWER
+        // BOUND, not the whole answer — the `+` suffix says so instead of
+        // letting an agent read a bare number as exhaustive. PRIN-5.
+        // trace:BUG-1288 | ai:claude
+        let unshipped_suffix = report
+            .unshipped_work_scan
+            .as_ref()
+            .filter(|scan| !scan.complete)
+            .map(|_| "+")
+            .unwrap_or("");
+        println!(
+            "unshipped: {}{}",
+            report.unshipped_work.len(),
+            unshipped_suffix
+        );
         println!(
             "nightly_red: {}",
             report

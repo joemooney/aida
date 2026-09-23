@@ -3256,8 +3256,23 @@ fn patch_id_pairs(project_root: &std::path::Path, log_p_output: &[u8]) -> Option
         .stderr(Stdio::null())
         .spawn()
         .ok()?;
-    child.stdin.take()?.write_all(log_p_output).ok()?;
+    let mut stdin = child.stdin.take()?;
+    let input = log_p_output.to_vec();
+    // BUG-1288 fix-up: writing the WHOLE stream to stdin before reading any
+    // stdout deadlocks once the log is large enough to fill both the stdin
+    // and stdout OS pipe buffers at once (patch-id blocks writing output
+    // because we haven't read it yet; we block writing input because it
+    // hasn't read enough of it yet) — a real risk here, since the very point
+    // of this function is to hand it a big `git log -p` stream. Write on a
+    // separate thread so `wait_with_output` can drain stdout concurrently;
+    // the thread exits (dropping `stdin`, closing the pipe so patch-id sees
+    // EOF) whether or not the write fully succeeds.
+    // trace:BUG-1288 | ai:claude
+    let writer = std::thread::spawn(move || {
+        let _ = stdin.write_all(&input);
+    });
     let output = child.wait_with_output().ok()?;
+    let _ = writer.join();
     if !output.status.success() {
         return None;
     }
