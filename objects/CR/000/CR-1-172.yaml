@@ -1,0 +1,38 @@
+id: 01a0cc94-cd72-7353-8ff8-c4db03f0cbd0
+spec_id: CR-1-172
+title: 'Cross-harness seat wake: idle agent seats resume on addressed work via held Stop hooks, with no model-side polling'
+description: |
+  An agent seat (advisor, integrator, implementer) that ends its turn goes idle, and nothing wakes it when work addressed to it arrives. Incident 2026-09-22: a Codex advisor ended its turn at 19:19 while delegated lanes kept opening PRs; nothing was coordinated for ~90 min until the operator typed, and the seat then claimed it was "still working".
+
+  Direction (researched 2026-09-22; plan docs/plans/2026-09-22-seat-wake-cross-harness.md):
+  - PRIMARY: a held Stop hook. At turn end the harness Stop hook runs `aida seat wait`, which records the seat's turn end, waits (zero tokens) on the event log for actionable events addressed to the seat, and, when one arrives, answers in the vendor's continue dialect with a brief built from AIDA state. Claude Code and Codex: exit 2 plus stderr. Antigravity: {"decision":"continue","reason":...}. OpenCode: a session.idle plugin calls client.session.prompt.
+  - FALLBACK: suspend, then resume on addressed work, never on idle alone (the threa/harnessd rule). Mark suspended, re-check, kill, then `aida agent resume` with a wake brief.
+  - NEVER model-side CronCreate//loop/ScheduleWakeup polling (BUG-1589). Never tmux scraping or keystroke injection.
+
+  Prior art: salimfadhley/agent-inbox #71/#72 (held Stop-hook waiter for Codex and Antigravity), threahq/threa PR #2153 (suspend/wake with a wake note), nnemirovsky/cc-resume-watchdog (exit-2 resume, max_per_hour cap, 115 stalls in 47 days), Claude Code Channels (Claude-only push, research preview), hjzccc/opencode-auto-continue.
+
+  Related: BUG-1589, TASK-1245, STORY-586 (advisor watch), STORY-790 (agent resume), STORY-1051/ADR-26 (redrive cap/backoff), STORY-712.
+
+  ## Proposed decomposition (for the advisor to groom)
+  1. SPIKE: hold-hook behavior on all four harnesses. Does the TUI accept or buffer input while a Stop hook sleeps (`sleep 30`)? Does Ctrl+C/Esc cancel it? Check exit-2 (Claude/Codex) and decision=continue (Antigravity) live; whether Antigravity hooks fire headless (antigravity-cli #893, `-p` with GEMINI_API_KEY); how long a hook may hold on each vendor; whether the OpenCode plugin loads in headless runs.
+  2. STORY: `aida seat wait --vendor <claude|codex|antigravity|opencode> --timeout N`. Per-vendor stdin parsing (Claude/Codex: session_id, stop_hook_active; Antigravity: conversationId, terminationReason, fullyIdle). Emit SeatTurnStarted/SeatTurnEnded events carrying seat, session/resume id, role, owned lanes and declared reason. Hold only on a normal stop (Antigravity terminationReason=model_stop). Wait on .aida/events.jsonl for actionable events addressed to the seat that are newer than the last wake (reuse the `aida watch` classifier). Rolling per-hour wake cap (default 12) that records WakeRateLimited. Build the brief from store state. Vendor response formats: Claude/Codex = brief on stderr + exit 2, or exit 0 to stop; Antigravity = {"decision":"continue","reason":brief} or {"decision":"stop"} (the binary's schema enum is stop|continue|block; "allow" is not valid); OpenCode = brief on stdout for the plugin. Logic lives in Rust; each handler is a one-line `exec aida seat wait`.
+  3. TASK: scaffold Stop-hook adapters for Claude (.claude/settings.json), Codex (.codex/hooks.json, which needs one-time /hooks trust) and Antigravity (.agents/hooks.json). Antigravity schema: top-level key is the hook name, Stop is a flat list of handlers, `timeout` is in seconds, and cwd is the hooks.json directory, so use absolute paths. Decide gitignore for .agents/hooks.json per the BUG-1511 rule.
+  4. TASK: OpenCode plugin (.opencode/plugins/aida-seat.ts): on session.idle, run `aida seat wait --vendor opencode`, then client.session.prompt(brief). Note: session.stopping does not exist (opencode #16626).
+  5. STORY: resume fallback after a hold timeout, a crash, or a harness without hooks. Resume ONLY when work addressed to the seat arrives, never on idle alone. Mark suspended, re-check, then kill (one process per session id), then `aida agent resume` (STORY-790) with a wake brief. Cap and back off per ADR-26 (redrive). Past a context-size threshold, start a fresh seat from a handoff brief instead of resuming. Honor the human-presence turn clock (never kill a session a human is using). Vendor resume commands: claude --resume, codex exec resume, agy --conversation, opencode --session.
+  6. TASK (depends on 1): interactive-seat hold policy. If the spike shows held hooks lock TUI input, set hold=0 or a short grace period when a human is present (turn clock), and keep long holds for headless seats.
+  7. TASK: status-claim honesty in advisor-role.md and the seat skills. A progress claim names its state (actively watching / delegated / paused) and cites `aida ps` or `aida integrate`. Never say "still working" after the turn has ended.
+
+  Plan: docs/plans/2026-09-22-seat-wake-cross-harness.md
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T04:44:59.122261809Z
+modified_at: 2026-09-23T04:44:59.122261809Z
+req_type: ChangeRequest
+tags:
+- cross-vendor
+- heartbeat
+- incident:2026-09-22
+- intake:requester
+- seat-discipline
