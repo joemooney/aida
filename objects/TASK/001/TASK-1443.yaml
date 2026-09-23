@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T03:44:19.644493754Z
-modified_at: 2026-09-23T04:24:32.284099658Z
+modified_at: 2026-09-23T04:24:33.822243337Z
 req_type: Task
 tags:
 - parent:BUG-1510 orchestrator integrity attribution split-from:BUG-1510
@@ -27,4 +27,10 @@ comments:
   content: Claude implementer dispatched 2026-09-22 21:12 -> branch claude/task-1443 (based on claude/task-1442), no PR
   created_at: 2026-09-23T04:12:15.713594029Z
   modified_at: 2026-09-23T04:12:15.713594029Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cc82-1b1e-7cb2-b801-6a1c46ddbb3b
+  author: joe
+  content: 'Claude implementer result: branch claude/task-1443 @ 4407680a86 (pushed, no PR), STACKED on claude/task-1442, so merge 1442 first. existing_open_pr_for_branch (lib.rs) runs before open_change in open_orchestrator_pr_for_implementer_worktree / open_orchestrator_pr_for_pushed_branch and ADOPTS an existing open PR for the branch (reusing pr_ship::branch_pr_resolution_from_lookup; skips PureGitForge''s id-0 sentinel). AC1 met; AC2 met by the no-network fake-gh test post_push_pr_recovery_adopts_existing_open_pr_instead_of_creating_another (4 pass). REVIEWER NOTE: this fails OPEN. A forge lookup failure (CliFailed/CliMissing/Unreachable) falls through to create, so a flaky gh can still produce a duplicate. Consider failing the phase on LookupFailed instead.'
+  created_at: 2026-09-23T04:24:33.822243337Z
+  modified_at: 2026-09-23T04:24:33.822243337Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
