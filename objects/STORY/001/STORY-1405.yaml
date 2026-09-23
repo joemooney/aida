@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T21:22:32.534380767Z
-modified_at: 2026-09-23T18:46:51.914130418Z
+modified_at: 2026-09-23T18:51:38.723495391Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -127,4 +127,10 @@ comments:
   created_at: 2026-09-21T01:29:06.057135772Z
   modified_at: 2026-09-21T01:29:06.057135772Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0cf9b-f163-7ba2-b5b9-47fae6c330b7
+  author: joe
+  content: 'PROXY DECISION (strict review APPROVE at 3582fecb31): instead of consulting the BUG-511 spec lease (criteria 5/5b), the gate uses a separate marker keyed on PR number plus head sha. A lease is per-spec and interactive, while the merge question is per-PR-head and has to work headless too, so the drain reviewer is wired as well, departing from 5c. On 5a, review record deliberately takes no lease: it clears the marker, and that is the release. Follow-ups are filed separately.'
+  created_at: 2026-09-23T18:51:38.723495391Z
+  modified_at: 2026-09-23T18:51:38.723495391Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
