@@ -125,7 +125,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-23T09:23:36.712404151Z
+modified_at: 2026-09-23T09:23:39.315639396Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
@@ -233,5 +233,11 @@ comments:
   content: 'PROXY DECISION (Claude for the operator, 01:15) after a strict-review BLOCK: land the six-arm fail_on_rework_no_op! wiring as a PARTIAL (the reviewer confirmed it is safe and strictly better than main), after one small fix: an Inconclusive-arm shelve must keep the --resume hint. AC #5/#6/#7/#9 (the predicate still fails open on an unreadable head, a non-matching phase_done_pr, or no default ref; no compare against the verdict''s reviewed_sha on the dispatched branch; the Held/Inconclusive pr_number None case) are split to a follow-up task.'
   created_at: 2026-09-23T08:13:31.011179702Z
   modified_at: 2026-09-23T08:13:31.011179702Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd93-eeb3-7940-9b8c-93b55b9bb9ee
+  author: joe
+  content: 'Merged via integration batch 5, PR #2115 (2026-09-23 02:24). Completed by hand (BUG-1590).'
+  created_at: 2026-09-23T09:23:39.315639396Z
+  modified_at: 2026-09-23T09:23:39.315639396Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
