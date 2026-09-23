@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T13:04:08.032544690Z
-modified_at: 2026-09-23T13:56:58.035011126Z
+modified_at: 2026-09-23T14:00:54.795300419Z
 req_type: Task
 tags:
 - ci
@@ -37,4 +37,10 @@ comments:
   content: 'Claude implementer result: claude/task-1453 @ ac4fbf7002 (on bug-1455). At the absolute ceiling, a known concluded failure gives Red with a summary (the stuck check listed as pending), otherwise NoSignal; ci_absolute=0 is clamped to 4h with a warning; env docs updated. 6 tests. Awaiting strict review.'
   created_at: 2026-09-23T13:56:58.035011126Z
   modified_at: 2026-09-23T13:56:58.035011126Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce91-c50b-7b21-9a30-639f7b11a609
+  author: joe
+  content: 'Strict-review blocker fixed by the orchestrator: the ceiling verdict drops merge-hold-gate (it fails by construction under a hold), so hold-gate-only plus stuck stays NoSignal; the test fixture now uses a real failing check (lint), plus a new hold-gate-only test. 55 tests pass. Batch 13.'
+  created_at: 2026-09-23T14:00:54.795300419Z
+  modified_at: 2026-09-23T14:00:54.795300419Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
