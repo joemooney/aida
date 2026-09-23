@@ -56972,12 +56972,17 @@ fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
         }
     }
     let reasons = reasons;
+    // BUG-1551: a Done spec with an unresolved BlockedBy predecessor will not
+    // auto-complete on merge — say so, naming the blocker, so the hold is
+    // visible where "why hasn't this closed?" gets asked. trace:BUG-1551 | ai:claude
+    let closure_hold = closure_hold_line(req, &store);
 
     if json {
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
                 "spec": f.id,
+                "closure_held_by": closure_hold.as_ref().map(|(ids, _)| ids.clone()),
                 "bucket": bucket.key(),
                 "reason": reasons.first().map(|r| r.text.as_str()).unwrap_or_default(),
                 "reasons": reasons
@@ -57017,6 +57022,13 @@ fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
         };
         println!("    {} {}", tag, r.text.dimmed());
     }
+    if let Some((_, line)) = &closure_hold {
+        println!(
+            "    {} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            line
+        );
+    }
     // STORY-732 (FIX 2): a NeedsAttention spec the orchestrator shelved carries a
     // FailureReason (phase + detail + recovery hint). The derived reason only
     // redirects to `aida findings list`; inline WHAT failed here so "why is this
@@ -57042,6 +57054,32 @@ fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// BUG-1551: when `req` is Done and an unresolved `BlockedBy` predecessor
+/// holds its completion, the blocker ids plus the human line `aida why`
+/// prints. `None` when nothing holds closure.
+// trace:BUG-1551 | ai:claude
+fn closure_hold_line(
+    req: &aida_core::Requirement,
+    store: &aida_core::RequirementsStore,
+) -> Option<(Vec<String>, String)> {
+    if !matches!(req.status, RequirementStatus::Done) {
+        return None;
+    }
+    let blockers = aida_core::pickability::unresolved_closure_blockers(req, store);
+    if blockers.is_empty() {
+        return None;
+    }
+    let ids = blockers.iter().map(|b| b.id.clone()).collect();
+    Some((
+        ids,
+        format!(
+            "completion held — blocked by {}; stays Done after merge until every blocker \
+             is Completed, Rejected or Superseded",
+            aida_core::pickability::closure_blockers_label(&blockers)
+        ),
+    ))
 }
 
 const PLAIN_WHY_CACHE_PREFIX: &str = "<!-- aida-plain";
@@ -65977,6 +66015,127 @@ fn apply_auto_bump_flip(
     true
 }
 
+/// BUG-1551: marker on the audit comment a closure hold writes. Also the
+/// dedupe key (with the merge SHA) so a re-run of pull/reconcile over the same
+/// commit does not stack notes.
+const CLOSURE_HOLD_MARKER: &str = "[aida:closure-held]";
+
+/// BUG-1551: a merge-evidence flip that the auto-bump will NOT complete,
+/// because the spec still has an unresolved `BlockedBy` predecessor.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ClosureHold {
+    flip: AutoBumpFlip,
+    blockers: Vec<aida_core::pickability::ClosureBlocker>,
+}
+
+/// BUG-1551: `BlockedBy` gates closure, not just pickup (ADR recorded on the
+/// spec). Split `flips` into the ones free to complete (kept in place) and the
+/// ones held at Done by an unresolved blocker (returned). Shared by the live
+/// `aida pull` / `db sync --pull` auto-bump and the `db reconcile-status`
+/// replay so the two can't drift.
+// trace:BUG-1551 | ai:claude
+fn split_closure_held_flips(
+    store: &aida_core::RequirementsStore,
+    flips: &mut Vec<AutoBumpFlip>,
+) -> Vec<ClosureHold> {
+    let mut held = Vec::new();
+    flips.retain(|flip| {
+        let Some(req) = store.get_requirement_by_spec_id(&flip.spec_id) else {
+            return true;
+        };
+        let blockers = aida_core::pickability::unresolved_closure_blockers(req, store);
+        if blockers.is_empty() {
+            return true;
+        }
+        held.push(ClosureHold {
+            flip: flip.clone(),
+            blockers,
+        });
+        false
+    });
+    held
+}
+
+/// BUG-1551: the audit note recording that the code merged but closure is
+/// held. Stored on the spec so `aida show` carries it.
+// trace:BUG-1551 | ai:claude
+fn closure_hold_comment(hold: &ClosureHold) -> String {
+    let short = if hold.flip.sha.len() >= 7 {
+        &hold.flip.sha[..7]
+    } else {
+        hold.flip.sha.as_str()
+    };
+    let id = &hold.flip.spec_id;
+    format!(
+        "{CLOSURE_HOLD_MARKER} Code merged to the default branch (commit {short}), but \
+         completion is held at Done: unresolved BlockedBy {}. BlockedBy gates completion \
+         as well as pickup. It completes on `aida db reconcile-status --spec {id}` once \
+         every blocker is Completed, Rejected or Superseded; to ship without it, a human \
+         runs `aida edit {id} --status completed`. (merge sha: {})",
+        aida_core::pickability::closure_blockers_label(&hold.blockers),
+        hold.flip.sha
+    )
+}
+
+/// BUG-1551: apply a closure hold to the freshest copy of the spec — land it
+/// at Done (a pre-Done in-flight spec moves up to Done, since its code is on
+/// the default branch) and record the merge in a deduped audit comment.
+/// Deliberately does NOT stamp `completion_sha`: that field means "this commit
+/// completed the spec", and stamping it would make the BUG-410 re-bump guard
+/// refuse the eventual completion. Returns true when something changed.
+// trace:BUG-1551 | ai:claude
+fn apply_closure_hold(
+    r: &mut aida_core::Requirement,
+    hold: &ClosureHold,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    if !auto_bump_eligible_status(&r.status) {
+        return false;
+    }
+    let mut changed = false;
+    if !matches!(r.status, RequirementStatus::Done) {
+        let prior = r.status.clone();
+        r.set_status_from_str("Done");
+        r.record_change(
+            "aida-auto-bump".to_string(),
+            vec![aida_core::Requirement::field_change(
+                "status",
+                format!("{:?}", prior),
+                format!("{:?}", r.status),
+            )],
+        );
+        changed = true;
+    }
+    let already_noted = r.comments.iter().any(|c| {
+        c.content.contains(CLOSURE_HOLD_MARKER)
+            && (hold.flip.sha.is_empty() || c.content.contains(hold.flip.sha.as_str()))
+    });
+    if !already_noted {
+        r.add_comment(aida_core::Comment::new(
+            "aida-auto-bump".to_string(),
+            closure_hold_comment(hold),
+        ));
+        changed = true;
+    }
+    if changed {
+        r.modified_at = now;
+    }
+    changed
+}
+
+/// BUG-1551: print one line per held spec, naming the blocker.
+// trace:BUG-1551 | ai:claude
+fn report_closure_holds(holds: &[ClosureHold]) {
+    for hold in holds {
+        eprintln!(
+            "  {} {} stays Done — merged, but blocked by {} (completion waits for the blocker)",
+            "↷".yellow(),
+            hold.flip.spec_id,
+            aida_core::pickability::closure_blockers_label(&hold.blockers)
+        );
+    }
+}
+
 // Shared per-requirement mutation for the TASK-246/BUG-219 stale-review-story
 // flip (PR merged before the review lifecycle finished). Same dual-path use
 // as `apply_auto_bump_flip`; re-checks the live status so a second pass sees
@@ -66561,6 +66720,13 @@ fn auto_bump_done_to_completed(
         None => {}
     }
 
+    // BUG-1551: BlockedBy gates closure, not just pickup. A spec whose code
+    // merged while a BlockedBy predecessor is still unresolved stays at Done
+    // with a note recording the merge, instead of silently completing past
+    // the dependency. trace:BUG-1551 | ai:claude
+    let closure_holds = split_closure_held_flips(&store, &mut flips);
+    report_closure_holds(&closure_holds);
+
     // TASK-246 / BUG-219: a review story whose PR merged before the
     // review lifecycle finished — left at `InProgress` (a reviewer asked
     // for fixups, then the PR self-merged instead of a fresh /aida-review
@@ -66574,7 +66740,11 @@ fn auto_bump_done_to_completed(
     // trace:TASK-246 trace:BUG-219 | ai:claude
     let stale_review_flips = collect_stale_review_story_flips(&store, &pr_to_sha, &flips);
 
-    if flips.is_empty() && stale_review_flips.is_empty() && stranded_review_pr.is_empty() {
+    if flips.is_empty()
+        && stale_review_flips.is_empty()
+        && stranded_review_pr.is_empty()
+        && closure_holds.is_empty()
+    {
         return Ok(Vec::new());
     }
 
@@ -66598,6 +66768,15 @@ fn auto_bump_done_to_completed(
                 continue;
             };
             if apply_auto_bump_flip(&mut r, flip, now, project_root) {
+                backend.update_requirement(&r)?;
+            }
+        }
+        // BUG-1551: closure holds — same targeted write, one commit each.
+        for hold in &closure_holds {
+            let Some(mut r) = backend.get_requirement_by_spec_id(&hold.flip.spec_id)? else {
+                continue;
+            };
+            if apply_closure_hold(&mut r, hold, now) {
                 backend.update_requirement(&r)?;
             }
         }
@@ -66627,7 +66806,17 @@ fn auto_bump_done_to_completed(
         let flips_for_write = flips.clone();
         let stale_for_write = stale_review_flips.clone();
         let stranded_for_write = stranded_review_pr.clone();
+        let holds_for_write = closure_holds.clone();
         storage.update_atomically(|s| {
+            // BUG-1551: closure holds, atomic-store path.
+            for hold in &holds_for_write {
+                if let Some(r) = s.requirements.iter_mut().find(|r| {
+                    r.spec_id.as_deref() == Some(hold.flip.spec_id.as_str())
+                        || r.agreed_id.as_deref() == Some(hold.flip.spec_id.as_str())
+                }) {
+                    apply_closure_hold(r, hold, now);
+                }
+            }
             for flip in &flips_for_write {
                 // TASK-1-113: match agreed_id as well as spec_id — the
                 // eligibility scan above resolves via the agreed-aware
@@ -67366,6 +67555,13 @@ fn handle_db_reconcile_status(
         None => {}
     }
 
+    // BUG-1551: the replay honours the same closure gate as the live
+    // auto-bump — an unresolved BlockedBy predecessor keeps the spec at Done
+    // (merge recorded in a note) rather than completing past it.
+    // trace:BUG-1551 | ai:claude
+    let closure_holds = split_closure_held_flips(&store, &mut flips);
+    report_closure_holds(&closure_holds);
+
     // TASK-1446 (BUG-1506 AC3): the sweep runs — and reports — in BOTH
     // directions, not just the one that produces a flip.
     //
@@ -67428,7 +67624,11 @@ fn handle_db_reconcile_status(
         },
     );
 
-    if flips.is_empty() && stale_review_flips.is_empty() && draft_landed.is_empty() {
+    if flips.is_empty()
+        && stale_review_flips.is_empty()
+        && draft_landed.is_empty()
+        && closure_holds.is_empty()
+    {
         if open_pr_deferred {
             return Ok(());
         }
@@ -67511,7 +67711,17 @@ fn handle_db_reconcile_status(
     let now = chrono::Utc::now();
     let flips_for_write = flips.clone();
     let stale_for_write = stale_review_flips.clone();
+    let holds_for_write = closure_holds.clone();
     storage.update_atomically(|s| {
+        // BUG-1551: closure holds — land at Done + record the merge.
+        for hold in &holds_for_write {
+            if let Some(r) = s.requirements.iter_mut().find(|r| {
+                r.spec_id.as_deref() == Some(hold.flip.spec_id.as_str())
+                    || r.agreed_id.as_deref() == Some(hold.flip.spec_id.as_str())
+            }) {
+                apply_closure_hold(r, hold, now);
+            }
+        }
         for flip in &flips_for_write {
             // TASK-1-113: match agreed_id as well as spec_id. flip.spec_id is
             // harvested from the commit subject's `(SPEC-ID)` ref, which is
