@@ -450,6 +450,19 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // TASK-1313: round-trip artifacts — a swallowed TOON row header or a
+    // UTF-8-as-Latin-1 mojibake sequence left in stored spec text by a
+    // read-modify-write through rendered `aida show` output. Pure text scan
+    // over the already-loaded store (no extra git/process calls), but kept
+    // off the hot `collect_doctor_findings` path per the same convention as
+    // the other opt-in categories above: `aida status` should not pay for a
+    // full-store text scan on every invocation. Report-only. Honours
+    // `--category`. trace:TASK-1313 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "round-trip-artifacts")? {
+        findings.extend(scan_round_trip_artifacts(&store));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // The performance gate: guarded command shapes that exceed their budget on
     // TOO LARGE A FRACTION of recent calls, plus guarded shapes with no recorded
     // calls at all. A proportion over a window, not a median — the distribution
@@ -1913,6 +1926,96 @@ fn scan_store_scrub(project_root: &std::path::Path) -> Vec<DoctorFinding> {
         .collect()
 }
 
+// TASK-1313: round-trip artifacts in stored spec text. A seat that captures
+// `aida show` output (TOON-rendered when piped) and writes it back through a
+// description edit corrupts the field two ways: the TOON rendering's row
+// headers — and everything the renderer emitted after them — get swallowed
+// into the value, and/or the capture path decodes UTF-8 as Latin-1 and
+// mangles non-ASCII bytes into mojibake. Both predicates are measured against
+// the real store in TASK-1313's own spec text (six genuine instances, zero
+// false positives). REPORT-ONLY: this never rewrites a spec. Reconstructing a
+// swallowed block means recovering the pre-corruption text from the orphan
+// branch's git history, a per-spec judgment call for a human/reviewer, not an
+// automated rewrite (that repair pass is TASK-1314). trace:TASK-1313 | ai:claude
+fn round_trip_toon_header_regex() -> regex::Regex {
+    // Anchored at column 0 of a line (`(?m)^`). Anchoring is what separates a
+    // genuine swallowed TOON rendering — which always starts at a line's
+    // first column, because that is where the renderer emits it — from prose
+    // that merely discusses the convention mid-line. Unanchored, this very
+    // check's own spec text (which quotes the pattern) would false-positive.
+    regex::Regex::new(r"(?m)^(?:(?:relationships|next)\[\d+\]\{|execution_mode:)")
+        .expect("valid TOON round-trip header regex")
+}
+
+fn round_trip_mojibake_regex() -> regex::Regex {
+    // A lead character in {Â U+00C2, Ã U+00C3, â U+00E2} immediately followed
+    // by EITHER a Latin-1 Supplement code point (U+0080-U+00FF — this is what
+    // a raw UTF-8-as-Latin-1 mis-decode of a multi-byte sequence parses to)
+    // OR a literal `\xHH` escape (the form a YAML double-quoted scalar stores
+    // when the same damage still carries its escape text rather than having
+    // been parsed into the control character). Scanning the PARSED field
+    // value needs both alternatives, because YAML's parser already turns some
+    // `\xHH` escapes into the control character and leaves others literal
+    // depending on how many re-serialization passes the field went through.
+    // A LONE Â/Ã/â is an ordinary letter — only the pair indicates a
+    // mis-decode, so no bare-lead-character alternative is included.
+    regex::Regex::new(r"[\u{00C2}\u{00C3}\u{00E2}](?:[\u{0080}-\u{00FF}]|\\x[0-9a-fA-F]{2})")
+        .expect("valid mojibake regex")
+}
+
+/// Scan every text field of every requirement in the store — title,
+/// description, and every comment body — for round-trip artifacts. Coverage
+/// is the whole object store, not just descriptions. Report only: never
+/// mutates `store`.
+// trace:TASK-1313 | ai:claude
+fn scan_round_trip_artifacts(store: &aida_core::models::RequirementsStore) -> Vec<DoctorFinding> {
+    let toon_re = round_trip_toon_header_regex();
+    let mojibake_re = round_trip_mojibake_regex();
+    let mut out = Vec::new();
+
+    for req in &store.requirements {
+        let spec_id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
+        let mut fields: Vec<(String, &str)> = vec![
+            ("title".to_string(), req.title.as_str()),
+            ("description".to_string(), req.description.as_str()),
+        ];
+        for (i, c) in req.comments.iter().enumerate() {
+            fields.push((format!("comment[{i}]"), c.content.as_str()));
+        }
+
+        for (field, text) in fields {
+            for m in toon_re.find_iter(text) {
+                out.push(DoctorFinding {
+                    category: "round-trip-artifacts".to_string(),
+                    id: format!("{spec_id}/{field}/{}", m.start()),
+                    summary: format!(
+                        "{spec_id} field `{field}` offset {}: swallowed TOON row header (`{}`) — a read-modify-write through rendered `aida show` output",
+                        m.start(),
+                        m.as_str()
+                    ),
+                    action: "reconstruct the field from the orphan branch's git history (this check reports, it does not repair)".to_string(),
+                    safe_heal: false,
+                });
+            }
+            for m in mojibake_re.find_iter(text) {
+                out.push(DoctorFinding {
+                    category: "round-trip-artifacts".to_string(),
+                    id: format!("{spec_id}/{field}/{}", m.start()),
+                    summary: format!(
+                        "{spec_id} field `{field}` offset {}: UTF-8-decoded-as-Latin-1 mojibake sequence (`{}`)",
+                        m.start(),
+                        m.as_str()
+                    ),
+                    action: "reconstruct the field from the orphan branch's git history (this check reports, it does not repair)".to_string(),
+                    safe_heal: false,
+                });
+            }
+        }
+    }
+
+    out
+}
+
 /// Whether `category` (a normalized doctor category) is in scope given the
 /// user's `--category` filter. `None` filter selects everything. Errors only
 // if the filter itself is an unknown category. trace:TASK-673 | ai:claude
@@ -1920,6 +2023,114 @@ fn doctor_category_selected(filter: Option<&str>, category: &str) -> Result<bool
     match filter {
         None => Ok(true),
         Some(raw) => Ok(normalize_doctor_category(raw)? == category),
+    }
+}
+
+#[cfg(test)]
+mod task_1313_round_trip_artifact_tests {
+    use super::*;
+    use aida_core::models::{Requirement, RequirementsStore};
+
+    fn store_with(description: &str) -> RequirementsStore {
+        let mut req = Requirement::new("Sample".to_string(), description.to_string());
+        req.spec_id = Some("TASK-9001".to_string());
+        let mut store = RequirementsStore::new();
+        store.requirements.push(req);
+        store
+    }
+
+    // 7c: raw-form mis-decode (the parser has already turned the escape into
+    // the control character) produces exactly one mojibake finding.
+    #[test]
+    fn mojibake_raw_form_is_found() {
+        let text = "the em-dash reads as \u{00E2}\u{0080}\u{0094} here";
+        let store = store_with(text);
+        let findings = scan_round_trip_artifacts(&store);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].category, "round-trip-artifacts");
+        assert!(findings[0].summary.contains("mojibake"));
+    }
+
+    // 7d: escaped-form mis-decode (the field still carries the literal
+    // `\xHH` escape text) also produces one finding.
+    #[test]
+    fn mojibake_escaped_form_is_found() {
+        let text = "the em-dash reads as \u{00E2}\\x80\\x94 here";
+        let store = store_with(text);
+        let findings = scan_round_trip_artifacts(&store);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].summary.contains("mojibake"));
+    }
+
+    // 7a: a legitimate lone Â/Ã/â (an ordinary accented letter, not a pair)
+    // produces no mojibake finding.
+    #[test]
+    fn lone_latin_letter_is_not_mojibake() {
+        let text = "The café menu references the \u{00C2}ge Bracket column.";
+        let store = store_with(text);
+        assert!(scan_round_trip_artifacts(&store).is_empty());
+    }
+
+    // 7e: a swallowed TOON block with no non-ASCII character at all is still
+    // found — this is the case the mojibake-only detector would have missed.
+    #[test]
+    fn swallowed_toon_block_without_mojibake_is_found() {
+        let text = "Closing the description here.\"\nrelationships[1]{rel,id,title}:\n  child,TASK-2,\"x\"\nnext[1]{cmd,to}:\n  aida queue done TASK-2,done";
+        let store = store_with(text);
+        let findings = scan_round_trip_artifacts(&store);
+        assert_eq!(findings.len(), 2, "expects one finding per anchored header");
+        assert!(findings
+            .iter()
+            .all(|f| f.summary.contains("TOON row header")));
+    }
+
+    // 7b (inline mention, negative case 1): prose that discusses the
+    // convention mid-line — never at column 0 — must not match. This is
+    // TASK-1313's own defining case: its spec text contains the phrase
+    // `execution_mode:` and the literal pattern `next[1]{` inline, never at
+    // the start of a line.
+    #[test]
+    fn inline_mention_of_execution_mode_is_not_flagged() {
+        let text = "It proposes a new execution_mode: value for the advisor to groom.";
+        let store = store_with(text);
+        assert!(scan_round_trip_artifacts(&store).is_empty());
+    }
+
+    #[test]
+    fn inline_mention_of_toon_header_is_not_flagged() {
+        let text = "aida status already uses the `next[1]{cmd,to}:` row header today.";
+        let store = store_with(text);
+        assert!(scan_round_trip_artifacts(&store).is_empty());
+    }
+
+    // 7b (negative case 2): an INDENTED code block quoting a TOON sample —
+    // the column-0 anchor (not a leading-indent-allowing anchor) must not
+    // match an indented line.
+    #[test]
+    fn indented_toon_sample_is_not_flagged() {
+        let text = "See the example below:\n\n    relationships[1]{rel,id,title}:\n      child,TASK-2,\"x\"\n";
+        let store = store_with(text);
+        assert!(scan_round_trip_artifacts(&store).is_empty());
+    }
+
+    // Coverage: title and comment bodies are scanned too, not only
+    // description (criterion 6).
+    #[test]
+    fn title_and_comment_fields_are_scanned() {
+        let mut req = Requirement::new(
+            "execution_mode:\nswallowed into the title field".to_string(),
+            "clean description".to_string(),
+        );
+        req.spec_id = Some("TASK-9002".to_string());
+        req.comments.push(aida_core::models::Comment::new(
+            "joe".to_string(),
+            "comment carries \u{00C3}\u{00A2} mojibake".to_string(),
+        ));
+        let mut store = RequirementsStore::new();
+        store.requirements.push(req);
+        let findings = scan_round_trip_artifacts(&store);
+        assert!(findings.iter().any(|f| f.id.contains("/title/")));
+        assert!(findings.iter().any(|f| f.id.contains("/comment[0]/")));
     }
 }
 
