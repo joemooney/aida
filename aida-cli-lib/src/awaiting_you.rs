@@ -12,6 +12,7 @@
 //!
 //! trace:STORY-465 | ai:claude
 
+use crate::review_verdict;
 use crate::status_cleanup::OpenPrItem;
 use colored::Colorize;
 use std::io::Write;
@@ -465,6 +466,12 @@ pub(crate) struct PendingBriefItem {
 pub(crate) struct ReviewerQueueItem {
     pub spec_id: String,
     pub title: String,
+    /// Does a verdict already cover the current head? Resolved locally by
+    /// `crate::reviewer_row_actionability` -- verdict file + git refs, no
+    /// forge call. The row is kept and rendered regardless of state (routed
+    /// rows never vanish); this only changes how it reads.
+    // trace:BUG-1508 | ai:claude
+    pub state: review_verdict::ReviewActionability,
 }
 
 #[derive(Debug, Clone)]
@@ -516,6 +523,8 @@ impl AwaitingReport {
             + self.rework_ready.len()
             + (if self.nightly_red.is_some() { 1 } else { 0 })
             + self.reviewer_queue_items.len()
+            // BUG-1508 AC4/AC7: the "actionable N of M routed" summary line.
+            + (if !self.reviewer_queue_items.is_empty() { 1 } else { 0 })
             + (if self.shelved_total > 0 { 1 } else { 0 })
             + self.escalations.len()
     }
@@ -763,12 +772,50 @@ impl AwaitingReport {
                 budget -= 1;
             }
         }
+        // BUG-1508 AC4/AC7: the summary line carries BOTH numbers --
+        // actionable and routed -- because the gap between them is itself
+        // the signal (a queue that reads five-deep on review when four are
+        // really awaiting rework misdirects capacity at the wrong seat).
+        // trace:BUG-1508 | ai:claude
+        if !self.reviewer_queue_items.is_empty() {
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                let actionable = self
+                    .reviewer_queue_items
+                    .iter()
+                    .filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview)
+                    .count();
+                writeln!(
+                    w,
+                    "  🔎 reviewer: actionable {} of {} routed",
+                    actionable,
+                    self.reviewer_queue_items.len()
+                )?;
+                budget -= 1;
+            }
+        }
+        // BUG-1508 AC2: every routed row still renders -- an
+        // already-reviewed row is never dropped, only annotated, so it
+        // reads as rework/resolved rather than silently disappearing.
         for q in &self.reviewer_queue_items {
             if budget == 0 {
                 overflow += 1;
                 continue;
             }
-            writeln!(w, "  👀 verdict needed: {} — {}", q.spec_id.bold(), q.title,)?;
+            let (glyph, label) = match q.state {
+                review_verdict::ReviewActionability::NeedsReview => ("👀", "needs-review"),
+                review_verdict::ReviewActionability::AwaitingRework => ("🔧", "awaiting-rework"),
+                review_verdict::ReviewActionability::Resolved => ("✅", "resolved"),
+            };
+            writeln!(
+                w,
+                "  {} {}: {} — {}",
+                glyph,
+                label,
+                q.spec_id.bold(),
+                q.title,
+            )?;
             budget -= 1;
         }
         if self.shelved_total > 0 {
@@ -865,7 +912,14 @@ impl AwaitingReport {
             "reviewer_queue_items": self.reviewer_queue_items.iter().map(|q| serde_json::json!({
                 "spec_id": q.spec_id,
                 "title": q.title,
+                "state": q.state.as_str(),
             })).collect::<Vec<_>>(),
+            // BUG-1508 AC4/AC7: the depth figure that decides reviewer
+            // capacity is actionable-of-routed, not a bare routed count.
+            "reviewer_actionable_of_routed": {
+                "actionable": self.reviewer_queue_items.iter().filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview).count(),
+                "routed": self.reviewer_queue_items.len(),
+            },
             "shelved_total": self.shelved_total,
             "escalations": self.escalations.iter().map(|e| serde_json::json!({
                 "spec_id": e.spec_id,
@@ -941,10 +995,17 @@ impl AwaitingReport {
             parts.push("nightly-red".to_string());
         }
         if !self.reviewer_queue_items.is_empty() {
-            parts.push(pluralize(
-                self.reviewer_queue_items.len(),
-                "verdict",
-                "verdicts",
+            // BUG-1508 AC4/AC7: "actionable N of M routed" everywhere this
+            // depth figure is printed, including the compact per-turn line.
+            let actionable = self
+                .reviewer_queue_items
+                .iter()
+                .filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview)
+                .count();
+            parts.push(format!(
+                "actionable {} of {} routed",
+                actionable,
+                self.reviewer_queue_items.len()
             ));
         }
         if self.shelved_total > 0 {
@@ -1962,5 +2023,62 @@ mod tests {
             out.push(c);
         }
         out
+    }
+
+    fn reviewer_item(
+        spec_id: &str,
+        state: review_verdict::ReviewActionability,
+    ) -> ReviewerQueueItem {
+        ReviewerQueueItem {
+            spec_id: spec_id.to_string(),
+            title: format!("title for {spec_id}"),
+            state,
+        }
+    }
+
+    // BUG-1508 AC2/AC4/AC7: routed rows never vanish (all render, each
+    // annotated), and the depth figure everywhere it's printed is
+    // "actionable N of M routed" -- both numbers, because the gap between
+    // them is the signal.
+    #[test]
+    fn reviewer_rows_all_render_and_report_actionable_of_routed() {
+        let r = AwaitingReport {
+            reviewer_queue_items: vec![
+                reviewer_item("BUG-1", review_verdict::ReviewActionability::NeedsReview),
+                reviewer_item("BUG-2", review_verdict::ReviewActionability::AwaitingRework),
+                reviewer_item("BUG-3", review_verdict::ReviewActionability::Resolved),
+            ],
+            ..Default::default()
+        };
+
+        // The depth figure used for capacity decisions: actionable (1) of
+        // routed (3) -- not a bare routed count of 3.
+        let compact = r.compact_line().expect("populated report must have a line");
+        assert!(compact.contains("actionable 1 of 3 routed"), "{compact}");
+
+        let mut buf = Vec::new();
+        assert!(r.render(true, &mut buf).unwrap());
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(out.contains("reviewer: actionable 1 of 3 routed"), "{out}");
+        // AC2: none of the three rows vanish -- each is present, annotated
+        // by its own state.
+        assert!(out.contains("needs-review: BUG-1"), "{out}");
+        assert!(out.contains("awaiting-rework: BUG-2"), "{out}");
+        assert!(out.contains("resolved: BUG-3"), "{out}");
+    }
+
+    #[test]
+    fn reviewer_state_reaches_json() {
+        let r = AwaitingReport {
+            reviewer_queue_items: vec![reviewer_item(
+                "BUG-7",
+                review_verdict::ReviewActionability::AwaitingRework,
+            )],
+            ..Default::default()
+        };
+        let v = r.to_json();
+        assert_eq!(v["reviewer_queue_items"][0]["state"], "awaiting-rework");
+        assert_eq!(v["reviewer_actionable_of_routed"]["actionable"], 0);
+        assert_eq!(v["reviewer_actionable_of_routed"]["routed"], 1);
     }
 }
