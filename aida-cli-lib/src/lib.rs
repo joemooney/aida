@@ -89768,6 +89768,38 @@ fn orchestrator_pr_title_and_body(commit_msg: &str) -> Result<(String, String)> 
     Ok((title, body))
 }
 
+// TASK-1443: adopt an already-open PR for `branch` instead of opening a
+// second one. #2042 and #2043 shared a head and were created 106 seconds
+// apart — two orchestrator drives raced the same branch and neither one
+// saw the other's freshly-opened PR before calling `open_change` again.
+// Reuses the same forge-neutral lookup `aida pr ship` uses to resume onto
+// an existing PR (`branch_pr_resolution_from_lookup`, TASK-141/STORY-516)
+// rather than re-deriving branch->PR lookup here. `Found` adopts (returns
+// the existing PR id); `Create` and every inconclusive lookup state
+// (`LookupFailed`) fall through to the caller's normal open-PR path — a
+// lookup we cannot trust must not block recovery, it only means this
+// race-guard cannot help for that call. trace:TASK-1443 | ai:claude
+fn existing_open_pr_for_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+    forge_kind: crate::forge::ForgeKind,
+) -> Option<u64> {
+    // Route through the EXPLICIT `forge_kind` the caller already resolved for
+    // this drive, not `change_lookup_for_branch`'s own auto-detection — a
+    // fixture/test remote (or a repo mid-migration) can auto-resolve to
+    // `PureGitForge`, whose `change_for_branch` deliberately reports the
+    // branch itself as `Found(id: 0)` (no PR concept). That sentinel is not
+    // an adoptable PR number, so it is filtered out here in addition to
+    // matching the caller's real forge. trace:TASK-1443 | ai:claude
+    let lookup = crate::forge::forge_for_kind(project_root, forge_kind)
+        .change_for_branch(branch)
+        .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}")));
+    match crate::pr_ship::branch_pr_resolution_from_lookup(&lookup) {
+        crate::pr_ship::BranchPrResolution::Found(id) if id != 0 => Some(id),
+        _ => None,
+    }
+}
+
 fn open_orchestrator_pr_for_implementer_worktree(
     project_root: &std::path::Path,
     worktree: &std::path::Path,
@@ -89782,6 +89814,12 @@ fn open_orchestrator_pr_for_implementer_worktree(
     // verify the branch actually carries a commit trailered for the spec
     // this drive is for.
     ensure_pr_open_spec_attribution(worktree, branch, spec)?;
+    // TASK-1443: a concurrent drive may have already opened a PR for this
+    // head between the push above and this point — adopt it rather than
+    // opening a second one. trace:TASK-1443 | ai:claude
+    if let Some(existing) = existing_open_pr_for_branch(project_root, branch, forge_kind) {
+        return Ok(existing);
+    }
     let commit_msg_out = std::process::Command::new("git")
         .current_dir(worktree)
         .args(["log", "-1", "--format=%B"])
@@ -90098,6 +90136,11 @@ fn open_orchestrator_pr_for_pushed_branch(
     // verify the pushed branch actually carries a commit trailered for the
     // spec this drive is for.
     ensure_pr_open_spec_attribution(project_root, &branch_ref, spec)?;
+    // TASK-1443: adopt an already-open PR for this head instead of opening a
+    // second one (see `existing_open_pr_for_branch` above). trace:TASK-1443 | ai:claude
+    if let Some(existing) = existing_open_pr_for_branch(project_root, branch, forge_kind) {
+        return Ok(existing);
+    }
     let commit_msg = head_commit_message(project_root, &branch_ref)?;
     let (title, body) = orchestrator_pr_title_and_body(&commit_msg)?;
     let change = crate::forge::forge_for_kind(project_root, forge_kind)
