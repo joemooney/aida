@@ -54,6 +54,17 @@ pub(crate) struct PerformanceAudit {
     pub excluded_samples: usize,
     #[serde(default)]
     pub lineage_scoped: bool,
+    /// ADR-53's second limb: the configured single-call ceiling in force at
+    /// the time of the trip, if any. `None` on a ledger written before this
+    /// limb existed, via `#[serde(default)]`.
+    // trace:ADR-53 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ceiling_ms: Option<u64>,
+    /// Did `worst_ms` exceed `ceiling_ms`? Recorded even when the proportion
+    /// limb also tripped, so a reader can tell which limb (or both) fired.
+    // trace:ADR-53 | ai:claude
+    #[serde(default)]
+    pub ceiling_breached: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -640,6 +651,8 @@ mod tests {
                 worst_ms: Some(165_672),
                 excluded_samples: 0,
                 lineage_scoped: true,
+                ceiling_ms: Some(5_000),
+                ceiling_breached: true,
             }],
             audit_error: None,
         });

@@ -315,8 +315,12 @@ impl DueJob {
         if let Some(failure) = &self.failure {
             line.push_str(&format!("\n  trip evidence: {}", failure.trip_id));
             for audit in &failure.performance {
+                let ceiling = audit.ceiling_ms.map_or_else(
+                    || "n/a".to_string(),
+                    |c| format!("{c} ms (breached={})", audit.ceiling_breached),
+                );
                 line.push_str(&format!(
-                    "\n    aida {}: {:.3}% over {} ms ({} of {} calls; tolerance {:.3}%; worst {}; window {}h; excluded {}; lineage_scoped={})",
+                    "\n    aida {}: {:.3}% over {} ms ({} of {} calls; tolerance {:.3}%; worst {}; ceiling {}; window {}h; excluded {}; lineage_scoped={})",
                     audit.command,
                     audit.proportion_millipercent as f64 / 1000.0,
                     audit.budget_ms,
@@ -324,6 +328,7 @@ impl DueJob {
                     audit.denominator,
                     audit.tolerated_millipercent as f64 / 1000.0,
                     audit.worst_ms.map_or_else(|| "n/a".into(), |v| format!("{v} ms")),
+                    ceiling,
                     audit.window_hours,
                     audit.excluded_samples,
                     audit.lineage_scoped,

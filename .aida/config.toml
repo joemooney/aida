@@ -108,13 +108,24 @@ informational_workflows = ["Cross-platform*"]
 # schedule/performance-guard.yaml independently, so a trip is BOTH durable and
 # noticed.
 #
-# KNOWN LIMITATION (BUG-1572): the denominator is binary-blind. `~/.aida/usage.jsonl`
-# is machine-global and this repo runs 20-60 worktrees, so one lane's stale build
-# can hold this gate red for a regression that is not on main. Read a red gate
-# against BUG-1572 before concluding main regressed.
-# trace:STORY-1423 | ai:claude
+# BUG-1572 (fixed): the denominator was binary-blind — `~/.aida/usage.jsonl` is
+# machine-global and this repo runs 20-60 worktrees, so one lane's stale build
+# could hold this gate red for a regression that was not on main. The gate now
+# scopes its decision population to this HEAD's binary lineage by default
+# (AIDA_PERF_GATE_ALL_BINARIES=1 restores the old unscoped behaviour).
+#
+# ADR-53: `ceiling_ms` is a SECOND, INDEPENDENT limb, decided after the
+# post-fix pair (STORY-1423) showed the proportion going quiet (2.9% at
+# n=170) while the worst single call got WORSE (69,240ms, post-fix). A
+# proportion cannot express that — it is invariant to the magnitude of its
+# own outliers and improves as its denominator grows — so this trips on
+# EITHER limb: the proportion over tolerance, OR any single call over the
+# ceiling. 5000ms is derived from the interaction model (beyond ~5s a person
+# assumes the tool hung), not from the measured distribution — tuning a
+# budget to a measurement is what this spec family forbids.
+# trace:STORY-1423 trace:ADR-53 | ai:claude
 [performance.budgets]
-show = 1000
+show = { budget_ms = 1000, ceiling_ms = 5000 }
 
 [[schedule.jobs]]
 name = "performance-guard"
