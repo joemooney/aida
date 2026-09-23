@@ -308,7 +308,21 @@ disagreed.
 
 The check that caught it was one command:
 
-    git show HEAD:<path> | grep -c '<<<<<<<\|^=======$\|>>>>>>>'
+    n=$(git show HEAD:<path> | grep -c '<<<<<<<\|^=======$\|>>>>>>>')
+    [ "$n" -eq 0 ] && echo clean || echo "$n marker(s) found"
+
+Two caveats on that command, both verified empirically. First, a bare
+`grep -c '<<<<<<<\|^=======$\|>>>>>>>'` inverts on the case you care about:
+zero matches is the clean, passing outcome, and it is also the case where
+`grep -c` exits 1 — so under `set -e`, or any caller that checks pipeline
+status instead of the count, success reads as failure. Compare the printed
+count, as above, rather than trusting the exit code. Second, the
+`^=======$` branch also matches a markdown setext heading underline — a line
+of exactly seven `=` under a heading — so a clean markdown file with no
+conflict at all can report one match if it contains a table. It fails safe,
+over-reporting rather than under, but the file class where this fires is
+exactly the one the worked example above involves, so know it before you
+paste the command into a script.
 
 The script that failed to resolve the conflict is the same script that
 announced the resolution. Its self-report is not a second opinion — it is the
@@ -323,10 +337,41 @@ whether the instrument worked.
 | Did the write take? | the command's confirmation line | the stored record on disk |
 | Did the check verify anything? | a green job | that the job's work actually ran |
 
+The table's first row is only as strong as the identifier behind it. Pin
+what you check — capture the identifier and its content in the same
+operation, and quote the identifier you captured — rather than re-deriving
+it: `git show HEAD:<path>` is exactly right at the moment you run it, and
+`HEAD` is exactly the thing that can move underneath you before your next
+command reads it again. Two individually-correct readings taken a minute
+apart can disagree, and both will look authoritative. Authorship makes this
+worse, not better: a stale-green result that arrives from somewhere else is
+already distrusted, but a reading you produced yourself does not feel like
+evidence that can change underneath you, so the re-read reflex never fires.
+The reading most likely to be stale is the one you wrote yourself. Worked
+case: a reviewer recorded a verdict, re-checked CI at the head five minutes
+later, and merged — without re-reading the verdict, which a second reviewer
+had overwritten with a refusal in the interval, on a project where that
+exact overwrite behaviour had already bitten the same person that morning.
+
 The last row is the same rule pointed at CI. A job that skips its real work
 and exits 0 reports identically to one that ran and passed; the skip is
 usually a notice annotation, invisible unless someone opens the run. "Did not
 fail" and "verified" are different claims, and only one of them is evidence.
+
+Generalise one step further, past CI to any check: a test you have never
+observed fail is not yet evidence. A green signal from an instrument nobody
+has watched fail carries no information, because a check that silently does
+nothing and a check that ran and passed are indistinguishable from outside.
+The operational form is what makes this a requirement rather than an
+aspiration — revert the change with the test in place and show it red; "the
+test must be capable of failing" is a property nobody can check by reading
+it. Go further when judging what a new test is worth: a mutation that
+breaks everything demonstrates nothing, because the rest of the suite would
+have caught it too. Showing a test red under a mutation proves it can fail;
+showing it red under a mutation narrow enough that the rest of the suite
+stays green proves it catches something no other test catches — a
+different, stronger claim, and the one that justifies adding the test
+rather than trusting the suite you already have.
 
 Spend the check after any step whose failure mode is silent — not after every
 command. Concretely: anything involving conflict markers, anything where a
@@ -339,6 +384,95 @@ This is the single-step case of the preceding section. There, two seats guard
 each other by deriving a claim different ways; here there is only one step,
 and the artifact it leaves behind is the only thing that can disagree with
 it.
+
+### Don't narrow the evidence you reason from
+
+Three different ways a reader narrows the evidence before reasoning from it,
+none detectable by reading more carefully — which is what makes them rules
+rather than cautions. Take only one and you should still come away with the
+general form: the evidence you narrow is the evidence you will reason from.
+
+**Space.** Checking the artifact instead of the step's report does not help
+if you then look only at the part of the artifact you already believe. A
+grep, a jq selector, a `--json` field list, a `2>/dev/null`, a `head` — all
+filters. The test: could the filter have returned anything other than what
+you expected? A filter can also change what the instrument DOES, not only
+what you see of it — a piped read that suppresses a write is the case that
+proves it.
+
+A narrow pattern needs a second, different test, because the first one
+can't catch it. Dropping rows announces itself — a wrong pattern usually
+returns zero. A pattern that never admitted the rows in the first place
+suppresses nothing, so there is nothing to notice, and the result comes back
+looking plausible; worse, in a check meant to read two ways, zero can be the
+answer one direction is hoping for, so a false zero is received as
+confirmation, and the check reports success because it failed. The second
+test interrogates the producer rather than the filter: when counting by a
+string, ask what OTHER strings the same producer emits for the same event.
+Three counts were wrong this way in one session — a `*.md` glob that missed
+a `.yaml` file, an equality test on one writer's name that would have
+silently narrowed to a historical cohort the moment that name changed, and a
+match on one phrasing of a refusal that missed the same gate's other
+phrasing.
+
+**Time.** When you can state what an outcome will look like, state it
+before you look — and state separately what the outcome will NOT establish.
+An explanation formed after the evidence fits by construction. A
+pre-registered prediction is worth more even when it turns out correct,
+because it already said what a correct result would leave unsettled; a
+prediction written after the outcome is a report about the predictor, not
+evidence about the system.
+
+**Source.** Knowing WHICH artifact holds the fact is prior to reading it
+correctly. Reading the right file correctly, when it is not the whole
+record, produces a confident wrong answer that no care in the reading would
+catch. Worked case: a command that writes two files on one action — one
+keyed to the review request, one keyed to the underlying item — had its
+request-keyed file overwritten by a second reviewer's verdict. A reader who
+checked only that file reported the first verdict destroyed and a follow-up
+check impossible; the item-keyed file, written by the same command, was
+intact the whole time, and nobody had asked what else the write produced.
+The actionable half: when a write produces more than one artifact,
+establish the full set before concluding anything about the record.
+
+The same discipline applies on the writing side. A comment whose opening
+words assert it belongs in the binding section reads as done to anyone
+skimming it, including its own author moments later — unless someone checks
+that the words actually landed in the section that binds, not just in the
+comment that says so. The verification move is the same for a write as for
+a read: read it back, and report the passage, not a count. A count is a
+claim about the artifact derived through a pattern; the passage is the
+artifact itself, and quoting it costs less than getting the pattern right.
+
+### Severity and urgency are judgement, not evidence
+
+Every other part of a report has a source someone can point at: the file,
+the line, the run id, the timestamp, the patch id. Severity and urgency have
+none — they are always inferred from the facts, never found among them.
+State them tentatively when writing, and discount them first when reading:
+a reader who cannot tell a sourced fact from an inferred judgement will take
+both on the same authority, and the judgement is the half most likely to be
+wrong. Two worked cases: a defect was called "serious" before anyone asked
+which way it failed — the failure turned out to be closed, refusing rather
+than authorising, which reversed the disposition entirely — and a branch was
+called urgent on a cost-of-delay argument that did not hold, because there
+was nothing to rebase; the underlying finding survived, the urgency did not.
+
+---
+
+A note on this entry's own authority. Every rule above was broken by the
+person who wrote it, within hours of writing it, while actively thinking
+about that rule. Each time the error was caught — and not once by its
+author noticing. It was always a second reader holding a different piece of
+the record: a different file, a different timestamp, a different half of
+the same command's output.
+
+So the entry is not an argument for reading carefully. Care is what failed
+in every case recorded here. It is an argument for arranging work so that
+someone else holds a piece you do not, and for treating their disagreement
+as information rather than friction. Where you cannot have that, spend the
+mechanical checks above — they are a poor substitute for a second reader and
+much better than nothing.
 
 ## Check for in-flight work before rejecting
 
