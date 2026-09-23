@@ -233,6 +233,26 @@ fn gate_proceeds_with_no_verdict_or_a_passing_one() {
     );
 }
 
+// An unrecognised verdict word must refuse, not silently proceed as though
+// it were an approval — the same fail-open shape as a Skipped preflight
+// guard funnelling into Open.
+// trace:BUG-1507 | ai:claude (PRIN-5: absent is not good evidence)
+#[test]
+fn gate_refuses_an_unrecognised_verdict_word() {
+    let mystery = rc("mostly fine", Some("e49317ecafe0"));
+    match queue_done_verdict_gate("TASK-5", Some(&mystery), TipRelation::AtReviewedSha) {
+        VerdictGate::Refuse(lines) => {
+            let joined = lines.join("\n");
+            assert!(joined.contains("unrecognised verdict"), "{joined}");
+            assert!(
+                joined.contains("mostly fine"),
+                "names the raw word: {joined}"
+            );
+        }
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+}
+
 #[test]
 fn gate_refuses_an_unverifiable_approval() {
     let approved = rc("approved", None);

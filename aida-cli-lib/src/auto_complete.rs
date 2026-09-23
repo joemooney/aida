@@ -147,7 +147,18 @@ impl LifecycleSkip {
         // review-skip. Express overrides any `lifecycle:*` short-circuit that
         // would otherwise downgrade the gate, so an express spec can never
         // silently ship under a reduced gate.
+        //
+        // This must clear EVERY integrity-phase skip field, not a hand-picked
+        // subset: `no_preflight` was omitted here (BUG-1507) while the
+        // plain-express test case asserted the whole-set invariant
+        // (`is_empty()`) instead — so a `batch:express` spec carrying
+        // `lifecycle:no-preflight` shipped with preflight silently skipped
+        // even though the banner said "full gate". `no_harvest` is
+        // deliberately NOT cleared: harvest is advisory, not an integrity
+        // phase, so express does not force it back on.
+        // trace:BUG-1507 | ai:claude (PRIN-5: absent is not good evidence)
         if skip.express {
+            skip.no_preflight = false;
             skip.no_ci_wait = false;
             skip.no_review = false;
             skip.no_build = false;
@@ -213,7 +224,18 @@ impl LifecycleSkip {
     pub(crate) fn banner_summary(self) -> Option<String> {
         // TASK-907: the express tier announces itself even though it skips
         // nothing — its contract is "fast because reliably routed, full gate".
-        if self.express {
+        //
+        // The early return used to be unconditional, so it printed "full
+        // gate" even on a spec where `express` was true but a skip field had
+        // leaked past the from_tags() force-off (BUG-1507's THE BUG). That is
+        // exactly the failure this banner exists to prevent: it is the only
+        // operator-facing surface reporting which phases actually ran, and a
+        // hardcoded string cannot be wrong in a way a compiler or test would
+        // catch. Gate the canned string on `is_empty()` — the same universal
+        // check the trust contract itself is defined by — so any residual
+        // skip is still named instead of silently contradicted.
+        // trace:BUG-1507 | ai:claude (PRIN-5: absent is not good evidence)
+        if self.express && self.is_empty() {
             return Some("express tier — full gate (CI + reviewer + build)".to_string());
         }
         if self.is_empty() {
@@ -236,7 +258,17 @@ impl LifecycleSkip {
         if self.no_harvest {
             parts.push("harvest");
         }
-        Some(format!("skipping {}", parts.join(" + ")))
+        let summary = format!("skipping {}", parts.join(" + "));
+        if self.express {
+            // Should be unreachable given the from_tags() force-off, but the
+            // banner must never claim "full gate" while parts is non-empty.
+            // trace:BUG-1507 | ai:claude (PRIN-5: absent is not good evidence)
+            Some(format!(
+                "express tier — {summary} (trust-contract violation)"
+            ))
+        } else {
+            Some(summary)
+        }
     }
 }
 
@@ -6878,9 +6910,6 @@ mod tests {
         // Plain express → marked, nothing skipped.
         let skip = LifecycleSkip::from_tags([EXPRESS_TIER_TAG]);
         assert!(skip.express, "batch:express sets the express marker");
-        assert!(!skip.no_ci_wait);
-        assert!(!skip.no_review);
-        assert!(!skip.no_build);
         assert!(
             skip.is_empty(),
             "express skips no phase — is_empty() (the skip set) stays empty"
@@ -6890,17 +6919,44 @@ mod tests {
             "express records no short-circuit token in telemetry"
         );
 
-        // Express + a lifecycle skip on the same spec → express wins; the gate
+        // Express + a lifecycle skip on EVERY integrity field the struct
+        // carries, on the same spec → express wins on all of them; the gate
         // is NOT downgraded (the punt-out / trust-contract invariant).
+        //
+        // BUG-1507: this used to assert three named fields (no_ci_wait,
+        // no_review, no_build) rather than the universal `is_empty()`, so it
+        // could not fail when `no_preflight` was left out of the force-off —
+        // which is exactly what happened. `is_empty()` is the SAME
+        // instrument the plain-express case above already uses correctly;
+        // using it here too closes the gap between the two cases.
+        //
+        // The destructuring bind below additionally makes a sixth skip field
+        // fail to COMPILE at this exact site if it is ever added without a
+        // decision about whether express should force it off — the
+        // strongest form criterion 4 asks for. trace:BUG-1507 | ai:claude
+        // (PRIN-5: absent is not good evidence)
         let conflicting = LifecycleSkip::from_tags([
             "lifecycle:trivial",
             EXPRESS_TIER_TAG,
             "lifecycle:no-review",
+            "lifecycle:no-preflight",
         ]);
-        assert!(conflicting.express);
+        let LifecycleSkip {
+            no_preflight,
+            no_ci_wait,
+            no_review,
+            no_build,
+            no_harvest: _, // advisory, not an integrity phase — express does not touch it
+            express,
+        } = conflicting;
+        assert!(express);
         assert!(
-            !conflicting.no_ci_wait && !conflicting.no_review && !conflicting.no_build,
+            !no_preflight && !no_ci_wait && !no_review && !no_build,
             "express overrides any lifecycle:* short-circuit — full gate enforced"
+        );
+        assert!(
+            conflicting.is_empty(),
+            "express skips no phase even when conflicting lifecycle:* tags are present"
         );
 
         // Case-insensitive, matching the rest of from_tags.
