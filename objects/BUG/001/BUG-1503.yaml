@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:25:38.477338107Z
-modified_at: 2026-09-23T05:21:00.741564048Z
+modified_at: 2026-09-23T17:02:30.017387033Z
 req_type: Bug
 tags:
 - batch:night-0920 agent-surface cli-conformance drain-safe from:session-0920
@@ -84,3 +84,9 @@ comments:
     Local targeted gates passed; this is a CI integration test contract failure, not a local fast-path failure.
   created_at: 2026-09-23T05:21:00.741564048Z
   modified_at: 2026-09-23T05:21:00.741564048Z
+- id: 01a0cf38-0481-7082-8b09-2f1d85491dfb
+  author: joe
+  content: 'Orchestrator (overnight): PR #2110 (claude/bug-1503 @ 113c6b2579) has a real CI failure, aida-cli/tests/bug_1289_format_json.rs::status_bare_format_json_parses. Rework dispatched on the same branch.'
+  created_at: 2026-09-23T17:02:30.017387033Z
+  modified_at: 2026-09-23T17:02:30.017387033Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
