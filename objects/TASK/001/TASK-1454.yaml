@@ -1,0 +1,23 @@
+id: 01a0ce68-d24d-72c0-a92d-14bc5fe7fc50
+spec_id: TASK-1454
+agreed_id: TASK-1454
+title: Record a pending-approval marker via the Notification(permission_prompt) hook so aida ps and awaiting can say a seat is blocked on the human
+description: |-
+  Split from BUG-1553 (proxy decision 2026-09-23). A time heuristic cannot tell a seat blocked on a human approval from a long tool call. Record the gate itself: a Claude Code Notification hook for the permission_prompt type stamps a per-lease pending-approval marker (tool name plus time); the next PreToolUse/PostToolUse/UserPromptSubmit clears it. aida ps reports Blocked only when the marker is present, and aida awaiting surfaces blocked seats (BUG-1553 AC4). The hook master lives in aida-core/templates/hooks, wired in settings.json.
+
+  ## Acceptance
+  1. The hook writes and clears the marker; aida ps shows Blocked (naming the tool) only when it is present.
+  2. aida awaiting lists blocked seats.
+  3. Tests for set, clear and render; no false Blocked on a long Bash call.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T13:16:11.213474237Z
+modified_at: 2026-09-23T13:16:11.213474237Z
+req_type: Task
+tags:
+- followup
+- hooks
+- parent:BUG-1553
+- ps
