@@ -1549,6 +1549,7 @@ fn rework_no_op_fires_when_dispatched_branch_head_equals_reviewed_sha() {
         77,
         "task-1449-work".to_string(),
         Some(head),
+        None,
         "outstanding review findings".to_string(),
         3,
     ));
@@ -1577,6 +1578,7 @@ fn rework_no_op_fires_when_some_other_head_moved_but_not_the_dispatched_branch()
         77,
         "task-1449-work".to_string(),
         Some(reviewed_sha),
+        None,
         "outstanding review findings".to_string(),
         2,
     ));
@@ -1606,6 +1608,7 @@ fn rework_no_op_passes_on_genuine_new_content_on_the_dispatched_branch() {
         77,
         "task-1449-work".to_string(),
         Some(reviewed_sha),
+        None,
         "outstanding review findings".to_string(),
         2,
     ));
@@ -1618,14 +1621,74 @@ fn rework_no_op_passes_on_genuine_new_content_on_the_dispatched_branch() {
 }
 
 #[test]
-fn rework_no_op_refuses_when_verdict_has_no_reviewed_sha() {
-    // TASK-1449 AC1 / BUG-1522 AC9: a verdict with no recorded reviewed_sha
-    // is UNKNOWN, not clear — refuse rather than silently advance.
+fn rework_no_op_passes_on_sha_less_verdict_with_a_new_commit() {
+    // TASK-1449 (rework, common-path regression): ~86% of verdicts carry no
+    // reviewed_sha. A missing sha must NOT itself refuse — the guard falls
+    // back to the dispatched branch's head captured at ARM TIME, and a real
+    // commit pushed since then must be allowed to proceed.
+    let (_tmp, root) = rework_fixture();
+    let arm_time_head = git(&root, &["rev-parse", "HEAD"]);
+    write_commit(
+        &root,
+        "impl.rs",
+        "v2 — real fix\n",
+        "fix: address findings (TASK-1449)",
+    );
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        None, // no reviewed_sha on the blocking verdict
+        Some(arm_time_head),
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    assert!(
+        d.rework_no_op_failure().is_none(),
+        "a sha-less verdict with a genuine new commit must be allowed to proceed"
+    );
+}
+
+#[test]
+fn rework_no_op_fires_on_sha_less_verdict_with_an_unchanged_head() {
+    // TASK-1449 (rework, common-path regression): with no reviewed_sha, the
+    // arm-time dispatched-branch head is the fallback baseline. When the
+    // round produces no commits at all, that baseline still catches the
+    // no-op — falling back does not mean "always pass".
+    let (_tmp, root) = rework_fixture();
+    let arm_time_head = git(&root, &["rev-parse", "HEAD"]);
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        None, // no reviewed_sha on the blocking verdict
+        Some(arm_time_head),
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("a sha-less verdict with an unchanged head must still fire as a no-op");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+}
+
+#[test]
+fn rework_no_op_refuses_only_when_both_sha_and_arm_time_head_are_missing() {
+    // TASK-1449 AC3: refuse (UNKNOWN) ONLY when neither the verdict's
+    // reviewed_sha nor the arm-time head could be established — never
+    // merely because the sha is missing.
     let (_tmp, root) = rework_fixture();
     let mut d = driver(&root, "TASK-1449");
     d.rework_guard = Some((
         77,
         "task-1449-work".to_string(),
+        None,
         None,
         "outstanding review findings".to_string(),
         2,
@@ -1634,13 +1697,9 @@ fn rework_no_op_refuses_when_verdict_has_no_reviewed_sha() {
 
     let failure = d
         .rework_no_op_failure()
-        .expect("a missing reviewed_sha must refuse rather than silently pass");
+        .expect("with no baseline at all, the guard must refuse rather than silently pass");
     assert_eq!(failure.kind, FailureKind::ReworkNoOp);
-    assert!(
-        failure.reason.contains("reviewed_sha"),
-        "{}",
-        failure.reason
-    );
+    assert!(failure.reason.contains("neither"), "{}", failure.reason);
 }
 
 #[test]
@@ -1653,6 +1712,7 @@ fn rework_no_op_refuses_when_dispatched_branch_head_is_unreadable() {
         77,
         "branch-that-does-not-exist".to_string(),
         Some("deadbeef".repeat(5)),
+        None,
         "outstanding review findings".to_string(),
         2,
     ));
@@ -1683,6 +1743,7 @@ fn rework_no_op_fires_even_when_pr_number_is_none_this_round() {
         77,
         "task-1449-work".to_string(),
         Some(head),
+        None,
         "outstanding review findings".to_string(),
         2,
     ));
@@ -1747,10 +1808,17 @@ exit 1
     let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", gh.to_str().unwrap())]);
 
     let mut d = driver(&root, "TASK-1449");
+    // The driver already cached its `ForgeKind::GitHub` at construction from
+    // the remote URL above (needed for `pr_head_ref_best_effort`'s
+    // `gh`-mocked `change_metadata` call); drop the (fake, unreachable)
+    // remote now so `rework_no_op_failure`'s best-effort `git fetch origin`
+    // fails instantly ("no such remote") instead of touching the network.
+    git(&root, &["remote", "remove", "origin"]);
     d.rework_guard = Some((
         77,
         "task-1449-work".to_string(),
         Some(reviewed_sha),
+        None,
         "outstanding review findings".to_string(),
         2,
     ));
