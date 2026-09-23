@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T08:13:32.228974840Z
-modified_at: 2026-09-23T17:20:21.605672132Z
+modified_at: 2026-09-23T17:20:24.382385976Z
 req_type: Task
 tags:
 - drain
@@ -32,4 +32,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 10:02 -> branch claude/task-1449, no PR (overnight burn-down)
   created_at: 2026-09-23T17:02:33.236766995Z
   modified_at: 2026-09-23T17:02:33.236766995Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cf48-693e-7592-b864-877a23609708
+  author: joe
+  content: 'Claude implementer result: claude/task-1449 @ d0cc2f12a1. The rework guard arms on the blocking verdict''s reviewed_sha plus the dispatched branch; unreadable head, missing reviewed_sha or unclassifiable means a shelvable failure; phase_done_pr misattribution is checked; works with pr_number None. 9 RealPhaseDriver tests. Awaiting strict review: the missing-reviewed_sha case may shelve most reworks, given 86% of verdicts lack a sha (BUG-1508 measurement).'
+  created_at: 2026-09-23T17:20:24.382385976Z
+  modified_at: 2026-09-23T17:20:24.382385976Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
