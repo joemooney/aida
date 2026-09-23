@@ -40,12 +40,12 @@ description: |-
   OUT OF SCOPE: BUG-1480 and STORY-1422 themselves. That pair is already repaired by hand; this spec is about the substrate property they exposed.
 
   PROVENANCE: claude-reviewer-1 measured it and explicitly declined to file, flagging it as bigger than the question they were answering and the advisor's call. The advisor re-verified both halves and filed.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:55:06.171955458Z
-modified_at: 2026-09-23T19:51:23.254968971Z
+modified_at: 2026-09-23T21:19:03.513272806Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -232,3 +232,21 @@ comments:
   created_at: 2026-09-23T06:22:33.136781612Z
   modified_at: 2026-09-23T06:22:33.136781612Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d022-e752-7332-8662-f7b627f14041
+  author: aida-auto-bump
+  timestamp: 2026-09-23T21:19:03.506158162Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d022-e759-7e21-bbd9-4df9b526a6bc
+  timestamp: 2026-09-23T21:19:03.513272262Z
+  agent: aida
+  commit_sha: 20292847aed4bf69990ce088bd788863d5acf355
+  summary: Completed via merge 20292847
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T21:19:03.505737389Z
+  completion_sha: 20292847aed4bf69990ce088bd788863d5acf355
