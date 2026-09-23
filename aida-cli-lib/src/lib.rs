@@ -73992,8 +73992,23 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
 /// silently falling through to the heavy `--full`-equivalent report. Emits
 /// ONLY the JSON document on stdout (no banners/text before it) so the
 /// output always parses.
+//
+// Fix note: the pre-existing bug_1289_format_json.rs contract
+// (status_bare_format_json_parses) asserts the document carries either a
+// `requirements` or an `agents` key — the shape the heavy
+// print_status_json path produced when bare `--format json` used to fall
+// through to it. The fast path has no live-agent roster to report (that
+// moved to `aida doctor`), so it keeps the contract via `requirements`: the
+// SAME cache-sourced `counts` already computed for the human view, at no
+// extra cost. Plain `//` keeps the marker out of any doc/help.
 // trace:BUG-1503 | ai:claude
 fn print_fast_status_json(snap: &FastStatusSnapshot) -> Result<()> {
+    let counts = serde_json::json!({
+        "open": snap.counts.open,
+        "in_progress": snap.counts.in_progress,
+        "draft": snap.counts.draft,
+        "total": snap.counts.total,
+    });
     let out = serde_json::json!({
         "role": snap.role,
         "role_is_default": snap.role_is_default,
@@ -74003,12 +74018,8 @@ fn print_fast_status_json(snap: &FastStatusSnapshot) -> Result<()> {
             "actionable": snap.queue_actionable,
         },
         "cache_present": snap.cache_present,
-        "counts": {
-            "open": snap.counts.open,
-            "in_progress": snap.counts.in_progress,
-            "draft": snap.counts.draft,
-            "total": snap.counts.total,
-        },
+        "counts": counts,
+        "requirements": counts,
     });
     println!("{}", serde_json::to_string_pretty(&out)?);
     Ok(())
