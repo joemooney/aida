@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:12:19.310798509Z
-modified_at: 2026-09-23T03:05:43.827225686Z
+modified_at: 2026-09-23T03:05:45.562495272Z
 req_type: Bug
 tags:
 - batch:night-0920 queue drain-safe from:review-triage-0920
@@ -54,4 +54,10 @@ comments:
   content: Commit 87a124ec14 references this requirement
   created_at: 2026-09-23T03:04:53.414292474Z
   modified_at: 2026-09-23T03:04:53.414292474Z
+  session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
+- id: 01a0cc39-f55a-7713-a59a-141c4e348e98
+  author: joe
+  content: 'Implemented on branch claude/bug-1512 @ 87a124ec14 (pushed, no PR, not merged). queue gc now also collects routed review entries whose PR is merged or closed (via Forge::change_metadata, the seam queue prune --merged uses), additive to the target-spec rule, with per-row reasons. AC3 decision: review story stays Draft-and-unrouted, no new status (rationale in merged_pr_review_entries doc comment). AC4: 0 outstanding instances (prune --merged --dry-run). Tests: queue_json_rows 9/9. REVIEWER NOTE: gc now overlaps queue prune --merged detection - check whether the two should share one helper rather than two paths. Needs: PR + independent review + merge.'
+  created_at: 2026-09-23T03:05:45.562495272Z
+  modified_at: 2026-09-23T03:05:45.562495272Z
   session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
