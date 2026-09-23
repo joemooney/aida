@@ -120,12 +120,12 @@ description: |
      predicate is viable for live work. It is the legacy majority that must not read as
      permission. BUG-1466 is the spec that makes provenance reach the corpus; until it
      lands, criterion 9 is what keeps this guard honest without it.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-23T08:13:40.351469948Z
+modified_at: 2026-09-23T09:23:36.712404151Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
