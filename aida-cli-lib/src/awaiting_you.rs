@@ -1892,7 +1892,9 @@ fn pluralize(n: usize, singular: &str, plural: &str) -> String {
 /// Classify a single open PR as "awaiting you." The aida-chat motivating
 /// case (5 mergeable PRs OPEN for hours) lives or dies on this filter:
 ///   - `mergeable == "MERGEABLE"` (excludes CONFLICTING / UNKNOWN)
-///   - CI is not failing or pending (pass / no-checks / `?` are fine)
+///   - CI is not failing, pending, missing a required check, or unknown
+///     whether a required check is missing (pass / no-checks / `?` are
+///     fine — BUG-1481)
 ///   - reviewer verdict is not `CHANGES_REQUESTED`
 ///   - no AIDA-recorded blocking verdict at the PR's current head, and no
 ///     AIDA-recorded APPROVED verdict that fails to provably cover it
@@ -1915,7 +1917,11 @@ pub(crate) fn is_awaiting_you(pr: &OpenPrItem, local_verdict_blocks: bool) -> bo
         return false;
     }
     match pr.ci_rollup.as_deref() {
-        Some("fail") | Some("pending") => return false,
+        // BUG-1481: "missing" = a required check's row never showed up on
+        // this head at all; "unknown" = the required-check set itself could
+        // not be determined (branch protection unreadable). Neither is a
+        // pass — absent evidence is not good evidence (PRIN-5).
+        Some("fail") | Some("pending") | Some("missing") | Some("unknown") => return false,
         _ => {}
     }
     let verdict = pr
@@ -3658,5 +3664,31 @@ mod tests {
         assert_eq!(classify_seat(Some("advisor")), Some(AwaitingSeat::Advisor));
         assert_eq!(classify_seat(Some("")), None);
         assert_eq!(classify_seat(None), None);
+    }
+
+    /// BUG-1481: the PR-2009 shape — `ci_rollup` already carries the
+    /// upstream-computed "missing" state (a required check's row never
+    /// showed up on the head) rather than "pass". A PR in that state must
+    /// not be classified as awaiting-you / mergeable, the same as a `fail`
+    /// or `pending` rollup.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn missing_required_check_is_not_awaiting_you() {
+        let missing = pr(2009, Some("MERGEABLE"), Some("missing"), None);
+        assert!(!is_awaiting_you(&missing, false));
+        let classified = classify_open_prs(&[missing], &HashSet::new());
+        assert!(
+            classified.is_empty(),
+            "a head missing a required check must not appear in mergeable_prs: {classified:?}"
+        );
+    }
+
+    /// Same shape but the required-check set itself couldn't be read at
+    /// all — must also not be classified as green.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn unknown_required_check_set_is_not_awaiting_you() {
+        let unknown = pr(2009, Some("MERGEABLE"), Some("unknown"), None);
+        assert!(!is_awaiting_you(&unknown, false));
     }
 }

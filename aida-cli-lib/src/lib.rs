@@ -39596,6 +39596,7 @@ mod task_192_fail_closed_fact_tests {
     fn forge_snapshot_retains_merge_hold_label() {
         let snapshot = parse_open_pr_snapshot(
             r#"[{"number":2035,"title":"broken","headRefName":"broken-pr","labels":[{"name":"aida:merge-hold"}],"statusCheckRollup":[]}]"#,
+            None,
         );
         assert_eq!(
             snapshot.by_branch["broken-pr"].labels,
@@ -69467,7 +69468,106 @@ fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenPrSnapshot {
     if !out.status.success() {
         return OpenPrSnapshot::default();
     }
-    parse_open_pr_snapshot(&String::from_utf8_lossy(&out.stdout))
+    // BUG-1481: fetch the base branch's required status checks once per
+    // snapshot and thread them through so `ci_rollup` can't read "pass" off
+    // a head that is simply missing a required check's row entirely.
+    // trace:BUG-1481 | ai:claude
+    let required = required_status_checks(project_root);
+    parse_open_pr_snapshot(&String::from_utf8_lossy(&out.stdout), required.as_deref())
+}
+
+/// BUG-1481: the base branch's required status-check names (branch
+/// protection's `required_status_checks.contexts`), so `ci_rollup` can tell
+/// "nothing is required" apart from "a required check never showed up on
+/// this head". `None` means the set itself could not be determined — gh
+/// missing, offline, or no permission to read protection — and callers must
+/// treat that as *unknown*, never as "nothing required" (PRIN-5: absent
+/// evidence is not good evidence). A branch that is genuinely unprotected
+/// (the API's 404 "Branch not protected") maps to `Some(vec![])`, which is a
+/// real, positive answer, not an unreadable one. Cached once per process per
+/// project root, mirroring `collect_open_prs`'s BUG-613 memo, so one
+/// `aida awaiting` run pays for this API call once regardless of PR count.
+// trace:BUG-1481 | ai:claude
+fn required_status_checks(project_root: &std::path::Path) -> Option<Vec<String>> {
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<
+        Mutex<std::collections::HashMap<std::path::PathBuf, Option<Vec<String>>>>,
+    > = OnceLock::new();
+    let key = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
+    let cache = CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
+    if let Ok(guard) = cache.lock() {
+        if let Some(hit) = guard.get(&key) {
+            return hit.clone();
+        }
+    }
+    let result = required_status_checks_uncached(project_root);
+    if let Ok(mut guard) = cache.lock() {
+        guard.insert(key, result.clone());
+    }
+    result
+}
+
+/// The uncached lookup behind [`required_status_checks`].
+// trace:BUG-1481 | ai:claude
+fn required_status_checks_uncached(project_root: &std::path::Path) -> Option<Vec<String>> {
+    // Same forge guard as `collect_open_prs_uncached`: no gh-shaped
+    // protection API to ask on a non-GitHub forge, so there is nothing to
+    // treat as "required" — legitimately empty, not unknown.
+    if forge::resolve_forge_kind(project_root) != forge::ForgeKind::GitHub {
+        return Some(Vec::new());
+    }
+    let gh_bin = resolve_gh_binary()?;
+    let default_branch = detect_default_branch_ref(project_root)
+        .and_then(|r| r.rsplit('/').next().map(str::to_string))
+        .unwrap_or_else(|| "main".to_string());
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "api",
+            &format!("repos/{{owner}}/{{repo}}/branches/{default_branch}/protection"),
+            "--jq",
+            ".required_status_checks.contexts // []",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return required_status_checks_outcome_from_stderr(&stderr);
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).ok()?;
+    Some(
+        parsed
+            .as_array()?
+            .iter()
+            .filter_map(|v| v.as_str())
+            .map(str::to_string)
+            .collect(),
+    )
+}
+
+/// BUG-1481: classify a failed `gh api .../protection` call's stderr into
+/// "nothing is required" vs "unknown". GitHub returns HTTP 404 for BOTH a
+/// genuinely unprotected branch (body `{"message":"Branch not protected",...}`)
+/// AND a protected branch the caller lacks permission to read protection on
+/// (body `{"message":"Not Found",...}`) — so a bare "404"/"not found"
+/// substring match conflates the two and can silently report a protected
+/// branch as having no required checks (the exact PR-2009 false-green shape).
+/// Only the literal "Branch not protected" message is a real, positive
+/// "nothing required" answer; everything else (permission denied, network
+/// failure, the ambiguous plain "not found") is genuinely unknown and must
+/// never be treated as "nothing required" (PRIN-5: absent evidence is not
+/// good evidence).
+// trace:BUG-1481 | ai:claude
+fn required_status_checks_outcome_from_stderr(stderr: &str) -> Option<Vec<String>> {
+    let stderr = stderr.to_ascii_lowercase();
+    if stderr.contains("branch not protected") {
+        return Some(Vec::new());
+    }
+    None
 }
 
 /// BUG-1291: bounded safety net for runs killed before their normal reviewer
@@ -69805,8 +69905,16 @@ exit 1
 /// into an `OpenPrSnapshot`. Split out of `collect_open_prs` so it's
 /// unit-testable without shelling out; malformed JSON / a missing `number`
 /// field degrades silently (empty snapshot / skip the row).
-/// trace:TASK-833 | ai:claude
-fn parse_open_pr_snapshot(json: &str) -> OpenPrSnapshot {
+///
+/// `required_checks` (BUG-1481) is the base branch's required status-check
+/// name set, from [`required_status_checks`]: `None` when it could not be
+/// determined, `Some(list)` (possibly empty) when it's known. It only ever
+/// pulls a `ci_rollup` of `"pass"` DOWN to `"missing"` (a required check's
+/// row never showed up on this head) or `"unknown"` (the required set
+/// itself couldn't be read) — it never turns a `"fail"`/`"pending"`/`"?"`
+/// into something greener.
+// trace:TASK-833 trace:BUG-1481 | ai:claude
+fn parse_open_pr_snapshot(json: &str, required_checks: Option<&[String]>) -> OpenPrSnapshot {
     let parsed: serde_json::Value = match serde_json::from_str(json.trim()) {
         Ok(v) => v,
         Err(_) => return OpenPrSnapshot::default(),
@@ -69844,7 +69952,7 @@ fn parse_open_pr_snapshot(json: &str) -> OpenPrSnapshot {
         let ci_rollup = pr
             .get("statusCheckRollup")
             .and_then(|v| v.as_array())
-            .map(|arr| summarize_status_check_rollup(arr));
+            .map(|arr| summarize_status_check_rollup_with_required(arr, required_checks));
         let labels = pr
             .get("labels")
             .and_then(|v| v.as_array())
@@ -70125,6 +70233,179 @@ fn summarize_status_check_rollup(checks: &[serde_json::Value]) -> String {
         "pass".to_string()
     } else {
         "?".to_string()
+    }
+}
+
+/// BUG-1481: [`summarize_status_check_rollup`], corrected for the checks
+/// that never ran at all. `ci_rollup: "pass"` means "every check present is
+/// green" — that's true of a head carrying one green trivial check and
+/// missing the required build entirely, which is exactly the false-green
+/// PR-2009 shape. This wrapper never lets a required check's *absence* read
+/// as a pass:
+///
+/// - `required_checks` unresolved (`None`, e.g. branch protection unreadable)
+///   downgrades a `"pass"` verdict to `"unknown"` — the required set itself
+///   is absent evidence, not evidence of nothing required (PRIN-5).
+/// - `required_checks` resolved but naming a check whose row is missing from
+///   `checks` downgrades to `"missing"`.
+/// - Otherwise the base rollup passes through unchanged, so a `"fail"` /
+///   `"pending"` never gets *greener* just because the required set is
+///   unknown or incomplete.
+// trace:BUG-1481 | ai:claude
+fn summarize_status_check_rollup_with_required(
+    checks: &[serde_json::Value],
+    required_checks: Option<&[String]>,
+) -> String {
+    let base = summarize_status_check_rollup(checks);
+    if base != "pass" {
+        return base;
+    }
+    let Some(required) = required_checks else {
+        return "unknown".to_string();
+    };
+    if required.is_empty() {
+        return base;
+    }
+    let present: std::collections::HashSet<&str> = checks
+        .iter()
+        .filter_map(|c| {
+            c.get("name")
+                .and_then(|v| v.as_str())
+                .or_else(|| c.get("context").and_then(|v| v.as_str()))
+        })
+        .collect();
+    if required.iter().any(|r| !present.contains(r.as_str())) {
+        return "missing".to_string();
+    }
+    base
+}
+
+#[cfg(test)]
+mod bug_1481_ci_rollup_required_checks_tests {
+    use super::*;
+
+    fn checks(json: &str) -> Vec<serde_json::Value> {
+        serde_json::from_str(json).unwrap()
+    }
+
+    /// The exact PR-2009 shape from the bug report: one green non-required
+    /// check (`merge-hold-gate`) and no row at all for the required `Build
+    /// (ubuntu-latest)` check. Must NOT read as "pass".
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn missing_required_check_is_not_pass() {
+        let arr =
+            checks(r#"[{"name":"merge-hold-gate","status":"COMPLETED","conclusion":"SUCCESS"}]"#);
+        let required = vec![
+            "merge-hold-gate".to_string(),
+            "Build (ubuntu-latest)".to_string(),
+        ];
+        assert_eq!(
+            summarize_status_check_rollup_with_required(&arr, Some(&required)),
+            "missing"
+        );
+    }
+
+    /// Every required check present and green → pass, unchanged from today.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn all_required_present_and_green_is_pass() {
+        let arr = checks(
+            r#"[{"name":"merge-hold-gate","status":"COMPLETED","conclusion":"SUCCESS"},
+                {"name":"Build (ubuntu-latest)","status":"COMPLETED","conclusion":"SUCCESS"}]"#,
+        );
+        let required = vec![
+            "merge-hold-gate".to_string(),
+            "Build (ubuntu-latest)".to_string(),
+        ];
+        assert_eq!(
+            summarize_status_check_rollup_with_required(&arr, Some(&required)),
+            "pass"
+        );
+    }
+
+    /// Branch protection couldn't be read at all: never claim pass over an
+    /// unknown required set.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn unreadable_protection_is_unknown_not_pass() {
+        let arr =
+            checks(r#"[{"name":"merge-hold-gate","status":"COMPLETED","conclusion":"SUCCESS"}]"#);
+        assert_eq!(
+            summarize_status_check_rollup_with_required(&arr, None),
+            "unknown"
+        );
+    }
+
+    /// A genuinely unprotected branch (`Some(vec![])`, e.g. the API's 404)
+    /// keeps today's behavior — nothing is required, so all-green is pass.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn no_required_checks_configured_is_unchanged() {
+        let arr =
+            checks(r#"[{"name":"merge-hold-gate","status":"COMPLETED","conclusion":"SUCCESS"}]"#);
+        assert_eq!(
+            summarize_status_check_rollup_with_required(&arr, Some(&[])),
+            "pass"
+        );
+    }
+
+    /// A required set that can't be read never makes a failing/pending head
+    /// look better than it is.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn unreadable_protection_does_not_upgrade_fail_or_pending() {
+        let failing = checks(r#"[{"name":"x","status":"COMPLETED","conclusion":"FAILURE"}]"#);
+        assert_eq!(
+            summarize_status_check_rollup_with_required(&failing, None),
+            "fail"
+        );
+        let pending = checks(r#"[{"name":"x","status":"IN_PROGRESS","conclusion":""}]"#);
+        assert_eq!(
+            summarize_status_check_rollup_with_required(&pending, None),
+            "pending"
+        );
+    }
+
+    /// The literal "Branch not protected" message is the ONLY real, positive
+    /// "nothing required" answer.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn branch_not_protected_message_is_nothing_required() {
+        assert_eq!(
+            required_status_checks_outcome_from_stderr(
+                "gh: Branch not protected (HTTP 404)\n{\"message\":\"Branch not protected\"}"
+            ),
+            Some(Vec::new())
+        );
+    }
+
+    /// A bare 404 with a DIFFERENT message (e.g. a protected branch the
+    /// caller lacks permission to read protection on) must NOT be read as
+    /// "nothing required" — that is the exact PR-2009 false-green shape via
+    /// the "404"/"not found" substring match this replaces.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn bare_404_with_other_message_is_unknown() {
+        assert_eq!(
+            required_status_checks_outcome_from_stderr(
+                "gh: Not Found (HTTP 404)\n{\"message\":\"Not Found\"}"
+            ),
+            None
+        );
+    }
+
+    /// Permission-denied / network failure: unknown, never "nothing
+    /// required".
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn permission_denied_is_unknown() {
+        assert_eq!(
+            required_status_checks_outcome_from_stderr(
+                "gh: Must have admin rights to Repository. (HTTP 403)"
+            ),
+            None
+        );
     }
 }
 
