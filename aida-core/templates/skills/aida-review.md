@@ -377,6 +377,14 @@ fi
 
 If no review story exists (the PR was opened without `/aida-pr` or auto-queue is disabled), this is a silent no-op — the manual review path is unaffected. (BUG-34)
 
+**Claim the review-in-progress marker (STORY-1405).** Before reading a single diff hunk, mark PR-N as under review so a merge surface — `aida pr ship`, another drain's merge phase — refuses to land it out from under you seconds before your verdict:
+
+```bash
+aida review claim --pr <N> --spec <SPEC>
+```
+
+This is only needed here for entry points that don't already hold the marker themselves: `aida queue work PR-N --role reviewer` (standalone or orchestrated) and the drain's own reviewer phase hold it automatically for the life of the session, so `aida review claim` is a no-op safety net in those cases, not a duplicate claim. `aida review record` (step 6a) clears the marker as part of recording the verdict — no separate release needed on the happy path. If you abandon the review without recording a verdict, release it explicitly: `aida review claim --pr <N> --release`. The claim also expires on its own (`--ttl-mins`, capped at 1440/24h) so an abandoned review never wedges a PR indefinitely.
+
 ### 2. Generate the per-spec checklist (STORY-67)
 
 ```bash

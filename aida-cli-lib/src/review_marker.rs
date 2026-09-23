@@ -36,6 +36,23 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub(crate) const PID_BACKED_TTL_SECS: u64 = 2 * 60 * 60;
 /// Default TTL for an explicit `aida review claim` (no process to watch).
 pub(crate) const CLAIM_TTL_SECS: u64 = 30 * 60;
+/// TASK-1459: hard cap for `aida review claim --ttl-mins` — an explicit claim
+/// has no process to watch, so an unbounded TTL could hold a PR "under
+/// review" for days after the reviewer walked away. 24h covers a reviewer
+/// away for a full day (weekend/timezone) without letting a typo (`--ttl-mins
+/// 14400`) or a copy-pasted value in the wrong unit wedge a PR indefinitely.
+pub(crate) const MAX_CLAIM_TTL_MINS: u64 = 24 * 60;
+
+/// Clamp a requested `--ttl-mins` to [`MAX_CLAIM_TTL_MINS`], returning the
+/// value to use and whether it was clamped (so the caller can note it).
+// trace:TASK-1459 | ai:claude
+pub(crate) fn clamp_claim_ttl_mins(requested_mins: u64) -> (u64, bool) {
+    if requested_mins > MAX_CLAIM_TTL_MINS {
+        (MAX_CLAIM_TTL_MINS, true)
+    } else {
+        (requested_mins, false)
+    }
+}
 
 fn markers_dir(root: &Path) -> PathBuf {
     root.join(".aida").join("review-in-progress")
@@ -449,5 +466,27 @@ mod tests {
         write(dir.path(), &a).unwrap();
         write(dir.path(), &b).unwrap();
         assert_eq!(list(dir.path()), vec![b, a]);
+    }
+
+    // TASK-1459: an explicit `aida review claim` has no process to watch, so
+    // its TTL is capped at 24h rather than left unbounded.
+    // trace:TASK-1459 | ai:claude
+    #[test]
+    fn claim_ttl_within_cap_is_unchanged() {
+        assert_eq!(clamp_claim_ttl_mins(1), (1, false));
+        assert_eq!(clamp_claim_ttl_mins(30), (30, false));
+        assert_eq!(
+            clamp_claim_ttl_mins(MAX_CLAIM_TTL_MINS),
+            (MAX_CLAIM_TTL_MINS, false)
+        );
+    }
+
+    #[test]
+    fn claim_ttl_above_cap_is_clamped_and_flagged() {
+        assert_eq!(
+            clamp_claim_ttl_mins(MAX_CLAIM_TTL_MINS + 1),
+            (MAX_CLAIM_TTL_MINS, true)
+        );
+        assert_eq!(clamp_claim_ttl_mins(u64::MAX), (MAX_CLAIM_TTL_MINS, true));
     }
 }

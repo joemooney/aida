@@ -19,6 +19,7 @@ Drive a PR review to completion — checklist, verdicts, fix-forward, merge, mar
 Follow the workflow in `.claude/skills/aida-review/SKILL.md`:
 
 1. Resolve the PR number from the active session lease's scope, or accept `--pr N`
+1a. `aida review claim --pr N` to mark PR-N under review, so a merge surface refuses to land it before your verdict; `aida review record` (step 6) clears it
 2. `aida review prompt --pr N --write .aida/review-prompt-pr-N.md` to generate the per-spec checklist (STORY-67)
 3. Walk each spec: read the diff against acceptance criteria, run the test plan, post a ✅ PASS / ⚠️ PARTIAL / ❌ FAIL verdict with evidence
 4. Fix-forward mechanical issues (fmt drift, cfg-gated tests, typos) as small commits; never fix-forward semantic gaps
