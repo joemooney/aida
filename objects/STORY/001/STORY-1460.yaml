@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T16:30:39.898477413Z
-modified_at: 2026-09-22T16:30:44.706839010Z
+modified_at: 2026-09-23T01:02:53.397466512Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0c006-9a4b-7080-a650-c8117a9803e2
   created_at: 2026-09-22T16:30:44.706830540Z
   created_by: joe
+comments:
+- id: 01a0cbc9-77d5-7c20-bff7-61ddae0d0a61
+  author: joe
+  content: 'REQUEST_CHANGES cold review at exact head 983e249ad47e4368b6c3248bc03b8b097e65a8dd. CI Build and merge-hold-gate SUCCESS; mergeable/CLEAN. Focused merge_hold 20/20 and awaiting_you 36/36, fmt and diff checks pass. Blockers against signed sketch: production hold creation still calls plaintext write_hold (lib.rs 50937, 78394, 88522, 92418), so real rework/refusal holds parse as supervision and are not typed/routed; --route-to is only manual metadata with no live-seat/brief/reconciliation routing; clear checks approval against marker target_head_sha but not current PR head, allowing stale approval after head advance; principals are free-form strings and clear falls back to shell current_user_id, with no stable principal tuple/unknown fail-closed identity. Positive unit coverage covers round-trip, malformed/legacy hold, no-reader and seat-aware rendering, but end-to-end signed architecture is not met.'
+  created_at: 2026-09-23T01:02:53.397466512Z
+  modified_at: 2026-09-23T01:02:53.397466512Z
