@@ -3414,6 +3414,19 @@ pub struct ImplementationInfo {
     // trace:STORY-634 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completion_repo: Option<String>,
+
+    /// The code-repo HEAD sha at the moment this spec was deliberately
+    /// reopened to `Draft` (e.g. after a BUG-1506 Draft→Done landing bump
+    /// the reviewer decided wasn't good enough). Its own field, distinct
+    /// from `completion_sha` — that one is owned by the Done→Completed
+    /// bump's own idempotency check (BUG-410) and reusing it here would
+    /// block the legitimate Done→Completed promotion later. The
+    /// Draft-landing guard skips any candidate commit at or before this
+    /// sha, so only a genuinely NEW trailered commit (landed after the
+    /// reopen) can re-land the spec at `Done`.
+    // trace:TASK-1446 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reopened_at_sha: Option<String>,
 }
 
 impl ImplementationInfo {

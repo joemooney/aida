@@ -396,6 +396,36 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                     .unwrap_or_default(),
             ),
         ),
+        // trace:TASK-1450 | ai:claude
+        EventKind::ReviewVerdictRecorded {
+            pr,
+            verdict,
+            reviewed_sha,
+        } => (
+            "review-verdict-recorded",
+            format!(
+                "review verdict `{verdict}` recorded{}{}",
+                pr.map(|n| format!(" for PR #{n}")).unwrap_or_default(),
+                reviewed_sha
+                    .as_deref()
+                    .map(|s| format!(" at {}", &s[..s.len().min(8)]))
+                    .unwrap_or_default(),
+            ),
+        ),
+        // trace:TASK-1450 | ai:claude
+        EventKind::DispositionChanged { before, after } => (
+            "disposition-changed",
+            format!("disposition changed: {before} → {after}"),
+        ),
+        // trace:TASK-1450 | ai:claude
+        EventKind::ExecutionModeChanged { before, after } => (
+            "execution-mode-changed",
+            format!(
+                "execution mode changed: {} → {}",
+                before.as_deref().unwrap_or("ungroomed"),
+                after.as_deref().unwrap_or("ungroomed"),
+            ),
+        ),
         EventKind::SpecCompleted {
             commit,
             pr,

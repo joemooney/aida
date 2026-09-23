@@ -1303,3 +1303,109 @@ fn a_closed_refusal_does_not_suppress_a_later_pr() {
         "a closed refusal must not suppress a later PR"
     );
 }
+
+// BUG-1571: the handshake write must fail LOUDLY, not silently, when the
+// artefact cannot actually land. Simulated by pointing the target path at a
+// read-only directory: `create_dir_all` on an existing dir is a no-op, so
+// the write itself is what trips, exactly like a permissions/quota/disk
+// failure in the field would.
+// trace:BUG-1571 | ai:claude
+#[cfg(unix)]
+#[test]
+fn pr_keyed_write_reports_failure_honestly_when_the_directory_is_read_only() {
+    use std::os::unix::fs::PermissionsExt;
+    // Root bypasses directory permissions (CAP_DAC_OVERRIDE), so a read-only
+    // directory cannot force the failure this test needs. trace:BUG-1571
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipping: running as root, directory permissions are not enforced");
+        return;
+    }
+
+    let tmp = TempDir::new().unwrap();
+    let locked_dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&locked_dir).unwrap();
+    let path = locked_dir.join("PR-9001.json");
+
+    let mut perms = std::fs::metadata(&locked_dir).unwrap().permissions();
+    perms.set_mode(0o555); // read + execute, no write
+    std::fs::set_permissions(&locked_dir, perms.clone()).unwrap();
+
+    let result = record_verdict_at_path(
+        tmp.path(),
+        &path,
+        Some("approved"),
+        Some("ac772eaca9"),
+        Some("topic"),
+        Some("looks good"),
+        &[],
+        "reviewer-a",
+    );
+
+    // Restore write access so TempDir can clean itself up on drop.
+    let mut restore = perms;
+    restore.set_mode(0o755);
+    std::fs::set_permissions(&locked_dir, restore).unwrap();
+
+    let err = result
+        .expect_err("a write that cannot land must be reported as an error, never as a success");
+    let message = err.to_string();
+    assert!(
+        message.contains("PR-9001.json"),
+        "the failure must name the artefact that did not land: {message}"
+    );
+    assert!(
+        !path.exists(),
+        "the artefact must genuinely be absent when the write is reported as failed"
+    );
+}
+
+// BUG-1571: a caller layering extra fields onto build_verdict_object (the
+// orchestrator's phase-3 handshake overlay) and committing with
+// write_verdict_object gets the same honest-failure guarantee as the
+// single-shot record_verdict_at_path path.
+// trace:BUG-1571 | ai:claude
+#[cfg(unix)]
+#[test]
+fn layered_handshake_write_reports_failure_honestly_when_the_directory_is_read_only() {
+    use std::os::unix::fs::PermissionsExt;
+    // Root bypasses directory permissions (CAP_DAC_OVERRIDE), so a read-only
+    // directory cannot force the failure this test needs. trace:BUG-1571
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipping: running as root, directory permissions are not enforced");
+        return;
+    }
+
+    let tmp = TempDir::new().unwrap();
+    let locked_dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&locked_dir).unwrap();
+    let path = locked_dir.join("PR-9002.json");
+
+    let obj = build_verdict_object(
+        tmp.path(),
+        &path,
+        Some("approved"),
+        Some("ac772eaca9"),
+        Some("topic"),
+        Some("looks good"),
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+
+    let mut perms = std::fs::metadata(&locked_dir).unwrap().permissions();
+    perms.set_mode(0o555);
+    std::fs::set_permissions(&locked_dir, perms.clone()).unwrap();
+
+    let result = write_verdict_object(&path, &obj);
+
+    let mut restore = perms;
+    restore.set_mode(0o755);
+    std::fs::set_permissions(&locked_dir, restore).unwrap();
+
+    let err = result.expect_err("a failed layered write must surface as an error");
+    assert!(
+        err.to_string().contains("PR-9002.json"),
+        "the failure must name the artefact that did not land: {err}"
+    );
+    assert!(!path.exists(), "the artefact must genuinely be absent");
+}
