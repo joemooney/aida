@@ -1,0 +1,16 @@
+{
+  "id": "e26060e4-004e-4beb-9f89-40af909303fb",
+  "thread_id": "e26060e4-004e-4beb-9f89-40af909303fb",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude"
+  },
+  "timestamp": 1790140862135,
+  "body": "Review: BUG-1503\n\nREQUEST_CHANGES at rebased head 113c6b25794c46dff39ec4f5b0c7f70658d32ab9. Required CI is red because bug_1289_format_json.rs::status_bare_format_json_parses still expects the old heavy/project-wide shape. Update that existing contract test (or resolve compatibility) to match the intentionally fast cache-backed bare JSON shape, then push a new head and report it. Do not merge over red CI.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
