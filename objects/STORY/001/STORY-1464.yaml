@@ -1,0 +1,30 @@
+id: 01a0cc10-1a05-7793-8aba-05792cf412f4
+spec_id: STORY-1464
+agreed_id: STORY-1464
+title: 'Seat rotation: autonomous advisor/product seats run as short episodes that hand off and exit, and a supervised warm seat is rotated at a context ceiling - so no seat ever lives at 500k+'
+description: |
+  ## Why
+  BUG-1589: the advisor and reviewer seats lived for days, auto-compacting near ~967k, so every call averaged ~580k. Fresh or post-compaction context is ~85k. The ingredients for rotation already exist but nothing composes them: /aida-handoff (STORY-1006), cold-boot context seeding via .aida/advisor-context.md (STORY-626), wake-only-when-awaiting (TASK-1245), the ADR-46 cold-boot fallback, the scheduler tick (STORY-1226, now installed), the supervised launcher (aida agent new), and the STORY-1462 watchdog (300k restart recommendation).
+
+  ## Two modes
+  A. Episodic (the default for unattended seats). No warm process. The zero-token scheduler tick checks the seat's worklist (aida awaiting / aida advisor / product equivalent). Only when it is non-empty does it cold-boot a fresh headless session for that seat, seeded with the seat's context file + last handoff, bounded by max turns / max tokens. The session works the items, rewrites its handoff (bounded size), and exits. Context never exceeds one episode's growth; idle costs zero.
+  B. Rotating warm seat (supervised, a human is present). aida agent new --rotate keeps the launcher as a parent loop. When per-call context crosses the ceiling (default 300k, shared config with STORY-1462 criterion 8), at the next turn boundary the seat is told to run /aida-handoff and exit (Claude: Stop/UserPromptSubmit hook reading the transcript usage; Codex: session-log token counts); the launcher then relaunches the same seat seeded from the handoff. If the seat does not exit within a grace window after the handoff is written, the launcher terminates it.
+
+  ## Acceptance
+  1. Mode A: aida seat run <advisor|product> --episodic (or a registered scheduler job) cold-boots only when the seat's worklist is non-empty; an empty worklist costs zero model calls, pinned by a test.
+  2. Each episode is bounded (max turns, max tokens, max wall-clock from config) and ends by writing the seat's handoff; the next episode's first prompt includes it.
+  3. Handoff is size-capped (default ~4k tokens) because it becomes the next session's baseline; overflow must go to specs/comments/findings, not the handoff.
+  4. Mode B: aida agent new --role <seat> --rotate relaunches the seat after a handoff when context crosses the ceiling; rotation happens only at a turn boundary, never mid-command (never mid-merge, rebase or push).
+  5. The new process inherits the seat identity (same role, lease holder, mailbox recipient) - it does not register as a second seat, and the old seat's lease is released or transferred atomically.
+  6. Thrash guard: if a fresh episode starts above ~70% of the ceiling (handoff + baseline too large), or more than N rotations happen per hour, rotation stops and a needs-human item is raised instead of looping.
+  7. Vendor parity: works for Claude and Codex seats; context measurement per vendor comes from the STORY-1462 / TASK-1427 readers, not a new parser.
+  8. Every rotation and episode is recorded (seat, reason, context at rotation, handoff path, tokens used) so aida usage / the ledger can show cost per episode.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T02:20:02.437526721Z
+modified_at: 2026-09-23T02:20:02.437526721Z
+req_type: Story
+tags:
+- seat-rotation token-economics autonomy advisor product cold-boot parent:EPIC-71 parent:EPIC-62
