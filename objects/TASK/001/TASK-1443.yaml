@@ -1,0 +1,19 @@
+id: 01a0cc5d-44bc-7663-b92d-c3e855be51b7
+spec_id: TASK-1443
+agreed_id: TASK-1443
+title: The orchestrator must not open a second PR for a head that already has an open PR
+description: |
+  Split from BUG-1510 (2026-09-22) at the operator's request. BUG-1510 AC1 (dispatch-time lease-vs-brief compare) is on branch claude/bug-1510 @ 0d3597cb2b; this task is containment for when that check fails anyway. Incident: STORY-1391's drain drove PR #2043, whose commits were trailered BUG-1420; the RequestChanges verdict (TASK-1289/BUG-1420 findings) was shelved onto STORY-1391. Read BUG-1510 for the full timeline. Not in scope: BUG-1507 (fail-open preflight decide), BUG-1505 (verdict-store full replace).
+
+  Acceptance (BUG-1510 AC3, verbatim):
+  1. The orchestrator does not open a PR for a head that already has an open PR. #2042 and #2043 share a head and were created 106 seconds apart.
+  2. When an open PR already exists for the head, the orchestrator adopts or reports it rather than creating another; a test with an injected forge state covers this without real network calls.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T03:44:19.644493754Z
+modified_at: 2026-09-23T03:44:19.644493754Z
+req_type: Task
+tags:
+- parent:BUG-1510 orchestrator integrity attribution split-from:BUG-1510
