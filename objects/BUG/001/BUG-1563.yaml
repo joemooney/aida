@@ -218,7 +218,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:43:33.092866010Z
-modified_at: 2026-09-23T14:30:20.534042473Z
+modified_at: 2026-09-23T14:42:40.385721844Z
 req_type: Bug
 comments:
 - id: 01a0c556-7edc-7f02-820a-d12318982900
@@ -310,4 +310,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 07:30 -> branch claude/bug-1563, no PR (overnight burn-down)
   created_at: 2026-09-23T14:30:20.534042473Z
   modified_at: 2026-09-23T14:30:20.534042473Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ceb8-0081-73a1-8f29-3e1b95f0629f
+  author: joe
+  content: Commit fda022ab93 references this requirement
+  created_at: 2026-09-23T14:42:40.385721844Z
+  modified_at: 2026-09-23T14:42:40.385721844Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
