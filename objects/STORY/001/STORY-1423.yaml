@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-23T23:18:13.270256216Z
+modified_at: 2026-09-23T23:18:58.885667862Z
 req_type: Story
 relationships:
 - rel_type:
@@ -258,6 +258,12 @@ comments:
   content: 'The ceiling limb merged to main via #2138 (integration batch 27). The spec stays open because criterion 1 (quiet on both limbs) waits on BUG-1594, the 23.8s show tail.'
   created_at: 2026-09-23T23:18:13.270256216Z
   modified_at: 2026-09-23T23:18:13.270256216Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d090-b245-7ea1-9cdd-36435fb873ea
+  author: joe
+  content: 'CORRECTION: the auto-bump on the #2138 merge set this Completed, but criterion 1 is unmet: BUG-1594''s 23.8s show tail still trips the new ceiling. Reopened to Approved. I will complete it once BUG-1594 merges and aida doctor check performance is quiet.'
+  created_at: 2026-09-23T23:18:58.885667862Z
+  modified_at: 2026-09-23T23:18:58.885667862Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 history:
 - id: 01a0d08f-a355-7422-b04b-a11b42f298cc
