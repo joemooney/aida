@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:50:46.533446065Z
-modified_at: 2026-09-23T03:22:34.693281887Z
+modified_at: 2026-09-23T03:22:36.556749892Z
 req_type: Bug
 tags:
 - agent-surface
@@ -86,5 +86,11 @@ comments:
   content: Commit 6037184b7b references this requirement
   created_at: 2026-09-23T03:21:26.882975093Z
   modified_at: 2026-09-23T03:21:26.882975093Z
+  session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
+- id: 01a0cc49-628c-7253-8ecb-f0343f953e83
+  author: joe
+  content: 'Branch claude/bug-1494 @ 6037184b7b (pushed, no PR, not merged) is TEST-ONLY (+136). Finding, advisor-verified on origin/main: the two-hop bypass is already closed - target_requires_advisor_authority (aida-core lifecycle.rs) protects Approved/Planned/InProgress/Done/Completed, and status_advance_requires_advisor_authority gates the rework path (lib.rs) and MCP queue_rework. The branch pins it: 4 lifecycle unit tests at the boundary + a handle_queue_rework(work:true) non-advisor refusal test (the incident''s path, previously untested). AC4 sweep of every status-write site not exhaustive. Recommendation: merge as regression coverage, then Completed via the merge.'
+  created_at: 2026-09-23T03:22:36.556749892Z
+  modified_at: 2026-09-23T03:22:36.556749892Z
   session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
 execution_mode: drain
