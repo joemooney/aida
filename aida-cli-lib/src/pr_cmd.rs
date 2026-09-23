@@ -2635,6 +2635,14 @@ pub(crate) fn write_implementer_complete_banner(
             crate::glyph(crate::glyphs::Glyph::Info).cyan(),
             pr_number,
         )?;
+        // BUG-376's exit directive is load-bearing for the implementer
+        // session and must survive the honest wording (BUG-1537 review).
+        // trace:BUG-1537 | ai:claude
+        writeln!(
+            w,
+            "  {} — this implementer session has nothing left to do.",
+            "EXIT NOW".bold()
+        )?;
         writeln!(w)?;
         return Ok(());
     }

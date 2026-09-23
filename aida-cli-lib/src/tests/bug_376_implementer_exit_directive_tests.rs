@@ -106,6 +106,12 @@ fn already_merged_gets_observed_line_not_implementer_complete_banner() {
         out.contains("observed") || out.contains("Nothing was merged by this session"),
         "must be honest that this run only observed the merge, not performed it: {out}"
     );
+    // BUG-376's exit directive must survive on the observed path too.
+    // trace:BUG-1537 | ai:claude
+    assert!(
+        out.contains("EXIT NOW"),
+        "the implementer must still be told to exit: {out}"
+    );
 }
 
 /// The `aida-implement.md` skill template — the file an implementer
