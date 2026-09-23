@@ -52732,6 +52732,45 @@ fn pr_has_local_blocking_verdict_at_head(
         })
 }
 
+/// BUG-1549: true when AIDA holds a recorded APPROVED verdict for `pr`'s
+/// spec that does NOT provably cover `pr`'s CURRENT head — stale (the
+/// recorded sha is behind head), sha-less (the writer recorded no
+/// `reviewed_sha`), or Incomparable (a recorded sha too short to compare).
+/// Mirror image of `pr_has_local_blocking_verdict_at_head` just above: that
+/// function suppresses on a *confirmed* blocking verdict; this one
+/// suppresses on an approval whose coverage of the head cannot be
+/// confirmed, because an unverified approval is not evidence a PR is safe
+/// to merge either. Same reader (`review_verdict::read_recorded_verdict_any`,
+/// keyed off spec ids parsed from the PR title), same local-only, no-network
+/// contract. `same_reviewed_sha` already folds both "moved" and "too short
+/// to compare" into a single `false`, which is exactly the union this
+/// suppression predicate needs — the caller-facing `stale_approval_rows`
+/// (awaiting_you.rs) still distinguishes the two for the row's wording.
+// trace:BUG-1549 | ai:claude
+fn pr_has_stale_or_unverifiable_local_approval(
+    project_root: &std::path::Path,
+    pr: &status_cleanup::OpenPrItem,
+) -> bool {
+    let head_sha = pr.head_sha.as_deref().filter(|s| !s.trim().is_empty());
+    pr_ship::extract_spec_ids_from_text(&pr.title)
+        .iter()
+        .any(|spec_id| {
+            review_verdict::read_recorded_verdict_any(project_root, &[spec_id.as_str()])
+                .is_some_and(|verdict| {
+                    if verdict.kind != review_verdict::VerdictKind::Approved {
+                        return false;
+                    }
+                    match (verdict.reviewed_sha.as_deref(), head_sha) {
+                        (None, _) => true,
+                        (Some(_), None) => true,
+                        (Some(reviewed), Some(head)) => {
+                            !review_verdict::same_reviewed_sha(reviewed, head)
+                        }
+                    }
+                })
+        })
+}
+
 /// BUG-550: the set of SPEC-IDs referenced by commits that exist on some ref
 /// but are NOT yet reachable from the default branch — i.e. specs with an
 /// in-flight (unmerged) review surface. This is the cheap prefilter that lets
@@ -70665,7 +70704,24 @@ fn collect_awaiting_report_inner(
             .filter(|pr| pr_has_local_blocking_verdict_at_head(project_root, pr))
             .map(|pr| pr.number)
             .collect();
-        awaiting_you::classify_open_prs(&prs, &local_blocking)
+        // BUG-1549: an APPROVED local verdict that does not provably cover
+        // the PR's current head (stale, sha-less, or Incomparable) must
+        // leave the mergeable set exactly like a confirmed blocking verdict
+        // does — built alongside local_blocking from the same verdict
+        // reader, same no-network constraint, then unioned into one
+        // suppression set. See `stale_approval_rows` (awaiting_you.rs) for
+        // the distinct "stale" vs "cannot be verified" row this produces.
+        // trace:BUG-1549 | ai:claude
+        let unverifiable_local_approvals: std::collections::HashSet<u64> = prs
+            .iter()
+            .filter(|pr| pr_has_stale_or_unverifiable_local_approval(project_root, pr))
+            .map(|pr| pr.number)
+            .collect();
+        let local_suppressed: std::collections::HashSet<u64> = local_blocking
+            .union(&unverifiable_local_approvals)
+            .copied()
+            .collect();
+        awaiting_you::classify_open_prs(&prs, &local_suppressed)
     };
 
     // Pending briefs — prefer narrowing to the running agent so we
@@ -70975,7 +71031,7 @@ fn collect_awaiting_report_inner(
             .collect();
         (
             awaiting_you::rework_ready_rows(&candidates, seat.as_deref()),
-            awaiting_you::stale_approval_rows(&candidates, seat.as_deref()),
+            awaiting_you::stale_approval_rows(&candidates),
         )
     };
 

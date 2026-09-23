@@ -267,55 +267,84 @@ pub(crate) fn rework_ready_rows(
 /// merge, not "go re-review"): did a PR's head move past an APPROVAL, so a
 /// stale approval could be merged as if it still covered the current code.
 // trace:BUG-1549 | ai:claude
+/// Why a PR's recorded APPROVED verdict does not read as covering its
+/// current head. Two distinct causes, two distinct operator remedies:
+/// re-review (Stale — the head demonstrably moved past what was approved)
+/// vs. can't-tell-from-here (Unverifiable — the writer recorded no sha, or
+/// one too short to compare, so coverage can neither be confirmed nor
+/// denied). Collapsing the two into one boolean would lose exactly the
+/// distinction BUG-1549 AC1 asks the row to carry.
+// trace:BUG-1549 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StaleApprovalReason {
+    /// The approval was recorded against a sha the head has since moved
+    /// past (`ShaRelation::Moved`).
+    Stale,
+    /// No `reviewed_sha` was recorded, or one too short to compare
+    /// (`ShaRelation::Incomparable`) — coverage cannot be confirmed.
+    Unverifiable,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StaleApprovalItem {
     pub pr: u64,
     pub spec: Option<String>,
-    /// The sha the approval was recorded against.
+    /// The sha the approval was recorded against, when one was recorded at
+    /// all — empty when `reason` is `Unverifiable` because the writer
+    /// recorded none.
     pub reviewed_sha: String,
     /// Where the PR is now.
     pub head_sha: String,
+    /// Why this approval doesn't read as covering `head_sha`.
+    pub reason: StaleApprovalReason,
 }
 
-/// Which PRs carry an APPROVED verdict that no longer covers the current
-/// head — the merge-safety direction nothing previously detected.
+/// Which PRs carry an APPROVED verdict that does not provably cover the
+/// current head — the merge-safety direction nothing previously detected.
 ///
-/// Same fail-closed discipline as `rework_ready_rows`: a candidate with no
-/// `verdict_approved`, no `reviewed_sha`, or a sha too short to compare
-/// (`ShaRelation::Incomparable`, BUG-1546) emits NOTHING here. Indeterminate
-/// is never read as "still approved" — it just never reads as flagged BY
-/// THIS ROW either; the row is a positive-evidence surface, not the sole
-/// merge gate. Only a POSITIVE `Moved` reading emits a row.
+/// A candidate with no `reviewed_sha`, or one too short to compare
+/// (`ShaRelation::Incomparable`, BUG-1546), now emits a row too (reason
+/// `Unverifiable`) rather than being silently dropped: PRIN-5 fail-closed
+/// means indeterminate coverage must not read as "still approved" on the
+/// MERGE surface either, and a suppressed-but-invisible PR is worse than a
+/// suppressed-and-explained one. Only `ShaRelation::Same` — approval
+/// confirmed to still cover the head — emits nothing.
 ///
-/// Scoped to `seat` exactly like `rework_ready_rows` — the approver is the
-/// one who can say whether the new commit is covered.
+/// NOT scoped by seat (BUG-1549 AC2): a stale or unverifiable approval must
+/// show regardless of which actor recorded it, because the reader who
+/// needs the warning is whoever is about to merge, not necessarily the
+/// approver.
 // trace:BUG-1549 | ai:claude
-pub(crate) fn stale_approval_rows(
-    candidates: &[ReworkCandidate],
-    seat: Option<&str>,
-) -> Vec<StaleApprovalItem> {
+pub(crate) fn stale_approval_rows(candidates: &[ReworkCandidate]) -> Vec<StaleApprovalItem> {
     candidates
         .iter()
         .filter(|c| c.verdict_approved)
-        .filter(|c| match (seat, c.recorded_by.as_deref()) {
-            (Some(me), Some(who)) => who.contains(me),
-            _ => true,
-        })
         .filter_map(|c| {
             let reviewed = c
                 .reviewed_sha
                 .as_deref()
                 .map(str::trim)
-                .filter(|s| !s.is_empty())?;
+                .filter(|s| !s.is_empty());
             let head = c.head_sha.trim();
-            if head.is_empty() || compare_shas(head, reviewed) != ShaRelation::Moved {
-                return None;
-            }
+            let (reason, reviewed_sha) = match reviewed {
+                None => (StaleApprovalReason::Unverifiable, String::new()),
+                Some(reviewed) if head.is_empty() => {
+                    (StaleApprovalReason::Unverifiable, reviewed.to_string())
+                }
+                Some(reviewed) => match compare_shas(head, reviewed) {
+                    ShaRelation::Same => return None,
+                    ShaRelation::Moved => (StaleApprovalReason::Stale, reviewed.to_string()),
+                    ShaRelation::Incomparable => {
+                        (StaleApprovalReason::Unverifiable, reviewed.to_string())
+                    }
+                },
+            };
             Some(StaleApprovalItem {
                 pr: c.pr,
                 spec: c.spec.clone(),
-                reviewed_sha: reviewed.to_string(),
+                reviewed_sha,
                 head_sha: head.to_string(),
+                reason,
             })
         })
         .collect()
@@ -763,15 +792,33 @@ impl AwaitingReport {
                 .as_deref()
                 .map(|s| format!(" ({s})"))
                 .unwrap_or_default();
-            writeln!(
-                w,
-                "  {} PR-{}{} moved past your approval — reviewed {}, now {} — do not merge on the old verdict",
-                "🛑".red(),
-                item.pr.to_string().bold(),
-                spec,
-                short_sha_for_row(&item.reviewed_sha).dimmed(),
-                short_sha_for_row(&item.head_sha).bold(),
-            )?;
+            match item.reason {
+                StaleApprovalReason::Stale => writeln!(
+                    w,
+                    "  {} PR-{}{} moved past your approval — reviewed {}, now {} — do not merge on the old verdict",
+                    "🛑".red(),
+                    item.pr.to_string().bold(),
+                    spec,
+                    short_sha_for_row(&item.reviewed_sha).dimmed(),
+                    short_sha_for_row(&item.head_sha).bold(),
+                )?,
+                StaleApprovalReason::Unverifiable => writeln!(
+                    w,
+                    "  {} PR-{}{} approval cannot be verified — {} — do not merge on the old verdict",
+                    "🛑".red(),
+                    item.pr.to_string().bold(),
+                    spec,
+                    if item.reviewed_sha.is_empty() {
+                        "no reviewed sha was recorded".to_string()
+                    } else {
+                        format!(
+                            "recorded sha {} is too short to compare against {}",
+                            short_sha_for_row(&item.reviewed_sha).dimmed(),
+                            short_sha_for_row(&item.head_sha).bold(),
+                        )
+                    },
+                )?,
+            }
             budget -= 1;
         }
 
@@ -1154,6 +1201,10 @@ impl AwaitingReport {
                 "spec": i.spec,
                 "reviewed_sha": i.reviewed_sha,
                 "head_sha": i.head_sha,
+                "reason": match i.reason {
+                    StaleApprovalReason::Stale => "stale",
+                    StaleApprovalReason::Unverifiable => "unverifiable",
+                },
             })).collect::<Vec<_>>(),
             "reviewer_queue_items": self.reviewer_queue_items.iter().map(|q| serde_json::json!({
                 "spec_id": q.spec_id,
@@ -1309,7 +1360,9 @@ fn pluralize(n: usize, singular: &str, plural: &str) -> String {
 ///   - `mergeable == "MERGEABLE"` (excludes CONFLICTING / UNKNOWN)
 ///   - CI is not failing or pending (pass / no-checks / `?` are fine)
 ///   - reviewer verdict is not `CHANGES_REQUESTED`
-///   - no AIDA-recorded blocking verdict at the PR's current head
+///   - no AIDA-recorded blocking verdict at the PR's current head, and no
+///     AIDA-recorded APPROVED verdict that fails to provably cover it
+///     (stale, sha-less, or Incomparable — BUG-1549)
 ///
 /// A `REVIEW_REQUIRED` PR still qualifies: if the operator is the only
 /// reviewer on a solo project, the human merge button is the only gate.
@@ -1350,9 +1403,14 @@ pub(crate) fn is_awaiting_you(pr: &OpenPrItem, local_verdict_blocks: bool) -> bo
 ///
 /// `local_blocking` names the PRs (by number) for which the caller already
 /// resolved an AIDA-recorded RequestChanges/Rejected verdict at the PR's
-/// CURRENT head (see `pr_has_local_blocking_verdict_at_head` in lib.rs) — the
-/// two sources are unioned with GitHub's `review_decision`, never swapped.
+/// CURRENT head (see `pr_has_local_blocking_verdict_at_head` in lib.rs) OR an
+/// AIDA-recorded APPROVED verdict that does not provably cover that head —
+/// stale, sha-less, or Incomparable (see
+/// `pr_has_stale_or_unverifiable_local_approval` in lib.rs, BUG-1549) — the
+/// caller unions both into this one set. The two sources are unioned with
+/// GitHub's `review_decision`, never swapped.
 // trace:BUG-1490 | ai:claude
+// trace:BUG-1549 | ai:claude
 pub(crate) fn classify_open_prs(
     prs: &[OpenPrItem],
     local_blocking: &HashSet<u64>,
@@ -1762,11 +1820,10 @@ mod tests {
     // trace:BUG-1549 | ai:claude
     #[test]
     fn an_approval_at_the_head_is_not_stale() {
-        assert!(stale_approval_rows(
-            &[approved_candidate(2060, "aaa1111", Some("aaa1111"), None)],
-            None
-        )
-        .is_empty());
+        assert!(
+            stale_approval_rows(&[approved_candidate(2060, "aaa1111", Some("aaa1111"), None)])
+                .is_empty()
+        );
     }
 
     // Acceptance: approval BEHIND the head — the head moved past the
@@ -1776,48 +1833,35 @@ mod tests {
     // trace:BUG-1549 | ai:claude
     #[test]
     fn an_approval_behind_the_head_is_flagged_as_stale() {
-        let rows = stale_approval_rows(
-            &[approved_candidate(
-                2060,
-                "1aca4e3e9251",
-                Some("08834c6045a9"),
-                Some("claude-reviewer-1"),
-            )],
-            None,
-        );
+        let rows = stale_approval_rows(&[approved_candidate(
+            2060,
+            "1aca4e3e9251",
+            Some("08834c6045a9"),
+            Some("claude-reviewer-1"),
+        )]);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].pr, 2060);
         assert_eq!(rows[0].reviewed_sha, "08834c6045a9");
         assert_eq!(rows[0].head_sha, "1aca4e3e9251");
+        assert_eq!(rows[0].reason, StaleApprovalReason::Stale);
     }
 
-    // Acceptance: an approval recorded with no reviewed_sha is indeterminate
-    // and must NOT read as a covering approval. PRIN-5 fail-closed: absent
-    // provenance degrades to silence here (same discipline as
-    // `a_verdict_without_provenance_degrades_to_silence_not_a_guess`) rather
-    // than being treated as "still approved" — it is never counted Resolved
-    // by `review_verdict::review_actionability` either (relation is
-    // `TipRelation::Unknown`, which is NOT `AtReviewedSha`).
+    // Acceptance (BUG-1549 AC1): an approval recorded with no reviewed_sha is
+    // indeterminate and must NOT read as a covering approval — and, unlike
+    // before, must not vanish from the awaiting/mergeable surface either. It
+    // now emits its own row (reason `Unverifiable`) so the operator sees WHY
+    // the PR isn't reading as safe to merge, distinct from a genuinely stale
+    // (head-moved) approval. This asserts on the surface this branch changes
+    // (`stale_approval_rows`), not on `review_verdict::review_actionability`,
+    // which is a different classifier answering a different question.
     // trace:BUG-1549 | ai:claude
     #[test]
     fn an_approval_without_a_sha_is_treated_as_absent_not_covering() {
-        assert!(stale_approval_rows(
-            &[approved_candidate(2060, "1aca4e3e9251", None, None)],
-            None
-        )
-        .is_empty());
-        assert_eq!(
-            review_verdict::review_actionability(
-                Some(&review_verdict::RecordedVerdict {
-                    kind: review_verdict::VerdictKind::Approved,
-                    reviewed_sha: None,
-                    ..Default::default()
-                }),
-                review_verdict::classify_tip_relation(None, Some("1aca4e3e9251"), None),
-            ),
-            review_verdict::ReviewActionability::NeedsReview,
-            "an approval without a reviewed_sha must never classify as Resolved"
-        );
+        let rows = stale_approval_rows(&[approved_candidate(2060, "1aca4e3e9251", None, None)]);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].pr, 2060);
+        assert_eq!(rows[0].reviewed_sha, "");
+        assert_eq!(rows[0].reason, StaleApprovalReason::Unverifiable);
     }
 
     // A blocking verdict is not an approval, so its head moving is
@@ -1826,17 +1870,20 @@ mod tests {
     // trace:BUG-1549 | ai:claude
     #[test]
     fn a_blocking_verdict_never_produces_a_stale_approval_row() {
-        assert!(stale_approval_rows(
-            &[candidate(2061, "1aca4e3e9251", Some("08834c6045a9"), None)],
+        assert!(stale_approval_rows(&[candidate(
+            2061,
+            "1aca4e3e9251",
+            Some("08834c6045a9"),
             None
-        )
+        )])
         .is_empty());
     }
 
-    // Scoped to the approving seat, same discipline as rework_ready_rows.
+    // BUG-1549 AC2: NOT scoped by seat — a stale or unverifiable approval
+    // must show regardless of which actor recorded it.
     // trace:BUG-1549 | ai:claude
     #[test]
-    fn stale_approvals_are_scoped_to_the_approving_seat_but_unknown_surfaces() {
+    fn stale_approvals_surface_regardless_of_the_recording_actor() {
         let mine = approved_candidate(
             2060,
             "aaa1111",
@@ -1845,12 +1892,12 @@ mod tests {
         );
         let theirs = approved_candidate(2061, "ccc3333", Some("ddd4444"), Some("someone-else"));
 
-        let scoped =
-            stale_approval_rows(&[mine.clone(), theirs.clone()], Some("claude-reviewer-1"));
-        assert_eq!(scoped.iter().map(|r| r.pr).collect::<Vec<_>>(), vec![2060]);
-
-        let unscoped = stale_approval_rows(&[mine, theirs], None);
-        assert_eq!(unscoped.len(), 2, "with no seat known, surface everything");
+        let rows = stale_approval_rows(&[mine, theirs]);
+        assert_eq!(
+            rows.iter().map(|r| r.pr).collect::<Vec<_>>(),
+            vec![2060, 2061],
+            "both rows must surface regardless of who recorded the approval"
+        );
     }
 
     /// The regression: three messages in the operator's own inbox, a big
