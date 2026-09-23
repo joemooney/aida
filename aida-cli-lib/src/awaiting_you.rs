@@ -369,8 +369,12 @@ pub(crate) fn stale_approval_rows(candidates: &[ReworkCandidate]) -> Vec<StaleAp
 /// a 3-character string equal a 40-character one. "Too short to tell" is not
 /// "different"; it degrades to silence, exactly like absent provenance.
 // trace:BUG-1546 | ai:claude
+// BUG-1549: `pub(crate)` so `lib.rs`'s `resolve_pr_review_verdict` can reuse
+// the exact same "is this sha comparable" test when tie-breaking between a
+// spec-keyed and a PR-keyed verdict record, instead of re-implementing the
+// prefix-length floor and risking the two drifting apart.
 #[derive(Debug, PartialEq, Eq)]
-enum ShaRelation {
+pub(crate) enum ShaRelation {
     Same,
     Moved,
     Incomparable,
@@ -380,7 +384,7 @@ enum ShaRelation {
 /// than evidence.
 const MIN_COMPARABLE_SHA: usize = 7;
 
-fn compare_shas(head: &str, reviewed: &str) -> ShaRelation {
+pub(crate) fn compare_shas(head: &str, reviewed: &str) -> ShaRelation {
     let n = head.len().min(reviewed.len()).min(40);
     if n < MIN_COMPARABLE_SHA {
         return ShaRelation::Incomparable;
