@@ -20,7 +20,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:59:00.522521946Z
-modified_at: 2026-09-23T06:30:44.722969945Z
+modified_at: 2026-09-23T06:30:46.454557767Z
 req_type: Bug
 tags:
 - aida:db
@@ -38,4 +38,10 @@ comments:
   content: Commit fe757d59ce references this requirement
   created_at: 2026-09-23T06:30:25.295051350Z
   modified_at: 2026-09-23T06:30:25.295051350Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ccf5-a7b6-7821-b1e0-f3a301b104b5
+  author: joe
+  content: 'Claude implementer result: claude/bug-1486 @ fe757d59ce. stakeholder_cli_action now puts Db(Path|Info|Status) and Db(Block{List|Status|Verify}) in the Read bucket; the Db(_) fail-closed default still gates Migrate/Sync/MergeGate/RetireLegacyIds/WorkspaceInit/ReconcileStatus/Check/Block::Claim. 2 tests. Awaiting an independent review, then integration batch.'
+  created_at: 2026-09-23T06:30:46.454557767Z
+  modified_at: 2026-09-23T06:30:46.454557767Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
