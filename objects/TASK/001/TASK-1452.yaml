@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T10:02:27.848962003Z
-modified_at: 2026-09-23T11:27:39.610577671Z
+modified_at: 2026-09-23T11:27:41.918741274Z
 req_type: Task
 tags:
 - data-repair
@@ -29,4 +29,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 04:24 (overnight burn-down)
   created_at: 2026-09-23T11:24:52.888898002Z
   modified_at: 2026-09-23T11:24:52.888898002Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce05-7f5e-7873-97a9-e81caaf0ebd6
+  author: joe
+  content: 'Done (store data repair via aida edit --description-from-file, each byte-verified): swallowed TOON blocks removed from 6 descriptions (BUG-1106, BUG-1111, BUG-1310, BUG-1450, BUG-1452, STORY-1405). High-confidence description findings: 10 to 0. STORY-1217 and TASK-1289 comment instances are unrepairable by design (no comment-edit surface).'
+  created_at: 2026-09-23T11:27:41.918741274Z
+  modified_at: 2026-09-23T11:27:41.918741274Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
