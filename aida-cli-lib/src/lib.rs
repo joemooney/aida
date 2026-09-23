@@ -70539,8 +70539,10 @@ fn collect_awaiting_report_inner(
     // notice-fast path and when CI/forge lookups are off — the same contract as
     // mergeable_prs. Reuses the MEMOIZED snapshot, so this adds no request.
     // trace:STORY-1419 | ai:claude
-    let rework_ready = if notice_fast || no_ci {
-        Vec::new()
+    // trace:BUG-1549 | ai:claude — shares the candidate build with rework_ready
+    // below (same PR snapshot, same seat scoping); only the direction differs.
+    let (rework_ready, stale_approvals) = if notice_fast || no_ci {
+        (Vec::new(), Vec::new())
     } else {
         let snapshot = collect_open_prs(project_root);
         let seat = std::env::var("AIDA_USER")
@@ -70560,12 +70562,16 @@ fn collect_awaiting_report_inner(
                     &head_sha,
                     &pr.head_branch,
                     verdict.kind.blocks_done(),
+                    verdict.kind == review_verdict::VerdictKind::Approved,
                     verdict.reviewed_sha.as_deref(),
                     verdict.recorded_by.as_deref(),
                 ))
             })
             .collect();
-        awaiting_you::rework_ready_rows(&candidates, seat.as_deref())
+        (
+            awaiting_you::rework_ready_rows(&candidates, seat.as_deref()),
+            awaiting_you::stale_approval_rows(&candidates, seat.as_deref()),
+        )
     };
 
     // TASK-1445 (containment for BUG-1510 AC5): does a live drain's
@@ -70584,6 +70590,7 @@ fn collect_awaiting_report_inner(
         mergeable_prs,
         unowned_failing_prs,
         rework_ready,
+        stale_approvals,
         pending_briefs,
         findings_total,
         reviewer_queue_items,
