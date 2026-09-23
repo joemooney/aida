@@ -1048,6 +1048,33 @@ pub fn queue_done_verdict_gate(
         .filter(|l| !l.is_empty())
         .collect());
     }
+    // An unrecognised verdict word is not evidence of approval. `handle_review_record`
+    // already refuses to WRITE one (`VerdictKind::Other` bails before the file is
+    // written), but an older/hand-edited file can still carry a word `parse` does not
+    // recognise, and falling through the way `blocks_done() == false` handles a real
+    // Approved verdict would silently treat "could not classify" as "passed" — the same
+    // shape as the preflight Skipped-funnels-to-Open defect. Refuse and say why instead.
+    // trace:BUG-1507 | ai:claude (PRIN-5: absent is not good evidence)
+    if v.kind == VerdictKind::Other {
+        return VerdictGate::Refuse(
+            vec![
+                format!(
+                    "error: aida queue done refused (exit 1) — the last review of {display_id} \
+                     recorded an unrecognised verdict word `{}`, so this check cannot determine \
+                     whether the review passed or blocked.",
+                    v.raw
+                ),
+                summary_line(v),
+                "A review gate that cannot classify the verdict must not wave work through. \
+                 Record a fresh, recognised verdict against the current head: `aida review \
+                 record` accepts approved, request-changes, or rejected."
+                    .to_string(),
+            ]
+            .into_iter()
+            .filter(|l| !l.is_empty())
+            .collect(),
+        );
+    }
     if !v.kind.blocks_done() {
         return non_blocking_verdict_gate(display_id, v, relation);
     }
