@@ -366,6 +366,8 @@ pub(crate) fn handle_schedule_command(
         }
         MaintenanceScheduleCommand::Done { job, note } => done(project_root, job, note.as_deref())?,
         MaintenanceScheduleCommand::EmitCron => emit_cron(project_root)?,
+        MaintenanceScheduleCommand::InstallCron => install_cron_command(project_root)?,
+        MaintenanceScheduleCommand::UninstallCron => uninstall_cron_command(project_root)?,
     }
     Ok(())
 }
@@ -1430,6 +1432,443 @@ fn emit_cron(project_root: &Path) -> Result<()> {
         );
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Cron driver install / uninstall / doctor evidence (STORY-1463)
+//
+// STORY-1226 registered jobs only ever RUN when something invokes
+// `aida schedule tick`; nothing installs that invoker. This section adds the
+// one supported auto-installer (a crontab entry, Linux/macOS) plus the
+// read-only evidence `aida doctor` uses to flag a repo where nothing drives
+// the tick — a registered job that silently never runs.
+// ---------------------------------------------------------------------------
+
+/// Marker embedded (as a trailing `#` comment) in the installed crontab
+/// line, keyed by this repo's canonical path. Makes install idempotent
+/// (re-running `aida init`/`install-cron` never duplicates the entry) and
+/// lets `uninstall-cron` find exactly the line that belongs to this repo
+/// without touching a different repo's entry.
+// trace:STORY-1463 | ai:claude
+pub(crate) fn tick_cron_marker(project_root: &Path) -> String {
+    let canon = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
+    format!("aida-schedule-tick:{}", canon.display())
+}
+
+/// Pure line-builder, split out from [`tick_cron_line`] so the exact shape
+/// is unit-testable without touching `std::env::current_exe`.
+// trace:STORY-1463 | ai:claude
+pub(crate) fn build_tick_cron_line(repo: &Path, aida_exe: &Path) -> String {
+    let bin_dir = aida_exe
+        .parent()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    format!(
+        "*/15 * * * * cd {} && PATH={}:/usr/local/bin:/usr/bin:/bin {} schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1 # {}",
+        shell_quote(&repo.display().to_string()),
+        bin_dir,
+        shell_quote(&aida_exe.display().to_string()),
+        tick_cron_marker(repo),
+    )
+}
+
+/// The crontab entry that drives `aida schedule tick` for `project_root`
+/// every 15 minutes: an absolute `aida` path and an explicit `PATH` (cron's
+/// own PATH is minimal), `cd`'d into the repo, logging to
+/// `~/.aida/schedule-tick.log`. This is the reference shape from STORY-1463
+/// (the line an operator had to hand-install before this existed).
+// trace:STORY-1463 | ai:claude
+pub(crate) fn tick_cron_line(project_root: &Path) -> Result<String> {
+    let repo = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
+    let aida_exe =
+        std::env::current_exe().context("could not resolve the current `aida` binary path")?;
+    let aida_exe = aida_exe.canonicalize().unwrap_or(aida_exe);
+    Ok(build_tick_cron_line(&repo, &aida_exe))
+}
+
+/// Read the current user's crontab. `Ok(None)` means no crontab exists yet
+/// for this user — a common, legitimate state (`crontab -l` exits non-zero
+/// with "no crontab for <user>"), not an error. Any other failure (the
+/// `crontab` binary missing, a permission error, …) is `Err` so the caller
+/// can report "unknown" rather than misreading it as "no entry installed".
+// trace:STORY-1463 | ai:claude
+fn read_crontab() -> Result<Option<String>> {
+    let output = match ProcessCommand::new("crontab").arg("-l").output() {
+        Ok(o) => o,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            anyhow::bail!("`crontab` is not installed or not on PATH");
+        }
+        Err(e) => return Err(e).context("failed to run `crontab -l`"),
+    };
+    if output.status.success() {
+        return Ok(Some(String::from_utf8_lossy(&output.stdout).to_string()));
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
+    if stderr.contains("no crontab") {
+        return Ok(None);
+    }
+    anyhow::bail!(
+        "crontab -l failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+}
+
+fn write_crontab(body: &str) -> Result<()> {
+    use std::io::Write;
+    let mut child = ProcessCommand::new("crontab")
+        .arg("-")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .context("failed to spawn `crontab -`")?;
+    child
+        .stdin
+        .as_mut()
+        .context("no stdin for `crontab -`")?
+        .write_all(body.as_bytes())
+        .context("failed to write the new crontab")?;
+    let status = child.wait().context("failed waiting on `crontab -`")?;
+    if !status.success() {
+        anyhow::bail!("`crontab -` exited with {status}");
+    }
+    Ok(())
+}
+
+/// Pure: the new crontab body after installing `line` (marked by `marker`),
+/// or `None` when `marker` is already present (idempotent no-op). Appends —
+/// never rewrites or reorders whatever `crontab -l` already printed.
+// trace:STORY-1463 | ai:claude
+pub(crate) fn crontab_after_install(existing: &str, marker: &str, line: &str) -> Option<String> {
+    if existing.contains(marker) {
+        return None;
+    }
+    let mut body = existing.to_string();
+    if !body.is_empty() && !body.ends_with('\n') {
+        body.push('\n');
+    }
+    body.push_str(line);
+    body.push('\n');
+    Some(body)
+}
+
+/// Pure: the new crontab body with every line containing `marker` removed,
+/// or `None` when `marker` was not present (idempotent no-op).
+// trace:STORY-1463 | ai:claude
+pub(crate) fn crontab_after_uninstall(existing: &str, marker: &str) -> Option<String> {
+    if !existing.contains(marker) {
+        return None;
+    }
+    let mut body = existing
+        .lines()
+        .filter(|line| !line.contains(marker))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if !body.is_empty() {
+        body.push('\n');
+    }
+    Some(body)
+}
+
+/// Install this repo's tick entry into the user's crontab. Idempotent
+/// (`Ok(false)` when already installed). Windows has no crontab — callers
+/// print `tick_cron_line` and the manual next step instead of calling this.
+// trace:STORY-1463 | ai:claude
+pub(crate) fn install_tick_cron(project_root: &Path) -> Result<bool> {
+    if cfg!(windows) {
+        anyhow::bail!(
+            "cron install is not supported on Windows — add this line to Task Scheduler by hand:\n  {}",
+            tick_cron_line(project_root)?
+        );
+    }
+    let marker = tick_cron_marker(project_root);
+    let line = tick_cron_line(project_root)?;
+    let existing = read_crontab()?.unwrap_or_default();
+    match crontab_after_install(&existing, &marker, &line) {
+        None => Ok(false),
+        Some(body) => {
+            write_crontab(&body)?;
+            Ok(true)
+        }
+    }
+}
+
+/// Remove this repo's tick entry from the user's crontab (found via its
+/// marker). Idempotent (`Ok(false)` when nothing matched); never touches an
+/// entry belonging to a different repo.
+// trace:STORY-1463 | ai:claude
+pub(crate) fn uninstall_tick_cron(project_root: &Path) -> Result<bool> {
+    if cfg!(windows) {
+        anyhow::bail!("cron is not available on Windows");
+    }
+    let marker = tick_cron_marker(project_root);
+    let Some(existing) = read_crontab()? else {
+        return Ok(false);
+    };
+    match crontab_after_uninstall(&existing, &marker) {
+        None => Ok(false),
+        Some(body) => {
+            write_crontab(&body)?;
+            Ok(true)
+        }
+    }
+}
+
+/// Whether a scheduler driver is installed for this repo, from the one
+/// signal we can positively check: our own crontab marker.
+// trace:STORY-1463 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CronDriverStatus {
+    /// The marker line is present in the user's crontab.
+    Installed,
+    /// crontab is readable and the marker is absent.
+    Missing,
+    /// Could not determine (no `crontab` on PATH, unsupported platform,
+    /// permission error, …). PRIN-5: never collapse this into "ok".
+    Unknown(String),
+}
+
+/// Pure classifier over an already-resolved crontab read, so the doctor
+/// logic (`build_scheduler_driver_findings`) is unit-testable without
+/// shelling out. `Err(reason)` mirrors a `read_crontab` failure.
+// trace:STORY-1463 | ai:claude
+pub(crate) fn classify_cron_driver(
+    crontab: Result<Option<String>, String>,
+    marker: &str,
+) -> CronDriverStatus {
+    match crontab {
+        Ok(Some(body)) if body.contains(marker) => CronDriverStatus::Installed,
+        Ok(_) => CronDriverStatus::Missing,
+        Err(reason) => CronDriverStatus::Unknown(reason),
+    }
+}
+
+fn cron_driver_status(project_root: &Path) -> CronDriverStatus {
+    if cfg!(windows) {
+        return CronDriverStatus::Unknown("no crontab on Windows".to_string());
+    }
+    let marker = tick_cron_marker(project_root);
+    classify_cron_driver(read_crontab().map_err(|e| e.to_string()), &marker)
+}
+
+/// How many enabled SUBSTRATE jobs this repo's merged registry declares
+/// (project `.aida/config.toml` + machine-global `~/.aida/schedule.toml`).
+/// `0` when there is no registry at all, or every entry is a seat job / disabled.
+// trace:STORY-1463 | ai:claude
+pub(crate) fn enabled_substrate_job_count(project_root: &Path) -> Result<usize> {
+    let Some(config) = load_registry(project_root)? else {
+        return Ok(0);
+    };
+    Ok(config
+        .tasks
+        .iter()
+        .filter(|t| t.enabled && t.kind == JobKind::Substrate)
+        .count())
+}
+
+/// An enabled substrate job whose effective last run (ledger, cross-clone;
+/// or local mirror) is more than 2x its own interval in the past — the
+/// observable symptom of a broken driver even when an entry IS installed
+/// (wrong PATH, wrong `aida` binary, cron daemon disabled, …).
+// trace:STORY-1463 | ai:claude
+pub(crate) struct OverdueSubstrateJob {
+    pub name: String,
+    pub interval: Duration,
+    pub last_run: DateTime<Utc>,
+}
+
+/// Enabled substrate jobs overdue by more than 2x their interval. A job
+/// that has NEVER run (no ledger, no local mirror) is deliberately excluded
+/// here — that is "no evidence", not "overdue" — the missing-driver finding
+/// (`enabled_substrate_job_count` + `cron_driver_status`) covers that case.
+// trace:STORY-1463 | ai:claude
+pub(crate) fn overdue_substrate_jobs(project_root: &Path) -> Result<Vec<OverdueSubstrateJob>> {
+    let Some(config) = load_registry(project_root)? else {
+        return Ok(Vec::new());
+    };
+    let ledgers = schedule_ledger::load_all(&store_root(project_root));
+    let state = load_state(project_root)?;
+    let now = Utc::now();
+    let mut out = Vec::new();
+    for task in &config.tasks {
+        if !task.enabled || task.kind != JobKind::Substrate {
+            continue;
+        }
+        let Some(interval) = task.interval else {
+            continue;
+        };
+        let Some(last_run) =
+            effective_last_run(ledgers.get(&task.name), state.tasks.get(&task.name))
+        else {
+            continue;
+        };
+        if now.signed_duration_since(last_run) > interval * 2 {
+            out.push(OverdueSubstrateJob {
+                name: task.name.clone(),
+                interval,
+                last_run,
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// Pure assembly of the `scheduler-driver` doctor findings from
+/// already-computed evidence — no I/O, fully unit-testable.
+// trace:STORY-1463 | ai:claude
+pub(crate) fn build_scheduler_driver_findings(
+    enabled_substrate_jobs: usize,
+    cron_status: CronDriverStatus,
+    overdue: &[OverdueSubstrateJob],
+    now: DateTime<Utc>,
+) -> Vec<crate::DoctorFinding> {
+    let mut out = Vec::new();
+    if enabled_substrate_jobs > 0 {
+        match cron_status {
+            CronDriverStatus::Installed => {}
+            CronDriverStatus::Missing => out.push(crate::DoctorFinding {
+                category: "scheduler-driver".to_string(),
+                id: "scheduler-tick-not-installed".to_string(),
+                summary: format!(
+                    "{enabled_substrate_jobs} enabled substrate scheduler job(s) registered, but nothing invokes `aida schedule tick` for this repo — they will never run"
+                ),
+                action: "aida schedule install-cron".to_string(),
+                safe_heal: false,
+            }),
+            CronDriverStatus::Unknown(reason) => out.push(crate::DoctorFinding {
+                category: "scheduler-driver".to_string(),
+                id: "scheduler-tick-driver-unknown".to_string(),
+                summary: format!(
+                    "cannot confirm whether a scheduler driver is installed for this repo ({reason}) — status unknown, not ok"
+                ),
+                action: "aida schedule install-cron".to_string(),
+                safe_heal: false,
+            }),
+        }
+    }
+    if !overdue.is_empty() {
+        let detail = overdue
+            .iter()
+            .map(|o| {
+                format!(
+                    "{} (last run {} ago, interval {})",
+                    o.name,
+                    human_age(now.signed_duration_since(o.last_run)),
+                    format_duration(o.interval)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        out.push(crate::DoctorFinding {
+            category: "scheduler-driver".to_string(),
+            id: "scheduler-job-overdue".to_string(),
+            summary: format!(
+                "{} substrate job(s) overdue by more than 2x their interval — a driver may be installed but not actually ticking: {detail}",
+                overdue.len()
+            ),
+            action: "aida schedule status".to_string(),
+            safe_heal: false,
+        });
+    }
+    out
+}
+
+/// `aida doctor` entry point: evidence-gated so a repo with no registered
+/// jobs never shells out to `crontab` at all.
+// trace:STORY-1463 | ai:claude
+pub(crate) fn scheduler_driver_doctor_findings(
+    project_root: &Path,
+) -> Result<Vec<crate::DoctorFinding>> {
+    let enabled = enabled_substrate_job_count(project_root)?;
+    let overdue = overdue_substrate_jobs(project_root)?;
+    if enabled == 0 && overdue.is_empty() {
+        return Ok(Vec::new());
+    }
+    let cron_status = cron_driver_status(project_root);
+    Ok(build_scheduler_driver_findings(
+        enabled,
+        cron_status,
+        &overdue,
+        Utc::now(),
+    ))
+}
+
+/// `aida schedule install-cron` / the `aida init` TTY offer.
+// trace:STORY-1463 | ai:claude
+fn install_cron_command(project_root: &Path) -> Result<()> {
+    if cfg!(windows) {
+        println!("Windows has no crontab. Add this line to Task Scheduler instead:");
+        println!("  {}", tick_cron_line(project_root)?);
+        return Ok(());
+    }
+    match install_tick_cron(project_root) {
+        Ok(true) => println!("Installed the scheduler tick crontab entry for this repo."),
+        Ok(false) => {
+            println!("Already installed — this repo's tick entry is already in your crontab.")
+        }
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+/// `aida schedule uninstall-cron`.
+// trace:STORY-1463 | ai:claude
+fn uninstall_cron_command(project_root: &Path) -> Result<()> {
+    if cfg!(windows) {
+        println!("Windows has no crontab entry to remove.");
+        return Ok(());
+    }
+    match uninstall_tick_cron(project_root) {
+        Ok(true) => println!("Removed this repo's scheduler tick crontab entry."),
+        Ok(false) => println!("No crontab entry found for this repo."),
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+/// STORY-1463: at a TTY, offer to install the crontab entry that drives
+/// `aida schedule tick` for this repo. Default answer is **no** — writing to
+/// the operator's crontab is a real system side effect that should be an
+/// explicit yes, not an assumed one. Non-interactive `aida init` never
+/// prompts and never installs anything.
+// trace:STORY-1463 | ai:claude
+pub(crate) fn maybe_offer_tick_install(project_root: &Path) {
+    use std::io::IsTerminal;
+    if !(std::io::stdin().is_terminal() && std::io::stdout().is_terminal()) {
+        return;
+    }
+    let line = match tick_cron_line(project_root) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("  Note: scheduler tick install skipped: {e}");
+            return;
+        }
+    };
+    println!();
+    println!("Scheduler tick");
+    println!("  Registered scheduler jobs only run when something invokes `aida schedule tick`.");
+    println!("  This line would drive it every 15 minutes:");
+    println!("    {line}");
+    if cfg!(windows) {
+        println!(
+            "  Windows has no crontab — add the line above to Task Scheduler yourself if you want it driven."
+        );
+        return;
+    }
+    let install = crate::prompt_yes_no("  Install now? [y/N] ", false).unwrap_or(false);
+    if !install {
+        println!(
+            "  Skipped. Install later with `aida schedule install-cron` (undo with `aida schedule uninstall-cron`)."
+        );
+        return;
+    }
+    match install_tick_cron(project_root) {
+        Ok(true) => println!("  Installed."),
+        Ok(false) => println!("  Already installed."),
+        Err(e) => eprintln!("  Note: scheduler tick was not installed: {e}"),
+    }
 }
 
 // ---------------------------------------------------------------------------
