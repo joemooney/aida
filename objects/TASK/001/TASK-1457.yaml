@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   1. The tests above exist and pass.
   2. A trailer-less rename yields a distinct, accurately worded outcome.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T16:53:46.913036798Z
-modified_at: 2026-09-23T16:53:50.895966549Z
+modified_at: 2026-09-23T17:17:09.284749047Z
 req_type: Task
 tags:
 - drain
