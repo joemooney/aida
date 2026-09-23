@@ -1249,7 +1249,12 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     // local mistake it is. Resolve the base from the branch's open PR
     // (if any); fall back to the repository default when there's no PR
     // yet or its base can't be read, and SAY SO before acting (PRIN-5).
-    let pr_number_for_base = match change_lookup_for_branch(&project_root, &branch) {
+    let base_lookup = change_lookup_for_branch(&project_root, &branch);
+    // Review fix: an unreachable forge (offline, gh failure, gh missing) is
+    // "could not tell", not "no PR" — it must print the fallback note too.
+    // trace:TASK-1416 | ai:claude
+    let base_lookup_failed = finish_base_lookup_failed(&base_lookup);
+    let pr_number_for_base = match base_lookup {
         crate::forge::ChangeLookup::Found(c) => Some(c.id),
         _ => None,
     };
@@ -1266,6 +1271,12 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
             "  {} {}",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
             note
+        );
+    } else if base_lookup_failed {
+        eprintln!(
+            "  {} could not determine this branch's PR base (the forge lookup failed); \
+             falling back to {default_ref}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
         );
     }
     let origin_ref = rebase_target.origin_ref().to_string();
@@ -4178,5 +4189,34 @@ pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> 
             anyhow::bail!("{}", outcome.summary)
         }
         _ => Ok(()),
+    }
+}
+
+/// True when the forge could not answer (as opposed to answering "no PR"):
+/// the finish ceremony must then say it fell back rather than stay silent.
+// trace:TASK-1416 | ai:claude
+pub(crate) fn finish_base_lookup_failed(lookup: &crate::forge::ChangeLookup) -> bool {
+    !matches!(
+        lookup,
+        crate::forge::ChangeLookup::Found(_) | crate::forge::ChangeLookup::NoChange
+    )
+}
+
+#[cfg(test)]
+mod task_1416_lookup_failure_tests {
+    use super::finish_base_lookup_failed;
+    use crate::forge::ChangeLookup;
+
+    // trace:TASK-1416 | ai:claude
+    #[test]
+    fn unreachable_forge_is_a_lookup_failure_but_no_pr_is_not() {
+        assert!(!finish_base_lookup_failed(&ChangeLookup::NoChange));
+        assert!(finish_base_lookup_failed(&ChangeLookup::CliMissing));
+        assert!(finish_base_lookup_failed(&ChangeLookup::CliFailed(
+            "boom".into()
+        )));
+        assert!(finish_base_lookup_failed(&ChangeLookup::Unreachable(
+            "offline".into()
+        )));
     }
 }
