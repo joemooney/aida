@@ -126,6 +126,7 @@ fn ps_row_carries_attributed_mail_identity_when_probe_resolves() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Attributed,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -153,6 +154,7 @@ fn ps_row_carries_unattributed_mail_identity_when_probe_falls_back() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unattributed,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -181,6 +183,7 @@ fn ps_row_carries_unknown_mail_identity_when_probe_cannot_read() {
         |_| None,
         |_| None,
         |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -209,6 +212,7 @@ fn ps_row_mail_identity_is_none_without_live_pid() {
         |_| None,
         |_| None,
         |_| panic!("mail identity probe must not be called for a row with no live pid"),
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
