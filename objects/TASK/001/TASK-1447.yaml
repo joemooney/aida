@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T07:40:38.872571128Z
-modified_at: 2026-09-23T14:45:26.183046402Z
+modified_at: 2026-09-23T14:45:33.188948360Z
 req_type: Task
 tags:
 - ci
@@ -36,4 +36,10 @@ comments:
   content: 'Claude implementer result: claude/task-1447 @ 7c8a757aeb. CLI-manual and monitor-contract guards run on docs-only PRs via a minimal cargo build -p aida-cli step on that path; doc-intent and trace/doc-header ungated (no binary needed); new scripts/check-docs-guards-scheduled.py (wired into CI) fails on any re-gated guard without a DOCS-GUARD-EXEMPT marker. Orchestrator-validated YAML and the check. Batch 13.'
   created_at: 2026-09-23T13:47:46.242028423Z
   modified_at: 2026-09-23T13:47:46.242028423Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ceba-a384-7fa1-9c3d-2b5e07e7e4f8
+  author: joe
+  content: 'Merged via integration batch 13, PR #2124 (2026-09-23 07:45).'
+  created_at: 2026-09-23T14:45:33.188948360Z
+  modified_at: 2026-09-23T14:45:33.188948360Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
