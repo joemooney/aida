@@ -58630,6 +58630,24 @@ fn ps_locked_by_cell(locked_by: Option<&str>) -> String {
         .to_string()
 }
 
+/// BUG-1521: the agent-mode (TOON) `running:` line for `aida ps`. The bare
+/// default view hides STALE rows behind a separate `stale_hidden:` count, but
+/// printing `running: 1` alone reads as "one session exists" — an operator (or
+/// an agent) has no way to tell "1 shown, 0 hidden" apart from "1 shown, 7
+/// hidden" without also parsing the next line. Folding the hidden count into
+/// the same line makes the number honest without a second lookup: `running: 1
+/// (7 stale hidden; --all to show)`. With nothing hidden (including under
+/// `--all`, where hidden is always 0), the plain count stands alone. Pure so
+/// the wording is unit-testable without building session fixtures.
+// trace:BUG-1521 | ai:claude
+fn ps_running_count_line(shown: usize, hidden: usize) -> String {
+    if hidden == 0 {
+        format!("running: {shown}")
+    } else {
+        format!("running: {shown} ({hidden} stale hidden; --all to show)")
+    }
+}
+
 /// Floor / ceiling for the auto-sized `spec` column of the `aida ps` table. The
 /// floor is the historical fixed width (so a table of ordinary SPEC-IDs looks
 /// exactly as before); the ceiling bounds a pathological scope value so one long
@@ -59616,7 +59634,18 @@ fn build_running_work(
                 .and_then(&role_probe);
             let manifest_role = manifest_role_probe(&l.id);
             let lease_role = l.role.clone();
-            let role = jsonl_role.or(manifest_role).or_else(|| lease_role.clone());
+            // BUG-1521: the role shown must be READ from the session's own
+            // record (the lease's stored `role`), not derived by scanning a
+            // transcript. The jsonl/manifest heuristics match on ambiguous
+            // signals (a shared cwd, a text marker anywhere in the log) that
+            // can resolve to a DIFFERENT live session's transcript — and can
+            // resolve differently between two invocations of the same command
+            // seconds apart, since each re-scans independently. A recorded
+            // lease role is authoritative and identical across every view
+            // that reads the same lease file, so it wins whenever present;
+            // the derived signals remain a fallback only for legacy/unrecorded
+            // leases with no stored role at all. trace:BUG-1521 | ai:claude
+            let role = lease_role.clone().or(jsonl_role).or(manifest_role);
             // BUG-763: resolve the backing pid's own start time so an adopted
             // persistent lease (pid younger than the lease record) can name
             // both ages instead of mixing provenance silently.
@@ -59869,7 +59898,10 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             .collect();
 
         println!("view: ps");
-        println!("running: {}", shown.len());
+        // BUG-1521: `running:` names live+hidden together so the count can't
+        // be misread as "this is everything" — `stale_hidden:` stays a
+        // separate scalar for machine consumers that already parse it.
+        println!("{}", ps_running_count_line(shown.len(), hidden_stale.len()));
         println!("stale_hidden: {}", hidden_stale.len());
         println!("orphaned: {}", orphans.len());
         if let Some(lock) = &live_wave {
