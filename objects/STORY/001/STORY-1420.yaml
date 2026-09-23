@@ -30,12 +30,12 @@ description: |-
   EXPLICITLY NOT THE FIX: widening a seat-scoping predicate to read `transferred_by` or "whoever last touched the file". Ruled on STORY-1419 — a transfer copies the RECORD, not the GATE, and delivering to the last toucher looks like routing while being worse than silence.
 
   Filed by the driver-advisor from the reviewer seat's measurement, after the advisor's own sizing of the same gap was wrong by an order of magnitude in the reassuring direction. Autonomous-safe: routing and surfacing only, no change to what a verdict means or to any merge gate.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:07:40.046649414Z
-modified_at: 2026-09-23T21:30:54.862149106Z
+modified_at: 2026-09-23T22:18:50.763385605Z
 req_type: Story
 comments:
 - id: 01a0ccee-3636-78c2-a382-3c450c05f34a
@@ -44,3 +44,21 @@ comments:
   created_at: 2026-09-23T06:22:38.646566198Z
   modified_at: 2026-09-23T06:22:38.646566198Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d059-a404-73e0-8543-20eeeac53a31
+  author: aida-auto-bump
+  timestamp: 2026-09-23T22:18:50.756467548Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d059-a40b-77b0-81a8-d7649af273dc
+  timestamp: 2026-09-23T22:18:50.763382886Z
+  agent: aida
+  commit_sha: 4c375719687c3deec3e61eb3e49695b30705df52
+  summary: Completed via merge 4c375719
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T22:18:50.756289584Z
+  completion_sha: 4c375719687c3deec3e61eb3e49695b30705df52
