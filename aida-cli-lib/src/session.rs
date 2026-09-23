@@ -3313,8 +3313,23 @@ fn parse_session_meta_for_agent(
     let mut started_at: Option<chrono::DateTime<chrono::Utc>> = None;
     let mut last_cwd: Option<String> = None;
     let mut role_resolved = false;
+    // BUG-1593 (rework, PROXY DECISION): two marker tiers within the
+    // unconditional cap. Tier 1 (structural, checked first) is written
+    // only by AIDA's own launch/hook context and always wins when
+    // present anywhere within the cap. Tier 2 (bare `Role: `) is the
+    // fallback used ONLY when no tier-1 marker appears at all within
+    // the cap — `.claude/skills/aida-pickup.md`, `aida-queue.md`, and
+    // `aida role show` all echo a bare `Role: <role>` line with no
+    // structural anchor, and dropping it entirely (the first rework
+    // attempt) regressed those sessions back to `unknown`.
+    let mut tier2_role: Option<String> = None;
+    let mut tier2_resolved = false;
+    // BUG-1593: the cap is honoured unconditionally. A role unresolved by
+    // MAX_LINES is `unknown` (None), never a late match found by scanning
+    // further into a transcript that may still be growing.
+    // trace:BUG-1593 | ai:claude
     for (i, line) in reader.lines().enumerate() {
-        if i >= MAX_LINES && title.is_some() && role.is_some() && started_at.is_some() {
+        if i >= MAX_LINES {
             break;
         }
         let Ok(line) = line else { continue };
@@ -3371,21 +3386,37 @@ fn parse_session_meta_for_agent(
             }
         }
 
-        // Role markers — Claude Code logs hook text as ordinary message
-        // content, while commands like `aida role show` and shell echos of
-        // $AIDA_SESSION_ROLE that ran early in the session leave reliable
-        // strings:
-        //   - `Role: implementer`     (from aida role show)
-        //   - `AIDA_SESSION_ROLE=implementer`
-        //   - `AIDA · role: implementer`
-        //   - `AIDA active role: implementer`
-        // Both are checked; the first plausible match wins.
+        // Role markers, two tiers. Tier 1 (structural) is written only by
+        // AIDA's own launch/hook context and is never an arbitrary
+        // substring that happened to be echoed back through ordinary tool
+        // output or quoted text:
+        //   - `AIDA_SESSION_ROLE=implementer`  (env, set at session start)
+        //   - `- Role: implementer`            (render_agent_launch_context's
+        //                                        launch-context line, the
+        //                                        dash anchors it to that
+        //                                        exact structural line)
+        //   - `AIDA · role: implementer`       (aida-session-context.sh hook)
+        //   - `AIDA active role: implementer`  (aida-role-context.sh hook)
+        // The FIRST tier-1 match anywhere within the cap always wins.
+        //
+        // Tier 2 (fallback) is a bare `Role: ` with no structural anchor —
+        // emitted by `.claude/skills/aida-pickup.md`, `aida-queue.md`, and
+        // `aida role show` output piped through a tool call. It is used
+        // ONLY when the whole capped scan finds no tier-1 marker at all;
+        // dropping it outright (rather than demoting it to a fallback)
+        // regressed those sessions to `unknown` — that was the root cause
+        // of the review BLOCK on the first rework of this bug. A tier-2
+        // candidate is only recorded on a line that did NOT already match
+        // a tier-1 marker, so a transcript quoting a foreign `Role: X`
+        // elsewhere can never outrank a real tier-1 launch marker.
         // trace:FR-1-043 | ai:claude
         // trace:BUG-837 | ai:codex
+        // trace:BUG-1593 | ai:claude
         if !role_resolved {
+            let mut matched_tier1 = false;
             for marker in [
                 "AIDA_SESSION_ROLE=",
-                "Role: ",
+                "- Role: ",
                 "AIDA · role: ",
                 "AIDA active role: ",
             ] {
@@ -3409,11 +3440,28 @@ fn parse_session_meta_for_agent(
                     // of confusing the operator mid-recovery.
                     // trace:TASK-402 | ai:claude
                     if !name.is_empty() {
+                        matched_tier1 = true;
                         role_resolved = true;
                         if name != "none" {
                             role = Some(canonical_session_role(&name));
                         }
                         break;
+                    }
+                }
+            }
+            if !matched_tier1 && !tier2_resolved {
+                const TIER2_MARKER: &str = "Role: ";
+                if let Some(idx) = line.find(TIER2_MARKER) {
+                    let after = &line[idx + TIER2_MARKER.len()..];
+                    let name: String = after
+                        .chars()
+                        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+                        .collect();
+                    if !name.is_empty() {
+                        tier2_resolved = true;
+                        if name != "none" {
+                            tier2_role = Some(canonical_session_role(&name));
+                        }
                     }
                 }
             }
@@ -3426,11 +3474,11 @@ fn parse_session_meta_for_agent(
                 spec = Some(s);
             }
         }
-
-        if i >= MAX_LINES {
-            break;
-        }
     }
+
+    // No tier-1 (structural) marker anywhere within the cap: fall back to
+    // the tier-2 bare `Role: ` match, if any.
+    let role = role.or(tier2_role);
 
     Ok(SessionMeta {
         agent: agent.to_string(),
@@ -4484,6 +4532,60 @@ mod tests {
             ]),
             None
         );
+    }
+
+    // BUG-1593 (rework, PROXY DECISION): a tier-1 structural marker wins
+    // even when a later line echoes a foreign, unanchored bare `Role: `
+    // string — e.g. a tool result quoting someone else's status text. The
+    // launch line here uses ONLY `AIDA_SESSION_ROLE=implementer`, a form
+    // that contains no bare `Role: ` substring at all, so this test fails
+    // if the two tiers are collapsed into one first-match-of-any scan: a
+    // collapsed scan finds no marker on line 1 and would incorrectly
+    // resolve to the foreign "product" on line 2 instead of "implementer".
+    // trace:BUG-1593 | ai:claude
+    #[test]
+    fn foreign_echoed_role_string_does_not_override_launch_role() {
+        assert_eq!(
+            parse_session_role_from_lines(&[
+                r#"{"message":"AIDA_SESSION_ROLE=implementer"}"#,
+                r#"{"message":"tool output quoting someone else's status: Role: product"}"#,
+            ]),
+            Some("implementer".to_string())
+        );
+    }
+
+    // BUG-1593 (rework, PROXY DECISION): a transcript with NO tier-1
+    // structural marker anywhere but a bare `Role: ` line — exactly what
+    // `.claude/skills/aida-pickup.md`, `aida-queue.md`, and `aida role
+    // show` echo — still resolves the role via the tier-2 fallback. This
+    // is the regression guard: dropping the bare marker outright (rather
+    // than demoting it to a fallback) is what triggered the review BLOCK
+    // on the first rework of this bug.
+    // trace:BUG-1593 | ai:claude
+    #[test]
+    fn bare_skill_echoed_role_resolves_via_tier2_fallback() {
+        assert_eq!(
+            parse_session_role_from_lines(&[r#"{"message":"Role: implementer"}"#,]),
+            Some("implementer".to_string())
+        );
+    }
+
+    // BUG-1593: a role marker that only appears past the MAX_LINES cap must
+    // never be found — the scan honours the cap regardless of whether role
+    // (or title/started_at) resolved by then, so the result is `unknown`
+    // (None) rather than a late, possibly-stale match from a still-growing
+    // transcript.
+    // trace:BUG-1593 | ai:claude
+    #[test]
+    fn role_marker_past_the_line_cap_is_unknown() {
+        // MAX_LINES is 400 (private to `parse_session_meta_for_agent`); pad
+        // well past it before the marker to land the marker outside the cap.
+        let mut lines: Vec<String> = (0..410)
+            .map(|n| format!(r#"{{"message":"filler line {n}"}}"#))
+            .collect();
+        lines[405] = r#"{"message":"- Role: implementer"}"#.to_string();
+        let refs: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
+        assert_eq!(parse_session_role_from_lines(&refs), None);
     }
 
     // trace:STORY-822 | ai:codex
