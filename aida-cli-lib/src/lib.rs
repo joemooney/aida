@@ -85478,6 +85478,26 @@ fn resolve_batch_ineligible_members(
 /// contract), never a guess about a Done spec whose verdict state it
 /// couldn't read.
 // trace:TASK-1456 | ai:claude
+/// TASK-1456: the human-readable idle-drain message naming every all-refused
+/// candidate and its recovery route — a pure formatter (no `eprintln!`
+/// inside it) so the exact wording is assertable directly, without spinning
+/// up a drain.
+// trace:TASK-1456 | ai:claude
+fn next_n_rework_idle_message(rework_needed: &[events::IneligibleBatchMember]) -> String {
+    let rendered = rework_needed
+        .iter()
+        .map(|member| format!("{} ({})", member.spec, member.reason))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "queue has {} item{} but none are eligible — every candidate needs \
+         rework, not a fresh drive: {}",
+        rework_needed.len(),
+        if rework_needed.len() == 1 { "" } else { "s" },
+        rendered,
+    )
+}
+
 fn resolve_queue_rework_needed(
     storage: &Storage,
     user_id: &str,
@@ -88679,18 +88699,10 @@ fn emit_next_n_drain_summary(
                 && result.escalated.is_empty()
                 && !rework_needed.is_empty() =>
         {
-            let rendered = rework_needed
-                .iter()
-                .map(|member| format!("{} ({})", member.spec, member.reason))
-                .collect::<Vec<_>>()
-                .join(", ");
             eprintln!(
-                "{} queue has {} item{} but none are eligible — every candidate needs \
-                 rework, not a fresh drive: {}",
+                "{} {}",
                 "⏸".yellow().bold(),
-                rework_needed.len(),
-                if rework_needed.len() == 1 { "" } else { "s" },
-                rendered,
+                next_n_rework_idle_message(rework_needed),
             );
         }
         BatchDrainOutcome::Drained

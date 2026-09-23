@@ -13707,44 +13707,67 @@ pub(crate) fn recover_action_label(action: queue_recover::RecoverAction) -> &'st
     }
 }
 
+/// The CHEAP half of the BUG-1515 outstanding-refusal check: read the
+/// locally-recorded verdict (trying `project_root` then, only as a fallback,
+/// the ALREADY-RESOLVED `primary_root`) and test whether its SHAPE is an
+/// outstanding refusal (`RequestChanges`/`Rejected`, never closed by a later
+/// merge — `review_verdict::is_outstanding_refusal`; a `Done` spec is never
+/// `Completed`, so that half of the predicate is always `false` here). Pure
+/// filesystem reads — no git spawn. Callers resolve `primary_root` ONCE
+/// (`main_worktree_root_from`, a `git worktree list` spawn) and reuse it
+/// across every spec being checked, rather than each check resolving its own
+/// — the per-spec spawn this split exists to avoid.
+// trace:TASK-1456 | ai:claude
+fn cheap_outstanding_refusal_candidate(
+    project_root: &std::path::Path,
+    primary_root: &std::path::Path,
+    display_id: &str,
+    spec_id: &str,
+) -> Option<review_verdict::RecordedVerdict> {
+    let verdict = review_verdict::read_recorded_verdict_any(project_root, &[display_id, spec_id])
+        .or_else(|| {
+        (primary_root != project_root)
+            .then(|| {
+                review_verdict::read_recorded_verdict_any(primary_root, &[display_id, spec_id])
+            })
+            .flatten()
+    })?;
+    review_verdict::is_outstanding_refusal(&verdict, /* spec_completed */ false).then_some(verdict)
+}
+
 /// BUG-1515: whether a `Done` spec's most recently recorded review verdict is
-/// an OUTSTANDING refusal that is STILL LIVE at the branch tip — a
-/// `RequestChanges`/`Rejected` verdict never closed by a later merge
-/// (`review_verdict::is_outstanding_refusal`; a `Done` spec is never
-/// `Completed`, so that half of the predicate is always `false` here) AND
-/// whose reviewed sha is still the tip (`verdict_tip_relation` ==
-/// `AtReviewedSha`). A refusal recorded against an OLD head (new commits
-/// pushed since, or the branch rewritten) is history, not a live blocker —
-/// after a normal rework round (refusal, new commits, `queue done` again)
-/// that old refusal must not keep reading as "REWORK NEEDED" when what it
-/// actually needs is RE-REVIEW; `queue_fresh_pickup_policy` falls back to
-/// `AwaitingMerge` in that case. Reads the verdict the same way
-/// `evaluate_review_verdict_gate` does (either id form, primary-worktree
-/// fallback for a reviewer verdict recorded outside an implementer
-/// worktree) — no new verdict reader, per BUG-1515's acceptance. The
-/// primary-worktree fallback (a `git worktree list` spawn) is resolved only
-/// when the local checkout itself has no recorded verdict, since most Done
-/// rows have none — this keeps `queue list`/`queue next` from shelling out
-/// once per Done row. Returns the outstanding verdict so a caller can build
-/// a richer message from it.
+/// an OUTSTANDING refusal that is STILL LIVE at the branch tip — the cheap
+/// shape check ([`cheap_outstanding_refusal_candidate`]) AND whose reviewed
+/// sha is still the tip (`verdict_tip_relation` == `AtReviewedSha`). A
+/// refusal recorded against an OLD head (new commits pushed since, or the
+/// branch rewritten) is history, not a live blocker — after a normal rework
+/// round (refusal, new commits, `queue done` again) that old refusal must
+/// not keep reading as "REWORK NEEDED" when what it actually needs is
+/// RE-REVIEW; `queue_fresh_pickup_policy` falls back to `AwaitingMerge` in
+/// that case. Reads the verdict the same way `evaluate_review_verdict_gate`
+/// does (either id form, primary-worktree fallback for a reviewer verdict
+/// recorded outside an implementer worktree) — no new verdict reader, per
+/// BUG-1515's acceptance.
+///
+/// **Single-spec path** — resolves the primary worktree root itself (a `git
+/// worktree list` spawn), so it is O(1) per call and fine for `aida queue
+/// work <ID>` / `aida queue list`'s per-row Done classification. A caller
+/// iterating MANY Done specs at once (e.g. `aida list`'s default open lens)
+/// must NOT call this per spec — that resolves the primary root once PER
+/// SPEC and, worse, pays the tip/ancestry git check for every spec with any
+/// recorded verdict, not just a capped set. Use
+/// [`select_done_rework_rows`]/[`resolve_done_rework_ids`] instead; they
+/// resolve the root once and cap the expensive half. Returns the outstanding
+/// verdict so a caller can build a richer message from it.
 // trace:BUG-1515 | ai:claude
 pub(crate) fn done_spec_outstanding_refusal(
     project_root: &std::path::Path,
     display_id: &str,
     spec_id: &str,
 ) -> Option<review_verdict::RecordedVerdict> {
-    let verdict = review_verdict::read_recorded_verdict_any(project_root, &[display_id, spec_id])
-        .or_else(|| {
-        let primary_root = main_worktree_root_from(project_root);
-        (primary_root != project_root)
-            .then(|| {
-                review_verdict::read_recorded_verdict_any(&primary_root, &[display_id, spec_id])
-            })
-            .flatten()
-    })?;
-    if !review_verdict::is_outstanding_refusal(&verdict, /* spec_completed */ false) {
-        return None;
-    }
+    let primary_root = main_worktree_root_from(project_root);
+    let verdict =
+        cheap_outstanding_refusal_candidate(project_root, &primary_root, display_id, spec_id)?;
     let relation = verdict_tip_relation(
         project_root,
         verdict.reviewed_branch.as_deref(),
@@ -13752,6 +13775,17 @@ pub(crate) fn done_spec_outstanding_refusal(
     );
     matches!(relation, review_verdict::TipRelation::AtReviewedSha).then_some(verdict)
 }
+
+/// Cap on how many candidates [`resolve_done_rework_ids`] will run the git
+/// tip/ancestry check against, after the cheap local-file pass has already
+/// narrowed the set to specs with an outstanding-SHAPED verdict. A project
+/// with more than this many Done specs simultaneously carrying an unresolved
+/// refusal has bigger problems than one `aida list` run being slightly
+/// incomplete; PRIN-5 still holds — a spec past the cap is simply not
+/// confirmed this run (not silently claimed clean), and re-appears once the
+/// backlog ahead of it clears.
+// trace:TASK-1456 | ai:claude
+const MAX_REWORK_TIP_CHECKS: usize = 20;
 
 /// TASK-1456 (follow-up to BUG-1515): `aida list`'s default open lens
 /// (`RequirementStatus::open_statuses()`) deliberately excludes `Done` — it
@@ -13763,32 +13797,84 @@ pub(crate) fn done_spec_outstanding_refusal(
 /// disappear from the main work list entirely rather than just from the
 /// (already correct) awaiting-merge bucket.
 ///
-/// Pure filter: given the Done rows the caller already fetched (same
-/// `ListFilter`, status axis swapped to `done`), returns only the ones with
-/// an outstanding refusal, via [`done_spec_outstanding_refusal`] — the exact
-/// predicate `queue_fresh_pickup_policy` uses, so the two surfaces can never
-/// disagree about which Done specs are "really" rework. `project_root` is
-/// `None` in the rare caller that cannot resolve one (mirrors
-/// `queue_fresh_pickup_policy`'s degrade-safe contract) — PRIN-5: unknown
-/// verdict state is never treated as "must be rework", so it degrades to
-/// "not included" rather than a guess.
+/// **Perf** (review follow-up to the first cut of this function, which called
+/// `done_spec_outstanding_refusal` per row — an O(N) `git worktree list`
+/// spawn plus, for every Done row that happened to carry ANY recorded
+/// verdict, a further 2-3 git spawns for the tip/ancestry check, breaking the
+/// sub-second `aida list` contract on a project with many Done specs). This
+/// resolves the primary worktree root ONCE
+/// ([`main_worktree_root_from`]), then runs the CHEAP local-file-only pass
+/// ([`cheap_outstanding_refusal_candidate`], no git spawn) over every
+/// candidate, and only pays for the git tip/ancestry check on the resulting
+/// candidate set — capped at [`MAX_REWORK_TIP_CHECKS`].
+///
+/// Returns the rows to fold into the list (a strict subset of `done_rows`)
+/// plus the SAME decision as a `Uuid` set, so a caller rendering those rows
+/// at several sites (JSON, agent-mode notes, the human table's "Rework
+/// needed" block) can reuse the set by plain membership check instead of
+/// recomputing the verdict/git check per render site.
+///
+/// `project_root` is `None` in the rare caller that cannot resolve one
+/// (mirrors `queue_fresh_pickup_policy`'s degrade-safe contract) — PRIN-5:
+/// unknown verdict state is never treated as "must be rework", so it
+/// degrades to "not included" rather than a guess.
 // trace:TASK-1456 | ai:claude
 pub(crate) fn select_done_rework_rows(
     done_rows: Vec<aida_core::RequirementSummary>,
     project_root: Option<&std::path::Path>,
-) -> Vec<aida_core::RequirementSummary> {
+) -> (
+    Vec<aida_core::RequirementSummary>,
+    std::collections::HashSet<uuid::Uuid>,
+) {
     let Some(root) = project_root else {
-        return Vec::new();
+        return (Vec::new(), std::collections::HashSet::new());
     };
-    done_rows
+    let ids = resolve_done_rework_ids(&done_rows, root);
+    if ids.is_empty() {
+        return (Vec::new(), ids);
+    }
+    let rows = done_rows
         .into_iter()
-        .filter(|r| {
-            done_spec_outstanding_refusal(
-                root,
+        .filter(|r| ids.contains(&r.id))
+        .collect();
+    (rows, ids)
+}
+
+/// The id-set half of [`select_done_rework_rows`] — see its doc comment for
+/// the perf rationale. Exposed separately so a caller that already holds the
+/// `RequirementSummary` rows (no need for `select_done_rework_rows` to hand
+/// back a filtered copy) can ask "which of these are rework" directly.
+// trace:TASK-1456 | ai:claude
+pub(crate) fn resolve_done_rework_ids(
+    done_rows: &[aida_core::RequirementSummary],
+    project_root: &std::path::Path,
+) -> std::collections::HashSet<uuid::Uuid> {
+    // Resolved ONCE for the whole batch — was resolved once PER Done row
+    // with no local verdict (the common case), an O(N) `git worktree list`
+    // spawn. trace:TASK-1456 | ai:claude
+    let primary_root = main_worktree_root_from(project_root);
+    let candidates: Vec<(uuid::Uuid, review_verdict::RecordedVerdict)> = done_rows
+        .iter()
+        .filter_map(|r| {
+            let verdict = cheap_outstanding_refusal_candidate(
+                project_root,
+                &primary_root,
                 r.agreed_id.as_deref().unwrap_or_default(),
                 r.spec_id.as_deref().unwrap_or_default(),
-            )
-            .is_some()
+            )?;
+            Some((r.id, verdict))
+        })
+        .collect();
+    candidates
+        .into_iter()
+        .take(MAX_REWORK_TIP_CHECKS)
+        .filter_map(|(id, verdict)| {
+            let relation = verdict_tip_relation(
+                project_root,
+                verdict.reviewed_branch.as_deref(),
+                verdict.reviewed_sha.as_deref(),
+            );
+            matches!(relation, review_verdict::TipRelation::AtReviewedSha).then_some(id)
         })
         .collect()
 }

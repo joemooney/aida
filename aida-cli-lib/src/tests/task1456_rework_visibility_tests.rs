@@ -84,7 +84,9 @@ fn summary_row(id: &str, status: &str) -> aida_core::RequirementSummary {
 #[test]
 fn select_done_rework_rows_without_project_root_is_empty() {
     let rows = vec![summary_row("TASK-1", "Done")];
-    assert!(queue_cmd::select_done_rework_rows(rows, None).is_empty());
+    let (rows, ids) = queue_cmd::select_done_rework_rows(rows, None);
+    assert!(rows.is_empty());
+    assert!(ids.is_empty());
 }
 
 // TASK-1456: a Done row with NO recorded verdict at all is plain
@@ -93,12 +95,15 @@ fn select_done_rework_rows_without_project_root_is_empty() {
 fn select_done_rework_rows_excludes_done_with_no_verdict() {
     let dir = tempfile::tempdir().unwrap();
     let rows = vec![summary_row("TASK-1", "Done")];
-    assert!(queue_cmd::select_done_rework_rows(rows, Some(dir.path())).is_empty());
+    let (rows, ids) = queue_cmd::select_done_rework_rows(rows, Some(dir.path()));
+    assert!(rows.is_empty());
+    assert!(ids.is_empty());
 }
 
 // TASK-1456: a Done row whose recorded verdict is a still-live refusal AT
 // the branch tip IS folded in — this is the exact state BUG-1515 taught
-// `queue_fresh_pickup_policy` to read as rework.
+// `queue_fresh_pickup_policy` to read as rework. The returned id set must
+// agree with the returned rows (the render-site reuse contract).
 #[test]
 fn select_done_rework_rows_includes_outstanding_refusal_at_tip() {
     let dir = tempfile::tempdir().unwrap();
@@ -121,10 +126,56 @@ fn select_done_rework_rows_includes_outstanding_refusal_at_tip() {
     )
     .unwrap();
 
-    let rows = vec![summary_row("TASK-1", "Done"), summary_row("TASK-2", "Done")];
-    let selected = queue_cmd::select_done_rework_rows(rows, Some(root));
+    let refused = summary_row("TASK-1", "Done");
+    let refused_id = refused.id;
+    let rows = vec![refused, summary_row("TASK-2", "Done")];
+    let (selected, ids) = queue_cmd::select_done_rework_rows(rows, Some(root));
     assert_eq!(selected.len(), 1, "only the refused row is folded in");
     assert_eq!(selected[0].spec_id.as_deref(), Some("TASK-1"));
+    assert_eq!(ids.len(), 1, "the id set must agree with the rows: {ids:?}");
+    assert!(ids.contains(&refused_id));
+}
+
+// TASK-1456 (review follow-up): a refusal recorded against a STALE head —
+// new commits landed on the branch since the review, the normal shape after
+// a rework round — must be EXCLUDED, not folded in. Mirrors
+// `queue_work_tests::stale_refusal_on_an_old_head_is_not_classified_awaiting_rework`
+// for the batch (`select_done_rework_rows`/`resolve_done_rework_ids`) path,
+// so `aida list`'s fold-in can never disagree with `queue_fresh_pickup_policy`
+// on this case either.
+#[test]
+fn select_done_rework_rows_excludes_refusal_at_a_stale_tip() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    git(
+        root,
+        &["init", "--initial-branch=claude/task-1456", "--quiet"],
+    );
+    git(root, &["commit", "--allow-empty", "-m", "root", "--quiet"]);
+    let old_head = git_head(root);
+    crate::review_verdict::record_verdict(
+        root,
+        "TASK-1",
+        Some("request-changes"),
+        Some(&old_head),
+        Some("claude/task-1456"),
+        Some("needs another round"),
+        &["fix the thing".to_string()],
+        "reviewer",
+    )
+    .unwrap();
+    // Rework happened: a new commit landed past the reviewed sha, but the
+    // refusal file was never explicitly closed.
+    git(root, &["commit", "--allow-empty", "-m", "fix", "--quiet"]);
+
+    let rows = vec![summary_row("TASK-1", "Done")];
+    let (selected, ids) = queue_cmd::select_done_rework_rows(rows, Some(root));
+    assert!(
+        selected.is_empty(),
+        "a refusal pinned to an OLD head needs re-review, not another rework \
+         round: {selected:?}"
+    );
+    assert!(ids.is_empty());
 }
 
 fn queue_entry(req_id: Uuid, for_role: Option<&str>) -> QueueEntry {
@@ -262,5 +313,64 @@ fn resolve_queue_rework_needed_is_empty_for_an_ordinary_queue() {
     assert!(
         rework.is_empty(),
         "an ordinary queue has no rework: {rework:?}"
+    );
+}
+
+// TASK-1456 (review follow-up): `aida list --format json`'s
+// status_label/status_lens value for a folded-in rework row — "Rework
+// Needed" / "ReworkNeeded", taking priority over any NeedsAttention parked
+// lens (the two never actually coincide — a row is Done XOR NeedsAttention
+// — but priority is asserted anyway so it never silently flips).
+#[test]
+fn list_json_row_carries_rework_needed_status_label() {
+    let (label, lens) = git_backend_cmd::list_json_status_label_lens(true, None);
+    assert_eq!(label.as_deref(), Some("Rework Needed"));
+    assert_eq!(lens, Some("ReworkNeeded"));
+
+    // Not rework: falls through to the (absent, here) parked lens.
+    let (label, lens) = git_backend_cmd::list_json_status_label_lens(false, None);
+    assert_eq!(label, None);
+    assert_eq!(lens, None);
+}
+
+// TASK-1456 (review follow-up): the `next N` / bare `--auto-complete`
+// drain's idle-branch message names every all-refused candidate, its
+// reason, and reads as rework — not the plain "nothing to drive" a
+// genuinely empty queue gets.
+#[test]
+fn next_n_idle_message_names_rework_candidates() {
+    let rework = vec![
+        events::IneligibleBatchMember {
+            spec: "TASK-9001".to_string(),
+            reason: "REWORK NEEDED — reviewer requested changes; still outstanding; route via \
+                     `aida queue rework TASK-9001` then `aida queue work TASK-9001 \
+                     --auto-complete=through-ci --no-human=both`"
+                .to_string(),
+        },
+        events::IneligibleBatchMember {
+            spec: "TASK-9002".to_string(),
+            reason: "REWORK NEEDED — reviewer requested changes; still outstanding".to_string(),
+        },
+    ];
+    let message = next_n_rework_idle_message(&rework);
+    assert!(
+        message.contains("2 items"),
+        "must count both candidates: {message}"
+    );
+    assert!(
+        message.contains("every candidate needs rework"),
+        "must read as rework, not a plain empty queue: {message}"
+    );
+    assert!(message.contains("TASK-9001"), "{message}");
+    assert!(message.contains("TASK-9002"), "{message}");
+    assert!(
+        message.contains("aida queue rework TASK-9001"),
+        "must carry the recovery route: {message}"
+    );
+
+    let single = next_n_rework_idle_message(&rework[..1]);
+    assert!(
+        single.contains("1 item "),
+        "singular item, no trailing s: {single}"
     );
 }
