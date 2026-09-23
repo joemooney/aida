@@ -438,6 +438,7 @@ mod tests {
                 title: "t".into(),
                 head_branch: "b".into(),
                 ci_rollup: Some("pass".into()),
+                under_review: None,
             }],
             unowned_failing_prs: vec![crate::awaiting_you::UnownedFailingPrItem {
                 number: 8,

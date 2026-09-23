@@ -230,6 +230,8 @@ mod report_cmd;
 // trace:STORY-568 | ai:claude — pure core of the research/spike dispatch lane.
 mod research;
 mod reviewer_summary;
+// trace:STORY-1405 | ai:claude — review-in-progress marker consulted by merge surfaces.
+mod review_marker;
 // trace:BUG-775 | ai:claude — review verdicts as first-class gate-readable state.
 mod review_verdict;
 mod role_cmd;
@@ -72807,7 +72809,19 @@ fn collect_awaiting_report_inner(
         let snapshot = collect_open_prs(project_root);
         let prs: Vec<_> = snapshot.by_branch.into_values().collect();
         let local_suppressed = local_suppressed_prs(project_root, &prs);
-        awaiting_you::classify_open_prs(&prs, &local_suppressed)
+        let mut items = awaiting_you::classify_open_prs(&prs, &local_suppressed);
+        // STORY-1405: a mergeable PR a reviewer is mid-way through says so.
+        // Local file reads only; the head comes from the same snapshot.
+        // trace:STORY-1405 | ai:claude
+        let marker_root = main_worktree_root_from(project_root);
+        for item in &mut items {
+            let head = prs
+                .iter()
+                .find(|p| p.number == item.number)
+                .and_then(|p| p.head_sha.as_deref());
+            item.under_review = review_marker::live_description(&marker_root, item.number, head);
+        }
+        items
     };
 
     // Pending briefs — prefer narrowing to the running agent so we
@@ -81219,6 +81233,28 @@ fn handle_review_spec(
     };
     let _review_lease =
         acquire_review_lease_with_mode(project_root, &spec_id, &surface_branch, review_lease_mode)?;
+    // STORY-1405: while the reviewer runs, PR-N is visibly under review to
+    // every merge surface. Released with the lease when this verb exits.
+    // trace:STORY-1405 | ai:claude
+    let _review_marker = match pr_number.filter(|_| !no_agent) {
+        Some(n) => review_marker::hold(
+            &main_worktree_root_from(project_root),
+            review_marker::Marker::for_this_process(
+                n,
+                resolve_commit_sha(project_root, &format!("origin/{surface_branch}")).as_deref(),
+                Some(&spec_id),
+                &format!("`aida review {spec_id}`"),
+            ),
+        )
+        .map_err(|e| {
+            eprintln!(
+                "  {} could not mark PR-{n} as under review ({e}) — continuing",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            )
+        })
+        .ok(),
+        None => None,
+    };
 
     // BUG-510: stale-base pre-flight — same predicate as the reviewer-role
     // path (`aida queue work <PR-N> --for reviewer` / orchestrator phase 3:
@@ -81550,6 +81586,14 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
             finding,
             *pr,
         ),
+        // trace:STORY-1405 | ai:claude
+        ReviewCommand::Claim {
+            pr,
+            sha,
+            spec,
+            ttl_mins,
+            release,
+        } => handle_review_claim(*pr, sha.as_deref(), spec.as_deref(), *ttl_mins, *release),
         // trace:BUG-775 | ai:claude
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
         // trace:BUG-1516 | ai:claude
@@ -82213,6 +82257,116 @@ fn assert_review_write_root_is_isolated(project_root: &std::path::Path) {
     );
 }
 
+/// STORY-1405: remove the review-in-progress marker(s) a recorded verdict
+/// settles — PR-keyed when `pr` is known, otherwise every marker naming
+/// `spec`. Checks the given root and the main clone (where merge surfaces
+/// look). Returns the PRs cleared.
+// trace:STORY-1405 | ai:claude
+fn clear_review_markers_for_verdict(
+    project_root: &std::path::Path,
+    spec: &str,
+    pr: Option<u64>,
+) -> Vec<u64> {
+    let mut roots = vec![project_root.to_path_buf()];
+    let main = main_worktree_root_from(project_root);
+    if main != project_root {
+        roots.push(main);
+    }
+    let mut cleared = Vec::new();
+    for root in &roots {
+        let targets: Vec<u64> = match pr {
+            Some(n) => vec![n],
+            None => review_marker::list(root)
+                .into_iter()
+                .filter(|m| {
+                    m.spec
+                        .as_deref()
+                        .is_some_and(|s| s.eq_ignore_ascii_case(spec))
+                })
+                .map(|m| m.pr)
+                .collect(),
+        };
+        for n in targets {
+            if review_marker::clear(root, n) {
+                cleared.push(n);
+            }
+        }
+    }
+    cleared
+}
+
+/// `aida review claim` — STORY-1405's deliberate entry point for a review
+/// that runs through no other aida verb (criterion 5d): a reviewer seat reading
+/// a diff by hand. No process stays behind to watch, so the claim is TTL-only.
+// trace:STORY-1405 | ai:claude
+fn handle_review_claim(
+    pr: u64,
+    sha: Option<&str>,
+    spec: Option<&str>,
+    ttl_mins: u64,
+    release: bool,
+) -> Result<()> {
+    let project_root = drive_root_or_project_root()?;
+    let root = main_worktree_root_from(&project_root);
+    if release {
+        if review_marker::clear(&root, pr) {
+            println!(
+                "{} released the review claim on PR-{pr}",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
+        } else {
+            println!("no review claim on PR-{pr} — nothing to release");
+        }
+        return Ok(());
+    }
+    anyhow::ensure!(ttl_mins > 0, "`--ttl-mins` must be at least 1");
+    let head = sha
+        .map(str::to_string)
+        .or_else(|| std::env::var("AIDA_FROM_PR_HEAD_SHA").ok())
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| {
+            pr_cmd::fetch_change_info_via_resolved_forge(
+                &project_root,
+                pr,
+                crate::forge::resolve_open_change_forge_kind(&project_root),
+            )
+            .ok()
+            .map(|info| info.head_oid)
+        });
+    if let Some(prev) = review_marker::read(&root, pr) {
+        if review_marker::is_live(&prev) {
+            eprintln!(
+                "  {} replacing a live review claim on PR-{pr}: {}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                prev.describe()
+            );
+        }
+    }
+    let mut marker = review_marker::Marker::for_this_process(
+        pr,
+        head.as_deref(),
+        spec.map(|s| s.to_ascii_uppercase()).as_deref(),
+        &review_recorded_by().replace("aida review record", "aida review claim"),
+    );
+    marker.pid = 0;
+    marker.ttl_secs = ttl_mins.saturating_mul(60);
+    review_marker::write(&root, &marker)
+        .with_context(|| format!("could not mark PR-{pr} as under review"))?;
+    println!(
+        "{} PR-{pr} is marked under review{} for {ttl_mins}m — merges wait for your verdict",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        head.as_deref()
+            .map(|h| format!(" at {}", review_verdict::short_sha(h)))
+            .unwrap_or_else(|| " (head unknown — every head is covered)".to_string()),
+    );
+    println!(
+        "  {} `aida review record <SPEC> --verdict … --pr {pr}` clears it; \
+         `aida review claim --pr {pr} --release` abandons it.",
+        crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
+    );
+    Ok(())
+}
+
 /// `aida review record`'s CLI entry point. Resolves the write root exactly
 /// ONCE (drive root, falling back to the found project root) and hands it to
 /// [`handle_review_record_at`] — the ambient env is read here and nowhere
@@ -82372,6 +82526,11 @@ fn handle_review_record_at(
             path.display()
         );
     }
+    // STORY-1405: the verdict is on disk, so the review is no longer "in
+    // progress" — clear the PR's marker (by `--pr`, else any marker naming
+    // this spec) so merge surfaces now read the verdict instead.
+    // trace:STORY-1405 | ai:claude
+    clear_review_markers_for_verdict(&project_root, spec, pr);
     // TASK-1450: a recorded review verdict is a reviewer-seat coordination
     // decision — the other gap BUG-1423's event feed left (that bug closed
     // the merge-path gap; this is the review-path gap). Emitted only after
@@ -82511,6 +82670,78 @@ fn handle_review_record_at(
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod story_1405_review_marker_tests {
+    use super::*;
+
+    fn tempdir_root() -> tempfile::TempDir {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+        root
+    }
+
+    // A reviewer's claim blocks a merge; recording the verdict (with --pr)
+    // clears it, so the same merge gate then lets the merge through.
+    #[test]
+    fn recording_the_verdict_clears_the_marker_and_unblocks_merge() {
+        let root = tempdir_root();
+        let mut m = review_marker::Marker::for_this_process(
+            14051,
+            Some("abc1234"),
+            Some("BUG-14051"),
+            "reviewer seat",
+        );
+        m.pid = 0;
+        m.ttl_secs = review_marker::CLAIM_TTL_SECS;
+        review_marker::write(root.path(), &m).unwrap();
+        assert!(matches!(
+            review_marker::merge_gate(root.path(), 14051, || Some("abc1234".into())),
+            review_marker::MergeGate::UnderReview(_)
+        ));
+
+        handle_review_record_at(
+            root.path().to_path_buf(),
+            "BUG-14051",
+            "approved",
+            Some("abc1234"),
+            Some("bug-14051-work"),
+            Some("looks right"),
+            &[],
+            Some(14051),
+        )
+        .expect("recording an approval must succeed");
+
+        assert!(review_marker::read(root.path(), 14051).is_none());
+        assert_eq!(
+            review_marker::merge_gate(root.path(), 14051, || panic!("no marker, no lookup")),
+            review_marker::MergeGate::Clear
+        );
+    }
+
+    #[test]
+    fn verdict_without_pr_clears_markers_naming_the_spec_only() {
+        let root = tempdir_root();
+        for (pr, spec) in [(1, "TASK-1"), (2, "TASK-2")] {
+            let m = review_marker::Marker::for_this_process(pr, Some("abc"), Some(spec), "r");
+            review_marker::write(root.path(), &m).unwrap();
+        }
+        let cleared = clear_review_markers_for_verdict(root.path(), "task-1", None);
+        assert_eq!(cleared, vec![1]);
+        assert!(review_marker::read(root.path(), 2).is_some());
+    }
+
+    #[test]
+    fn awaiting_annotation_is_head_scoped_and_read_only() {
+        let root = tempdir_root();
+        let m = review_marker::Marker::for_this_process(5, Some("aaa111"), None, "reviewer seat");
+        review_marker::write(root.path(), &m).unwrap();
+        assert!(review_marker::live_description(root.path(), 5, Some("aaa111")).is_some());
+        assert!(review_marker::live_description(root.path(), 5, Some("bbb222")).is_none());
+        assert!(review_marker::live_description(root.path(), 6, Some("aaa111")).is_none());
+        assert!(review_marker::read(root.path(), 5).is_some());
+    }
 }
 
 /// Audit identity for a supported seat-written verdict. The launched seat's
@@ -95809,6 +96040,32 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // the head that received phase 2's terminal CI conclusion.
         self.mark_drain_phase(auto_complete::Phase::Reviewer);
 
+        // STORY-1405: mark PR-N "under review" at the head just proven above,
+        // so `aida pr ship` / another drain's merge phase / `aida awaiting` see
+        // it. Held by this process for the whole phase and released when this
+        // method returns with (or without) a verdict; a crash leaves a marker
+        // whose dead pid expires it. This is a marker, not the BUG-511 review
+        // lease — the drain's reviewer still takes no lease (see the gate
+        // comment in `handle_review_spec`). trace:STORY-1405 | ai:claude
+        let _review_marker = match crate::review_marker::hold(
+            &main_worktree_root_from(&self.project_root),
+            crate::review_marker::Marker::for_this_process(
+                pr as u64,
+                self.ci_terminal_sha.as_deref(),
+                Some(&self.spec),
+                "the drain's reviewer phase",
+            ),
+        ) {
+            Ok(g) => Some(g),
+            Err(e) => {
+                eprintln!(
+                    "  {} could not mark PR-{pr} as under review ({e}) — continuing",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                None
+            }
+        };
+
         // STORY-501: ensure the "Review PR-N" hand-off story exists before we
         // hand the PR to `aida queue work PR-N`. Normally phase 2 (finish_ci →
         // `aida session end`) mints it — but a `--resume-drain` that re-enters
@@ -96679,6 +96936,25 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             crate::merge_lock::DEFAULT_WAIT,
         )
         .map_err(|e| drain_merge_lease_failure(&e, &lease_target, pr))?;
+        // STORY-1405: another seat's review in progress on this head stops
+        // the drain's merge the same way it stops `aida pr ship`. The drain's
+        // own phase-3 marker was released when `run_reviewer` returned.
+        // trace:STORY-1405 | ai:claude
+        let review_gate = crate::review_marker::merge_gate(&lease_root, pr as u64, || {
+            pr_head_sha_best_effort(self, pr)
+        });
+        if let crate::review_marker::MergeGate::UnderReview(m) = &review_gate {
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::LeaseConflict,
+                crate::review_marker::refusal_message(m),
+            ));
+        }
+        if let Some(note) = crate::review_marker::proceed_note(&review_gate) {
+            println!(
+                "  {} {note}",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan()
+            );
+        }
         self.lifecycle_forge()
             .merge_change(&change_ref, &opts, &mut sink)
             .map_err(|e| classify_drain_merge_failure(self.lifecycle_forge, pr, &e))?;
