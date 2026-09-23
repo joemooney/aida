@@ -69272,6 +69272,13 @@ struct UnshippedBranchCandidate {
     // than guessed.
     // trace:BUG-1531 | ai:claude
     tip_sha: Option<String>,
+    // BUG-1531: the branch's name has the `pr-N`/`mr-N` review-snapshot
+    // shape, but the forge did NOT confirm it (no forge, lookup failure, or
+    // a head sha that doesn't match this branch's tip) — so it is kept in
+    // the report rather than silently excluded (PRIN-5: never hide on name
+    // alone), labelled as unverified with no ship hint.
+    // trace:BUG-1531 | ai:claude
+    possible_review_snapshot: bool,
 }
 
 // BUG-1288: a bounded candidate gate for the unshipped-work detector. Kept
@@ -69435,14 +69442,38 @@ fn collect_unshipped_work_items(
             continue;
         }
         // BUG-1531 criterion 1: a branch fetched from refs/pull/N/head (or its
-        // GitLab mr-N twin) is a PUBLISHED snapshot by construction — it is
-        // the one shape `ReviewForge::local_branch_for` creates, per
-        // TASK-1312's `parse_review_snapshot_branch`. It can never be
-        // unshipped work, so it is excluded before any naming-convention or
-        // dedup heuristic runs.
+        // GitLab mr-N twin) is the one shape `ReviewForge::local_branch_for`
+        // creates, per TASK-1312's `parse_review_snapshot_branch` — but the
+        // NAME alone is not proof (a real unpushed feature branch can happen
+        // to be named `pr-123`). Only exclude it once the forge CONFIRMS
+        // PR/MR N exists and its head sha equals this branch's tip, reusing
+        // the same forge lookup TASK-1312's `aida pr gc` uses
+        // (`change_metadata`). With no forge (`no_forge`), a lookup failure,
+        // or a head sha that doesn't match, the row is kept and labelled
+        // unverified below rather than hidden on name alone (PRIN-5).
         // trace:BUG-1531 | ai:claude
-        if pr_cmd::parse_review_snapshot_branch(&short_branch).is_some() {
-            continue;
+        let mut possible_review_snapshot = false;
+        if let Some((kind, n)) = pr_cmd::parse_review_snapshot_branch(&short_branch) {
+            if no_forge {
+                possible_review_snapshot = true;
+            } else {
+                match forge::forge_for_kind(project_root, kind)
+                    .change_metadata(n, &mut network_retry::NoopSink)
+                {
+                    Ok(meta) if !meta.head_sha.is_empty() => {
+                        let tip_matches =
+                            git_output_checked(project_root, &["rev-parse", &refname])
+                                .is_ok_and(|tip| tip.trim() == meta.head_sha);
+                        if tip_matches {
+                            continue;
+                        }
+                        possible_review_snapshot = true;
+                    }
+                    _ => {
+                        possible_review_snapshot = true;
+                    }
+                }
+            }
         }
         let pr_evidence = pr_head_states
             .as_ref()
@@ -69545,6 +69576,7 @@ fn collect_unshipped_work_items(
             age,
             has_local,
             tip_sha,
+            possible_review_snapshot,
         });
     }
 
@@ -69596,6 +69628,13 @@ fn collect_unshipped_work_items(
                 format!(
                     "do not ship — this commit carries an unresolved reviewer verdict ({}); resolve the review first",
                     verdict.raw
+                )
+            } else if c.possible_review_snapshot {
+                // BUG-1531: name-shaped like a review snapshot but the forge
+                // never confirmed it — kept visible, no ship hint (PRIN-5).
+                format!(
+                    "possible review snapshot ({}), unverified",
+                    c.local_branch
                 )
             } else if c.has_local {
                 format!("aida pr ship {}", c.branch)
@@ -70084,16 +70123,27 @@ exit 1
         branch_with_commit(root, "pr-2035", "PR-2035");
         // A genuinely unshipped, unrelated branch that must keep reporting.
         branch_with_commit(root, "story-1531-unshipped", "STORY-1531");
+        let pr_2035_tip = git_output_checked(root, &["rev-parse", "pr-2035"]).unwrap();
 
+        // The forge CONFIRMS PR 2035 exists and its head sha equals the
+        // branch tip — the only condition BUG-1531's rework allows the
+        // name-shaped `pr-2035` branch to be excluded on.
         let fake_gh = executable_fake_gh(
             root,
-            r#"#!/usr/bin/env bash
+            &format!(
+                r#"#!/usr/bin/env bash
 if [[ "$*" == *"pr list"* ]]; then
   printf '[]'
   exit 0
 fi
+if [[ "$*" == *"pr view 2035"* ]]; then
+  printf '{{"state":"MERGED","title":"t","mergedAt":null,"baseRefName":"main","headRefName":"pr-2035","headRefOid":"{}","isCrossRepository":false,"headRepository":null,"isDraft":false}}'
+  exit 0
+fi
 exit 1
 "#,
+                pr_2035_tip.trim()
+            ),
         );
         let _env = crate::test_env::EnvVarsGuard::set(&[(
             "AIDA_TEST_GH_BINARY",
@@ -70111,7 +70161,7 @@ exit 1
 
         assert!(
             rows.iter().all(|row| row.branch != "pr-2035"),
-            "a refs/pull/N/head-shaped snapshot must never be reported as unshipped: {rows:?}"
+            "a forge-confirmed review snapshot (matching head sha) must never be reported as unshipped: {rows:?}"
         );
         let genuine = rows
             .iter()
@@ -70119,6 +70169,93 @@ exit 1
             .expect("a genuinely unshipped branch must still report");
         assert_eq!(genuine.spec_id, "STORY-1531");
         assert_eq!(genuine.recovery, "aida pr ship story-1531-unshipped");
+    }
+
+    // BUG-1531 PROXY DECISION: with NO forge available (`no_forge = true`),
+    // a name-shaped `pr-N` branch cannot be confirmed, so it must be KEPT —
+    // never hidden on name alone (PRIN-5) — and labelled unverified with no
+    // "aida pr ship" hint.
+    // trace:BUG-1531 | ai:claude
+    #[test]
+    fn detector_keeps_review_snapshot_named_branch_unverified_with_no_forge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+
+        branch_with_commit(root, "pr-2036", "PR-2036");
+
+        let rows = collect_unshipped_work_items(
+            root,
+            &[summary("PR-2036", "InProgress")],
+            true, // no_forge
+            false,
+        );
+
+        let row = rows
+            .iter()
+            .find(|row| row.branch == "pr-2036")
+            .expect("with no forge, a name-shaped pr-N branch must be kept, not hidden");
+        assert_eq!(row.spec_id, "PR-2036");
+        assert_eq!(
+            row.recovery,
+            "possible review snapshot (pr-2036), unverified"
+        );
+        assert!(
+            !row.recovery.contains("aida pr ship"),
+            "an unverified row must carry no ship hint: {row:?}"
+        );
+    }
+
+    // BUG-1531 PROXY DECISION: the forge resolves PR 2037, but its recorded
+    // head sha does NOT match this branch's tip (e.g. the change moved since
+    // the fetch, or the name is a coincidence). The branch must be KEPT and
+    // labelled unverified rather than excluded.
+    // trace:BUG-1531 | ai:claude
+    #[cfg_attr(
+        windows,
+        ignore = "fake-gh harness is a bash script; gh cannot be stubbed via shebang on Windows"
+    )]
+    #[test]
+    fn detector_keeps_review_snapshot_named_branch_unverified_when_forge_head_differs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+
+        branch_with_commit(root, "pr-2037", "PR-2037");
+
+        let fake_gh = executable_fake_gh(
+            root,
+            r#"#!/usr/bin/env bash
+if [[ "$*" == *"pr list"* ]]; then
+  printf '[]'
+  exit 0
+fi
+if [[ "$*" == *"pr view 2037"* ]]; then
+  printf '{"state":"OPEN","title":"t","mergedAt":null,"baseRefName":"main","headRefName":"pr-2037","headRefOid":"0000000000000000000000000000000000dead","isCrossRepository":false,"headRepository":null,"isDraft":false}'
+  exit 0
+fi
+exit 1
+"#,
+        );
+        let _env = crate::test_env::EnvVarsGuard::set(&[(
+            "AIDA_TEST_GH_BINARY",
+            fake_gh.to_str().unwrap(),
+        )]);
+        let rows =
+            collect_unshipped_work_items(root, &[summary("PR-2037", "InProgress")], false, false);
+
+        let row = rows.iter().find(|row| row.branch == "pr-2037").expect(
+            "a forge-resolved PR whose head sha differs from the branch tip must be kept, not excluded",
+        );
+        assert_eq!(row.spec_id, "PR-2037");
+        assert_eq!(
+            row.recovery,
+            "possible review snapshot (pr-2037), unverified"
+        );
+        assert!(
+            !row.recovery.contains("aida pr ship"),
+            "an unverified row must carry no ship hint: {row:?}"
+        );
     }
 
     // BUG-1531 criterion 3 + 6: a refusal binds to a COMMIT, not to a PR
