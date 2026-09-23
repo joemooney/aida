@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:30:38.833900428Z
-modified_at: 2026-09-23T10:59:26.876015887Z
+modified_at: 2026-09-23T10:59:28.361671628Z
 req_type: Bug
 tags:
 - aida:ps substrate-truth severity:operational papercut
@@ -60,4 +60,10 @@ comments:
   content: 'Claude implementer result: claude/bug-1521 @ 2e95483768. build_running_work role priority is now lease_role > jsonl_role > manifest_role (the session''s own record wins; one fn shared by ps, ps --all and integrate); the agent-mode count line is ''running: N (M stale hidden; --all to show)''. The TASK-152/153 tests whose premise was derived-role-overrides-record were updated. Awaiting strict review.'
   created_at: 2026-09-23T10:58:20.546082643Z
   modified_at: 2026-09-23T10:58:20.546082643Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdeb-a7e9-71d2-bd16-d8246db74cc6
+  author: joe
+  content: 'PROXY DECISION (Claude for the operator, 04:00) after a strict-review BLOCK: role order is (1) a REAL recorded lease role, i.e. not the harness placeholder ''general-purpose'' (worktree_lease.rs), then (2) manifest_role (the stable claude_session_id join, TASK-153), then (3) jsonl_role (the ambiguous /proc cwd transcript match), then (4) the placeholder. This keeps TASK-152/153''s advisor-over-placeholder fix and lets a real recorded role win. The agent-mode ''running: N'' stays an integer; add a separate ''shown:''/''hidden_stale:'' line rather than changing the scalar. Root-cause and test the product-vs-advisor divergence (likely role_from_jsonl on a live, changing transcript or a caller-cwd match).'
+  created_at: 2026-09-23T10:59:28.361671628Z
+  modified_at: 2026-09-23T10:59:28.361671628Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
