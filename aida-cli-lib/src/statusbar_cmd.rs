@@ -193,9 +193,14 @@ fn collect_meter(
         .filter(|r| matches!(r.state, LeaseState::Stale))
         .count();
 
-    // Needs-you — the cheap (no_ci) awaiting report, mirroring the per-turn
-    // notice path: a lightweight context (role from env, empty queue head),
-    // so no full-store load and no gh call ever rides the refresh loop.
+    // Needs-you — the cheap (no_ci, notice_fast) awaiting report, mirroring
+    // the per-turn notice path EXACTLY: a lightweight context (role from
+    // env, empty queue head) AND `notice_fast: true`, so the summaries reads
+    // hit the unrefreshed cache snapshot (`backend.cache().list_summaries`)
+    // instead of `backend.list_summaries()`, which freshness-checks and can
+    // trigger a full store rebuild (BUG-1569). The statusbar previously
+    // called the public `collect_awaiting_report` wrapper, which hardcodes
+    // `notice_fast: false` — that one call was the whole 68s. trace:TASK-195
     let you = backend
         .map(|b| {
             let ctx = UserStatusContext {
@@ -207,7 +212,13 @@ fn collect_meter(
                 queue_total: 0,
                 agents: Vec::new(),
             };
-            you_channels(&collect_awaiting_report(project_root, b, &ctx, true))
+            you_channels(&collect_awaiting_report_inner(
+                project_root,
+                b,
+                &ctx,
+                true,
+                true,
+            ))
         })
         .unwrap_or_default();
 
@@ -320,6 +331,42 @@ mod tests {
         AwaitingReport, CronChannel, DirectivesChannel, EscalationItem, MailChannel,
         MergeablePrItem, NightlyRedItem, PendingBriefItem, ReviewerQueueItem, UnshippedWorkItem,
     };
+
+    /// TASK-195: `collect_meter` must call the notice-fast
+    /// `collect_awaiting_report_inner(.., no_ci: true, notice_fast: true)`
+    /// path — the exact pairing `aida awaiting --notice` uses — never the
+    /// public `collect_awaiting_report` wrapper, which hardcodes
+    /// `notice_fast: false` and so hits `backend.list_summaries()` (a
+    /// freshness check that can trigger a full store rebuild, BUG-1569)
+    /// instead of the unrefreshed `backend.cache().list_summaries()`
+    /// snapshot. That one flag flip was the entire 68s-vs-cache-fast
+    /// regression (statusbar was measured taking 68s on a surface
+    /// documented as cache/local-fast with no network). Source-level guard
+    /// because the regression is a one-word literal with no compile-time
+    /// signal and no cheap way to inject a backend seam here.
+    // trace:TASK-195 | ai:claude
+    #[test]
+    fn collect_meter_uses_notice_fast_awaiting_path_not_the_slow_wrapper() {
+        let src = include_str!("statusbar_cmd.rs");
+        let body_start = src
+            .find("fn collect_meter(")
+            .expect("collect_meter must exist in this file");
+        let body_end = src[body_start..]
+            .find("\n}\n")
+            .map(|i| body_start + i)
+            .unwrap_or(src.len());
+        let body = &src[body_start..body_end];
+        assert!(
+            body.contains("collect_awaiting_report_inner("),
+            "collect_meter must call collect_awaiting_report_inner directly \
+             (with notice_fast: true), not the notice_fast:false wrapper"
+        );
+        assert!(
+            !body.contains("collect_awaiting_report(project_root"),
+            "collect_meter must not call the collect_awaiting_report wrapper \
+             — it hardcodes notice_fast: false, which is the slow path"
+        );
+    }
 
     #[test]
     fn quiet_meter_shows_queue_and_live_only() {
