@@ -32,12 +32,12 @@ description: |-
   3. It states the generalization (a null result is only evidence if the instrument producing it was live) and gives at least one non-mutation instance, so a reader applies it past mutation testing.
   4. It records BOTH concrete 2026-09-21 mechanisms - the cancelled-out double swap and the missed anchor - because the two are caught by different checks and naming only one ships half the rule.
   5. The README pointer-table entry for implementer-discipline.md still describes the file accurately after the addition.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:24:43.875708252Z
-modified_at: 2026-09-23T07:51:19.853557537Z
+modified_at: 2026-09-23T08:10:24.079043334Z
 req_type: Task
 tags:
 - discipline
@@ -550,3 +550,21 @@ comments:
   created_at: 2026-09-23T07:51:19.853557537Z
   modified_at: 2026-09-23T07:51:19.853557537Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cd50-ddbb-7c73-9452-57920bd03415
+  author: aida-auto-bump
+  timestamp: 2026-09-23T08:10:24.059404148Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cd50-ddcf-7df0-b16f-e70df8a03dd4
+  timestamp: 2026-09-23T08:10:24.079041733Z
+  agent: aida
+  commit_sha: 91155561e725f90389e9ddcad8cf0c6209892635
+  summary: Completed via merge 91155561
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T08:10:18.535908585Z
+  completion_sha: 91155561e725f90389e9ddcad8cf0c6209892635
