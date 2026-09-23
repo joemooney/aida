@@ -8268,6 +8268,19 @@ pub enum MaintenanceScheduleCommand {
 
     /// Print crontab lines for enabled substrate jobs with an `every`.
     EmitCron,
+
+    /// Install the crontab entry that drives `aida schedule tick` for this
+    /// repo every 15 minutes (Linux/macOS only; idempotent — safe to re-run).
+    /// This is what `aida init`'s TTY prompt calls, and the fix hint `aida
+    /// doctor` prints when it finds registered jobs but no installed driver.
+    // trace:STORY-1463 | ai:claude
+    InstallCron,
+
+    /// Remove this repo's crontab entry installed by `install-cron` (or the
+    /// `aida init` prompt). Idempotent — a no-op when nothing is installed;
+    /// never touches another repo's entry.
+    // trace:STORY-1463 | ai:claude
+    UninstallCron,
 }
 
 #[derive(Subcommand, Debug)]
@@ -11613,6 +11626,16 @@ pub enum Command {
         // trace:TASK-698 | ai:claude
         #[clap(long)]
         no_agent_config: bool,
+
+        /// Skip the TTY offer to install the scheduler-tick crontab entry
+        /// (`aida schedule tick`, every 15m). Without this flag, a TTY init
+        /// still only offers — the default answer is no — and a
+        /// non-interactive init never prompts or installs anything either
+        /// way. Use this to suppress the offer itself, e.g. in a scripted
+        /// session run at a TTY.
+        // trace:STORY-1463 | ai:claude
+        #[clap(long)]
+        no_schedule: bool,
 
         /// Overwrite existing files if already initialized
         #[clap(long)]

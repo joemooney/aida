@@ -184,6 +184,91 @@ pub fn blocked_by_incomplete(req: &Requirement, store: &RequirementsStore) -> bo
         })
 }
 
+/// BUG-1551: an unresolved `BlockedBy` predecessor that holds a spec's
+/// CLOSURE (Done → Completed), as opposed to its pickup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClosureBlocker {
+    /// Display id of the blocker (agreed > spec > internal), or
+    /// `(unknown:<uuid>)` for a dangling edge.
+    pub id: String,
+    /// The blocker's status; `None` for a dangling edge (target not in the
+    /// store — treated as unresolved, never silently satisfied).
+    pub status: Option<RequirementStatus>,
+}
+
+/// BUG-1551: is a `BlockedBy` target resolved for CLOSURE purposes? Reuses
+/// the one "closed" predicate the open lens and the epic rollup read
+/// ([`crate::lifecycle::status_is_closed_for_type`]): terminal (Completed,
+/// Rejected, Superseded) or an accepted ADR (Decision at Approved). An EPIC is
+/// judged by its read-only child rollup ([`crate::rollup::derive_epic_status`])
+/// rather than its stored status, which is not hand-maintained and reads a
+/// stale Draft. Deliberately wider than the pickup rule
+/// (`blocked_by_incomplete`, which only accepts Completed): a Rejected blocker
+/// parks new work for re-scoping, but it must not strand already-merged work at
+/// Done forever.
+// trace:BUG-1551 | ai:claude
+pub fn closure_blocker_resolved(target: &Requirement, store: &RequirementsStore) -> bool {
+    let status = effective_closure_status(target, store);
+    crate::lifecycle::status_is_closed_for_type(
+        &target.req_type,
+        crate::lifecycle::State::from_status(&status),
+    )
+}
+
+/// BUG-1551: the status a blocker is judged by — the derived rollup for an
+/// epic, the stored status otherwise.
+fn effective_closure_status(target: &Requirement, store: &RequirementsStore) -> RequirementStatus {
+    if matches!(target.req_type, crate::RequirementType::Epic) {
+        if let Some(derived) = crate::rollup::derive_epic_status(store, target.id) {
+            return derived;
+        }
+    }
+    target.status.clone()
+}
+
+/// BUG-1551: the unresolved `BlockedBy` predecessors that hold `req`'s closure.
+/// `BlockedBy` gates BOTH pickup (see [`pickability`]) and closure: the
+/// merge-driven Done → Completed auto-bump consults this and keeps the spec at
+/// Done (with a note recording the merge) while it returns non-empty. Empty =
+/// closure is free to proceed.
+// trace:BUG-1551 | ai:claude
+pub fn unresolved_closure_blockers(
+    req: &Requirement,
+    store: &RequirementsStore,
+) -> Vec<ClosureBlocker> {
+    req.relationships
+        .iter()
+        .filter(|r| matches!(r.rel_type, RelationshipType::BlockedBy))
+        .filter_map(
+            |rel| match store.requirements.iter().find(|r| r.id == rel.target_id) {
+                Some(target) if closure_blocker_resolved(target, store) => None,
+                Some(target) => Some(ClosureBlocker {
+                    id: target_display_id(target),
+                    status: Some(effective_closure_status(target, store)),
+                }),
+                None => Some(ClosureBlocker {
+                    id: format!("(unknown:{})", rel.target_id),
+                    status: None,
+                }),
+            },
+        )
+        .collect()
+}
+
+/// BUG-1551: one-line rendering of a closure-blocker set, e.g.
+/// `STORY-12 (InProgress), BUG-3 (Draft)`.
+// trace:BUG-1551 | ai:claude
+pub fn closure_blockers_label(blockers: &[ClosureBlocker]) -> String {
+    blockers
+        .iter()
+        .map(|b| match &b.status {
+            Some(s) => format!("{} ({:?})", b.id, s),
+            None => format!("{} (missing)", b.id),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// Render a `BlockedReason` as a single line suitable for the
 /// `aida queue list` Blocked section, `aida queue next` skip hints, and
 /// the head-pickup banner. The label leads with the *reason kind*, then
@@ -476,5 +561,48 @@ mod tests {
             pickability(&r, &store),
             Pickability::Blocked(BlockedReason::HumanOnly)
         );
+    }
+
+    // BUG-1551: BlockedBy gates CLOSURE too. A blocker holds closure until it
+    // is terminal (Completed / Rejected / Superseded); anything else — or a
+    // dangling edge — keeps it held. trace:BUG-1551 | ai:claude
+    #[test]
+    fn closure_blockers_hold_until_blocker_terminal() {
+        for (status, held) in [
+            (RequirementStatus::Draft, true),
+            (RequirementStatus::Approved, true),
+            (RequirementStatus::InProgress, true),
+            (RequirementStatus::Done, true),
+            (RequirementStatus::NeedsAttention, true),
+            (RequirementStatus::Completed, false),
+            (RequirementStatus::Rejected, false),
+            (RequirementStatus::Superseded, false),
+        ] {
+            let blocker = make_req("STORY-B", status.clone());
+            let mut spec = make_req("BUG-A", RequirementStatus::Done);
+            add_blocked_by(&mut spec, blocker.id);
+            let store = store_with(vec![blocker, spec.clone()]);
+            let got = unresolved_closure_blockers(&spec, &store);
+            assert_eq!(!got.is_empty(), held, "blocker status {status:?}");
+            if held {
+                assert_eq!(got[0].id, "STORY-B");
+                assert_eq!(
+                    closure_blockers_label(&got),
+                    format!("STORY-B ({status:?})")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn closure_blockers_dangling_edge_is_unresolved_and_no_edge_is_free() {
+        let mut spec = make_req("BUG-A", RequirementStatus::Done);
+        let store = store_with(vec![spec.clone()]);
+        assert!(unresolved_closure_blockers(&spec, &store).is_empty());
+        add_blocked_by(&mut spec, Uuid::new_v4());
+        let got = unresolved_closure_blockers(&spec, &store_with(vec![spec.clone()]));
+        assert_eq!(got.len(), 1);
+        assert!(got[0].status.is_none());
+        assert!(closure_blockers_label(&got).ends_with("(missing)"));
     }
 }

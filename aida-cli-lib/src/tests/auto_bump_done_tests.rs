@@ -3223,3 +3223,368 @@ fn open_pr_id_matching_is_whole_id_only() {
     assert_eq!(count_ids_mentioned("fix(x): thing (bug-1)", &ids), 1);
     assert_eq!(count_ids_mentioned("BUG-1, TASK-7.", &ids), 2);
 }
+
+// ── BUG-1551: BlockedBy gates closure, not just pickup ──────────────────
+
+/// Seed `spec_id` at `status` with a `BlockedBy` edge to `blocker_id` (seeded
+/// at `blocker_status`).
+// trace:BUG-1551 | ai:claude
+fn seed_blocked_spec(
+    store_path: &std::path::Path,
+    spec_id: &str,
+    status: &str,
+    blocker_id: &str,
+    blocker_status: &str,
+) {
+    seed_spec_at(store_path, blocker_id, blocker_status);
+    seed_spec_at(store_path, spec_id, status);
+    let storage = Storage::new(store_path);
+    let mut store = storage.load().unwrap();
+    let blocker_uuid = store.get_requirement_by_spec_id(blocker_id).unwrap().id;
+    let spec = store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some(spec_id))
+        .unwrap();
+    spec.relationships.push(aida_core::Relationship {
+        rel_type: aida_core::RelationshipType::BlockedBy,
+        target_id: blocker_uuid,
+        created_at: None,
+        created_by: None,
+    });
+    storage.save(&store).unwrap();
+}
+
+/// Land a commit carrying `(spec_id)` and run the live auto-bump over it.
+// trace:BUG-1551 | ai:claude
+fn land_and_bump(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    spec_id: &str,
+) -> (Vec<AutoBumpFlip>, String) {
+    let pre_sha = aida_core::git_ops::head_sha(project_root).unwrap();
+    std::fs::write(project_root.join(format!("{spec_id}.txt")), "land\n").unwrap();
+    run_git(project_root, &["add", "."]);
+    run_git(
+        project_root,
+        &["commit", "-m", &format!("fix: land ({spec_id})")],
+    );
+    let merge_sha = run_git(project_root, &["rev-parse", "HEAD"]);
+    let storage = Storage::new(store_path);
+    let flips =
+        auto_bump_done_to_completed(project_root, store_path, Some(&pre_sha), &storage).unwrap();
+    (flips, merge_sha)
+}
+
+/// BUG-1551 AC2/AC4: a spec already in flight (Done, branch merged) whose
+/// BlockedBy predecessor is unresolved does NOT auto-complete on merge. It
+/// stays Done, the merge is recorded in a note naming the blocker, and
+/// `completion_sha` is left unstamped so the eventual completion isn't
+/// refused by the BUG-410 re-bump guard. Re-running is idempotent.
+// trace:BUG-1551 | ai:claude
+#[test]
+fn auto_bump_holds_done_spec_at_done_while_blocker_unresolved() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_blocked_spec(&store_path, "BUG-9551", "Done", "STORY-9552", "In Progress");
+
+    let (flips, merge_sha) = land_and_bump(&project_root, &store_path, "BUG-9551");
+    assert!(
+        !has_flip(&flips, "BUG-9551"),
+        "an unresolved BlockedBy must hold closure; flips: {flips:?}"
+    );
+
+    let storage = Storage::new(&store_path);
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-9551").unwrap();
+    assert_eq!(req.status, RequirementStatus::Done);
+    let notes: Vec<_> = req
+        .comments
+        .iter()
+        .filter(|c| c.content.contains(CLOSURE_HOLD_MARKER))
+        .collect();
+    assert_eq!(notes.len(), 1, "the merge is recorded, once");
+    assert!(
+        notes[0].content.contains(&merge_sha),
+        "note names the merge"
+    );
+    assert!(
+        notes[0].content.contains("STORY-9552 (InProgress)"),
+        "note names the blocker: {}",
+        notes[0].content
+    );
+    assert!(req
+        .implementation_info
+        .as_ref()
+        .and_then(|i| i.completion_sha.as_deref())
+        .is_none());
+    // `aida why` surfaces the hold.
+    let (ids, line) = closure_hold_line(req, &store).expect("why names the hold");
+    assert_eq!(ids, vec!["STORY-9552".to_string()]);
+    assert!(line.contains("STORY-9552"));
+
+    // Idempotent: the same merge replayed does not stack a second note.
+    let mut flips = vec![AutoBumpFlip::new(
+        "BUG-9551".into(),
+        merge_sha.clone(),
+        RequirementStatus::Done,
+    )];
+    let holds = split_closure_held_flips(&store, &mut flips);
+    assert!(flips.is_empty());
+    let mut again = req.clone();
+    assert!(!apply_closure_hold(
+        &mut again,
+        &holds[0],
+        chrono::Utc::now()
+    ));
+}
+
+/// BUG-1551: a pre-Done in-flight spec (InProgress) whose code merged past an
+/// unresolved blocker lands at Done — the merge is a fact — not Completed.
+// trace:BUG-1551 | ai:claude
+#[test]
+fn auto_bump_lands_in_progress_spec_at_done_when_blocked() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_blocked_spec(
+        &store_path,
+        "BUG-9553",
+        "In Progress",
+        "STORY-9554",
+        "Draft",
+    );
+
+    let (flips, _) = land_and_bump(&project_root, &store_path, "BUG-9553");
+    assert!(!has_flip(&flips, "BUG-9553"));
+    let store = Storage::new(&store_path).load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-9553").unwrap();
+    assert_eq!(req.status, RequirementStatus::Done);
+}
+
+/// BUG-1551: a blocker that reached a terminal status (Completed, Rejected or
+/// Superseded) no longer holds closure — the spec completes on merge as before.
+// trace:BUG-1551 | ai:claude
+#[test]
+fn auto_bump_completes_when_blocker_is_terminal() {
+    for (i, blocker_status) in ["Completed", "Rejected", "Superseded"].iter().enumerate() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec = format!("BUG-956{i}");
+        let blocker = format!("STORY-957{i}");
+        seed_blocked_spec(&store_path, &spec, "Done", &blocker, blocker_status);
+        let (flips, _) = land_and_bump(&project_root, &store_path, &spec);
+        assert!(
+            has_flip(&flips, &spec),
+            "a {blocker_status} blocker must not hold closure"
+        );
+        let store = Storage::new(&store_path).load().unwrap();
+        let req = store.get_requirement_by_spec_id(&spec).unwrap();
+        assert_eq!(req.status, RequirementStatus::Completed);
+        assert!(closure_hold_line(req, &store).is_none());
+    }
+}
+
+/// BUG-1551: the `db reconcile-status` replay honours the same closure gate —
+/// held while the blocker is open, completes once the blocker ships.
+// trace:BUG-1551 | ai:claude
+#[test]
+fn reconcile_status_holds_then_completes_when_blocker_ships() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_blocked_spec(&store_path, "BUG-9580", "Done", "STORY-9581", "Approved");
+    std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+    run_git(&project_root, &["add", "file.txt"]);
+    run_git(&project_root, &["commit", "-m", "fix: land (BUG-9580)"]);
+
+    handle_db_reconcile_status(&store_path, None, Some("BUG-9580"), false).unwrap();
+    let storage = Storage::new(&store_path);
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-9580").unwrap();
+    assert_eq!(req.status, RequirementStatus::Done, "held by STORY-9581");
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.contains(CLOSURE_HOLD_MARKER)));
+
+    // The blocker ships; the replay now completes the held spec.
+    let mut store = store;
+    store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some("STORY-9581"))
+        .unwrap()
+        .set_status_from_str("Completed");
+    storage.save(&store).unwrap();
+    handle_db_reconcile_status(&store_path, None, Some("BUG-9580"), false).unwrap();
+    let after = storage.load().unwrap();
+    assert_eq!(
+        after.get_requirement_by_spec_id("BUG-9580").unwrap().status,
+        RequirementStatus::Completed
+    );
+}
+
+/// Mutate one seeded spec in place.
+// trace:BUG-1551 | ai:claude
+fn mutate_spec(
+    store_path: &std::path::Path,
+    spec_id: &str,
+    f: impl FnOnce(&mut aida_core::Requirement),
+) {
+    let storage = Storage::new(store_path);
+    let mut store = storage.load().unwrap();
+    f(store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some(spec_id))
+        .unwrap());
+    storage.save(&store).unwrap();
+}
+
+/// BUG-1551 review: an EPIC blocker is judged by its child rollup, not its
+/// stale stored Draft — an epic whose children all Completed releases closure.
+// trace:BUG-1551 | ai:claude
+#[test]
+fn closure_gate_resolves_epic_blocker_via_child_rollup() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_blocked_spec(&store_path, "BUG-9590", "Done", "EPIC-9591", "Draft");
+    mutate_spec(&store_path, "EPIC-9591", |r| {
+        r.req_type = RequirementType::Epic
+    });
+    seed_spec_at(&store_path, "TASK-9592", "Completed");
+    let store = Storage::new(&store_path).load().unwrap();
+    let epic = store.get_requirement_by_spec_id("EPIC-9591").unwrap().id;
+    let child = store.get_requirement_by_spec_id("TASK-9592").unwrap().id;
+    mutate_spec(&store_path, "EPIC-9591", |r| {
+        r.relationships.push(aida_core::Relationship {
+            rel_type: aida_core::RelationshipType::Child,
+            target_id: child,
+            created_at: None,
+            created_by: None,
+        })
+    });
+    mutate_spec(&store_path, "TASK-9592", |r| {
+        r.relationships.push(aida_core::Relationship {
+            rel_type: aida_core::RelationshipType::Parent,
+            target_id: epic,
+            created_at: None,
+            created_by: None,
+        })
+    });
+
+    let (flips, _) = land_and_bump(&project_root, &store_path, "BUG-9590");
+    assert!(
+        has_flip(&flips, "BUG-9590"),
+        "an epic whose children all Completed must not hold closure (stored Draft is stale)"
+    );
+}
+
+/// BUG-1551 review: an accepted ADR (Decision at Approved) is closed by the
+/// same predicate the open lens uses, so it does not hold closure.
+// trace:BUG-1551 | ai:claude
+#[test]
+fn closure_gate_treats_accepted_adr_blocker_as_resolved() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_blocked_spec(&store_path, "BUG-9593", "Done", "ADR-9594", "Approved");
+    mutate_spec(&store_path, "ADR-9594", |r| {
+        r.req_type = RequirementType::Decision
+    });
+    let (flips, _) = land_and_bump(&project_root, &store_path, "BUG-9593");
+    assert!(has_flip(&flips, "BUG-9593"), "accepted ADR resolves");
+}
+
+/// BUG-1551 review: the next `aida pull` re-checks held specs and completes
+/// one whose blocker resolved — even though its merge commit is no longer in
+/// the pull's scan window — stamping the ORIGINAL merge sha.
+// trace:BUG-1551 | ai:claude
+#[test]
+fn pull_rechecks_and_completes_held_spec_once_blocker_resolves() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_blocked_spec(&store_path, "BUG-9595", "Done", "STORY-9596", "In Progress");
+    let (flips, merge_sha) = land_and_bump(&project_root, &store_path, "BUG-9595");
+    assert!(!has_flip(&flips, "BUG-9595"));
+
+    // A pull with nothing new, blocker still open: stays held.
+    let storage = Storage::new(&store_path);
+    let head = run_git(&project_root, &["rev-parse", "HEAD"]);
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&head), &storage).unwrap();
+    assert!(!has_flip(&flips, "BUG-9595"));
+
+    mutate_spec(&store_path, "STORY-9596", |r| {
+        r.set_status_from_str("Completed")
+    });
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&head), &storage).unwrap();
+    assert!(has_flip(&flips, "BUG-9595"), "released on the next pull");
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-9595").unwrap();
+    assert_eq!(req.status, RequirementStatus::Completed);
+    assert_eq!(
+        req.implementation_info
+            .as_ref()
+            .and_then(|i| i.completion_sha.as_deref()),
+        Some(merge_sha.as_str())
+    );
+}
+
+/// BUG-1551 review: the note's recipe (`reconcile-status --since <sha>^`)
+/// reaches a merge older than the default 200-commit replay window.
+// trace:BUG-1551 | ai:claude
+#[test]
+fn reconcile_since_merge_parent_reaches_merge_older_than_200_commits() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_blocked_spec(&store_path, "BUG-9597", "Done", "STORY-9598", "In Progress");
+    let (_, merge_sha) = land_and_bump(&project_root, &store_path, "BUG-9597");
+    let storage = Storage::new(&store_path);
+    let note = storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id("BUG-9597")
+        .unwrap()
+        .comments
+        .iter()
+        .find(|c| c.content.contains(CLOSURE_HOLD_MARKER))
+        .unwrap()
+        .content
+        .clone();
+    assert!(
+        note.contains(&format!("--since {}^", &merge_sha[..7])),
+        "{note}"
+    );
+    assert!(note.contains("cycle"), "{note}");
+    for i in 0..201 {
+        run_git(
+            &project_root,
+            &[
+                "commit",
+                "--allow-empty",
+                "-q",
+                "-m",
+                &format!("chore: filler {i}"),
+            ],
+        );
+    }
+    mutate_spec(&store_path, "STORY-9598", |r| {
+        r.set_status_from_str("Completed")
+    });
+
+    // Default window (200 commits) cannot see the merge.
+    handle_db_reconcile_status(&store_path, None, Some("BUG-9597"), false).unwrap();
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-9597")
+            .unwrap()
+            .status,
+        RequirementStatus::Done
+    );
+    // The recipe's `--since <sha>^` does.
+    let since = format!("{}^", &merge_sha[..7]);
+    handle_db_reconcile_status(&store_path, Some(&since), Some("BUG-9597"), false).unwrap();
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-9597")
+            .unwrap()
+            .status,
+        RequirementStatus::Completed
+    );
+}
