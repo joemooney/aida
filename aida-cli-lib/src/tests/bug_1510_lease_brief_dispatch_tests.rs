@@ -7,7 +7,7 @@ use super::*;
 
 fn brief(spec_id: &str, acked: bool) -> BriefListEntry {
     BriefListEntry {
-        path: std::path::PathBuf::from(format!("/tmp/agent-briefs/{spec_id}.md")),
+        path: std::path::PathBuf::from("agent-briefs").join(format!("{spec_id}.md")),
         spec_id: spec_id.to_string(),
         agent: "claude".to_string(),
         generated_at: "2026-09-20T01:00:00Z".to_string(),
