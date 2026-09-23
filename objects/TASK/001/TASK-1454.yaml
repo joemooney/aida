@@ -14,10 +14,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T13:16:11.213474237Z
-modified_at: 2026-09-23T13:16:11.213474237Z
+modified_at: 2026-09-23T13:16:21.115049170Z
 req_type: Task
 tags:
 - followup
 - hooks
 - parent:BUG-1553
 - ps
+relationships:
+- rel_type: Child
+  target_id: 01a0c485-0e45-74e1-80cb-82609d5ac626
+  created_at: 2026-09-23T13:16:21.115049170Z
