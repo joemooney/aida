@@ -1179,6 +1179,14 @@ pub(crate) enum QueueFreshPickup {
     NeedsGuidedOrOperatorSession(aida_core::ExecutionMode),
     NeedsReleaseOperatorSession,
     AwaitingMerge,
+    /// BUG-1515: `Done`, but the review that examined this branch is an
+    /// OUTSTANDING refusal (RequestChanges/Rejected, never closed by a later
+    /// merge — `review_verdict::is_outstanding_refusal`). Distinct from
+    /// `AwaitingMerge`: nothing here is ready to ship, it needs a rework
+    /// round first, and the two shipping-route hints (`--from-pr`,
+    /// `integrate`) both refuse from this state.
+    // trace:BUG-1515 | ai:claude
+    AwaitingRework,
     Terminal(RequirementStatus),
     Blocked(aida_core::pickability::BlockedReason),
 }
@@ -1187,11 +1195,19 @@ pub(crate) enum QueueFreshPickup {
 /// as in-flight / awaiting-merge work, but it is not a valid fresh pickup.
 /// `NeedsAttention` is blocked by normal pickability unless an explicit force
 /// path is being resolved.
+///
+/// BUG-1515: a `Done` spec whose recorded review verdict is a still-live
+/// refusal is a DIFFERENT ineligibility (`AwaitingRework`, not
+/// `AwaitingMerge`) — `project_root` is `None` in callers that cannot cheaply
+/// resolve one (e.g. isolated unit tests), which degrades to the pre-BUG-1515
+/// `AwaitingMerge` reading rather than erroring.
 // trace:BUG-1017 | ai:codex
+// trace:BUG-1515 | ai:claude
 pub(crate) fn queue_fresh_pickup_policy(
     req: &aida_core::Requirement,
     store: &aida_core::RequirementsStore,
     force_needs_attention: bool,
+    project_root: Option<&std::path::Path>,
 ) -> QueueFreshPickup {
     // trace:BUG-1099 | ai:codex
     if req.deferred {
@@ -1201,6 +1217,17 @@ pub(crate) fn queue_fresh_pickup_policy(
         return QueueFreshPickup::Archived;
     }
     if matches!(req.status, RequirementStatus::Done) {
+        if let Some(root) = project_root {
+            if done_spec_outstanding_refusal(
+                root,
+                req.agreed_id.as_deref().unwrap_or_default(),
+                req.spec_id.as_deref().unwrap_or_default(),
+            )
+            .is_some()
+            {
+                return QueueFreshPickup::AwaitingRework;
+            }
+        }
         return QueueFreshPickup::AwaitingMerge;
     }
     if is_terminal_status(&req.status) {
@@ -1231,6 +1258,13 @@ pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Opti
             "Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`"
                 .to_string(),
         ),
+        // trace:BUG-1515 | ai:claude
+        QueueFreshPickup::AwaitingRework => Some(
+            "REWORK NEEDED — reviewer requested changes and it is still outstanding; route via \
+             `aida queue rework <ID>` then \
+             `aida queue work <ID> --auto-complete=through-ci --no-human=both`"
+                .to_string(),
+        ),
         QueueFreshPickup::Terminal(status) => Some(format!("{status} — already terminal")),
         QueueFreshPickup::Blocked(reason) => {
             Some(aida_core::pickability::pickability_reason_label(reason))
@@ -1242,6 +1276,7 @@ pub(crate) fn queue_drain_pickup_policy(
     req: &aida_core::Requirement,
     store: &aida_core::RequirementsStore,
     force_needs_attention: bool,
+    project_root: Option<&std::path::Path>,
 ) -> QueueFreshPickup {
     // Release meta-tasks may be queued and tracked, but never picked up by an
     // unattended drain. Their driver is the at-keyboard `/aida-release` prep
@@ -1265,7 +1300,7 @@ pub(crate) fn queue_drain_pickup_policy(
             req.execution_mode.expect("matched Some execution_mode"),
         );
     }
-    queue_fresh_pickup_policy(req, store, force_needs_attention)
+    queue_fresh_pickup_policy(req, store, force_needs_attention, project_root)
 }
 
 // trace:TASK-1234 | ai:codex
@@ -1951,13 +1986,14 @@ pub(crate) fn handle_queue_command(
                     else {
                         return true;
                     };
-                    match queue_fresh_pickup_policy(req, &store, false) {
+                    match queue_fresh_pickup_policy(req, &store, false, store_path.parent()) {
                         QueueFreshPickup::Pickable => true,
                         QueueFreshPickup::Archived
                         | QueueFreshPickup::Deferred
                         | QueueFreshPickup::NeedsGuidedOrOperatorSession(_)
                         | QueueFreshPickup::NeedsReleaseOperatorSession
                         | QueueFreshPickup::AwaitingMerge
+                        | QueueFreshPickup::AwaitingRework
                         | QueueFreshPickup::Terminal(_) => false,
                         QueueFreshPickup::Blocked(reason) => {
                             blocked_entries.push(BlockedEntry { req, reason });
@@ -4390,7 +4426,7 @@ pub(crate) fn handle_queue_command(
                         else {
                             return true;
                         };
-                        match queue_fresh_pickup_policy(req, &store, false) {
+                        match queue_fresh_pickup_policy(req, &store, false, store_path.parent()) {
                             QueueFreshPickup::Pickable => true,
                             other => {
                                 let display = req
@@ -7939,7 +7975,12 @@ pub(crate) fn resolve_queue_work_plan(
                 let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
                     return true;
                 };
-                match queue_fresh_pickup_policy(req, &store, force_needs_attention) {
+                match queue_fresh_pickup_policy(
+                    req,
+                    &store,
+                    force_needs_attention,
+                    storage.path().parent(),
+                ) {
                     QueueFreshPickup::Pickable => true,
                     other => {
                         let display = req
@@ -8089,6 +8130,7 @@ pub(crate) fn resolve_queue_work_plan(
             req,
             &store,
             force_needs_attention,
+            storage.path().parent(),
         )) {
             anyhow::bail!(
                 "`{}` is not pickable for fresh work: {}",
@@ -8128,7 +8170,12 @@ pub(crate) fn resolve_queue_work_plan(
                     return false;
                 };
                 if !matches!(
-                    queue_fresh_pickup_policy(req, &store, force_needs_attention),
+                    queue_fresh_pickup_policy(
+                        req,
+                        &store,
+                        force_needs_attention,
+                        storage.path().parent(),
+                    ),
                     QueueFreshPickup::Pickable
                 ) {
                     return false;
@@ -8246,7 +8293,8 @@ pub(crate) fn resolve_queue_work_plan(
         // the orchestrator never spawns phase 1 on a blocked-by /
         // human-only spec. Same gate as head pickup + batch drain.
         // trace:STORY-333 | ai:claude
-        match queue_fresh_pickup_policy(req, &store, force_needs_attention) {
+        match queue_fresh_pickup_policy(req, &store, force_needs_attention, storage.path().parent())
+        {
             QueueFreshPickup::Pickable => {}
             QueueFreshPickup::Archived => {
                 archived_skipped += 1;
@@ -11871,7 +11919,7 @@ fn auto_complete_sibling_role_hint(
             continue;
         };
         if !matches!(
-            queue_fresh_pickup_policy(req, &store, false),
+            queue_fresh_pickup_policy(req, &store, false, storage.path().parent()),
             QueueFreshPickup::Pickable
         ) {
             continue;
@@ -12307,11 +12355,19 @@ pub(crate) fn probe_pr_integration_state(
     // The forge row for this PR (keyed by head branch).
     let item = branch.and_then(|b| snapshot.by_branch.get(b));
 
-    // CI: prefer the snapshot rollup ("pass"/"fail"/"pending"/"?"), normalized.
+    // CI: prefer the snapshot rollup ("pass"/"fail"/"pending"/"missing"/
+    // "unknown"/"?"), normalized. "missing" (a required check's row never
+    // showed up on this head) and "unknown" (the required-check set itself
+    // couldn't be read) are BOTH absent-evidence states, not passes — mapping
+    // either into the catch-all `None` arm is the exact PR-2009 false-green
+    // shape through `aida integrate` (`classify_integration_action` merges on
+    // `None`). trace:BUG-1481 | ai:claude
     let ci = match item.and_then(|i| i.ci_rollup.as_deref()) {
         Some("pass") => integrate::CiState::Passing,
         Some("fail") => integrate::CiState::Failing,
         Some("pending") => integrate::CiState::Running,
+        Some("missing") => integrate::CiState::RequiredCheckMissing,
+        Some("unknown") => integrate::CiState::Indeterminate,
         _ => integrate::CiState::None,
     };
 
@@ -12556,6 +12612,53 @@ mod bug_1581_integration_probe_tests {
             crate::integrate::classify_integration_action(&state),
             crate::integrate::IntegrationAction::Park(
                 crate::integrate::ParkReason::ReviewIntegrity
+            )
+        ));
+    }
+
+    // BUG-1481: a `ci_rollup` of "missing" (a required check's row never
+    // showed up on this head) must never be probed into `CiState::None` and
+    // never classify as Merge — that is the exact PR-2009 false-green shape
+    // through `aida integrate`.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn integrate_probe_never_merges_on_missing_required_check() {
+        let root = tempfile::tempdir().unwrap();
+        let mut snap = snapshot();
+        snap.by_branch.get_mut("bug-1581").unwrap().ci_rollup = Some("missing".into());
+        let state = probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snap);
+        assert_eq!(state.ci, crate::integrate::CiState::RequiredCheckMissing);
+        assert!(!matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Merge
+        ));
+        assert!(matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Park(
+                crate::integrate::ParkReason::RequiredCheckMissing
+            )
+        ));
+    }
+
+    // BUG-1481: a `ci_rollup` of "unknown" (the required-check set itself
+    // couldn't be read — branch protection unreadable) must never be probed
+    // into `CiState::None` and never classify as Merge.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn integrate_probe_never_merges_on_unknown_required_checks() {
+        let root = tempfile::tempdir().unwrap();
+        let mut snap = snapshot();
+        snap.by_branch.get_mut("bug-1581").unwrap().ci_rollup = Some("unknown".into());
+        let state = probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snap);
+        assert_eq!(state.ci, crate::integrate::CiState::Indeterminate);
+        assert!(!matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Merge
+        ));
+        assert!(matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Park(
+                crate::integrate::ParkReason::RequiredCheckMissing
             )
         ));
     }
@@ -13602,6 +13705,52 @@ pub(crate) fn recover_action_label(action: queue_recover::RecoverAction) -> &'st
         A::WipCommitPark => "commit WIP and park for resumption",
         A::EndAndRequeue => "end the lease and re-queue",
     }
+}
+
+/// BUG-1515: whether a `Done` spec's most recently recorded review verdict is
+/// an OUTSTANDING refusal that is STILL LIVE at the branch tip — a
+/// `RequestChanges`/`Rejected` verdict never closed by a later merge
+/// (`review_verdict::is_outstanding_refusal`; a `Done` spec is never
+/// `Completed`, so that half of the predicate is always `false` here) AND
+/// whose reviewed sha is still the tip (`verdict_tip_relation` ==
+/// `AtReviewedSha`). A refusal recorded against an OLD head (new commits
+/// pushed since, or the branch rewritten) is history, not a live blocker —
+/// after a normal rework round (refusal, new commits, `queue done` again)
+/// that old refusal must not keep reading as "REWORK NEEDED" when what it
+/// actually needs is RE-REVIEW; `queue_fresh_pickup_policy` falls back to
+/// `AwaitingMerge` in that case. Reads the verdict the same way
+/// `evaluate_review_verdict_gate` does (either id form, primary-worktree
+/// fallback for a reviewer verdict recorded outside an implementer
+/// worktree) — no new verdict reader, per BUG-1515's acceptance. The
+/// primary-worktree fallback (a `git worktree list` spawn) is resolved only
+/// when the local checkout itself has no recorded verdict, since most Done
+/// rows have none — this keeps `queue list`/`queue next` from shelling out
+/// once per Done row. Returns the outstanding verdict so a caller can build
+/// a richer message from it.
+// trace:BUG-1515 | ai:claude
+pub(crate) fn done_spec_outstanding_refusal(
+    project_root: &std::path::Path,
+    display_id: &str,
+    spec_id: &str,
+) -> Option<review_verdict::RecordedVerdict> {
+    let verdict = review_verdict::read_recorded_verdict_any(project_root, &[display_id, spec_id])
+        .or_else(|| {
+        let primary_root = main_worktree_root_from(project_root);
+        (primary_root != project_root)
+            .then(|| {
+                review_verdict::read_recorded_verdict_any(&primary_root, &[display_id, spec_id])
+            })
+            .flatten()
+    })?;
+    if !review_verdict::is_outstanding_refusal(&verdict, /* spec_completed */ false) {
+        return None;
+    }
+    let relation = verdict_tip_relation(
+        project_root,
+        verdict.reviewed_branch.as_deref(),
+        verdict.reviewed_sha.as_deref(),
+    );
+    matches!(relation, review_verdict::TipRelation::AtReviewedSha).then_some(verdict)
 }
 
 /// Resolve the review-verdict gate for a spec about to be marked done.

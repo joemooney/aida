@@ -202,6 +202,17 @@ pub(crate) enum CiState {
     Failing,
     /// CI is queued / in-progress — no terminal verdict yet.
     Running,
+    /// BUG-1481: a required check's row never showed up on this head at
+    /// all (the branch's required-check set is known, but one of its
+    /// entries has no row in the rollup). Never a pass — absent evidence
+    /// is not good evidence (PRIN-5).
+    RequiredCheckMissing,
+    /// BUG-1481: the required-check set itself could not be determined
+    /// (branch protection unreadable — permission denied, network
+    /// failure, or anything other than the forge's genuine "branch is
+    /// unprotected" answer). Genuinely unknown; never treated as
+    /// "nothing required".
+    Indeterminate,
     /// No CI is configured / no checks ran, or we couldn't tell.
     #[default]
     None,
@@ -251,6 +262,10 @@ pub(crate) enum ParkReason {
     ReviewIntegrity,
     /// A real merge conflict — never auto-resolved.
     MergeConflict,
+    /// BUG-1481: a required status check's row never showed up on this
+    /// head, or the required-check set itself could not be determined —
+    /// never merge on absent evidence (PRIN-5).
+    RequiredCheckMissing,
 }
 
 impl ParkReason {
@@ -267,6 +282,9 @@ impl ParkReason {
             ParkReason::MergeConflict => {
                 "the PR has a merge conflict — never auto-resolved (parked; rebase/resolve, then re-run)"
             }
+            ParkReason::RequiredCheckMissing => {
+                "a required status check is missing or unreadable — not merging on absent evidence (parked for triage)"
+            }
         }
     }
 }
@@ -277,14 +295,17 @@ impl ParkReason {
 ///   1. RequestChanges — a human asked for changes; never merge over it, even
 ///      with green CI (the strongest, most explicit human signal).
 ///   2. CI red — never merge a failing PR.
-///   3. Merge conflict — never auto-resolve.
-///   4. CI running — wait (re-decide next pass), don't merge blind.
-///   5. otherwise (mergeable / unknown, CI passing / none, no RequestChanges) —
+///   3. Required check missing or unreadable (BUG-1481) — a required check's
+///      row never showed up on this head, or the required-check set itself
+///      couldn't be determined; never merge on absent evidence (PRIN-5).
+///   4. Merge conflict — never auto-resolve.
+///   5. CI running — wait (re-decide next pass), don't merge blind.
+///   6. otherwise (mergeable / unknown, CI passing / none, no RequestChanges) —
 ///      Merge. A behind-base branch is rebased by the caller's `--rebase` step
 ///      before this gate, and the `--from-pr` drive re-gates the merge, so an
 ///      Unknown-mergeable case is safe to let through (merge refuses, never
 ///      corrupts).
-/// trace:TASK-836 | ai:claude
+// trace:TASK-836 trace:BUG-1481 | ai:claude
 pub(crate) fn classify_integration_action(s: &PrIntegrationState) -> IntegrationAction {
     if s.review_integrity_unproven {
         return IntegrationAction::Park(ParkReason::ReviewIntegrity);
@@ -294,6 +315,9 @@ pub(crate) fn classify_integration_action(s: &PrIntegrationState) -> Integration
     }
     if s.ci == CiState::Failing {
         return IntegrationAction::Park(ParkReason::CiRed);
+    }
+    if matches!(s.ci, CiState::RequiredCheckMissing | CiState::Indeterminate) {
+        return IntegrationAction::Park(ParkReason::RequiredCheckMissing);
     }
     if s.mergeable == MergeableState::Conflicting {
         return IntegrationAction::Park(ParkReason::MergeConflict);
