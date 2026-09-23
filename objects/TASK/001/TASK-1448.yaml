@@ -9,12 +9,12 @@ description: |-
   1. aida pr ship refuses to merge a PR whose recorded approval does not cover the current head sha, naming both shas, with an explicit override.
   2. The drain merge phase shelves (never exits) in the same case.
   3. Tests cover approval at head (allowed), behind head (refused) and sha-less (refused).
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T08:13:24.387700830Z
-modified_at: 2026-09-23T08:13:26.792552794Z
+modified_at: 2026-09-23T17:46:31.842614985Z
 req_type: Task
 tags:
 - followup
