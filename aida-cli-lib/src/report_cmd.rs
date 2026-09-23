@@ -441,10 +441,23 @@ pub(crate) fn maybe_print_upstream_recheck_notice(storage: &Storage) {
         .into_iter()
         .filter(|row| row.older)
         .count();
-    if stale == 0 {
-        return;
+    if stale > 0 {
+        eprintln!("{stale} upstream aida report(s) predate this binary - aida report --recheck");
     }
-    eprintln!("{stale} upstream aida report(s) predate this binary - aida report --recheck");
+    // BUG-1594: record "checked for this version" whether or not anything was
+    // stale. This notice runs before EVERY git-backend command, and the marker
+    // used to be written only when a stale report was found — so in a project
+    // with no stale upstream reports (the common case) every `aida show`,
+    // `aida list`, … paid a full store load (4,400+ YAML parses, 2.5s warm and
+    // far longer under contention) just to conclude "nothing to say". The
+    // check is per binary version: a report filed later carries the current
+    // version (never "older"), and `aida report --recheck` stays the explicit
+    // full view. trace:BUG-1594 | ai:claude
+    record_upstream_notice_checked(&marker, current);
+}
+
+// trace:BUG-1594 | ai:claude
+fn record_upstream_notice_checked(marker: &std::path::Path, current: &str) {
     if let Some(parent) = marker.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
