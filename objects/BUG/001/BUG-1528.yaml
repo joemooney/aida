@@ -80,7 +80,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:55:34.840549Z
-modified_at: 2026-09-23T04:56:20.532356996Z
+modified_at: 2026-09-23T04:56:22.455120270Z
 req_type: Bug
 tags:
 - agent-surface
@@ -187,4 +187,10 @@ comments:
   content: Claude implementer dispatched 2026-09-22 21:40 -> branch claude/bug-1528, no PR
   created_at: 2026-09-23T04:40:34.938453258Z
   modified_at: 2026-09-23T04:40:34.938453258Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cc9f-3ab7-7801-b1c6-829bdc923593
+  author: joe
+  content: 'Claude implementer result: branch claude/bug-1528 @ b5f334ddd8 (pushed, no PR). There were two root causes, both reproduced in real git repos. (1) collect_git_linkage_opts resolved the branch only from the NEWEST referencing commit, so a branch crossing (a local bug-X-work plus a newer remote-only bug-X-round2) produced branch None. It now unions candidate branches over all referencing commits, picks the spec''s own branch, and lists the rest as other_branches (''also references this spec''). (2) ChangeLinkageState::BranchNotFound rendered NO PR line, unlike its siblings; it now prints ''PR state unknown - branch not found locally'' (PRIN-5). AC1 and AC2 met; AC3/AC4 met per branch, but a spec-id-wide PR search was not built. 46 targeted tests pass (3 new). REVIEWER NOTE: every other_branches entry triggers its own change_lookup_for_branch (a forge call), so ''aida show'' latency grows with the number of branches. Consider --verbose-only or a cap.'
+  created_at: 2026-09-23T04:56:22.455120270Z
+  modified_at: 2026-09-23T04:56:22.455120270Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
