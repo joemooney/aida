@@ -7,8 +7,6 @@ use aida_core::RequirementsStore;
 use anyhow::Result;
 use colored::Colorize;
 
-/// Handle `aida node` subcommands. Operates on the orphan-store worktree
-/// at `store_path` (typically `.aida-store/`).
 /// Render the docs tree, called from the legacy (Storage facade) dispatch.
 // trace:EPIC-1-052 | ai:claude
 // trace:FR-1-077 | ai:claude

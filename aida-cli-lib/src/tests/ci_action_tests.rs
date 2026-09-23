@@ -245,6 +245,98 @@ fn parse_malformed_is_no_signal() {
     assert!(matches!(parse_ci_probe(""), CiProbe::NoSignal(_)));
 }
 
+// --- BUG-1455: a partial rollup must never read as a terminal verdict ---
+//
+// `gh`'s rollup carries no `isRequired` flag, so `parse_ci_probe` cannot
+// distinguish a required check from an optional one by name. What it CAN
+// always tell is concluded vs. still-running, so the table below is framed
+// on that axis: any check still in progress keeps the verdict open,
+// regardless of what has already concluded. `merge-hold-gate` (fails by
+// construction while a supervised hold is active) and `Build` (the
+// build/test check that actually decides code health) are the two real
+// check names from the observed incident, standing in for "a fast-failing
+// gate-style check" and "the code-health check" respectively.
+
+/// The exact rollup observed live on BUG-1291 / PR #2001: `merge-hold-gate`
+/// has already concluded FAILURE while `Build` is still IN_PROGRESS. Before
+/// the fix this returned `Red` — a terminal verdict — 32 seconds after the
+/// CI phase started, while the check that actually measures code health
+/// hadn't reported in yet.
+// trace:BUG-1455 | ai:claude
+#[test]
+fn optional_fail_with_required_pending_is_not_terminal() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "merge-hold-gate", "status": "COMPLETED",   "conclusion": "FAILURE"},
+            {"name": "Build",           "status": "IN_PROGRESS", "conclusion": ""}
+        ]}]"#;
+    assert_eq!(
+        parse_ci_probe(json),
+        CiProbe::InProgress { pr_number: 2001 },
+        "a concluded failure must not end the wait while another check is still running"
+    );
+}
+
+/// Once nothing is left running, a concluded failure is reported as it
+/// always was: the fast-fail case a required check going red with no other
+/// check pending.
+// trace:BUG-1455 | ai:claude
+#[test]
+fn required_fail_with_nothing_pending_is_red() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "merge-hold-gate", "status": "COMPLETED", "conclusion": "FAILURE"},
+            {"name": "Build",           "status": "COMPLETED", "conclusion": "SUCCESS"}
+        ]}]"#;
+    match parse_ci_probe(json) {
+        CiProbe::Red {
+            pr_number,
+            failed_summary,
+        } => {
+            assert_eq!(pr_number, 2001);
+            assert!(
+                failed_summary.contains("merge-hold-gate"),
+                "summary: {failed_summary}"
+            );
+        }
+        other => panic!("expected Red, got {other:?}"),
+    }
+}
+
+/// A check still queued/running with nothing concluded yet is the ordinary
+/// in-progress case, unaffected by the fix.
+// trace:BUG-1455 | ai:claude
+#[test]
+fn required_pending_with_nothing_concluded_is_in_progress() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "Build", "status": "QUEUED", "conclusion": ""}
+        ]}]"#;
+    assert_eq!(
+        parse_ci_probe(json),
+        CiProbe::InProgress { pr_number: 2001 }
+    );
+}
+
+/// Every check concluded successfully — Green, unaffected by the fix.
+// trace:BUG-1455 | ai:claude
+#[test]
+fn all_pass_is_green() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "merge-hold-gate", "status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"name": "Build",           "status": "COMPLETED", "conclusion": "SUCCESS"}
+        ]}]"#;
+    assert_eq!(parse_ci_probe(json), CiProbe::Green { pr_number: 2001 });
+}
+
+/// An unreadable/empty rollup is `NoSignal`, never a false Green or Red.
+// trace:BUG-1455 | ai:claude
+#[test]
+fn unknown_rollup_is_no_signal() {
+    assert!(matches!(parse_ci_probe("not json"), CiProbe::NoSignal(_)));
+    assert!(matches!(
+        parse_ci_probe(r#"[{"number": 2001}]"#),
+        CiProbe::PrNoChecks { pr_number: 2001 }
+    ));
+}
+
 // BUG-1250: the exact stderr emitted by `gh` for a connect failure must be
 // classified as retryable; exhaustion must close the gate, never proceed.
 // trace:BUG-1250 | ai:codex
@@ -279,5 +371,96 @@ fn hard_ci_probe_failure_is_immediately_unavailable() {
     assert_eq!(
         decide_ci_probe_failure("gh pr list failed: HTTP 401", 1, 3, &patterns),
         CiProbeFailureAction::Unavailable
+    );
+}
+
+// --- TASK-1453: absolute-ceiling verdict — Red-with-known-failure vs honest NoSignal ---
+//
+// `ci_ceiling_verdict_from_rollup` is the pure decision `wait_for_ci_terminal`
+// consults only once it has already hit its absolute ceiling. It must tell a
+// stuck-pending-forever check sitting next to an already-concluded failure
+// (report Red, name both) apart from stuck-pending alone (stay honest
+// NoSignal — the caller falls back to its existing message).
+
+/// A real check (`lint`) concluded FAILURE while `Build` never concludes. At
+/// the ceiling this must surface as Red with `lint` named and `Build` listed
+/// as still pending — not the uninformative "giving up" NoSignal.
+// trace:TASK-1453 | ai:claude
+#[test]
+fn ceiling_with_known_failure_and_stuck_pending_is_red_with_summary() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "lint",  "status": "COMPLETED",   "conclusion": "FAILURE"},
+            {"name": "Build", "status": "IN_PROGRESS", "conclusion": ""}
+        ]}]"#;
+    match ci_ceiling_verdict_from_rollup(json) {
+        Some(CiProbe::Red {
+            pr_number,
+            failed_summary,
+        }) => {
+            assert_eq!(pr_number, 2001);
+            assert!(failed_summary.contains("lint"), "summary: {failed_summary}");
+            assert!(
+                failed_summary.contains("Build"),
+                "stuck check should still be named as pending: {failed_summary}"
+            );
+        }
+        other => panic!("expected Some(Red), got {other:?}"),
+    }
+}
+
+/// Nothing concluded — every check is still pending/queued. This is the
+/// genuine "we truly don't know" case, so the ceiling must NOT invent a Red
+/// verdict; the caller keeps its existing NoSignal.
+// trace:TASK-1453 | ai:claude
+#[test]
+fn ceiling_with_stuck_pending_alone_stays_none() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "Build", "status": "IN_PROGRESS", "conclusion": ""}
+        ]}]"#;
+    assert_eq!(ci_ceiling_verdict_from_rollup(json), None);
+}
+
+/// A concluded failure with nothing else pending is still Red (no spurious
+/// "still pending" note appended).
+// trace:TASK-1453 | ai:claude
+#[test]
+fn ceiling_with_only_concluded_failure_is_red_without_pending_note() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "lint", "status": "COMPLETED", "conclusion": "FAILURE"}
+        ]}]"#;
+    match ci_ceiling_verdict_from_rollup(json) {
+        Some(CiProbe::Red { failed_summary, .. }) => {
+            assert!(
+                !failed_summary.contains("still pending"),
+                "summary: {failed_summary}"
+            );
+        }
+        other => panic!("expected Some(Red), got {other:?}"),
+    }
+}
+
+/// Malformed / empty / non-GitHub-shaped JSON degrades to `None` — the safe
+/// fallback that preserves today's NoSignal behavior.
+// trace:TASK-1453 | ai:claude
+#[test]
+fn ceiling_verdict_degrades_to_none_on_unparsable_json() {
+    assert_eq!(ci_ceiling_verdict_from_rollup(""), None);
+    assert_eq!(ci_ceiling_verdict_from_rollup("[]"), None);
+    assert_eq!(ci_ceiling_verdict_from_rollup("not json"), None);
+}
+
+/// Review fix: the merge-hold gate fails by construction while a hold is
+/// active. At the ceiling, a hold-gate failure plus a stuck check is NOT a
+/// real Red; it stays None (NoSignal) so a held PR is not marked ci-red.
+// trace:TASK-1453 | ai:claude
+#[test]
+fn ceiling_with_only_hold_gate_failure_is_not_red() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "merge-hold-gate", "status": "COMPLETED",   "conclusion": "FAILURE"},
+            {"name": "Build",           "status": "IN_PROGRESS", "conclusion": ""}
+        ]}]"#;
+    assert!(
+        ci_ceiling_verdict_from_rollup(json).is_none(),
+        "a hold-gate-only failure must not become a ceiling Red"
     );
 }

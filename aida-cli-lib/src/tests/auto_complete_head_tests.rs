@@ -77,3 +77,20 @@ fn all_in_flight_queue_is_not_drivable() {
         ]
     );
 }
+
+/// BUG-1517: `--resume-dry-run` is a read-only preview (never re-enters the
+/// drain), so it must succeed under a non-dispatching seat. A live
+/// (non-dry-run) launch under that same seat must still be refused — pinning
+/// both halves of the acceptance criteria so a fix that drops the gate
+/// entirely (rather than exempting only the dry-run branch) fails.
+// trace:BUG-1517 | ai:claude
+#[test]
+fn resume_dry_run_bypasses_dispatch_authority_but_live_dispatch_stays_gated() {
+    // Non-advisor seat (no dispatch authority): dry-run is allowed.
+    assert!(auto_complete_dispatch_authority_ok(true, false).is_ok());
+    // Same seat, no dry-run: a real dispatch is still refused.
+    assert!(auto_complete_dispatch_authority_ok(false, false).is_err());
+    // Dispatch authority present: both succeed regardless of dry-run.
+    assert!(auto_complete_dispatch_authority_ok(true, true).is_ok());
+    assert!(auto_complete_dispatch_authority_ok(false, true).is_ok());
+}

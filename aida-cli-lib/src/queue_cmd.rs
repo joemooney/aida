@@ -618,6 +618,23 @@ pub(crate) fn queue_json_rows(
         .collect()
 }
 
+/// Human-readable chip for a reviewer-routed row's actionability. Rendered
+/// inline -- rows never vanish because of this label, they're annotated.
+// trace:BUG-1508 | ai:claude
+pub(crate) fn reviewer_state_chip(state: review_verdict::ReviewActionability) -> String {
+    match state {
+        review_verdict::ReviewActionability::NeedsReview => {
+            format!("[{}]", "needs-review".yellow().bold())
+        }
+        review_verdict::ReviewActionability::AwaitingRework => {
+            format!("[{}]", "awaiting-rework".blue())
+        }
+        review_verdict::ReviewActionability::Resolved => {
+            format!("[{}]", "resolved".green().dimmed())
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct QueueDestinationDetails {
     pub(crate) identity: String,
@@ -996,6 +1013,87 @@ pub(crate) fn dead_queue_entries<'a>(
         .collect()
 }
 
+/// BUG-1512: which of `summaries` look like auto-queued review rows ("Review
+/// PR-N: ...") and aren't already flagged dead by the target-spec rule above.
+/// A routed review entry's liveness must not hinge on the review STORY's own
+/// status — that status only says whether a reviewer closed it, not whether
+/// the PR it reviews is still open. Pure — no forge, no network — so it's
+/// unit-testable on its own; the caller resolves each returned PR number's
+/// merged-or-closed state (via `review_pr_is_merged_or_closed`, or a test
+/// double) and feeds the resolved ids to [`merged_pr_review_entries`].
+// trace:BUG-1512 | ai:claude
+pub(crate) fn review_summaries_pending_merge_check<'a>(
+    summaries: &'a [aida_core::RequirementSummary],
+    already_dead: &std::collections::HashSet<uuid::Uuid>,
+) -> Vec<(&'a aida_core::RequirementSummary, u64)> {
+    summaries
+        .iter()
+        .filter(|s| !already_dead.contains(&s.id))
+        .filter_map(|s| parse_review_story_pr_number(&s.title).map(|pr| (s, pr)))
+        .collect()
+}
+
+/// BUG-1512: the routed review entries whose PR already merged or closed —
+/// additive to `dead_queue_entries`'s target-spec rule, never a replacement
+/// for it (an entry the target-spec rule already caught is excluded via
+/// `already_dead` so the two conditions don't double-count). `merged_pr_ids`
+/// is the set of requirement ids whose PR was confirmed merged/closed (see
+/// `review_summaries_pending_merge_check` for how the caller builds the
+/// candidate list). Pure over its inputs, mirroring `dead_queue_entries`'s
+/// shape so both are unit-testable without a forge/network dependency.
+///
+/// DECISION (BUG-1512 AC3): the review STORY's own status is left untouched
+/// here — still Draft (or whatever it was), just unrouted. It is
+/// deliberately NOT bumped to Completed (that would assert a review that
+/// never happened) and this fix does not invent a new terminal
+/// "closed-unreviewed" status either, since a bare Draft-and-unrouted spec
+/// already reads as "nobody signed off on this" and a new status is a
+/// bigger surface change than this entry-level bug calls for.
+// trace:BUG-1512 | ai:claude
+pub(crate) fn merged_pr_review_entries<'a>(
+    entries: &'a [aida_core::models::QueueEntry],
+    merged_pr_ids: &std::collections::HashSet<uuid::Uuid>,
+    already_dead: &std::collections::HashSet<uuid::Uuid>,
+    for_role: Option<&str>,
+) -> Vec<&'a aida_core::models::QueueEntry> {
+    entries
+        .iter()
+        .filter(|e| match for_role {
+            None => true,
+            Some(want) => e
+                .for_role
+                .as_deref()
+                .is_some_and(|have| want.eq_ignore_ascii_case(have)),
+        })
+        .filter(|e| !already_dead.contains(&e.requirement_id))
+        .filter(|e| merged_pr_ids.contains(&e.requirement_id))
+        .collect()
+}
+
+/// BUG-1512 AC1: a routed review's reason for existing ends when its PR
+/// either MERGED or was CLOSED without merging — a declined PR needs no more
+/// review either, so both are terminal for this purpose. Mirrors
+/// `pr_is_merged_with_sink`'s shape (same `None` = "cannot confirm, don't
+/// collect" contract) but widens the accepted state. `None` on any forge
+/// failure (gh missing/unreachable, no forge configured), never a silent
+/// collect.
+// trace:BUG-1512 | ai:claude
+fn review_pr_is_merged_or_closed(
+    project_root: &std::path::Path,
+    pr: u32,
+    sink: &mut dyn network_retry::RetrySink,
+) -> Option<bool> {
+    crate::forge::forge_for(project_root)
+        .change_metadata(pr as u64, sink)
+        .ok()
+        .map(|m| {
+            matches!(
+                m.state,
+                crate::forge::ChangeState::Merged | crate::forge::ChangeState::Closed
+            )
+        })
+}
+
 /// BUG-772: the UNSATISFIED `BlockedBy` predecessors of `req`, as the
 /// path-to-empty footer's plain-data facts — display id + status, with `None`
 /// status marking a dangling edge (target no longer in the store). A Completed
@@ -1081,6 +1179,14 @@ pub(crate) enum QueueFreshPickup {
     NeedsGuidedOrOperatorSession(aida_core::ExecutionMode),
     NeedsReleaseOperatorSession,
     AwaitingMerge,
+    /// BUG-1515: `Done`, but the review that examined this branch is an
+    /// OUTSTANDING refusal (RequestChanges/Rejected, never closed by a later
+    /// merge — `review_verdict::is_outstanding_refusal`). Distinct from
+    /// `AwaitingMerge`: nothing here is ready to ship, it needs a rework
+    /// round first, and the two shipping-route hints (`--from-pr`,
+    /// `integrate`) both refuse from this state.
+    // trace:BUG-1515 | ai:claude
+    AwaitingRework,
     Terminal(RequirementStatus),
     Blocked(aida_core::pickability::BlockedReason),
 }
@@ -1089,11 +1195,19 @@ pub(crate) enum QueueFreshPickup {
 /// as in-flight / awaiting-merge work, but it is not a valid fresh pickup.
 /// `NeedsAttention` is blocked by normal pickability unless an explicit force
 /// path is being resolved.
+///
+/// BUG-1515: a `Done` spec whose recorded review verdict is a still-live
+/// refusal is a DIFFERENT ineligibility (`AwaitingRework`, not
+/// `AwaitingMerge`) — `project_root` is `None` in callers that cannot cheaply
+/// resolve one (e.g. isolated unit tests), which degrades to the pre-BUG-1515
+/// `AwaitingMerge` reading rather than erroring.
 // trace:BUG-1017 | ai:codex
+// trace:BUG-1515 | ai:claude
 pub(crate) fn queue_fresh_pickup_policy(
     req: &aida_core::Requirement,
     store: &aida_core::RequirementsStore,
     force_needs_attention: bool,
+    project_root: Option<&std::path::Path>,
 ) -> QueueFreshPickup {
     // trace:BUG-1099 | ai:codex
     if req.deferred {
@@ -1103,6 +1217,17 @@ pub(crate) fn queue_fresh_pickup_policy(
         return QueueFreshPickup::Archived;
     }
     if matches!(req.status, RequirementStatus::Done) {
+        if let Some(root) = project_root {
+            if done_spec_outstanding_refusal(
+                root,
+                req.agreed_id.as_deref().unwrap_or_default(),
+                req.spec_id.as_deref().unwrap_or_default(),
+            )
+            .is_some()
+            {
+                return QueueFreshPickup::AwaitingRework;
+            }
+        }
         return QueueFreshPickup::AwaitingMerge;
     }
     if is_terminal_status(&req.status) {
@@ -1133,6 +1258,13 @@ pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Opti
             "Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`"
                 .to_string(),
         ),
+        // trace:BUG-1515 | ai:claude
+        QueueFreshPickup::AwaitingRework => Some(
+            "REWORK NEEDED — reviewer requested changes and it is still outstanding; route via \
+             `aida queue rework <ID>` then \
+             `aida queue work <ID> --auto-complete=through-ci --no-human=both`"
+                .to_string(),
+        ),
         QueueFreshPickup::Terminal(status) => Some(format!("{status} — already terminal")),
         QueueFreshPickup::Blocked(reason) => {
             Some(aida_core::pickability::pickability_reason_label(reason))
@@ -1144,6 +1276,7 @@ pub(crate) fn queue_drain_pickup_policy(
     req: &aida_core::Requirement,
     store: &aida_core::RequirementsStore,
     force_needs_attention: bool,
+    project_root: Option<&std::path::Path>,
 ) -> QueueFreshPickup {
     // Release meta-tasks may be queued and tracked, but never picked up by an
     // unattended drain. Their driver is the at-keyboard `/aida-release` prep
@@ -1167,7 +1300,7 @@ pub(crate) fn queue_drain_pickup_policy(
             req.execution_mode.expect("matched Some execution_mode"),
         );
     }
-    queue_fresh_pickup_policy(req, store, force_needs_attention)
+    queue_fresh_pickup_policy(req, store, force_needs_attention, project_root)
 }
 
 // trace:TASK-1234 | ai:codex
@@ -1315,7 +1448,63 @@ pub(crate) fn handle_queue_command(
                 };
                 let backend = advance_backend(store_path)?;
                 let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
-                let rows = queue_json_rows(&raw, &summaries);
+                let mut rows = queue_json_rows(&raw, &summaries);
+                // BUG-1508 AC1: annotate reviewer-routed rows with their
+                // actionability. Local-only (verdict file + git refs) and
+                // only paid for when a reviewer row is actually present, so
+                // the common (non-reviewer) cache-fast read is unaffected.
+                // trace:BUG-1508 | ai:claude
+                if raw
+                    .iter()
+                    .any(|e| e.for_role.as_deref() == Some("reviewer"))
+                {
+                    if let Ok(project_root) = find_project_root() {
+                        if let Ok(full_store) = storage.load() {
+                            let leases = list_leases(&project_root);
+                            for entry in raw
+                                .iter()
+                                .filter(|e| e.for_role.as_deref() == Some("reviewer"))
+                            {
+                                let Some(req) = full_store
+                                    .requirements
+                                    .iter()
+                                    .find(|r| r.id == entry.requirement_id)
+                                else {
+                                    continue;
+                                };
+                                let display_id = req
+                                    .agreed_id
+                                    .as_deref()
+                                    .or(req.spec_id.as_deref())
+                                    .unwrap_or("?");
+                                let state = reviewer_row_actionability(
+                                    &project_root,
+                                    req,
+                                    &leases,
+                                    |uuid| {
+                                        full_store
+                                            .requirements
+                                            .iter()
+                                            .find(|r| r.id == uuid)
+                                            .and_then(|r| {
+                                                r.agreed_id.clone().or_else(|| r.spec_id.clone())
+                                            })
+                                    },
+                                );
+                                if let Some(row) = rows.iter_mut().find(|r| {
+                                    r.get("spec_id").and_then(|v| v.as_str()) == Some(display_id)
+                                }) {
+                                    if let Some(obj) = row.as_object_mut() {
+                                        obj.insert(
+                                            "reviewer_state".to_string(),
+                                            serde_json::Value::String(state.as_str().to_string()),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 println!("{}", serde_json::to_string(&rows)?);
                 return Ok(());
             }
@@ -1335,6 +1524,22 @@ pub(crate) fn handle_queue_command(
                         *include_completed,
                     )?
                 };
+                // BUG-1513: `queue_list_with_role_fallback` deliberately passes
+                // the CALLER'S OWN entries through unfiltered (it widens the
+                // caller's own queue with peers' role-routed additions, per
+                // BUG-774) — that is correct for the passive/no-`--for` view,
+                // but here an explicit `--for <role>` (or the active session
+                // role) is a stated request for ONLY that role's rows. Without
+                // this second pass, an own-queue entry routed to a different
+                // role rode along in both the printed rows and the declared
+                // `count:`, so the header disagreed with the filter it claimed
+                // to apply. Re-derive the same role/only-unrouted resolution
+                // the human TTY view already uses and apply it here too, so
+                // every row this command emits actually satisfies the filter
+                // it was asked for. trace:BUG-1513 | ai:claude
+                let agent_session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+                let (agent_role_filter, agent_only_unrouted) =
+                    resolve_queue_role_filter(role.as_deref(), *all, agent_session_role.as_deref());
                 let backend = advance_backend(store_path)?;
                 let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
                 let by_id: std::collections::HashMap<Uuid, &aida_core::RequirementSummary> =
@@ -1345,8 +1550,34 @@ pub(crate) fn handle_queue_command(
                 // raw queue (which retains Done-awaiting-merge + shipped specs)
                 // balloons the agent output far past the human view. trace:TASK-964
                 let show_terminal = *include_terminal || *include_completed;
+                // BUG-1508 AC1/AC4/AC7: as with the BUG-616 JSON panel read,
+                // only load the full store + leases when a reviewer-routed
+                // row is present, so the common agent read stays cache-fast.
+                // trace:BUG-1508 | ai:claude
+                let reviewer_ctx = if raw
+                    .iter()
+                    .any(|e| e.for_role.as_deref() == Some("reviewer"))
+                {
+                    find_project_root().ok().and_then(|root| {
+                        storage.load().ok().map(|full_store| {
+                            let leases = list_leases(&root);
+                            (root, full_store, leases)
+                        })
+                    })
+                } else {
+                    None
+                };
+                let mut reviewer_routed = 0usize;
+                let mut reviewer_actionable = 0usize;
                 let rows: Vec<Vec<String>> = raw
                     .iter()
+                    .filter(|e| {
+                        entry_matches_role_filter(
+                            e.for_role.as_deref(),
+                            agent_role_filter.as_deref(),
+                            agent_only_unrouted,
+                        )
+                    })
                     .filter_map(|e| {
                         let s = by_id.get(&e.requirement_id)?;
                         if !show_terminal {
@@ -1364,18 +1595,66 @@ pub(crate) fn handle_queue_command(
                             .or(s.spec_id.as_deref())
                             .unwrap_or("")
                             .to_string();
+                        let reviewer_state = if e.for_role.as_deref() == Some("reviewer") {
+                            reviewer_ctx
+                                .as_ref()
+                                .and_then(|(root, full_store, leases)| {
+                                    full_store
+                                        .requirements
+                                        .iter()
+                                        .find(|r| r.id == e.requirement_id)
+                                        .map(|req| {
+                                            reviewer_row_actionability(root, req, leases, |uuid| {
+                                                full_store
+                                                    .requirements
+                                                    .iter()
+                                                    .find(|r| r.id == uuid)
+                                                    .and_then(|r| {
+                                                        r.agreed_id
+                                                            .clone()
+                                                            .or_else(|| r.spec_id.clone())
+                                                    })
+                                            })
+                                        })
+                                })
+                                .map(|state| {
+                                    reviewer_routed += 1;
+                                    if state == review_verdict::ReviewActionability::NeedsReview {
+                                        reviewer_actionable += 1;
+                                    }
+                                    state.as_str().to_string()
+                                })
+                                .unwrap_or_default()
+                        } else {
+                            String::new()
+                        };
                         Some(vec![
                             id,
                             s.title.clone(),
                             toon_status_token(&s.status),
                             e.for_role.clone().unwrap_or_default(),
+                            reviewer_state,
                         ])
                     })
                     .collect();
-                println!("count: {}", rows.len());
+                // BUG-1513 AC6: print the resolved caller identity alongside
+                // the count — the queue is keyed off shell identity (BUG-89),
+                // so two callers comparing a bare count with no identity
+                // attached are not comparing the same filter's output.
+                println!("count: {} for_user: {}", rows.len(), user_id);
+                if reviewer_routed > 0 {
+                    println!(
+                        "reviewer: actionable {} of {} routed",
+                        reviewer_actionable, reviewer_routed
+                    );
+                }
                 println!(
                     "{}",
-                    crate::toon::table_raw("queue", &["id", "title", "status", "for_role"], &rows)
+                    crate::toon::table_raw(
+                        "queue",
+                        &["id", "title", "status", "for_role", "reviewer_state"],
+                        &rows
+                    )
                 );
                 // TASK-974 (AXI #9): next-step block — start/show the queue head
                 // when non-empty, else point at the approvable backlog to fill
@@ -1707,13 +1986,14 @@ pub(crate) fn handle_queue_command(
                     else {
                         return true;
                     };
-                    match queue_fresh_pickup_policy(req, &store, false) {
+                    match queue_fresh_pickup_policy(req, &store, false, store_path.parent()) {
                         QueueFreshPickup::Pickable => true,
                         QueueFreshPickup::Archived
                         | QueueFreshPickup::Deferred
                         | QueueFreshPickup::NeedsGuidedOrOperatorSession(_)
                         | QueueFreshPickup::NeedsReleaseOperatorSession
                         | QueueFreshPickup::AwaitingMerge
+                        | QueueFreshPickup::AwaitingRework
                         | QueueFreshPickup::Terminal(_) => false,
                         QueueFreshPickup::Blocked(reason) => {
                             blocked_entries.push(BlockedEntry { req, reason });
@@ -1928,6 +2208,69 @@ pub(crate) fn handle_queue_command(
             // trace:TASK-222 | ai:claude
             let skip_regular_render = *in_flight_only || pending_empty;
 
+            // BUG-1508 AC1/AC4/AC7: resolve each reviewer-routed row's
+            // actionability LOCALLY (verdict file + `refs/remotes/origin/*` /
+            // `refs/heads/*` -- no forge call), so the depth figure used for
+            // capacity decisions can say "actionable N of M routed" instead
+            // of a bare routed count that reads deep even when most rows are
+            // really awaiting rework, not review. Only paid for when a
+            // reviewer-routed row is actually present. trace:BUG-1508 | ai:claude
+            let reviewer_state_by_entry: std::collections::HashMap<
+                Uuid,
+                review_verdict::ReviewActionability,
+            > = if entries
+                .iter()
+                .any(|e| e.for_role.as_deref() == Some("reviewer"))
+            {
+                match find_project_root() {
+                    Ok(project_root) => {
+                        let leases = list_leases(&project_root);
+                        entries
+                            .iter()
+                            .filter(|e| e.for_role.as_deref() == Some("reviewer"))
+                            .filter_map(|e| {
+                                store
+                                    .requirements
+                                    .iter()
+                                    .find(|r| r.id == e.requirement_id)
+                                    .map(|req| {
+                                        (
+                                            e.requirement_id,
+                                            reviewer_row_actionability(
+                                                &project_root,
+                                                req,
+                                                &leases,
+                                                |uuid| {
+                                                    store
+                                                        .requirements
+                                                        .iter()
+                                                        .find(|r| r.id == uuid)
+                                                        .and_then(|r| {
+                                                            r.agreed_id
+                                                                .clone()
+                                                                .or_else(|| r.spec_id.clone())
+                                                        })
+                                                },
+                                            ),
+                                        )
+                                    })
+                            })
+                            .collect()
+                    }
+                    Err(_) => std::collections::HashMap::new(),
+                }
+            } else {
+                std::collections::HashMap::new()
+            };
+            let reviewer_routed_count = entries
+                .iter()
+                .filter(|e| e.for_role.as_deref() == Some("reviewer"))
+                .count();
+            let reviewer_actionable_count = reviewer_state_by_entry
+                .values()
+                .filter(|s| **s == review_verdict::ReviewActionability::NeedsReview)
+                .count();
+
             if !skip_regular_render {
                 let total = entries.len() + global_entries.len();
                 let title = if only_unrouted {
@@ -1938,6 +2281,19 @@ pub(crate) fn handle_queue_command(
                     )
                 } else {
                     match &role_filter {
+                        // BUG-1508 AC4/AC7: the reviewer queue's headline
+                        // number is "actionable N of M routed" -- routed
+                        // rows never vanish (AC2), but the figure that
+                        // decides capacity is the actionable one, and both
+                        // are shown together because the gap is the signal.
+                        Some(r)
+                            if r.eq_ignore_ascii_case("reviewer") && reviewer_routed_count > 0 =>
+                        {
+                            format!(
+                                "My Queue · role:{} (actionable {} of {} routed)",
+                                r, reviewer_actionable_count, reviewer_routed_count,
+                            )
+                        }
                         Some(r) => format!(
                             "My Queue · role:{} ({} item{})",
                             r,
@@ -2069,8 +2425,15 @@ pub(crate) fn handle_queue_command(
                                     )
                                 })
                                 .unwrap_or_default();
+                            // BUG-1508: reviewer-routed rows get an
+                            // actionability chip -- needs-review /
+                            // awaiting-rework / resolved.
+                            let reviewer_state_chip_str = reviewer_state_by_entry
+                                .get(&entry.requirement_id)
+                                .map(|s| format!("  {}", reviewer_state_chip(*s)))
+                                .unwrap_or_default();
                             println!(
-                                "  {} {}{}  {}  [{}]{}{}{}{}",
+                                "  {} {}{}  {}  [{}]{}{}{}{}{}",
                                 glyph.dimmed(),
                                 display_id_owned.bold(),
                                 pad,
@@ -2080,6 +2443,7 @@ pub(crate) fn handle_queue_command(
                                 routed_chip,
                                 supervised_chip,
                                 tag_chip,
+                                reviewer_state_chip_str,
                             );
                         };
 
@@ -2212,6 +2576,12 @@ pub(crate) fn handle_queue_command(
                         title_owned
                     );
                     print!("  [{}]", status_badge);
+                    // BUG-1508: reviewer-routed rows get an actionability
+                    // chip -- needs-review / awaiting-rework / resolved.
+                    // The row itself never vanishes; this only annotates it.
+                    if let Some(state) = reviewer_state_by_entry.get(&entry.requirement_id) {
+                        print!("  {}", reviewer_state_chip(*state));
+                    }
                     // BUG-492: an archived spec that is still queued is
                     // contradictory state (`aida list` hides it, this view
                     // keeps showing it). Flag it loudly so the user can
@@ -3772,7 +4142,12 @@ pub(crate) fn handle_queue_command(
         // TASK-1052: queue-GC — sweep dead routed entries (target spec
         // archived / Completed / Rejected) and report the count. The explicit
         // companion to the opportunistic self-heal that runs on `queue list`.
+        // BUG-1512: additionally sweeps routed review entries whose PR
+        // already merged, independent of the review STORY's own status — see
+        // `merged_pr_review_entries` for why that's a second, additive
+        // condition rather than a change to the target-spec rule.
         // trace:TASK-1052 | ai:claude
+        // trace:BUG-1512 | ai:claude
         QueueCommand::Gc {
             user,
             r#for,
@@ -3783,8 +4158,35 @@ pub(crate) fn handle_queue_command(
             let summaries =
                 advance_backend(store_path)?.list_summaries(&queue_dead_target_summary_filter())?;
             let dead = dead_queue_entries(&entries, &summaries, r#for.as_deref());
+            let dead_ids: std::collections::HashSet<Uuid> =
+                dead.iter().map(|e| e.requirement_id).collect();
 
-            if dead.is_empty() {
+            // BUG-1512: resolve the merge state of any candidate review rows
+            // not already caught above. This is the one network/gh-backed
+            // step in the sweep; everything upstream and downstream of it
+            // (the candidate selection and the removal) is pure and covered
+            // by unit tests.
+            let review_candidates = review_summaries_pending_merge_check(&summaries, &dead_ids);
+            let mut merged_pr_by_id: std::collections::HashMap<Uuid, u64> =
+                std::collections::HashMap::new();
+            if !review_candidates.is_empty() {
+                let project_root = find_project_root()?;
+                let mut sink = network_retry::NoopSink;
+                for (s, pr) in review_candidates {
+                    if review_pr_is_merged_or_closed(&project_root, pr as u32, &mut sink)
+                        == Some(true)
+                    {
+                        merged_pr_by_id.insert(s.id, pr);
+                    }
+                }
+            }
+            let merged_pr_ids: std::collections::HashSet<Uuid> =
+                merged_pr_by_id.keys().copied().collect();
+            let merged_dead =
+                merged_pr_review_entries(&entries, &merged_pr_ids, &dead_ids, r#for.as_deref());
+
+            let total = dead.len() + merged_dead.len();
+            if total == 0 {
                 println!(
                     "{} No dead queue entries found{}",
                     crate::glyph(crate::glyphs::Glyph::Check).green(),
@@ -3795,7 +4197,6 @@ pub(crate) fn handle_queue_command(
                     }
                 );
             } else {
-                let n = dead.len();
                 println!(
                     "{} {} dead queue entr{} ({})",
                     if *dry_run {
@@ -3803,8 +4204,8 @@ pub(crate) fn handle_queue_command(
                     } else {
                         crate::glyph(crate::glyphs::Glyph::Cross).yellow()
                     },
-                    n.to_string().bold(),
-                    if n == 1 { "y" } else { "ies" },
+                    total.to_string().bold(),
+                    if total == 1 { "y" } else { "ies" },
                     if *dry_run { "would remove" } else { "removing" },
                 );
                 let by_id: std::collections::HashMap<Uuid, &aida_core::RequirementSummary> =
@@ -3828,6 +4229,31 @@ pub(crate) fn handle_queue_command(
                         .unwrap_or_default();
                     println!("  pos {:2}  {}{}", e.position, label.dimmed(), role);
                 }
+                // BUG-1512: a distinct "why" per row — this class survives
+                // the target-spec check above (the story is still Draft) but
+                // its PR already merged, so the review is unrouted, not
+                // completed (see the decision note on `merged_pr_review_entries`).
+                for e in &merged_dead {
+                    let id = by_id
+                        .get(&e.requirement_id)
+                        .and_then(|s| s.agreed_id.as_deref().or(s.spec_id.as_deref()))
+                        .unwrap_or("?");
+                    let pr = merged_pr_by_id
+                        .get(&e.requirement_id)
+                        .map(|n| n.to_string())
+                        .unwrap_or_else(|| "?".to_string());
+                    let role = e
+                        .for_role
+                        .as_deref()
+                        .map(|r| format!(" [for:{r}]"))
+                        .unwrap_or_default();
+                    println!(
+                        "  pos {:2}  {}{}",
+                        e.position,
+                        format!("{id} [PR #{pr} merged/closed — review never closed]").dimmed(),
+                        role,
+                    );
+                }
                 if *dry_run {
                     println!();
                     println!("  {}", "Re-run without --dry-run to remove.".dimmed());
@@ -3835,18 +4261,23 @@ pub(crate) fn handle_queue_command(
                     // for_role None → bulk remove-by-spec (one commit). With a
                     // role filter, drop only the matching-role entry per spec so
                     // a sibling entry routed to another role survives.
+                    let all_dead: Vec<&aida_core::models::QueueEntry> = dead
+                        .iter()
+                        .copied()
+                        .chain(merged_dead.iter().copied())
+                        .collect();
                     let removed = if r#for.is_none() {
-                        let ids: Vec<Uuid> = dead.iter().map(|e| e.requirement_id).collect();
+                        let ids: Vec<Uuid> = all_dead.iter().map(|e| e.requirement_id).collect();
                         storage.queue_remove_many(&user_id, &ids)?.len()
                     } else {
-                        for e in &dead {
+                        for e in &all_dead {
                             storage.queue_remove_for_role(
                                 &user_id,
                                 &e.requirement_id,
                                 r#for.as_deref(),
                             )?;
                         }
-                        dead.len()
+                        all_dead.len()
                     };
                     println!(
                         "{} Removed {} dead queue entr{}",
@@ -3995,7 +4426,7 @@ pub(crate) fn handle_queue_command(
                         else {
                             return true;
                         };
-                        match queue_fresh_pickup_policy(req, &store, false) {
+                        match queue_fresh_pickup_policy(req, &store, false, store_path.parent()) {
                             QueueFreshPickup::Pickable => true,
                             other => {
                                 let display = req
@@ -5307,11 +5738,16 @@ pub(crate) fn handle_queue_command(
                          seat for this role, or run `aida queue work --auto-complete` from the driver."
                     );
                 }
-                if !has_dispatch_authority() {
-                    anyhow::bail!(
-                        "starting an autonomous drain needs dispatch authority (product, advisor, \
-                         or integrator role, or a live orchestrator)"
-                    );
+                // BUG-1517: `--resume-dry-run` is a read-only preview — it
+                // prints the reconciled re-entry plan and never re-enters —
+                // so it is disposition, not dispatch, and should not need
+                // dispatch authority. Only a FRESH, non-dry-run launch is
+                // gated here; a live dispatch without `--resume-dry-run`
+                // stays refused. trace:BUG-1517 | ai:claude
+                if let Err(msg) =
+                    auto_complete_dispatch_authority_ok(*resume_dry_run, has_dispatch_authority())
+                {
+                    anyhow::bail!(msg);
                 }
             }
             // STORY-246: `--auto-complete` drives the full
@@ -7539,7 +7975,12 @@ pub(crate) fn resolve_queue_work_plan(
                 let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
                     return true;
                 };
-                match queue_fresh_pickup_policy(req, &store, force_needs_attention) {
+                match queue_fresh_pickup_policy(
+                    req,
+                    &store,
+                    force_needs_attention,
+                    storage.path().parent(),
+                ) {
                     QueueFreshPickup::Pickable => true,
                     other => {
                         let display = req
@@ -7689,6 +8130,7 @@ pub(crate) fn resolve_queue_work_plan(
             req,
             &store,
             force_needs_attention,
+            storage.path().parent(),
         )) {
             anyhow::bail!(
                 "`{}` is not pickable for fresh work: {}",
@@ -7728,7 +8170,12 @@ pub(crate) fn resolve_queue_work_plan(
                     return false;
                 };
                 if !matches!(
-                    queue_fresh_pickup_policy(req, &store, force_needs_attention),
+                    queue_fresh_pickup_policy(
+                        req,
+                        &store,
+                        force_needs_attention,
+                        storage.path().parent(),
+                    ),
                     QueueFreshPickup::Pickable
                 ) {
                     return false;
@@ -7846,7 +8293,8 @@ pub(crate) fn resolve_queue_work_plan(
         // the orchestrator never spawns phase 1 on a blocked-by /
         // human-only spec. Same gate as head pickup + batch drain.
         // trace:STORY-333 | ai:claude
-        match queue_fresh_pickup_policy(req, &store, force_needs_attention) {
+        match queue_fresh_pickup_policy(req, &store, force_needs_attention, storage.path().parent())
+        {
             QueueFreshPickup::Pickable => {}
             QueueFreshPickup::Archived => {
                 archived_skipped += 1;
@@ -8946,6 +9394,26 @@ pub(crate) fn claude_posture_display(permission_mode: Option<&str>, contained: b
         permission_mode
             .map(|m| format!("permission-mode {}", m))
             .unwrap_or_else(|| "native permission posture".to_string())
+    }
+}
+
+/// BUG-1517: `--resume-dry-run` is a read-only preview of the reconciled
+/// re-entry plan — it never re-enters the drain — so it is disposition, not
+/// dispatch, and must not require `has_dispatch_authority()`. A live (non
+/// dry-run) launch stays gated exactly as before. Pure so the two halves of
+/// the acceptance criteria are unit-testable without spinning up a store.
+// trace:BUG-1517 | ai:claude
+pub(crate) fn auto_complete_dispatch_authority_ok(
+    resume_dry_run: bool,
+    has_dispatch_authority: bool,
+) -> Result<(), &'static str> {
+    if resume_dry_run || has_dispatch_authority {
+        Ok(())
+    } else {
+        Err(
+            "starting an autonomous drain needs dispatch authority (product, advisor, \
+             or integrator role, or a live orchestrator)",
+        )
     }
 }
 
@@ -11451,7 +11919,7 @@ fn auto_complete_sibling_role_hint(
             continue;
         };
         if !matches!(
-            queue_fresh_pickup_policy(req, &store, false),
+            queue_fresh_pickup_policy(req, &store, false, storage.path().parent()),
             QueueFreshPickup::Pickable
         ) {
             continue;
@@ -11887,11 +12355,19 @@ pub(crate) fn probe_pr_integration_state(
     // The forge row for this PR (keyed by head branch).
     let item = branch.and_then(|b| snapshot.by_branch.get(b));
 
-    // CI: prefer the snapshot rollup ("pass"/"fail"/"pending"/"?"), normalized.
+    // CI: prefer the snapshot rollup ("pass"/"fail"/"pending"/"missing"/
+    // "unknown"/"?"), normalized. "missing" (a required check's row never
+    // showed up on this head) and "unknown" (the required-check set itself
+    // couldn't be read) are BOTH absent-evidence states, not passes — mapping
+    // either into the catch-all `None` arm is the exact PR-2009 false-green
+    // shape through `aida integrate` (`classify_integration_action` merges on
+    // `None`). trace:BUG-1481 | ai:claude
     let ci = match item.and_then(|i| i.ci_rollup.as_deref()) {
         Some("pass") => integrate::CiState::Passing,
         Some("fail") => integrate::CiState::Failing,
         Some("pending") => integrate::CiState::Running,
+        Some("missing") => integrate::CiState::RequiredCheckMissing,
+        Some("unknown") => integrate::CiState::Indeterminate,
         _ => integrate::CiState::None,
     };
 
@@ -11978,6 +12454,7 @@ mod bug_1581_integration_probe_tests {
                 review_decision: None,
                 head_sha: Some("ac772eaca9d389fa762a232156df996023bfdf7a".into()),
                 labels: Vec::new(),
+                created_at: None,
             },
         );
         snapshot
@@ -12135,6 +12612,53 @@ mod bug_1581_integration_probe_tests {
             crate::integrate::classify_integration_action(&state),
             crate::integrate::IntegrationAction::Park(
                 crate::integrate::ParkReason::ReviewIntegrity
+            )
+        ));
+    }
+
+    // BUG-1481: a `ci_rollup` of "missing" (a required check's row never
+    // showed up on this head) must never be probed into `CiState::None` and
+    // never classify as Merge — that is the exact PR-2009 false-green shape
+    // through `aida integrate`.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn integrate_probe_never_merges_on_missing_required_check() {
+        let root = tempfile::tempdir().unwrap();
+        let mut snap = snapshot();
+        snap.by_branch.get_mut("bug-1581").unwrap().ci_rollup = Some("missing".into());
+        let state = probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snap);
+        assert_eq!(state.ci, crate::integrate::CiState::RequiredCheckMissing);
+        assert!(!matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Merge
+        ));
+        assert!(matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Park(
+                crate::integrate::ParkReason::RequiredCheckMissing
+            )
+        ));
+    }
+
+    // BUG-1481: a `ci_rollup` of "unknown" (the required-check set itself
+    // couldn't be read — branch protection unreadable) must never be probed
+    // into `CiState::None` and never classify as Merge.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn integrate_probe_never_merges_on_unknown_required_checks() {
+        let root = tempfile::tempdir().unwrap();
+        let mut snap = snapshot();
+        snap.by_branch.get_mut("bug-1581").unwrap().ci_rollup = Some("unknown".into());
+        let state = probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snap);
+        assert_eq!(state.ci, crate::integrate::CiState::Indeterminate);
+        assert!(!matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Merge
+        ));
+        assert!(matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Park(
+                crate::integrate::ParkReason::RequiredCheckMissing
             )
         ));
     }
@@ -13181,6 +13705,52 @@ pub(crate) fn recover_action_label(action: queue_recover::RecoverAction) -> &'st
         A::WipCommitPark => "commit WIP and park for resumption",
         A::EndAndRequeue => "end the lease and re-queue",
     }
+}
+
+/// BUG-1515: whether a `Done` spec's most recently recorded review verdict is
+/// an OUTSTANDING refusal that is STILL LIVE at the branch tip — a
+/// `RequestChanges`/`Rejected` verdict never closed by a later merge
+/// (`review_verdict::is_outstanding_refusal`; a `Done` spec is never
+/// `Completed`, so that half of the predicate is always `false` here) AND
+/// whose reviewed sha is still the tip (`verdict_tip_relation` ==
+/// `AtReviewedSha`). A refusal recorded against an OLD head (new commits
+/// pushed since, or the branch rewritten) is history, not a live blocker —
+/// after a normal rework round (refusal, new commits, `queue done` again)
+/// that old refusal must not keep reading as "REWORK NEEDED" when what it
+/// actually needs is RE-REVIEW; `queue_fresh_pickup_policy` falls back to
+/// `AwaitingMerge` in that case. Reads the verdict the same way
+/// `evaluate_review_verdict_gate` does (either id form, primary-worktree
+/// fallback for a reviewer verdict recorded outside an implementer
+/// worktree) — no new verdict reader, per BUG-1515's acceptance. The
+/// primary-worktree fallback (a `git worktree list` spawn) is resolved only
+/// when the local checkout itself has no recorded verdict, since most Done
+/// rows have none — this keeps `queue list`/`queue next` from shelling out
+/// once per Done row. Returns the outstanding verdict so a caller can build
+/// a richer message from it.
+// trace:BUG-1515 | ai:claude
+pub(crate) fn done_spec_outstanding_refusal(
+    project_root: &std::path::Path,
+    display_id: &str,
+    spec_id: &str,
+) -> Option<review_verdict::RecordedVerdict> {
+    let verdict = review_verdict::read_recorded_verdict_any(project_root, &[display_id, spec_id])
+        .or_else(|| {
+        let primary_root = main_worktree_root_from(project_root);
+        (primary_root != project_root)
+            .then(|| {
+                review_verdict::read_recorded_verdict_any(&primary_root, &[display_id, spec_id])
+            })
+            .flatten()
+    })?;
+    if !review_verdict::is_outstanding_refusal(&verdict, /* spec_completed */ false) {
+        return None;
+    }
+    let relation = verdict_tip_relation(
+        project_root,
+        verdict.reviewed_branch.as_deref(),
+        verdict.reviewed_sha.as_deref(),
+    );
+    matches!(relation, review_verdict::TipRelation::AtReviewedSha).then_some(verdict)
 }
 
 /// Resolve the review-verdict gate for a spec about to be marked done.

@@ -12,8 +12,10 @@
 //!
 //! trace:STORY-465 | ai:claude
 
+use crate::review_verdict;
 use crate::status_cleanup::OpenPrItem;
 use colored::Colorize;
+use std::collections::HashSet;
 use std::io::Write;
 
 /// Default cap on rendered lines before `--verbose` lifts it.
@@ -96,14 +98,464 @@ pub(crate) struct AwaitingReport {
     /// it needs the PR snapshot, which the per-turn notice path skips.
     // trace:STORY-1419 | ai:claude
     pub rework_ready: Vec<ReworkReadyItem>,
+    /// BUG-1549: PRs whose recorded APPROVAL no longer covers the current
+    /// head — the merge-safety direction `rework_ready` cannot see, because
+    /// that row filters to blocking verdicts first. A stale approval can be
+    /// MERGED (unlike a stale refusal, which only wastes a round), so this
+    /// is rendered ahead of `rework_ready` despite arriving second in code.
+    /// Full report only: same PR-snapshot dependency as `rework_ready`.
+    // trace:BUG-1549 | ai:claude
+    pub stale_approvals: Vec<StaleApprovalItem>,
+    /// BUG-1549: PRs a LIVE refusal (RequestChanges/Rejected at the head, or
+    /// unverifiable against it, and not superseded by a later approval at the
+    /// head) keeps out of the mergeable set. Every PR `classify_pr_review`
+    /// suppresses has exactly one row here or in `stale_approvals`.
+    // trace:BUG-1549 | ai:claude
+    pub blocked_reviews: Vec<BlockedReviewItem>,
+    /// TASK-1445 (containment for BUG-1510 AC5): a live drain's lease-based PR
+    /// attribution disagrees with what the PR's own commits credit. Drain
+    /// status attributes a PR by the lease it ran under; commit trailers are
+    /// independent evidence of what the PR is actually about. The incident:
+    /// STORY-1391's drain opened a PR trailered BUG-1420 and the split sat
+    /// unreported for 52 seconds before a verdict landed on the wrong spec.
+    /// Full report only — resolving the lease's branch needs a local git log,
+    /// which the per-turn notice path skips for latency, same as
+    /// `unshipped_work`.
+    // trace:TASK-1445 | ai:claude
+    pub pr_attribution_disagreements: Vec<PrAttributionDisagreementItem>,
+    /// BUG-1564: In-Progress specs with no live session, lease or process
+    /// backing the flag — the anomaly `aida ps` already detects (the
+    /// flag-only column + the orphan pass) but that, until now, only a
+    /// human who read that column and knew what it meant could see. Reuses
+    /// `gather_running_work`'s orphan verdict verbatim (no second
+    /// implementation); a spec a live fan-out is plausibly building
+    /// (`likely_fanout`) is excluded here exactly as it is on `aida ps` —
+    /// informational, not a genuine anomaly. Full-report only: it walks
+    /// leases + a live-process probe via `gather_running_work`, the same
+    /// "needs a heavier local probe" tier as `unshipped_work` /
+    /// `pr_attribution_disagreements`, so the per-turn `--notice` path
+    /// (which must stay local and fast, no full-store load) leaves it empty.
+    // trace:BUG-1564 | ai:claude
+    pub orphaned_in_progress: Vec<OrphanedInProgressItem>,
+    /// BUG-1530: the reading seat's session role (`AIDA_SESSION_ROLE` / the
+    /// role file), as the caller already resolves it for every other
+    /// role-scoped surface. Drives which channels the headline (`render`)
+    /// and the per-turn `compact_line` lead with — a reviewer's headline
+    /// must not lead with advisor-owned findings or implementer-owned
+    /// rework, and vice versa. `None` (no role known) keeps every channel
+    /// unscoped, exactly like before this field existed.
+    // trace:BUG-1530 | ai:claude
+    pub role: Option<String>,
 }
 
-/// STORY-1419: one PR whose rework has landed on a refusal you recorded.
+/// BUG-1530: coarse seat classification for headline scoping. Only three
+/// channels have a single, specific-seat owner today (findings triage is
+/// advisor authority; a shelved/rework item is implementer work; a
+/// reviewer-queue row is routed to the reviewer seat specifically) — every
+/// other channel (a PR to merge, a brief filed for you, mail, an
+/// escalation, …) is "your own gate" regardless of which seat you sit in,
+/// so it stays universal and is never hidden by this classification.
+// trace:BUG-1530 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AwaitingSeat {
+    Reviewer,
+    Advisor,
+    Implementer,
+    Other,
+}
+
+/// Resolve the reading seat from a raw role string, normalizing aliases
+/// (`dialog` -> `advisor`) the same way every other role-scoped surface
+/// does. `None` when no role is known at all.
+// trace:BUG-1530 | ai:claude
+fn classify_seat(role: Option<&str>) -> Option<AwaitingSeat> {
+    let role = role?;
+    let role = role.trim();
+    if role.is_empty() {
+        return None;
+    }
+    // Review fix: role names are matched case-insensitively (`Reviewer` must
+    // not fall through to `Other` and hide the seat's own rows).
+    let canonical = crate::canonical_role_name(&role.to_ascii_lowercase());
+    Some(match canonical.as_str() {
+        "reviewer" => AwaitingSeat::Reviewer,
+        "advisor" => AwaitingSeat::Advisor,
+        "implementer" => AwaitingSeat::Implementer,
+        _ => AwaitingSeat::Other,
+    })
+}
+
+/// True when a channel owned by `owner` should be shown to `seat` — either
+/// because `seat` IS that owner, or because no seat is known at all (today's
+/// unscoped behavior, preserved exactly when `AIDA_SESSION_ROLE` is unset).
+// trace:BUG-1530 | ai:claude
+fn owned_channel_visible(seat: Option<AwaitingSeat>, owner: AwaitingSeat) -> bool {
+    match seat {
+        None => true,
+        // Review fix: an unrecognised seat (integrator, product, human, …) is
+        // not scoped at all — it sees every channel, never nothing (PRIN-5:
+        // an unknown seat must not hide actionable work). trace:BUG-1530
+        Some(AwaitingSeat::Other) => true,
+        Some(s) => s == owner,
+    }
+}
+
+#[cfg(test)]
+mod bug_1530_review_fix_tests {
+    use super::*;
+
+    // trace:BUG-1530 | ai:claude
+    #[test]
+    fn unrecognised_seat_sees_every_owned_channel() {
+        for role in ["integrator", "product", "human", "some-new-seat"] {
+            let seat = classify_seat(Some(role));
+            for owner in [
+                AwaitingSeat::Reviewer,
+                AwaitingSeat::Advisor,
+                AwaitingSeat::Implementer,
+            ] {
+                assert!(
+                    owned_channel_visible(seat, owner),
+                    "role {role} must see {owner:?}"
+                );
+            }
+        }
+    }
+
+    // trace:BUG-1530 | ai:claude
+    #[test]
+    fn role_matching_is_case_insensitive() {
+        assert_eq!(
+            classify_seat(Some("Reviewer")),
+            Some(AwaitingSeat::Reviewer)
+        );
+        assert_eq!(classify_seat(Some("ADVISOR")), Some(AwaitingSeat::Advisor));
+        assert!(owned_channel_visible(
+            classify_seat(Some("Reviewer")),
+            AwaitingSeat::Reviewer
+        ));
+    }
+}
+
+/// BUG-1564: one In-Progress spec with no live session/lease/process behind
+/// it. `abandoned = true` means a spec-scoped lease existed but its holder
+/// process is dead (work started, then the session died — ABANDONED);
+/// `abandoned = false` means no spec-scoped lease ever existed for this spec
+/// (nothing has picked it up — NOT-YET-STARTED). `since_label` is a
+/// best-effort "how long" signal derived from the spec's last-modified
+/// timestamp (a proxy, not a confirmed transition time — the exact
+/// InProgress-since moment lives in the orphan-branch git log via `aida
+/// history events`, which this fast surface does not walk) and says so
+/// plainly when it can't be resolved at all.
+// trace:BUG-1564 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct OrphanedInProgressItem {
+    pub spec_id: String,
+    pub title: String,
+    pub abandoned: bool,
+    pub since_label: String,
+}
+
+/// BUG-1549: how one recorded verdict relates to a PR's current head.
 ///
-/// The signal is exactly `head != reviewed_sha` on a PR carrying a blocking
-/// verdict. Both shas are reported and NOTHING is classified: whether the move
-/// was a rebase or a real rework is the reviewer's call, and inferring it is
-/// precisely the judgement that proved unreliable when attempted elsewhere.
+/// `Unverifiable` covers every "cannot tell" shape — no `reviewed_sha`, a sha
+/// too short to compare (`ShaRelation::Incomparable`), or a PR with no known
+/// head sha. Only `Same` and `Moved` are positive evidence.
+// trace:BUG-1549 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReviewRelation {
+    Same,
+    Moved,
+    Unverifiable,
+}
+
+/// Relation of a recorded `reviewed` sha to `head`, via [`compare_shas`].
+// trace:BUG-1549 | ai:claude
+pub(crate) fn review_relation(reviewed: Option<&str>, head: Option<&str>) -> ReviewRelation {
+    fn clean(s: Option<&str>) -> Option<&str> {
+        s.map(str::trim).filter(|s| !s.is_empty())
+    }
+    let (Some(reviewed), Some(head)) = (clean(reviewed), clean(head)) else {
+        return ReviewRelation::Unverifiable;
+    };
+    match compare_shas(head, reviewed) {
+        ShaRelation::Same => ReviewRelation::Same,
+        ShaRelation::Moved => ReviewRelation::Moved,
+        ShaRelation::Incomparable => ReviewRelation::Unverifiable,
+    }
+}
+
+/// Why a live refusal blocks the PR.
+// trace:BUG-1549 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BlockedReason {
+    /// The refusal was recorded against the current head.
+    AtHead,
+    /// The refusal cannot be pinned to a commit (no sha, a sha too short to
+    /// compare, or no known head), so a push cannot be shown to clear it.
+    Unverifiable,
+}
+
+/// The ONE row a PR's local review verdicts produce, if any.
+// trace:BUG-1549 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PrReviewRow {
+    /// A live refusal — the PR must not merge.
+    Blocked {
+        reason: BlockedReason,
+        reviewed_sha: String,
+        /// RFC-3339 timestamp the refusal was recorded at, when known —
+        /// carried through so the age since the refusal (no rework since)
+        /// can be reported. `None` when the verdict never recorded one.
+        // trace:TASK-1310 | ai:claude
+        recorded_at: Option<String>,
+    },
+    /// The newest approval was recorded against a sha the head moved past.
+    Stale { reviewed_sha: String },
+    /// The newest approval cannot be verified against the head.
+    Unverifiable { reviewed_sha: String },
+    /// Only refusals the head has moved past: rework landed, re-review.
+    /// Does NOT suppress (STORY-1419's row).
+    ReworkReady {
+        reviewed_sha: String,
+        recorded_by: Option<String>,
+    },
+}
+
+impl PrReviewRow {
+    /// True for the rows that explain a suppression. The invariant
+    /// `classify_pr_review` guarantees: `suppressed` iff this is true.
+    pub(crate) fn explains_suppression(&self) -> bool {
+        !matches!(self, PrReviewRow::ReworkReady { .. })
+    }
+}
+
+/// What a PR's local verdicts mean for the mergeable set and the report.
+// trace:BUG-1549 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct PrReviewDecision {
+    pub suppressed: bool,
+    pub row: Option<PrReviewRow>,
+}
+
+fn recorded_instant(
+    v: &review_verdict::RecordedVerdict,
+) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    v.recorded_at
+        .as_deref()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s.trim()).ok())
+}
+
+/// TASK-1310: how long a `Blocked` review row has stood with no rework —
+/// the duration `aida awaiting`/`aida status` report so a refusal can't sit
+/// unworked indefinitely unnoticed. Past this many seconds since
+/// `recorded_at`, the row is flagged as long-standing (`REFUSAL_OVERDUE_SECS`
+/// below). Chosen as a plain, generous default (a week) rather than a config
+/// knob — the smallest thing that meets the acceptance; widen to a
+/// `.aida/config.toml` setting if a real project needs a different cadence.
+// trace:TASK-1310 | ai:claude
+const REFUSAL_OVERDUE_SECS: i64 = 7 * 24 * 3600;
+
+/// One `Blocked` row's age since its verdict was recorded, against `now`.
+/// `None` means the verdict carries no parseable `recorded_at` — reported
+/// as "age unknown", never as "no rework" (PRIN-5: unknown is not the same
+/// claim as zero).
+// trace:TASK-1310 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct BlockedAge {
+    pub secs: i64,
+    pub overdue: bool,
+}
+
+/// Parses `recorded_at` (RFC-3339) and measures its age against `now`. A
+/// negative age (clock skew, or a stamp in the future) is clamped to zero
+/// rather than reported as overdue or negative.
+// trace:TASK-1310 | ai:claude
+pub(crate) fn blocked_age(
+    recorded_at: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<BlockedAge> {
+    let at = recorded_at
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())?;
+    let secs = (now - at.with_timezone(&chrono::Utc)).num_seconds().max(0);
+    Some(BlockedAge {
+        secs,
+        overdue: secs >= REFUSAL_OVERDUE_SECS,
+    })
+}
+
+/// Renders a `Blocked` row's age suffix: `"refused 3d ago, no rework since"`,
+/// `"refused 9d ago, no rework since — overdue"` past the threshold, or
+/// `"age unknown"` when `recorded_at` could not be parsed. Reused by both
+/// the text renderer and the JSON shape (via [`blocked_age`]) so the two
+/// surfaces cannot disagree — the query that produced the number is exactly
+/// this function plus the `recorded_at` field both surfaces also print.
+// trace:TASK-1310 | ai:claude
+pub(crate) fn blocked_age_label(
+    recorded_at: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    match blocked_age(recorded_at, now) {
+        Some(age) if age.overdue => format!(
+            "refused {}, no rework since — overdue",
+            crate::last_drain::format_age(age.secs)
+        ),
+        Some(age) => format!(
+            "refused {}, no rework since",
+            crate::last_drain::format_age(age.secs)
+        ),
+        None => "age unknown".to_string(),
+    }
+}
+
+/// Age suffix for an `Unverifiable` Blocked row: the refusal cannot be placed
+/// against the head, so whether rework landed since is UNKNOWN — never claim
+/// "no rework since" (PRIN-5), and never flag it overdue.
+// trace:TASK-1310 | ai:claude
+pub(crate) fn blocked_age_label_unverifiable(
+    recorded_at: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    match blocked_age(recorded_at, now) {
+        Some(age) => format!(
+            "refused {}, rework since then unknown",
+            crate::last_drain::format_age(age.secs)
+        ),
+        None => "age unknown".to_string(),
+    }
+}
+
+/// BUG-1549: the single PR review classifier. BOTH the mergeable suppression
+/// set (`local_suppressed_prs`, lib.rs) and every review row in the report
+/// (`PrReviewRows::add`) derive from this one pure function, so they cannot
+/// disagree. `candidates` is the spec-keyed verdict for every spec id in the
+/// PR title plus the PR-keyed verdict; `head` is the PR's head sha.
+///
+/// The rule (operator proxy decision, 2026-09-23):
+/// - A refusal (RequestChanges/Rejected) is LIVE unless its relation is
+///   `Moved`, or an approval with a strictly LATER `recorded_at` (both
+///   timestamps known) has relation `Same`. Unknown recency keeps it live.
+/// - Any live refusal: suppressed, `Blocked` row (`AtHead` when that
+///   refusal's relation is `Same`, else `Unverifiable`). With several, the
+///   newest live refusal (undated counts as oldest) names the reason.
+/// - Otherwise the newest approval (undated counts as oldest; a tie is broken
+///   fail-closed, toward a non-`Same` relation) decides: `Same` = mergeable,
+///   no row; `Moved` = suppressed, `Stale` row; `Unverifiable` = suppressed,
+///   `Unverifiable` row.
+/// - No approval and no live refusal: not suppressed; a `ReworkReady` row
+///   when a `Moved` refusal exists (the newest one), else no row.
+///
+/// Invariant: `suppressed` iff `row` explains a suppression.
+// trace:BUG-1549 | ai:claude
+pub(crate) fn classify_pr_review(
+    candidates: &[review_verdict::RecordedVerdict],
+    head: Option<&str>,
+) -> PrReviewDecision {
+    let rel =
+        |v: &review_verdict::RecordedVerdict| review_relation(v.reviewed_sha.as_deref(), head);
+    let sha = |v: &review_verdict::RecordedVerdict| {
+        v.reviewed_sha.as_deref().unwrap_or("").trim().to_string()
+    };
+    // BUG-1529: a refusal closed by its PR's merge is history, not a live
+    // obstruction for a later PR on the same spec. trace:BUG-1529 | ai:claude
+    let refusals: Vec<_> = candidates
+        .iter()
+        .filter(|v| v.kind.blocks_done() && !v.is_closed())
+        .collect();
+    let approvals: Vec<_> = candidates
+        .iter()
+        .filter(|v| v.kind == review_verdict::VerdictKind::Approved)
+        .collect();
+
+    let superseded = |r: &review_verdict::RecordedVerdict| -> bool {
+        let Some(rt) = recorded_instant(r) else {
+            return false;
+        };
+        approvals.iter().any(|a| {
+            rel(a) == ReviewRelation::Same && recorded_instant(a).is_some_and(|at| at > rt)
+        })
+    };
+    let live = refusals
+        .iter()
+        .copied()
+        .filter(|r| rel(r) != ReviewRelation::Moved && !superseded(r))
+        .max_by_key(|r| recorded_instant(r));
+    if let Some(r) = live {
+        let reason = if rel(r) == ReviewRelation::Same {
+            BlockedReason::AtHead
+        } else {
+            BlockedReason::Unverifiable
+        };
+        return PrReviewDecision {
+            suppressed: true,
+            row: Some(PrReviewRow::Blocked {
+                reason,
+                reviewed_sha: sha(r),
+                recorded_at: r.recorded_at.clone(),
+            }),
+        };
+    }
+
+    let newest_approval = approvals
+        .iter()
+        .copied()
+        .max_by_key(|a| (recorded_instant(a), rel(a) != ReviewRelation::Same));
+    if let Some(a) = newest_approval {
+        let row = match rel(a) {
+            ReviewRelation::Same => None,
+            ReviewRelation::Moved => Some(PrReviewRow::Stale {
+                reviewed_sha: sha(a),
+            }),
+            ReviewRelation::Unverifiable => Some(PrReviewRow::Unverifiable {
+                reviewed_sha: sha(a),
+            }),
+        };
+        return PrReviewDecision {
+            suppressed: row.as_ref().is_some_and(PrReviewRow::explains_suppression),
+            row,
+        };
+    }
+
+    // Only Moved refusals remain (any other refusal would have been live).
+    let row = refusals
+        .iter()
+        .copied()
+        .max_by_key(|r| recorded_instant(r))
+        .map(|r| PrReviewRow::ReworkReady {
+            reviewed_sha: sha(r),
+            recorded_by: r.recorded_by.clone(),
+        });
+    PrReviewDecision {
+        suppressed: false,
+        row,
+    }
+}
+
+/// BUG-1549: one PR a live refusal blocks — the row explaining why it is
+/// absent from the mergeable set. Not seat-scoped: whoever is about to merge
+/// needs it.
+// trace:BUG-1549 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct BlockedReviewItem {
+    pub pr: u64,
+    pub spec: Option<String>,
+    /// The sha the refusal was recorded against — empty when none was.
+    pub reviewed_sha: String,
+    /// Where the PR is now — empty when unknown.
+    pub head_sha: String,
+    pub reason: BlockedReason,
+    /// RFC-3339 timestamp the refusal was recorded at, when known. `None`
+    /// means the age is unknown — never rendered as "no rework" (PRIN-5).
+    // trace:TASK-1310 | ai:claude
+    pub recorded_at: Option<String>,
+}
+
+/// STORY-1419: one PR whose rework has landed on a refusal you recorded —
+/// every refusal's sha has been moved past and nothing newer governs. Both
+/// shas are reported; whether the move was a rebase or a real rework is the
+/// reviewer's call.
 // trace:STORY-1419 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ReworkReadyItem {
@@ -115,118 +567,111 @@ pub(crate) struct ReworkReadyItem {
     pub head_sha: String,
 }
 
-/// One PR's inputs to the rework-ready test, assembled by the caller so the
-/// decision itself stays pure and testable without a forge or a store.
-// trace:STORY-1419 | ai:claude
-#[derive(Debug, Clone)]
-pub(crate) struct ReworkCandidate {
+/// Why a PR's newest APPROVED verdict does not cover its current head:
+/// re-review (Stale — the head demonstrably moved past what was approved)
+/// vs. can't-tell-from-here (Unverifiable — no sha, one too short to
+/// compare, or no known head).
+// trace:BUG-1549 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StaleApprovalReason {
+    Stale,
+    Unverifiable,
+}
+
+/// BUG-1549: one PR whose newest recorded APPROVAL does not provably cover
+/// its head. NOT seat-scoped: the reader who needs the warning is whoever is
+/// about to merge, not necessarily the approver.
+// trace:BUG-1549 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct StaleApprovalItem {
     pub pr: u64,
-    pub head_sha: String,
     pub spec: Option<String>,
-    /// True when the recorded verdict BLOCKS (RequestChanges / Rejected).
-    pub verdict_blocks: bool,
-    /// The verdict's `reviewed_sha`, absent when the writer recorded none.
-    pub reviewed_sha: Option<String>,
-    /// The seat that recorded the verdict, absent when the writer recorded none.
-    pub recorded_by: Option<String>,
+    /// The sha the approval was recorded against — empty when none was.
+    pub reviewed_sha: String,
+    /// Where the PR is now — empty when unknown.
+    pub head_sha: String,
+    pub reason: StaleApprovalReason,
 }
 
-/// Build one candidate from the parts the caller has, deriving the spec id from
-/// the head branch.
-///
-/// STORY-1419 review: `spec` was hardcoded `None` at the single production call
-/// site, so the advertised row could never show a spec — and the test that
-/// asserted the spec renders HAND-BUILT the item and bypassed this mapping
-/// entirely. The mapping is a function now precisely so a test can reach it;
-/// inline construction at the call site is what made it untestable.
-// trace:STORY-1419 | ai:claude
-pub(crate) fn rework_candidate_from_parts(
-    pr: u64,
-    head_sha: &str,
-    head_branch: &str,
-    verdict_blocks: bool,
-    reviewed_sha: Option<&str>,
-    recorded_by: Option<&str>,
-) -> ReworkCandidate {
-    ReworkCandidate {
-        pr,
-        head_sha: head_sha.to_string(),
-        // the branch is the only place the spec reliably appears; the verdict
-        // is PR-keyed and carries no spec id of its own
-        spec: crate::pr_ship::extract_spec_ids_from_text(head_branch)
+/// The review rows of the report, built ONLY from [`classify_pr_review`]
+/// decisions.
+// trace:BUG-1549 | ai:claude
+#[derive(Debug, Default, Clone)]
+pub(crate) struct PrReviewRows {
+    pub blocked_reviews: Vec<BlockedReviewItem>,
+    pub stale_approvals: Vec<StaleApprovalItem>,
+    pub rework_ready: Vec<ReworkReadyItem>,
+}
+
+impl PrReviewRows {
+    /// Render one PR's decision into its row, if any. The spec id is derived
+    /// from the head branch (STORY-1419). Only the non-suppressing
+    /// `ReworkReady` row is scoped to `seat` (the refusing reviewer; unknown
+    /// on either side surfaces) — a row that explains a suppression is never
+    /// filtered, so suppressed-iff-row survives into the report.
+    // trace:STORY-1419 trace:BUG-1549 | ai:claude
+    pub(crate) fn add(
+        &mut self,
+        pr: u64,
+        head_sha: Option<&str>,
+        head_branch: &str,
+        decision: &PrReviewDecision,
+        seat: Option<&str>,
+    ) {
+        let Some(row) = decision.row.as_ref() else {
+            return;
+        };
+        let spec = crate::pr_ship::extract_spec_ids_from_text(head_branch)
             .into_iter()
-            .next(),
-        verdict_blocks,
-        reviewed_sha: reviewed_sha.map(str::to_string),
-        recorded_by: recorded_by.map(str::to_string),
-    }
-}
-
-/// Which PRs have moved past the refusal recorded against them.
-///
-/// Scoped to `seat` when it is known, so the row reaches the reviewer who
-/// refused rather than everyone. When the seat is unknown every row is
-/// returned — the same choice `pending_briefs` makes for an unidentifiable
-/// agent, because a missed handoff costs more than a surplus line.
-///
-/// DEGRADES TO SILENCE, NEVER TO A WRONG ROW. A verdict carrying no
-/// `reviewed_sha` yields nothing: there is no sha to compare, so the honest
-/// output is the same silence as before rather than a guess. That is BUG-1538's
-/// blast radius showing through here, and it is why this cannot claim full
-/// coverage until provenance is always written.
-// trace:STORY-1419 | ai:claude
-pub(crate) fn rework_ready_rows(
-    candidates: &[ReworkCandidate],
-    seat: Option<&str>,
-) -> Vec<ReworkReadyItem> {
-    candidates
-        .iter()
-        .filter(|c| c.verdict_blocks)
-        .filter(|c| match (seat, c.recorded_by.as_deref()) {
-            (Some(me), Some(who)) => who.contains(me),
-            // unknown on either side: surface it rather than hide it
-            _ => true,
-        })
-        .filter_map(|c| {
-            let reviewed = c
-                .reviewed_sha
-                .as_deref()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())?;
-            let head = c.head_sha.trim();
-            // DECISION, recorded rather than inherited: only a POSITIVE Moved
-            // emits a row. Same and Incomparable are both silence here, and
-            // that is deliberate even though they are different states.
-            //
-            // A ROW SURFACE CANNOT CARRY A DISTINCTION IN THE ABSENCE OF A ROW.
-            // "No row" is one state however many reasons produce it, so asking
-            // Incomparable to look different from Same HERE would be asking
-            // silence to have two flavours. The governing principle — that
-            // absent evidence must be distinguishable from good evidence — is
-            // satisfied by the distinction existing somewhere a consumer can
-            // REACH, not by every surface rendering it.
-            //
-            // WHERE THE DISTINCTION LIVES: in `ShaRelation` itself. It is
-            // three-state precisely so a caller that CAN express the
-            // difference is able to. Binding on anything built later: a
-            // diagnostic or verbose view over verdict staleness MUST report
-            // Incomparable distinctly from Same. Collapsing it back to a
-            // boolean at such a surface would be the failure this shape exists
-            // to avoid — the row surface is the one place where it is correct.
-            //
-            // The immediate consequence is that an unusably short recorded sha
-            // cannot pin a row open
-            if head.is_empty() || compare_shas(head, reviewed) != ShaRelation::Moved {
-                return None;
+            .next();
+        let head_sha = head_sha.unwrap_or("").trim().to_string();
+        match row {
+            PrReviewRow::Blocked {
+                reason,
+                reviewed_sha,
+                recorded_at,
+            } => self.blocked_reviews.push(BlockedReviewItem {
+                pr,
+                spec,
+                reviewed_sha: reviewed_sha.clone(),
+                head_sha,
+                reason: *reason,
+                recorded_at: recorded_at.clone(),
+            }),
+            PrReviewRow::Stale { reviewed_sha } => self.stale_approvals.push(StaleApprovalItem {
+                pr,
+                spec,
+                reviewed_sha: reviewed_sha.clone(),
+                head_sha,
+                reason: StaleApprovalReason::Stale,
+            }),
+            PrReviewRow::Unverifiable { reviewed_sha } => {
+                self.stale_approvals.push(StaleApprovalItem {
+                    pr,
+                    spec,
+                    reviewed_sha: reviewed_sha.clone(),
+                    head_sha,
+                    reason: StaleApprovalReason::Unverifiable,
+                })
             }
-            Some(ReworkReadyItem {
-                pr: c.pr,
-                spec: c.spec.clone(),
-                reviewed_sha: reviewed.to_string(),
-                head_sha: head.to_string(),
-            })
-        })
-        .collect()
+            PrReviewRow::ReworkReady {
+                reviewed_sha,
+                recorded_by,
+            } => {
+                if let (Some(me), Some(who)) = (seat, recorded_by.as_deref()) {
+                    if !who.contains(me) {
+                        return;
+                    }
+                }
+                self.rework_ready.push(ReworkReadyItem {
+                    pr,
+                    spec,
+                    reviewed_sha: reviewed_sha.clone(),
+                    head_sha,
+                })
+            }
+        }
+    }
 }
 
 /// How a recorded sha relates to the current head.
@@ -248,8 +693,10 @@ pub(crate) fn rework_ready_rows(
 /// a 3-character string equal a 40-character one. "Too short to tell" is not
 /// "different"; it degrades to silence, exactly like absent provenance.
 // trace:BUG-1546 | ai:claude
+// BUG-1549: `review_relation` maps this onto `ReviewRelation` for
+// `classify_pr_review`, reusing the same prefix-length floor.
 #[derive(Debug, PartialEq, Eq)]
-enum ShaRelation {
+pub(crate) enum ShaRelation {
     Same,
     Moved,
     Incomparable,
@@ -259,7 +706,7 @@ enum ShaRelation {
 /// than evidence.
 const MIN_COMPARABLE_SHA: usize = 7;
 
-fn compare_shas(head: &str, reviewed: &str) -> ShaRelation {
+pub(crate) fn compare_shas(head: &str, reviewed: &str) -> ShaRelation {
     let n = head.len().min(reviewed.len()).min(40);
     if n < MIN_COMPARABLE_SHA {
         return ShaRelation::Incomparable;
@@ -385,6 +832,11 @@ pub(crate) struct UnownedFailingPrItem {
     pub number: u64,
     pub title: String,
     pub head_branch: String,
+    /// BUG-1514: `Some(spec_id)` when this row is the two-way inconsistency —
+    /// a spec already marked Done whose PR (named in the title) is failing —
+    /// rather than the ordinary no-owner/no-route case. `None` for the
+    /// latter.
+    pub done_spec: Option<String>,
 }
 
 /// Routing facts layered over the forge snapshot. Kept separate from
@@ -398,6 +850,10 @@ pub(crate) struct UnownedFailingPrCandidate {
     pub held: bool,
     pub route: ReviewerRoute,
     pub actively_owned: bool,
+    /// BUG-1514: `Some(spec_id)` when the PR title names a spec whose status
+    /// is currently Done. The caller resolves this so the classifier stays
+    /// pure — no store lookup here.
+    pub done_spec: Option<String>,
 }
 
 /// Fail-closed knowledge of the reviewer queue. Queue read or parse failures
@@ -410,17 +866,62 @@ pub(crate) enum ReviewerRoute {
     Unknown,
 }
 
-/// The complement of the green orphan-review lane: only definitively red work
-/// with no existing route is actionable here. Pending is not red; green/no-CI
-/// belongs to the reviewer sweep; any ownership signal suppresses the row.
-// trace:TASK-192 | ai:codex
+/// BUG-1514: minimum time a PR must have been red before this channel
+/// surfaces it. A PR is routinely red for several minutes mid push-fix-
+/// repush; #2035, the motivating instance, was red and unowned for 3.8
+/// hours. 30 minutes sits comfortably above normal rework-cycle latency
+/// (CI run + notice + fix + repush) and far below the hours of neglect the
+/// bug describes, so it debounces routine churn without hiding real
+/// staleness for long. Named here rather than left implicit per acceptance
+/// criterion #3.
+// trace:BUG-1514 | ai:claude
+pub(crate) const UNOWNED_FAILING_PR_MIN_AGE_MINUTES: i64 = 30;
+
+/// BUG-1514: age-gate a PR against [`UNOWNED_FAILING_PR_MIN_AGE_MINUTES`].
+/// Unknown creation time (missing/malformed `createdAt`) fails OPEN — this
+/// bug is precisely about evidence gaps turning into silent invisibility,
+/// so "we don't know how old it is" must not mean "never surface it."
+// trace:BUG-1514 | ai:claude
+fn pr_meets_min_age(
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    match created_at {
+        None => true,
+        Some(created) => {
+            now.signed_duration_since(created)
+                >= chrono::Duration::minutes(UNOWNED_FAILING_PR_MIN_AGE_MINUTES)
+        }
+    }
+}
+
+/// The complement of the green orphan-review lane, PLUS the BUG-1514
+/// two-way inconsistency: a spec already marked Done whose PR (named in the
+/// title) is red. The ordinary no-owner/no-route case still requires every
+/// ownership signal to be absent; the Done-spec case bypasses verdict/route/
+/// ownership (the spec's own status already contradicts red CI, independent
+/// of who is reviewing or holding the branch) but still respects an active
+/// merge hold, so it doesn't duplicate a row another surface already owns.
+/// Pending is not red; green/no-CI belongs to the reviewer sweep. Both paths
+/// share the same minimum-age debounce.
+///
+/// NOT COVERED: a Done spec whose PR is closed, missing, or conflicting
+/// rather than open-and-red. That needs a spec-driven forge lookup (one
+/// `gh` call per Done spec) rather than this PR-driven pass over the
+/// already-fetched open-PR snapshot, and is left as a follow-on — the same
+/// cost/generality tradeoff TASK-192 made for the green sweep's complement.
+// trace:TASK-192 trace:BUG-1514 | ai:claude ai:codex
 pub(crate) fn classify_unowned_failing_prs(
     candidates: &[UnownedFailingPrCandidate],
+    now: chrono::DateTime<chrono::Utc>,
 ) -> Vec<UnownedFailingPrItem> {
     candidates
         .iter()
         .filter(|c| c.pr.ci_rollup.as_deref() == Some("fail"))
         .filter(|c| {
+            if c.done_spec.is_some() {
+                return true;
+            }
             let forge_verdict =
                 c.pr.review_decision
                     .as_deref()
@@ -429,11 +930,17 @@ pub(crate) fn classify_unowned_failing_prs(
             !matches!(forge_verdict.as_str(), "APPROVED" | "CHANGES_REQUESTED")
                 && !c.has_local_verdict
         })
-        .filter(|c| !c.held && c.route == ReviewerRoute::Unrouted && !c.actively_owned)
+        .filter(|c| {
+            !c.held
+                && (c.done_spec.is_some()
+                    || (c.route == ReviewerRoute::Unrouted && !c.actively_owned))
+        })
+        .filter(|c| pr_meets_min_age(c.pr.created_at, now))
         .map(|c| UnownedFailingPrItem {
             number: c.pr.number,
             title: c.pr.title.clone(),
             head_branch: c.pr.head_branch.clone(),
+            done_spec: c.done_spec.clone(),
         })
         .collect()
 }
@@ -465,6 +972,12 @@ pub(crate) struct PendingBriefItem {
 pub(crate) struct ReviewerQueueItem {
     pub spec_id: String,
     pub title: String,
+    /// Does a verdict already cover the current head? Resolved locally by
+    /// `crate::reviewer_row_actionability` -- verdict file + git refs, no
+    /// forge call. The row is kept and rendered regardless of state (routed
+    /// rows never vanish); this only changes how it reads.
+    // trace:BUG-1508 | ai:claude
+    pub state: review_verdict::ReviewActionability,
 }
 
 #[derive(Debug, Clone)]
@@ -482,6 +995,39 @@ pub(crate) struct UnshippedWorkItem {
     pub age: String,
     pub recovery: String,
     pub pr_state: String,
+}
+
+// TASK-1305: `recovery` is recorded once by the collector as the "no PR yet"
+// hint (`aida pr ship <branch>`), which is correct for `pr_state` "absent"
+// (and still reasonable for "merged"/"unknown", where shipping the remaining
+// commits is the right move either way). It is actively wrong for "open" —
+// the branch already has a PR in the review path, so the ask is a merge
+// decision, not another PR. Every render surface for this item must route
+// its action hint through here rather than reading `.recovery` directly, so
+// the "open" case can never regress back to the identical-row bug this spec
+// exists to fix. trace:TASK-1305 | ai:claude
+pub(crate) fn unshipped_work_recovery_hint(item: &UnshippedWorkItem) -> String {
+    if item.pr_state == "open" {
+        format!(
+            "gh pr view {} — PR already open, needs a merge decision",
+            item.branch
+        )
+    } else {
+        item.recovery.clone()
+    }
+}
+
+/// TASK-1445: one live-drain PR whose lease-based owner and commit-trailer
+/// owner disagree. Both claimed owners are reported, named by the evidence
+/// that produced them — never a guess at which one is "right."
+// trace:TASK-1445 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct PrAttributionDisagreementItem {
+    pub pr: u64,
+    /// The spec drain status attributes the PR to (the lease it ran under).
+    pub lease_spec: String,
+    /// The spec the PR's own commit trailers confidently name instead.
+    pub trailer_spec: String,
 }
 
 // trace:STORY-1043 | ai:codex
@@ -514,10 +1060,16 @@ impl AwaitingReport {
             + (if self.cron.due > 0 { 1 } else { 0 })
             + self.unshipped_work.len()
             + self.rework_ready.len()
+            + self.stale_approvals.len()
+            + self.blocked_reviews.len()
             + (if self.nightly_red.is_some() { 1 } else { 0 })
             + self.reviewer_queue_items.len()
+            // BUG-1508 AC4/AC7: the "actionable N of M routed" summary line.
+            + (if !self.reviewer_queue_items.is_empty() { 1 } else { 0 })
             + (if self.shelved_total > 0 { 1 } else { 0 })
             + self.escalations.len()
+            + self.pr_attribution_disagreements.len()
+            + self.orphaned_in_progress.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -544,6 +1096,15 @@ impl AwaitingReport {
 
         let mut budget = cap;
         let mut overflow = 0usize;
+        // BUG-1530: scope the seat-owned channels (findings/shelved/reviewer)
+        // to the reading seat. `hidden_other_seat` accumulates the count of
+        // items folded away this way so the report says what it hid instead
+        // of silently dropping it (PRIN-5).
+        let seat = classify_seat(self.role.as_deref());
+        let show_findings = owned_channel_visible(seat, AwaitingSeat::Advisor);
+        let show_shelved = owned_channel_visible(seat, AwaitingSeat::Implementer);
+        let show_reviewer = owned_channel_visible(seat, AwaitingSeat::Reviewer);
+        let mut hidden_other_seat = 0usize;
 
         // Order: PRs first (most actionable — the unblocked-merge case),
         // then briefs (handoffs you owe), then findings line (a triage
@@ -554,6 +1115,108 @@ impl AwaitingReport {
         // and the round cannot move until they look. Deliberately reports BOTH
         // shas and does not say whether the move was a rebase or a rework; that
         // judgement is the reviewer's and inferring it is unreliable.
+        // BUG-1549: a stale APPROVAL is rendered first — it is the one that
+        // can be MERGED (a stale refusal just wastes a re-review round), so
+        // it outranks even the STORY-1419 rework-ready row below it.
+        // trace:BUG-1549 | ai:claude
+        // trace:BUG-1549 | ai:claude — a live refusal is why the PR is not in
+        // the mergeable list; say so rather than letting it silently vanish.
+        for item in &self.blocked_reviews {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            let spec = item
+                .spec
+                .as_deref()
+                .map(|s| format!(" ({s})"))
+                .unwrap_or_default();
+            // trace:TASK-1310 | ai:claude — how long the refusal has stood
+            // with no subsequent rework, reused from the same verdict data
+            // classify_pr_review already read; "age unknown" (PRIN-5) when
+            // recorded_at was never captured.
+            let age = match item.reason {
+                BlockedReason::AtHead => {
+                    blocked_age_label(item.recorded_at.as_deref(), chrono::Utc::now())
+                }
+                BlockedReason::Unverifiable => {
+                    blocked_age_label_unverifiable(item.recorded_at.as_deref(), chrono::Utc::now())
+                }
+            };
+            match item.reason {
+                BlockedReason::AtHead => writeln!(
+                    w,
+                    "  {} PR-{}{} blocked — changes requested at the current head {} — {}",
+                    "⛔".red(),
+                    item.pr.to_string().bold(),
+                    spec,
+                    short_sha_for_row(&item.head_sha).bold(),
+                    age,
+                )?,
+                BlockedReason::Unverifiable => writeln!(
+                    w,
+                    "  {} PR-{}{} blocked — a refusal cannot be checked against the head ({}) — {}",
+                    "⛔".red(),
+                    item.pr.to_string().bold(),
+                    spec,
+                    if item.reviewed_sha.is_empty() {
+                        "no reviewed sha was recorded".to_string()
+                    } else if item.head_sha.is_empty() {
+                        "the PR head is unknown".to_string()
+                    } else {
+                        format!(
+                            "recorded sha {} is too short to compare",
+                            short_sha_for_row(&item.reviewed_sha).dimmed()
+                        )
+                    },
+                    age,
+                )?,
+            }
+            budget -= 1;
+        }
+
+        for item in &self.stale_approvals {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            let spec = item
+                .spec
+                .as_deref()
+                .map(|s| format!(" ({s})"))
+                .unwrap_or_default();
+            match item.reason {
+                StaleApprovalReason::Stale => writeln!(
+                    w,
+                    "  {} PR-{}{} moved past your approval — reviewed {}, now {} — do not merge on the old verdict",
+                    "🛑".red(),
+                    item.pr.to_string().bold(),
+                    spec,
+                    short_sha_for_row(&item.reviewed_sha).dimmed(),
+                    short_sha_for_row(&item.head_sha).bold(),
+                )?,
+                StaleApprovalReason::Unverifiable => writeln!(
+                    w,
+                    "  {} PR-{}{} approval cannot be verified — {} — do not merge on the old verdict",
+                    "🛑".red(),
+                    item.pr.to_string().bold(),
+                    spec,
+                    if item.reviewed_sha.is_empty() {
+                        "no reviewed sha was recorded".to_string()
+                    } else if item.head_sha.is_empty() {
+                        "the PR head is unknown".to_string()
+                    } else {
+                        format!(
+                            "recorded sha {} is too short to compare against {}",
+                            short_sha_for_row(&item.reviewed_sha).dimmed(),
+                            short_sha_for_row(&item.head_sha).bold(),
+                        )
+                    },
+                )?,
+            }
+            budget -= 1;
+        }
+
         // trace:STORY-1419 | ai:claude
         for item in &self.rework_ready {
             if budget == 0 {
@@ -573,6 +1236,23 @@ impl AwaitingReport {
                 spec,
                 short_sha_for_row(&item.reviewed_sha).dimmed(),
                 short_sha_for_row(&item.head_sha).bold(),
+            )?;
+            budget -= 1;
+        }
+
+        // trace:TASK-1445 | ai:claude
+        for item in &self.pr_attribution_disagreements {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            writeln!(
+                w,
+                "  {} PR-{} attribution split — lease says {}, commit trailers say {}",
+                "⚠️".yellow(),
+                item.pr.to_string().bold(),
+                item.lease_spec.bold(),
+                item.trailer_spec.bold(),
             )?;
             budget -= 1;
         }
@@ -602,11 +1282,17 @@ impl AwaitingReport {
                 overflow += 1;
                 continue;
             }
+            // trace:BUG-1514 | ai:claude — name WHY it's stuck (acceptance #5).
+            let reason = match &pr.done_spec {
+                Some(spec) => format!("{spec} is marked Done but its CI is failing"),
+                None => "CI failing with no owner or route".to_string(),
+            };
             writeln!(
                 w,
-                "  {} PR-{} CI failing with no owner or route — {} · inspect `{}`",
+                "  {} PR-{} {} — {} · inspect `{}`",
                 "🔴".red(),
                 pr.number.to_string().bold(),
+                reason,
                 pr.title,
                 format!("gh pr checks {}", pr.number).cyan(),
             )?;
@@ -631,7 +1317,10 @@ impl AwaitingReport {
             )?;
             budget -= 1;
         }
-        if self.findings_total > 0 {
+        // trace:BUG-1530 | ai:claude — findings triage is advisor authority.
+        if self.findings_total > 0 && !show_findings {
+            hidden_other_seat += self.findings_total;
+        } else if self.findings_total > 0 {
             if budget == 0 {
                 overflow += 1;
             } else {
@@ -737,16 +1426,27 @@ impl AwaitingReport {
                 overflow += 1;
                 continue;
             }
+            // trace:TASK-1305 | ai:claude — route through the shared hint so a
+            // branch with an open PR is never told to open one.
+            // BUG-1530: unshipped work isn't scoped to any one seat — label
+            // it as such once a seat is known, rather than implying it's
+            // this seat's own gate.
+            let scope_note = if seat.is_some() {
+                " (project-wide)"
+            } else {
+                ""
+            };
             writeln!(
                 w,
-                "  🧭 unshipped work: {} on `{}` — {} commit{} ahead, age {}, PR {} — `{}`",
+                "  🧭 unshipped work{}: {} on `{}` — {} commit{} ahead, age {}, PR {} — `{}`",
+                scope_note,
                 item.spec_id.bold(),
                 item.branch,
                 item.commits_ahead,
                 if item.commits_ahead == 1 { "" } else { "s" },
                 item.age,
                 item.pr_state,
-                item.recovery.cyan(),
+                unshipped_work_recovery_hint(item).cyan(),
             )?;
             budget -= 1;
         }
@@ -763,15 +1463,64 @@ impl AwaitingReport {
                 budget -= 1;
             }
         }
-        for q in &self.reviewer_queue_items {
+        // BUG-1508 AC4/AC7: the summary line carries BOTH numbers --
+        // actionable and routed -- because the gap between them is itself
+        // the signal (a queue that reads five-deep on review when four are
+        // really awaiting rework misdirects capacity at the wrong seat).
+        // trace:BUG-1508 | ai:claude
+        // trace:BUG-1530 | ai:claude — reviewer-queue rows are routed to the
+        // reviewer seat specifically; fold them into the hidden count for
+        // every other seat instead of itemizing.
+        if !self.reviewer_queue_items.is_empty() && !show_reviewer {
+            hidden_other_seat += self.reviewer_queue_items.len();
+        } else if !self.reviewer_queue_items.is_empty() {
             if budget == 0 {
                 overflow += 1;
-                continue;
+            } else {
+                let actionable = self
+                    .reviewer_queue_items
+                    .iter()
+                    .filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview)
+                    .count();
+                writeln!(
+                    w,
+                    "  🔎 reviewer: actionable {} of {} routed",
+                    actionable,
+                    self.reviewer_queue_items.len()
+                )?;
+                budget -= 1;
             }
-            writeln!(w, "  👀 verdict needed: {} — {}", q.spec_id.bold(), q.title,)?;
-            budget -= 1;
+            // BUG-1508 AC2: every routed row still renders -- an
+            // already-reviewed row is never dropped, only annotated, so it
+            // reads as rework/resolved rather than silently disappearing.
+            for q in &self.reviewer_queue_items {
+                if budget == 0 {
+                    overflow += 1;
+                    continue;
+                }
+                let (glyph, label) = match q.state {
+                    review_verdict::ReviewActionability::NeedsReview => ("👀", "needs-review"),
+                    review_verdict::ReviewActionability::AwaitingRework => {
+                        ("🔧", "awaiting-rework")
+                    }
+                    review_verdict::ReviewActionability::Resolved => ("✅", "resolved"),
+                };
+                writeln!(
+                    w,
+                    "  {} {}: {} — {}",
+                    glyph,
+                    label,
+                    q.spec_id.bold(),
+                    q.title,
+                )?;
+                budget -= 1;
+            }
         }
-        if self.shelved_total > 0 {
+        // trace:BUG-1530 | ai:claude — a shelved/rework item is implementer
+        // work ("queue rework --work"); fold it away for other seats.
+        if self.shelved_total > 0 && !show_shelved {
+            hidden_other_seat += self.shelved_total;
+        } else if self.shelved_total > 0 {
             if budget == 0 {
                 overflow += 1;
             } else {
@@ -794,6 +1543,28 @@ impl AwaitingReport {
             writeln!(w, "  🗣️ escalation: {} — {}", e.spec_id.bold(), e.title,)?;
             budget -= 1;
         }
+        // trace:BUG-1564 | ai:claude
+        for o in &self.orphaned_in_progress {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            let state = if o.abandoned {
+                "abandoned — lease died"
+            } else {
+                "not yet started — no lease"
+            };
+            writeln!(
+                w,
+                "  {} orphaned In-Progress: {} — {}, {} — `{}`",
+                "⚠️".yellow(),
+                o.spec_id.bold(),
+                state,
+                o.since_label,
+                "aida ps".cyan(),
+            )?;
+            budget -= 1;
+        }
 
         if overflow > 0 {
             writeln!(
@@ -802,6 +1573,18 @@ impl AwaitingReport {
                 "…".dimmed(),
                 overflow,
                 "aida status --awaiting --verbose".cyan(),
+            )?;
+        }
+        // trace:BUG-1530 | ai:claude — PRIN-5: say what is hidden. Never
+        // silently drop the advisor/implementer/reviewer-owned items folded
+        // out of this seat's headline; name the count instead.
+        if hidden_other_seat > 0 {
+            writeln!(
+                w,
+                "  {} {} item{} routed to other seats (not shown here)",
+                "·".dimmed(),
+                hidden_other_seat,
+                if hidden_other_seat == 1 { "" } else { "s" },
             )?;
         }
         writeln!(w)?;
@@ -825,6 +1608,8 @@ impl AwaitingReport {
                 "head_branch": p.head_branch,
                 "ci_rollup": "fail",
                 "action": format!("gh pr checks {}", p.number),
+                // trace:BUG-1514 | ai:claude
+                "done_spec": p.done_spec,
             })).collect::<Vec<_>>(),
             "pending_briefs": self.pending_briefs.iter().map(|b| serde_json::json!({
                 "agent": b.agent,
@@ -862,14 +1647,69 @@ impl AwaitingReport {
                 "run_id": n.run_id,
                 "nights": n.nights,
             })),
+            // trace:BUG-1549 | ai:claude
+            // trace:TASK-1310 | ai:claude — `recorded_at` is the raw input and
+            // `age_secs`/`overdue` are its derived reading (via `blocked_age`),
+            // so a second reader can recompute and falsify the number instead
+            // of trusting the label alone.
+            "blocked_reviews": self.blocked_reviews.iter().map(|i| {
+                let age = blocked_age(i.recorded_at.as_deref(), chrono::Utc::now());
+                serde_json::json!({
+                    "pr": i.pr,
+                    "spec": i.spec,
+                    "reviewed_sha": i.reviewed_sha,
+                    "head_sha": i.head_sha,
+                    "reason": match i.reason {
+                        BlockedReason::AtHead => "at_head",
+                        BlockedReason::Unverifiable => "unverifiable",
+                    },
+                    "recorded_at": i.recorded_at,
+                    "age_secs": age.map(|a| a.secs),
+                    // Unverifiable: rework-since is unknown, so no overdue claim.
+                    "overdue": match i.reason {
+                        BlockedReason::AtHead => age.map(|a| a.overdue),
+                        BlockedReason::Unverifiable => None,
+                    },
+                })
+            }).collect::<Vec<_>>(),
+            "stale_approvals": self.stale_approvals.iter().map(|i| serde_json::json!({
+                "pr": i.pr,
+                "spec": i.spec,
+                "reviewed_sha": i.reviewed_sha,
+                "head_sha": i.head_sha,
+                "reason": match i.reason {
+                    StaleApprovalReason::Stale => "stale",
+                    StaleApprovalReason::Unverifiable => "unverifiable",
+                },
+            })).collect::<Vec<_>>(),
             "reviewer_queue_items": self.reviewer_queue_items.iter().map(|q| serde_json::json!({
                 "spec_id": q.spec_id,
                 "title": q.title,
+                "state": q.state.as_str(),
             })).collect::<Vec<_>>(),
+            // BUG-1508 AC4/AC7: the depth figure that decides reviewer
+            // capacity is actionable-of-routed, not a bare routed count.
+            "reviewer_actionable_of_routed": {
+                "actionable": self.reviewer_queue_items.iter().filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview).count(),
+                "routed": self.reviewer_queue_items.len(),
+            },
             "shelved_total": self.shelved_total,
             "escalations": self.escalations.iter().map(|e| serde_json::json!({
                 "spec_id": e.spec_id,
                 "title": e.title,
+            })).collect::<Vec<_>>(),
+            // trace:TASK-1445 | ai:claude
+            "pr_attribution_disagreements": self.pr_attribution_disagreements.iter().map(|d| serde_json::json!({
+                "pr": d.pr,
+                "lease_spec": d.lease_spec,
+                "trailer_spec": d.trailer_spec,
+            })).collect::<Vec<_>>(),
+            // trace:BUG-1564 | ai:claude
+            "orphaned_in_progress": self.orphaned_in_progress.iter().map(|o| serde_json::json!({
+                "spec_id": o.spec_id,
+                "title": o.title,
+                "abandoned": o.abandoned,
+                "since_label": o.since_label,
             })).collect::<Vec<_>>(),
         })
     }
@@ -888,6 +1728,14 @@ impl AwaitingReport {
         if self.is_empty() {
             return None;
         }
+        // BUG-1530: scope the seat-owned channels (findings/shelved/reviewer)
+        // to the reading seat, same as `render`. `hidden_other_seat` says
+        // what was folded away instead of silently dropping it (PRIN-5).
+        let seat = classify_seat(self.role.as_deref());
+        let show_findings = owned_channel_visible(seat, AwaitingSeat::Advisor);
+        let show_shelved = owned_channel_visible(seat, AwaitingSeat::Implementer);
+        let show_reviewer = owned_channel_visible(seat, AwaitingSeat::Reviewer);
+        let mut hidden_other_seat = 0usize;
         let mut parts: Vec<String> = Vec::new();
         if !self.mergeable_prs.is_empty() {
             parts.push(pluralize(self.mergeable_prs.len(), "PR", "PRs"));
@@ -895,11 +1743,23 @@ impl AwaitingReport {
         if !self.unowned_failing_prs.is_empty() {
             parts.push(format!("{} broken-unowned", self.unowned_failing_prs.len()));
         }
+        // trace:BUG-1549 | ai:claude
+        if !self.stale_approvals.is_empty() {
+            parts.push(format!("{} stale-approval", self.stale_approvals.len()));
+        }
+        if !self.blocked_reviews.is_empty() {
+            parts.push(format!("{} blocked-review", self.blocked_reviews.len()));
+        }
         if !self.pending_briefs.is_empty() {
             parts.push(pluralize(self.pending_briefs.len(), "brief", "briefs"));
         }
+        // trace:BUG-1530 | ai:claude — findings triage is advisor authority.
         if self.findings_total > 0 {
-            parts.push(pluralize(self.findings_total, "finding", "findings"));
+            if show_findings {
+                parts.push(pluralize(self.findings_total, "finding", "findings"));
+            } else {
+                hidden_other_seat += self.findings_total;
+            }
         }
         if self.mail.unread > 0 {
             let urgent = if self.mail.urgent > 0 {
@@ -935,20 +1795,48 @@ impl AwaitingReport {
         }
         // trace:STORY-1043 | ai:codex
         if !self.unshipped_work.is_empty() {
-            parts.push(format!("unshipped:{}", self.unshipped_work.len()));
+            // BUG-1530: unshipped work isn't scoped to any one seat — label
+            // it as project-wide once a seat is known, rather than implying
+            // it's this seat's own gate.
+            let label = if seat.is_some() {
+                "unshipped (project-wide)"
+            } else {
+                "unshipped"
+            };
+            parts.push(format!("{}:{}", label, self.unshipped_work.len()));
         }
         if self.nightly_red.is_some() {
             parts.push("nightly-red".to_string());
         }
+        // trace:BUG-1530 | ai:claude — reviewer-queue rows are routed to the
+        // reviewer seat specifically.
         if !self.reviewer_queue_items.is_empty() {
-            parts.push(pluralize(
-                self.reviewer_queue_items.len(),
-                "verdict",
-                "verdicts",
-            ));
+            if show_reviewer {
+                // BUG-1508 AC4/AC7: "actionable N of M routed" everywhere
+                // this depth figure is printed, including the compact
+                // per-turn line.
+                let actionable = self
+                    .reviewer_queue_items
+                    .iter()
+                    .filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview)
+                    .count();
+                parts.push(format!(
+                    "actionable {} of {} routed",
+                    actionable,
+                    self.reviewer_queue_items.len()
+                ));
+            } else {
+                hidden_other_seat += self.reviewer_queue_items.len();
+            }
         }
+        // trace:BUG-1530 | ai:claude — a shelved/rework item is implementer
+        // work ("queue rework --work").
         if self.shelved_total > 0 {
-            parts.push(format!("{} in rework", self.shelved_total));
+            if show_shelved {
+                parts.push(format!("{} in rework", self.shelved_total));
+            } else {
+                hidden_other_seat += self.shelved_total;
+            }
         }
         if !self.escalations.is_empty() {
             parts.push(pluralize(
@@ -956,6 +1844,27 @@ impl AwaitingReport {
                 "escalation",
                 "escalations",
             ));
+        }
+        // trace:TASK-1445 | ai:claude
+        if !self.pr_attribution_disagreements.is_empty() {
+            parts.push(format!(
+                "{} attribution split",
+                self.pr_attribution_disagreements.len()
+            ));
+        }
+        // trace:BUG-1564 | ai:claude
+        if !self.orphaned_in_progress.is_empty() {
+            parts.push(pluralize(
+                self.orphaned_in_progress.len(),
+                "orphaned in-progress",
+                "orphaned in-progress",
+            ));
+        }
+        // trace:BUG-1530 | ai:claude — PRIN-5: say what is hidden. Never
+        // silently drop the advisor/implementer/reviewer-owned items folded
+        // out of this seat's headline; name the count instead.
+        if hidden_other_seat > 0 {
+            parts.push(format!("{hidden_other_seat} for other seats"));
         }
         if parts.is_empty() {
             return None;
@@ -983,19 +1892,36 @@ fn pluralize(n: usize, singular: &str, plural: &str) -> String {
 /// Classify a single open PR as "awaiting you." The aida-chat motivating
 /// case (5 mergeable PRs OPEN for hours) lives or dies on this filter:
 ///   - `mergeable == "MERGEABLE"` (excludes CONFLICTING / UNKNOWN)
-///   - CI is not failing or pending (pass / no-checks / `?` are fine)
+///   - CI is not failing, pending, missing a required check, or unknown
+///     whether a required check is missing (pass / no-checks / `?` are
+///     fine — BUG-1481)
 ///   - reviewer verdict is not `CHANGES_REQUESTED`
+///   - no AIDA-recorded blocking verdict at the PR's current head, and no
+///     AIDA-recorded APPROVED verdict that fails to provably cover it
+///     (stale, sha-less, or Incomparable — BUG-1549)
 ///
 /// A `REVIEW_REQUIRED` PR still qualifies: if the operator is the only
 /// reviewer on a solo project, the human merge button is the only gate.
-/// trace:STORY-465 | ai:claude
-pub(crate) fn is_awaiting_you(pr: &OpenPrItem) -> bool {
+///
+/// `local_verdict_blocks` is a caller-supplied fact (see
+/// [`classify_open_prs`]) rather than a filesystem read here: this stays the
+/// same pure, git/forge-free classifier the module doc promises. BUG-1490:
+/// GitHub's `review_decision` is not the only place a refusal is recorded —
+/// `aida review record` writes straight to the AIDA substrate with no forge
+/// round trip, so a PR refused that way had `review_decision` empty and kept
+/// showing up here as awaiting-you.
+// trace:BUG-1490 | ai:claude
+pub(crate) fn is_awaiting_you(pr: &OpenPrItem, local_verdict_blocks: bool) -> bool {
     let mergeable = pr.mergeable.as_deref().unwrap_or("");
     if !mergeable.eq_ignore_ascii_case("MERGEABLE") {
         return false;
     }
     match pr.ci_rollup.as_deref() {
-        Some("fail") | Some("pending") => return false,
+        // BUG-1481: "missing" = a required check's row never showed up on
+        // this head at all; "unknown" = the required-check set itself could
+        // not be determined (branch protection unreadable). Neither is a
+        // pass — absent evidence is not good evidence (PRIN-5).
+        Some("fail") | Some("pending") | Some("missing") | Some("unknown") => return false,
         _ => {}
     }
     let verdict = pr
@@ -1006,14 +1932,28 @@ pub(crate) fn is_awaiting_you(pr: &OpenPrItem) -> bool {
     if verdict == "CHANGES_REQUESTED" {
         return false;
     }
+    if local_verdict_blocks {
+        return false;
+    }
     true
 }
 
 /// Filter a snapshot of open PRs down to the "Awaiting you" subset. Used
 /// by the renderer and exercised directly in tests.
-pub(crate) fn classify_open_prs(prs: &[OpenPrItem]) -> Vec<MergeablePrItem> {
+///
+/// `local_blocking` names the PRs (by number) whose `classify_pr_review`
+/// decision is suppressed (`local_suppressed_prs`, lib.rs, BUG-1549) — a live
+/// refusal, or a newest approval that does not provably cover the head. Each
+/// such PR has a blocked-review or stale-approval row explaining it. This set
+/// is unioned with GitHub's `review_decision`, never swapped.
+// trace:BUG-1490 | ai:claude
+// trace:BUG-1549 | ai:claude
+pub(crate) fn classify_open_prs(
+    prs: &[OpenPrItem],
+    local_blocking: &HashSet<u64>,
+) -> Vec<MergeablePrItem> {
     prs.iter()
-        .filter(|pr| is_awaiting_you(pr))
+        .filter(|pr| is_awaiting_you(pr, local_blocking.contains(&pr.number)))
         .map(|pr| MergeablePrItem {
             number: pr.number,
             title: pr.title.clone(),
@@ -1042,6 +1982,7 @@ mod tests {
             review_decision: verdict.map(String::from),
             head_sha: None,
             labels: Vec::new(),
+            created_at: None,
         }
     }
 
@@ -1052,7 +1993,14 @@ mod tests {
             held: false,
             route: ReviewerRoute::Unrouted,
             actively_owned: false,
+            done_spec: None,
         }
+    }
+
+    fn fixed_now() -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339("2026-09-22T12:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc)
     }
 
     // TASK-192: the historical PR-2035 shape is red and has no route at all.
@@ -1062,7 +2010,8 @@ mod tests {
     fn red_unrouted_unheld_unowned_pr_is_actionable() {
         let mut review_required = failing_candidate(2036);
         review_required.pr.review_decision = Some("REVIEW_REQUIRED".into());
-        let rows = classify_unowned_failing_prs(&[failing_candidate(2035), review_required]);
+        let rows =
+            classify_unowned_failing_prs(&[failing_candidate(2035), review_required], fixed_now());
         assert_eq!(
             rows.iter().map(|row| row.number).collect::<Vec<_>>(),
             vec![2035, 2036],
@@ -1089,16 +2038,19 @@ mod tests {
         let mut approved = failing_candidate(8);
         approved.pr.review_decision = Some("APPROVED".into());
 
-        assert!(classify_unowned_failing_prs(&[
-            green,
-            pending,
-            held,
-            routed,
-            owned,
-            local_verdict,
-            forge_verdict,
-            approved,
-        ])
+        assert!(classify_unowned_failing_prs(
+            &[
+                green,
+                pending,
+                held,
+                routed,
+                owned,
+                local_verdict,
+                forge_verdict,
+                approved,
+            ],
+            fixed_now(),
+        )
         .is_empty());
     }
 
@@ -1106,13 +2058,72 @@ mod tests {
     fn unknown_reviewer_queue_fails_closed() {
         let mut unavailable = failing_candidate(9);
         unavailable.route = ReviewerRoute::Unknown;
-        assert!(classify_unowned_failing_prs(&[unavailable]).is_empty());
+        assert!(classify_unowned_failing_prs(&[unavailable], fixed_now()).is_empty());
+    }
+
+    // BUG-1514: a Done spec whose PR is red is an inconsistency even though a
+    // merge hold, in this specific test, is deliberately NOT set — the row
+    // must still surface despite full ownership (routed + actively owned +
+    // has_local_verdict), because none of those facts make "Done" true.
+    #[test]
+    fn done_spec_with_failing_pr_surfaces_despite_full_ownership() {
+        let mut owned_and_routed = failing_candidate(2050);
+        owned_and_routed.route = ReviewerRoute::Routed;
+        owned_and_routed.actively_owned = true;
+        owned_and_routed.has_local_verdict = true;
+        owned_and_routed.pr.review_decision = Some("APPROVED".into());
+        owned_and_routed.done_spec = Some("BUG-1470".into());
+
+        let rows = classify_unowned_failing_prs(&[owned_and_routed], fixed_now());
+        assert_eq!(
+            rows.len(),
+            1,
+            "Done+red must surface regardless of ownership"
+        );
+        assert_eq!(rows[0].done_spec.as_deref(), Some("BUG-1470"));
+    }
+
+    // BUG-1514: a merge hold is an existing, independent "something is
+    // already stopping this" signal — the Done-spec bypass must not
+    // duplicate a row that surface already owns.
+    #[test]
+    fn done_spec_with_failing_pr_still_respects_a_merge_hold() {
+        let mut held = failing_candidate(2051);
+        held.held = true;
+        held.done_spec = Some("BUG-1470".into());
+        assert!(classify_unowned_failing_prs(&[held], fixed_now()).is_empty());
+    }
+
+    // BUG-1514 acceptance #3: freshly-red PRs must not alarm.
+    #[test]
+    fn freshly_red_pr_is_debounced_below_the_min_age() {
+        let mut fresh = failing_candidate(2052);
+        fresh.pr.created_at = Some(fixed_now() - chrono::Duration::minutes(5));
+        assert!(
+            classify_unowned_failing_prs(&[fresh], fixed_now()).is_empty(),
+            "5 minutes red is routine rework-cycle churn, not neglect"
+        );
+    }
+
+    #[test]
+    fn red_pr_past_the_min_age_surfaces() {
+        let mut stale = failing_candidate(2053);
+        stale.pr.created_at = Some(fixed_now() - chrono::Duration::hours(4));
+        let rows = classify_unowned_failing_prs(&[stale], fixed_now());
+        assert_eq!(
+            rows.len(),
+            1,
+            "3.8h+ red-and-unowned is exactly #2035's shape"
+        );
     }
 
     #[test]
     fn broken_unowned_row_reaches_human_and_json_surfaces() {
         let report = AwaitingReport {
-            unowned_failing_prs: classify_unowned_failing_prs(&[failing_candidate(2035)]),
+            unowned_failing_prs: classify_unowned_failing_prs(
+                &[failing_candidate(2035)],
+                fixed_now(),
+            ),
             ..Default::default()
         };
         let mut rendered = Vec::new();
@@ -1164,6 +2175,8 @@ mod tests {
             retracted: false,
             deleted: false,
             archived: false,
+            from_source: aida_core::mailbox::SenderSource::Explicit,
+            from_role: None,
         }
     }
 
@@ -1171,155 +2184,509 @@ mod tests {
         aida_core::mailbox::Recipient::Agent(agent.to_string())
     }
 
-    fn candidate(pr: u64, head: &str, reviewed: Option<&str>, by: Option<&str>) -> ReworkCandidate {
-        ReworkCandidate {
-            pr,
-            head_sha: head.to_string(),
-            spec: Some(format!("BUG-{pr}")),
-            verdict_blocks: true,
-            reviewed_sha: reviewed.map(str::to_string),
-            recorded_by: by.map(str::to_string),
+    // ── BUG-1549: the one PR review classifier, table-driven ────────────────
+
+    const HEAD: &str = "cafef00d1234567890";
+    const OLD: &str = "deadbeef9999999999";
+    const T1: &str = "2026-09-01T00:00:00+00:00";
+    const T2: &str = "2026-09-02T00:00:00+00:00";
+    const T3: &str = "2026-09-03T00:00:00+00:00";
+
+    fn verdict(kind: &str, sha: Option<&str>, at: Option<&str>) -> review_verdict::RecordedVerdict {
+        review_verdict::RecordedVerdict {
+            kind: review_verdict::VerdictKind::parse(kind),
+            raw: kind.to_string(),
+            reviewed_sha: sha.map(str::to_string),
+            recorded_at: at.map(str::to_string),
+            ..Default::default()
+        }
+    }
+    fn refusal(sha: Option<&str>, at: Option<&str>) -> review_verdict::RecordedVerdict {
+        verdict("request-changes", sha, at)
+    }
+    fn approval(sha: Option<&str>, at: Option<&str>) -> review_verdict::RecordedVerdict {
+        verdict("approved", sha, at)
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum Kind {
+        NoRow,
+        Blocked(BlockedReason),
+        Stale,
+        Unverifiable,
+        ReworkReady,
+    }
+
+    fn kind_of(row: Option<&PrReviewRow>) -> Kind {
+        match row {
+            None => Kind::NoRow,
+            Some(PrReviewRow::Blocked { reason, .. }) => Kind::Blocked(*reason),
+            Some(PrReviewRow::Stale { .. }) => Kind::Stale,
+            Some(PrReviewRow::Unverifiable { .. }) => Kind::Unverifiable,
+            Some(PrReviewRow::ReworkReady { .. }) => Kind::ReworkReady,
         }
     }
 
-    // STORY-1419: the signal is head != reviewed_sha on a blocking verdict.
-    // trace:STORY-1419 | ai:claude
+    // BUG-1549: every case is (candidates, head) -> (suppressed, row kind),
+    // and EVERY case also asserts the invariant — suppressed iff the PR has a
+    // Blocked, Stale or Unverifiable row — both on the decision and after it
+    // is rendered into the report's row vectors (where seat scoping applies).
+    // trace:BUG-1549 | ai:claude
     #[test]
-    fn a_moved_head_on_a_blocking_verdict_is_rework_ready() {
-        let rows = rework_ready_rows(
-            &[candidate(
-                2014,
-                "f95b30853e",
-                Some("3310400503"),
-                Some("claude-reviewer-1"),
-            )],
-            None,
-        );
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].pr, 2014);
-        assert_eq!(rows[0].reviewed_sha, "3310400503");
-        assert_eq!(rows[0].head_sha, "f95b30853e");
-    }
+    fn classify_pr_review_table() {
+        use BlockedReason::{AtHead, Unverifiable as BUnv};
+        let head = Some(HEAD);
+        let short = Some("cafef0");
+        #[allow(clippy::type_complexity)]
+        let cases: Vec<(
+            &str,
+            Vec<review_verdict::RecordedVerdict>,
+            Option<&str>,
+            bool,
+            Kind,
+        )> = vec![
+            ("nothing", vec![], head, false, Kind::NoRow),
+            (
+                "refusal at head",
+                vec![refusal(head, Some(T1))],
+                head,
+                true,
+                Kind::Blocked(AtHead),
+            ),
+            (
+                "rejected at head",
+                vec![verdict("rejected", head, Some(T1))],
+                head,
+                true,
+                Kind::Blocked(AtHead),
+            ),
+            (
+                "refusal moved",
+                vec![refusal(Some(OLD), Some(T1))],
+                head,
+                false,
+                Kind::ReworkReady,
+            ),
+            (
+                "sha-less refusal",
+                vec![refusal(None, Some(T1))],
+                head,
+                true,
+                Kind::Blocked(BUnv),
+            ),
+            (
+                "blank-sha refusal",
+                vec![refusal(Some("   "), Some(T1))],
+                head,
+                true,
+                Kind::Blocked(BUnv),
+            ),
+            (
+                "short-sha refusal",
+                vec![refusal(short, Some(T1))],
+                head,
+                true,
+                Kind::Blocked(BUnv),
+            ),
+            (
+                "head-less PR, sha'd refusal",
+                vec![refusal(head, Some(T1))],
+                None,
+                true,
+                Kind::Blocked(BUnv),
+            ),
+            (
+                "refusal superseded by later approval at head",
+                vec![refusal(head, Some(T1)), approval(head, Some(T2))],
+                head,
+                false,
+                Kind::NoRow,
+            ),
+            (
+                "sha-less refusal superseded by later approval at head",
+                vec![refusal(None, Some(T1)), approval(head, Some(T2))],
+                head,
+                false,
+                Kind::NoRow,
+            ),
+            (
+                "refusal then later sha-less approval: not superseded",
+                vec![refusal(head, Some(T1)), approval(None, Some(T2))],
+                head,
+                true,
+                Kind::Blocked(AtHead),
+            ),
+            (
+                "refusal then later stale approval: not superseded",
+                vec![refusal(head, Some(T1)), approval(Some(OLD), Some(T2))],
+                head,
+                true,
+                Kind::Blocked(AtHead),
+            ),
+            (
+                "undated refusal plus approval at head: recency unknown",
+                vec![refusal(head, None), approval(head, Some(T2))],
+                head,
+                true,
+                Kind::Blocked(AtHead),
+            ),
+            (
+                "dated refusal plus undated approval at head: recency unknown",
+                vec![refusal(head, Some(T1)), approval(head, None)],
+                head,
+                true,
+                Kind::Blocked(AtHead),
+            ),
+            (
+                "approval at head OLDER than the refusal",
+                vec![approval(head, Some(T1)), refusal(head, Some(T2))],
+                head,
+                true,
+                Kind::Blocked(AtHead),
+            ),
+            (
+                "two title specs: spec1 refusal moved, spec2 refusal at head",
+                vec![refusal(Some(OLD), Some(T2)), refusal(head, Some(T1))],
+                head,
+                true,
+                Kind::Blocked(AtHead),
+            ),
+            (
+                "two title specs: spec1 refusal moved, spec2 refusal sha-less",
+                vec![refusal(Some(OLD), Some(T1)), refusal(None, Some(T2))],
+                head,
+                true,
+                Kind::Blocked(BUnv),
+            ),
+            (
+                "refusal t1, approval at head t2, refusal at head t3",
+                vec![
+                    refusal(head, Some(T1)),
+                    approval(head, Some(T2)),
+                    refusal(head, Some(T3)),
+                ],
+                head,
+                true,
+                Kind::Blocked(AtHead),
+            ),
+            (
+                "approval at head only",
+                vec![approval(head, Some(T1))],
+                head,
+                false,
+                Kind::NoRow,
+            ),
+            (
+                "undated approval at head only",
+                vec![approval(head, None)],
+                head,
+                false,
+                Kind::NoRow,
+            ),
+            (
+                "approval with a truncated but matching sha",
+                vec![approval(Some("cafef00d"), Some(T1))],
+                head,
+                false,
+                Kind::NoRow,
+            ),
+            (
+                "stale approval only",
+                vec![approval(Some(OLD), Some(T1))],
+                head,
+                true,
+                Kind::Stale,
+            ),
+            (
+                "sha-less approval only",
+                vec![approval(None, Some(T1))],
+                head,
+                true,
+                Kind::Unverifiable,
+            ),
+            (
+                "short-sha approval only",
+                vec![approval(short, Some(T1))],
+                head,
+                true,
+                Kind::Unverifiable,
+            ),
+            (
+                "head-less PR, sha'd approval",
+                vec![approval(head, Some(T1))],
+                None,
+                true,
+                Kind::Unverifiable,
+            ),
+            (
+                "spec approval at head t1 + PR sha-less approval t2: newest decides",
+                vec![approval(head, Some(T1)), approval(None, Some(T2))],
+                head,
+                true,
+                Kind::Unverifiable,
+            ),
+            (
+                "spec approval at head t2 + PR sha-less approval t1: newest decides",
+                vec![approval(head, Some(T2)), approval(None, Some(T1))],
+                head,
+                false,
+                Kind::NoRow,
+            ),
+            (
+                "spec approval at head t1 + PR stale approval t2: newest decides",
+                vec![approval(head, Some(T1)), approval(Some(OLD), Some(T2))],
+                head,
+                true,
+                Kind::Stale,
+            ),
+            (
+                "undated approval at head + dated sha-less approval: undated is oldest",
+                vec![approval(head, None), approval(None, Some(T1))],
+                head,
+                true,
+                Kind::Unverifiable,
+            ),
+            (
+                "dated approval at head + undated sha-less approval: undated is oldest",
+                vec![approval(head, Some(T1)), approval(None, None)],
+                head,
+                false,
+                Kind::NoRow,
+            ),
+            (
+                "moved refusal + later approval at head",
+                vec![refusal(Some(OLD), Some(T1)), approval(head, Some(T2))],
+                head,
+                false,
+                Kind::NoRow,
+            ),
+            (
+                "moved refusal + stale approval",
+                vec![refusal(Some(OLD), Some(T1)), approval(Some(OLD), Some(T2))],
+                head,
+                true,
+                Kind::Stale,
+            ),
+            (
+                "unrecognised verdict word only",
+                vec![verdict("pondering", head, Some(T1))],
+                head,
+                false,
+                Kind::NoRow,
+            ),
+        ];
 
-    // The unmoved head is the common case and must stay silent, or the row
-    // fires on every held PR and stops meaning anything.
-    // trace:STORY-1419 | ai:claude
-    #[test]
-    fn an_unmoved_head_is_not_rework_ready() {
-        assert!(rework_ready_rows(
-            &[candidate(2001, "ffac563445", Some("ffac563445"), None)],
-            None
-        )
-        .is_empty());
-    }
+        for (name, candidates, head, want_suppressed, want_kind) in cases {
+            let d = classify_pr_review(&candidates, head);
+            assert_eq!(d.suppressed, want_suppressed, "{name}: suppressed");
+            assert_eq!(kind_of(d.row.as_ref()), want_kind, "{name}: row kind");
 
-    // Verdict writers record full or short shas depending on the path; a
-    // short-vs-long pair is the SAME commit, not a moved head.
-    // trace:STORY-1419 | ai:claude
-    #[test]
-    fn a_truncated_sha_is_not_a_moved_head() {
-        assert!(rework_ready_rows(
-            &[candidate(
-                2030,
-                "293da2d0cc9404f5226ad4deef89c0bc37e97c81",
-                Some("293da2d0cc"),
-                None
-            )],
-            None
-        )
-        .is_empty());
-    }
+            // The invariant, on the decision…
+            let explained = d
+                .row
+                .as_ref()
+                .is_some_and(PrReviewRow::explains_suppression);
+            assert_eq!(d.suppressed, explained, "{name}: suppressed iff explained");
 
-    // The edge the abbreviated-sha corpus exposed: a sha SHORTER THAN THE
-    // COMPARISON FLOOR is unusable evidence, and the failure is asymmetric.
-    // Treating it as "different" emits a row that NO PUSH CAN EVER CLEAR — a
-    // 3-character string never becomes equal to a 40-character one — so the
-    // wrong answer here is permanent, not transient. Silence is the only
-    // output consistent with the contract the absent-provenance case sets.
-    // trace:BUG-1546 | ai:claude
-    #[test]
-    fn a_sha_too_short_to_compare_is_silence_not_a_permanent_row() {
-        let head = "293da2d0cc9404f5226ad4deef89c0bc37e97c81";
-        for short in ["2", "29", "293", "293d", "293da", "293da2"] {
-            assert!(
-                rework_ready_rows(&[candidate(2030, head, Some(short), None)], None).is_empty(),
-                "a {}-char reviewed_sha is too short to be evidence, so it must \
-                 not pin a row open forever (got one for {short:?})",
-                short.len()
+            // …and after rendering into the report rows, under a seat that
+            // did NOT record anything (seat scoping must never hide a row that
+            // explains a suppression).
+            let mut rows = PrReviewRows::default();
+            rows.add(2100, head, "claude/bug-2100", &d, Some("some-other-seat"));
+            let explaining = rows.blocked_reviews.len() + rows.stale_approvals.len();
+            assert_eq!(
+                explaining,
+                usize::from(d.suppressed),
+                "{name}: exactly one explaining row iff suppressed"
+            );
+            assert_eq!(
+                rows.rework_ready.len(),
+                usize::from(want_kind == Kind::ReworkReady),
+                "{name}: rework_ready row"
             );
         }
-        // …and a sha that DISAGREES below the floor is equally unusable: the
-        // floor is about comparability, not about which way the bytes fall.
-        for short in ["f", "ff", "fff", "ffff", "fffff", "ffffff"] {
-            assert!(
-                rework_ready_rows(&[candidate(2030, head, Some(short), None)], None).is_empty(),
-                "a sub-floor sha must be silence whichever way its bytes fall ({short:?})"
-            );
-        }
-        // The floor is exactly 7: one more character and comparison resumes,
-        // so this pins the boundary rather than merely "short is quiet".
-        assert!(
-            rework_ready_rows(&[candidate(2030, head, Some("293da2d"), None)], None).is_empty(),
-            "7 matching chars is comparable and matching — silence"
-        );
-        assert_eq!(
-            rework_ready_rows(&[candidate(2030, head, Some("fffffff"), None)], None).len(),
-            1,
-            "7 DIFFERING chars is comparable and moved — the row must fire"
-        );
     }
 
-    // BUG-1538's blast radius: no reviewed_sha means nothing to compare, so the
-    // honest output is silence. Asserted explicitly so a later change that
-    // starts GUESSING here fails loudly.
-    // trace:STORY-1419 | ai:claude
+    // STORY-1419: the rework-ready row (and only it — it does not suppress) is
+    // scoped to the seat that refused; unknown on either side surfaces.
+    // trace:STORY-1419 trace:BUG-1549 | ai:claude
     #[test]
-    fn a_verdict_without_provenance_degrades_to_silence_not_a_guess() {
-        assert!(rework_ready_rows(&[candidate(2009, "065f3df8aa", None, None)], None).is_empty());
-        assert!(
-            rework_ready_rows(&[candidate(2009, "065f3df8aa", Some("   "), None)], None).is_empty(),
-            "a blank reviewed_sha is absent provenance, not a sha"
-        );
-    }
+    fn rework_ready_rows_are_scoped_to_the_refusing_seat_but_unknown_surfaces() {
+        let moved = |by: Option<&str>| {
+            let mut r = refusal(Some(OLD), Some(T1));
+            r.recorded_by = by.map(str::to_string);
+            classify_pr_review(&[r], Some(HEAD))
+        };
+        let mine = moved(Some("claude-reviewer-1 (claude reviewer seat)"));
+        let theirs = moved(Some("aida drain reviewer"));
+        let anon = moved(None);
 
-    // A non-blocking verdict is not a refusal, so its head moving is ordinary
-    // progress rather than something the reviewer gates.
-    // trace:STORY-1419 | ai:claude
-    #[test]
-    fn a_non_blocking_verdict_never_produces_a_row() {
-        let mut approved = candidate(2046, "f56e089371", Some("be6a8eecb5"), None);
-        approved.verdict_blocks = false;
-        assert!(rework_ready_rows(&[approved], None).is_empty());
-    }
-
-    // Scoped to the seat that refused — and UNKNOWN on either side surfaces
-    // rather than hides, because a missed handoff costs more than a spare line.
-    // trace:STORY-1419 | ai:claude
-    #[test]
-    fn rows_are_scoped_to_the_refusing_seat_but_unknown_surfaces() {
-        let mine = candidate(
-            2014,
-            "aaa1111",
-            Some("bbb2222"),
-            Some("claude-reviewer-1 (claude reviewer seat)"),
-        );
-        let theirs = candidate(
-            2030,
-            "ccc3333",
-            Some("ddd4444"),
-            Some("aida drain reviewer"),
-        );
-        let anon = candidate(2040, "eee5555", Some("fff6666"), None);
-
-        let scoped = rework_ready_rows(
-            &[mine.clone(), theirs.clone(), anon.clone()],
-            Some("claude-reviewer-1"),
-        );
-        let prs: Vec<u64> = scoped.iter().map(|r| r.pr).collect();
+        let mut scoped = PrReviewRows::default();
+        scoped.add(2014, Some(HEAD), "b", &mine, Some("claude-reviewer-1"));
+        scoped.add(2030, Some(HEAD), "b", &theirs, Some("claude-reviewer-1"));
+        scoped.add(2040, Some(HEAD), "b", &anon, Some("claude-reviewer-1"));
+        let prs: Vec<u64> = scoped.rework_ready.iter().map(|r| r.pr).collect();
         assert_eq!(prs, vec![2014, 2040], "mine plus the unattributable one");
 
-        let unscoped = rework_ready_rows(&[mine, theirs, anon], None);
-        assert_eq!(unscoped.len(), 3, "with no seat known, surface everything");
+        let mut unscoped = PrReviewRows::default();
+        for (n, d) in [(2014, &mine), (2030, &theirs), (2040, &anon)] {
+            unscoped.add(n, Some(HEAD), "b", d, None);
+        }
+        assert_eq!(unscoped.rework_ready.len(), 3, "no seat known: surface all");
+    }
+
+    // BUG-1549: the rows carry both shas and the branch-derived spec, and the
+    // blocked row reaches the header count, the render and the JSON.
+    // trace:BUG-1549 | ai:claude
+    #[test]
+    fn review_rows_carry_shas_spec_and_reach_the_render() {
+        let mut rows = PrReviewRows::default();
+        let stale = classify_pr_review(&[approval(Some(OLD), Some(T1))], Some(HEAD));
+        rows.add(2060, Some(HEAD), "task-1298-work", &stale, None);
+        let blocked = classify_pr_review(&[refusal(Some(HEAD), Some(T1))], Some(HEAD));
+        rows.add(2061, Some(HEAD), "some-unlabelled-branch", &blocked, None);
+        assert_eq!(rows.stale_approvals[0].reviewed_sha, OLD);
+        assert_eq!(rows.stale_approvals[0].head_sha, HEAD);
+        assert_eq!(rows.stale_approvals[0].spec.as_deref(), Some("TASK-1298"));
+        assert_eq!(
+            rows.blocked_reviews[0].spec, None,
+            "no spec id: still a row"
+        );
+
+        let r = AwaitingReport {
+            blocked_reviews: rows.blocked_reviews,
+            stale_approvals: rows.stale_approvals,
+            ..Default::default()
+        };
+        assert_eq!(r.total(), 2);
+        let mut buf = Vec::new();
+        assert!(r.render(false, &mut buf).unwrap());
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("PR-2061") && out.contains("blocked"), "{out}");
+        assert!(
+            out.contains("PR-2060") && out.contains("TASK-1298"),
+            "{out}"
+        );
+        assert_eq!(r.to_json()["blocked_reviews"][0]["reason"], "at_head");
+        assert!(r.compact_line().unwrap().contains("1 blocked-review"));
+    }
+
+    // TASK-1310: `blocked_age` is the pure function both the text render and
+    // the JSON shape read — testing it directly is testing what both
+    // surfaces will say, without depending on wall-clock timing in a render
+    // assertion.
+    // trace:TASK-1310 | ai:claude
+    #[test]
+    fn blocked_age_computes_days_since_recorded_at() {
+        let now: chrono::DateTime<chrono::Utc> = "2026-09-23T00:00:00Z".parse().unwrap();
+        let age = blocked_age(Some("2026-09-20T00:00:00+00:00"), now).expect("parseable");
+        assert_eq!(age.secs, 3 * 24 * 3600);
+        assert!(!age.overdue, "3 days is under the overdue threshold");
+        assert_eq!(
+            blocked_age_label(Some("2026-09-20T00:00:00+00:00"), now),
+            "refused 3d ago, no rework since"
+        );
+    }
+
+    // trace:TASK-1310 | ai:claude
+    // trace:TASK-1310 | ai:claude
+    #[test]
+    fn unverifiable_blocked_age_never_claims_no_rework() {
+        let now: chrono::DateTime<chrono::Utc> = "2026-09-23T00:00:00Z".parse().unwrap();
+        let label = blocked_age_label_unverifiable(Some("2026-09-01T00:00:00+00:00"), now);
+        assert!(label.contains("rework since then unknown"), "{label}");
+        assert!(!label.contains("no rework"), "{label}");
+        assert!(!label.contains("overdue"), "{label}");
+    }
+
+    #[test]
+    fn blocked_age_flags_long_standing_refusals_as_overdue() {
+        let now: chrono::DateTime<chrono::Utc> = "2026-09-23T00:00:00Z".parse().unwrap();
+        let age = blocked_age(Some("2026-09-01T00:00:00+00:00"), now).expect("parseable");
+        assert!(age.overdue, "22 days must clear the overdue threshold");
+        assert!(
+            blocked_age_label(Some("2026-09-01T00:00:00+00:00"), now).contains("overdue"),
+            "the label must name the long-standing refusal, not just its age"
+        );
+    }
+
+    // PRIN-5: a refusal with no recorded_at (or an unparseable one) is
+    // reported as "age unknown" — never silently read as "no rework" or as
+    // zero elapsed time. Mirrors PR-1784.json's real shape: the sha KEY is
+    // present but its value is empty, which is exactly the
+    // "blank-sha refusal" case `classify_pr_review_table` already covers for
+    // the reason; this asserts the age reads unknown independently of that.
+    // trace:TASK-1310 | ai:claude
+    #[test]
+    fn blocked_age_is_unknown_without_a_parseable_recorded_at() {
+        let now: chrono::DateTime<chrono::Utc> = "2026-09-23T00:00:00Z".parse().unwrap();
+        assert_eq!(blocked_age(None, now), None);
+        assert_eq!(blocked_age(Some(""), now), None);
+        assert_eq!(blocked_age(Some("   "), now), None);
+        assert_eq!(blocked_age(Some("not-a-timestamp"), now), None);
+        assert_eq!(blocked_age_label(None, now), "age unknown");
+    }
+
+    // trace:TASK-1310 | ai:claude
+    #[test]
+    fn blocked_review_render_and_json_carry_the_age() {
+        // Recorded 2h ago, relative to the actual wall clock — this must
+        // read as recent (not overdue) no matter what day the suite runs.
+        let recent = (chrono::Utc::now() - chrono::Duration::hours(2)).to_rfc3339();
+        let decision = classify_pr_review(&[refusal(Some(HEAD), Some(&recent))], Some(HEAD));
+        let mut rows = PrReviewRows::default();
+        rows.add(2200, Some(HEAD), "some-branch", &decision, None);
+        assert_eq!(
+            rows.blocked_reviews[0].recorded_at.as_deref(),
+            Some(recent.as_str()),
+            "the raw recorded_at must ride along so a second reader can recompute the age"
+        );
+
+        let r = AwaitingReport {
+            blocked_reviews: rows.blocked_reviews,
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        assert!(r.render(false, &mut buf).unwrap());
+        let out = String::from_utf8(buf).unwrap();
+        assert!(
+            out.contains("no rework since"),
+            "the blocked row must say how long it has stood: {out}"
+        );
+        assert!(
+            !out.contains("overdue"),
+            "2h ago must not read as long-standing: {out}"
+        );
+
+        let json = r.to_json();
+        assert_eq!(json["blocked_reviews"][0]["recorded_at"], recent);
+        assert!(json["blocked_reviews"][0]["age_secs"].is_number());
+        assert_eq!(json["blocked_reviews"][0]["overdue"], false);
+    }
+
+    // trace:TASK-1310 | ai:claude
+    #[test]
+    fn blocked_review_json_reports_unknown_age_never_no_rework() {
+        // The blank-sha-key shape (PR-1784.json): the refusal has NO
+        // recorded_at at all, so age must be null/unknown, not zero.
+        let decision = classify_pr_review(&[refusal(Some(HEAD), None)], Some(HEAD));
+        let mut rows = PrReviewRows::default();
+        rows.add(2201, Some(HEAD), "some-branch", &decision, None);
+        assert_eq!(rows.blocked_reviews[0].recorded_at, None);
+
+        let r = AwaitingReport {
+            blocked_reviews: rows.blocked_reviews,
+            ..Default::default()
+        };
+        let json = r.to_json();
+        assert!(json["blocked_reviews"][0]["age_secs"].is_null());
+        assert!(json["blocked_reviews"][0]["overdue"].is_null());
+
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("age unknown"), "{out}");
+        assert!(!out.contains("no rework since"), "{out}");
     }
 
     /// The regression: three messages in the operator's own inbox, a big
@@ -1439,64 +2806,153 @@ mod tests {
         assert_eq!(json["unshipped_work"][0]["commits_ahead"], 2);
     }
 
-    // STORY-1419 review: the row advertises a spec id and the production call
-    // site hardcoded `spec: None`, so it could never appear. My plumbing test
-    // hand-built the item and bypassed the mapping — the same "a unit test
-    // cannot see its own seam" failure, committed inside the test written to
-    // prevent it.
-    //
-    // This goes through the PRODUCTION mapping: branch -> spec -> row -> render.
-    // Nothing is hand-built except the inputs the forge would supply.
-    // trace:STORY-1419 | ai:claude
+    // trace:BUG-1564 | ai:claude
     #[test]
-    fn the_spec_reaches_the_row_through_the_production_mapping() {
-        let candidate = rework_candidate_from_parts(
-            2014,
-            "f95b30853e",
-            "task-1298-work",
-            true,
-            Some("3310400503"),
-            None,
-        );
-        assert_eq!(
-            candidate.spec.as_deref(),
-            Some("TASK-1298"),
-            "the spec must be derived from the branch, not left None"
+    fn orphaned_in_progress_renders_and_distinguishes_abandoned_from_not_yet_started() {
+        let r = AwaitingReport {
+            orphaned_in_progress: vec![
+                OrphanedInProgressItem {
+                    spec_id: "BUG-9001".to_string(),
+                    title: "crashed session".to_string(),
+                    abandoned: true,
+                    since_label: "last touched 3h ago".to_string(),
+                },
+                OrphanedInProgressItem {
+                    spec_id: "TASK-9002".to_string(),
+                    title: "never picked up".to_string(),
+                    abandoned: false,
+                    since_label: "last-touched time unknown".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+        assert_eq!(r.total(), 2);
+        let line = r
+            .compact_line()
+            .expect("orphaned in-progress yields a per-turn line");
+        assert!(
+            line.contains("2 orphaned in-progress"),
+            "compact line: {line}"
         );
 
-        let rows = rework_ready_rows(&[candidate], None);
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].spec.as_deref(), Some("TASK-1298"));
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(
+            s.contains("BUG-9001") && s.contains("abandoned — lease died"),
+            "{s}"
+        );
+        assert!(
+            s.contains("TASK-9002") && s.contains("not yet started — no lease"),
+            "{s}"
+        );
+        assert!(s.contains("last-touched time unknown"), "{s}");
+
+        let json = r.to_json();
+        assert_eq!(json["orphaned_in_progress"][0]["spec_id"], "BUG-9001");
+        assert_eq!(json["orphaned_in_progress"][0]["abandoned"], true);
+        assert_eq!(json["orphaned_in_progress"][1]["abandoned"], false);
+    }
+
+    // trace:TASK-1305 | ai:claude
+    #[test]
+    fn unshipped_work_no_pr_and_open_pr_render_differently() {
+        let no_pr = UnshippedWorkItem {
+            spec_id: "STORY-2001".to_string(),
+            branch: "story-2001-no-pr".to_string(),
+            commits_ahead: 3,
+            age: "2h".to_string(),
+            recovery: "aida pr ship story-2001-no-pr".to_string(),
+            pr_state: "absent".to_string(),
+        };
+        let open_pr = UnshippedWorkItem {
+            spec_id: "STORY-2002".to_string(),
+            branch: "story-2002-open-pr".to_string(),
+            commits_ahead: 3,
+            age: "2h".to_string(),
+            // The collector still records the generic "ship it" hint on the
+            // item — the render layer is what must not repeat it verbatim
+            // for an already-open PR.
+            recovery: "aida pr ship story-2002-open-pr".to_string(),
+            pr_state: "open".to_string(),
+        };
 
         let r = AwaitingReport {
-            rework_ready: rows,
+            unshipped_work: vec![no_pr, open_pr],
             ..Default::default()
         };
         let mut buf = Vec::new();
         r.render(false, &mut buf).unwrap();
-        let out = String::from_utf8(buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        let lines: Vec<&str> = s
+            .lines()
+            .filter(|l| l.contains("unshipped work:"))
+            .collect();
+        assert_eq!(lines.len(), 2, "expected one row per branch:\n{s}");
+
+        let no_pr_line = lines
+            .iter()
+            .find(|l| l.contains("STORY-2001"))
+            .expect("no-PR row present");
+        let open_pr_line = lines
+            .iter()
+            .find(|l| l.contains("STORY-2002"))
+            .expect("open-PR row present");
+
+        // Criterion 1: the two states are distinguishable without opening the PR.
+        assert_ne!(no_pr_line, open_pr_line);
+        assert!(no_pr_line.contains("PR absent"), "{no_pr_line}");
+        assert!(open_pr_line.contains("PR open"), "{open_pr_line}");
+
+        // Criterion 2: a branch with an open PR is not told to open one.
         assert!(
-            out.contains("TASK-1298"),
-            "the spec must survive all the way to the rendered row: {out}"
+            no_pr_line.contains("aida pr ship story-2001-no-pr"),
+            "{no_pr_line}"
         );
+        assert!(
+            !open_pr_line.contains("aida pr ship"),
+            "an open-PR row must not repeat the 'open a PR' hint: {open_pr_line}"
+        );
+        assert!(open_pr_line.contains("merge decision"), "{open_pr_line}");
     }
 
-    // A branch carrying no spec id must still produce a row — the PR number is
-    // the actionable part. Without this, "derive the spec" could be implemented
-    // as "drop rows with no spec" and the suite would not notice.
-    // trace:STORY-1419 | ai:claude
+    // TASK-1445 (containment for BUG-1510 AC5): the disagreeing case must
+    // surface on the surface an operator/advisor already looks — render,
+    // JSON, and the per-turn compact line — naming both claimed owners.
+    // trace:TASK-1445 | ai:claude
     #[test]
-    fn a_branch_without_a_spec_id_still_produces_a_row() {
-        let candidate = rework_candidate_from_parts(
-            2047,
-            "58fffe27b9",
-            "some-unlabelled-branch",
-            true,
-            Some("aaaa1111"),
-            None,
+    fn pr_attribution_disagreement_renders_json_and_notice_count() {
+        let r = AwaitingReport {
+            pr_attribution_disagreements: vec![PrAttributionDisagreementItem {
+                pr: 2043,
+                lease_spec: "STORY-1391".to_string(),
+                trailer_spec: "BUG-1420".to_string(),
+            }],
+            ..Default::default()
+        };
+        assert_eq!(r.total(), 1);
+        let line = r
+            .compact_line()
+            .expect("attribution disagreement yields a per-turn line");
+        assert!(line.contains("1 attribution split"), "compact line: {line}");
+
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(s.contains("PR-2043 attribution split"), "{s}");
+        assert!(s.contains("lease says STORY-1391"), "{s}");
+        assert!(s.contains("commit trailers say BUG-1420"), "{s}");
+
+        let json = r.to_json();
+        assert_eq!(json["pr_attribution_disagreements"][0]["pr"], 2043);
+        assert_eq!(
+            json["pr_attribution_disagreements"][0]["lease_spec"],
+            "STORY-1391"
         );
-        assert_eq!(candidate.spec, None);
-        assert_eq!(rework_ready_rows(&[candidate], None).len(), 1);
+        assert_eq!(
+            json["pr_attribution_disagreements"][0]["trailer_spec"],
+            "BUG-1420"
+        );
     }
 
     // STORY-1419: the CLASSIFIER tests above do not pin the PLUMBING. Dropping
@@ -1553,7 +3009,7 @@ mod tests {
         let prs = (1..=5)
             .map(|n| pr(n, Some("MERGEABLE"), Some("pass"), None))
             .collect::<Vec<_>>();
-        let classified = classify_open_prs(&prs);
+        let classified = classify_open_prs(&prs, &HashSet::new());
         assert_eq!(classified.len(), 5);
         let r = AwaitingReport {
             mergeable_prs: classified,
@@ -1604,15 +3060,51 @@ mod tests {
             // Awaiting you — no CI checks set up at all (aida-chat case).
             pr(7, Some("MERGEABLE"), None, None),
         ];
-        let classified = classify_open_prs(&prs);
+        let classified = classify_open_prs(&prs, &HashSet::new());
         let nums: Vec<_> = classified.iter().map(|p| p.number).collect();
         assert_eq!(nums, vec![1, 5, 7], "only the awaiting-you PRs surface");
+    }
+
+    // BUG-1490: the exact shape observed live on PR #2030 — GitHub's
+    // review_decision is empty (the refusal was recorded straight to the
+    // AIDA substrate via `aida review record`, never posted as a GitHub
+    // review), so `review_decision` alone cannot suppress it. The caller
+    // resolves the AIDA-recorded verdict and hands the PR number in via
+    // `local_blocking`; classify_open_prs must honour it independently of
+    // GitHub's (empty) verdict.
+    // trace:BUG-1490 | ai:claude
+    #[test]
+    fn aida_recorded_verdict_suppresses_pr_with_empty_github_review_decision() {
+        let prs = vec![pr(2030, Some("MERGEABLE"), Some("pass"), None)];
+        let mut local_blocking = HashSet::new();
+        local_blocking.insert(2030);
+        let classified = classify_open_prs(&prs, &local_blocking);
+        assert!(
+            classified.is_empty(),
+            "a PR with a recorded AIDA RequestChanges verdict at head must not be awaiting-you: {classified:?}"
+        );
+    }
+
+    // The sibling case: the same PR with no locally recorded verdict stays
+    // awaiting-you, so the new parameter only ever narrows, never widens.
+    // trace:BUG-1490 | ai:claude
+    #[test]
+    fn pr_without_local_verdict_still_surfaces() {
+        let prs = vec![pr(2030, Some("MERGEABLE"), Some("pass"), None)];
+        let classified = classify_open_prs(&prs, &HashSet::new());
+        assert_eq!(
+            classified.iter().map(|p| p.number).collect::<Vec<_>>(),
+            vec![2030]
+        );
     }
 
     #[test]
     fn header_count_collapses_findings_to_one_line_regardless_of_total() {
         let r = AwaitingReport {
-            mergeable_prs: classify_open_prs(&[pr(1, Some("MERGEABLE"), Some("pass"), None)]),
+            mergeable_prs: classify_open_prs(
+                &[pr(1, Some("MERGEABLE"), Some("pass"), None)],
+                &HashSet::new(),
+            ),
             findings_total: 17,
             ..Default::default()
         };
@@ -1632,7 +3124,7 @@ mod tests {
             .map(|n| pr(n, Some("MERGEABLE"), Some("pass"), None))
             .collect::<Vec<_>>();
         let r = AwaitingReport {
-            mergeable_prs: classify_open_prs(&prs),
+            mergeable_prs: classify_open_prs(&prs, &HashSet::new()),
             ..Default::default()
         };
         let mut buf = Vec::new();
@@ -1962,5 +3454,241 @@ mod tests {
             out.push(c);
         }
         out
+    }
+
+    fn reviewer_item(
+        spec_id: &str,
+        state: review_verdict::ReviewActionability,
+    ) -> ReviewerQueueItem {
+        ReviewerQueueItem {
+            spec_id: spec_id.to_string(),
+            title: format!("title for {spec_id}"),
+            state,
+        }
+    }
+
+    // BUG-1508 AC2/AC4/AC7: routed rows never vanish (all render, each
+    // annotated), and the depth figure everywhere it's printed is
+    // "actionable N of M routed" -- both numbers, because the gap between
+    // them is the signal.
+    #[test]
+    fn reviewer_rows_all_render_and_report_actionable_of_routed() {
+        let r = AwaitingReport {
+            reviewer_queue_items: vec![
+                reviewer_item("BUG-1", review_verdict::ReviewActionability::NeedsReview),
+                reviewer_item("BUG-2", review_verdict::ReviewActionability::AwaitingRework),
+                reviewer_item("BUG-3", review_verdict::ReviewActionability::Resolved),
+            ],
+            ..Default::default()
+        };
+
+        // The depth figure used for capacity decisions: actionable (1) of
+        // routed (3) -- not a bare routed count of 3.
+        let compact = r.compact_line().expect("populated report must have a line");
+        assert!(compact.contains("actionable 1 of 3 routed"), "{compact}");
+
+        let mut buf = Vec::new();
+        assert!(r.render(true, &mut buf).unwrap());
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(out.contains("reviewer: actionable 1 of 3 routed"), "{out}");
+        // AC2: none of the three rows vanish -- each is present, annotated
+        // by its own state.
+        assert!(out.contains("needs-review: BUG-1"), "{out}");
+        assert!(out.contains("awaiting-rework: BUG-2"), "{out}");
+        assert!(out.contains("resolved: BUG-3"), "{out}");
+    }
+
+    #[test]
+    fn reviewer_state_reaches_json() {
+        let r = AwaitingReport {
+            reviewer_queue_items: vec![reviewer_item(
+                "BUG-7",
+                review_verdict::ReviewActionability::AwaitingRework,
+            )],
+            ..Default::default()
+        };
+        let v = r.to_json();
+        assert_eq!(v["reviewer_queue_items"][0]["state"], "awaiting-rework");
+        assert_eq!(v["reviewer_actionable_of_routed"]["actionable"], 0);
+        assert_eq!(v["reviewer_actionable_of_routed"]["routed"], 1);
+    }
+
+    // BUG-1530: the reproduction from the bug report — a reviewer seat with
+    // advisor-owned findings, implementer-owned shelved/rework, and its own
+    // routed reviewer-queue row all populated at once. The reviewer's
+    // headline must lead with its own routed section and fold the other two
+    // away into a named "for other seats" count rather than leading with
+    // them or silently dropping them.
+    fn mixed_seat_report(role: &str) -> AwaitingReport {
+        AwaitingReport {
+            findings_total: 11,
+            shelved_total: 8,
+            reviewer_queue_items: vec![reviewer_item(
+                "BUG-9",
+                review_verdict::ReviewActionability::NeedsReview,
+            )],
+            role: Some(role.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn bug_1530_reviewer_headline_leads_with_own_routed_work_not_findings_or_rework() {
+        let r = mixed_seat_report("reviewer");
+
+        let compact = r.compact_line().expect("populated report must have a line");
+        assert!(compact.contains("actionable 1 of 1 routed"), "{compact}");
+        assert!(!compact.contains("finding"), "{compact}");
+        assert!(!compact.contains("in rework"), "{compact}");
+        // 11 findings + 8 shelved = 19 items folded away for other seats.
+        assert!(compact.contains("19 for other seats"), "{compact}");
+
+        let mut buf = Vec::new();
+        assert!(r.render(true, &mut buf).unwrap());
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(out.contains("reviewer: actionable 1 of 1 routed"), "{out}");
+        assert!(out.contains("needs-review: BUG-9"), "{out}");
+        assert!(!out.contains("finding"), "{out}");
+        assert!(!out.contains("shelved item"), "{out}");
+        assert!(out.contains("19 items routed to other seats"), "{out}");
+    }
+
+    #[test]
+    fn bug_1530_advisor_headline_leads_with_findings_not_reviewer_or_rework() {
+        let r = mixed_seat_report("advisor");
+
+        let compact = r.compact_line().expect("populated report must have a line");
+        assert!(compact.contains("11 findings"), "{compact}");
+        assert!(!compact.contains("actionable"), "{compact}");
+        assert!(!compact.contains("in rework"), "{compact}");
+        // 8 shelved + 1 reviewer row = 9 items folded away for other seats.
+        assert!(compact.contains("9 for other seats"), "{compact}");
+
+        let mut buf = Vec::new();
+        assert!(r.render(true, &mut buf).unwrap());
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(out.contains("finding"), "{out}");
+        assert!(!out.contains("needs-review: BUG-9"), "{out}");
+        assert!(!out.contains("shelved item"), "{out}");
+        assert!(out.contains("9 items routed to other seats"), "{out}");
+    }
+
+    #[test]
+    fn bug_1530_implementer_headline_leads_with_rework_not_findings_or_reviewer() {
+        let r = mixed_seat_report("implementer");
+
+        let compact = r.compact_line().expect("populated report must have a line");
+        assert!(compact.contains("8 in rework"), "{compact}");
+        assert!(!compact.contains("finding"), "{compact}");
+        assert!(!compact.contains("actionable"), "{compact}");
+        // 11 findings + 1 reviewer row = 12 items folded away for other seats.
+        assert!(compact.contains("12 for other seats"), "{compact}");
+    }
+
+    // Acceptance #5: the reviewer and advisor headlines differ, and each
+    // names its own routed section — a test that only checked one seat would
+    // pass vacuously.
+    #[test]
+    fn bug_1530_reviewer_and_advisor_headlines_differ_and_each_names_its_own_section() {
+        let reviewer_line = mixed_seat_report("reviewer").compact_line().unwrap();
+        let advisor_line = mixed_seat_report("advisor").compact_line().unwrap();
+        assert_ne!(reviewer_line, advisor_line);
+        assert!(reviewer_line.contains("routed"), "{reviewer_line}");
+        assert!(advisor_line.contains("findings"), "{advisor_line}");
+    }
+
+    // Acceptance: with no role set, today's unscoped behavior is unchanged —
+    // every channel appears, nothing is folded into a hidden count.
+    #[test]
+    fn bug_1530_no_role_keeps_todays_unscoped_behavior() {
+        let mut r = mixed_seat_report("reviewer");
+        r.role = None;
+
+        let compact = r.compact_line().expect("populated report must have a line");
+        assert!(compact.contains("11 findings"), "{compact}");
+        assert!(compact.contains("8 in rework"), "{compact}");
+        assert!(compact.contains("actionable 1 of 1 routed"), "{compact}");
+        assert!(!compact.contains("for other seats"), "{compact}");
+
+        let mut buf = Vec::new();
+        assert!(r.render(true, &mut buf).unwrap());
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(out.contains("finding"), "{out}");
+        assert!(out.contains("shelved item"), "{out}");
+        assert!(out.contains("needs-review: BUG-9"), "{out}");
+        assert!(!out.contains("routed to other seats"), "{out}");
+    }
+
+    // Acceptance #4: unshipped work isn't scoped to any seat — once a seat
+    // is known it is labelled project-wide rather than implied to be this
+    // seat's own gate; with no role it renders exactly as before.
+    #[test]
+    fn bug_1530_unshipped_work_labelled_project_wide_once_a_seat_is_known() {
+        let item = UnshippedWorkItem {
+            spec_id: "STORY-1".to_string(),
+            branch: "story-1".to_string(),
+            commits_ahead: 1,
+            age: "1h".to_string(),
+            recovery: "aida pr ship story-1".to_string(),
+            pr_state: "absent".to_string(),
+        };
+        let scoped = AwaitingReport {
+            unshipped_work: vec![item.clone()],
+            role: Some("reviewer".to_string()),
+            ..Default::default()
+        };
+        let unscoped = AwaitingReport {
+            unshipped_work: vec![item],
+            ..Default::default()
+        };
+        assert!(
+            scoped
+                .compact_line()
+                .unwrap()
+                .contains("unshipped (project-wide):1"),
+            "{}",
+            scoped.compact_line().unwrap()
+        );
+        assert!(
+            unscoped.compact_line().unwrap().contains("unshipped:1"),
+            "{}",
+            unscoped.compact_line().unwrap()
+        );
+    }
+
+    // The `dialog` alias normalizes to `advisor` at this boundary too, same
+    // as every other role-scoped surface.
+    #[test]
+    fn bug_1530_dialog_alias_normalizes_to_advisor_seat() {
+        assert_eq!(classify_seat(Some("dialog")), Some(AwaitingSeat::Advisor));
+        assert_eq!(classify_seat(Some("advisor")), Some(AwaitingSeat::Advisor));
+        assert_eq!(classify_seat(Some("")), None);
+        assert_eq!(classify_seat(None), None);
+    }
+
+    /// BUG-1481: the PR-2009 shape — `ci_rollup` already carries the
+    /// upstream-computed "missing" state (a required check's row never
+    /// showed up on the head) rather than "pass". A PR in that state must
+    /// not be classified as awaiting-you / mergeable, the same as a `fail`
+    /// or `pending` rollup.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn missing_required_check_is_not_awaiting_you() {
+        let missing = pr(2009, Some("MERGEABLE"), Some("missing"), None);
+        assert!(!is_awaiting_you(&missing, false));
+        let classified = classify_open_prs(&[missing], &HashSet::new());
+        assert!(
+            classified.is_empty(),
+            "a head missing a required check must not appear in mergeable_prs: {classified:?}"
+        );
+    }
+
+    /// Same shape but the required-check set itself couldn't be read at
+    /// all — must also not be classified as green.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn unknown_required_check_set_is_not_awaiting_you() {
+        let unknown = pr(2009, Some("MERGEABLE"), Some("unknown"), None);
+        assert!(!is_awaiting_you(&unknown, false));
     }
 }

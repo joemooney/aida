@@ -231,6 +231,27 @@ pub fn git_merge_completes(from: State) -> bool {
     )
 }
 
+/// BUG-1506: a Draft spec whose trailered commit is already on the default
+/// branch is the mirror image of [`git_merge_completes`]'s domain. It skipped
+/// BOTH the advisor triage (`Draft → Approved`) and every intermediate
+/// pipeline state, so a landed commit here is a different kind of evidence
+/// than for the already-triaged states above: it proves the CODE shipped, but
+/// not that skipping triage was intentional. Leaving it at Draft is strictly
+/// worse — a merged Draft reads as un-started backlog, inviting the very
+/// re-implementation/re-grooming this bug was filed to stop — but jumping it
+/// straight to the terminal `Completed` (as the already-triaged states do)
+/// would also silently override that skipped approval. Consistent with
+/// BUG-1454's "where the bump is ambiguous, prefer Done over Completed": the
+/// git event advances a landed Draft only as far as `Done` — visible and off
+/// the open-backlog shelf, but one explicit human confirmation short of
+/// terminal. `git_merge_completes` deliberately still excludes `Draft` (its
+/// own doc comment / BUG-328); this is a separate transition, not a widening
+/// of that one.
+// trace:BUG-1506 | ai:claude
+pub fn git_merge_lands_draft_at_done(from: State) -> bool {
+    matches!(from, State::Draft)
+}
+
 // ────────────────────────────────────────────────────────────────────
 // Phase 2d (TASK-741): cross-axis orthogonal invariants.
 //
@@ -991,6 +1012,30 @@ mod tests {
         // declared-only pseudo/Released states stay put.
         for s in [Start, Draft, Completed, Released, Rejected] {
             assert!(!git_merge_completes(s), "{s:?} must not be merge-eligible");
+        }
+    }
+
+    // trace:BUG-1506 | ai:claude
+    #[test]
+    fn git_merge_lands_draft_at_done_is_draft_only() {
+        use State::*;
+        assert!(git_merge_lands_draft_at_done(Draft));
+        for s in [
+            Start,
+            Approved,
+            Planned,
+            InProgress,
+            Done,
+            Completed,
+            Released,
+            Rejected,
+            Superseded,
+            NeedsAttention,
+        ] {
+            assert!(
+                !git_merge_lands_draft_at_done(s),
+                "{s:?} must not use the draft-landing path"
+            );
         }
     }
 

@@ -2887,6 +2887,7 @@ every = "1h"
             ts,
             spec: None,
             run_uuid: String::new(),
+            seat: None,
             kind,
         };
         // A week of historical merges before the job ever existed.
@@ -2963,6 +2964,7 @@ every = "1h"
             ts,
             spec: None,
             run_uuid: String::new(),
+            seat: None,
             kind,
         };
         let events_a = vec![
@@ -3182,6 +3184,7 @@ every = "1h"
             ts: at(12),
             spec: None,
             run_uuid: String::new(),
+            seat: None,
             kind: EventKind::MailReceived {
                 to: "advisor".into(),
             },

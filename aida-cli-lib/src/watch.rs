@@ -384,6 +384,48 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             format!("escalated to human: {}", reason),
         ),
         EventKind::PrMerged { pr } => ("pr-merged", format!("PR #{} merged", pr)),
+        // trace:BUG-1423 | ai:claude
+        EventKind::MergeHoldChanged { pr, placed, reason } => (
+            "merge-hold-changed",
+            format!(
+                "merge hold {} on PR #{pr}{}",
+                if *placed { "placed" } else { "lifted" },
+                reason
+                    .as_deref()
+                    .map(|r| format!(" — {r}"))
+                    .unwrap_or_default(),
+            ),
+        ),
+        // trace:TASK-1450 | ai:claude
+        EventKind::ReviewVerdictRecorded {
+            pr,
+            verdict,
+            reviewed_sha,
+        } => (
+            "review-verdict-recorded",
+            format!(
+                "review verdict `{verdict}` recorded{}{}",
+                pr.map(|n| format!(" for PR #{n}")).unwrap_or_default(),
+                reviewed_sha
+                    .as_deref()
+                    .map(|s| format!(" at {}", &s[..s.len().min(8)]))
+                    .unwrap_or_default(),
+            ),
+        ),
+        // trace:TASK-1450 | ai:claude
+        EventKind::DispositionChanged { before, after } => (
+            "disposition-changed",
+            format!("disposition changed: {before} → {after}"),
+        ),
+        // trace:TASK-1450 | ai:claude
+        EventKind::ExecutionModeChanged { before, after } => (
+            "execution-mode-changed",
+            format!(
+                "execution mode changed: {} → {}",
+                before.as_deref().unwrap_or("ungroomed"),
+                after.as_deref().unwrap_or("ungroomed"),
+            ),
+        ),
         EventKind::SpecCompleted {
             commit,
             pr,
@@ -446,6 +488,10 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             "supervisor mailbox has unread mail".to_string(),
         ),
         // trace:STORY-1043 | ai:codex
+        // TASK-1305: this event is a one-time "first seen" detection notice —
+        // it carries no `pr_state`/`recovery` and never renders an action
+        // hint, so it can't reproduce the no-PR-vs-open-PR collision. No
+        // change needed on this surface.
         EventKind::UnshippedWorkDetected {
             spec,
             branch,

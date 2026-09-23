@@ -91,6 +91,8 @@ fn ps_process_backed_lease_uses_active_pid() {
         |_| None,
         |_| None,
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -142,6 +144,8 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
         |_| None,
         |_| None,
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -160,11 +164,17 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
     assert!(d.hint.is_none());
 }
 
-/// TASK-152: when the same live pid has both a harness-worktree lease role and
-/// a transcript role, `aida ps` displays the transcript role because it names
-/// what the session is actually doing. The original lease role remains present
-/// for structured provenance.
-// trace:TASK-152 | ai:codex
+/// TASK-152: when the same live pid has both a harness-worktree lease role
+/// and a transcript role, `aida ps` displays the transcript role because the
+/// lease role here is the harness's generic Agent-tool placeholder
+/// (`tail_cmd::HARNESS_AGENT_TYPE`, "general-purpose") — it names no real
+/// role, so it carries no information worth defending. The original lease
+/// role remains present for structured provenance (`lease_role`). Restored
+/// after the BUG-1521 strict-review PROXY DECISION: a REAL recorded lease
+/// role is authoritative (see `ps_real_lease_role_beats_derived_jsonl_role`
+/// below), but the placeholder itself is not real and must not mask a
+/// derived signal that actually names the role.
+// trace:TASK-152 trace:BUG-1521 | ai:claude
 #[test]
 fn ps_role_prefers_live_jsonl_role_and_retains_lease_role() {
     let tmp = tempfile::tempdir().unwrap();
@@ -195,6 +205,8 @@ fn ps_role_prefers_live_jsonl_role_and_retains_lease_role() {
         |_| None,
         |path| (path == jsonl).then(|| "advisor".to_string()),
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -205,10 +217,12 @@ fn ps_role_prefers_live_jsonl_role_and_retains_lease_role() {
 
 /// TASK-153: the same role preference must hold when the lease joins to a
 /// resumed Claude transcript through the manifest, even if the live `/proc`
-/// row no longer carries the JSONL path. This is the long-lived advisor shape:
-/// `aida ps` should agree with `aida session conversations` instead of falling
-/// back to the harness lease's `general-purpose` role.
-// trace:TASK-153 | ai:codex
+/// row no longer carries the JSONL path. This is the long-lived advisor
+/// shape: `aida ps` should agree with `aida session conversations` instead
+/// of falling back to the harness lease's placeholder `general-purpose`
+/// role. Restored after the BUG-1521 PROXY DECISION alongside the sibling
+/// TASK-152 test above.
+// trace:TASK-153 trace:BUG-1521 | ai:claude
 #[test]
 fn ps_role_prefers_manifest_jsonl_role_when_live_jsonl_is_absent() {
     let tmp = tempfile::tempdir().unwrap();
@@ -233,12 +247,116 @@ fn ps_role_prefers_manifest_jsonl_role_when_live_jsonl_is_absent() {
         |_| None,
         |_| None,
         |lease_id| (lease_id == "l-role-manifest").then(|| "advisor".to_string()),
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].pid, Some(std::process::id()));
     assert_eq!(rows[0].role.as_deref(), Some("advisor"));
     assert_eq!(rows[0].lease_role.as_deref(), Some("general-purpose"));
+}
+
+/// BUG-1521: a lease that carries a REAL recorded role (not the harness
+/// placeholder) is authoritative and wins over a DIFFERENT derived jsonl
+/// role, even when a live transcript's heuristic text scan suggests
+/// otherwise. This is the mechanism the placeholder-only tests above don't
+/// cover: an `implementer` lease must never be overridden by an ambiguous
+/// `advisor` transcript match.
+// trace:BUG-1521 | ai:claude
+#[test]
+fn ps_real_lease_role_beats_derived_jsonl_role() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    let wt = tmp.path().join(".claude/worktrees/agent-real-role");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&wt).unwrap();
+    let jsonl = tmp.path().join("session.jsonl");
+
+    let mut l = ps_lease("l-real-role", worktree_lease::HARNESS_WORKTREE_SCOPE, wt);
+    l.role = Some("implementer".into());
+    l.active_pid = Some(std::process::id());
+
+    let live = vec![process_probe::LiveSession {
+        pid: std::process::id(),
+        cwd: repo,
+        jsonl: Some(jsonl.clone()),
+        stale_cwd: false,
+    }];
+
+    let (rows, _) = build_running_work(
+        &[],
+        &[l],
+        &live,
+        chrono::Utc::now(),
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| None,
+        |path| (path == jsonl).then(|| "advisor".to_string()),
+        |lease_id| (lease_id == "l-real-role").then(|| "product".to_string()),
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
+    );
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].role.as_deref(),
+        Some("implementer"),
+        "a real recorded lease role must win over both derived signals"
+    );
+    assert_eq!(rows[0].lease_role.as_deref(), Some("implementer"));
+}
+
+/// BUG-1521: when the lease only carries the harness placeholder, the
+/// manifest-joined role (TASK-153's stable `claude_session_id` join) wins
+/// over the live jsonl scan (TASK-152's ambiguous cwd/text-marker match) —
+/// the manifest role is next in the priority chain, ahead of jsonl, not
+/// merely a fallback when jsonl is silent.
+// trace:BUG-1521 | ai:claude
+#[test]
+fn ps_placeholder_lease_role_loses_to_manifest_role_over_jsonl_role() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    let wt = tmp.path().join(".claude/worktrees/agent-placeholder-order");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&wt).unwrap();
+    let jsonl = tmp.path().join("session.jsonl");
+
+    let mut l = ps_lease(
+        "l-placeholder-order",
+        worktree_lease::HARNESS_WORKTREE_SCOPE,
+        wt,
+    );
+    l.role = Some(tail_cmd::HARNESS_AGENT_TYPE.into());
+    l.active_pid = Some(std::process::id());
+
+    let live = vec![process_probe::LiveSession {
+        pid: std::process::id(),
+        cwd: repo,
+        jsonl: Some(jsonl.clone()),
+        stale_cwd: false,
+    }];
+
+    let (rows, _) = build_running_work(
+        &[],
+        &[l],
+        &live,
+        chrono::Utc::now(),
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| None,
+        |path| (path == jsonl).then(|| "advisor".to_string()),
+        |lease_id| (lease_id == "l-placeholder-order").then(|| "product".to_string()),
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
+    );
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].role.as_deref(),
+        Some("product"),
+        "the manifest role must win over the jsonl role once the lease role is only the placeholder"
+    );
 }
 
 /// BUG-752: a harness lease with NO pid signal at all (legacy lease from a
@@ -270,6 +388,8 @@ fn ps_harness_lease_without_pid_is_unknown_not_salvageable() {
         |_| None,
         |_| None,
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -315,6 +435,8 @@ fn ps_non_harness_dead_dirty_lease_still_salvageable() {
         |_| None,
         |_| None,
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -611,6 +733,8 @@ fn build_running_work_resolves_specs_and_orphans_on_fixture() {
         |_| None,
         |_| None,
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     // Row: TASK-1's scope resolved to its display id; live pid attached.
@@ -714,6 +838,8 @@ fn build_running_work_surfaces_the_worktree_lock_owner() {
         |_| None,
         |_| None,
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     let locked_row = rows
@@ -963,6 +1089,8 @@ fn build_running_work_carries_pid_start_time() {
         |_| Some(pid_started),
         |_| None,
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -988,6 +1116,8 @@ fn build_running_work_carries_pid_start_time() {
         |_| Some(pid_started),
         |_| None,
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].pid, None);
@@ -1062,6 +1192,8 @@ fn build_running_work_elapsed_is_process_uptime_when_adopted() {
         |_| Some(now - chrono::Duration::minutes(3)),
         |_| None,
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(
@@ -1080,6 +1212,8 @@ fn build_running_work_elapsed_is_process_uptime_when_adopted() {
         |_| Some(lease_born),
         |_| None,
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(
@@ -1272,6 +1406,8 @@ fn ps_freshly_hand_entered_spec_reads_awaiting_agent_not_orphaned() {
         |_| None,
         |_| None,
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     assert_eq!(rows.len(), 1);
@@ -1351,6 +1487,8 @@ fn ps_dead_agent_lease_still_flags_stalled_after_the_grace_window() {
         |_| None,
         |_| None,
         |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
     );
 
     let entered_row = rows.iter().find(|r| r.lease.id == "l-entered-old").unwrap();
@@ -1440,4 +1578,326 @@ fn mark_lease_manual_enter_round_trips_and_preserves_foreign_keys() {
     mark_lease_manual_enter(root, &lease.id).expect("re-enter is idempotent");
     let again: SessionLease = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     assert!(again.manual_enter_at.unwrap() >= stamped);
+}
+
+/// BUG-1521: the last link in the priority chain — a lease stuck on the
+/// harness placeholder, with NEITHER a manifest role NOR a jsonl role
+/// available, falls back to the placeholder itself rather than leaving the
+/// row roleless. Replaces the former
+/// `ps_role_and_identity_agree_between_default_and_all_views`, which
+/// compared a `build_running_work` row against itself (the default-view and
+/// `--all` "views" were both slices of the identical `rows` Vec, so the
+/// assertion was tautological and never exercised the two views' actual
+/// separate rendering code paths) — this test instead exercises the real
+/// resolution order directly, completing the chain the
+/// TASK-152/TASK-153/`ps_real_lease_role_beats_derived_jsonl_role`/
+/// `ps_placeholder_lease_role_loses_to_manifest_role_over_jsonl_role` tests
+/// each cover one link of.
+// trace:BUG-1521 | ai:claude
+#[test]
+fn ps_placeholder_lease_role_is_the_last_resort_when_nothing_else_resolves() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut l = ps_lease("l-agree-live", "TASK-1", tmp.path().to_path_buf());
+    l.role = Some(tail_cmd::HARNESS_AGENT_TYPE.into());
+    l.active_pid = Some(std::process::id());
+
+    let live = vec![process_probe::LiveSession {
+        pid: std::process::id(),
+        cwd: tmp.path().to_path_buf(),
+        jsonl: None,
+        stale_cwd: false,
+    }];
+
+    let (rows, _) = build_running_work(
+        &[],
+        &[l],
+        &live,
+        chrono::Utc::now(),
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
+    );
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].role.as_deref(),
+        Some(tail_cmd::HARNESS_AGENT_TYPE),
+        "the placeholder is shown when no other signal resolves a role"
+    );
+    assert_eq!(
+        rows[0].lease_role.as_deref(),
+        Some(tail_cmd::HARNESS_AGENT_TYPE)
+    );
+}
+
+/// BUG-1521 acceptance #4: a regression guard for the reported failure mode —
+/// the CALLING shell's own role bleeding onto a DIFFERENT listed session's
+/// row (observed as `aida ps` showing the caller's `AIDA_SESSION_ROLE` for a
+/// session that wasn't the caller's). Simulated here by a `role_probe` that
+/// returns a role foreign to the lease (standing in for an ambiguous
+/// cwd/transcript match that picked up some OTHER live session's text) — the
+/// listed session must keep the role from its OWN record, not the probe's.
+/// Uses a REAL recorded role (`implementer`), not the harness placeholder:
+/// under the BUG-1521 priority order the placeholder itself falls through to
+/// the derived signals (see `ps_placeholder_lease_role_loses_to_manifest_role_over_jsonl_role`),
+/// so only a real role is a valid fixture for "must never be overridden by a
+/// foreign probe match".
+// trace:BUG-1521 | ai:claude
+#[test]
+fn ps_listed_session_keeps_its_own_role_not_a_foreign_probe_match() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wt = tmp.path().join(".claude/worktrees/agent-foreign");
+    std::fs::create_dir_all(&wt).unwrap();
+    let jsonl = tmp.path().join("someone-elses-session.jsonl");
+
+    let mut l = ps_lease(
+        "l-not-caller",
+        worktree_lease::HARNESS_WORKTREE_SCOPE,
+        wt.clone(),
+    );
+    l.role = Some("implementer".into());
+    l.active_pid = Some(std::process::id());
+
+    let live = vec![process_probe::LiveSession {
+        pid: std::process::id(),
+        cwd: wt,
+        jsonl: Some(jsonl.clone()),
+        stale_cwd: false,
+    }];
+
+    // The probe stands in for a text scan that (wrongly) resolved to the
+    // CALLING shell's own role, e.g. because the caller's own live session
+    // shares this lease's worktree path.
+    let (rows, _) = build_running_work(
+        &[],
+        &[l],
+        &live,
+        chrono::Utc::now(),
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| None,
+        |path| (path == jsonl).then(|| "product".to_string()),
+        |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
+    );
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].role.as_deref(),
+        Some("implementer"),
+        "the listed session must keep its own recorded role, not the caller's/foreign one"
+    );
+    assert_ne!(
+        rows[0].role.as_deref(),
+        Some("product"),
+        "a foreign/caller role must never be attributed to this session's row"
+    );
+}
+
+// ============================================================================
+// BUG-1553: seat activity — working / long tool call / suspended / unknown,
+// distinct rendering. No state asserts "blocked on your approval" — that
+// needs a recorded Notification-hook marker (follow-up task); see the
+// 2026-09-23 strict-review PROXY DECISION.
+// ============================================================================
+
+mod bug_1553_seat_activity {
+    use super::*;
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn pending_tool_use_with_no_result_past_threshold_reads_long_tool_call() {
+        let now = chrono::Utc::now();
+        let old = now - chrono::Duration::seconds(LONG_TOOL_CALL_THRESHOLD_SECS + 30);
+        let tail = vec![format!(
+            r#"{{"type":"assistant","timestamp":"{}","message":{{"content":[{{"type":"tool_use","id":"t1","name":"Bash"}}]}}}}"#,
+            old.to_rfc3339()
+        )];
+        let activity = classify_seat_activity(Some(&tail), false, now);
+        match activity {
+            SeatActivity::LongToolCall { tool, secs } => {
+                assert_eq!(tool, Some("Bash".to_string()));
+                assert!(secs >= LONG_TOOL_CALL_THRESHOLD_SECS);
+            }
+            other => panic!("expected LongToolCall, got {other:?}"),
+        }
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn resolved_tool_call_reads_working_even_when_old() {
+        let now = chrono::Utc::now();
+        let old = now - chrono::Duration::seconds(LONG_TOOL_CALL_THRESHOLD_SECS + 30);
+        let tail = vec![
+            format!(
+                r#"{{"type":"assistant","timestamp":"{}","message":{{"content":[{{"type":"tool_use","id":"t1","name":"Bash"}}]}}}}"#,
+                old.to_rfc3339()
+            ),
+            r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1"}]}}"#
+                .to_string(),
+        ];
+        let activity = classify_seat_activity(Some(&tail), false, now);
+        assert_eq!(activity, SeatActivity::Working);
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn pending_tool_use_within_threshold_reads_working_not_long_tool_call() {
+        let now = chrono::Utc::now();
+        let recent = now - chrono::Duration::seconds(5);
+        let tail = vec![format!(
+            r#"{{"type":"assistant","timestamp":"{}","message":{{"content":[{{"type":"tool_use","id":"t1","name":"Bash"}}]}}}}"#,
+            recent.to_rfc3339()
+        )];
+        let activity = classify_seat_activity(Some(&tail), false, now);
+        assert_eq!(activity, SeatActivity::Working);
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn no_readable_tail_reads_unknown_never_working() {
+        let now = chrono::Utc::now();
+        let activity = classify_seat_activity(None, false, now);
+        assert_eq!(activity, SeatActivity::Unknown);
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn stopped_process_reads_suspended_regardless_of_transcript() {
+        let now = chrono::Utc::now();
+        // No pending tool at all in the tail — the stopped-process signal
+        // alone must still trip Suspended.
+        let tail: Vec<String> = vec![];
+        let activity = classify_seat_activity(Some(&tail), true, now);
+        assert_eq!(activity, SeatActivity::Suspended);
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn tail_starting_mid_utf8_character_still_parses() {
+        // Simulate the 64KB seek landing mid-character: build a file where
+        // the byte at `start = len - max_bytes` falls INSIDE a multi-byte
+        // UTF-8 sequence ("€" = 0xE2 0x82 0xAC), so the seeked-to tail opens
+        // on a dangling continuation byte. `read_to_end` + `from_utf8_lossy`
+        // must tolerate this (replacing the stray bytes) rather than
+        // failing the whole read the way `read_to_string` would.
+        let now = chrono::Utc::now();
+        let json_line = format!(
+            r#"{{"type":"assistant","timestamp":"{}","message":{{"content":[{{"type":"tool_use","id":"t1","name":"Bash"}}]}}}}"#,
+            now.to_rfc3339()
+        );
+        let prefix = b"padding before the multi-byte char";
+        let euro = "€".as_bytes(); // 0xE2 0x82 0xAC — 3 bytes
+        let mut full = Vec::new();
+        full.extend_from_slice(prefix);
+        full.extend_from_slice(euro);
+        full.push(b'\n');
+        full.extend_from_slice(json_line.as_bytes());
+        full.push(b'\n');
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), &full).unwrap();
+
+        // Seek to one byte INTO the euro sequence — a genuine mid-character
+        // split, not byte 0.
+        let start = prefix.len() + 1;
+        let max_bytes = (full.len() - start) as u64;
+        let lines = read_transcript_tail(tmp.path(), max_bytes);
+        assert!(lines.is_some(), "a mid-character tail must still parse");
+        let lines = lines.unwrap();
+        assert!(
+            lines.iter().any(|l| l.contains("tool_use")),
+            "the well-formed trailing line must survive lossy decoding: {lines:?}"
+        );
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn the_four_states_plus_none_render_differently_in_build_running_work() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let mut working = ps_lease("l-working", "STORY-1", tmp.path().join("w"));
+        working.active_pid = Some(std::process::id());
+        let mut long_call = ps_lease("l-long-call", "STORY-2", tmp.path().join("b"));
+        long_call.active_pid = Some(std::process::id());
+        let mut suspended = ps_lease("l-suspended", "STORY-4", tmp.path().join("s"));
+        suspended.active_pid = Some(std::process::id());
+        let mut unknown = ps_lease("l-unknown", "STORY-3", tmp.path().join("u"));
+        unknown.active_pid = Some(std::process::id());
+
+        let live: Vec<process_probe::LiveSession> = vec![];
+
+        let (rows, _) = build_running_work(
+            &[],
+            &[working, long_call, suspended, unknown],
+            &live,
+            chrono::Utc::now(),
+            |_| dispatch_health_ps::WorktreeGitProbe::default(),
+            |_| None,
+            |_| None,
+            |_| None,
+            |_| None,
+            |_| MailIdentityStatus::Unknown,
+            |l: &SessionLease, _pid: u32| match l.id.as_str() {
+                "l-working" => SeatActivity::Working,
+                "l-long-call" => SeatActivity::LongToolCall {
+                    tool: Some("Bash".to_string()),
+                    secs: 300,
+                },
+                "l-suspended" => SeatActivity::Suspended,
+                _ => SeatActivity::Unknown,
+            },
+        );
+
+        assert_eq!(rows.len(), 4);
+        let get = |id: &str| rows.iter().find(|r| r.lease.id == id).unwrap();
+        assert_eq!(get("l-working").activity, Some(SeatActivity::Working));
+        assert_eq!(
+            get("l-long-call").activity,
+            Some(SeatActivity::LongToolCall {
+                tool: Some("Bash".to_string()),
+                secs: 300,
+            })
+        );
+        assert_eq!(get("l-suspended").activity, Some(SeatActivity::Suspended));
+        assert_eq!(get("l-unknown").activity, Some(SeatActivity::Unknown));
+
+        // Four DISTINCT non-None values — none collapses into another.
+        let all: std::collections::HashSet<_> =
+            rows.iter().map(|r| format!("{:?}", r.activity)).collect();
+        assert_eq!(all.len(), 4, "all four activity states must be distinct");
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn dormant_or_stale_rows_have_no_activity_verdict() {
+        // No live pid at all → nothing to classify, activity stays None —
+        // distinct from Unknown (which means "tried to check, couldn't").
+        let l = ps_lease(
+            "l-dead",
+            "STORY-4",
+            std::path::PathBuf::from("/nonexistent"),
+        );
+        let live: Vec<process_probe::LiveSession> = vec![];
+        let (rows, _) = build_running_work(
+            &[],
+            &[l],
+            &live,
+            chrono::Utc::now(),
+            |_| dispatch_health_ps::WorktreeGitProbe::default(),
+            |_| None,
+            |_| None,
+            |_| None,
+            |_| None,
+            |_| MailIdentityStatus::Unknown,
+            |_, _| SeatActivity::Working,
+        );
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].state, LeaseState::Stale);
+        assert_eq!(rows[0].activity, None);
+    }
 }

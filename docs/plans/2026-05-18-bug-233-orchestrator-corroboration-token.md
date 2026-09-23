@@ -27,7 +27,7 @@ orchestrate(BUG-233)
   │           └─ claude session: skill runs `aida orchestrator status` → "orchestrated"
   ├─ run_reviewer:     aida queue work PR-N      env: AIDA_AUTO_COMPLETE=1 + _TOKEN=<uuid>
   │  (Drop) RunMarkerGuard removes the marker when orchestrate() returns
-  
+
 standalone:  aida queue work BUG-233   (no env)        → detect() → Interactive
 leaked var:  AIDA_AUTO_COMPLETE=1, no token / dead pid  → detect() → Uncorroborated → note
 ```

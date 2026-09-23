@@ -145,16 +145,43 @@ pub(crate) fn ci_idle_window_secs(project_root: &std::path::Path) -> u64 {
         .unwrap_or(DEFAULT_CI_IDLE_SECS)
 }
 
+/// TASK-1453: `ci_wait_verdict` treats an absolute ceiling of `0` as "disabled
+/// — never fires", so `ci_absolute = 0` / `AIDA_WORKER_CI_ABSOLUTE=0` is a real
+/// unbounded-hang risk rather than the "no limit" an operator might intend.
+/// `ci_absolute_ceiling_secs` clamps a resolved `0` up to this maximum instead
+/// of passing it through, so a CI wait is always eventually bounded. 4h is
+/// comfortably above [`DEFAULT_CI_ABSOLUTE_SECS`] (90 min) — generous headroom
+/// for a legitimately slow pipeline without permitting a forever-wait.
+// trace:TASK-1453 | ai:claude
+pub(crate) const MAX_CI_ABSOLUTE_SECS: u64 = 14_400; // 4h
+
 /// Absolute ceiling (seconds) for the CI wait. `AIDA_WORKER_CI_ABSOLUTE` has
 /// precedence over `[drain] ci_absolute`; default
-/// [`DEFAULT_CI_ABSOLUTE_SECS`].
-// trace:TASK-968 trace:BUG-1275 | ai:claude+codex
+/// [`DEFAULT_CI_ABSOLUTE_SECS`]. A resolved value of `0` is clamped to
+/// [`MAX_CI_ABSOLUTE_SECS`] with a warning rather than disabling the timer.
+// trace:TASK-968 trace:BUG-1275 trace:TASK-1453 | ai:claude+codex
 pub(crate) fn ci_absolute_ceiling_secs(project_root: &std::path::Path) -> u64 {
-    std::env::var("AIDA_WORKER_CI_ABSOLUTE")
+    let resolved = std::env::var("AIDA_WORKER_CI_ABSOLUTE")
         .ok()
         .and_then(|v| v.trim().parse::<u64>().ok())
         .or_else(|| crate::read_drain_config(project_root).ci_absolute)
-        .unwrap_or(DEFAULT_CI_ABSOLUTE_SECS)
+        .unwrap_or(DEFAULT_CI_ABSOLUTE_SECS);
+    clamp_ci_absolute_ceiling(resolved)
+}
+
+/// Pure clamp for [`ci_absolute_ceiling_secs`] — split out so the zero-value
+/// behavior is unit-testable without env/config plumbing.
+// trace:TASK-1453 | ai:claude
+pub(crate) fn clamp_ci_absolute_ceiling(resolved: u64) -> u64 {
+    if resolved == 0 {
+        eprintln!(
+            "  ⚠ ci_absolute=0 would wait forever — clamped to {}h",
+            MAX_CI_ABSOLUTE_SECS / 3600
+        );
+        MAX_CI_ABSOLUTE_SECS
+    } else {
+        resolved
+    }
 }
 
 #[cfg(test)]
@@ -187,6 +214,22 @@ mod tests {
         assert_eq!(
             ci_wait_verdict(4800, 30, 600, 5400),
             CiWaitVerdict::Continue
+        );
+    }
+
+    // trace:TASK-1453 | ai:claude
+    #[test]
+    fn zero_ci_absolute_is_clamped_not_unbounded() {
+        assert_eq!(clamp_ci_absolute_ceiling(0), MAX_CI_ABSOLUTE_SECS);
+    }
+
+    // trace:TASK-1453 | ai:claude
+    #[test]
+    fn nonzero_ci_absolute_passes_through_unclamped() {
+        assert_eq!(clamp_ci_absolute_ceiling(120), 120);
+        assert_eq!(
+            clamp_ci_absolute_ceiling(DEFAULT_CI_ABSOLUTE_SECS),
+            DEFAULT_CI_ABSOLUTE_SECS
         );
     }
 

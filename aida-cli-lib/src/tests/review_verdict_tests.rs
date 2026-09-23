@@ -20,6 +20,8 @@ fn rc(kind_raw: &str, sha: Option<&str>) -> RecordedVerdict {
         findings: Vec::new(),
         surviving_findings: Vec::new(),
         recorded_by: None,
+        closed_by_merge: None,
+        closed_at: None,
     }
 }
 
@@ -231,6 +233,26 @@ fn gate_proceeds_with_no_verdict_or_a_passing_one() {
         queue_done_verdict_gate("TASK-5", Some(&approved), TipRelation::AtReviewedSha),
         VerdictGate::Proceed
     );
+}
+
+// An unrecognised verdict word must refuse, not silently proceed as though
+// it were an approval — the same fail-open shape as a Skipped preflight
+// guard funnelling into Open.
+// trace:BUG-1507 | ai:claude (PRIN-5: absent is not good evidence)
+#[test]
+fn gate_refuses_an_unrecognised_verdict_word() {
+    let mystery = rc("mostly fine", Some("e49317ecafe0"));
+    match queue_done_verdict_gate("TASK-5", Some(&mystery), TipRelation::AtReviewedSha) {
+        VerdictGate::Refuse(lines) => {
+            let joined = lines.join("\n");
+            assert!(joined.contains("unrecognised verdict"), "{joined}");
+            assert!(
+                joined.contains("mostly fine"),
+                "names the raw word: {joined}"
+            );
+        }
+        other => panic!("expected a refusal, got {other:?}"),
+    }
 }
 
 #[test]
@@ -1011,4 +1033,379 @@ fn explicit_path_writer_preserves_displaced_reviewer_evidence() {
     assert_eq!(value["rounds"][0]["recorded_by"], "reviewer-a");
     assert_eq!(value["rounds"][0]["verdict"], "approved");
     assert!(verdict_conflict_for_current_sha(&body).is_some());
+}
+
+// trace:BUG-1508 | ai:claude
+#[test]
+fn no_verdict_needs_review() {
+    assert_eq!(
+        review_actionability(None, TipRelation::Unknown),
+        ReviewActionability::NeedsReview
+    );
+}
+
+// trace:BUG-1508 | ai:claude
+#[test]
+fn blocking_verdict_at_current_head_is_awaiting_rework() {
+    let v = rc("request-changes", Some("aaaa"));
+    assert_eq!(
+        review_actionability(Some(&v), TipRelation::AtReviewedSha),
+        ReviewActionability::AwaitingRework
+    );
+}
+
+// trace:BUG-1508 | ai:claude
+#[test]
+fn approving_verdict_at_current_head_is_resolved() {
+    let v = rc("approved", Some("aaaa"));
+    assert_eq!(
+        review_actionability(Some(&v), TipRelation::AtReviewedSha),
+        ReviewActionability::Resolved
+    );
+}
+
+// trace:BUG-1508 | ai:claude
+#[test]
+fn head_advanced_past_a_blocking_verdict_needs_review_again() {
+    // Criterion 3: once the head moves past what was reviewed, the entry is
+    // actionable again -- even though the last word was "changes requested".
+    let v = rc("request-changes", Some("aaaa"));
+    assert_eq!(
+        review_actionability(Some(&v), TipRelation::AdvancedPast),
+        ReviewActionability::NeedsReview
+    );
+}
+
+// trace:BUG-1508 | ai:claude
+#[test]
+fn rewritten_branch_needs_review_even_with_a_prior_approval() {
+    let v = rc("approved", Some("aaaa"));
+    assert_eq!(
+        review_actionability(Some(&v), TipRelation::Rewritten),
+        ReviewActionability::NeedsReview
+    );
+}
+
+// trace:BUG-1508 | ai:claude
+#[test]
+fn permanently_indeterminate_verdict_is_treated_as_absent() {
+    // Criterion 8: a verdict with no reviewed_sha can never be placed against
+    // a head. classify_tip_relation already reports this as Unknown, and
+    // Unknown must NOT be read as "covers the current head" -- the reassuring
+    // reading is exactly the PRIN-5 violation this spec exists to prevent.
+    let v = rc("request-changes", None);
+    let relation = classify_tip_relation(v.reviewed_sha.as_deref(), Some("bbbb"), None);
+    assert_eq!(relation, TipRelation::Unknown);
+    assert_eq!(
+        review_actionability(Some(&v), relation),
+        ReviewActionability::NeedsReview
+    );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// BUG-1529: closing a refusal's verdict record when its reworked PR merges.
+// ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn close_verdict_on_merge_stamps_a_blocking_verdict() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    record_verdict(
+        root,
+        "STORY-1",
+        Some("request-changes"),
+        Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        None,
+        Some("three blocking defects"),
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+
+    let closed = close_verdict_on_merge(root, "STORY-1", "cccccccccccc").unwrap();
+    assert!(closed, "a blocking verdict must be closeable");
+
+    let v = read_recorded_verdict(root, "STORY-1").expect("verdict still parses");
+    assert!(v.is_closed());
+    assert_eq!(v.closed_by_merge.as_deref(), Some("cccccccccccc"));
+    assert!(v.closed_at.is_some());
+    // The refusal itself is untouched -- criterion 2: closing is not a fresh
+    // approving review.
+    assert_eq!(v.kind, VerdictKind::RequestChanges);
+    assert_eq!(v.summary.as_deref(), Some("three blocking defects"));
+}
+
+#[test]
+fn close_verdict_on_merge_is_a_no_op_for_a_non_blocking_verdict() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    record_verdict(
+        root,
+        "STORY-2",
+        Some("approved"),
+        Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        None,
+        None,
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+
+    assert!(!close_verdict_on_merge(root, "STORY-2", "cccccccccccc").unwrap());
+    let v = read_recorded_verdict(root, "STORY-2").unwrap();
+    assert!(!v.is_closed());
+}
+
+#[test]
+fn close_verdict_on_merge_never_overwrites_the_first_closer() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    record_verdict(
+        root,
+        "STORY-3",
+        Some("request-changes"),
+        Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        None,
+        None,
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+
+    assert!(close_verdict_on_merge(root, "STORY-3", "first-sha").unwrap());
+    // A second call (e.g. a re-run of the auto-bump scan) must not clobber
+    // the original closing reference.
+    assert!(!close_verdict_on_merge(root, "STORY-3", "second-sha").unwrap());
+    let v = read_recorded_verdict(root, "STORY-3").unwrap();
+    assert_eq!(v.closed_by_merge.as_deref(), Some("first-sha"));
+}
+
+#[test]
+fn close_verdict_on_merge_is_a_no_op_with_no_file_or_empty_ref() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    assert!(!close_verdict_on_merge(root, "STORY-4", "some-sha").unwrap());
+
+    record_verdict(
+        root,
+        "STORY-5",
+        Some("rejected"),
+        Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        None,
+        None,
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+    assert!(!close_verdict_on_merge(root, "STORY-5", "   ").unwrap());
+}
+
+#[test]
+fn outstanding_refusal_query_excludes_closed_and_completed_specs() {
+    // A live refusal, spec still open: outstanding.
+    let live = rc("request-changes", Some("aaaa"));
+    assert!(is_outstanding_refusal(&live, false));
+
+    // Same refusal, but the spec is Completed -- criterion 4's fallback for
+    // the pre-existing corpus this fix cannot retroactively rewrite.
+    assert!(!is_outstanding_refusal(&live, true));
+
+    // A refusal closed by a merge is not outstanding even while the spec
+    // status is unknown/open in the caller's view.
+    let mut closed = rc("request-changes", Some("aaaa"));
+    closed.closed_by_merge = Some("deadbeef".to_string());
+    assert!(!is_outstanding_refusal(&closed, false));
+
+    // An approval was never a refusal.
+    let approved = rc("approved", Some("aaaa"));
+    assert!(!is_outstanding_refusal(&approved, false));
+}
+
+// trace:BUG-1529 | ai:claude
+#[test]
+fn a_closed_verdict_reads_resolved_regardless_of_tip_relation() {
+    // The head has necessarily moved past the reviewed sha by the time a
+    // merge closes the verdict, so AdvancedPast/Rewritten/Unknown must not
+    // reroute a closed record back to NeedsReview / AwaitingRework.
+    let mut v = rc("request-changes", Some("aaaa"));
+    v.closed_by_merge = Some("deadbeef".to_string());
+    for relation in [
+        TipRelation::AtReviewedSha,
+        TipRelation::AdvancedPast,
+        TipRelation::Rewritten,
+        TipRelation::Unknown,
+    ] {
+        assert_eq!(
+            review_actionability(Some(&v), relation),
+            ReviewActionability::Resolved,
+            "closed verdict should read Resolved at relation {relation:?}"
+        );
+    }
+}
+
+// BUG-1529 review fix: a new round must not inherit the previous round's
+// close, and a closed refusal must not suppress a later PR.
+// trace:BUG-1529 | ai:claude
+#[test]
+fn a_fresh_refusal_after_a_close_is_not_closed() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let rc = |sha: &str| {
+        record_verdict(
+            root,
+            "STORY-9",
+            Some("request-changes"),
+            Some(sha),
+            None,
+            Some("blocking"),
+            &[],
+            "reviewer-a",
+        )
+        .unwrap();
+    };
+    rc("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    assert!(close_verdict_on_merge(root, "STORY-9", "cccccccccccc").unwrap());
+    assert!(read_recorded_verdict(root, "STORY-9").unwrap().is_closed());
+    rc("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    let v = read_recorded_verdict(root, "STORY-9").unwrap();
+    assert!(!v.is_closed(), "a new round must not inherit the old close");
+    assert_eq!(v.kind, VerdictKind::RequestChanges);
+}
+
+// trace:BUG-1529 | ai:claude
+#[test]
+fn a_closed_refusal_does_not_suppress_a_later_pr() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    // Sha-less refusal: were it live, it would be Unverifiable and suppress.
+    record_verdict(
+        root,
+        "STORY-8",
+        Some("request-changes"),
+        None,
+        None,
+        Some("blocking"),
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+    let live = read_recorded_verdict(root, "STORY-8").unwrap();
+    assert!(
+        crate::awaiting_you::classify_pr_review(std::slice::from_ref(&live), Some("dddddddd"))
+            .suppressed,
+        "control: a live sha-less refusal suppresses"
+    );
+    assert!(close_verdict_on_merge(root, "STORY-8", "cccccccccccc").unwrap());
+    let closed = read_recorded_verdict(root, "STORY-8").unwrap();
+    assert!(
+        !crate::awaiting_you::classify_pr_review(std::slice::from_ref(&closed), Some("dddddddd"))
+            .suppressed,
+        "a closed refusal must not suppress a later PR"
+    );
+}
+
+// BUG-1571: the handshake write must fail LOUDLY, not silently, when the
+// artefact cannot actually land. Simulated by pointing the target path at a
+// read-only directory: `create_dir_all` on an existing dir is a no-op, so
+// the write itself is what trips, exactly like a permissions/quota/disk
+// failure in the field would.
+// trace:BUG-1571 | ai:claude
+#[cfg(unix)]
+#[test]
+fn pr_keyed_write_reports_failure_honestly_when_the_directory_is_read_only() {
+    use std::os::unix::fs::PermissionsExt;
+    // Root bypasses directory permissions (CAP_DAC_OVERRIDE), so a read-only
+    // directory cannot force the failure this test needs. trace:BUG-1571
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipping: running as root, directory permissions are not enforced");
+        return;
+    }
+
+    let tmp = TempDir::new().unwrap();
+    let locked_dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&locked_dir).unwrap();
+    let path = locked_dir.join("PR-9001.json");
+
+    let mut perms = std::fs::metadata(&locked_dir).unwrap().permissions();
+    perms.set_mode(0o555); // read + execute, no write
+    std::fs::set_permissions(&locked_dir, perms.clone()).unwrap();
+
+    let result = record_verdict_at_path(
+        tmp.path(),
+        &path,
+        Some("approved"),
+        Some("ac772eaca9"),
+        Some("topic"),
+        Some("looks good"),
+        &[],
+        "reviewer-a",
+    );
+
+    // Restore write access so TempDir can clean itself up on drop.
+    let mut restore = perms;
+    restore.set_mode(0o755);
+    std::fs::set_permissions(&locked_dir, restore).unwrap();
+
+    let err = result
+        .expect_err("a write that cannot land must be reported as an error, never as a success");
+    let message = err.to_string();
+    assert!(
+        message.contains("PR-9001.json"),
+        "the failure must name the artefact that did not land: {message}"
+    );
+    assert!(
+        !path.exists(),
+        "the artefact must genuinely be absent when the write is reported as failed"
+    );
+}
+
+// BUG-1571: a caller layering extra fields onto build_verdict_object (the
+// orchestrator's phase-3 handshake overlay) and committing with
+// write_verdict_object gets the same honest-failure guarantee as the
+// single-shot record_verdict_at_path path.
+// trace:BUG-1571 | ai:claude
+#[cfg(unix)]
+#[test]
+fn layered_handshake_write_reports_failure_honestly_when_the_directory_is_read_only() {
+    use std::os::unix::fs::PermissionsExt;
+    // Root bypasses directory permissions (CAP_DAC_OVERRIDE), so a read-only
+    // directory cannot force the failure this test needs. trace:BUG-1571
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipping: running as root, directory permissions are not enforced");
+        return;
+    }
+
+    let tmp = TempDir::new().unwrap();
+    let locked_dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&locked_dir).unwrap();
+    let path = locked_dir.join("PR-9002.json");
+
+    let obj = build_verdict_object(
+        tmp.path(),
+        &path,
+        Some("approved"),
+        Some("ac772eaca9"),
+        Some("topic"),
+        Some("looks good"),
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+
+    let mut perms = std::fs::metadata(&locked_dir).unwrap().permissions();
+    perms.set_mode(0o555);
+    std::fs::set_permissions(&locked_dir, perms.clone()).unwrap();
+
+    let result = write_verdict_object(&path, &obj);
+
+    let mut restore = perms;
+    restore.set_mode(0o755);
+    std::fs::set_permissions(&locked_dir, restore).unwrap();
+
+    let err = result.expect_err("a failed layered write must surface as an error");
+    assert!(
+        err.to_string().contains("PR-9002.json"),
+        "the failure must name the artefact that did not land: {err}"
+    );
+    assert!(!path.exists(), "the artefact must genuinely be absent");
 }

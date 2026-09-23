@@ -914,6 +914,21 @@ pub enum ReviewCommand {
         #[clap(long)]
         dry_run: bool,
     },
+
+    /// Report specs stranded by a refusal at the PR's current head: still
+    /// Done, unheld, unqueued. Read-only by default; `--fix` applies the
+    /// same protection a fresh refusal gets (merge hold + Needs Attention).
+    Stranded {
+        /// Emit the raw report as JSON.
+        #[clap(long)]
+        json: bool,
+
+        /// Explicit opt-in remediation: hold the PR and park the spec in
+        /// Needs Attention. Idempotent — a spec already protected is left
+        /// alone, so a second run changes nothing.
+        #[clap(long)]
+        fix: bool,
+    },
 }
 
 /// Per-scope disposition / triage lease commands (the intake gate).
@@ -1833,6 +1848,16 @@ pub enum PrCommand {
         // trace:STORY-469 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         no_trailer_check: bool,
+
+        /// Ship even when the PR's green check completed before a
+        /// CI-definition file (a workflow, or a script it invokes directly)
+        /// changed on the base branch. Without this, ship refuses so a
+        /// green that no longer means what it looks like doesn't merge
+        /// unnoticed. A plain test-file change on the base branch only
+        /// warns and never needs this flag.
+        // trace:BUG-1468 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        override_stale_check: bool,
     },
 
     /// Deliberately HOLD the PR on the current session — push the branch but
@@ -1852,6 +1877,31 @@ pub enum PrCommand {
         // trace:BUG-1294 | ai:claude
         #[clap(long, value_name = "REASON", allow_hyphen_values = true)]
         reason: Option<String>,
+    },
+
+    /// Sweep local review-snapshot branches (`pr-N` / `mr-N`, created by
+    /// `aida session start --owns PR-N` / `aida pr rebase` when they fetch a
+    /// change's head ref for headless review) whose change has reached a
+    /// terminal state (merged or closed). Nothing removes these today, so a
+    /// long-running project's local branch namespace accumulates one per
+    /// review, forever.
+    ///
+    /// A candidate is deleted only when: the change is merged/closed (an
+    /// open change is left alone — the review may still need it), the
+    /// branch isn't checked out in any worktree, and the branch's tip still
+    /// matches the change's last known head SHA (a branch that gained local
+    /// commits since the fetch is left alone rather than guessed at). Every
+    /// skip is reported with its reason. Scoped to the exact `pr-<digits>` /
+    /// `mr-<digits>` name shape `aida session start --owns PR-N` creates —
+    /// never touches an authored spec branch.
+    ///
+    /// Opt-in: this command is never run automatically. Use `--dry-run` to
+    /// preview before deleting.
+    // trace:TASK-1312 | ai:claude
+    Gc {
+        /// Report what would be deleted without deleting anything.
+        #[clap(long)]
+        dry_run: bool,
     },
 }
 
@@ -5358,17 +5408,19 @@ pub enum QueueCommand {
     },
     /// Garbage-collect dead routed queue entries — remove every entry whose
     /// backing spec is archived, completed, or rejected (terminal corpses that
-    /// linger in the queue file after the work shipped). The default `aida
+    /// linger in the queue file after the work shipped), OR whose routed
+    /// review's own PR already merged (the review story's status alone can't
+    /// say whether the review it wraps is still needed). The default `aida
     /// queue list` view already hides them, but the underlying queue file
-    /// still carries them; this sweeps them and reports the count. Sibling of
-    /// the two `aida queue prune` predicates — `prune --orphaned` targets
-    /// DELETED specs and `prune --merged` targets shipped reviewer rows, while
-    /// `gc` targets specs that still exist but are done with (archived /
-    /// terminal). Use `--dry-run` to preview. Still-actionable entries
-    /// (Draft/Approved/Planned/InProgress/Done) always survive.
+    /// still carries them; this sweeps them and reports the count and why.
+    /// Sibling of `aida queue prune --orphaned`, which targets DELETED specs.
+    /// Use `--dry-run` to preview. Still-actionable entries
+    /// (Draft/Approved/Planned/InProgress/Done) survive unless their PR
+    /// already merged.
     // trace:TASK-1052 | ai:claude — plain `//` so the SPEC-ID doesn't leak
     // into user-facing --help output per the TASK-268 convention.
     // trace:TASK-1063 | ai:claude
+    // trace:BUG-1512 | ai:claude
     Gc {
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
@@ -10599,7 +10651,12 @@ pub enum Command {
     #[clap(subcommand, hide = true)]
     Dev(DevCommand),
 
-    /// Diagnose and heal AIDA multi-agent state drift.
+    /// Diagnose and heal AIDA multi-agent state drift. Report-only by
+    /// design: exit 0 means the scan RAN, not that it found nothing —
+    /// findings print as text/JSON either way. A caller that needs a
+    /// pass/fail signal (e.g. a CI gate or scheduled job) opts in with
+    /// `doctor check <category> --fail-on-findings`, which exits non-zero
+    /// only when that one category has findings.
     // trace:EPIC-19 trace:STORY-462
     Doctor {
         /// Apply safe fixes after scanning. Without this, doctor is read-only.
@@ -14081,6 +14138,23 @@ mod tests {
         }
     }
 
+    // BUG-1552: `aida doctor` is report-only by design — exit 0 means "ran
+    // successfully," not "found nothing." That contract has to be
+    // discoverable from --help itself, not just docs, so this pins that
+    // the top-level `aida doctor --help` names the opt-in gate
+    // (`--fail-on-findings`) a caller reaches for when it wants pass/fail.
+    // trace:BUG-1552 | ai:claude
+    #[test]
+    fn doctor_help_names_fail_on_findings_gate() {
+        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let help = find_subcommand_help(&mut cmd, &["doctor"]);
+        let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("--fail-on-findings"),
+            "`aida doctor --help` no longer names --fail-on-findings; got:\n{help}"
+        );
+    }
+
     /// Render the long help for a nested subcommand path (e.g. `queue work`).
     // trace:TASK-185 | ai:claude
     fn find_subcommand_help(cmd: &mut clap::Command, path: &[&str]) -> String {
@@ -14449,5 +14523,37 @@ mod tests {
             msg.contains("unexpected argument") || msg.contains("unrecognized"),
             "expected a clear parse error for the mistyped flag, got: {msg}"
         );
+    }
+
+    // trace:TASK-1307 | ai:claude
+    #[test]
+    fn review_stranded_parses_json_and_fix_flags() {
+        let cli = Cli::try_parse_from(["aida", "review", "stranded", "--json", "--fix"]).unwrap();
+        match cli.command {
+            Command::Review {
+                cmd: Some(ReviewCommand::Stranded { json, fix }),
+                ..
+            } => {
+                assert!(json);
+                assert!(fix);
+            }
+            other => panic!("expected review stranded command, got {other:?}"),
+        }
+    }
+
+    // trace:TASK-1307 | ai:claude
+    #[test]
+    fn review_stranded_defaults_to_read_only() {
+        let cli = Cli::try_parse_from(["aida", "review", "stranded"]).unwrap();
+        match cli.command {
+            Command::Review {
+                cmd: Some(ReviewCommand::Stranded { json, fix }),
+                ..
+            } => {
+                assert!(!json);
+                assert!(!fix, "the sweep must default to read-only");
+            }
+            other => panic!("expected review stranded command, got {other:?}"),
+        }
     }
 }
