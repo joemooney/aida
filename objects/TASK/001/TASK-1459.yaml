@@ -1,0 +1,21 @@
+id: 01a0cf9b-f7b3-7630-9059-8d0955eaa20a
+spec_id: TASK-1459
+agreed_id: TASK-1459
+title: 'STORY-1405 follow-ups: cap review claim TTL, accurate drain recovery hint, forge head for the marker, wire /aida-review and queue work PR-N'
+description: |-
+  From the strict review of STORY-1405 (APPROVE).
+  (1) Cap --ttl-mins on aida review claim at about 24h.
+  (2) The drain merge refusal reuses FailureKind::LeaseConflict, so the recovery hint at auto_complete.rs ~2089 wrongly says another merger holds the merge-lease. Give it a distinct kind or message.
+  (3) aida review <SPEC> takes the marker head from the local origin/<branch> ref, which may be stale. Prefer the forge PR head.
+  (4) Wire aida review claim into the /aida-review skill and into queue work PR-N review sessions.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T18:51:40.339796684Z
+modified_at: 2026-09-23T18:51:40.339796684Z
+req_type: Task
+tags:
+- followup
+- merge-safety
+- parent:STORY-1405
