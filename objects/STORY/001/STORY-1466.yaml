@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T02:29:00.333699027Z
-modified_at: 2026-09-23T06:17:48.422172026Z
+modified_at: 2026-09-23T06:23:39.660769846Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -50,6 +50,12 @@ comments:
   content: 'Auto-completed: PR #2106 merged without a reviewer session (self-merge or orchestrator skipped phase 3).'
   created_at: 2026-09-23T06:17:48.422170953Z
   modified_at: 2026-09-23T06:17:48.422170953Z
+- id: 01a0ccef-248c-7c42-8a9e-4139d7bd2976
+  author: joe
+  content: 'PROXY DISPOSITION (Claude for the operator, overnight burn-down): ALREADY FIXED on main, verified. Evidence: PR-2106 already merged: `gh pr view 2106` shows state MERGED, mergedAt 2026-09-23T04:43:20Z; `git log origin/main --grep BUG-1589` shows commit 2dcd351a09 "[AI:codex] fix(seats): forbid model-side mailbox polling (BUG-1589) (#2106)" on main. Just needs a status flip to completed (not performed here, read-only). N/A'
+  created_at: 2026-09-23T06:23:39.660769846Z
+  modified_at: 2026-09-23T06:23:39.660769846Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 history:
 - id: 01a0cce9-c886-7293-8198-03ccf8bec24a
   author: aida-auto-bump
