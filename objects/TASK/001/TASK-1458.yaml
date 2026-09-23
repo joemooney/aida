@@ -9,12 +9,12 @@ description: |-
   (3) Record --override-stale-approval durably via log_ship_activity or an event naming both shas.
   (4) The TASK-975 conflict-retry rebase (auto_complete.rs ~4348, ci_auto_fix>0) now always shelves. Either accept an approval whose rebased patch-id is unchanged, or re-request review, and fix the mock-only test orchestrate_merge_conflict_rebased_in_drain_ships.
   (5) Add wiring tests for pr_ship_handler, the override path and the real merge() call site.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T17:52:39.701830561Z
-modified_at: 2026-09-23T17:52:52.870608455Z
+modified_at: 2026-09-23T19:52:40.877350836Z
 req_type: Task
 tags:
 - followup
