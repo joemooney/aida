@@ -13296,6 +13296,20 @@ fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
             | Command::Schema { .. }
             | Command::Contract { .. }
             | Command::Cache(CacheCommand::Status)
+            // trace:BUG-1486 | ai:claude — `aida db` gates per-verb: these
+            // are pure reads (path/info/status printouts, block
+            // list/status/verify reports) and must not inherit the
+            // "refusing database writes" refusal meant for the genuinely
+            // mutating verbs (Migrate/Sync/MergeGate/ReconcileStatus/
+            // Block::Claim/...), which stay gated below via the
+            // `Command::Db(_) => StakeholderAction::Database` fail-closed
+            // default.
+            | Command::Db(DbCommand::Path)
+            | Command::Db(DbCommand::Info)
+            | Command::Db(DbCommand::Status)
+            | Command::Db(DbCommand::Block {
+                subcommand: BlockCommand::List | BlockCommand::Status | BlockCommand::Verify,
+            })
             | Command::Usage { .. }
             | Command::Plan(PlanCommand::Verify { fix: false, .. })
             | Command::Plan(PlanCommand::Helpers { append: None, .. })
@@ -96570,3 +96584,8 @@ mod task_1444_shelve_attribution_tests;
 #[cfg(test)]
 #[path = "tests/task_1445_pr_attribution_disagreement_tests.rs"]
 mod task_1445_pr_attribution_disagreement_tests;
+
+// trace:BUG-1486 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1486_stakeholder_db_verb_tests.rs"]
+mod bug_1486_stakeholder_db_verb_tests;
