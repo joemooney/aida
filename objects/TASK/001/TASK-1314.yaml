@@ -33,12 +33,12 @@ description: |-
   6. After repair, the store-wide count is re-measured and recorded, so a later occurrence has a baseline of zero to compare against rather than an assumption.
 
   NOT URGENT. The corruption is cosmetic in rendering and does not affect spec identity, relationships, status or any machine consumer. It is filed so it is not forgotten once the detector makes it visible, and so nobody repairs it in passing while it is still the only fixture.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:05:36.150787113Z
-modified_at: 2026-09-23T09:54:00.789903010Z
+modified_at: 2026-09-23T10:02:19.571746797Z
 req_type: Task
 tags:
 - store-integrity mojibake follow-up:task-1313 severity:cosmetic
