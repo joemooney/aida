@@ -40,7 +40,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:40:43.370422318Z
-modified_at: 2026-09-23T16:15:52.716635306Z
+modified_at: 2026-09-23T16:16:01.374005662Z
 req_type: Task
 tags:
 - adoption-gap
@@ -129,4 +129,10 @@ comments:
   content: 'Review blocker fixed by the orchestrator: an unreachable/failed/missing forge lookup (vs NoChange) now prints ''could not determine this branch''s PR base ... falling back''; finish_base_lookup_failed is tested. rebase 107 pass. Batch 15.'
   created_at: 2026-09-23T15:14:52.554731800Z
   modified_at: 2026-09-23T15:14:52.554731800Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cf0d-775e-79d0-bfe9-498670b72ea4
+  author: joe
+  content: 'Merged via integration batch 15, PR #2126 (merge confirmed MERGED, 2026-09-23 09:16).'
+  created_at: 2026-09-23T16:16:01.374005662Z
+  modified_at: 2026-09-23T16:16:01.374005662Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
