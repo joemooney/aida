@@ -71,7 +71,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:40:23.908358534Z
-modified_at: 2026-09-23T16:41:05.975473083Z
+modified_at: 2026-09-23T16:47:22.685293511Z
 req_type: Bug
 tags:
 - parent:EPIC-62 drain orchestrator silent-noop severity:major
@@ -108,5 +108,11 @@ comments:
   content: 'Claude implementer result: claude/bug-1524 @ dc9eafbc1b. New FailureKind::LaunchRefused (from discover_orchestrated_lease when no lease and no BUG-1485 handoff receipt exist) skips recover_phase1_failure_with_open_pr and shelves; 2 tests at the auto_complete seam. Awaiting strict review (the risk: a launched-then-released lease misread as never-launched).'
   created_at: 2026-09-23T16:41:05.975473083Z
   modified_at: 2026-09-23T16:41:05.975473083Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cf2a-2c3d-7d23-b674-04262be9a7d3
+  author: joe
+  content: 'Strict review: the key risk is absent (the BUG-1485 receipt is written before launch and never deleted, so launched-then-released work stays recoverable). Blocker fixed by the orchestrator: LeaseConflict also skips open-PR recovery (test added, misleading comment corrected). auto_complete 258 pass. Batch 18.'
+  created_at: 2026-09-23T16:47:22.685293511Z
+  modified_at: 2026-09-23T16:47:22.685293511Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
