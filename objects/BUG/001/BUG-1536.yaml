@@ -70,7 +70,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:51:52.124497966Z
-modified_at: 2026-09-23T15:30:17.346568934Z
+modified_at: 2026-09-23T15:33:54.231183123Z
 req_type: Bug
 tags:
 - parent:EPIC-62 test-isolation forge-safety severity:major
@@ -100,4 +100,10 @@ comments:
   content: 'Claude implementer result: claude/bug-1536 @ 58a7937fc8. handle_review_record_at(project_root, ...) takes the write root explicitly (the CLI resolves it once); a cfg(test) guard panics if a test writes outside the temp dir; the BUG-1452 test is rewritten plus a new decoy-ambient-root test. AC1-4 met; AC5 (a production PR-to-repo guard, e.g. pinning -R on the forge calls in merge_hold.rs) is split to a follow-up since merge_hold.rs is off-limits pending STORY-1397.'
   created_at: 2026-09-23T14:51:54.996558411Z
   modified_at: 2026-09-23T14:51:54.996558411Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cee6-e7b7-73b0-80b4-0fd6334338e5
+  author: joe
+  content: 'Merged via integration batch 14, PR #2125 squash 17c46fa574 (merge confirmed via gh state MERGED, 2026-09-23 08:28). Completed by hand because aida pull timed out on the loaded host.'
+  created_at: 2026-09-23T15:33:54.231183123Z
+  modified_at: 2026-09-23T15:33:54.231183123Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
