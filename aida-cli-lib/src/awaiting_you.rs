@@ -160,7 +160,9 @@ fn classify_seat(role: Option<&str>) -> Option<AwaitingSeat> {
     if role.is_empty() {
         return None;
     }
-    let canonical = crate::canonical_role_name(role);
+    // Review fix: role names are matched case-insensitively (`Reviewer` must
+    // not fall through to `Other` and hide the seat's own rows).
+    let canonical = crate::canonical_role_name(&role.to_ascii_lowercase());
     Some(match canonical.as_str() {
         "reviewer" => AwaitingSeat::Reviewer,
         "advisor" => AwaitingSeat::Advisor,
@@ -176,7 +178,48 @@ fn classify_seat(role: Option<&str>) -> Option<AwaitingSeat> {
 fn owned_channel_visible(seat: Option<AwaitingSeat>, owner: AwaitingSeat) -> bool {
     match seat {
         None => true,
+        // Review fix: an unrecognised seat (integrator, product, human, …) is
+        // not scoped at all — it sees every channel, never nothing (PRIN-5:
+        // an unknown seat must not hide actionable work). trace:BUG-1530
+        Some(AwaitingSeat::Other) => true,
         Some(s) => s == owner,
+    }
+}
+
+#[cfg(test)]
+mod bug_1530_review_fix_tests {
+    use super::*;
+
+    // trace:BUG-1530 | ai:claude
+    #[test]
+    fn unrecognised_seat_sees_every_owned_channel() {
+        for role in ["integrator", "product", "human", "some-new-seat"] {
+            let seat = classify_seat(Some(role));
+            for owner in [
+                AwaitingSeat::Reviewer,
+                AwaitingSeat::Advisor,
+                AwaitingSeat::Implementer,
+            ] {
+                assert!(
+                    owned_channel_visible(seat, owner),
+                    "role {role} must see {owner:?}"
+                );
+            }
+        }
+    }
+
+    // trace:BUG-1530 | ai:claude
+    #[test]
+    fn role_matching_is_case_insensitive() {
+        assert_eq!(
+            classify_seat(Some("Reviewer")),
+            Some(AwaitingSeat::Reviewer)
+        );
+        assert_eq!(classify_seat(Some("ADVISOR")), Some(AwaitingSeat::Advisor));
+        assert!(owned_channel_visible(
+            classify_seat(Some("Reviewer")),
+            AwaitingSeat::Reviewer
+        ));
     }
 }
 
