@@ -19,12 +19,12 @@ description: |
   5. A test covers the shape: a spec at Draft whose trailered commit is on the default branch is detected, and one whose trailered commit is only on a branch is not.
 
   PROVENANCE. Originally added to BUG-1454 as items (a) and (b) in an advisor COMMENT on 2026-09-20 rather than in its ACCEPTANCE block. A drain implements the acceptance block, so the criteria were invisible at the rung the implementer reads and PR #2040 correctly implemented the six visible criteria and none of these. Split out here so BUG-1454 can merge without burying a real remaining deliverable behind a terminal Completed status. The misfiling is recorded in TASK-1303 as an instance of the rung class.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:33:09.166796821Z
-modified_at: 2026-09-23T06:45:12.000915966Z
+modified_at: 2026-09-23T08:10:20.096424446Z
 req_type: Bug
 tags:
 - batch:night-0920 lifecycle drain-safe from:review-pr-2040
@@ -104,3 +104,21 @@ comments:
   created_at: 2026-09-23T06:45:01.107324755Z
   modified_at: 2026-09-23T06:45:01.107324755Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cd50-ce39-7af1-a048-846a1e59ed9c
+  author: aida-auto-bump
+  timestamp: 2026-09-23T08:10:20.089589390Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cd50-ce40-7e72-84f5-ea057df91bdd
+  timestamp: 2026-09-23T08:10:20.096423618Z
+  agent: aida
+  commit_sha: 91155561e725f90389e9ddcad8cf0c6209892635
+  summary: Completed via merge 91155561
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T08:10:18.535908585Z
+  completion_sha: 91155561e725f90389e9ddcad8cf0c6209892635
