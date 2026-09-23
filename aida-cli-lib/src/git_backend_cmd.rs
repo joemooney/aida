@@ -757,6 +757,96 @@ mod show_latency_regression_tests {
     }
 }
 
+/// `aida edit --status` — emit the seat-tagged `DispositionChanged` event
+/// this invocation's status transition produced (approve/reject/defer-class
+/// decisions, including groom's `--apply`, which shells out to `aida edit`).
+/// Split out for direct unit testing, same rationale as BUG-1423's
+/// `emit_ship_pr_merged`. Best-effort: `events::emit` never fails.
+// trace:TASK-1450 | ai:claude
+fn emit_edit_disposition_changed(
+    project_root: &std::path::Path,
+    spec_display: &str,
+    before: String,
+    after: String,
+) {
+    let mut ev = crate::events::Event::new(
+        Some(spec_display.to_string()),
+        "",
+        crate::events::EventKind::DispositionChanged { before, after },
+    );
+    ev.seat = crate::events::active_seat();
+    crate::events::emit(project_root, &ev);
+}
+
+/// `aida edit --mode` — emit the seat-tagged `ExecutionModeChanged` event
+/// this invocation's mode write produced. Split out for direct unit testing.
+/// Best-effort: `events::emit` never fails.
+// trace:TASK-1450 | ai:claude
+fn emit_edit_execution_mode_changed(
+    project_root: &std::path::Path,
+    spec_display: &str,
+    before: Option<String>,
+    after: Option<String>,
+) {
+    let mut ev = crate::events::Event::new(
+        Some(spec_display.to_string()),
+        "",
+        crate::events::EventKind::ExecutionModeChanged { before, after },
+    );
+    ev.seat = crate::events::active_seat();
+    crate::events::emit(project_root, &ev);
+}
+
+#[cfg(test)]
+mod task_1450_edit_event_tests {
+    use super::*;
+
+    /// A disposition (status) change through `aida edit --status` must
+    /// record the before/after status labels and the acting seat — the
+    /// approve/reject/defer-class decision BUG-1423's follow-up (TASK-1450)
+    /// closes.
+    // trace:TASK-1450 | ai:claude
+    #[test]
+    fn disposition_change_emits_seat_tagged_before_after() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+
+        emit_edit_disposition_changed(tmp.path(), "TASK-1", "Draft".into(), "Approved".into());
+
+        let events = crate::events::read_all(tmp.path());
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].spec.as_deref(), Some("TASK-1"));
+        assert_eq!(events[0].seat.as_deref(), Some("advisor"));
+        assert!(matches!(
+            &events[0].kind,
+            crate::events::EventKind::DispositionChanged { before, after }
+                if before == "Draft" && after == "Approved"
+        ));
+    }
+
+    /// An `execution_mode` change through `aida edit --mode` must record the
+    /// before/after mode (including the ungroomed `None` case) and the
+    /// acting seat.
+    // trace:TASK-1450 | ai:claude
+    #[test]
+    fn execution_mode_change_emits_seat_tagged_before_after() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+
+        emit_edit_execution_mode_changed(tmp.path(), "TASK-2", None, Some("drain".into()));
+
+        let events = crate::events::read_all(tmp.path());
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].spec.as_deref(), Some("TASK-2"));
+        assert_eq!(events[0].seat.as_deref(), Some("advisor"));
+        assert!(matches!(
+            &events[0].kind,
+            crate::events::EventKind::ExecutionModeChanged { before, after }
+                if before.is_none() && after.as_deref() == Some("drain")
+        ));
+    }
+}
+
 pub(crate) fn handle_git_backend_command(
     store_path: &std::path::Path,
     command: &Command,
@@ -5061,6 +5151,13 @@ pub(crate) fn handle_git_backend_command(
 
             let mut changed = false;
             let mut force_dropped_structural_tags: Vec<String> = Vec::new();
+            // TASK-1450: before/after pairs for the seat-tagged coordination
+            // events emitted once the edit is durably written — captured here
+            // (not reconstructed after the fact) so the recorded values are
+            // exactly what this invocation changed, not a re-derivation from
+            // the saved requirement. trace:TASK-1450 | ai:claude
+            let mut disposition_event: Option<(String, String)> = None;
+            let mut execution_mode_event: Option<(Option<String>, Option<String>)> = None;
             if let Some(t) = title {
                 req.title = t.clone();
                 changed = true;
@@ -5130,10 +5227,12 @@ pub(crate) fn handle_git_backend_command(
                         team_role_refusal_clause()
                     );
                 }
+                let mode_before = req.execution_mode.map(|m| m.to_string());
                 if m.trim().is_empty() {
                     if req.execution_mode.is_some() {
                         req.execution_mode = None;
                         changed = true;
+                        execution_mode_event = Some((mode_before, None));
                     }
                 } else {
                     let parsed: aida_core::ExecutionMode =
@@ -5141,6 +5240,7 @@ pub(crate) fn handle_git_backend_command(
                     if req.execution_mode != Some(parsed) {
                         req.execution_mode = Some(parsed);
                         changed = true;
+                        execution_mode_event = Some((mode_before, Some(parsed.to_string())));
                     }
                 }
             }
@@ -5279,7 +5379,13 @@ pub(crate) fn handle_git_backend_command(
                 // STORY-738: capture the into-Completed transition against the
                 // prior status (before the set). trace:STORY-738 | ai:claude
                 into_completed = is_into_completed_transition(&req.status, canonical);
+                // TASK-1450: disposition before/after for the coordination
+                // event, captured against the on-disk status before the set
+                // below (same "before the mutation" rule STORY-738 uses).
+                // trace:TASK-1450 | ai:claude
+                let status_before = req.status.to_string();
                 req.set_status_from_str(canonical);
+                disposition_event = Some((status_before, req.status.to_string()));
                 // STORY-332 / EPIC-28: a spec triaged out of NeedsAttention is
                 // no longer paused — drop the now-stale punt metadata AND any
                 // orchestrator-shelving metadata. The punt ledger
@@ -5458,6 +5564,23 @@ pub(crate) fn handle_git_backend_command(
                             force_dropped_structural_tags.join(", ")
                         ),
                     )?;
+                }
+                // TASK-1450: a disposition (status) or execution_mode change
+                // made through `aida edit` is a coordination-seat decision —
+                // approve/reject/defer and groom's `--mode` writes all land
+                // here (groom/approve/reject shell out to `aida edit`
+                // themselves). Emit AFTER the write above lands, mirroring
+                // BUG-1423's PrMerged placement, so a failed write never
+                // produces a phantom event. Best-effort — `events::emit`
+                // itself never fails the edit. trace:TASK-1450 | ai:claude
+                if let Some(project_root) = store_path.parent() {
+                    let display_id = req.spec_id.as_deref().unwrap_or(id);
+                    if let Some((before, after)) = disposition_event.take() {
+                        emit_edit_disposition_changed(project_root, display_id, before, after);
+                    }
+                    if let Some((before, after)) = execution_mode_event.take() {
+                        emit_edit_execution_mode_changed(project_root, display_id, before, after);
+                    }
                 }
                 // STORY-738: a transition INTO Completed is the payoff state —
                 // render the felt completion crescendo instead of the flat

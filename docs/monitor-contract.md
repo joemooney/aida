@@ -48,17 +48,27 @@ chained-batch drains). Consumers must preserve that distinction instead of
 coercing an absent field to zero. // trace:BUG-1425 | ai:codex
 
 `.aida/events.jsonl` records what a drain does plus, since `1.1.0`, what
-`aida pr ship` does. **Events written before `1.1.0` record drain activity
-only** — a merge, review verdict, or supervised-merge-hold change performed by
-a coordination seat (advisor, product) outside a drain phase emitted nothing.
-Any seat count or merge count a consumer computes from an event log that spans
-back before `1.1.0` is therefore a **lower bound**, not a complete account.
-`seat` (present on `MergeHoldChanged` and, when known, on `PrMerged`) is
-`null`/absent on every event recorded before this field existed, and on
-drain-phase events, whose actor is instead identified by `run_uuid`. // trace:BUG-1423 | ai:claude
+`aida pr ship` does, and since `1.2.0`, a recorded review verdict
+(`aida review record`) and a disposition or `execution_mode` change
+(`aida edit --status`/`--mode`, including groom/approve/reject, which shell
+out to `aida edit`). **Events written before `1.2.0` still miss the review
+and disposition/mode paths** — a review verdict recorded, or a spec approved,
+rejected, deferred, or re-classified by execution_mode outside a drain phase,
+emitted nothing before this version. Any seat count or activity count a
+consumer computes from an event log that spans back before `1.2.0` is
+therefore a **lower bound**, not a complete account. `seat` (present on
+`MergeHoldChanged`, `ReviewVerdictRecorded`, `DispositionChanged`,
+`ExecutionModeChanged`, and, when known, on `PrMerged`) is `null`/absent on
+every event recorded before this field existed, and on drain-phase events,
+whose actor is instead identified by `run_uuid`. // trace:BUG-1423 | ai:claude // trace:TASK-1450 | ai:claude
 
 ## Migration notes
 
+- `1.2.0` — `aida review record` now emits `ReviewVerdictRecorded` (spec, PR,
+  verdict, reviewed sha); `aida edit --status`/`--mode` now emit
+  `DispositionChanged`/`ExecutionModeChanged` with before/after values
+  (covers groom/approve/reject, which shell out to `aida edit`). All three
+  are seat-tagged. Additive only — no covered field changed shape. (TASK-1450)
 - `1.1.0` — `aida pr ship` now emits `PrMerged` (parity with the drain merge
   phase) and the new `MergeHoldChanged` event kind for a coordination-seat
   hold placed/lifted; `Event` gained an additive `seat` field. Additive only —

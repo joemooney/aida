@@ -210,6 +210,44 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
+    /// A review verdict was recorded for a spec (`aida review record`) — the
+    /// other coordination-seat action BUG-1423's event feed still missed:
+    /// approving or requesting changes on a PR is a reviewer-seat decision
+    /// that, before this, left no trace in `.aida/events.jsonl`.
+    /// **Actionable.**
+    // trace:TASK-1450 | ai:claude
+    ReviewVerdictRecorded {
+        /// PR the verdict applies to, when the reviewer named one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pr: Option<u32>,
+        /// The verdict's canonical label, e.g. `approved`, `request-changes`.
+        verdict: String,
+        /// Commit the review examined, when resolved.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reviewed_sha: Option<String>,
+    },
+    /// A spec's disposition (status) changed through `aida edit --status` —
+    /// the advisor/product seat's approve/reject/defer-class decisions,
+    /// including groom's `--apply` (which shells out to `aida edit`).
+    /// **Actionable.**
+    // trace:TASK-1450 | ai:claude
+    DispositionChanged {
+        /// Status label before the edit, e.g. `Draft`.
+        before: String,
+        /// Status label after the edit, e.g. `Approved`.
+        after: String,
+    },
+    /// A spec's `execution_mode` — the advisor's bless-time autonomy-ladder
+    /// routing judgment — changed through `aida edit --mode`. **Actionable.**
+    // trace:TASK-1450 | ai:claude
+    ExecutionModeChanged {
+        /// Mode before the edit; `None` when it was previously ungroomed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        before: Option<String>,
+        /// Mode after the edit; `None` when the edit cleared it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        after: Option<String>,
+    },
     /// A spec transitioned to `Completed`. This is the durable per-spec ship
     /// record, including completions discovered outside a live drain.
     // trace:BUG-1286 | ai:codex
@@ -371,6 +409,9 @@ impl EventKind {
             | EventKind::AdvisorEscalated { .. }
             | EventKind::PrMerged { .. }
             | EventKind::MergeHoldChanged { .. }
+            | EventKind::ReviewVerdictRecorded { .. }
+            | EventKind::DispositionChanged { .. }
+            | EventKind::ExecutionModeChanged { .. }
             | EventKind::SpecCompleted { .. }
             | EventKind::RunCompleted { .. }
             | EventKind::QueueDrained { .. }
@@ -419,6 +460,9 @@ impl EventKind {
             EventKind::AdvisorEscalated { .. } => "AdvisorEscalated",
             EventKind::PrMerged { .. } => "PrMerged",
             EventKind::MergeHoldChanged { .. } => "MergeHoldChanged",
+            EventKind::ReviewVerdictRecorded { .. } => "ReviewVerdictRecorded",
+            EventKind::DispositionChanged { .. } => "DispositionChanged",
+            EventKind::ExecutionModeChanged { .. } => "ExecutionModeChanged",
             EventKind::SpecCompleted { .. } => "SpecCompleted",
             EventKind::RunCompleted { .. } => "RunCompleted",
             EventKind::QueueDrained { .. } => "QueueDrained",
@@ -459,6 +503,9 @@ impl EventKind {
             "CronJobFailed",
             "MailReceived",
             "MergeHoldChanged",
+            "ReviewVerdictRecorded",
+            "DispositionChanged",
+            "ExecutionModeChanged",
         ]
     }
 }

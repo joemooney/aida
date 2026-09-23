@@ -80669,6 +80669,66 @@ fn review_pr_handshake_path(project_root: &std::path::Path, pr_number: u64) -> s
     review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"))
 }
 
+/// `aida review record` — emit the seat-tagged `ReviewVerdictRecorded` event
+/// naming the spec (as `Event.spec`), PR, verdict and reviewed sha. Split out
+/// for direct unit testing, same rationale as BUG-1423's `emit_ship_pr_merged`
+/// in `pr_cmd.rs`. Best-effort: `events::emit` never fails the command.
+// trace:TASK-1450 | ai:claude
+fn emit_review_verdict_recorded(
+    project_root: &std::path::Path,
+    spec_display: &str,
+    pr: Option<u32>,
+    verdict: String,
+    reviewed_sha: Option<String>,
+) {
+    let mut ev = events::Event::new(
+        Some(spec_display.to_string()),
+        "",
+        events::EventKind::ReviewVerdictRecorded {
+            pr,
+            verdict,
+            reviewed_sha,
+        },
+    );
+    ev.seat = events::active_seat();
+    events::emit(project_root, &ev);
+}
+
+#[cfg(test)]
+mod task_1450_review_verdict_event_tests {
+    use super::*;
+
+    /// A recorded review verdict must emit a seat-tagged event naming the
+    /// spec, PR, verdict and reviewed sha — the reviewer-seat coordination
+    /// decision the BUG-1423 feed still missed.
+    // trace:TASK-1450 | ai:claude
+    #[test]
+    fn review_record_emits_seat_tagged_spec_pr_verdict_and_sha() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "reviewer");
+
+        emit_review_verdict_recorded(
+            tmp.path(),
+            "BUG-1450",
+            Some(2119),
+            "approved".to_string(),
+            Some("abc123def".to_string()),
+        );
+
+        let events = events::read_all(tmp.path());
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].spec.as_deref(), Some("BUG-1450"));
+        assert_eq!(events[0].seat.as_deref(), Some("reviewer"));
+        assert!(matches!(
+            &events[0].kind,
+            events::EventKind::ReviewVerdictRecorded { pr, verdict, reviewed_sha }
+                if *pr == Some(2119)
+                    && verdict == "approved"
+                    && reviewed_sha.as_deref() == Some("abc123def")
+        ));
+    }
+}
+
 fn handle_review_record(
     spec: &str,
     verdict: &str,
@@ -80775,6 +80835,19 @@ fn handle_review_record(
         &recorded_by,
     )
     .with_context(|| "could not write the review verdict")?;
+    // TASK-1450: a recorded review verdict is a reviewer-seat coordination
+    // decision — the other gap BUG-1423's event feed left (that bug closed
+    // the merge-path gap; this is the review-path gap). Emitted only after
+    // the write above lands, so a failed record never produces a phantom
+    // event. Best-effort: `events::emit` never fails the command.
+    // trace:TASK-1450 | ai:claude
+    emit_review_verdict_recorded(
+        &project_root,
+        &spec.to_ascii_uppercase(),
+        pr.map(|n| n as u32),
+        kind.label().to_string(),
+        resolved_sha.clone(),
+    );
     println!(
         "{} recorded {} for {}{}",
         crate::glyph(crate::glyphs::Glyph::Check).green(),

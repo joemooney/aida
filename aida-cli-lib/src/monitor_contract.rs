@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use std::io::Write;
 
 pub const NAME: &str = "aida-monitor";
-pub const VERSION: &str = "1.1.0";
+pub const VERSION: &str = "1.2.0";
 
 /// Return the deliberately small set of fields promised to monitor consumers.
 /// Fields not named here remain implementation details even when they happen to
