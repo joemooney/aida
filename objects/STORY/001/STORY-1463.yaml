@@ -19,12 +19,12 @@ description: |
   5. aida doctor reports a finding when the repo has enabled substrate jobs but no installed tick entry, and a separate finding when any substrate job is overdue by more than 2x its interval (the observable symptom even if an entry exists but is broken). The finding's fix hint is the install command.
   6. The tick itself never launches a model session (seat jobs are delivered as notices only) - pinned by a test, so installing it by default can never become a token-spend path.
   7. aida scaffold status reports the scheduler entry as a scaffold item (installed / missing / stale), and aida scaffold upgrade offers to install a missing entry and repair a stale one: an absolute aida path that no longer exists, a PATH or repo path that no longer matches, or a legacy per-job line from the old emit-cron shape, which is migrated to the single tick line. The same TTY-offer and non-interactive rules as criterion 1 apply (non-interactive upgrade reports and changes nothing without --with-scheduler), and entries for other repos are never touched.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T01:54:53.786005560Z
-modified_at: 2026-09-23T20:27:02.053879555Z
+modified_at: 2026-09-23T21:19:04.014660914Z
 req_type: Story
 tags:
 - scheduler aida:init aida:schedule onboarding substrate-as-bouncer parent:EPIC-71
@@ -40,3 +40,21 @@ comments:
   created_at: 2026-09-23T20:27:02.053879555Z
   modified_at: 2026-09-23T20:27:02.053879555Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d022-e943-7172-b31d-f0d65810b009
+  author: aida-auto-bump
+  timestamp: 2026-09-23T21:19:04.003549867Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d022-e94e-7220-a9af-c6e0b5b8b6ce
+  timestamp: 2026-09-23T21:19:04.014659889Z
+  agent: aida
+  commit_sha: 20292847aed4bf69990ce088bd788863d5acf355
+  summary: Completed via merge 20292847
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T21:19:03.505737389Z
+  completion_sha: 20292847aed4bf69990ce088bd788863d5acf355
