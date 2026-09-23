@@ -562,6 +562,8 @@ fn send_mail_notice(project_root: &Path, view: &AgentRegistryView, text: &str) -
         .unwrap_or_else(|| view.agent_type.clone());
     // trace:BUG-1533 | ai:claude
     let (from, from_source) = crate::resolve_mail_sender_identity(None);
+    // trace:BUG-1592 | ai:claude
+    let from_role = crate::resolve_mail_sender_role();
     let msg = aida_core::mailbox::Message {
         subject: None,
         id: uuid::Uuid::new_v4().to_string(),
@@ -577,6 +579,7 @@ fn send_mail_notice(project_root: &Path, view: &AgentRegistryView, text: &str) -
         deleted: false,
         archived: false,
         from_source,
+        from_role,
     };
     crate::mailbox_store::write_message(project_root, &msg)
 }

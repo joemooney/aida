@@ -293,6 +293,8 @@ fn send_advisor_nudge(project_root: &Path, advisor: &str, items: &[StuckItem]) -
     let body = format_nudge_body(items);
     // trace:BUG-1533 | ai:claude
     let (from, from_source) = crate::resolve_mail_sender_identity(None);
+    // trace:BUG-1592 | ai:claude
+    let from_role = crate::resolve_mail_sender_role();
     let msg = Message {
         subject: None,
         id: id.clone(),
@@ -308,6 +310,7 @@ fn send_advisor_nudge(project_root: &Path, advisor: &str, items: &[StuckItem]) -
         deleted: false,
         archived: false,
         from_source,
+        from_role,
     };
     crate::mailbox_store::write_message(project_root, &msg)?;
     Ok(())

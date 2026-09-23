@@ -9996,6 +9996,7 @@ pub(crate) fn send_notification(
         // e.g. "web", "aida-session-reap"), not an ambiguous env fallback.
         // trace:BUG-1533 | ai:claude
         from_source: aida_core::mailbox::SenderSource::Explicit,
+        from_role: None,
     };
     if let Err(e) = mailbox_store::write_message(project_root, &msg) {
         eprintln!(
@@ -19597,8 +19598,25 @@ fn mailbox_line_body(m: &aida_core::mailbox::Message) -> String {
 /// so the two surfaces agree (STORY-585 acceptance #5). Deduped, role-aliases
 /// normalized (`dialog` → `advisor`). trace:STORY-585 | ai:claude
 // trace:TASK-818 | ai:claude
+// trace:BUG-1592 | ai:claude
 fn inbox_identities() -> Vec<String> {
     let mut ids = vec![current_user_id(None)];
+    // BUG-1592: `resolve_mail_sender_identity` puts `AIDA_AGENT_NAME` FIRST in
+    // the send-side precedence (ahead of `AIDA_USER`), but this read-side set
+    // never included it — a seat whose launcher sets `AIDA_AGENT_NAME` to
+    // something other than `AIDA_USER` sends mail under a name it never reads
+    // its own inbox for, so replies go unread. The launchers currently set
+    // `AIDA_USER = AIDA_AGENT_NAME`, which is why this was latent; any future
+    // override inside a launched agent splits send-identity from
+    // read-identity without this union.
+    if let Some(agent_name) = std::env::var("AIDA_AGENT_NAME")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+    {
+        if !ids.iter().any(|i| i == &agent_name) {
+            ids.push(agent_name);
+        }
+    }
     if let Some(raw) = std::env::var("AIDA_SESSION_ROLE")
         .ok()
         .filter(|s| !s.trim().is_empty())
@@ -81219,6 +81237,24 @@ pub(crate) fn resolve_mail_sender_identity(
         std::env::var("AIDA_SESSION_ROLE").ok().as_deref(),
         shell_user.as_deref(),
     )
+}
+
+/// The sender's active session role at send time (BUG-1592, AC2): normalized
+/// `AIDA_SESSION_ROLE` when it is actually set, `None` when it isn't. This is
+/// deliberately NOT `resolve_effective_role`/`effective_role_resolved`, which
+/// force an "implementer" default when the env var is absent — a forced
+/// default would make every legacy-shaped send look like a resolved
+/// "implementer" seat instead of recording that the role was simply unknown.
+/// Called alongside [`resolve_mail_sender_identity`] so the envelope records
+/// the role next to the agent id when both are known, mirroring how
+/// BUG-1533 recorded the id half of "who sent this".
+// trace:BUG-1592 | ai:claude
+pub(crate) fn resolve_mail_sender_role() -> Option<String> {
+    std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(|raw| canonical_role_name(&raw))
 }
 
 /// The queue identity for DRAINABLE handoff work (`aida backlog groom`): the
