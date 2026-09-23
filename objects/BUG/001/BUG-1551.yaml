@@ -40,12 +40,12 @@ description: |-
   OUT OF SCOPE: BUG-1480 and STORY-1422 themselves. That pair is already repaired by hand; this spec is about the substrate property they exposed.
 
   PROVENANCE: claude-reviewer-1 measured it and explicitly declined to file, flagging it as bigger than the question they were answering and the advisor's call. The advisor re-verified both halves and filed.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:55:06.171955458Z
-modified_at: 2026-09-23T19:50:57.737326400Z
+modified_at: 2026-09-23T19:51:23.254968971Z
 req_type: Bug
 relationships:
 - rel_type: References
