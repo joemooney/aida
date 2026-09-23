@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:42:03.999804940Z
-modified_at: 2026-09-23T02:30:15.498176666Z
+modified_at: 2026-09-23T02:30:17.646308875Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -57,4 +57,11 @@ relationships:
   target_id: 01a0c058-3d0c-7eb1-993d-3976581722cb
   created_at: 2026-09-21T00:42:33.778455517Z
   created_by: joe
+comments:
+- id: 01a0cc19-7d2e-78b3-9080-34661358dc5d
+  author: joe
+  content: 'Claude implementer (sonnet subagent, worktree) dispatched 2026-09-22 19:40 local. Output: branch claude/bug-1500 off origin/main, pushed, NO PR, NOT merged - left for later review+merge.'
+  created_at: 2026-09-23T02:30:17.646308875Z
+  modified_at: 2026-09-23T02:30:17.646308875Z
+  session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
 execution_mode: drain
