@@ -25,18 +25,49 @@ fn git(repo: &Path, args: &[&str]) {
     );
 }
 
+// trace:BUG-1563 | ai:claude
+// Hermetic-env root cause: this suite spawns the real `aida` binary, and
+// `Command` inherits the calling process's *entire* environment unless told
+// otherwise — `env_remove`/`env` only ever add or subtract individual keys.
+// A developer shell that has run `aida dev activate` carries AIDA_DEV_*,
+// AIDA_PERMISSION_MODE, a real USER, etc.; none of that exists in CI. Most
+// of those vars are inert here, but "inert today" is not a property the
+// compiler checks, and BUG-1563's own history (a 1s notice-watchdog racing
+// a real-store read, masquerading first as sibling-agent lock contention
+// and then as a dirty working tree before the actual deadline bug was
+// found — see BUG-1563 comments) is a case study in how load- and
+// environment-shaped flakes get misdiagnosed when the only local signal is
+// "it failed here and passed in CI". A clean, isolated rerun in this repo
+// did not reproduce that failure, which is consistent with the deadline
+// race already being closed for this test via AIDA_TEST_NOTICE_DEADLINE_MS
+// below (BUG-1567) rather than with an env-leakage cause — but there is no
+// reason for this suite to keep depending on whichever AIDA_* vars happen
+// to be unset in whoever's shell runs it next. `env_clear()` plus an
+// explicit allowlist makes "what env the binary sees" part of the test
+// itself instead of an ambient fact about the caller's shell.
 fn aida(repo: &Path, home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
-    cmd.current_dir(repo)
-        .env("HOME", home)
+    cmd.current_dir(repo).env_clear();
+    // PATH is the one ambient value we must keep: `aida` shells out to a
+    // real `git` for worktree/session operations, and `git` is resolved via
+    // PATH inside the spawned process.
+    if let Ok(path) = std::env::var("PATH") {
+        cmd.env("PATH", path);
+    }
+    cmd.env("HOME", home)
+        // Fixed, non-ambient identity so `USER`-derived owner/attribution
+        // fields are the same on every machine and in CI, never the real
+        // developer's login name.
+        .env("USER", "aida-protocol-test")
         .env("AIDA_TELEMETRY", "0")
         // These assertions exercise the human protocol notice. Pin the format
         // so CI's non-TTY auto-selection cannot silently switch them to TOON.
         .env("AIDA_OUTPUT_FORMAT", "human")
-        .env("NO_COLOR", "1")
-        .env_remove("AIDA_HEADLESS")
-        .env_remove("AIDA_SESSION_ID")
-        .env_remove("AIDA_SESSION_ROLE");
+        .env("NO_COLOR", "1");
+    // Everything else (AIDA_HEADLESS, AIDA_SESSION_ID, AIDA_SESSION_ROLE,
+    // AIDA_USER, AIDA_DEV_*, AIDA_PERMISSION_MODE, ...) is absent by
+    // construction now; individual tests still `.env(...)` in the specific
+    // values they need (e.g. AIDA_SESSION_ID once a lease exists).
     cmd
 }
 
@@ -208,6 +239,22 @@ fn pickup_commands_dispatch_and_render_protocols_before_acceptance() {
     assert_pickup_block(&text(&enter), "story");
 }
 
+// BUG-1563: this test failed locally and passed in CI at the same sha under
+// the same `cargo test --workspace --no-fail-fast` command. The eventual
+// root cause (recorded on BUG-1563) was NOT the working tree, and NOT
+// cross-process lock contention with sibling agents (both were seriously
+// investigated and eliminated with evidence) — it was `arm_notice_deadline`
+// in aida-cli-lib/src/lib.rs, a 1s fail-open watchdog on the per-turn
+// notice (BUG-1239) that raced this test's real-store lease lookup under
+// load. That race is why the assertion below overrides
+// AIDA_TEST_NOTICE_DEADLINE_MS to 0 (BUG-1567): this test owns the
+// lease-lifecycle contract, not the watchdog's latency contract, so the
+// deadline must not be able to turn a correct reminder into an empty,
+// successful response. Separately, and defensively rather than as the
+// traced cause, the `aida()` helper above now `env_clear()`s and allowlists
+// the spawned binary's environment so a developer's `aida dev activate`
+// shell (AIDA_DEV_*, AIDA_PERMISSION_MODE, a real USER, ...) can never
+// silently diverge this suite's behavior from CI's clean environment.
 #[test]
 fn awaiting_notice_tracks_real_lease_through_session_end() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
