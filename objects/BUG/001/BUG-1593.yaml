@@ -9,12 +9,12 @@ description: |-
   1. The scan honours its line cap regardless of which fields are resolved; past the cap the role is 'unknown', never a late match.
   2. Only structural role markers from the session's own launch context count (not arbitrary substrings in tool output).
   3. A test with a transcript that echoes a foreign 'Role:' string later in the file returns the launch role (or unknown), deterministically.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T11:13:43.902116703Z
-modified_at: 2026-09-23T11:53:41.624269083Z
+modified_at: 2026-09-23T12:18:57.624356839Z
 req_type: Bug
 tags:
 - identity
@@ -55,3 +55,21 @@ comments:
   created_at: 2026-09-23T11:53:41.624269083Z
   modified_at: 2026-09-23T11:53:41.624269083Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0ce34-6dd1-72e1-9e01-d295208582a2
+  author: aida-auto-bump
+  timestamp: 2026-09-23T12:18:57.617256370Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0ce34-6dd8-74c2-88a1-ec8f4873ae31
+  timestamp: 2026-09-23T12:18:57.624355623Z
+  agent: aida
+  commit_sha: a838b3a65fd6edef126b23e0e470e2c81d682aec
+  summary: Completed via merge a838b3a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T12:18:56.345342173Z
+  completion_sha: a838b3a65fd6edef126b23e0e470e2c81d682aec
