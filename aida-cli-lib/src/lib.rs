@@ -59668,7 +59668,32 @@ fn build_running_work(
                 .and_then(&role_probe);
             let manifest_role = manifest_role_probe(&l.id);
             let lease_role = l.role.clone();
-            let role = jsonl_role.or(manifest_role).or_else(|| lease_role.clone());
+            // BUG-1521: the role shown must be READ from the session's own
+            // record (the lease's stored `role`) whenever that record is a
+            // REAL role — not the harness's generic Agent-tool placeholder
+            // (`tail_cmd::HARNESS_AGENT_TYPE`, "general-purpose"). The
+            // jsonl/manifest heuristics match on ambiguous signals (a shared
+            // cwd, a text marker anywhere in the log) that can resolve to a
+            // DIFFERENT live session's transcript — and can resolve
+            // differently between two invocations of the same command
+            // seconds apart, since each re-scans independently — so a real
+            // recorded lease role is authoritative and wins first. But the
+            // placeholder itself carries no information (every harness
+            // fan-out subagent gets it, regardless of actual role), so a
+            // lease stuck with it falls through to the derived signals
+            // instead of masking them: manifest_role (TASK-153's stable
+            // claude_session_id join) next, then jsonl_role (the ambiguous
+            // transcript scan), and only the placeholder itself as the last
+            // resort when nothing else resolved. trace:BUG-1521 | ai:claude
+            let role = match lease_role.as_deref() {
+                Some(r) if !r.eq_ignore_ascii_case(tail_cmd::HARNESS_AGENT_TYPE) => {
+                    Some(r.to_string())
+                }
+                _ => manifest_role
+                    .clone()
+                    .or_else(|| jsonl_role.clone())
+                    .or_else(|| lease_role.clone()),
+            };
             // BUG-763: resolve the backing pid's own start time so an adopted
             // persistent lease (pid younger than the lease record) can name
             // both ages instead of mixing provenance silently.
@@ -59921,6 +59946,12 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             .collect();
 
         println!("view: ps");
+        // BUG-1521 (proxy decision): `running:` stays a bare integer — the
+        // shape every other agent-mode view (`aida integrate`, `aida
+        // awaiting`) uses — so a machine consumer can parse it without
+        // branching on whether a parenthetical got appended. The hidden
+        // count lives in its own `stale_hidden:` scalar right below, exactly
+        // like `aida integrate`'s `running:`/`stale_hidden:` pair.
         println!("running: {}", shown.len());
         println!("stale_hidden: {}", hidden_stale.len());
         println!("orphaned: {}", orphans.len());
