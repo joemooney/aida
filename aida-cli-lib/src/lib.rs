@@ -20645,7 +20645,7 @@ const STARTER_ROLES: &[(&str, &str, Option<&str>)] = &[
     (
         "advisor",
         "Trusted counsel across the project's lifetime. Surfaces friction, articulates mental models, gardens the queue, curates memory across sessions. Produces specs and comments, not code; routes implementation to doer roles via `aida queue add --for <role>`.",
-        Some("You are the independent judgment gate. You approve or reject dispositions, resolve grounded design forks, gate merges/rework, and turn review verdicts into actionable rework briefs. Never implement or merge code you authored, and never waive an unresolved gate merely to keep work moving. Read `.aida/discipline/two-seat-protocol.md`; follow `.aida/discipline/rework-brief-craft.md` for every requested-change handoff and `.aida/discipline/seat-recovery-playbooks.md` for recovery. Recurring duties arrive as due jobs, not as rules to remember."),
+        Some("You are the independent judgment gate. You approve or reject dispositions, resolve grounded design forks, gate merges/rework, and turn review verdicts into actionable rework briefs. Never implement or merge code you authored, and never waive an unresolved gate merely to keep work moving. Read `.aida/discipline/two-seat-protocol.md`; follow `.aida/discipline/rework-brief-craft.md` for every requested-change handoff and `.aida/discipline/seat-recovery-playbooks.md` for recovery. Recurring duties arrive as due jobs, not as rules to remember. Wait for mail through a zero-token shell/event watcher; never create model-side CronCreate, /loop, or ScheduleWakeup mailbox polls."),
     ),
     (
         "reviewer",
@@ -26951,7 +26951,7 @@ fn render_agent_launch_context(
     let role = plan.role.as_deref().unwrap_or("unspecified");
     let mut out = String::new();
     out.push_str("# AIDA Launch Context\n\n");
-    out.push_str("This is a point-in-time spawn snapshot. Briefs, queue changes, leases, and registry heartbeats filed after launch are not reflected here; keep polling AIDA during the session.\n\n");
+    out.push_str("This is a point-in-time spawn snapshot. Briefs, queue changes, leases, and registry heartbeats filed after launch are not reflected here; use AIDA's shell/event-driven watchers rather than recurring model-side polling.\n\n");
     out.push_str("## Launch\n\n");
     out.push_str(&format!("- Agent: {}\n", config.agent_type));
     out.push_str(&format!("- Role: {role}\n"));
@@ -27053,8 +27053,8 @@ fresh `aida agent new ... --spec NEXT-ID` session.\n"
     // EVERY vendor. Only Claude Code gets the prompt-bound aida-mail-notice.sh
     // hook; codex/antigravity/etc. get nothing automatic. The launcher already
     // writes this context file, so embedding the current unread snapshot + the
-    // poll command + cadence here closes the Claude-only delivery-awareness gap
-    // without any background process. The agent's identity is plan.name (the
+    // zero-token shell/event wait here closes the Claude-only delivery-awareness
+    // gap. The agent's identity is plan.name (the
     // AIDA_USER the launcher exports for the spawned agent, per BUG-558).
     // trace:STORY-619 | ai:claude
     out.push_str("## Mailbox\n\n");
@@ -27066,8 +27066,8 @@ fresh `aida agent new ... --spec NEXT-ID` session.\n"
 
     // STORY-1226: the seat's due jobs from the `[schedule]` registry, so a
     // freshly launched seat starts with the periodic work that applies to it
-    // — identical under every vendor (one registry, one view). Claude gets
-    // one extra line: it may mirror the jobs as in-session cron entries.
+    // — identical under every vendor (one registry, one view). No vendor is
+    // instructed to create an in-session recurring poll.
     // trace:STORY-1226 | ai:claude
     out.push_str("## Due Jobs\n\n");
     out.push_str(&render_launch_due_jobs_section(
@@ -27140,15 +27140,16 @@ fn render_seat_gate_section(project_root: &std::path::Path, role: &str) -> Strin
 /// prompt-bound `aida-mail-notice.sh` hook, so codex/antigravity/etc. otherwise
 /// get no mailbox awareness at all. Because the launcher writes the context file
 /// as plain text and EVERY vendor reads it at startup, embedding (a) the current
-/// unread-mail snapshot and (b) the explicit inbox command + poll cadence makes
-/// the snapshot self-describing for any vendor without any background process.
+/// unread-mail snapshot and (b) the explicit inbox command + zero-token wait
+/// makes the snapshot self-describing for any vendor.
 ///
 /// Reuses the existing notice renderer (`render_mailbox_notice`) and the pure
 /// `build_notice` core rather than duplicating inbox logic. `agent_name` is the
 /// spawned agent's stable identity (the `AIDA_USER` the launcher exports, per
 /// BUG-558), so the snapshot is keyed to the agent's own inbox. The guidance
 /// line always renders (even when caught up) so the agent learns the mailbox
-/// exists and how to poll it. trace:STORY-619 | ai:claude
+/// exists and how to wait for it without waking the model.
+// trace:STORY-619 trace:BUG-1589 | ai:claude+codex
 fn render_launch_mailbox_section(project_root: &std::path::Path, agent_name: &str) -> String {
     let mut out = String::new();
 
@@ -27180,13 +27181,16 @@ fn render_launch_mailbox_section(project_root: &std::path::Path, agent_name: &st
     }
 
     // Always include the guidance — only Claude Code gets the auto-hook, so every
-    // other vendor relies on this line to know the mailbox exists and to poll it.
+    // other vendor relies on this line to know the mailbox exists and how to
+    // wait outside the model until it becomes actionable.
     out.push_str(
         "Other agents send you mail here. Only Claude Code auto-surfaces new mail; \
-every other vendor must poll. Check your inbox with `aida mailbox inbox` (reads \
-+ acks) or `aida mailbox notice` (ambient, non-marking peek), and re-check \
-periodically — every few prompts and between work items — since nothing nudges \
-you automatically.\n",
+every other vendor must use a shell/event-driven wait. Check your inbox with \
+`aida mailbox inbox` (reads + acks) or `aida mailbox notice` (ambient, \
+non-marking peek). For unattended waiting, keep the model asleep behind a \
+`Monitor` over `aida watch --emit-wakes` or a background shell wait around \
+`aida awaiting --notice`; never create model-side CronCreate, /loop, or \
+ScheduleWakeup mailbox polls.\n",
     );
 
     out
@@ -27197,10 +27201,9 @@ you automatically.\n",
 /// Lists the registry's seat jobs that apply to `role` — due ones as
 /// due-lines (with the `aida schedule done <job>` report-back), the rest as
 /// "next due" so the seat knows its periodic responsibilities at launch. A
-/// Claude launch also gets the hint that it may mirror the jobs as in-session
-/// cron entries; every vendor gets the same jobs and the same report-back
-/// contract, so the registry stays the single source (ADR-46).
-// trace:STORY-1226 | ai:claude
+/// Every vendor gets the same jobs and report-back contract, while recurring
+/// waiting stays in the shell/substrate rather than in model turns.
+// trace:STORY-1226 trace:BUG-1589 | ai:claude+codex
 fn render_launch_due_jobs_section(
     project_root: &std::path::Path,
     role: Option<&str>,
@@ -27223,12 +27226,12 @@ fn render_launch_due_jobs_section(
             seat.as_deref().unwrap_or("*"),
         ));
     }
-    if agent_type == "claude" {
-        out.push_str(
-            "You may mirror these seat jobs as in-session cron entries (same interval, same \
-prompt); report each run with `aida schedule done <job>` so the shared ledger stays true.\n",
-        );
-    }
+    let _ = agent_type;
+    out.push_str(
+        "Recurring waits belong to AIDA's shell/event scheduler. Never mirror seat jobs with \
+model-side CronCreate, /loop, or ScheduleWakeup; report completed jobs with \
+`aida schedule done <job>` so the shared ledger stays true.\n",
+    );
     out
 }
 
@@ -27299,7 +27302,7 @@ fn default_role_guidance(role: &str) -> String {
         return guidance.to_string();
     }
     match role {
-        "advisor" | "dialog" => "You are advising the operator. Triage punts/findings, route implementation, clarify design forks, and avoid changing code unless explicitly asked.".to_string(),
+        "advisor" | "dialog" => "You are advising the operator. Triage punts/findings, route implementation, clarify design forks, and avoid changing code unless explicitly asked. Wait for mail through a zero-token shell/event watcher; never create model-side CronCreate, /loop, or ScheduleWakeup mailbox polls.".to_string(),
         "implementer" => "You are implementing. Read the assigned spec/brief, work in the supervised worktree, keep changes bounded to acceptance, run relevant tests, commit with the spec trailer, and finish with `aida pr ship`.".to_string(),
         // trace:TASK-1200 | ai:codex
         "product" => "You are wearing the product seat. Groom drafts, capture requirements, sharpen acceptance criteria, and route work to the right queue. Focus on intake and requirement capture; leave strategic counsel and disposition calls to the advisor.".to_string(),
