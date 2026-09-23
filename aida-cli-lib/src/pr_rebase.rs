@@ -96,6 +96,110 @@ pub fn rebase_refused_error(message: impl Into<String>) -> anyhow::Error {
     })
 }
 
+// ---------------------------------------------------------------------------
+// TASK-1416: the human-finish-ceremony (`aida ship` / `aida zen` /
+// `aida integrate`) used to rebase every branch onto a hardcoded
+// `origin/main`, regardless of what the branch's own open PR actually
+// targets. For the common case (PR → main) that's a no-op; for a STACKED
+// PR (head branch → another in-flight branch, not main) it silently
+// replays the parent's pre-merge commits a second time, producing
+// different SHAs for identical content — the child then looks "behind its
+// own base" while `git merge-tree` against main reports clean, which reads
+// like a stale GitHub view rather than the local mistake it is.
+//
+// The fix: resolve the PR's real base from the forge (`baseRefName`) and
+// rebase onto THAT ref. When no PR exists yet (first push) or the base
+// can't be determined, fall back to the repository default branch — but
+// say so, rather than silently guessing (PRIN-5).
+// ---------------------------------------------------------------------------
+
+/// Decision produced by [`resolve_finish_rebase_base`] for the
+/// human-finish-ceremony's rebase step. Carries the `origin/<ref>` to
+/// rebase onto plus an optional human-facing note — printed BEFORE the
+/// rebase runs, never buried in an error path — for every case that isn't
+/// "known PR targeting the repository default branch".
+// trace:TASK-1416 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FinishRebaseBase {
+    /// No open PR yet, or the PR's recorded base IS the repository
+    /// default — rebase onto it silently.
+    Default { origin_ref: String },
+    /// An open PR exists and its base is NOT the repository default (a
+    /// stacked PR) — rebase onto the PR's real base. `note` names both
+    /// branches so the choice is visible in the ceremony's output.
+    Stacked { origin_ref: String, note: String },
+    /// A PR exists but its base could not be resolved from the forge
+    /// (offline, `gh` failure, …) — fall back to the repository default,
+    /// but `note` says explicitly that the base is unknown rather than
+    /// silently assuming main.
+    // trace:TASK-1416 | ai:claude
+    FallbackWithNote { origin_ref: String, note: String },
+}
+
+impl FinishRebaseBase {
+    /// The `origin/<ref>` every variant carries — what the caller actually
+    /// passes to `git fetch` / `git rebase`.
+    pub fn origin_ref(&self) -> &str {
+        match self {
+            FinishRebaseBase::Default { origin_ref }
+            | FinishRebaseBase::Stacked { origin_ref, .. }
+            | FinishRebaseBase::FallbackWithNote { origin_ref, .. } => origin_ref,
+        }
+    }
+
+    /// The note to print before rebasing, when one applies.
+    pub fn note(&self) -> Option<&str> {
+        match self {
+            FinishRebaseBase::Default { .. } => None,
+            FinishRebaseBase::Stacked { note, .. }
+            | FinishRebaseBase::FallbackWithNote { note, .. } => Some(note),
+        }
+    }
+}
+
+/// Pure classifier: given the branch's open PR number (if any), the PR's
+/// base branch as read from the forge (`baseRefName`, if resolvable), and
+/// the repository's default branch, decide what the finish ceremony
+/// should rebase onto and whether to say something about it first.
+///
+/// `default_branch` may be a bare name (`"main"`) or already
+/// `origin/`-qualified (`"origin/main"`) — either is normalized to a short
+/// name before comparison/formatting.
+// trace:TASK-1416 | ai:claude
+pub fn resolve_finish_rebase_base(
+    pr_number: Option<u64>,
+    pr_base_branch: Option<&str>,
+    default_branch: &str,
+) -> FinishRebaseBase {
+    let default_short = default_branch
+        .strip_prefix("origin/")
+        .unwrap_or(default_branch);
+    let default_origin_ref = format!("origin/{default_short}");
+
+    match (pr_number, pr_base_branch) {
+        (Some(pr), Some(base)) if !base.is_empty() && base != default_short => {
+            FinishRebaseBase::Stacked {
+                origin_ref: format!("origin/{base}"),
+                note: format!(
+                    "PR-{pr}'s base is `{base}`, not the repository default (`{default_short}`) \
+                     — this is a stacked PR. Rebasing onto its real base."
+                ),
+            }
+        }
+        (Some(pr), None) => FinishRebaseBase::FallbackWithNote {
+            origin_ref: default_origin_ref,
+            note: format!(
+                "could not determine PR-{pr}'s base branch from the forge — falling back to the \
+                 repository default (`{default_short}`). If this PR is stacked on another branch, \
+                 rebase manually: `git rebase origin/<real-base>`."
+            ),
+        },
+        _ => FinishRebaseBase::Default {
+            origin_ref: default_origin_ref,
+        },
+    }
+}
+
 /// PR metadata captured from `gh pr view <N> --json ...`. Enough to
 /// drive the rebase + cross-fork detection.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1720,5 +1824,77 @@ enforcement = "warn"
         assert!(msg.contains("origin/feature"), "{msg}");
         assert!(msg.contains("Failing closed"), "{msg}");
         assert!(msg.contains("git ls-remote exited 128"), "{msg}");
+    }
+
+    // --- TASK-1416: finish-ceremony base resolution ---
+
+    #[test]
+    fn finish_rebase_base_no_pr_yet_uses_default_silently() {
+        // First push, no open PR — nothing to warn about.
+        let out = resolve_finish_rebase_base(None, None, "main");
+        assert_eq!(
+            out,
+            FinishRebaseBase::Default {
+                origin_ref: "origin/main".to_string()
+            }
+        );
+        assert!(out.note().is_none());
+        assert_eq!(out.origin_ref(), "origin/main");
+    }
+
+    #[test]
+    fn finish_rebase_base_pr_targets_default_silently() {
+        let out = resolve_finish_rebase_base(Some(2009), Some("main"), "main");
+        assert_eq!(
+            out,
+            FinishRebaseBase::Default {
+                origin_ref: "origin/main".to_string()
+            }
+        );
+        assert!(out.note().is_none());
+    }
+
+    #[test]
+    fn finish_rebase_base_stacked_pr_uses_real_base_with_note() {
+        // The TASK-1416 archetype: PR-2009 head bug-1420-work, base
+        // task-1289-work — must rebase onto the STACKED base, not main.
+        let out = resolve_finish_rebase_base(Some(2009), Some("task-1289-work"), "main");
+        match &out {
+            FinishRebaseBase::Stacked { origin_ref, note } => {
+                assert_eq!(origin_ref, "origin/task-1289-work");
+                assert!(note.contains("PR-2009"), "{note}");
+                assert!(note.contains("task-1289-work"), "{note}");
+                assert!(note.contains("stacked"), "{note}");
+            }
+            other => panic!("expected Stacked, got {other:?}"),
+        }
+        assert_eq!(out.origin_ref(), "origin/task-1289-work");
+        assert!(out.note().unwrap().contains("PR-2009"));
+    }
+
+    #[test]
+    fn finish_rebase_base_stacked_pr_normalizes_origin_qualified_default() {
+        // default_branch passed in already `origin/`-qualified must still
+        // compare correctly against the bare PR base.
+        let out = resolve_finish_rebase_base(Some(9), Some("feature-x"), "origin/main");
+        assert!(matches!(out, FinishRebaseBase::Stacked { .. }));
+        assert_eq!(out.origin_ref(), "origin/feature-x");
+    }
+
+    #[test]
+    fn finish_rebase_base_unknown_falls_back_with_visible_note() {
+        // PR exists but the forge lookup failed — fall back to default,
+        // but SAY SO (PRIN-5), never guess silently.
+        let out = resolve_finish_rebase_base(Some(42), None, "main");
+        match &out {
+            FinishRebaseBase::FallbackWithNote { origin_ref, note } => {
+                assert_eq!(origin_ref, "origin/main");
+                assert!(note.contains("PR-42"), "{note}");
+                assert!(note.contains("could not determine"), "{note}");
+                assert!(note.contains("main"), "{note}");
+            }
+            other => panic!("expected FallbackWithNote, got {other:?}"),
+        }
+        assert!(out.note().is_some());
     }
 }
