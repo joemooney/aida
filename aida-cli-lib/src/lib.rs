@@ -35450,7 +35450,22 @@ pub(crate) fn probe_ci_state_for_branch_github(branch: &str) -> CiProbe {
 /// Pure JSON-to-CiProbe parser. Extracted so we can unit-test it without
 /// running gh. The input shape is `[{"number": N, "statusCheckRollup": [...]}]`
 /// (a JSON array of PR objects from gh; we only ever look at the first).
-/// trace:TASK-111 | ai:claude
+///
+/// BUG-1455: a concluded failure is reported as terminal `Red` only once
+/// every other check on the rollup has also concluded. `gh`'s rollup carries
+/// no `isRequired` flag, so this function cannot tell a required check from
+/// an optional one — but it can always tell "concluded" from "still
+/// running", and a check still `IN_PROGRESS`/`QUEUED` might be the one that
+/// actually decides code health (e.g. the build), even while a fast-failing
+/// gate check (e.g. a supervised merge-hold marker check, which fails by
+/// construction) has already concluded. Ending the wait on the gate's
+/// conclusion alone let a caller declare CI red — and emit a terminal wake —
+/// before the real build had even reported in. Waiting for every check to
+/// settle before returning Red or Green is the conservative, always-safe
+/// reading: it never reports a verdict while something is still pending or
+/// unknown (PRIN-5), at the cost of not fast-failing on an unrelated
+/// optional check while something else is still running.
+// trace:BUG-1455 | ai:claude
 pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
     let trimmed = stdout.trim();
     if trimmed.is_empty() || trimmed == "[]" {
@@ -35518,6 +35533,13 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
             }
         }
     }
+    // BUG-1455: a check still running always keeps the verdict open, even
+    // when another check has already concluded a failure — a partial
+    // rollup must never be read as terminal. Only once nothing is left
+    // running do concluded failures decide Red vs Green.
+    if any_in_progress {
+        return CiProbe::InProgress { pr_number };
+    }
     if !failed.is_empty() {
         let summary = if failed.len() <= 3 {
             failed.join(", ")
@@ -35528,9 +35550,6 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
             pr_number,
             failed_summary: summary,
         };
-    }
-    if any_in_progress {
-        return CiProbe::InProgress { pr_number };
     }
     CiProbe::Green { pr_number }
 }
