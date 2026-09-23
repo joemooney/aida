@@ -1,0 +1,27 @@
+id: 01a0cbd7-7612-7fd1-ba90-3a998c6874f2
+spec_id: STORY-1461
+agreed_id: STORY-1461
+title: 'Review PR-2104: [AI:codex] feat(usage): add dated token cost estimates (TASK-1434)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0cbc4`) for branch `task-1434`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2104>
+  - Branch: `task-1434` → `main`
+
+  ## Covers
+
+  - TASK-1434
+  - TASK-1427
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2104` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T01:18:10.450876927Z
+modified_at: 2026-09-23T01:18:10.450876927Z
+req_type: Story
