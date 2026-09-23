@@ -5234,6 +5234,11 @@ pub enum QueueCommand {
     Move {
         /// Requirement ID (UUID or SPEC-ID)
         id: String,
+        /// User ID whose queue to reorder (defaults to AIDA_USER or the
+        /// shell's $USER), matching every other queue verb (add/remove/list).
+        // trace:BUG-1487 | ai:claude
+        #[clap(long)]
+        user: Option<String>,
         /// Move to the front of the queue (slot 1). `--to-front` and
         /// `--to-top` are accepted aliases for the same action. When
         /// the target is already at slot 1, the command is a friendly

@@ -3336,6 +3336,7 @@ pub(crate) fn handle_queue_command(
         }
         QueueCommand::Move {
             id,
+            user,
             top,
             bottom,
             to,
@@ -3353,7 +3354,10 @@ pub(crate) fn handle_queue_command(
             // BUG-89: route through the canonical helper so move resolves
             // user_id the same way add/list do (previously this path
             // skipped the USERNAME fallback). trace:BUG-89 | ai:claude
-            let user_id = current_user_id(None);
+            // BUG-1487: `move` was the only queue verb without --user, so
+            // the documented way to address another identity's queue
+            // failed on the one verb that reorders it. trace:BUG-1487 | ai:claude
+            let user_id = current_user_id(user.as_deref());
             let store = storage.load()?;
 
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
