@@ -8,12 +8,12 @@ description: |-
   (2) The drain merge refusal reuses FailureKind::LeaseConflict, so the recovery hint at auto_complete.rs ~2089 wrongly says another merger holds the merge-lease. Give it a distinct kind or message.
   (3) aida review <SPEC> takes the marker head from the local origin/<branch> ref, which may be stale. Prefer the forge PR head.
   (4) Wire aida review claim into the /aida-review skill and into queue work PR-N review sessions.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T18:51:40.339796684Z
-modified_at: 2026-09-23T20:45:16.472019314Z
+modified_at: 2026-09-23T21:36:28.174585508Z
 req_type: Task
 tags:
 - followup
@@ -23,3 +23,21 @@ relationships:
 - rel_type: Child
   target_id: 01a0c0b3-03d6-7190-a8f5-8bc1a15a751e
   created_at: 2026-09-23T18:51:43.385573736Z
+history:
+- id: 01a0d032-d800-7782-bfbb-702756dc77e0
+  author: aida-auto-bump
+  timestamp: 2026-09-23T21:36:28.160770124Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d032-d80e-7c23-b925-38c0962d44c6
+  timestamp: 2026-09-23T21:36:28.174583989Z
+  agent: aida
+  commit_sha: 765ee16859bfa89fb189f3b176944d13ed6901dc
+  summary: Completed via merge 765ee168
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T21:36:27.666412037Z
+  completion_sha: 765ee16859bfa89fb189f3b176944d13ed6901dc
