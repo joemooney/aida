@@ -28,12 +28,12 @@ description: |
   NOT IN SCOPE: changing `git diff --check`'s behaviour for source files. Trailing whitespace in Rust is an error and should stay one; this is only about markdown, where the construct is legitimate.
 
   Related: BUG-1291 (the ADR-47 instance, fixed at PR #2001), SPIKE-83 (the earlier instance, deliberately not actioned).
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:08:04.119482952Z
-modified_at: 2026-09-23T06:57:50.334169425Z
+modified_at: 2026-09-23T08:10:25.189228496Z
 req_type: Task
 relationships:
 - rel_type: !Custom related
@@ -59,3 +59,21 @@ comments:
   created_at: 2026-09-23T06:57:50.334169425Z
   modified_at: 2026-09-23T06:57:50.334169425Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cd50-e21e-78c2-be56-59a03da09012
+  author: aida-auto-bump
+  timestamp: 2026-09-23T08:10:25.182494186Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cd50-e225-7600-a540-fee15f218560
+  timestamp: 2026-09-23T08:10:25.189227537Z
+  agent: aida
+  commit_sha: 91155561e725f90389e9ddcad8cf0c6209892635
+  summary: Completed via merge 91155561
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T08:10:18.535908585Z
+  completion_sha: 91155561e725f90389e9ddcad8cf0c6209892635
