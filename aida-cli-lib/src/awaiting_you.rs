@@ -304,6 +304,11 @@ pub(crate) enum PrReviewRow {
     Blocked {
         reason: BlockedReason,
         reviewed_sha: String,
+        /// RFC-3339 timestamp the refusal was recorded at, when known —
+        /// carried through so the age since the refusal (no rework since)
+        /// can be reported. `None` when the verdict never recorded one.
+        // trace:TASK-1310 | ai:claude
+        recorded_at: Option<String>,
     },
     /// The newest approval was recorded against a sha the head moved past.
     Stale { reviewed_sha: String },
@@ -339,6 +344,87 @@ fn recorded_instant(
     v.recorded_at
         .as_deref()
         .and_then(|s| chrono::DateTime::parse_from_rfc3339(s.trim()).ok())
+}
+
+/// TASK-1310: how long a `Blocked` review row has stood with no rework —
+/// the duration `aida awaiting`/`aida status` report so a refusal can't sit
+/// unworked indefinitely unnoticed. Past this many seconds since
+/// `recorded_at`, the row is flagged as long-standing (`REFUSAL_OVERDUE_SECS`
+/// below). Chosen as a plain, generous default (a week) rather than a config
+/// knob — the smallest thing that meets the acceptance; widen to a
+/// `.aida/config.toml` setting if a real project needs a different cadence.
+// trace:TASK-1310 | ai:claude
+const REFUSAL_OVERDUE_SECS: i64 = 7 * 24 * 3600;
+
+/// One `Blocked` row's age since its verdict was recorded, against `now`.
+/// `None` means the verdict carries no parseable `recorded_at` — reported
+/// as "age unknown", never as "no rework" (PRIN-5: unknown is not the same
+/// claim as zero).
+// trace:TASK-1310 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct BlockedAge {
+    pub secs: i64,
+    pub overdue: bool,
+}
+
+/// Parses `recorded_at` (RFC-3339) and measures its age against `now`. A
+/// negative age (clock skew, or a stamp in the future) is clamped to zero
+/// rather than reported as overdue or negative.
+// trace:TASK-1310 | ai:claude
+pub(crate) fn blocked_age(
+    recorded_at: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<BlockedAge> {
+    let at = recorded_at
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())?;
+    let secs = (now - at.with_timezone(&chrono::Utc)).num_seconds().max(0);
+    Some(BlockedAge {
+        secs,
+        overdue: secs >= REFUSAL_OVERDUE_SECS,
+    })
+}
+
+/// Renders a `Blocked` row's age suffix: `"refused 3d ago, no rework since"`,
+/// `"refused 9d ago, no rework since — overdue"` past the threshold, or
+/// `"age unknown"` when `recorded_at` could not be parsed. Reused by both
+/// the text renderer and the JSON shape (via [`blocked_age`]) so the two
+/// surfaces cannot disagree — the query that produced the number is exactly
+/// this function plus the `recorded_at` field both surfaces also print.
+// trace:TASK-1310 | ai:claude
+pub(crate) fn blocked_age_label(
+    recorded_at: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    match blocked_age(recorded_at, now) {
+        Some(age) if age.overdue => format!(
+            "refused {}, no rework since — overdue",
+            crate::last_drain::format_age(age.secs)
+        ),
+        Some(age) => format!(
+            "refused {}, no rework since",
+            crate::last_drain::format_age(age.secs)
+        ),
+        None => "age unknown".to_string(),
+    }
+}
+
+/// Age suffix for an `Unverifiable` Blocked row: the refusal cannot be placed
+/// against the head, so whether rework landed since is UNKNOWN — never claim
+/// "no rework since" (PRIN-5), and never flag it overdue.
+// trace:TASK-1310 | ai:claude
+pub(crate) fn blocked_age_label_unverifiable(
+    recorded_at: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    match blocked_age(recorded_at, now) {
+        Some(age) => format!(
+            "refused {}, rework since then unknown",
+            crate::last_drain::format_age(age.secs)
+        ),
+        None => "age unknown".to_string(),
+    }
 }
 
 /// BUG-1549: the single PR review classifier. BOTH the mergeable suppression
@@ -407,6 +493,7 @@ pub(crate) fn classify_pr_review(
             row: Some(PrReviewRow::Blocked {
                 reason,
                 reviewed_sha: sha(r),
+                recorded_at: r.recorded_at.clone(),
             }),
         };
     }
@@ -459,6 +546,10 @@ pub(crate) struct BlockedReviewItem {
     /// Where the PR is now — empty when unknown.
     pub head_sha: String,
     pub reason: BlockedReason,
+    /// RFC-3339 timestamp the refusal was recorded at, when known. `None`
+    /// means the age is unknown — never rendered as "no rework" (PRIN-5).
+    // trace:TASK-1310 | ai:claude
+    pub recorded_at: Option<String>,
 }
 
 /// STORY-1419: one PR whose rework has landed on a refusal you recorded —
@@ -538,12 +629,14 @@ impl PrReviewRows {
             PrReviewRow::Blocked {
                 reason,
                 reviewed_sha,
+                recorded_at,
             } => self.blocked_reviews.push(BlockedReviewItem {
                 pr,
                 spec,
                 reviewed_sha: reviewed_sha.clone(),
                 head_sha,
                 reason: *reason,
+                recorded_at: recorded_at.clone(),
             }),
             PrReviewRow::Stale { reviewed_sha } => self.stale_approvals.push(StaleApprovalItem {
                 pr,
@@ -1038,18 +1131,31 @@ impl AwaitingReport {
                 .as_deref()
                 .map(|s| format!(" ({s})"))
                 .unwrap_or_default();
+            // trace:TASK-1310 | ai:claude — how long the refusal has stood
+            // with no subsequent rework, reused from the same verdict data
+            // classify_pr_review already read; "age unknown" (PRIN-5) when
+            // recorded_at was never captured.
+            let age = match item.reason {
+                BlockedReason::AtHead => {
+                    blocked_age_label(item.recorded_at.as_deref(), chrono::Utc::now())
+                }
+                BlockedReason::Unverifiable => {
+                    blocked_age_label_unverifiable(item.recorded_at.as_deref(), chrono::Utc::now())
+                }
+            };
             match item.reason {
                 BlockedReason::AtHead => writeln!(
                     w,
-                    "  {} PR-{}{} blocked — changes requested at the current head {}",
+                    "  {} PR-{}{} blocked — changes requested at the current head {} — {}",
                     "⛔".red(),
                     item.pr.to_string().bold(),
                     spec,
                     short_sha_for_row(&item.head_sha).bold(),
+                    age,
                 )?,
                 BlockedReason::Unverifiable => writeln!(
                     w,
-                    "  {} PR-{}{} blocked — a refusal cannot be checked against the head ({})",
+                    "  {} PR-{}{} blocked — a refusal cannot be checked against the head ({}) — {}",
                     "⛔".red(),
                     item.pr.to_string().bold(),
                     spec,
@@ -1063,6 +1169,7 @@ impl AwaitingReport {
                             short_sha_for_row(&item.reviewed_sha).dimmed()
                         )
                     },
+                    age,
                 )?,
             }
             budget -= 1;
@@ -1541,16 +1648,30 @@ impl AwaitingReport {
                 "nights": n.nights,
             })),
             // trace:BUG-1549 | ai:claude
-            "blocked_reviews": self.blocked_reviews.iter().map(|i| serde_json::json!({
-                "pr": i.pr,
-                "spec": i.spec,
-                "reviewed_sha": i.reviewed_sha,
-                "head_sha": i.head_sha,
-                "reason": match i.reason {
-                    BlockedReason::AtHead => "at_head",
-                    BlockedReason::Unverifiable => "unverifiable",
-                },
-            })).collect::<Vec<_>>(),
+            // trace:TASK-1310 | ai:claude — `recorded_at` is the raw input and
+            // `age_secs`/`overdue` are its derived reading (via `blocked_age`),
+            // so a second reader can recompute and falsify the number instead
+            // of trusting the label alone.
+            "blocked_reviews": self.blocked_reviews.iter().map(|i| {
+                let age = blocked_age(i.recorded_at.as_deref(), chrono::Utc::now());
+                serde_json::json!({
+                    "pr": i.pr,
+                    "spec": i.spec,
+                    "reviewed_sha": i.reviewed_sha,
+                    "head_sha": i.head_sha,
+                    "reason": match i.reason {
+                        BlockedReason::AtHead => "at_head",
+                        BlockedReason::Unverifiable => "unverifiable",
+                    },
+                    "recorded_at": i.recorded_at,
+                    "age_secs": age.map(|a| a.secs),
+                    // Unverifiable: rework-since is unknown, so no overdue claim.
+                    "overdue": match i.reason {
+                        BlockedReason::AtHead => age.map(|a| a.overdue),
+                        BlockedReason::Unverifiable => None,
+                    },
+                })
+            }).collect::<Vec<_>>(),
             "stale_approvals": self.stale_approvals.iter().map(|i| serde_json::json!({
                 "pr": i.pr,
                 "spec": i.spec,
@@ -2442,6 +2563,124 @@ mod tests {
         );
         assert_eq!(r.to_json()["blocked_reviews"][0]["reason"], "at_head");
         assert!(r.compact_line().unwrap().contains("1 blocked-review"));
+    }
+
+    // TASK-1310: `blocked_age` is the pure function both the text render and
+    // the JSON shape read — testing it directly is testing what both
+    // surfaces will say, without depending on wall-clock timing in a render
+    // assertion.
+    // trace:TASK-1310 | ai:claude
+    #[test]
+    fn blocked_age_computes_days_since_recorded_at() {
+        let now: chrono::DateTime<chrono::Utc> = "2026-09-23T00:00:00Z".parse().unwrap();
+        let age = blocked_age(Some("2026-09-20T00:00:00+00:00"), now).expect("parseable");
+        assert_eq!(age.secs, 3 * 24 * 3600);
+        assert!(!age.overdue, "3 days is under the overdue threshold");
+        assert_eq!(
+            blocked_age_label(Some("2026-09-20T00:00:00+00:00"), now),
+            "refused 3d ago, no rework since"
+        );
+    }
+
+    // trace:TASK-1310 | ai:claude
+    // trace:TASK-1310 | ai:claude
+    #[test]
+    fn unverifiable_blocked_age_never_claims_no_rework() {
+        let now: chrono::DateTime<chrono::Utc> = "2026-09-23T00:00:00Z".parse().unwrap();
+        let label = blocked_age_label_unverifiable(Some("2026-09-01T00:00:00+00:00"), now);
+        assert!(label.contains("rework since then unknown"), "{label}");
+        assert!(!label.contains("no rework"), "{label}");
+        assert!(!label.contains("overdue"), "{label}");
+    }
+
+    #[test]
+    fn blocked_age_flags_long_standing_refusals_as_overdue() {
+        let now: chrono::DateTime<chrono::Utc> = "2026-09-23T00:00:00Z".parse().unwrap();
+        let age = blocked_age(Some("2026-09-01T00:00:00+00:00"), now).expect("parseable");
+        assert!(age.overdue, "22 days must clear the overdue threshold");
+        assert!(
+            blocked_age_label(Some("2026-09-01T00:00:00+00:00"), now).contains("overdue"),
+            "the label must name the long-standing refusal, not just its age"
+        );
+    }
+
+    // PRIN-5: a refusal with no recorded_at (or an unparseable one) is
+    // reported as "age unknown" — never silently read as "no rework" or as
+    // zero elapsed time. Mirrors PR-1784.json's real shape: the sha KEY is
+    // present but its value is empty, which is exactly the
+    // "blank-sha refusal" case `classify_pr_review_table` already covers for
+    // the reason; this asserts the age reads unknown independently of that.
+    // trace:TASK-1310 | ai:claude
+    #[test]
+    fn blocked_age_is_unknown_without_a_parseable_recorded_at() {
+        let now: chrono::DateTime<chrono::Utc> = "2026-09-23T00:00:00Z".parse().unwrap();
+        assert_eq!(blocked_age(None, now), None);
+        assert_eq!(blocked_age(Some(""), now), None);
+        assert_eq!(blocked_age(Some("   "), now), None);
+        assert_eq!(blocked_age(Some("not-a-timestamp"), now), None);
+        assert_eq!(blocked_age_label(None, now), "age unknown");
+    }
+
+    // trace:TASK-1310 | ai:claude
+    #[test]
+    fn blocked_review_render_and_json_carry_the_age() {
+        // Recorded 2h ago, relative to the actual wall clock — this must
+        // read as recent (not overdue) no matter what day the suite runs.
+        let recent = (chrono::Utc::now() - chrono::Duration::hours(2)).to_rfc3339();
+        let decision = classify_pr_review(&[refusal(Some(HEAD), Some(&recent))], Some(HEAD));
+        let mut rows = PrReviewRows::default();
+        rows.add(2200, Some(HEAD), "some-branch", &decision, None);
+        assert_eq!(
+            rows.blocked_reviews[0].recorded_at.as_deref(),
+            Some(recent.as_str()),
+            "the raw recorded_at must ride along so a second reader can recompute the age"
+        );
+
+        let r = AwaitingReport {
+            blocked_reviews: rows.blocked_reviews,
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        assert!(r.render(false, &mut buf).unwrap());
+        let out = String::from_utf8(buf).unwrap();
+        assert!(
+            out.contains("no rework since"),
+            "the blocked row must say how long it has stood: {out}"
+        );
+        assert!(
+            !out.contains("overdue"),
+            "2h ago must not read as long-standing: {out}"
+        );
+
+        let json = r.to_json();
+        assert_eq!(json["blocked_reviews"][0]["recorded_at"], recent);
+        assert!(json["blocked_reviews"][0]["age_secs"].is_number());
+        assert_eq!(json["blocked_reviews"][0]["overdue"], false);
+    }
+
+    // trace:TASK-1310 | ai:claude
+    #[test]
+    fn blocked_review_json_reports_unknown_age_never_no_rework() {
+        // The blank-sha-key shape (PR-1784.json): the refusal has NO
+        // recorded_at at all, so age must be null/unknown, not zero.
+        let decision = classify_pr_review(&[refusal(Some(HEAD), None)], Some(HEAD));
+        let mut rows = PrReviewRows::default();
+        rows.add(2201, Some(HEAD), "some-branch", &decision, None);
+        assert_eq!(rows.blocked_reviews[0].recorded_at, None);
+
+        let r = AwaitingReport {
+            blocked_reviews: rows.blocked_reviews,
+            ..Default::default()
+        };
+        let json = r.to_json();
+        assert!(json["blocked_reviews"][0]["age_secs"].is_null());
+        assert!(json["blocked_reviews"][0]["overdue"].is_null());
+
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("age unknown"), "{out}");
+        assert!(!out.contains("no rework since"), "{out}");
     }
 
     /// The regression: three messages in the operator's own inbox, a big
