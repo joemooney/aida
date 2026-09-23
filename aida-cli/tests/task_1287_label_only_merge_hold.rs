@@ -154,19 +154,32 @@ fn output_text(output: &Output) -> String {
     )
 }
 
+// BUG-1566: `aida pr ship` no longer releases a supervised merge-hold
+// without a human at an interactive terminal — the same integrity floor as
+// `aida merge-hold clear`. Under `cargo test` stdin is not a TTY, so a
+// label-only hold must be REFUSED before any release or merge happens.
+// trace:BUG-1566 | ai:claude
 #[test]
-fn label_only_hold_releases_waits_for_gate_and_merges_in_one_ship() {
+fn label_only_hold_is_refused_without_a_human_at_a_terminal() {
     let fixture = Fixture::new(true);
     let output = fixture.ship();
     let text = output_text(&output);
-    assert!(output.status.success(), "{text}");
     assert!(
-        text.contains("releasing supervised merge-hold on PR-1287 (explicit review-merge)"),
-        "{text}"
+        !output.status.success(),
+        "headless ship must refuse: {text}"
     );
-    assert_eq!(
-        std::fs::read_to_string(fixture.state.join("events")).unwrap(),
-        "release\ngate-green\nmerge\n"
+    assert!(
+        text.contains("aida merge-hold clear 1287"),
+        "refusal must point at the human clear path: {text}"
+    );
+    let events = std::fs::read_to_string(fixture.state.join("events")).unwrap_or_default();
+    assert!(
+        !events.contains("release") && !events.contains("merge"),
+        "nothing may be released or merged: {events:?}"
+    );
+    assert!(
+        fixture.state.join("label").exists(),
+        "the hold label must still be in place"
     );
 }
 
