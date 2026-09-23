@@ -196,19 +196,34 @@ pub struct ClosureBlocker {
     pub status: Option<RequirementStatus>,
 }
 
-/// BUG-1551: is a `BlockedBy` target resolved for CLOSURE purposes? A blocker
-/// is resolved once it reaches a terminal status — Completed (shipped),
-/// Rejected (declined: there is nothing left to wait for) or Superseded
-/// (replaced). Anything else means the dependency is still unsatisfied.
-/// Deliberately wider than the pickup rule (`blocked_by_incomplete`, which
-/// only accepts Completed): a Rejected blocker parks new work for re-scoping,
-/// but it must not strand already-merged work at Done forever.
+/// BUG-1551: is a `BlockedBy` target resolved for CLOSURE purposes? Reuses
+/// the one "closed" predicate the open lens and the epic rollup read
+/// ([`crate::lifecycle::status_is_closed_for_type`]): terminal (Completed,
+/// Rejected, Superseded) or an accepted ADR (Decision at Approved). An EPIC is
+/// judged by its read-only child rollup ([`crate::rollup::derive_epic_status`])
+/// rather than its stored status, which is not hand-maintained and reads a
+/// stale Draft. Deliberately wider than the pickup rule
+/// (`blocked_by_incomplete`, which only accepts Completed): a Rejected blocker
+/// parks new work for re-scoping, but it must not strand already-merged work at
+/// Done forever.
 // trace:BUG-1551 | ai:claude
-pub fn closure_blocker_resolved(status: &RequirementStatus) -> bool {
-    matches!(
-        status,
-        RequirementStatus::Completed | RequirementStatus::Rejected | RequirementStatus::Superseded
+pub fn closure_blocker_resolved(target: &Requirement, store: &RequirementsStore) -> bool {
+    let status = effective_closure_status(target, store);
+    crate::lifecycle::status_is_closed_for_type(
+        &target.req_type,
+        crate::lifecycle::State::from_status(&status),
     )
+}
+
+/// BUG-1551: the status a blocker is judged by — the derived rollup for an
+/// epic, the stored status otherwise.
+fn effective_closure_status(target: &Requirement, store: &RequirementsStore) -> RequirementStatus {
+    if matches!(target.req_type, crate::RequirementType::Epic) {
+        if let Some(derived) = crate::rollup::derive_epic_status(store, target.id) {
+            return derived;
+        }
+    }
+    target.status.clone()
 }
 
 /// BUG-1551: the unresolved `BlockedBy` predecessors that hold `req`'s closure.
@@ -226,10 +241,10 @@ pub fn unresolved_closure_blockers(
         .filter(|r| matches!(r.rel_type, RelationshipType::BlockedBy))
         .filter_map(
             |rel| match store.requirements.iter().find(|r| r.id == rel.target_id) {
-                Some(target) if closure_blocker_resolved(&target.status) => None,
+                Some(target) if closure_blocker_resolved(target, store) => None,
                 Some(target) => Some(ClosureBlocker {
                     id: target_display_id(target),
-                    status: Some(target.status.clone()),
+                    status: Some(effective_closure_status(target, store)),
                 }),
                 None => Some(ClosureBlocker {
                     id: format!("(unknown:{})", rel.target_id),

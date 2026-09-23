@@ -3418,3 +3418,173 @@ fn reconcile_status_holds_then_completes_when_blocker_ships() {
         RequirementStatus::Completed
     );
 }
+
+/// Mutate one seeded spec in place.
+// trace:BUG-1551 | ai:claude
+fn mutate_spec(
+    store_path: &std::path::Path,
+    spec_id: &str,
+    f: impl FnOnce(&mut aida_core::Requirement),
+) {
+    let storage = Storage::new(store_path);
+    let mut store = storage.load().unwrap();
+    f(store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some(spec_id))
+        .unwrap());
+    storage.save(&store).unwrap();
+}
+
+/// BUG-1551 review: an EPIC blocker is judged by its child rollup, not its
+/// stale stored Draft — an epic whose children all Completed releases closure.
+// trace:BUG-1551 | ai:claude
+#[test]
+fn closure_gate_resolves_epic_blocker_via_child_rollup() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_blocked_spec(&store_path, "BUG-9590", "Done", "EPIC-9591", "Draft");
+    mutate_spec(&store_path, "EPIC-9591", |r| {
+        r.req_type = RequirementType::Epic
+    });
+    seed_spec_at(&store_path, "TASK-9592", "Completed");
+    let store = Storage::new(&store_path).load().unwrap();
+    let epic = store.get_requirement_by_spec_id("EPIC-9591").unwrap().id;
+    let child = store.get_requirement_by_spec_id("TASK-9592").unwrap().id;
+    mutate_spec(&store_path, "EPIC-9591", |r| {
+        r.relationships.push(aida_core::Relationship {
+            rel_type: aida_core::RelationshipType::Child,
+            target_id: child,
+            created_at: None,
+            created_by: None,
+        })
+    });
+    mutate_spec(&store_path, "TASK-9592", |r| {
+        r.relationships.push(aida_core::Relationship {
+            rel_type: aida_core::RelationshipType::Parent,
+            target_id: epic,
+            created_at: None,
+            created_by: None,
+        })
+    });
+
+    let (flips, _) = land_and_bump(&project_root, &store_path, "BUG-9590");
+    assert!(
+        has_flip(&flips, "BUG-9590"),
+        "an epic whose children all Completed must not hold closure (stored Draft is stale)"
+    );
+}
+
+/// BUG-1551 review: an accepted ADR (Decision at Approved) is closed by the
+/// same predicate the open lens uses, so it does not hold closure.
+// trace:BUG-1551 | ai:claude
+#[test]
+fn closure_gate_treats_accepted_adr_blocker_as_resolved() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_blocked_spec(&store_path, "BUG-9593", "Done", "ADR-9594", "Approved");
+    mutate_spec(&store_path, "ADR-9594", |r| {
+        r.req_type = RequirementType::Decision
+    });
+    let (flips, _) = land_and_bump(&project_root, &store_path, "BUG-9593");
+    assert!(has_flip(&flips, "BUG-9593"), "accepted ADR resolves");
+}
+
+/// BUG-1551 review: the next `aida pull` re-checks held specs and completes
+/// one whose blocker resolved — even though its merge commit is no longer in
+/// the pull's scan window — stamping the ORIGINAL merge sha.
+// trace:BUG-1551 | ai:claude
+#[test]
+fn pull_rechecks_and_completes_held_spec_once_blocker_resolves() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_blocked_spec(&store_path, "BUG-9595", "Done", "STORY-9596", "In Progress");
+    let (flips, merge_sha) = land_and_bump(&project_root, &store_path, "BUG-9595");
+    assert!(!has_flip(&flips, "BUG-9595"));
+
+    // A pull with nothing new, blocker still open: stays held.
+    let storage = Storage::new(&store_path);
+    let head = run_git(&project_root, &["rev-parse", "HEAD"]);
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&head), &storage).unwrap();
+    assert!(!has_flip(&flips, "BUG-9595"));
+
+    mutate_spec(&store_path, "STORY-9596", |r| {
+        r.set_status_from_str("Completed")
+    });
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&head), &storage).unwrap();
+    assert!(has_flip(&flips, "BUG-9595"), "released on the next pull");
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-9595").unwrap();
+    assert_eq!(req.status, RequirementStatus::Completed);
+    assert_eq!(
+        req.implementation_info
+            .as_ref()
+            .and_then(|i| i.completion_sha.as_deref()),
+        Some(merge_sha.as_str())
+    );
+}
+
+/// BUG-1551 review: the note's recipe (`reconcile-status --since <sha>^`)
+/// reaches a merge older than the default 200-commit replay window.
+// trace:BUG-1551 | ai:claude
+#[test]
+fn reconcile_since_merge_parent_reaches_merge_older_than_200_commits() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_blocked_spec(&store_path, "BUG-9597", "Done", "STORY-9598", "In Progress");
+    let (_, merge_sha) = land_and_bump(&project_root, &store_path, "BUG-9597");
+    let storage = Storage::new(&store_path);
+    let note = storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id("BUG-9597")
+        .unwrap()
+        .comments
+        .iter()
+        .find(|c| c.content.contains(CLOSURE_HOLD_MARKER))
+        .unwrap()
+        .content
+        .clone();
+    assert!(
+        note.contains(&format!("--since {}^", &merge_sha[..7])),
+        "{note}"
+    );
+    assert!(note.contains("cycle"), "{note}");
+    for i in 0..201 {
+        run_git(
+            &project_root,
+            &[
+                "commit",
+                "--allow-empty",
+                "-q",
+                "-m",
+                &format!("chore: filler {i}"),
+            ],
+        );
+    }
+    mutate_spec(&store_path, "STORY-9598", |r| {
+        r.set_status_from_str("Completed")
+    });
+
+    // Default window (200 commits) cannot see the merge.
+    handle_db_reconcile_status(&store_path, None, Some("BUG-9597"), false).unwrap();
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-9597")
+            .unwrap()
+            .status,
+        RequirementStatus::Done
+    );
+    // The recipe's `--since <sha>^` does.
+    let since = format!("{}^", &merge_sha[..7]);
+    handle_db_reconcile_status(&store_path, Some(&since), Some("BUG-9597"), false).unwrap();
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-9597")
+            .unwrap()
+            .status,
+        RequirementStatus::Completed
+    );
+}

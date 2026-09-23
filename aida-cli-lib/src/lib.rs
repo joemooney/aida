@@ -66069,12 +66069,52 @@ fn closure_hold_comment(hold: &ClosureHold) -> String {
     format!(
         "{CLOSURE_HOLD_MARKER} Code merged to the default branch (commit {short}), but \
          completion is held at Done: unresolved BlockedBy {}. BlockedBy gates completion \
-         as well as pickup. It completes on `aida db reconcile-status --spec {id}` once \
-         every blocker is Completed, Rejected or Superseded; to ship without it, a human \
-         runs `aida edit {id} --status completed`. (merge sha: {})",
+         as well as pickup. The next `aida pull` completes it once every blocker is \
+         Completed, Rejected or Superseded (an epic by its child rollup, an ADR once \
+         accepted); to replay by hand, run `aida db reconcile-status --spec {id} --since \
+         {short}^`. If the blockers form a cycle, or you decide to ship without them, a \
+         human runs `aida edit {id} --status completed`. (merge sha: {})",
         aida_core::pickability::closure_blockers_label(&hold.blockers),
         hold.flip.sha
     )
+}
+
+/// BUG-1551: the merge sha a closure-hold note recorded (the newest note wins).
+// trace:BUG-1551 | ai:claude
+fn closure_hold_merge_sha(req: &aida_core::Requirement) -> Option<String> {
+    req.comments
+        .iter()
+        .rev()
+        .filter(|c| c.content.contains(CLOSURE_HOLD_MARKER))
+        .find_map(|c| {
+            let at = c.content.rfind("(merge sha: ")? + "(merge sha: ".len();
+            let sha: String = c.content[at..]
+                .chars()
+                .take_while(|ch| ch.is_ascii_hexdigit())
+                .collect();
+            (!sha.is_empty()).then_some(sha)
+        })
+}
+
+/// BUG-1551: specs currently HELD (Done + carrying a closure-hold note) whose
+/// blockers have all since resolved — released as ordinary merge flips so each
+/// `aida pull` completes them without needing their (possibly old) merge
+/// commit in the scan window. Cheap: only held specs are considered.
+// trace:BUG-1551 | ai:claude
+fn collect_released_closure_holds(store: &aida_core::RequirementsStore) -> Vec<AutoBumpFlip> {
+    store
+        .requirements
+        .iter()
+        .filter(|r| matches!(r.status, RequirementStatus::Done))
+        .filter_map(|r| {
+            let sha = closure_hold_merge_sha(r)?;
+            if !aida_core::pickability::unresolved_closure_blockers(r, store).is_empty() {
+                return None;
+            }
+            let spec_id = r.agreed_id.clone().or_else(|| r.spec_id.clone())?;
+            Some(AutoBumpFlip::new(spec_id, sha, r.status.clone()))
+        })
+        .collect()
 }
 
 /// BUG-1551: apply a closure hold to the freshest copy of the spec — land it
@@ -66583,7 +66623,14 @@ fn auto_bump_done_to_completed(
         }
     }
 
-    if candidates.is_empty() && pr_to_sha.is_empty() && stranded_review_pr.is_empty() {
+    // BUG-1551: held specs whose blockers have since resolved.
+    let released_holds = collect_released_closure_holds(&store);
+
+    if candidates.is_empty()
+        && pr_to_sha.is_empty()
+        && stranded_review_pr.is_empty()
+        && released_holds.is_empty()
+    {
         return Ok(Vec::new());
     }
 
@@ -66686,6 +66733,14 @@ fn auto_bump_done_to_completed(
     // this same pass is already visible in `flips`. trace:BUG-113 | ai:claude
     for flip in collect_covers_completed_review_flips(&store, &flips) {
         flips.push(flip);
+    }
+    // BUG-1551: release held specs whose blockers resolved since the merge.
+    // Added before the open-PR guard so a newly-opened PR still defers them.
+    // trace:BUG-1551 | ai:claude
+    for flip in released_holds {
+        if !flips.iter().any(|f| f.spec_id == flip.spec_id) {
+            flips.push(flip);
+        }
     }
 
     // BUG-1454: a trailer only completes the spec when this merge finishes
