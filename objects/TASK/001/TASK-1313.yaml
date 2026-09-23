@@ -327,12 +327,12 @@ description: |
   WHAT THIS DOES NOT ANSWER: whether one seat or several run it. Every commit is subject
   `update <SPEC>` authored as the human (BUG-1533), so the 78 cannot be attributed. Dating
   gives the frequency curve; attribution still needs BUG-1533 or per-diff reading.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-23T09:26:30.159225319Z
+modified_at: 2026-09-23T09:53:29.716670702Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
@@ -495,3 +495,21 @@ comments:
   created_at: 2026-09-23T09:08:36.861343886Z
   modified_at: 2026-09-23T09:08:36.861343886Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cdaf-4056-70b1-a33b-15a9c2069561
+  author: aida-auto-bump
+  timestamp: 2026-09-23T09:53:29.686965939Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cdaf-4074-7610-89e0-7ee604ec99ca
+  timestamp: 2026-09-23T09:53:29.716669127Z
+  agent: aida
+  commit_sha: 4e25ca658fb6f498d2970637334b84f3ede0e9d8
+  summary: Completed via merge 4e25ca65
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T09:53:29.684679381Z
+  completion_sha: 4e25ca658fb6f498d2970637334b84f3ede0e9d8
