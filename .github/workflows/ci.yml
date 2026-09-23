@@ -61,8 +61,14 @@ jobs:
         if: steps.changes.outputs.full_ci != 'true'
         run: echo "Docs-only change detected; skipping build, test, fmt, clippy, and trace gates."
 
+      # TASK-1447: the toolchain install/pin/cache steps below now run
+      # unconditionally (not gated on full_ci) because a docs-only PR still
+      # needs a `target/debug/aida` binary for the CLI-manual and monitor-
+      # contract drift guards further down (see "Minimal aida-cli build for
+      # docs-only guards"). Installing/pinning the toolchain is cheap
+      # (seconds, no compilation), so this costs docs-only PRs little.
+      # trace:TASK-1447 | ai:claude
       - name: Install Rust toolchain
-        if: steps.changes.outputs.full_ci == 'true'
         uses: dtolnay/rust-toolchain@stable
 
       # BUG-103: the macos-latest runner intermittently has a stale cache
@@ -74,7 +80,6 @@ jobs:
       # elsewhere) via `shell: bash`, which GitHub provides on all
       # runners. trace:BUG-103 | ai:claude
       - name: Pin stable toolchain & verify cargo
-        if: steps.changes.outputs.full_ci == 'true'
         shell: bash
         run: |
           rustup default stable
@@ -96,7 +101,6 @@ jobs:
           sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap
 
       - name: Cache Rust dependencies
-        if: steps.changes.outputs.full_ci == 'true'
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-dev-profile
@@ -276,9 +280,16 @@ jobs:
       # `docs:impacted` tag. This stops "blind surface edits" where the surface
       # moves but no spec captures the WHY the documenter needs. The store lives
       # on the orphan `aida-store` branch; sync/attach it from the remote-tracking
-      # ref before checking doc intent. trace:STORY-603
+      # ref before checking doc intent.
+      #
+      # TASK-1447: NOT gated on full_ci. It needs no built binary — the
+      # script reads spec metadata straight off the `aida-store` orphan
+      # branch via `git archive` (see its own module docstring: "no `aida`
+      # binary or attached worktree required") — and a docs-only PR can
+      # still touch the skill/command surface dirs above, so it must run
+      # there too. trace:STORY-603 trace:TASK-1447 | ai:claude
       - name: Doc-intent gate (surface changes mark doc-impact)
-        if: steps.changes.outputs.full_ci == 'true' && github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request'
         run: |
           git fetch --no-tags origin aida-store:refs/remotes/origin/aida-store
           # trace:TASK-1206 | ai:codex
@@ -308,15 +319,32 @@ jobs:
       # The orphan `aida-store` branch (fetched by the gates above) backs the
       # reflection check; it SKIPs non-failing when the store can't resolve.
       # trace:STORY-597
+      #
+      # TASK-1447: NOT gated on full_ci. This guard shells out to the built
+      # `aida` binary (`aida help-all`, `aida --help`), which a docs-only PR
+      # never built above — so the "Minimal aida-cli build" step just below
+      # covers that path, keeping this guard live on docs-only PRs too.
+      # trace:TASK-1447 | ai:claude
+      - name: Minimal aida-cli build for docs-only guards
+        if: steps.changes.outputs.full_ci != 'true'
+        # aida-cli-lib defaults exclude the `remote`/postgres features, so
+        # this needs neither protoc nor libgtk/libssl (no "Install Linux
+        # dependencies" step) — building just the `aida` binary crate is far
+        # cheaper than `cargo build --workspace` (server/tui/desktop stay
+        # unbuilt). trace:TASK-1447 | ai:claude
+        run: cargo build -p aida-cli
+
       - name: CLI-manual drift-guard (every command documented)
-        if: steps.changes.outputs.full_ci == 'true'
         run: |
           export PATH="$PWD/target/debug:$PATH"
           python3 docs/cli/verify-manual.py
 
       # trace:STORY-1352 | ai:codex
+      #
+      # TASK-1447: NOT gated on full_ci — same "Minimal aida-cli build" step
+      # above covers the target/debug/aida binary this guard's AIDA_BIN
+      # default points at. trace:TASK-1447 | ai:claude
       - name: Monitor contract drift guard
-        if: steps.changes.outputs.full_ci == 'true'
         run: |
           BASE="origin/${{ github.base_ref }}"
           python3 docs/monitor-contract-fixtures/verify.py "$BASE"
@@ -385,11 +413,24 @@ jobs:
       # structural (no prose semantics); see the module docstring in the
       # script for the measured false-positive investigation into a
       # doc-only (no trace) variant, which was rejected. trace:BUG-1550 | ai:claude
+      #
+      # TASK-1447: NOT gated on full_ci. Pure static analysis over checked-
+      # out source (no build artifact needed), and a docs-only PR can still
+      # strand a trace/doc-header pair in a Markdown or comment edit.
+      # trace:TASK-1447 | ai:claude
       - name: Trace/doc-header stranding gate
-        if: steps.changes.outputs.full_ci == 'true'
         run: |
           python3 scripts/check-trace-headers.py
           python3 -m unittest tests/test_check_trace_headers.py
+
+      # TASK-1447: regression check for the docs-drift guards above. Parses
+      # this file and asserts each known docs-drift guard step either has no
+      # full_ci gate (so it schedules on docs-only PRs) or carries a
+      # DOCS-GUARD-EXEMPT marker documenting why it can't. Pure static
+      # analysis over ci.yml itself -- no build artifact needed, so it runs
+      # unconditionally. trace:TASK-1447 | ai:claude
+      - name: Docs-drift guards schedule on docs-only PRs
+        run: python3 scripts/check-docs-guards-scheduled.py
 
   # Create release artifacts for tags
   release:
