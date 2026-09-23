@@ -34,12 +34,12 @@ description: |
   8. No dollar estimate is emitted without a separately versioned dated rate and exact model match; pricing is explicitly out of scope for this slice.
 
   Sketch-first: before implementation, post the proposed ledger location/schema, join keys, deduplication rules, and CLI surface on this task for driver signoff.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T14:04:15.633781093Z
-modified_at: 2026-09-23T00:53:45.609380219Z
+modified_at: 2026-09-23T00:55:06.030699731Z
 req_type: Task
 tags:
 - cost
@@ -169,3 +169,7 @@ comments:
   content: '[aida:proxy-approval] verdict=APPROVED; reasoning=Independent cold review PASS at exact head e92b0c5308d00ddb136589f125a3ff05f55372fe; all TASK-1427 acceptance blockers resolved, 17 focused ledger tests and BUG-1502 audit passed, portability/fmt/diff checks passed; independent=yes; gates cleared=Build ubuntu SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; trailer decision=keep TASK-1427 trailer to complete the named implementation spec, then verify and complete STORY-1457 separately; timestamp=2026-09-22T17:53:00-07:00.'
   created_at: 2026-09-23T00:53:45.609380219Z
   modified_at: 2026-09-23T00:53:45.609380219Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-23T00:55:06.030699731Z
+  implemented_by: joe
