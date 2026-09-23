@@ -10,17 +10,29 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
-fn classify_flags_workflow_changes_as_definition() {
+fn classify_flags_pr_triggered_workflow_changes_as_definition() {
     let changed = vec![".github/workflows/ci.yml".to_string()];
-    let (definition, test_only) = classify_changed_files(&changed, &|_| false);
+    let (definition, test_only) = classify_changed_files(&changed, &|_| true, &|_| false);
     assert_eq!(definition, changed);
     assert!(test_only.is_empty());
 }
 
+/// Follow-up 2: a workflow file changed, but it's NOT PR-triggered (nightly
+/// cron, release, dispatch-only) — it must not count as a definition
+/// change, and it must not count as an ordinary test-file warn either; it
+/// simply doesn't gate this PR's own check.
 #[test]
-fn classify_flags_workflow_invoked_scripts_as_definition() {
+fn classify_ignores_non_pr_triggered_workflow_changes() {
+    let changed = vec![".github/workflows/nightly.yml".to_string()];
+    let (definition, test_only) = classify_changed_files(&changed, &|_| false, &|_| false);
+    assert!(definition.is_empty());
+    assert!(test_only.is_empty());
+}
+
+#[test]
+fn classify_flags_pr_workflow_invoked_scripts_as_definition() {
     let changed = vec!["scripts/check-portability.sh".to_string()];
-    let (definition, test_only) = classify_changed_files(&changed, &|_| true);
+    let (definition, test_only) = classify_changed_files(&changed, &|_| false, &|_| true);
     assert_eq!(definition, changed);
     assert!(test_only.is_empty());
 }
@@ -28,7 +40,7 @@ fn classify_flags_workflow_invoked_scripts_as_definition() {
 #[test]
 fn classify_treats_non_invoked_scripts_as_ordinary_source() {
     let changed = vec!["scripts/one-off-cleanup.sh".to_string()];
-    let (definition, test_only) = classify_changed_files(&changed, &|_| false);
+    let (definition, test_only) = classify_changed_files(&changed, &|_| false, &|_| false);
     assert!(definition.is_empty());
     assert!(test_only.is_empty());
 }
@@ -39,7 +51,7 @@ fn classify_flags_test_files_as_warn_only() {
         "aida-cli-lib/src/tests/branch_behind_main_tests.rs".to_string(),
         "aida-core/src/tests/discipline_pack_test.rs".to_string(),
     ];
-    let (definition, test_only) = classify_changed_files(&changed, &|_| false);
+    let (definition, test_only) = classify_changed_files(&changed, &|_| false, &|_| false);
     assert!(definition.is_empty());
     assert_eq!(test_only, changed);
 }
@@ -50,7 +62,7 @@ fn classify_ignores_ordinary_source() {
         "aida-cli-lib/src/lib.rs".to_string(),
         "README.md".to_string(),
     ];
-    let (definition, test_only) = classify_changed_files(&changed, &|_| false);
+    let (definition, test_only) = classify_changed_files(&changed, &|_| false, &|_| false);
     assert!(definition.is_empty());
     assert!(test_only.is_empty());
 }
@@ -161,7 +173,11 @@ fn workflow_change_on_main_is_flagged_as_definition() {
     let p = tmp.path();
     run_git(p, &["checkout", "-q", "main"]);
     std::fs::create_dir_all(p.join(".github/workflows")).unwrap();
-    std::fs::write(p.join(".github/workflows/ci.yml"), "name: CI\n").unwrap();
+    std::fs::write(
+        p.join(".github/workflows/ci.yml"),
+        "name: CI\non:\n  pull_request:\n",
+    )
+    .unwrap();
     run_git(p, &["add", "."]);
     run_git(p, &["commit", "-m", "strengthen required guard", "--quiet"]);
     run_git(p, &["checkout", "-q", branch]);
@@ -172,6 +188,38 @@ fn workflow_change_on_main_is_flagged_as_definition() {
         warning.definition_files,
         vec![".github/workflows/ci.yml".to_string()]
     );
+    assert!(warning.test_files.is_empty());
+}
+
+/// Follow-up 2 (proxy-review narrowing): a workflow that only runs on a
+/// cron schedule (no `pull_request` trigger) changing on main must NOT be
+/// flagged as a definition change — it never gated this PR's own check, so
+/// it must not make `aida pr ship` refuse. It also isn't an ordinary test
+/// file, so it lands in neither tier.
+// trace:BUG-1468 | ai:claude
+#[test]
+fn cron_only_workflow_change_on_main_is_not_flagged_as_definition() {
+    let (tmp, branch) = fixture();
+    let p = tmp.path();
+    run_git(p, &["checkout", "-q", "main"]);
+    std::fs::create_dir_all(p.join(".github/workflows")).unwrap();
+    std::fs::write(
+        p.join(".github/workflows/nightly.yml"),
+        "name: Nightly\non:\n  schedule:\n    - cron: '0 6 * * *'\n  workflow_dispatch:\n",
+    )
+    .unwrap();
+    run_git(p, &["add", "."]);
+    run_git(
+        p,
+        &["commit", "-m", "tweak nightly cron workflow", "--quiet"],
+    );
+    run_git(p, &["checkout", "-q", branch]);
+
+    let warning = pr_stale_check_warning(p, branch, "main").expect("branch is behind main");
+    assert_eq!(warning.behind_commits, 1);
+    // This is exactly the signal `aida pr ship` gates its refusal on — an
+    // empty `definition_files` means it proceeds instead of bailing.
+    assert!(warning.definition_files.is_empty());
     assert!(warning.test_files.is_empty());
 }
 
@@ -188,7 +236,7 @@ fn workflow_invoked_script_change_is_flagged_as_definition() {
     std::fs::create_dir_all(p.join("scripts")).unwrap();
     std::fs::write(
         p.join(".github/workflows/ci.yml"),
-        "name: CI\njobs:\n  build:\n    steps:\n      - run: scripts/check-portability.sh\n",
+        "name: CI\non:\n  pull_request:\njobs:\n  build:\n    steps:\n      - run: scripts/check-portability.sh\n",
     )
     .unwrap();
     std::fs::write(
@@ -226,4 +274,31 @@ fn workflow_invoked_script_change_is_flagged_as_definition() {
 fn up_to_date_branch_returns_none() {
     let (tmp, branch) = fixture();
     assert!(pr_stale_check_warning(tmp.path(), branch, "main").is_none());
+}
+
+/// Follow-up 3: staleness is measured from `origin/<branch>` when that
+/// remote-tracking ref exists — falling back to the local `branch` ref only
+/// when there's no `origin/<branch>` (e.g. a not-yet-pushed local branch).
+// trace:BUG-1468 | ai:claude
+#[test]
+fn stale_check_branch_ref_prefers_origin_when_present() {
+    let (tmp, branch) = fixture();
+    let p = tmp.path();
+
+    // No remote yet — falls back to the local branch ref.
+    assert_eq!(stale_check_branch_ref(p, branch), branch);
+
+    // Push both branches to a bare remote so `origin/<branch>` exists.
+    let remote = TempDir::new().unwrap();
+    run_git(remote.path(), &["init", "--bare", "--quiet"]);
+    run_git(
+        p,
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
+    );
+    run_git(p, &["push", "-q", "origin", "main", branch]);
+
+    assert_eq!(
+        stale_check_branch_ref(p, branch),
+        format!("origin/{branch}")
+    );
 }
