@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:10:49.413002836Z
-modified_at: 2026-09-23T13:15:00.528265068Z
+modified_at: 2026-09-23T13:15:06.827548495Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -65,4 +65,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 05:47 -> branch claude/bug-1553, no PR (overnight burn-down)
   created_at: 2026-09-23T12:47:28.712900663Z
   modified_at: 2026-09-23T12:47:28.712900663Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce67-d6cb-7d51-afc5-ce2e87a50582
+  author: joe
+  content: 'Claude implementer result: claude/bug-1553 @ ffd31ac70f. SeatActivity Working/Blocked/Unknown in aida ps (a stopped process via /proc stat, or a transcript tail with an unresolved tool_use for 240s or more), with the pending tool named. AC1-3 and AC5 met; AC4 (aida awaiting surfaces blocked seats) NOT done, split to a follow-up. Awaiting strict review.'
+  created_at: 2026-09-23T13:15:06.827548495Z
+  modified_at: 2026-09-23T13:15:06.827548495Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
