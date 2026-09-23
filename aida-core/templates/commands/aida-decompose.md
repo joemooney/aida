@@ -1,5 +1,5 @@
 ---
-description: "Break a large requirement into independently deliverable vertical-slice children."
+description: Run /aida-decompose.
 ---
 # Decompose Requirement Into Vertical Slices
 

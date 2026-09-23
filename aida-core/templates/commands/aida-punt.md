@@ -1,5 +1,5 @@
 ---
-description: "Pause a spec in Needs Attention when you hit a decision you cannot safely make — the honest alternative to guessing during an autonomous drain."
+description: Run /aida-punt.
 ---
 # Punt A Design-Fork
 

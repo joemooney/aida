@@ -1,6 +1,6 @@
 ---
 name: aida-pr
-description: Wrap up the current batch of commits and open a pull request with linked specs and a test plan. Walks `git log <base>..HEAD` to derive REQ-IDs, confirms they're all Done (or Completed), pushes, drafts the PR body in the established batch format, and runs `gh pr create` after user sign-off.
+description: Wrap up the current batch of commits and open a pull request with linked specs and a test plan.
 disable-model-invocation: true
 allowed-tools:
   - Bash

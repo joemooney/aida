@@ -1,6 +1,6 @@
 ---
 name: aida-burndown
-description: Autonomously burn down a backlog — fan out worktree-isolated implementer subagents over the ready set, integrate their PRs, and loop until drained. Wraps the empirically-working autonomous-drain pattern so the "never stop to ask" rules are structural. Use when the user asks to "burn down the backlog", "drain the approved work", or run a hands-off multi-spec session. Reads the ready set from `aida burndown plan`.
+description: Autonomously burn down a backlog — fan out worktree-isolated implementer subagents over the ready set, integrate their PRs, and loop until drained.
 disable-model-invocation: true
 allowed-tools:
   - Bash

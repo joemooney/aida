@@ -1,6 +1,6 @@
 ---
 name: aida-doctor
-description: Diagnose and heal multi-agent AIDA state drift: stale leases, obsolete briefs, orphan worktrees, orphan branches, and spec/lease mismatches. Use when multi-agent coordination looks inconsistent or after an interrupted drain/recovery.
+description: Diagnose and heal multi-agent AIDA state drift: stale leases, obsolete briefs, orphan worktrees, orphan branches, and spec/lease mismatches.
 disable-model-invocation: true
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: aida-docs-review
-description: Exhaustive documentation quality review — finds stale, inconsistent, unprofessional, and hyped content. Produces a before/after diff report.
+description: Exhaustive documentation quality review — finds stale, inconsistent, unprofessional, and hyped content.
 allowed-tools:
   - Bash
   - Read

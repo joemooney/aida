@@ -1,6 +1,6 @@
 ---
 name: aida-import-plan
-description: Import a saved planner output file into AIDA conventions — detect its target SPEC, move it under docs/plans/, pin it to the spec, parse its sections, and verify its refs. Use after /aida-plan, a Plan agent, a multi-agent workflow, or another planner hands you a loose markdown file.
+description: Import a saved planner output file into AIDA conventions — detect its target SPEC, move it under docs/plans/, pin it to the spec, parse its sections, and verify its refs.
 allowed-tools:
   - Bash
   - Read

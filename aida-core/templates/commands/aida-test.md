@@ -1,5 +1,5 @@
 ---
-description: "Generate tests linked to a requirement."
+description: Run /aida-test.
 ---
 # Generate Tests
 

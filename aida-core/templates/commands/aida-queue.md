@@ -1,5 +1,5 @@
 ---
-description: "Show what's queued for the active role — read-only counterpart to `/aida-pickup`."
+description: Run /aida-queue.
 ---
 # View Queue Contents
 

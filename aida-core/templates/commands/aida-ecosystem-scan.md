@@ -1,5 +1,5 @@
 ---
-description: "Systematically scan the competitor landscape, log capability changes, update positioning, and file backlog tasks."
+description: Run /aida-ecosystem-scan.
 ---
 # AIDA Ecosystem Scan
 

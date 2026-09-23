@@ -1,6 +1,6 @@
 ---
 name: aida-memory-capture
-description: Capture durable project memory in AIDA as work unfolds. Use when a decision, requirement, caveat, or implementation note should outlive the chat.
+description: Capture durable project memory in AIDA as work unfolds.
 allowed-tools:
   - Bash
   - Grep

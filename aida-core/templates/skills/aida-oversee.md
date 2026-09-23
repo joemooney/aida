@@ -1,6 +1,6 @@
 ---
 name: aida-oversee
-description: The judgment layer over the oversight watch loop (STORY-1096 slice 1). Run `aida supervise watch` against a named objective, add judgment (benign vs genuine-human-decision), realign the queue to the objective, fire the redrive+nudge reflexes, coordinate with a live advisor through the substrate — and surface ONLY what needs a human. Never drives or merges. trace:TASK-1221 | ai:claude
+description: The judgment layer over the oversight watch loop (STORY-1096 slice 1).
 allowed-tools:
   - Bash
   - Read

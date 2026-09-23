@@ -1,5 +1,5 @@
 ---
-description: "Audit structural health and propose improvements aligned with requirements."
+description: Run /aida-architecture.
 ---
 # Review Codebase Architecture
 

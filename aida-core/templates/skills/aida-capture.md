@@ -1,6 +1,6 @@
 ---
 name: aida-capture
-description: Review conversation and capture missed requirements. Use at end of sessions to ensure all discussed features and decisions are tracked.
+description: Review conversation and capture missed requirements.
 allowed-tools:
   - Bash
   - Read

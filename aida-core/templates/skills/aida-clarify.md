@@ -1,6 +1,6 @@
 ---
 name: aida-clarify
-description: Advisor-assisted acceptance-authoring loop. For an under-specified spec the questions sweep flagged (missing/thin acceptance criteria), interrogate the human with a small targeted question set, reconcile any conflict with the existing spec body, draft a `## Acceptance` section, bind it, clear the gating parking tag, and re-check whether the spec is now autonomous-ready. The human-decision PRODUCER that turns "parked: missing acceptance" into "burndown-ready" — the interactive complement to the questions sweep (which only DETECTS).
+description: Advisor-assisted acceptance-authoring loop.
 allowed-tools:
   - Bash
   - Read

@@ -1,5 +1,5 @@
 ---
-description: "Plan a development sprint from approved requirements."
+description: Run /aida-sprint.
 ---
 # Sprint Planning
 

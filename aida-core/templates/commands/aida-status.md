@@ -1,5 +1,5 @@
 ---
-description: "One-shot snapshot of the project: requirement breakdown, cache freshness, sync state, recent activity."
+description: Run /aida-status.
 ---
 # Project Status
 

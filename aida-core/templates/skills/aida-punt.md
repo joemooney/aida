@@ -1,6 +1,6 @@
 ---
 name: aida-punt
-description: Punt a spec to Needs Attention when you hit a design-fork you cannot safely resolve. The honest alternative to guessing during an autonomous drain — pause the spec with a structured reason and return control so the orchestrator advances.
+description: Punt a spec to Needs Attention when you hit a design-fork you cannot safely resolve.
 disable-model-invocation: true
 allowed-tools:
   - Bash

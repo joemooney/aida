@@ -1,6 +1,6 @@
 ---
 name: aida-standup
-description: Generate daily standup summary from recent commits and requirement status changes. Quick overview of yesterday's work and today's plan.
+description: Generate daily standup summary from recent commits and requirement status changes.
 allowed-tools:
   - Bash
 ---

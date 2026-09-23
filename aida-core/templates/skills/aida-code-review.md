@@ -1,6 +1,6 @@
 ---
 name: aida-code-review
-description: Exhaustive code quality review — finds sloppy, untested, untraced, overly complex, and inconsistent code. Produces a structured report with before/after diffs.
+description: Exhaustive code quality review — finds sloppy, untested, untraced, overly complex, and inconsistent code.
 allowed-tools:
   - Bash
   - Read

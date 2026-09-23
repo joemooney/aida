@@ -1,5 +1,5 @@
 ---
-description: "Audit the coordination inbox — reconcile every `aida human` item so the report is true from the graph. Triage each into needs-you / fix-state / file-tool-bug, act, and hand back a ledger."
+description: Run /aida-human-audit.
 ---
 # Audit the Coordination Inbox
 

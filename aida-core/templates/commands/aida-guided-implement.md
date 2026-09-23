@@ -1,5 +1,5 @@
 ---
-description: "Guided keystone-implementation mode: a structured step-by-step decision dialog for a keystone / architecture / security spec — decide the major forks up front, record each as a traceable ADR, implement between answers, finish with a PR for human review (no auto-merge)."
+description: Run /aida-guided-implement.
 ---
 # Guided Keystone Implementation
 

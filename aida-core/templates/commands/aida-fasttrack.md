@@ -1,5 +1,5 @@
 ---
-description: "The low-ceremony lane for genuinely trivial work: cosmetic, documentation-only, or one obvious line. CI still gates every change; human review is skipped."
+description: Run /aida-fasttrack.
 ---
 # Fasttrack a trivial change
 

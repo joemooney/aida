@@ -1,6 +1,6 @@
 ---
 name: aida-integrate
-description: Drain the merge/integration queue off the advisor — the procedural recipe for the integrator seat. Take finished work (Done specs with an open PR), rebase stale branches, watch CI, squash-merge the ones that are green AND reviewer-blessed, pull to auto-bump, and escalate (never resolve) anything that needs judgment. Wraps `aida queue integrate` + the integrator role discipline. Use when the user asks to "integrate the finished PRs", "drain the merge queue", or "land the ready work".
+description: Drain the merge/integration queue off the advisor — the procedural recipe for the integrator seat.
 disable-model-invocation: true
 allowed-tools:
   - Bash

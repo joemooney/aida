@@ -1,5 +1,5 @@
 ---
-description: "Generate daily standup summary from recent activity."
+description: Run /aida-standup.
 ---
 # Daily Standup
 

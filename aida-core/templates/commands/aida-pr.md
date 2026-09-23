@@ -1,5 +1,5 @@
 ---
-description: "Wrap up the current batch of commits and open a pull request with linked specs and a test plan."
+description: Run /aida-pr.
 ---
 # AIDA PR
 

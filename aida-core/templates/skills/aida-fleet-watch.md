@@ -1,6 +1,6 @@
 ---
 name: aida-fleet-watch
-description: Substrate-first fleet monitor — one continuously-runnable census of every agent session (managed or not), with plain-language state and ONE recommended next action per item. Read + route only: it may file findings / ack briefs / escalate into `aida awaiting`, but NEVER starts work, takes a lease, or merges. Composes existing read-only CLI surfaces (`aida ps`, `aida awaiting`, `aida watch`, `aida integrate`) plus a tmux/wezterm terminal census fallback. Pair with `/loop` for a live dashboard.
+description: Substrate-first fleet monitor — one continuously-runnable census of every agent session (managed or not), with plain-language state and ONE recommended next action per item.
 allowed-tools:
   - Bash
   - Read

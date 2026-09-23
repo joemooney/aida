@@ -1,5 +1,5 @@
 ---
-description: "Interrogate a requirement or design decision by walking every branch of the tree."
+description: Run /aida-grill.
 ---
 # Grill A Requirement
 

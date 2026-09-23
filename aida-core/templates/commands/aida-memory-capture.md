@@ -1,5 +1,5 @@
 ---
-description: "Capture durable project memory in AIDA as work unfolds."
+description: Run /aida-memory-capture.
 ---
 # AIDA Memory Capture
 

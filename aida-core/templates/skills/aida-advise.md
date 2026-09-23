@@ -1,6 +1,6 @@
 ---
 name: aida-advise
-description: Headless advisor tier for the --no-human=both autonomous drain (STORY-306). Judge a design-fork a headless implementer punted on — resolve it from recorded principle or recorded preference, or escalate it to a human. The default bias is ESCALATE: resolve only what is provably grounded. trace:STORY-306 | ai:claude
+description: Headless advisor tier for the --no-human=both autonomous drain (STORY-306).
 disable-model-invocation: true
 allowed-tools:
   - Bash

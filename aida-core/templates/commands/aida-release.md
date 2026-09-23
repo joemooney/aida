@@ -1,5 +1,5 @@
 ---
-description: "Prepare an AIDA release, verify gates, and stop before tag/push."
+description: Run /aida-release.
 ---
 # Manage Release
 

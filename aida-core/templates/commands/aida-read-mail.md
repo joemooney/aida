@@ -1,5 +1,5 @@
 ---
-description: "Read the unread messages in your mailbox and decide what to do with each — the on-demand companion to the per-turn unread-mail notice."
+description: Run /aida-read-mail.
 ---
 # Read Your Agent Mail
 

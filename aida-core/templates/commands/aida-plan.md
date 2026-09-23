@@ -1,5 +1,5 @@
 ---
-description: "Decompose and design an approved requirement before coding begins."
+description: Run /aida-plan.
 ---
 # Plan Requirement Implementation
 

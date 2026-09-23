@@ -1,6 +1,6 @@
 ---
 name: aida-glossary
-description: Maintain a project glossary and ubiquitous language dictionary. Find inconsistent terminology across requirements and code, propose canonical definitions.
+description: Maintain a project glossary and ubiquitous language dictionary.
 allowed-tools:
   - Bash
   - Read

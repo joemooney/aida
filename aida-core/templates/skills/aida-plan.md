@@ -1,6 +1,6 @@
 ---
 name: aida-plan
-description: Plan the implementation of a requirement before coding. Use when user wants to decompose, design, or plan a requirement's implementation.
+description: Plan the implementation of a requirement before coding.
 allowed-tools:
   - Bash
   - Read

@@ -1,5 +1,5 @@
 ---
-description: "Detect, classify, and (optionally) execute a rebase of the current branch onto its upstream."
+description: Run /aida-rebase.
 ---
 # AIDA Rebase
 
