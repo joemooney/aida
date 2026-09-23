@@ -908,6 +908,75 @@ mod tests {
         assert!(!body.contains("OTHER"));
     }
 
+    // ── Phase 2b (TASK-739): advisor-authority transition guard ──
+
+    // BUG-1494: pin the exact boundary the two-hop "queue rework then edit"
+    // bypass relied on. `NeedsAttention -> InProgress` is a single hop that
+    // must itself require advisor authority (InProgress is a protected
+    // target per `target_requires_advisor_authority`) — otherwise a caller
+    // could land a punted spec InProgress ungated and then ride the
+    // (intentionally free) `InProgress -> Approved` execution flip to reach
+    // Approved without an advisor ever ruling on it. trace:BUG-1494 | ai:claude
+    #[test]
+    fn needs_attention_to_in_progress_requires_advisor_authority() {
+        assert_eq!(
+            transition_guard(State::NeedsAttention, State::InProgress),
+            GuardKind::RequiresAdvisorAuthority,
+            "the first hop of the documented recovery sequence (queue rework's \
+             --work target) must not be a laundering side door"
+        );
+    }
+
+    #[test]
+    fn draft_to_in_progress_requires_advisor_authority() {
+        assert_eq!(
+            transition_guard(State::Draft, State::InProgress),
+            GuardKind::RequiresAdvisorAuthority
+        );
+    }
+
+    // The complementary half of the boundary: once a spec is legitimately
+    // InProgress (however it got there with authority), further execution
+    // flips are NOT gated — that is the documented design (drains must not
+    // need advisor authority for every step), not a residual hole. Pinning
+    // this alongside the two tests above makes the two-hop bypass visible as
+    // a *test failure* the moment either half of the boundary moves.
+    // trace:BUG-1494 | ai:claude
+    #[test]
+    fn in_progress_to_approved_is_not_gated() {
+        assert_eq!(
+            transition_guard(State::InProgress, State::Approved),
+            GuardKind::None
+        );
+    }
+
+    #[test]
+    fn target_requires_advisor_authority_covers_the_full_protected_set() {
+        for s in [
+            State::Approved,
+            State::Planned,
+            State::InProgress,
+            State::Done,
+            State::Completed,
+        ] {
+            assert!(
+                target_requires_advisor_authority(s),
+                "{s:?} must be a protected target"
+            );
+        }
+        for s in [
+            State::Start,
+            State::Draft,
+            State::Rejected,
+            State::Superseded,
+        ] {
+            assert!(
+                !target_requires_advisor_authority(s),
+                "{s:?} must not be a protected target"
+            );
+        }
+    }
+
     // ── Phase 2c (TASK-740): merge auto-bump GitEvent guard ──
 
     #[test]
