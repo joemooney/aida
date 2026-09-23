@@ -218,7 +218,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:43:33.092866010Z
-modified_at: 2026-09-23T14:43:26.671576956Z
+modified_at: 2026-09-23T14:43:31.941561964Z
 req_type: Bug
 comments:
 - id: 01a0c556-7edc-7f02-820a-d12318982900
@@ -316,4 +316,10 @@ comments:
   content: Commit fda022ab93 references this requirement
   created_at: 2026-09-23T14:42:40.385721844Z
   modified_at: 2026-09-23T14:42:40.385721844Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ceb8-c9e5-70f2-8119-8faba1865f9e
+  author: joe
+  content: 'Claude implementer result: claude/bug-1563 @ fda022ab93. Root cause (per this spec''s own trail) is the 1s notice watchdog racing the real-store lease lookup, neutralized by BUG-1567''s AIDA_TEST_NOTICE_DEADLINE_MS=0. Added defense-in-depth: the test file''s aida() helper env_clear()s and allowlists the env, so ambient dev-shell state cannot diverge local from CI. 3/3 clean and 3/3 polluted pass. Test-only; next batch.'
+  created_at: 2026-09-23T14:43:31.941561964Z
+  modified_at: 2026-09-23T14:43:31.941561964Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
