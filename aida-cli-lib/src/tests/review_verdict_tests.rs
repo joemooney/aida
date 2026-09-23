@@ -1314,6 +1314,12 @@ fn a_closed_refusal_does_not_suppress_a_later_pr() {
 #[test]
 fn pr_keyed_write_reports_failure_honestly_when_the_directory_is_read_only() {
     use std::os::unix::fs::PermissionsExt;
+    // Root bypasses directory permissions (CAP_DAC_OVERRIDE), so a read-only
+    // directory cannot force the failure this test needs. trace:BUG-1571
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipping: running as root, directory permissions are not enforced");
+        return;
+    }
 
     let tmp = TempDir::new().unwrap();
     let locked_dir = tmp.path().join(".aida/review-verdicts");
@@ -1362,6 +1368,12 @@ fn pr_keyed_write_reports_failure_honestly_when_the_directory_is_read_only() {
 #[test]
 fn layered_handshake_write_reports_failure_honestly_when_the_directory_is_read_only() {
     use std::os::unix::fs::PermissionsExt;
+    // Root bypasses directory permissions (CAP_DAC_OVERRIDE), so a read-only
+    // directory cannot force the failure this test needs. trace:BUG-1571
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipping: running as root, directory permissions are not enforced");
+        return;
+    }
 
     let tmp = TempDir::new().unwrap();
     let locked_dir = tmp.path().join(".aida/review-verdicts");
