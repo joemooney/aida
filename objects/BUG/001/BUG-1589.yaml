@@ -28,12 +28,12 @@ description: |
   2. Where AIDA scaffolds or launches a seat (aida agent new, role enter, drain supervision skills), no path creates a model-side recurring mail poll; a grep of aida-core/templates for CronCreate/loop-based mail polling returns none.
   3. A doc (docs/agents/ or the discipline pack) records the cost model: tokens per wake ~= calls x context size, so the lever is wake count and context size, not output length.
   4. The upstream harness question (idle re-fire) is either reported with the evidence above or recorded as reported, with the outcome linked here.
-status: Done
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T01:51:06.191825231Z
-modified_at: 2026-09-23T02:29:15.582628238Z
+modified_at: 2026-09-23T03:46:06.226878880Z
 req_type: Bug
 tags:
 - cost token-economics seat-discipline heartbeat incident:2026-09-21 parent:EPIC-71
