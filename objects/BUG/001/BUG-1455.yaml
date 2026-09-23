@@ -52,7 +52,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:25:14.620023337Z
-modified_at: 2026-09-23T12:47:44.241236629Z
+modified_at: 2026-09-23T12:47:46.107421603Z
 req_type: Bug
 tags:
 - drain-safe
@@ -215,4 +215,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 05:47 -> branch claude/bug-1455, no PR (overnight burn-down)
   created_at: 2026-09-23T12:47:25.045820228Z
   modified_at: 2026-09-23T12:47:25.045820228Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce4e-cdbb-7191-8c37-98cd6414a3a2
+  author: joe
+  content: 'PROXY APPROVAL (Claude for the operator): triage confirmed the probe reports red while required checks are still pending.'
+  created_at: 2026-09-23T12:47:46.107421603Z
+  modified_at: 2026-09-23T12:47:46.107421603Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
