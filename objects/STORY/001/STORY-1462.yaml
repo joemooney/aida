@@ -1,0 +1,38 @@
+id: 01a0cbf5-f47e-7bf2-9912-67578e234451
+spec_id: STORY-1462
+agreed_id: STORY-1462
+title: 'Runaway-seat watchdog: a zero-token substrate job on the aida schedule tick that trips on per-session wake-rate, token-rate and repeated-prompt anomalies and alerts before a day''s budget is gone'
+description: |
+  ## Why
+  BUG-1589: on 2026-09-21 two Claude seats burned ~9.8B tokens answering mail ticks that fired every ~7-10s. Nothing noticed for ~24h. The existing watchers (aida watch, aida supervise watch, idlewatch/STORY-998) read the drain event feed and the store - none looks at interactive seat sessions, which is where the spend was. The scheduler that should host such a check (aida schedule / cron, STORY-1226) exists but nothing is ticking it: performance-guard has been overdue since 2026-09-21T21:50Z and no systemd timer / crontab entry drives aida schedule tick.
+
+  Every signal needed is already on disk, no proxy required: Claude Code writes per-request usage (input, cache_read, cache_creation, output), timestamps, and the injected prompts (isMeta/promptSource) into ~/.claude/projects/<slug>/**/*.jsonl including subagents; Codex writes session logs under ~/.codex/sessions/. TASK-1427's derived token ledger may already normalise these - reuse it rather than re-parse if it covers interactive sessions.
+
+  ## Shape
+  A substrate job (runs in cheap Rust/shell, never wakes a model to evaluate) registered in the aida schedule registry, run by aida schedule tick every few minutes. It reads the transcript tails since its last watermark and evaluates per-session rules. The watchdog is itself the thing that must never become the runaway: it is incremental (watermark per file), bounded in runtime, and costs zero model tokens.
+
+  ## Detectors (thresholds configurable under [watchdog] in .aida/config.toml, safe defaults)
+  - wake rate: API calls per session per hour above N (default ~120)
+  - token rate: tokens per session per hour above N (default ~100M) and per project per day above a budget
+  - repeated injected prompt: the same system/meta prompt (e.g. a mail tick) injected more than K times per hour, or at intervals far shorter than its declared cron schedule
+  - idle/no-op ratio: share of wakes whose reply is a no-op ('quiet') above X% over a window
+  - context pressure: sustained per-call context above ~800k, or more than M auto-compactions in a day (recommend restart)
+  - model-side poll setup: a CronCreate / ScheduleWakeup / /loop whose prompt polls the mailbox (per BUG-1589 this pattern is forbidden)
+
+  ## Acceptance
+  1. aida schedule has a built-in watchdog substrate job; aida schedule run watchdog executes it once and prints per-session findings (session id, seat if resolvable, project, rule tripped, measured value, threshold, window).
+  2. Run against the 2026-09-21 transcripts (sessions 01a0bfde..., 01a0adee...), the job trips wake-rate, token-rate, repeated-prompt and idle-ratio on both sessions within the first simulated hour of the storm (fixture or replay test).
+  3. A trip lands where a human already looks: an item in aida awaiting (and the per-turn --notice line), plus a desktop/terminal notification when available. Repeated trips for the same session dedupe.
+  4. Optional enforcement, off by default: [watchdog] action = alert|stop - stop terminates the offending Claude/Codex process (by pid from the session/lease registry) after recording the trip; never touches a process it cannot attribute to the tripped session.
+  5. The tick is actually running: aida init / aida doctor detect that no scheduler drives aida schedule tick and offer an installable systemd user timer or crontab line (aida schedule emit-cron already prints one); aida doctor reports an overdue substrate job as a finding.
+  6. The watchdog's own cost is bounded: incremental reads via per-file watermark, runtime under a few seconds on a 300MB transcript set, zero model calls - enforced by a test.
+  7. docs/environment-variables.md / config docs updated for any new knobs.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T01:51:28.894424654Z
+modified_at: 2026-09-23T01:51:28.894424654Z
+req_type: Story
+tags:
+- cost token-economics watchdog observability scheduler parent:EPIC-71
