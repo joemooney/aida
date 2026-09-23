@@ -33,12 +33,12 @@ description: |-
     - the general form is the MCP self-respawn rule applied to the CLI, which is an existing mechanism rather than a new one
 
   I have NOT rebuilt. A live wave pins its launcher binary and I do not know the current drain state from the reviewer seat, so that is the operator's call, not mine to take unilaterally.
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:36:35.887655718Z
-modified_at: 2026-09-23T21:49:33.358692964Z
+modified_at: 2026-09-23T22:59:01.556531154Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -73,3 +73,21 @@ comments:
   created_at: 2026-09-23T06:25:07.970218415Z
   modified_at: 2026-09-23T06:25:07.970218415Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d07e-6d2d-73e0-959f-7c0af887b432
+  author: aida-auto-bump
+  timestamp: 2026-09-23T22:59:01.549697955Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d07e-6d34-7362-9860-328aa2520266
+  timestamp: 2026-09-23T22:59:01.556529743Z
+  agent: aida
+  commit_sha: 02a9f07aa5a1b0c5de1ca454d0a33b5636ecebd4
+  summary: Completed via merge 02a9f07a
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T22:59:00.101002049Z
+  completion_sha: 02a9f07aa5a1b0c5de1ca454d0a33b5636ecebd4
