@@ -73,7 +73,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:02:30.985302118Z
-modified_at: 2026-09-23T10:29:10.291525848Z
+modified_at: 2026-09-23T10:33:48.687721636Z
 req_type: Bug
 tags:
 - parent:EPIC-62
@@ -102,4 +102,10 @@ comments:
   content: 'Claude implementer result: claude/bug-1529 @ d90a3f35a9. RecordedVerdict gains closed_by_merge/closed_at (serde default); close_verdict_on_merge is idempotent and never touches verdict/summary/findings; auto_bump_done_to_completed closes the verdicts of specs it bumps; review_actionability returns Resolved for a closed verdict; is_outstanding_refusal skips closed and Completed specs. AC1-3 and AC5 met; AC4 uses the spec''s exclusion escape hatch. Awaiting review.'
   created_at: 2026-09-23T10:29:10.291525848Z
   modified_at: 2026-09-23T10:29:10.291525848Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdd4-298f-7fb1-9826-81c7ec1f20a1
+  author: joe
+  content: 'Strict-review blockers fixed by the orchestrator: (1) record_verdict clears closed_by_merge/closed_at on a new round; (2) classify_pr_review skips closed refusals. 2 tests (with a control case). review_verdict+awaiting_you 99 pass. Going into batch 8.'
+  created_at: 2026-09-23T10:33:48.687721636Z
+  modified_at: 2026-09-23T10:33:48.687721636Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
