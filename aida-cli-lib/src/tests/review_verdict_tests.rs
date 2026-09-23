@@ -1409,3 +1409,157 @@ fn layered_handshake_write_reports_failure_honestly_when_the_directory_is_read_o
     );
     assert!(!path.exists(), "the artefact must genuinely be absent");
 }
+
+// ── BUG-1539: every round archived by reviewed sha ─────────────────────────
+// trace:BUG-1539 | ai:claude
+const SHA_R1: &str = "3acf3671fd7a1111111111111111111111111111";
+const SHA_R2: &str = "cd21a1dc0a9e2222222222222222222222222222";
+
+fn record_pr(root: &Path, pr: &str, verdict: &str, sha: &str, by: &str, findings: &[String]) {
+    let path = verdict_path(root, pr);
+    record_verdict_at_path(
+        root,
+        &path,
+        Some(verdict),
+        Some(sha),
+        Some("topic"),
+        Some("summary"),
+        findings,
+        by,
+    )
+    .unwrap();
+}
+
+fn archive_files(root: &Path, key: &str) -> Vec<String> {
+    let dir = verdict_archive_dir(&verdict_path(root, key)).unwrap();
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.ends_with(".json"))
+        .collect();
+    names.sort();
+    names
+}
+
+// trace:BUG-1539 | ai:claude
+#[test]
+fn two_rounds_on_different_shas_keep_both() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    record_pr(
+        root,
+        "PR-2049",
+        "request-changes",
+        SHA_R1,
+        "reviewer-a",
+        &["round-1 finding".into()],
+    );
+    record_pr(root, "PR-2049", "approved", SHA_R2, "drain reviewer", &[]);
+
+    assert_eq!(
+        archive_files(root, "PR-2049"),
+        vec![format!("{SHA_R1}.json"), format!("{SHA_R2}.json")]
+    );
+    let r1 = read_verdict_for_sha(root, "PR-2049", SHA_R1).expect("round 1 survives");
+    assert_eq!(r1.kind, VerdictKind::RequestChanges);
+    assert_eq!(r1.findings, vec!["round-1 finding".to_string()]);
+    assert_eq!(r1.recorded_by.as_deref(), Some("reviewer-a"));
+    let r2 = read_verdict_for_sha(root, "PR-2049", &SHA_R2[..12]).expect("round 2 by prefix");
+    assert_eq!(r2.kind, VerdictKind::Approved);
+    // A sha nobody reviewed has no verdict.
+    assert!(read_verdict_for_sha(root, "PR-2049", "deadbeefdeadbeef").is_none());
+}
+
+// trace:BUG-1539 | ai:claude
+#[test]
+fn same_sha_recorded_twice_is_idempotent() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let f = vec!["one finding".to_string()];
+    record_pr(root, "PR-7", "request-changes", SHA_R1, "reviewer-a", &f);
+    record_pr(root, "PR-7", "request-changes", SHA_R1, "reviewer-a", &f);
+
+    assert_eq!(archive_files(root, "PR-7"), vec![format!("{SHA_R1}.json")]);
+    let archive = verdict_archive_dir(&verdict_path(root, "PR-7"))
+        .unwrap()
+        .join(format!("{SHA_R1}.json"));
+    let v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&archive).unwrap()).unwrap();
+    assert!(
+        v.get("rounds").is_none(),
+        "an identical re-record must not manufacture a round: {v}"
+    );
+
+    // A DIFFERENT reviewer at the same sha is not a duplicate: one commit,
+    // two recordings, the first kept in the archive's own rounds.
+    record_pr(root, "PR-7", "approved", SHA_R1, "reviewer-b", &[]);
+    assert_eq!(archive_files(root, "PR-7"), vec![format!("{SHA_R1}.json")]);
+    let v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&archive).unwrap()).unwrap();
+    assert_eq!(v["recorded_by"], "reviewer-b");
+    assert_eq!(v["rounds"].as_array().unwrap().len(), 1);
+    assert_eq!(v["rounds"][0]["recorded_by"], "reviewer-a");
+}
+
+// trace:BUG-1539 | ai:claude
+#[test]
+fn current_file_readers_are_unchanged_by_the_archive() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    record_pr(
+        root,
+        "PR-11",
+        "request-changes",
+        SHA_R1,
+        "reviewer-a",
+        &["f".into()],
+    );
+    record_pr(root, "PR-11", "approved", SHA_R2, "reviewer-b", &[]);
+
+    // The PR-keyed current file still holds the latest round at the top
+    // level, with the prior round in `rounds`, exactly as before.
+    let current = read_recorded_verdict(root, "PR-11").expect("current file");
+    assert_eq!(current.kind, VerdictKind::Approved);
+    assert_eq!(current.reviewed_sha.as_deref(), Some(SHA_R2));
+    let body = std::fs::read_to_string(verdict_path(root, "PR-11")).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["rounds"][0]["reviewed_sha"], SHA_R1);
+
+    // The archive directory is invisible to `*.json` walkers of the dir.
+    let top: Vec<_> = std::fs::read_dir(root.join(".aida/review-verdicts"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+        .collect();
+    assert_eq!(top, vec![verdict_path(root, "PR-11")]);
+
+    // The TASK-1448 merge-gate candidate set is unchanged: one PR-keyed record.
+    let cands = crate::pr_ship::merge_gate_verdict_candidates(&[root], 11, &[]);
+    assert_eq!(cands.len(), 1);
+    assert_eq!(cands[0].kind, VerdictKind::Approved);
+}
+
+// trace:BUG-1539 | ai:claude
+#[test]
+fn same_tree_under_a_second_pr_number_finds_the_review() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    record_pr(root, "PR-2043", "request-changes", SHA_R1, "drain", &[]);
+    // PR-2042 carries the identical tree but has no file of its own.
+    assert!(read_verdict_for_sha(root, "PR-2042", SHA_R1).is_none());
+    let found = verdicts_for_sha(root, SHA_R1);
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].kind, VerdictKind::RequestChanges);
+}
+
+// trace:BUG-1539 | ai:claude
+#[test]
+fn a_round_with_no_reviewed_sha_is_not_archived() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let path = verdict_path(root, "PR-5");
+    record_verdict_at_path(root, &path, Some("approved"), None, None, None, &[], "x").unwrap();
+    assert!(!verdict_archive_dir(&path).unwrap().exists());
+}

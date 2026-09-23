@@ -1043,7 +1043,153 @@ pub(crate) fn write_verdict_object(
 ) -> std::io::Result<()> {
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj.clone()))
         .unwrap_or_else(|_| "{}".to_string());
-    write_verdict_atomic(path, &format!("{body}\n"))
+    write_verdict_atomic(path, &format!("{body}\n"))?;
+    // BUG-1539: the current file above is the compatibility contract every
+    // existing reader depends on; the per-sha archive is the history. It is
+    // written second so a failure here can never cost the current record,
+    // and it is best-effort for the same reason — but loudly, because a
+    // silently missing archive is exactly the invisible loss this fixes.
+    // trace:BUG-1539 | ai:claude
+    if let Err(e) = archive_round_by_sha(path, obj) {
+        eprintln!(
+            "warning: recorded {} but could not archive the round by reviewed commit: {e}",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
+/// BUG-1539: the directory holding every archived round of the verdict file
+/// at `path` — `.aida/review-verdicts/PR-<N>.json` archives into
+/// `.aida/review-verdicts/PR-<N>/`, one `<reviewed_sha>.json` per commit
+/// reviewed. A directory carries no `.json` extension, so every reader that
+/// walks `.aida/review-verdicts/` for `*.json` files is untouched by it.
+// trace:BUG-1539 | ai:claude
+pub fn verdict_archive_dir(path: &Path) -> Option<PathBuf> {
+    let stem = path.file_stem()?.to_str()?.trim();
+    if stem.is_empty() {
+        return None;
+    }
+    Some(path.parent()?.join(stem))
+}
+
+/// A reviewed sha usable as a file name: hex only, long enough to be a
+/// commit. Anything else is unidentifiable and is not archived (the same
+/// refusal [`archive_current_round`] makes for a round with no commit).
+fn archivable_sha(sha: &str) -> Option<&str> {
+    let sha = sha.trim();
+    (sha.len() >= 7 && sha.len() <= 64 && sha.bytes().all(|b| b.is_ascii_hexdigit())).then_some(sha)
+}
+
+/// BUG-1539: a verdict is about a COMMIT, but the current file is keyed by
+/// PR number or spec, so a later round replaces it. Archive this round at
+/// `<stem>/<reviewed_sha>.json` so a round never destroys the one before it
+/// and a reader can ask "is there a verdict for THIS commit".
+///
+/// Idempotent per commit: re-recording the same review at the same sha
+/// rewrites one file and adds nothing. A DIFFERENT recording at the same sha
+/// (a second reviewer) is kept in that file's own `rounds`, through the same
+/// [`archive_current_round`] rule the current file uses, so two reviewers at
+/// one commit read as one commit with two recordings, never as a silent
+/// overwrite.
+// trace:BUG-1539 | ai:claude
+fn archive_round_by_sha(path: &Path, obj: &JsonObj) -> std::io::Result<()> {
+    let Some(sha) = round_sha(obj) else {
+        return Ok(());
+    };
+    let Some(sha) = archivable_sha(&sha) else {
+        return Ok(());
+    };
+    if obj
+        .get("verdict")
+        .and_then(|v| v.as_str())
+        .is_none_or(|v| v.trim().is_empty())
+    {
+        return Ok(());
+    }
+    let Some(dir) = verdict_archive_dir(path) else {
+        return Ok(());
+    };
+    let archive = dir.join(format!("{}.json", sha.to_ascii_lowercase()));
+    let mut snapshot = obj.clone();
+    snapshot.remove("rounds");
+    let mut existing: JsonObj = std::fs::read_to_string(&archive)
+        .ok()
+        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    archive_current_round(&mut existing, &recording_key(&snapshot));
+    if let Some(rounds) = existing.remove("rounds") {
+        snapshot.insert("rounds".to_string(), rounds);
+    }
+    let body = serde_json::to_string_pretty(&serde_json::Value::Object(snapshot))
+        .unwrap_or_else(|_| "{}".to_string());
+    write_verdict_atomic(&archive, &format!("{body}\n"))
+}
+
+/// BUG-1539: the verdict recorded under `key` (a `PR-<N>` or spec id) for the
+/// commit `sha`, whichever round it was. The current file answers first when
+/// it was taken at `sha`; otherwise the per-sha archive does. Prefix-tolerant
+/// the same way every other sha comparison here is ([`same_reviewed_sha`]).
+// trace:BUG-1539 | ai:claude
+pub fn read_verdict_for_sha(project_root: &Path, key: &str, sha: &str) -> Option<RecordedVerdict> {
+    let path = verdict_path(project_root, key);
+    if let Some(current) = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|b| parse_recorded_verdict(&b))
+    {
+        if current
+            .reviewed_sha
+            .as_deref()
+            .is_some_and(|r| same_reviewed_sha(r, sha))
+        {
+            return Some(current);
+        }
+    }
+    archived_in_dir(&verdict_archive_dir(&path)?, sha)
+        .into_iter()
+        .next()
+}
+
+/// BUG-1539: every archived verdict for commit `sha` under ANY key — the
+/// answer for a duplicate or re-opened PR over the same tree, which has no
+/// file of its own. One entry per archive file (per key), so one review
+/// seen through two PR numbers reads as that review under each reference,
+/// newest recording first.
+// trace:BUG-1539 | ai:claude
+pub fn verdicts_for_sha(project_root: &Path, sha: &str) -> Vec<RecordedVerdict> {
+    let dir = project_root.join(".aida").join("review-verdicts");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<RecordedVerdict> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .flat_map(|d| archived_in_dir(&d, sha))
+        .collect();
+    out.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
+    out
+}
+
+fn archived_in_dir(dir: &Path, sha: &str) -> Vec<RecordedVerdict> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<RecordedVerdict> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+        .filter(|p| {
+            p.file_stem()
+                .and_then(|s| s.to_str())
+                .is_some_and(|stem| same_reviewed_sha(stem, sha))
+        })
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .filter_map(|b| parse_recorded_verdict(&b))
+        .collect();
+    out.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
+    out
 }
 
 /// BUG-1529 criterion 1: close a spec's outstanding refusal out when its
