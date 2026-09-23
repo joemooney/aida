@@ -33433,6 +33433,100 @@ fn branch_behind_main(repo: &std::path::Path, branch: &str) -> Option<(u64, Vec<
     Some((count, sample))
 }
 
+/// BUG-1468: a PR branch's green check is evidence about the guards that
+/// existed WHEN IT RAN. Nothing re-evaluates that green when a new required
+/// guard lands on main, so a long-lived branch can present a green check
+/// that no longer means what a reader assumes (observed on PR #1979 —
+/// `aida-core/templates/.aida/discipline/session-discipline.md` grew a
+/// content check 15h after the branch's own CI ran, and the branch still
+/// showed green). `behind_commits` distinguishes "base moved" (common,
+/// usually harmless) from the dangerous case captured in `guard_files`: a
+/// non-empty list means at least one of those commits touched a
+/// guard-DEFINING path (a CI workflow, or the test the guard runs) — the
+/// branch's green predates a change to what it was even testing.
+// trace:BUG-1468 | ai:claude
+pub(crate) struct StaleCheckWarning {
+    pub(crate) behind_commits: u64,
+    pub(crate) guard_files: Vec<String>,
+}
+
+/// Pure classifier: which of `changed_files` are guard-DEFINING (a CI
+/// workflow file, or a test file whose pass/fail the "green" check reports)
+/// rather than ordinary source changes. Anything else changing on main is
+/// the common "base moved" case — usually harmless for a PR that hasn't
+/// rebased.
+// trace:BUG-1468 | ai:claude
+pub(crate) fn guard_defining_files(changed_files: &[String]) -> Vec<String> {
+    changed_files
+        .iter()
+        .filter(|f| is_guard_defining_path(f))
+        .cloned()
+        .collect()
+}
+
+// trace:BUG-1468 | ai:claude
+fn is_guard_defining_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.starts_with(".github/workflows/")
+        || lower.contains("/.github/workflows/")
+        || lower.starts_with("tests/")
+        || lower.contains("/tests/")
+        || lower.ends_with("_test.rs")
+        || lower.ends_with("_tests.rs")
+        || lower.ends_with("_test.py")
+        || lower.ends_with("_test.sh")
+}
+
+/// git-IO wrapper: how far `branch` is behind `base_ref`, and whether any of
+/// the files that changed on `base_ref` since divergence are guard-defining.
+/// `None` when the branch is not behind base (nothing to warn about) or on a
+/// git error — same fail-open convention as [`branch_behind_main`], so a
+/// git hiccup never blocks a ship.
+// trace:BUG-1468 | ai:claude
+pub(crate) fn pr_stale_check_warning(
+    repo: &std::path::Path,
+    branch: &str,
+    base_ref: &str,
+) -> Option<StaleCheckWarning> {
+    let count_out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-list", "--count", &format!("{branch}..{base_ref}")])
+        .output()
+        .ok()?;
+    if !count_out.status.success() {
+        return None;
+    }
+    let behind_commits: u64 = String::from_utf8_lossy(&count_out.stdout)
+        .trim()
+        .parse()
+        .ok()?;
+    if behind_commits == 0 {
+        return None;
+    }
+    let diff_out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["diff", "--name-only", &format!("{branch}...{base_ref}")])
+        .output()
+        .ok()?;
+    if !diff_out.status.success() {
+        return None;
+    }
+    let changed: Vec<String> = String::from_utf8_lossy(&diff_out.stdout)
+        .lines()
+        .map(|l| l.to_string())
+        .collect();
+    Some(StaleCheckWarning {
+        behind_commits,
+        guard_files: guard_defining_files(&changed),
+    })
+}
+
+#[cfg(test)]
+#[path = "tests/bug_1468_stale_check_tests.rs"]
+mod bug_1468_stale_check_tests;
+
 /// TASK-53: list distinct files touched by commits on `branch` since
 /// `since` (a git-friendly time string like "14 days ago"). Returns
 /// an empty vec on any git error or when the branch has no commits in

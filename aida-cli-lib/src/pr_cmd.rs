@@ -34,6 +34,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             complexity,
             effort,
             no_trailer_check,
+            override_stale_check,
         } => pr_ship_handler(
             *n,
             *no_pull,
@@ -43,6 +44,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             *complexity,
             *effort,
             *no_trailer_check,
+            *override_stale_check,
         ),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
     }
@@ -1078,6 +1080,7 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
                 None,                  // complexity
                 None,                  // effort
                 opts.no_trailer_check, // no_trailer_check
+                false,                 // override_stale_check — not exposed on `aida ship` yet
             )
         }
     }
@@ -1140,6 +1143,7 @@ pub(crate) fn pr_ship_handler(
     complexity: Option<complexity_calibration::ComplexityLevel>,
     effort: Option<effort_calibration::EffortBucket>,
     no_trailer_check: bool,
+    override_stale_check: bool,
 ) -> Result<()> {
     use pr_ship::{
         branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan,
@@ -1727,6 +1731,46 @@ pub(crate) fn pr_ship_handler(
             &ShipStep::WatchCi,
             &StepOutcome::Ok,
         );
+    }
+
+    // ---- BUG-1468: warn (or refuse) when the PR's green predates a
+    // guard-defining change on main. A green check is evidence about the
+    // guards that existed WHEN IT RAN; nothing re-evaluates it when main
+    // gains a stricter workflow/test since. `!already_merged` because a
+    // merged PR has nothing left to refuse. trace:BUG-1468 | ai:claude
+    if !already_merged {
+        let base_branch = pr_ship_target_branch(pr_number);
+        let base_ref = format!("origin/{base_branch}");
+        if let Some(warning) = pr_stale_check_warning(&project_root, &ship_branch, &base_ref) {
+            if warning.guard_files.is_empty() {
+                eprintln!(
+                    "  {} PR-{}'s green predates {} commit(s) now on {} (base moved — \
+                     usually harmless)",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    pr_number,
+                    warning.behind_commits,
+                    base_branch,
+                );
+            } else if override_stale_check {
+                eprintln!(
+                    "  {} PR-{}'s green predates a guard-defining change on {} \
+                     ({}) — shipping anyway (override)",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                    pr_number,
+                    base_branch,
+                    warning.guard_files.join(", "),
+                );
+            } else {
+                anyhow::bail!(
+                    "PR-{pr_number}'s green check completed before {} changed on {base_branch}: {} \
+                     — its CI ran against an OLDER definition of that guard, so the green does not \
+                     mean what it looks like it means. Re-run CI (push an empty commit or rebase), \
+                     or re-run with `--override-stale-check` to ship anyway.",
+                    if warning.guard_files.len() == 1 { "a required check" } else { "required checks" },
+                    warning.guard_files.join(", "),
+                );
+            }
+        }
     }
 
     // ---- Step 3: merge. Use retry-wrapper so a transient gh
