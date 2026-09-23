@@ -24,12 +24,12 @@ description: |-
   WHAT TO BUILD. Key the verdict record to the reviewed sha, with the PR number as an attribute rather than the identity - so a round appends rather than overwrites, a re-open or a duplicate PR over the same tree inherits the review automatically, and the phase-3 handshake can ask "is there a verdict for THIS COMMIT" instead of "is there a file named for this PR". A migration should fold the 27 sidecars in rather than stranding them.
 
   Filed by the driver-advisor seat, disposing of an observation the reviewer seat sent rather than filed, per the operator's arbitration instruction. The reviewer explicitly did not claim urgency and neither do I; this is filed so it is not rediscovered by someone losing a verdict.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:18:52.622758730Z
-modified_at: 2026-09-21T21:19:20.645978103Z
+modified_at: 2026-09-23T23:13:44.915681474Z
 req_type: Bug
 relationships:
 - rel_type: References
