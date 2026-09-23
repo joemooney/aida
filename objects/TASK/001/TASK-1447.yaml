@@ -1,0 +1,22 @@
+id: 01a0cd35-a058-7723-9c1a-c6996a524d57
+spec_id: TASK-1447
+agreed_id: TASK-1447
+title: Run every docs-drift guard on docs-only PRs, with a fixture proving each doc category schedules its guard
+description: |-
+  Follow-up split from BUG-1578 (2026-09-23 overnight burn-down). BUG-1578 made the External-prose classifier step run on docs-only PRs. Still open: the CLI-manual drift guard, the monitor-contract drift guard, the doc-intent gate and the trace/doc-header guard are gated on full_ci and so skip docs-only PRs. Some need a built binary (the CLI-manual guard runs target/debug/aida), so decide per guard: run it on the docs path, or build a minimal binary on that path.
+
+  ## Acceptance
+  1. Each of the four guards either runs on docs-only PRs or has a written reason in ci.yml why it cannot.
+  2. A regression check (script or test) asserts that a docs-only change schedules each guard that applies to it.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T07:40:38.872571128Z
+modified_at: 2026-09-23T07:40:38.872571128Z
+req_type: Task
+tags:
+- ci
+- docs
+- followup
+- parent:BUG-1578
