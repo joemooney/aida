@@ -2,13 +2,48 @@ id: 01a0bf60-6de8-78a1-9ef9-9ed065935ce3
 spec_id: BUG-1450
 agreed_id: BUG-1450
 title: A watchdog-stopped implementer phase discards the work it already pushed, so ten committed commits stayed invisible to every PR-based surface for fifteen hours
-description: "The implementer phase watchdog ends a session at its wall-clock ceiling without surfacing the work the session already committed, so finished-and-pushed work becomes invisible to every PR-based surface and is indistinguishable from a session that produced nothing.\n\nOBSERVED on TASK-1274, stranded fifteen hours.\n\n  2026-09-19 22:17:05  PhaseEntered implementer (attempt 1)\n  2026-09-19 22:17:08  PuntFiled â\x80\x94 the implementer hit a design fork\n  2026-09-19 23:02:14  SpecRetried  cause=watchdog, attempt 2/2\n  2026-09-19 23:47:24  SpecShelved  \"the implementer phase watchdog stopped the session â\x80\x94 phase exceeded the 45m wall-clock ceiling (attempt 2/2)\"\n  2026-09-19 23:51:46  UnshippedWorkDetected  branch task-1274-work\n\nThe branch carried TEN commits, pushed, 107 insertions across four files â\x80\x94 warm mirror pipeline parallelization, runner-slot isolation, mtime and build-stamp stabilization, fixture output-mode pinning. Real work, complete enough to review. No PR was ever opened, because opening the PR happens after the work and inside the same timed phase, and the watchdog ended the phase first.\n\nWHY THAT MATTERS MORE THAN A LOST SESSION. Everything we use to see outstanding work is keyed on a PR â\x80\x94 `aida awaiting` prs, the reviewer queue, merge-hold accounting, the drain's own phase 4. A branch with no PR appears in exactly one place, `unshipped_work`, which reads as a recovery hint rather than as a claim that finished work is sitting there. So for fifteen hours the substrate's answer to \"is there anything to review\" was no, while ten reviewable commits existed.\n\nIt is the inverse of BUG-1422. There, a session that touched nothing was indistinguishable from one that finished. Here a session that did a great deal is indistinguishable from one that did nothing, and for the same underlying reason: the signal is the artifact, and the artifact is produced by a step the failure pre-empts.\n\nTHE PUNT COMPOUNDS IT. A punt was filed three seconds into attempt 1 and never answered, because the escalation that would have surfaced it also died with the session. So the design fork that likely caused the phase to run long is itself unrecorded anywhere a human would look.\n\nACCEPTANCE\n1. When the watchdog stops an implementer phase, work already committed and pushed on the branch is surfaced before the session is torn down â\x80\x94 a PR opened, or a record that names the branch and its commit count as reviewable work rather than as a recovery hint.\n2. The shelve event distinguishes a watchdog stop that left committed work from one that left none. The count of commits ahead of the default branch is the minimum; the current event says only that the ceiling was exceeded.\n3. A punt filed during a phase that the watchdog later stops is still delivered. An unanswered design fork must not be lost because the session that raised it was killed.\n4. WITHDRAWN 2026-09-20 — split to its own task. This criterion asked that `unshipped_work` distinguish a branch with no PR from one whose PR is open and waiting. It is a rendering change on a different surface (awaiting_you.rs) sharing no code with this spec's phase-ordering fix, so bundling them would hold a correct fix behind unrelated work. Removed by amendment rather than left to lapse: merging with it in place would auto-complete this spec against a criterion nobody implemented. Carried by TASK-1305.\n5. A test covers the observed shape: a phase that commits, pushes, and is then stopped by the watchdog leaves the work discoverable through the normal review path, not only through `unshipped_work`.\n\nNOT ABOUT THE CEILING ITSELF. Whether 45 minutes is the right ceiling is a separate question and not in scope. A phase that is stopped correctly should still not lose what it produced.\n\nFound by the advisor after TASK-1274 appeared in `unshipped_work` on roughly a dozen consecutive mail ticks without any surface treating it as actionable. PR #2019 opened manually to make the ten commits reviewable; held, pending review.\n\"\nexecution_mode: drain\nrelationships[4]{rel,id,title}:\n  Parent,EPIC-28,\"Dependency-aware autonomous drain: shelve failures, skip dependents, continue independents (full --auto-complete batch)\"\n  Related,BUG-1422,\"A batch whose remaining members are all ineligible relaunches forever, because a drain that touched nothing is indistinguishable from a drain that finished\"\n  Related,BUG-1422,\"A batch whose remaining members are all ineligible relaunches forever, because a drain that touched nothing is indistinguishable from a drain that finished\"\n  Related,STORY-1409,\"Review PR-2038: [AI:codex] fix(orchestrator): surface watchdog-stopped work (BUG-1450)"
+description: |-
+  The implementer phase watchdog ends a session at its wall-clock ceiling without surfacing the work the session already committed, so finished-and-pushed work becomes invisible to every PR-based surface and is indistinguishable from a session that produced nothing.
+
+  OBSERVED on TASK-1274, stranded fifteen hours.
+
+    2026-09-19 22:17:05  PhaseEntered implementer (attempt 1)
+    2026-09-19 22:17:08  PuntFiled — the implementer hit a design fork
+    2026-09-19 23:02:14  SpecRetried  cause=watchdog, attempt 2/2
+    2026-09-19 23:47:24  SpecShelved  "the implementer phase watchdog stopped the session — phase exceeded the 45m wall-clock ceiling (attempt 2/2)"
+    2026-09-19 23:51:46  UnshippedWorkDetected  branch task-1274-work
+
+  The branch carried TEN commits, pushed, 107 insertions across four files — warm mirror pipeline parallelization, runner-slot isolation, mtime and build-stamp stabilization, fixture output-mode pinning. Real work, complete enough to review. No PR was ever opened, because opening the PR happens after the work and inside the same timed phase, and the watchdog ended the phase first.
+
+  WHY THAT MATTERS MORE THAN A LOST SESSION. Everything we use to see outstanding work is keyed on a PR — `aida awaiting` prs, the reviewer queue, merge-hold accounting, the drain's own phase 4. A branch with no PR appears in exactly one place, `unshipped_work`, which reads as a recovery hint rather than as a claim that finished work is sitting there. So for fifteen hours the substrate's answer to "is there anything to review" was no, while ten reviewable commits existed.
+
+  It is the inverse of BUG-1422. There, a session that touched nothing was indistinguishable from one that finished. Here a session that did a great deal is indistinguishable from one that did nothing, and for the same underlying reason: the signal is the artifact, and the artifact is produced by a step the failure pre-empts.
+
+  THE PUNT COMPOUNDS IT. A punt was filed three seconds into attempt 1 and never answered, because the escalation that would have surfaced it also died with the session. So the design fork that likely caused the phase to run long is itself unrecorded anywhere a human would look.
+
+  ACCEPTANCE
+  1. When the watchdog stops an implementer phase, work already committed and pushed on the branch is surfaced before the session is torn down — a PR opened, or a record that names the branch and its commit count as reviewable work rather than as a recovery hint.
+  2. The shelve event distinguishes a watchdog stop that left committed work from one that left none. The count of commits ahead of the default branch is the minimum; the current event says only that the ceiling was exceeded.
+  3. A punt filed during a phase that the watchdog later stops is still delivered. An unanswered design fork must not be lost because the session that raised it was killed.
+  4. WITHDRAWN 2026-09-20 — split to its own task. This criterion asked that `unshipped_work` distinguish a branch with no PR from one whose PR is open and waiting. It is a rendering change on a different surface (awaiting_you.rs) sharing no code with this spec's phase-ordering fix, so bundling them would hold a correct fix behind unrelated work. Removed by amendment rather than left to lapse: merging with it in place would auto-complete this spec against a criterion nobody implemented. Carried by TASK-1305.
+  5. A test covers the observed shape: a phase that commits, pushes, and is then stopped by the watchdog leaves the work discoverable through the normal review path, not only through `unshipped_work`.
+
+  NOT ABOUT THE CEILING ITSELF. Whether 45 minutes is the right ceiling is a separate question and not in scope. A phase that is stopped correctly should still not lose what it produced.
+
+  Found by the advisor after TASK-1274 appeared in `unshipped_work` on roughly a dozen consecutive mail ticks without any surface treating it as actionable. PR #2019 opened manually to make the ten commits reviewable; held, pending review.
+  "
+  execution_mode: drain
+  relationships[4]{rel,id,title}:
+    Parent,EPIC-28,"Dependency-aware autonomous drain: shelve failures, skip dependents, continue independents (full --auto-complete batch)"
+    Related,BUG-1422,"A batch whose remaining members are all ineligible relaunches forever, because a drain that touched nothing is indistinguishable from a drain that finished"
+    Related,BUG-1422,"A batch whose remaining members are all ineligible relaunches forever, because a drain that touched nothing is indistinguishable from a drain that finished"
+    Related,STORY-1409,"Review PR-2038: [AI:codex] fix(orchestrator): surface watchdog-stopped work (BUG-1450)
 status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:12:42.984173284Z
-modified_at: 2026-09-21T00:40:30.794235212Z
+modified_at: 2026-09-23T10:01:26.504063285Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -23,7 +58,8 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-20T15:12:45.326860647Z
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bd83-26a9-7a91-aba8-ce5523d6d29c
   created_at: 2026-09-20T15:12:59.048841044Z
   created_by: joe
@@ -31,7 +67,8 @@ relationships:
   target_id: 01a0bd83-26a9-7a91-aba8-ce5523d6d29c
   created_at: 2026-09-20T17:52:42.033392932Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0c159-55c3-74a2-97ba-1b50754aa23d
   created_at: 2026-09-21T00:24:16.949899329Z
   created_by: joe
