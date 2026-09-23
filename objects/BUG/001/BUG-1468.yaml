@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:01:14.943970052Z
-modified_at: 2026-09-23T04:33:30.386746554Z
+modified_at: 2026-09-23T04:33:32.313415668Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -54,5 +54,11 @@ comments:
   content: Claude implementer dispatched 2026-09-22 21:10 -> branch claude/bug-1468, no PR
   created_at: 2026-09-23T04:10:09.900171968Z
   modified_at: 2026-09-23T04:10:09.900171968Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cc8a-5299-7051-b610-6430c4a852e4
+  author: joe
+  content: 'Claude implementer result: branch claude/bug-1468 @ 72d172cce3 (2 commits, pushed, no PR). pr_stale_check_warning (lib.rs) compares the branch against base since divergence, in two tiers. DEFINITION tier: .github/workflows/* or a scripts/ file a workflow invokes (found with git grep on base) changed on main -> ''aida pr ship'' refuses unless --override-stale-check, and the drain merge phase (RealPhaseDriver::merge) returns a shelvable PhaseFailure (spec parks NeedsAttention, drain continues). TEST tier: test files changed -> warn only (''N commits behind; M test files changed''). AC2/AC3/AC4 met (10 tests incl. the T/T+1/T+2 fixture). AC1 met for pr ship + the drain merge phase; the awaiting/PR views are NOT wired (gap). MERGE-SAFETY: needs a non-Claude review. REVIEWER NOTES: (a) staleness is inferred from branch divergence, not from the check run''s completion time vs base head; (b) a drain whose spec shelves on a definition change needs a rebase + CI re-run to clear, so confirm the drain''s pre-merge rebase does not make this fire spuriously; (c) new CLI flag --override-stale-check on pr ship has no MCP counterpart (no ship tool).'
+  created_at: 2026-09-23T04:33:32.313415668Z
+  modified_at: 2026-09-23T04:33:32.313415668Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
