@@ -35,5 +35,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:07:40.046649414Z
-modified_at: 2026-09-21T11:07:40.046649414Z
+modified_at: 2026-09-23T06:22:38.646566198Z
 req_type: Story
+comments:
+- id: 01a0ccee-3636-78c2-a382-3c450c05f34a
+  author: joe
+  content: 'PROXY DECISION (Claude for the operator, 2026-09-22 overnight burn-down; the operator delegated design calls: ''make decisions on my behalf''). The question and the ruling (the recommended option is adopted): Q: exited-recorder verdicts — (A) inherit to a standing seat, (B) detect+surface as UNROUTABLE, (C) never let drains record under an identity that outlives them? Recommended: (B) as the immediate fail-closed fix (never silently drop, names the orphaned recorder) — cheapest and matches PRIN-5; file (C) as a follow-up TASK since it''s the root-cause fix but more invasive. Now IMPLEMENT-ready; overrule by commenting.'
+  created_at: 2026-09-23T06:22:38.646566198Z
+  modified_at: 2026-09-23T06:22:38.646566198Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
