@@ -568,6 +568,73 @@ pub(crate) struct ReworkReadyItem {
     pub reviewed_sha: String,
     /// Where the PR is now.
     pub head_sha: String,
+    /// STORY-1420: set when the refusal's recorder has EXITED (a one-shot
+    /// drain reviewer, or a registered seat whose pid is gone), so the row was
+    /// inherited by the spec's owner/implementer — or the advisor/human
+    /// bucket when nobody owns it — instead of routed to a seat that can never
+    /// receive it. Names the recorder so the reader knows whose refusal it is.
+    // trace:STORY-1420 | ai:claude
+    pub inherited_from: Option<String>,
+}
+
+/// STORY-1420: is the seat that recorded a verdict still around to receive
+/// the follow-up? Resolved cheaply and locally (agent registry + pid probe,
+/// never the network) by [`classify_recorder`].
+// trace:STORY-1420 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RecorderLiveness {
+    /// A registered seat with this name has a live process.
+    Live,
+    /// The recorder cannot receive anything any more.
+    Exited,
+    /// No evidence either way — PRIN-5: surfaced to everyone, never hidden.
+    Unknown,
+}
+
+/// STORY-1420: classify a verdict's `recorded_by` against the recorder's
+/// liveness. `named_live(name)` answers from the local agent registry:
+/// `Some(true)` = a live entry with that name, `Some(false)` = entries exist
+/// but every one has exited, `None` = no entry at all.
+///
+/// - `aida drain reviewer` is the orchestrator's headless phase-3 writer: a
+///   one-shot `claude -p` that exits once its verdict is written, with no
+///   registry entry and no seat that outlives it — always `Exited`.
+/// - `<name> (… reviewer seat)` (the `aida review record` identity) is looked
+///   up by `<name>`.
+/// - Anything else (the operator writer, a hand-written identity) is
+///   `Unknown`.
+// trace:STORY-1420 | ai:claude
+pub(crate) fn classify_recorder(
+    recorded_by: &str,
+    named_live: impl Fn(&str) -> Option<bool>,
+) -> RecorderLiveness {
+    let who = recorded_by.trim();
+    if who.eq_ignore_ascii_case("aida drain reviewer") {
+        return RecorderLiveness::Exited;
+    }
+    let Some((name, rest)) = who.split_once(" (") else {
+        return RecorderLiveness::Unknown;
+    };
+    let name = name.trim();
+    if name.is_empty() || !rest.to_ascii_lowercase().contains("reviewer seat") {
+        return RecorderLiveness::Unknown;
+    }
+    match named_live(name) {
+        Some(true) => RecorderLiveness::Live,
+        Some(false) => RecorderLiveness::Exited,
+        None => RecorderLiveness::Unknown,
+    }
+}
+
+/// STORY-1420: who is reading, for routing the rework-ready row. `identity`
+/// is the seat identity (`AIDA_USER`) the STORY-1419 scoping already matched
+/// against `recorded_by`; `role` is the session role the BUG-1530 headline
+/// scoping reads.
+// trace:STORY-1420 | ai:claude
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct ReworkReader<'a> {
+    pub identity: Option<&'a str>,
+    pub role: Option<&'a str>,
 }
 
 /// Why a PR's newest APPROVED verdict does not cover its current head:
@@ -613,6 +680,7 @@ impl PrReviewRows {
     /// on either side surfaces) — a row that explains a suppression is never
     /// filtered, so suppressed-iff-row survives into the report.
     // trace:STORY-1419 trace:BUG-1549 | ai:claude
+    #[cfg(test)]
     pub(crate) fn add(
         &mut self,
         pr: u64,
@@ -621,6 +689,42 @@ impl PrReviewRows {
         decision: &PrReviewDecision,
         seat: Option<&str>,
     ) {
+        // Every recorder is treated as live here — the STORY-1419 contract.
+        // Production routes through `add_routed`, which resolves liveness.
+        self.add_routed(
+            pr,
+            head_sha,
+            head_branch,
+            decision,
+            ReworkReader {
+                identity: seat,
+                role: None,
+            },
+            |_| RecorderLiveness::Live,
+            |_| None,
+        )
+    }
+
+    /// STORY-1420: [`Self::add`] with the rework-ready row routed by the
+    /// recorder's liveness. A LIVE recorder keeps the STORY-1419 routing (the
+    /// refusing seat). An EXITED recorder's follow-up is attributed to the
+    /// spec's owner/implementer (`spec_owner`), or — when nobody owns it — to
+    /// the unowned advisor/human bucket every seat sees. UNKNOWN liveness is
+    /// shown to everyone (PRIN-5). The row is never silently dropped for want
+    /// of a recipient.
+    // trace:STORY-1420 | ai:claude
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn add_routed(
+        &mut self,
+        pr: u64,
+        head_sha: Option<&str>,
+        head_branch: &str,
+        decision: &PrReviewDecision,
+        reader: ReworkReader<'_>,
+        liveness: impl Fn(&str) -> RecorderLiveness,
+        spec_owner: impl Fn(&str) -> Option<String>,
+    ) {
+        let seat = reader.identity;
         let Some(row) = decision.row.as_ref() else {
             return;
         };
@@ -661,9 +765,26 @@ impl PrReviewRows {
                 reviewed_sha,
                 recorded_by,
             } => {
-                if let (Some(me), Some(who)) = (seat, recorded_by.as_deref()) {
-                    if !who.contains(me) {
-                        return;
+                let mut inherited_from = None;
+                if let Some(who) = recorded_by.as_deref() {
+                    match liveness(who) {
+                        RecorderLiveness::Live => {
+                            if let Some(me) = seat {
+                                if !who.contains(me) {
+                                    return;
+                                }
+                            }
+                        }
+                        // PRIN-5: nobody can say whether the recorder can
+                        // still receive this — show it to everyone.
+                        RecorderLiveness::Unknown => {}
+                        RecorderLiveness::Exited => {
+                            let owner = spec.as_deref().and_then(&spec_owner);
+                            if !exited_rework_visible(reader, owner.as_deref()) {
+                                return;
+                            }
+                            inherited_from = Some(who.to_string());
+                        }
                     }
                 }
                 self.rework_ready.push(ReworkReadyItem {
@@ -671,10 +792,33 @@ impl PrReviewRows {
                     spec,
                     reviewed_sha: reviewed_sha.clone(),
                     head_sha,
+                    inherited_from,
                 })
             }
         }
     }
+}
+
+/// STORY-1420: who sees a rework-ready row whose recorder has exited. With an
+/// owner/implementer on the spec, it is theirs — plus the advisor (the
+/// standing disposition gate) and any seat not scoped at all (no role, or an
+/// unrecognised one: BUG-1530's PRIN-5 rule). A reviewer seat that is not the
+/// owner does not inherit another reviewer's dead refusal. With NO owner, the
+/// row lands in the unowned advisor/human bucket shown to everyone.
+// trace:STORY-1420 | ai:claude
+fn exited_rework_visible(reader: ReworkReader<'_>, owner: Option<&str>) -> bool {
+    let Some(owner) = owner.map(str::trim).filter(|o| !o.is_empty()) else {
+        return true;
+    };
+    if reader
+        .identity
+        .is_some_and(|me| me.trim().eq_ignore_ascii_case(owner))
+    {
+        return true;
+    }
+    let seat = classify_seat(reader.role);
+    owned_channel_visible(seat, AwaitingSeat::Implementer)
+        || owned_channel_visible(seat, AwaitingSeat::Advisor)
 }
 
 /// How a recorded sha relates to the current head.
@@ -1274,12 +1418,19 @@ impl AwaitingReport {
                 .as_deref()
                 .map(|s| format!(" ({s})"))
                 .unwrap_or_default();
+            // trace:STORY-1420 | ai:claude — an inherited row names the
+            // exited recorder instead of claiming the refusal was yours.
+            let whose = match item.inherited_from.as_deref() {
+                Some(who) => format!("a refusal by {who} (recorder exited, now yours)"),
+                None => "your refusal".to_string(),
+            };
             writeln!(
                 w,
-                "  {} PR-{}{} moved past your refusal — reviewed {}, now {}",
+                "  {} PR-{}{} moved past {} — reviewed {}, now {}",
                 "🔄".cyan(),
                 item.pr.to_string().bold(),
                 spec,
+                whose,
                 short_sha_for_row(&item.reviewed_sha).dimmed(),
                 short_sha_for_row(&item.head_sha).bold(),
             )?;
@@ -2617,6 +2768,120 @@ mod tests {
         assert_eq!(unscoped.rework_ready.len(), 3, "no seat known: surface all");
     }
 
+    // STORY-1420: a refusal recorded by a seat that has EXITED reaches the
+    // implementer (the spec owner) and the advisor instead of nobody; a live
+    // seat's refusal still routes only to it; unknown liveness shows to all.
+    // trace:STORY-1420 | ai:claude
+    #[test]
+    fn exited_recorder_rework_is_inherited_by_implementer_and_advisor() {
+        let moved = |by: &str| {
+            let mut r = refusal(Some(OLD), Some(T1));
+            r.recorded_by = Some(by.to_string());
+            classify_pr_review(&[r], Some(HEAD))
+        };
+        let drain = moved("aida drain reviewer");
+        let live = moved("claude-reviewer-1 (claude reviewer seat)");
+        let gone = moved("claude-reviewer-9 (claude reviewer seat)");
+        let stranger = moved("claude-reviewer-5 (claude reviewer seat)");
+        let registry = |name: &str| match name {
+            "claude-reviewer-1" => Some(true),
+            "claude-reviewer-9" => Some(false),
+            _ => None,
+        };
+        let liveness = |who: &str| classify_recorder(who, registry);
+        let owner = |spec: &str| (spec == "BUG-2200").then(|| "impl-alice".to_string());
+        let route = |identity: &str, role: &str| {
+            let mut rows = PrReviewRows::default();
+            for (n, d) in [
+                (2200, &drain),
+                (2201, &live),
+                (2202, &gone),
+                (2203, &stranger),
+            ] {
+                rows.add_routed(
+                    n,
+                    Some(HEAD),
+                    &format!("claude/bug-{n}"),
+                    d,
+                    ReworkReader {
+                        identity: Some(identity),
+                        role: Some(role),
+                    },
+                    liveness,
+                    owner,
+                );
+            }
+            rows.rework_ready
+        };
+        let prs = |rows: &[ReworkReadyItem]| rows.iter().map(|r| r.pr).collect::<Vec<_>>();
+
+        // The implementer who owns BUG-2200 inherits the drain reviewer's
+        // refusal; the unowned exited one (2202) is everyone's; the live seat's
+        // refusal is not theirs; unknown liveness (2203) shows to all.
+        let implementer = route("impl-alice", "implementer");
+        assert_eq!(prs(&implementer), vec![2200, 2202, 2203]);
+        assert_eq!(
+            implementer[0].inherited_from.as_deref(),
+            Some("aida drain reviewer"),
+            "an inherited row names the exited recorder"
+        );
+        assert_eq!(implementer[2].inherited_from, None);
+
+        // The advisor (standing disposition gate) sees the exited rows too.
+        assert_eq!(prs(&route("advisor-1", "advisor")), vec![2200, 2202, 2203]);
+
+        // The live refusing seat keeps its own row; a reviewer that is not
+        // the owner does not inherit the owned exited row, but still sees the
+        // unowned bucket and the unknown-liveness row.
+        assert_eq!(
+            prs(&route("claude-reviewer-1", "reviewer")),
+            vec![2201, 2202, 2203]
+        );
+
+        let mut buf = Vec::new();
+        AwaitingReport {
+            rework_ready: implementer,
+            ..Default::default()
+        }
+        .render(false, &mut buf)
+        .unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(
+            out.contains("a refusal by aida drain reviewer (recorder exited"),
+            "{out}"
+        );
+    }
+
+    // trace:STORY-1420 | ai:claude
+    #[test]
+    fn classify_recorder_reads_the_registry_and_fails_open() {
+        let reg = |name: &str| match name {
+            "live-1" => Some(true),
+            "dead-1" => Some(false),
+            _ => None,
+        };
+        assert_eq!(
+            classify_recorder("aida drain reviewer", reg),
+            RecorderLiveness::Exited
+        );
+        assert_eq!(
+            classify_recorder("live-1 (claude reviewer seat)", reg),
+            RecorderLiveness::Live
+        );
+        assert_eq!(
+            classify_recorder("dead-1 (reviewer seat)", reg),
+            RecorderLiveness::Exited
+        );
+        assert_eq!(
+            classify_recorder("never-seen (claude reviewer seat)", reg),
+            RecorderLiveness::Unknown
+        );
+        assert_eq!(
+            classify_recorder("aida review record (operator)", reg),
+            RecorderLiveness::Unknown
+        );
+    }
+
     // BUG-1549: the rows carry both shas and the branch-derived spec, and the
     // blocked row reaches the header count, the render and the JSON.
     // trace:BUG-1549 | ai:claude
@@ -3117,6 +3382,7 @@ mod tests {
                 spec: Some("TASK-1298".into()),
                 reviewed_sha: "3310400503".into(),
                 head_sha: "f95b30853e".into(),
+                inherited_from: None,
             }],
             ..Default::default()
         };

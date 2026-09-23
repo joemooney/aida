@@ -53683,6 +53683,9 @@ fn local_suppressed_prs(
 /// `pr_review_decision`. A head-less PR is not skipped: its decision can
 /// suppress, so its row must exist.
 // trace:BUG-1549 | ai:claude
+// STORY-1420: production uses `pr_review_rows_routed`; this keeps the
+// STORY-1419 every-recorder-live contract for the plumbing tests.
+#[cfg(test)]
 fn pr_review_rows<'a>(
     project_root: &std::path::Path,
     prs: impl IntoIterator<Item = &'a status_cleanup::OpenPrItem>,
@@ -53697,6 +53700,36 @@ fn pr_review_rows<'a>(
             &pr.head_branch,
             &decision,
             seat,
+        );
+    }
+    rows
+}
+
+/// STORY-1420: [`pr_review_rows`] with the rework-ready row routed by the
+/// recorder's liveness (agent registry + pid, never the network).
+// trace:STORY-1420 | ai:claude
+fn pr_review_rows_routed<'a>(
+    project_root: &std::path::Path,
+    prs: impl IntoIterator<Item = &'a status_cleanup::OpenPrItem>,
+    reader: awaiting_you::ReworkReader<'_>,
+    spec_owner: impl Fn(&str) -> Option<String>,
+) -> awaiting_you::PrReviewRows {
+    let mut rows = awaiting_you::PrReviewRows::default();
+    let liveness = |who: &str| {
+        awaiting_you::classify_recorder(who, |name| {
+            agent_registry::named_agent_liveness(project_root, name)
+        })
+    };
+    for pr in prs {
+        let decision = pr_review_decision(project_root, pr);
+        rows.add_routed(
+            pr.number,
+            pr.head_sha.as_deref(),
+            &pr.head_branch,
+            &decision,
+            reader,
+            liveness,
+            &spec_owner,
         );
     }
     rows
@@ -73828,7 +73861,39 @@ fn collect_awaiting_report_inner(
         let seat = std::env::var("AIDA_USER")
             .ok()
             .filter(|s| !s.trim().is_empty());
-        let rows = pr_review_rows(project_root, snapshot.by_branch.values(), seat.as_deref());
+        // trace:STORY-1420 | ai:claude — route an exited recorder's refusal
+        // to the spec's owner/implementer (or the unowned bucket) instead of
+        // to nobody. Liveness is registry + pid only; owners come from the
+        // summaries already loaded above.
+        let reader = awaiting_you::ReworkReader {
+            identity: seat.as_deref(),
+            role: ctx.role.as_deref(),
+        };
+        let spec_owner = |spec: &str| {
+            summaries
+                .iter()
+                .find(|s| {
+                    s.agreed_id
+                        .as_deref()
+                        .is_some_and(|id| id.eq_ignore_ascii_case(spec))
+                        || s.spec_id
+                            .as_deref()
+                            .is_some_and(|id| id.eq_ignore_ascii_case(spec))
+                })
+                .and_then(|s| {
+                    Some(s.owner.trim())
+                        .filter(|o| !o.is_empty())
+                        .or_else(|| s.assignee.as_deref().map(str::trim))
+                        .filter(|o| !o.is_empty())
+                        .map(str::to_string)
+                })
+        };
+        let rows = pr_review_rows_routed(
+            project_root,
+            snapshot.by_branch.values(),
+            reader,
+            spec_owner,
+        );
         (
             rows.rework_ready,
             rows.stale_approvals,

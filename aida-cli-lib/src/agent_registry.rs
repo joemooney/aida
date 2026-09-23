@@ -1505,6 +1505,30 @@ pub(crate) fn agent_is_live(project_root: &Path, agent_type: &str, pid: u32) -> 
         .is_some_and(|entry| registry_entry_is_live(project_root, &entry))
 }
 
+/// STORY-1420: is a seat NAMED `name` still live? Local only — the registry
+/// files plus a pid probe. `Some(true)` when any entry with that name (case-
+/// insensitive) is live, `Some(false)` when entries exist but all have
+/// exited, `None` when the registry has never heard of the name.
+// trace:STORY-1420 | ai:claude
+pub(crate) fn named_agent_liveness(project_root: &Path, name: &str) -> Option<bool> {
+    let name = name.trim();
+    let mut seen = false;
+    for (_, entry) in load_entries(project_root) {
+        if !entry
+            .name
+            .as_deref()
+            .is_some_and(|n| n.trim().eq_ignore_ascii_case(name))
+        {
+            continue;
+        }
+        if registry_entry_is_live(project_root, &entry) {
+            return Some(true);
+        }
+        seen = true;
+    }
+    seen.then_some(false)
+}
+
 // trace:BUG-1156 | ai:codex
 fn registry_entry_is_live(project_root: &Path, entry: &AgentRegistryEntry) -> bool {
     if entry.ended_at.is_some() || !crate::process_probe::pid_is_alive(entry.pid) {
