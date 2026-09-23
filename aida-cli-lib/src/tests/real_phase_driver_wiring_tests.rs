@@ -1623,3 +1623,358 @@ exit 0
     // unset, proving no Done write (which requires a PR) was ever attempted.
     assert_eq!(driver.pr_number, None);
 }
+
+/// Minimal repo with a local `main` the tests below branch off. No origin
+/// remote needed — `resolve_default_branch_ref` falls back to a plain local
+/// `main` branch when no `origin/HEAD` is configured.
+// trace:TASK-1457 | ai:claude
+fn repo_on_default_branch() -> (tempfile::TempDir, std::path::PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let work = tmp.path().join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    git(&work, &["init", "-q", "-b", "main"]);
+    git(&work, &["config", "user.email", "aida@example.invalid"]);
+    git(&work, &["config", "user.name", "AIDA Test"]);
+    write_commit(&work, "base.txt", "base\n", "chore: base");
+    (tmp, work)
+}
+
+/// TASK-1457 (BUG-1527 follow-up): `classify_branch_swap_attribution` is the
+/// exact function `RealPhaseDriver::run_implementer`'s branch-swap gate
+/// calls, so exercising it directly here is exercising the real seam without
+/// the heavier fake-`aida`-launcher fixture. Three commit shapes that share
+/// a swapped-to branch with the dispatched spec's own trailer must all
+/// PROCEED (`Confirmed`) — never read as a swap:
+///
+///   - a same-spec rename (BUG-223): the only commit still trailers the
+///     dispatched spec under its new branch name;
+///   - a stacked branch: a predecessor spec's commit sits under this spec's
+///     own commit, but the dispatched spec's own trailer is still present;
+///   - a both-ids branch: a single commit trailers this spec AND another.
+///
+/// A fourth shape — a same-spec rename whose commits simply have not been
+/// trailered yet — must NOT read as `Confirmed` (nothing credits the
+/// dispatched spec) but must ALSO not read as the confident `Reattributed`
+/// swap a real different-spec trailer produces: it is `Uncertain`, the
+/// PRIN-5 "absent evidence" outcome, asserted here as a control alongside a
+/// genuine swap.
+// trace:BUG-1527 trace:TASK-1457 | ai:claude
+#[test]
+fn branch_swap_attribution_classifies_rename_stacked_both_ids_and_uncertain() {
+    // Same-spec rename (BUG-223): proceeds.
+    let (_tmp, work) = repo_on_default_branch();
+    git(&work, &["checkout", "-q", "-b", "renamed-branch"]);
+    write_commit(&work, "a.txt", "a\n", "fix(x): rename only (STORY-9001)");
+    assert_eq!(
+        super::classify_branch_swap_attribution(&work, "renamed-branch", "STORY-9001"),
+        ShelveAttribution::Confirmed("STORY-9001".to_string()),
+        "a same-spec rename must proceed"
+    );
+
+    // Stacked branch: a predecessor spec's commit plus this spec's own —
+    // proceeds because this spec's own trailer is present somewhere on it.
+    let (_tmp2, work2) = repo_on_default_branch();
+    git(&work2, &["checkout", "-q", "-b", "stacked-branch"]);
+    write_commit(
+        &work2,
+        "b.txt",
+        "b\n",
+        "fix(x): predecessor work (BUG-8999)",
+    );
+    write_commit(
+        &work2,
+        "c.txt",
+        "c\n",
+        "fix(x): this spec's work (STORY-9001)",
+    );
+    assert_eq!(
+        super::classify_branch_swap_attribution(&work2, "stacked-branch", "STORY-9001"),
+        ShelveAttribution::Confirmed("STORY-9001".to_string()),
+        "a stacked branch carrying this spec's own trailer must proceed"
+    );
+
+    // Both-ids branch: a single commit trailers this spec AND another —
+    // proceeds, same rule.
+    let (_tmp3, work3) = repo_on_default_branch();
+    git(&work3, &["checkout", "-q", "-b", "both-ids-branch"]);
+    write_commit(
+        &work3,
+        "d.txt",
+        "d\n",
+        "fix(x): shared fix (STORY-9001) (BUG-8999)",
+    );
+    assert_eq!(
+        super::classify_branch_swap_attribution(&work3, "both-ids-branch", "STORY-9001"),
+        ShelveAttribution::Confirmed("STORY-9001".to_string()),
+        "a commit trailering both this spec and another must proceed"
+    );
+
+    // Control: a genuine swap — the only commit confidently names a
+    // DIFFERENT spec and nothing names this one.
+    let (_tmp4, work4) = repo_on_default_branch();
+    git(&work4, &["checkout", "-q", "-b", "genuine-swap-branch"]);
+    write_commit(&work4, "e.txt", "e\n", "fix(other): unrelated (BUG-9002)");
+    assert_eq!(
+        super::classify_branch_swap_attribution(&work4, "genuine-swap-branch", "STORY-9001"),
+        ShelveAttribution::Reattributed("BUG-9002".to_string()),
+        "a trailer confidently naming a different spec is a genuine swap"
+    );
+
+    // TASK-1457 item 4: a same-spec rename whose commit carries NO trailer
+    // at all — absent evidence, not contrary evidence. Must be `Uncertain`,
+    // never `Reattributed` (there is nothing here to swap onto).
+    let (_tmp5, work5) = repo_on_default_branch();
+    git(
+        &work5,
+        &["checkout", "-q", "-b", "trailerless-rename-branch"],
+    );
+    write_commit(
+        &work5,
+        "f.txt",
+        "f\n",
+        "chore: continue work under the renamed branch",
+    );
+    assert_eq!(
+        super::classify_branch_swap_attribution(&work5, "trailerless-rename-branch", "STORY-9001"),
+        ShelveAttribution::Uncertain("no commit on this PR carries a spec-ID trailer".to_string()),
+        "a trailer-less rename is absent evidence, not a confirmed swap"
+    );
+}
+
+/// TASK-1457 item 4, end to end: exercise the exact same fake-`aida`-launcher
+/// seam as `phase1_refuses_when_implementer_ends_on_another_specs_branch`,
+/// but the swapped-to branch's commit carries NO spec-ID trailer at all —
+/// the legitimate-rename-not-yet-trailered shape. Before this change this
+/// reported the same confidently-worded "branch swapped mid-phase ... credits
+/// BUG-9002" message a genuine swap gets, which is misleading when nothing
+/// was ever established about another spec. The phase must still fail this
+/// pass (a PR/Done write under unconfirmed attribution is unsafe either way
+/// — PRIN-5), but the wording must say attribution is unknown, not assert a
+/// swap that was never confirmed.
+// trace:BUG-1527 trace:TASK-1457 | ai:claude
+#[cfg(unix)]
+#[test]
+fn phase1_reports_attribution_unknown_for_a_trailerless_rename_not_a_swap() {
+    let tmp = tempfile::tempdir().unwrap();
+    let remote = tmp.path().join("origin.git");
+    let root = tmp.path().join("root");
+    let dispatched_branch = "story-9001-work";
+
+    git(tmp.path(), &["init", "--bare", "-b", "main", "origin.git"]);
+    std::fs::create_dir_all(&root).unwrap();
+    git(&root, &["init", "-q"]);
+    git(&root, &["config", "user.email", "aida@example.invalid"]);
+    git(&root, &["config", "user.name", "AIDA Test"]);
+    git(&root, &["checkout", "-q", "-b", "main"]);
+    git(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    write_commit(&root, "README.md", "fixture\n", "chore: init");
+    git(&root, &["push", "-q", "-u", "origin", "main"]);
+    git(&root, &["remote", "set-head", "origin", "main"]);
+    git(&root, &["checkout", "-q", "-b", dispatched_branch]);
+
+    let fake_aida = tmp.path().join("aida");
+    write_executable(
+        &fake_aida,
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+session_id=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --session-id)
+      session_id="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+mkdir -p .aida/sessions .aida/headless-logs
+printf '{"type":"assistant","message":{"content":[{"type":"text","text":"fake work done"}]}}\n' > ".aida/headless-logs/${AIDA_FAKE_BRANCH}-${session_id}.jsonl"
+# BUG-223 rename with no trailer yet — a legitimate rename, not a swap.
+git checkout -q -b "${AIDA_SWAP_BRANCH}"
+printf 'renamed\n' > renamed.txt
+git add renamed.txt
+git commit -q -m "chore: continue work under the renamed branch"
+lease_id="lease-task-1457"
+cat > ".aida/sessions/${lease_id}.toml" <<EOF
+id = "${lease_id}"
+scope = "STORY-9001"
+slug = "story-9001"
+owner = "codex@example.test"
+worktree_path = "${AIDA_FAKE_WORKTREE}"
+branch = "${AIDA_FAKE_BRANCH}"
+started_at = "2026-09-23T00:00:00Z"
+hostname = "test"
+role = "implementer"
+EOF
+cat > ".aida/sessions/${lease_id}.manifest.toml" <<EOF
+session_id = "${lease_id}"
+planned_at = "2026-09-23T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "${session_id}"
+items = []
+EOF
+exit 0
+"#,
+    );
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_FAKE_BRANCH", dispatched_branch),
+        ("AIDA_SWAP_BRANCH", "story-9001-work-renamed"),
+        ("AIDA_FAKE_WORKTREE", root.to_str().unwrap()),
+        ("AIDA_EXIT_POLL_MS", "1"),
+        ("AIDA_GH_VERIFY_RETRIES", "0"),
+    ]);
+
+    let mut driver = driver(&root, "STORY-9001");
+    driver.aida_exe = fake_aida;
+    driver.no_human = Some(crate::auto_complete::NoHumanMode::Both);
+
+    let outcome = driver.run_implementer();
+    let failure = match outcome {
+        Err(f) => f,
+        Ok(ok) => {
+            panic!(
+                "expected the trailer-less rename to still fail phase 1 pending attribution, \
+                 got a success outcome instead: {ok:?}"
+            )
+        }
+    };
+    assert_eq!(failure.kind, FailureKind::ShippedMismatch);
+    assert!(
+        !failure.reason.contains("swapped"),
+        "a trailer-less rename must not be worded as a confirmed swap, got: {}",
+        failure.reason
+    );
+    assert!(
+        failure.reason.contains("attribution unknown"),
+        "expected the failure to say attribution is unknown, not assert a swap, got: {}",
+        failure.reason
+    );
+    assert!(
+        failure.reason.contains("BUG-223"),
+        "expected the failure to name the same-spec-rename possibility, got: {}",
+        failure.reason
+    );
+
+    // Still no PR lookup or Done write attempted — unconfirmed attribution
+    // is unsafe either way (PRIN-5), exactly like the genuine-swap case.
+    assert_eq!(driver.pr_number, None);
+}
+
+/// TASK-1457 item 3: `ensure_spec_done_after_pr`'s BUG-1527 gate — a PR whose
+/// commits confidently credit a DIFFERENT spec must never flip the
+/// dispatched spec to Done, even though a PR did open on the branch that was
+/// handed to it.
+// trace:BUG-1527 trace:TASK-1457 | ai:claude
+#[test]
+fn ensure_spec_done_after_pr_skips_the_write_when_the_pr_credits_another_spec() {
+    let (_tmp, work, store_dir) = fixture_repo_and_store_with_inprogress_spec("STORY-9001");
+    git(&work, &["checkout", "-q", "-b", "swap-branch"]);
+    write_commit(
+        &work,
+        "fix.txt",
+        "fix\n",
+        "fix(other): unrelated (BUG-8888)",
+    );
+
+    super::ensure_spec_done_after_pr(&work, &work, "swap-branch", "STORY-9001", 42, true);
+
+    let reloaded = aida_core::GitBackend::new(&store_dir)
+        .unwrap()
+        .load()
+        .unwrap();
+    let spec = reloaded
+        .requirements
+        .iter()
+        .find(|r| r.spec_id.as_deref() == Some("STORY-9001"))
+        .expect("spec must still be in the store");
+    assert_eq!(
+        spec.status,
+        RequirementStatus::InProgress,
+        "a PR that credits a different spec must never flip THIS spec to Done"
+    );
+}
+
+/// TASK-1457 item 5: pin the decision that a PR carrying NO commit trailer
+/// at all ALSO skips the Done write on this (non-swap) path. The BUG-1527
+/// gate on `ensure_spec_done_after_pr` is deliberately coarse — see the doc
+/// comment on `ensure_pr_open_spec_attribution` — because this function's
+/// only job is a write it must never make on unconfirmed attribution;
+/// PRIN-5 forbids treating "no evidence either way" as license to write.
+/// The finer three-way split (distinct wording for "unknown" vs "swapped")
+/// belongs to the branch-swap seam that reports to a human, not to this
+/// silent internal gate.
+// trace:BUG-1527 trace:TASK-1457 | ai:claude
+#[test]
+fn ensure_spec_done_after_pr_skips_the_write_when_the_pr_has_no_trailer_at_all() {
+    let (_tmp, work, store_dir) = fixture_repo_and_store_with_inprogress_spec("STORY-9001");
+    git(&work, &["checkout", "-q", "-b", "untrailered-branch"]);
+    write_commit(&work, "fix.txt", "fix\n", "chore: work, no trailer yet");
+
+    super::ensure_spec_done_after_pr(&work, &work, "untrailered-branch", "STORY-9001", 42, true);
+
+    let reloaded = aida_core::GitBackend::new(&store_dir)
+        .unwrap()
+        .load()
+        .unwrap();
+    let spec = reloaded
+        .requirements
+        .iter()
+        .find(|r| r.spec_id.as_deref() == Some("STORY-9001"))
+        .expect("spec must still be in the store");
+    assert_eq!(
+        spec.status,
+        RequirementStatus::InProgress,
+        "a PR carrying no trailer at all must not be treated as confirming attribution — \
+         the Done write must be skipped (pinned TASK-1457 decision)"
+    );
+}
+
+/// Shared fixture for the `ensure_spec_done_after_pr` tests: a bare origin +
+/// working repo on `main` with a `.aida-store` git-canonical store seeded
+/// with one InProgress spec. Callers branch off `main` and add their own
+/// commits before calling `ensure_spec_done_after_pr`.
+// trace:TASK-1457 | ai:claude
+fn fixture_repo_and_store_with_inprogress_spec(
+    spec_id: &str,
+) -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let remote = tmp.path().join("origin.git");
+    let work = tmp.path().join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    git(tmp.path(), &["init", "--bare", "-b", "main", "origin.git"]);
+    git(&work, &["init", "-q", "-b", "main"]);
+    git(&work, &["config", "user.email", "aida@example.invalid"]);
+    git(&work, &["config", "user.name", "AIDA Test"]);
+    git(
+        &work,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    write_commit(&work, "base.txt", "base\n", "chore: base");
+    git(&work, &["push", "-q", "-u", "origin", "main"]);
+    git(&work, &["remote", "set-head", "origin", "main"]);
+
+    std::fs::create_dir_all(work.join(".aida")).unwrap();
+    std::fs::write(
+        work.join(".aida").join("config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+
+    let mut req = Requirement::new("dispatched spec".to_string(), String::new());
+    req.spec_id = Some(spec_id.to_string());
+    req.status = RequirementStatus::InProgress;
+    let mut store = RequirementsStore::default();
+    store.requirements.push(req);
+    let store_dir = work.join(".aida-store");
+    aida_core::GitBackend::new(&store_dir)
+        .unwrap()
+        .save(&store)
+        .unwrap();
+
+    (tmp, work, store_dir)
+}
