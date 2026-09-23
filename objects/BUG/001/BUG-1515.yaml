@@ -95,12 +95,12 @@ description: |-
   10. If the working route requires more than one command, the hint gives ALL of them in order. A hint naming the second command of a two-command recipe is the same defect in a new place.
 
   WHY THIS IS A SEPARATE CRITERION RATHER THAN A NOTE ON 6: an implementer reading 6 alone will change a string, run a test asserting the new string, and ship. Both seats would review it as complete, because it matches the criterion. That is the enumerate-the-instances failure — naming the class reads as done and is not.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:36:49.231874688Z
-modified_at: 2026-09-23T16:07:56.835130619Z
+modified_at: 2026-09-23T16:40:24.679225033Z
 req_type: Bug
 tags:
 - agent-surface
