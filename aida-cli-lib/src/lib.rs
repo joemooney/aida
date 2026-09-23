@@ -70985,6 +70985,50 @@ fn collect_awaiting_report_inner(
         collect_pr_attribution_disagreements(project_root)
     };
 
+    // BUG-1564: In-Progress specs with no live session/lease/process behind
+    // the flag — reuses `gather_running_work`'s orphan pass verbatim (the
+    // same verdict `aida ps` computes), so this is not a second
+    // implementation of the detection. Needs a lease scan + a live-process
+    // probe, the same "heavier local probe" tier as `unshipped_work` /
+    // `pr_attribution_disagreements` above, so it is skipped on the
+    // notice-fast path to keep the per-turn hook local and fast (no
+    // full-store load, no network).
+    // trace:BUG-1564 | ai:claude
+    let orphaned_in_progress = if notice_fast {
+        Vec::new()
+    } else {
+        let (_rows, orphans) = gather_running_work(project_root);
+        orphans
+            .into_iter()
+            // TASK-1064: a fan-out-worked flag-only spec is informational on
+            // `aida ps` too — not a genuine anomaly, so it's excluded here.
+            .filter(|o| !o.likely_fanout)
+            .map(|o| {
+                let since_label = summaries
+                    .iter()
+                    .find(|s| {
+                        s.agreed_id.as_deref() == Some(o.spec.as_str())
+                            || s.spec_id.as_deref() == Some(o.spec.as_str())
+                    })
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s.modified_at).ok())
+                    .map(|t| {
+                        let secs = chrono::Utc::now()
+                            .signed_duration_since(t.with_timezone(&chrono::Utc))
+                            .num_seconds()
+                            .max(0) as u64;
+                        format!("last touched {} ago", humanize_duration_secs(secs))
+                    })
+                    .unwrap_or_else(|| "last-touched time unknown".to_string());
+                awaiting_you::OrphanedInProgressItem {
+                    spec_id: o.spec,
+                    title: o.title,
+                    abandoned: o.stale_lease,
+                    since_label,
+                }
+            })
+            .collect()
+    };
+
     awaiting_you::AwaitingReport {
         mergeable_prs,
         unowned_failing_prs,
@@ -71000,6 +71044,7 @@ fn collect_awaiting_report_inner(
         unshipped_work,
         nightly_red,
         pr_attribution_disagreements,
+        orphaned_in_progress,
     }
 }
 
