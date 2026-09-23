@@ -141,6 +141,12 @@ pub(crate) struct OpenPrItem {
     /// forge when the local marker has not been pulled yet.
     // trace:TASK-192 | ai:codex
     pub labels: Vec<String>,
+    /// `createdAt` from the same `gh pr list` call. Drives the BUG-1514 age
+    /// gate: a PR must be red-and-unowned for a minimum duration before it is
+    /// surfaced, so a normal push-fix-repush cycle doesn't alarm. `None` when
+    /// the forge omitted the field or the value failed to parse.
+    // trace:BUG-1514 | ai:claude
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// A dormant lease (worktree present, no live process, <24h old).
@@ -1158,6 +1164,7 @@ mod tests {
             review_decision: None,
             head_sha: None,
             labels: Vec::new(),
+            created_at: None,
         });
         report.dormant_leases.push(DormantLeaseItem {
             lease_id: "abc".into(),
@@ -1204,6 +1211,7 @@ mod tests {
             review_decision: None,
             head_sha: None,
             labels: Vec::new(),
+            created_at: None,
         });
 
         report.forge_kind = Some(crate::forge::ForgeKind::GitLab);
@@ -1667,6 +1675,7 @@ mod tests {
                 review_decision: None,
                 head_sha: None,
                 labels: Vec::new(),
+                created_at: None,
             }],
             missed_auto_bump: vec![MissedAutoBumpItem {
                 spec_id: "TASK-2".to_string(),

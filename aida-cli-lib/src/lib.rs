@@ -38717,6 +38717,7 @@ mod task_192_fail_closed_fact_tests {
             review_decision: None,
             head_sha: Some("deadbeef".into()),
             labels: labels.iter().map(|label| (*label).into()).collect(),
+            created_at: None,
         }
     }
 
@@ -67258,7 +67259,7 @@ fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenPrSnapshot {
             "--limit",
             "50",
             "--json",
-            "number,title,headRefName,headRefOid,statusCheckRollup,mergeable,reviewDecision,labels",
+            "number,title,headRefName,headRefOid,statusCheckRollup,mergeable,reviewDecision,labels,createdAt",
         ])
         .output();
     let Ok(out) = out else {
@@ -67529,6 +67530,14 @@ fn parse_open_pr_snapshot(json: &str) -> OpenPrSnapshot {
             .filter_map(|label| label.get("name").and_then(|v| v.as_str()))
             .map(str::to_owned)
             .collect();
+        // BUG-1514: same `gh pr list` call, no extra request — drives the
+        // unowned-failing-PR age gate. Malformed/missing → None (fail open).
+        // trace:BUG-1514 | ai:claude
+        let created_at = pr
+            .get("createdAt")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|dt| dt.with_timezone(&chrono::Utc));
         by_branch.insert(
             head_branch.clone(),
             status_cleanup::OpenPrItem {
@@ -67540,6 +67549,7 @@ fn parse_open_pr_snapshot(json: &str) -> OpenPrSnapshot {
                 review_decision,
                 head_sha,
                 labels,
+                created_at,
             },
         );
     }
@@ -69834,19 +69844,38 @@ fn collect_awaiting_report_inner(
                 .collect::<std::collections::HashSet<u64>>()
         });
         let live_branches = live_owned_branches(project_root);
+        // BUG-1514: the general form of the two-way inconsistency (acceptance
+        // #1) — a spec already marked Done whose PR title names it is red
+        // regardless of who owns/reviews the branch. Built from the spec ids
+        // in the PR title (the same trailer convention `aida pr` writes), so
+        // it costs no extra `gh` calls beyond the snapshot already fetched.
+        // trace:BUG-1514 | ai:claude
+        let done_spec_ids: std::collections::HashSet<String> = summaries
+            .iter()
+            .filter(|s| s.status.eq_ignore_ascii_case("done"))
+            .flat_map(|s| [s.spec_id.clone(), s.agreed_id.clone()])
+            .flatten()
+            .map(|id| id.to_ascii_uppercase())
+            .collect();
         let candidates: Vec<awaiting_you::UnownedFailingPrCandidate> =
             collect_open_prs(project_root)
                 .by_branch
                 .into_values()
-                .map(|pr| awaiting_you::UnownedFailingPrCandidate {
-                    has_local_verdict: pr_has_local_verdict(project_root, pr.number),
-                    held: pr_has_merge_hold(project_root, &pr),
-                    route: reviewer_route_for_pr(routed_prs.as_ref(), pr.number),
-                    actively_owned: live_branches.contains(&pr.head_branch),
-                    pr,
+                .map(|pr| {
+                    let done_spec = pr_ship::extract_spec_ids_from_text(&pr.title)
+                        .into_iter()
+                        .find(|id| done_spec_ids.contains(id));
+                    awaiting_you::UnownedFailingPrCandidate {
+                        has_local_verdict: pr_has_local_verdict(project_root, pr.number),
+                        held: pr_has_merge_hold(project_root, &pr),
+                        route: reviewer_route_for_pr(routed_prs.as_ref(), pr.number),
+                        actively_owned: live_branches.contains(&pr.head_branch),
+                        done_spec,
+                        pr,
+                    }
                 })
                 .collect();
-        awaiting_you::classify_unowned_failing_prs(&candidates)
+        awaiting_you::classify_unowned_failing_prs(&candidates, chrono::Utc::now())
     };
 
     // STORY-1419: PRs whose rework has landed on a refusal this seat recorded.
