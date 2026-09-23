@@ -13581,7 +13581,6 @@ fn render_agent_brief(
         "- Agent setup convention: docs/agents/{agent}-mcp-setup.md if present.\n\n"
     ));
 
-    let branch = spec_id.to_ascii_lowercase();
     // BUG-583: the Setup block must reference the TARGET PROJECT's location
     // (resolved at runtime from the invocation's project root), never the AIDA
     // binary's compiled-in source-repo path. A cold vendor agent following these
@@ -13593,32 +13592,221 @@ fn render_agent_brief(
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("project");
-    let worktree_dir = project_root
-        .parent()
-        .map(|parent| parent.join(format!("{project_name}-{branch}")))
-        .unwrap_or_else(|| project_root.join(format!("../{project_name}-{branch}")));
     let project_root_display = project_root.display();
-    let worktree_display = worktree_dir.display();
+    let worktree_path_for = |branch: &str| -> std::path::PathBuf {
+        project_root
+            .parent()
+            .map(|parent| parent.join(format!("{project_name}-{branch}")))
+            .unwrap_or_else(|| project_root.join(format!("../{project_name}-{branch}")))
+    };
+
+    // BUG-1525: never emit a fresh-start `git worktree add -b <new> origin/main`
+    // when the spec already has a branch (local or `origin/<branch>`) carrying
+    // its work — that starts a second lineage with none of the reviewed
+    // commits, silently, because the fresh branch name doesn't collide with
+    // anything. Resolve what's actually there first. trace:BUG-1525 | ai:claude
+    let target = resolve_brief_branch_target(project_root, spec_id);
     out.push_str("## Setup\n\n");
-    out.push_str("```bash\n");
-    out.push_str(&format!("cd {project_root_display}\n"));
-    out.push_str("git fetch origin main\n");
-    out.push_str(&format!(
-        "git worktree add {worktree_display} -b {branch} origin/main\n"
-    ));
-    out.push_str(&format!("cd {worktree_display}\n"));
-    // BUG-331: no `.aida-store` symlink needed — sibling worktrees now resolve
-    // the canonical store at the main worktree via git-common-dir. trace:BUG-331
-    out.push_str(&format!(
-        "aida session start --owns {spec_id} --branch {branch} --path {worktree_display} --reuse-branch\n"
-    ));
-    out.push_str("```\n\n");
+    match &target {
+        BriefBranchTarget::Ambiguous { candidates } => {
+            out.push_str(&format!(
+                "_Cannot determine this spec's branch automatically — {} branches reference {spec_id} ({}). \
+                 Check `aida show {spec_id}` for the branch its open PR (if any) actually points at, then \
+                 `cd` into that branch's existing worktree, or `git worktree add <path> <branch>` to attach \
+                 one — do NOT create a new branch off `origin/main`._\n\n",
+                candidates.len(),
+                candidates.join(", ")
+            ));
+            out.push_str("```bash\n");
+            out.push_str(&format!("cd {project_root_display}\n"));
+            out.push_str("git fetch origin main\n");
+            out.push_str("# resolve the branch above by hand before attaching a worktree\n");
+            out.push_str("```\n\n");
+        }
+        BriefBranchTarget::ExistingWorktree { branch, worktree } => {
+            let worktree_display = worktree.display();
+            out.push_str(&format!(
+                "This spec already has branch `{branch}` checked out in an existing worktree — \
+                 continue it, don't start a second lineage.\n\n"
+            ));
+            out.push_str("```bash\n");
+            out.push_str(&format!("cd {worktree_display}\n"));
+            out.push_str("git fetch origin main\n");
+            out.push_str(
+                "# realign if diverged from main before continuing:\n\
+                 #   git rebase origin/main   (or: git merge origin/main)\n",
+            );
+            out.push_str(&format!(
+                "aida session start --owns {spec_id} --branch {branch} --path {worktree_display} --reuse-branch\n"
+            ));
+            out.push_str("```\n\n");
+        }
+        BriefBranchTarget::ExistingBranch {
+            branch,
+            remote_only,
+        } => {
+            let worktree_dir = worktree_path_for(branch);
+            let worktree_display = worktree_dir.display();
+            out.push_str(&format!(
+                "This spec already has branch `{branch}` with commits ahead of the default branch — \
+                 continue it, don't start a fresh one.\n\n"
+            ));
+            out.push_str("```bash\n");
+            out.push_str(&format!("cd {project_root_display}\n"));
+            out.push_str("git fetch origin main\n");
+            if *remote_only {
+                out.push_str(&format!(
+                    "git worktree add {worktree_display} -B {branch} origin/{branch}\n"
+                ));
+            } else {
+                out.push_str(&format!("git worktree add {worktree_display} {branch}\n"));
+            }
+            out.push_str(&format!("cd {worktree_display}\n"));
+            out.push_str(
+                "# realign if diverged from main before continuing:\n\
+                 #   git rebase origin/main   (or: git merge origin/main)\n",
+            );
+            out.push_str(&format!(
+                "aida session start --owns {spec_id} --branch {branch} --path {worktree_display} --reuse-branch\n"
+            ));
+            out.push_str("```\n\n");
+        }
+        BriefBranchTarget::Fresh { branch } => {
+            let worktree_dir = worktree_path_for(branch);
+            let worktree_display = worktree_dir.display();
+            out.push_str("```bash\n");
+            out.push_str(&format!("cd {project_root_display}\n"));
+            out.push_str("git fetch origin main\n");
+            out.push_str(&format!(
+                "git worktree add {worktree_display} -b {branch} origin/main\n"
+            ));
+            out.push_str(&format!("cd {worktree_display}\n"));
+            // BUG-331: no `.aida-store` symlink needed — sibling worktrees now
+            // resolve the canonical store at the main worktree via
+            // git-common-dir. trace:BUG-331
+            out.push_str(&format!(
+                "aida session start --owns {spec_id} --branch {branch} --path {worktree_display} --reuse-branch\n"
+            ));
+            out.push_str("```\n\n");
+        }
+    }
 
     out.push_str("## Trailer reminder\n\n");
     out.push_str(&format!(
         "Use a trailing-parens spec trailer in the commit subject: `({spec_id})` for a single-spec ship, or include every shipped spec in the same trailing parens.\n"
     ));
     out
+}
+
+/// BUG-1525: what the brief's Setup block should tell the implementer to do
+/// about branches, derived from what already exists rather than assumed
+/// fresh.
+// trace:BUG-1525 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum BriefBranchTarget {
+    /// No branch anywhere references this spec — safe to start fresh off the
+    /// default branch, using AIDA's `<spec>-work` naming convention (the
+    /// shape the drain itself creates, per BUG-1525).
+    Fresh { branch: String },
+    /// Exactly one existing branch was found, and it's already checked out
+    /// in an existing worktree — `cd` into it, don't create a second one.
+    ExistingWorktree {
+        branch: String,
+        worktree: std::path::PathBuf,
+    },
+    /// Exactly one existing branch was found but no worktree currently has
+    /// it checked out — attach a worktree to that branch (`remote_only`
+    /// picks `-B <branch> origin/<branch>` over a plain local checkout).
+    ExistingBranch { branch: String, remote_only: bool },
+    /// More than one branch plausibly belongs to this spec — refuse to
+    /// guess which one is live; say so explicitly rather than emit a
+    /// confident fresh-start recipe.
+    Ambiguous { candidates: Vec<String> },
+}
+
+/// Git-only scan (no `gh`/forge call — matches the pattern in
+/// `collect_git_linkage_opts`) for a branch that already carries this spec's
+/// work: any local or `origin/<branch>` ref whose name references the spec
+/// id (`branch_name_references_spec`), excluding the `aida-store` orphan
+/// branch. Used to decide whether the brief's Setup block should reuse an
+/// existing lineage instead of starting a fresh one off `origin/main`.
+// trace:BUG-1525 | ai:claude
+fn resolve_brief_branch_target(project_root: &std::path::Path, spec_id: &str) -> BriefBranchTarget {
+    let fresh_branch = format!("{}-work", spec_id.trim().to_ascii_lowercase());
+
+    let git = |args: &[&str]| -> Option<String> {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+    };
+
+    let mut candidates: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    if let Some(out) = git(&["for-each-ref", "--format=%(refname:short)", "refs/heads/"]) {
+        for line in out.lines() {
+            let name = line.trim();
+            if !name.is_empty()
+                && branch_name_references_spec(name, spec_id)
+                && !is_orphan_store_branch(name)
+            {
+                candidates.insert(name.to_string());
+            }
+        }
+    }
+    if let Some(out) = git(&[
+        "for-each-ref",
+        "--format=%(refname:short)",
+        "refs/remotes/origin/",
+    ]) {
+        for line in out.lines() {
+            let Some(short) = line.trim().strip_prefix("origin/") else {
+                continue;
+            };
+            if short.is_empty() || short == "HEAD" {
+                continue;
+            }
+            if branch_name_references_spec(short, spec_id) && !is_orphan_store_branch(short) {
+                candidates.insert(short.to_string());
+            }
+        }
+    }
+
+    if candidates.is_empty() {
+        return BriefBranchTarget::Fresh {
+            branch: fresh_branch,
+        };
+    }
+    if candidates.len() > 1 {
+        return BriefBranchTarget::Ambiguous {
+            candidates: candidates.into_iter().collect(),
+        };
+    }
+    let branch = candidates.into_iter().next().unwrap();
+
+    for wt in list_worktrees(project_root) {
+        if wt.branch.as_deref() == Some(branch.as_str()) {
+            return BriefBranchTarget::ExistingWorktree {
+                branch,
+                worktree: wt.path,
+            };
+        }
+    }
+
+    let local_exists = git(&[
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        &format!("refs/heads/{branch}"),
+    ])
+    .is_some();
+    BriefBranchTarget::ExistingBranch {
+        branch,
+        remote_only: !local_exists,
+    }
 }
 
 fn brief_generated_by() -> String {
@@ -38554,7 +38742,37 @@ fn branch_name_references_spec(branch: &str, spec: &str) -> bool {
         .trim()
         .trim_start_matches("origin/")
         .to_ascii_lowercase();
-    !slug.is_empty() && (branch == slug || branch.contains(&slug))
+    if slug.is_empty() {
+        return false;
+    }
+    // BUG-1525 review fix: the slug must be a whole segment of the branch
+    // name. A raw substring let BUG-15 match `bug-150-work` and BUG-152
+    // match `claude/bug-1525`. A boundary is start/end or one of `/-._`,
+    // and the character after the slug must not be a digit or letter.
+    // trace:BUG-1525 | ai:claude
+    let is_sep = |c: char| matches!(c, '/' | '-' | '.' | '_');
+    branch.match_indices(&slug).any(|(at, m)| {
+        let before_ok = branch[..at].chars().next_back().is_none_or(is_sep);
+        let after_ok = branch[at + m.len()..].chars().next().is_none_or(is_sep);
+        before_ok && after_ok
+    })
+}
+
+#[cfg(test)]
+mod bug_1525_branch_match_tests {
+    use super::branch_name_references_spec as m;
+
+    // trace:BUG-1525 | ai:claude
+    #[test]
+    fn branch_match_is_whole_segment_only() {
+        assert!(m("bug-15-work", "BUG-15"));
+        assert!(m("claude/bug-15", "BUG-15"));
+        assert!(m("origin/bug-15", "BUG-15"));
+        assert!(m("bug-15", "BUG-15"));
+        assert!(!m("bug-150-work", "BUG-15"));
+        assert!(!m("claude/bug-1525", "BUG-152"));
+        assert!(!m("xbug-15", "BUG-15"));
+    }
 }
 
 fn open_pr_commit_headlines_reference_spec(
