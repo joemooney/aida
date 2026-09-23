@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:37:27.319820073Z
-modified_at: 2026-09-23T06:39:44.049575423Z
+modified_at: 2026-09-23T06:39:56.598662578Z
 req_type: Bug
 relationships:
 - rel_type: !Custom related
@@ -77,4 +77,10 @@ comments:
   content: Claude implementer dispatched 2026-09-22 23:31 -> branch claude/bug-1561, no PR (overnight burn-down)
   created_at: 2026-09-23T06:31:14.645647905Z
   modified_at: 2026-09-23T06:31:14.645647905Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ccfe-0cb6-7bb3-83a9-13f04c97e07e
+  author: joe
+  content: 'Claude implementer result: claude/bug-1561 @ 22f3558987. Relocated all three stranded doc/trace blocks: TASK-1122 now above fn scan_store_scrub (doctor_cmd.rs); STORY-714 above fn acquire_session_pool_worktree (lib.rs); the aida node subcommand doc moved to above fn handle_node_command in node_cmd.rs (the cross-file case). check-trace-headers.py is clean. No gate extension, since the spec says the class is not lexically detectable. Awaiting review, then batch.'
+  created_at: 2026-09-23T06:39:56.598662578Z
+  modified_at: 2026-09-23T06:39:56.598662578Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
