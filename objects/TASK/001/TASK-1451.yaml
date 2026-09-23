@@ -13,10 +13,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T09:22:23.719042649Z
-modified_at: 2026-09-23T09:22:23.719042649Z
+modified_at: 2026-09-23T09:22:26.196207112Z
 req_type: Task
 tags:
 - followup
 - identity
 - mailbox
 - parent:BUG-1533
+relationships:
+- rel_type: Child
+  target_id: 01a0c26d-62d3-7d32-8cd8-dc80bc6bfff7
+  created_at: 2026-09-23T09:22:26.196207112Z
