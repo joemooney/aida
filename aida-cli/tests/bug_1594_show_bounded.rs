@@ -188,7 +188,11 @@ fn bug_1594_upstream_notice_check_is_recorded_once_per_version() {
     let marker = fx.repo.join(".aida").join("upstream-report-notice-version");
     let recorded = std::fs::read_to_string(&marker)
         .expect("notice check must be recorded even with no stale reports");
-    assert_eq!(recorded.trim(), env!("CARGO_PKG_VERSION"));
+    // Marker = version, then the store HEAD the check covered.
+    let mut lines = recorded.lines();
+    assert_eq!(lines.next(), Some(env!("CARGO_PKG_VERSION")));
+    let sha = lines.next().unwrap_or_default();
+    assert_eq!(sha.len(), 40, "store HEAD sha recorded: {recorded:?}");
     let (out, elapsed) = run_bounded(
         &fx,
         &["show", "TASK-1", "--no-git"],
