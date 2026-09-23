@@ -23,5 +23,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:21:03.968494787Z
-modified_at: 2026-09-21T08:21:03.968494787Z
+modified_at: 2026-09-23T04:40:36.540094538Z
 req_type: Bug
+comments:
+- id: 01a0cc90-cbbc-79d0-825b-845ce013e7b6
+  author: joe
+  content: 'Claude orchestrator note 2026-09-22 21:40: this overlaps BUG-1507, which is in flight on claude/bug-1507 and covers the preflight Skipped->Open site. Check that branch before dispatching this one separately.'
+  created_at: 2026-09-23T04:40:36.540094538Z
+  modified_at: 2026-09-23T04:40:36.540094538Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
