@@ -890,7 +890,24 @@ fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> S
     let ids = vec![spec_id.to_string()];
     let linkage = crate::collect_git_linkage(project_root, &ids);
 
+    // BUG-1594 (PRIN-5): a bounded scan that stopped early is reported as
+    // partial, never as a complete (or empty) linkage. trace:BUG-1594 | ai:claude
+    let mut incomplete: Vec<String> = Vec::new();
+    if let Some((scanned, total)) = linkage.branch_scan_truncated {
+        incomplete.push(crate::format_branch_scan_truncated_note(scanned, total));
+    }
+    if linkage.files_scan_incomplete {
+        incomplete.push(crate::LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.to_string());
+    }
+    let incomplete_md: String = incomplete
+        .iter()
+        .map(|n| format!("- **Incomplete:** {n}\n"))
+        .collect();
+
     if linkage.commits.is_empty() && linkage.files.is_empty() {
+        if !incomplete_md.is_empty() {
+            return format!("\n## Git linkage\n\n{incomplete_md}");
+        }
         return "\n## Git linkage\n\nNo commits or trace comments reference this spec yet.\n"
             .to_string();
     }
@@ -931,6 +948,7 @@ fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> S
             }
         }
     }
+    out.push_str(&incomplete_md);
 
     out
 }
