@@ -17,6 +17,9 @@ use colored::Colorize;
 
 use crate::*;
 
+/// Handle `aida node` subcommands. Operates on the orphan-store worktree
+/// at `store_path` (typically `.aida-store/`).
+// trace:BUG-1561 | ai:claude
 pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Result<()> {
     use aida_core::node::NodeRegistry;
 

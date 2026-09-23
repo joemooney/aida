@@ -9,6 +9,8 @@ Complexity: ~N prod LOC, ~M test LOC, K commits, risk low|medium|high
   AIDA plan template. Save plans as docs/plans/YYYY-MM-DD-<slug>.md.
   Prefer SYMBOL refs (`fn handle_pull_command`) over LINE refs (`main.rs:19713`):
   symbol refs survive edits, line refs drift fast. trace:TASK-92
+  For a markdown hard line break, use `<br>` — not trailing spaces, which
+  `git diff --check` flags as whitespace errors. trace:TASK-1422
 -->
 
 ## Approach

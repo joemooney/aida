@@ -453,6 +453,27 @@ fn seed_spec_at(store_path: &std::path::Path, spec_id: &str, status: &str) -> St
     spec_id.to_string()
 }
 
+/// Like `seed_spec_at`, but sets an explicit `req_type` — used by the
+/// BUG-1506 work-type-filter tests, where the default `Requirement::new`
+/// type (`Functional`, itself a work type) wouldn't exercise the exclusion.
+// trace:BUG-1506 | ai:claude
+fn seed_spec_at_typed(
+    store_path: &std::path::Path,
+    spec_id: &str,
+    status: &str,
+    req_type: RequirementType,
+) -> String {
+    let storage = Storage::new(store_path);
+    let mut store = storage.load().unwrap_or_default();
+    let mut req = aida_core::Requirement::new(format!("test-{}", spec_id), String::new());
+    req.spec_id = Some(spec_id.to_string());
+    req.req_type = req_type;
+    req.set_status_from_str(status);
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+    spec_id.to_string()
+}
+
 /// Insert a Story spec at status=Done with the given spec_id into
 /// the store and persist it. Returns the spec_id we used.
 fn seed_done_spec(store_path: &std::path::Path, spec_id: &str) -> String {
@@ -869,21 +890,25 @@ fn auto_bump_completes_needs_attention_spec_and_clears_failure_reason() {
 }
 
 /// BUG-328: direct spec refs at Approved/Planned/InProgress now
-/// graduate to Completed when their commit lands on main. Draft
-/// preserves the approval signal; terminal statuses stay untouched.
-// trace:BUG-328 | ai:codex
+/// graduate to Completed when their commit lands on main. Terminal
+/// statuses stay untouched. BUG-1506: Draft no longer stays put either —
+/// it preserves the un-triaged signal by landing at Done rather than
+/// Completed, instead of being stranded forever (`has_flip` still reads
+/// false for it: the Completed-flip list `auto_bump_done_to_completed`
+/// returns doesn't carry the separate Draft→Done pass).
+// trace:BUG-328 | ai:codex trace:BUG-1506 | ai:claude
 #[test]
 fn auto_bump_eligibility_matrix_for_direct_subject_refs() {
     let cases = [
-        ("STORY-9011", "Approved", true),
-        ("STORY-9012", "Planned", true),
-        ("STORY-9013", "In Progress", true),
-        ("STORY-9014", "Done", true),
-        ("STORY-9015", "Draft", false),
-        ("STORY-9016", "Completed", false),
-        ("STORY-9017", "Rejected", false),
+        ("STORY-9011", "Approved", true, "Completed"),
+        ("STORY-9012", "Planned", true, "Completed"),
+        ("STORY-9013", "In Progress", true, "Completed"),
+        ("STORY-9014", "Done", true, "Completed"),
+        ("STORY-9015", "Draft", false, "Done"),
+        ("STORY-9016", "Completed", false, "Completed"),
+        ("STORY-9017", "Rejected", false, "Rejected"),
     ];
-    for (spec_id, status, should_flip) in cases {
+    for (spec_id, status, should_flip, expected_status) in cases {
         let (_tmp, project_root, store_path) = init_test_project();
         seed_spec_at(&store_path, spec_id, status);
 
@@ -907,26 +932,21 @@ fn auto_bump_eligibility_matrix_for_direct_subject_refs() {
 
         let after = storage.load().unwrap();
         let req = after.get_requirement_by_spec_id(spec_id).unwrap();
+        assert_eq!(
+            req.status.to_string(),
+            expected_status,
+            "{} should land at {}, was {:?}",
+            status,
+            expected_status,
+            req.status
+        );
         if should_flip {
-            assert!(
-                matches!(req.status, RequirementStatus::Completed),
-                "{} should be Completed, was {:?}",
-                status,
-                req.status
-            );
             assert!(
                 req.implementation_info
                     .as_ref()
                     .and_then(|i| i.completed_at)
                     .is_some(),
                 "{} should stamp completed_at",
-                status
-            );
-        } else {
-            assert_eq!(
-                req.status.to_string(),
-                status,
-                "{} should not auto-bump",
                 status
             );
         }
@@ -2093,16 +2113,21 @@ fn reconcile_status_completed_spec_with_ref_is_noop_ok() {
 // trace:BUG-328 | ai:codex
 #[test]
 fn reconcile_status_eligibility_matrix_for_direct_subject_refs() {
+    // BUG-1506: Draft no longer stays put — it lands at Done, the mirror
+    // image of the already-triaged states landing at Completed. The
+    // un-triaged signal (BUG-328) is preserved by NOT jumping straight to
+    // Completed, but a landed commit can no longer strand a Draft spec
+    // reading as unstarted backlog forever.
     let cases = [
-        ("STORY-9611", "Approved", true),
-        ("STORY-9612", "Planned", true),
-        ("STORY-9613", "In Progress", true),
-        ("STORY-9614", "Done", true),
-        ("STORY-9615", "Draft", false),
-        ("STORY-9616", "Completed", false),
-        ("STORY-9617", "Rejected", false),
+        ("STORY-9611", "Approved", "Completed"),
+        ("STORY-9612", "Planned", "Completed"),
+        ("STORY-9613", "In Progress", "Completed"),
+        ("STORY-9614", "Done", "Completed"),
+        ("STORY-9615", "Draft", "Done"),
+        ("STORY-9616", "Completed", "Completed"),
+        ("STORY-9617", "Rejected", "Rejected"),
     ];
-    for (spec_id, status, should_flip) in cases {
+    for (spec_id, status, expected_status) in cases {
         let (_tmp, project_root, store_path) = init_test_project();
         seed_spec_at(&store_path, spec_id, status);
 
@@ -2118,13 +2143,15 @@ fn reconcile_status_eligibility_matrix_for_direct_subject_refs() {
         let storage = Storage::new(store_path.clone());
         let after = storage.load().unwrap();
         let req = after.get_requirement_by_spec_id(spec_id).unwrap();
-        if should_flip {
-            assert!(
-                matches!(req.status, RequirementStatus::Completed),
-                "{} should be Completed, was {:?}",
-                status,
-                req.status
-            );
+        assert_eq!(
+            req.status.to_string(),
+            expected_status,
+            "{} should land at {}, was {:?}",
+            status,
+            expected_status,
+            req.status
+        );
+        if expected_status == "Completed" && status != "Completed" {
             assert!(
                 req.implementation_info
                     .as_ref()
@@ -2133,15 +2160,116 @@ fn reconcile_status_eligibility_matrix_for_direct_subject_refs() {
                 "{} should stamp completion_sha",
                 status
             );
-        } else {
-            assert_eq!(
-                req.status.to_string(),
-                status,
-                "{} should not reconcile-bump",
-                status
-            );
         }
     }
+}
+
+/// BUG-1506: a spec at Draft whose trailered commit is already on the
+/// default branch is detected and lands at Done (not left at Draft, not
+/// jumped straight to Completed); one whose trailered commit exists only on
+/// an unmerged branch is untouched.
+// trace:BUG-1506 | ai:claude
+#[test]
+fn reconcile_status_lands_draft_at_done_only_when_commit_is_on_default_branch() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    let landed = "STORY-9701";
+    let unmerged = "STORY-9702";
+    seed_spec_at(&store_path, landed, "Draft");
+    seed_spec_at(&store_path, unmerged, "Draft");
+
+    // `landed`'s trailered commit reaches the default branch.
+    std::fs::write(project_root.join("landed.txt"), "x\n").unwrap();
+    run_git(&project_root, &["add", "landed.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", &format!("feat: ship ({})", landed)],
+    );
+
+    // `unmerged`'s trailered commit exists only on a side branch that never
+    // reaches the default branch — reconcile-status only scans HEAD's log.
+    run_git(&project_root, &["checkout", "-b", "side/unmerged"]);
+    std::fs::write(project_root.join("unmerged.txt"), "x\n").unwrap();
+    run_git(&project_root, &["add", "unmerged.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", &format!("feat: wip ({})", unmerged)],
+    );
+    run_git(&project_root, &["checkout", "main"]);
+
+    let r = handle_db_reconcile_status(&store_path, None, None, false);
+    assert!(r.is_ok(), "reconcile-status failed: {:?}", r.err());
+
+    let storage = Storage::new(store_path.clone());
+    let after = storage.load().unwrap();
+
+    let landed_req = after.get_requirement_by_spec_id(landed).unwrap();
+    assert!(
+        matches!(landed_req.status, RequirementStatus::Done),
+        "{} (commit on default branch) should be detected and land at Done, was {:?}",
+        landed,
+        landed_req.status
+    );
+
+    let unmerged_req = after.get_requirement_by_spec_id(unmerged).unwrap();
+    assert!(
+        matches!(unmerged_req.status, RequirementStatus::Draft),
+        "{} (commit only on an unmerged branch) must stay Draft, was {:?}",
+        unmerged,
+        unmerged_req.status
+    );
+}
+
+/// BUG-1506: the Draft→Done landing bump is restricted to WORK types
+/// (functional/non-functional/system/user/change-request/bug/story/task/
+/// spike). A Draft ADR (`decision`) merely referenced by a trailered commit
+/// — e.g. the commit that implements the decision, not the decision record
+/// itself — must NOT be silently landed at Done: an ADR has its own
+/// proposed/accepted/superseded lifecycle, not a "shipped" one. A Draft
+/// `task` referenced the same way DOES land, exercising the positive case
+/// with an identical commit shape so the only variable is the type.
+// trace:BUG-1506 | ai:claude
+#[test]
+fn reconcile_status_draft_landing_excludes_non_work_types() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    let adr = "ADR-9710";
+    let task = "TASK-9711";
+    seed_spec_at_typed(&store_path, adr, "Draft", RequirementType::Decision);
+    seed_spec_at_typed(&store_path, task, "Draft", RequirementType::Task);
+
+    std::fs::write(project_root.join("adr.txt"), "x\n").unwrap();
+    run_git(&project_root, &["add", "adr.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", &format!("docs: record decision ({})", adr)],
+    );
+    std::fs::write(project_root.join("task.txt"), "x\n").unwrap();
+    run_git(&project_root, &["add", "task.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", &format!("feat: ship ({})", task)],
+    );
+
+    let r = handle_db_reconcile_status(&store_path, None, None, false);
+    assert!(r.is_ok(), "reconcile-status failed: {:?}", r.err());
+
+    let storage = Storage::new(store_path.clone());
+    let after = storage.load().unwrap();
+
+    let adr_req = after.get_requirement_by_spec_id(adr).unwrap();
+    assert!(
+        matches!(adr_req.status, RequirementStatus::Draft),
+        "{} (a Decision/ADR, not a work type) must stay Draft, was {:?}",
+        adr,
+        adr_req.status
+    );
+
+    let task_req = after.get_requirement_by_spec_id(task).unwrap();
+    assert!(
+        matches!(task_req.status, RequirementStatus::Done),
+        "{} (a work type) should land at Done, was {:?}",
+        task,
+        task_req.status
+    );
 }
 
 /// TASK-226: --dry-run reports the planned flips without writing.
@@ -2351,6 +2479,88 @@ fn auto_bump_git_canonical_store_writes_targeted_commits_per_spec() {
     assert!(
         subjects.contains(&"update STORY-9702"),
         "expected `update STORY-9702` commit, got: {:?}",
+        subjects
+    );
+    assert!(
+        !subjects.iter().any(|s| s.starts_with("chore: update")),
+        "no bulk chore commit expected, got: {:?}",
+        subjects
+    );
+}
+
+// BUG-1506: mirror of `auto_bump_git_canonical_store_writes_targeted_commits_per_spec`
+// for the Draft→Done landing bump — same targeted-write contract, plus the
+// regression this bug was filed over: a spec added to the git-canonical
+// store CONCURRENTLY (a drain follow-up, or `aida add` from another
+// session) must survive the write. The old `Storage::update_atomically`
+// path loaded the whole store, applied the flip, and saved the ENTIRE
+// snapshot back — deleting anything on disk that was missing from that
+// snapshot, including a spec added by someone else after the load.
+// trace:BUG-1506 | ai:claude
+#[test]
+fn reconcile_status_draft_landing_git_canonical_store_writes_targeted_commits_and_preserves_concurrent_spec(
+) {
+    use aida_core::db::DatabaseBackend;
+
+    let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
+
+    // Seed a Draft spec straight into the git-canonical store.
+    let backend = aida_core::db::GitBackend::new(&store_dir).unwrap();
+    let mut store = aida_core::RequirementsStore::default();
+    let mut req = aida_core::Requirement::new("test-STORY-9720".to_string(), String::new());
+    req.spec_id = Some("STORY-9720".to_string());
+    req.set_status_from_str("Draft");
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+    let seed_head = run_git(&store_dir, &["rev-parse", "HEAD"]);
+
+    // Land the trailered commit on the default branch.
+    std::fs::write(project_root.join("land.txt"), "land\n").unwrap();
+    run_git(&project_root, &["add", "land.txt"]);
+    run_git(&project_root, &["commit", "-m", "feat: land (STORY-9720)"]);
+
+    // Simulate a concurrent write: a brand-new spec appears in the store
+    // that the auto-bump never loaded a full in-memory snapshot of.
+    let mut concurrent_req =
+        aida_core::Requirement::new("test-STORY-9721".to_string(), String::new());
+    concurrent_req.spec_id = Some("STORY-9721".to_string());
+    concurrent_req.set_status_from_str("Draft");
+    backend.add_requirement(concurrent_req).unwrap();
+
+    let r = handle_db_reconcile_status(&store_dir, None, None, false);
+    assert!(r.is_ok(), "reconcile-status failed: {:?}", r.err());
+
+    let storage = Storage::new(store_dir.clone());
+    let after = storage.load().unwrap();
+
+    let landed = after.get_requirement_by_spec_id("STORY-9720").unwrap();
+    assert!(
+        matches!(landed.status, RequirementStatus::Done),
+        "STORY-9720 should land at Done, was {:?}",
+        landed.status
+    );
+
+    // The concurrently-added spec must survive — the whole point of the
+    // targeted write.
+    let concurrent = after.get_requirement_by_spec_id("STORY-9721");
+    assert!(
+        concurrent.is_some(),
+        "STORY-9721 (added concurrently) must NOT be deleted by the targeted Draft→Done write"
+    );
+    assert!(matches!(
+        concurrent.unwrap().status,
+        RequirementStatus::Draft
+    ));
+
+    // One targeted `update SPEC-ID` commit, no bulk chore commit.
+    let new_subjects = run_git(
+        &store_dir,
+        &["log", "--format=%s", &format!("{}..HEAD", seed_head)],
+    );
+    let subjects: Vec<&str> = new_subjects.lines().collect();
+    assert!(
+        subjects.contains(&"update STORY-9720"),
+        "expected `update STORY-9720` commit, got: {:?}",
         subjects
     );
     assert!(

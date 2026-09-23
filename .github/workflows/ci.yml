@@ -150,8 +150,16 @@ jobs:
       # were in that state at once. A doc-freshness check must not be able to
       # suppress the test signal; failing here costs a re-run, not the whole suite.
       # trace:BUG-1526 | ai:claude
+      #
+      # BUG-1578: this guard cross-checks Rust `// external-prose-classifier:`
+      # markers against docs/architecture/external-tool-output-classifiers.md
+      # (a doc-only file). Gating it on full_ci meant a docs-only PR that
+      # corrupted that doc got a green required Build with no verifier run.
+      # It needs no build artifacts (pure-Python static analysis over checked
+      # out sources), so it runs unconditionally — cheap even when full_ci is
+      # false — while the expensive build/test steps above stay skipped.
+      # trace:BUG-1578 | ai:claude
       - name: External-prose classifier inventory
-        if: steps.changes.outputs.full_ci == 'true'
         run: |
           python3 scripts/external-prose-classifiers.py --check
           python3 -m unittest tests/test_external_prose_classifiers.py
