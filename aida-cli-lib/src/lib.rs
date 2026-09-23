@@ -47685,6 +47685,7 @@ pub(crate) fn collect_git_linkage_opts(
             // commit is found too. trace:BUG-1528 | ai:claude
             let norm_id = |s: &str| s.to_ascii_lowercase().replace([' ', '_'], "-");
             let mut candidates: Vec<String> = Vec::new();
+            let mut local_candidates: Vec<String> = Vec::new();
             for (commit_full, _, _) in &commits {
                 let Some(contains) = git(&[
                     "branch",
@@ -47710,8 +47711,19 @@ pub(crate) fn collect_git_linkage_opts(
                 // in parens) — never offer it as the spec's review branch, or
                 // `aida review`/`aida human review` prompts to PR the entire
                 // requirements store as a code change.
-                for b in contains.lines() {
-                    let b = b.trim().trim_start_matches("origin/");
+                for raw in contains.lines() {
+                    let raw = raw.trim();
+                    // BUG-1591: remember which candidates exist as a LOCAL
+                    // branch — stripping `origin/` erased that, so selection
+                    // fell to commit recency and a newer remote-only branch
+                    // beat the spec's own local branch. trace:BUG-1591 | ai:claude
+                    let is_remote = raw.starts_with("origin/") || raw.starts_with("remotes/");
+                    let b = raw
+                        .trim_start_matches("remotes/")
+                        .trim_start_matches("origin/");
+                    if !is_remote && !b.is_empty() && !local_candidates.iter().any(|c| c == b) {
+                        local_candidates.push(b.to_string());
+                    }
                     if !b.is_empty()
                         && b != "HEAD"
                         && b != "main"
@@ -47738,6 +47750,11 @@ pub(crate) fn collect_git_linkage_opts(
                 })
                 .cloned()
                 .collect();
+            // BUG-1591: a spec's own LOCAL branch outranks a remote-only one;
+            // recency order is kept within each group (stable sort), so the
+            // choice no longer depends on which commit git lists first.
+            // trace:BUG-1591 | ai:claude
+            id_matches.sort_by_key(|b| !local_candidates.iter().any(|c| c == b));
             if id_matches.is_empty() {
                 // No candidate matches the spec's own id by name — fall back
                 // to the first (newest) candidate found, as before.
