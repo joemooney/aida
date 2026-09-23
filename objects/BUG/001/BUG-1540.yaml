@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:21:03.968494787Z
-modified_at: 2026-09-23T04:40:36.540094538Z
+modified_at: 2026-09-23T04:55:09.676443298Z
 req_type: Bug
 comments:
 - id: 01a0cc90-cbbc-79d0-825b-845ce013e7b6
@@ -31,4 +31,10 @@ comments:
   content: 'Claude orchestrator note 2026-09-22 21:40: this overlaps BUG-1507, which is in flight on claude/bug-1507 and covers the preflight Skipped->Open site. Check that branch before dispatching this one separately.'
   created_at: 2026-09-23T04:40:36.540094538Z
   modified_at: 2026-09-23T04:40:36.540094538Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cc9e-1e6c-7ca1-bf74-ef35550f6e98
+  author: joe
+  content: 'Claude orchestrator note: the BUG-1507 implementer found the preflight Skipped-vs-Open site ALREADY fixed on main via TASK-1289 (Inconclusive/Skipped split, with tests). Verify and consider closing this as already-fixed.'
+  created_at: 2026-09-23T04:55:09.676443298Z
+  modified_at: 2026-09-23T04:55:09.676443298Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
