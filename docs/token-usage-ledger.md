@@ -11,6 +11,8 @@ aida usage rebuild
 aida usage rebuild --json
 aida usage show TASK-1427
 aida usage show TASK-1427 --group-by phase,vendor,round --json
+aida usage show TASK-1427 --cost
+aida usage show TASK-1427 --cost --group-by phase,vendor,model,round --json
 ```
 
 The collector reads already-retained Claude Code and Codex JSONL artifacts. It
@@ -54,8 +56,26 @@ These values are local telemetry, not invoice reconciliation. Deleted or
 unsupported transcripts reduce coverage. Historical `drain_summary` token
 values predate this schema and are lower bounds because their zero values may
 mean collection failure; they are never added to per-message totals. Dollar
-pricing is intentionally absent: a later layer must use a separately versioned,
-dated rate table and an exact model match.
+pricing is optional and derived. `--cost` reads the bundled, versioned
+`data/token-rates/v1.toml` snapshot without making a network call. It matches an
+exact provider, raw model (or an explicitly listed alias), and the half-open
+effective interval `[effective_from,effective_to)`. Unknown models, missing or
+invalid timestamps, ambiguous matches, and token classes without their own rate
+remain explicitly unpriced; measured zero remains priced zero.
+
+Rates are decimal USD per one million tokens with at most six fractional digits.
+AIDA parses them as integer pico-USD per token, accumulates with checked integer
+arithmetic, and rounds only displayed USD values to six decimals using
+round-half-even. JSON retains the exact `cost_pico_usd` integer. Raw measured
+tokens and ledger provenance are never overwritten.
+
+The rate snapshot records source URL, revision/retrieval date, license, currency,
+token unit, and effective dates. Updating it is a reviewed data change: add a new
+dated interval/table version rather than rewriting historical prices. Query
+output always identifies the table version and source revision. The estimate is
+local and is not a vendor bill. Vendor invoice reconciliation, negotiated
+discounts or credits, taxes/currency conversion, and real-time budget enforcement
+remain out of scope.
 
 Schema version 1 and collector provenance are stored in the SQLite `metadata`
 table. Rebuild writes a complete temporary database and atomically replaces the

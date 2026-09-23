@@ -7468,9 +7468,13 @@ pub enum UsageCommand {
     Show {
         #[clap(value_name = "SPEC-ID")]
         spec: String,
-        /// Comma-separated dimensions: phase,vendor,round.
+        /// Comma-separated dimensions: phase,vendor,model,round.
         #[clap(long, default_value = "phase,vendor,round")]
         group_by: String,
+        /// Add offline local cost estimates from the pinned dated rate table.
+        // trace:TASK-1434 | ai:codex
+        #[clap(long)]
+        cost: bool,
         #[clap(long)]
         json: bool,
         #[clap(long, conflicts_with = "json")]
@@ -14225,12 +14229,13 @@ mod tests {
             "TASK-1427",
             "--group-by",
             "phase,vendor",
+            "--cost",
         ])
         .unwrap();
         assert!(matches!(
             cli.command,
             Command::Usage {
-                action: Some(UsageCommand::Show { spec, .. }),
+                action: Some(UsageCommand::Show { spec, cost: true, .. }),
                 ..
             } if spec == "TASK-1427"
         ));
