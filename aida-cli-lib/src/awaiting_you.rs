@@ -96,6 +96,17 @@ pub(crate) struct AwaitingReport {
     /// it needs the PR snapshot, which the per-turn notice path skips.
     // trace:STORY-1419 | ai:claude
     pub rework_ready: Vec<ReworkReadyItem>,
+    /// TASK-1445 (containment for BUG-1510 AC5): a live drain's lease-based PR
+    /// attribution disagrees with what the PR's own commits credit. Drain
+    /// status attributes a PR by the lease it ran under; commit trailers are
+    /// independent evidence of what the PR is actually about. The incident:
+    /// STORY-1391's drain opened a PR trailered BUG-1420 and the split sat
+    /// unreported for 52 seconds before a verdict landed on the wrong spec.
+    /// Full report only — resolving the lease's branch needs a local git log,
+    /// which the per-turn notice path skips for latency, same as
+    /// `unshipped_work`.
+    // trace:TASK-1445 | ai:claude
+    pub pr_attribution_disagreements: Vec<PrAttributionDisagreementItem>,
 }
 
 /// STORY-1419: one PR whose rework has landed on a refusal you recorded.
@@ -484,6 +495,19 @@ pub(crate) struct UnshippedWorkItem {
     pub pr_state: String,
 }
 
+/// TASK-1445: one live-drain PR whose lease-based owner and commit-trailer
+/// owner disagree. Both claimed owners are reported, named by the evidence
+/// that produced them — never a guess at which one is "right."
+// trace:TASK-1445 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct PrAttributionDisagreementItem {
+    pub pr: u64,
+    /// The spec drain status attributes the PR to (the lease it ran under).
+    pub lease_spec: String,
+    /// The spec the PR's own commit trailers confidently name instead.
+    pub trailer_spec: String,
+}
+
 // trace:STORY-1043 | ai:codex
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct NightlyRedItem {
@@ -518,6 +542,7 @@ impl AwaitingReport {
             + self.reviewer_queue_items.len()
             + (if self.shelved_total > 0 { 1 } else { 0 })
             + self.escalations.len()
+            + self.pr_attribution_disagreements.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -573,6 +598,23 @@ impl AwaitingReport {
                 spec,
                 short_sha_for_row(&item.reviewed_sha).dimmed(),
                 short_sha_for_row(&item.head_sha).bold(),
+            )?;
+            budget -= 1;
+        }
+
+        // trace:TASK-1445 | ai:claude
+        for item in &self.pr_attribution_disagreements {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            writeln!(
+                w,
+                "  {} PR-{} attribution split — lease says {}, commit trailers say {}",
+                "⚠️".yellow(),
+                item.pr.to_string().bold(),
+                item.lease_spec.bold(),
+                item.trailer_spec.bold(),
             )?;
             budget -= 1;
         }
@@ -871,6 +913,12 @@ impl AwaitingReport {
                 "spec_id": e.spec_id,
                 "title": e.title,
             })).collect::<Vec<_>>(),
+            // trace:TASK-1445 | ai:claude
+            "pr_attribution_disagreements": self.pr_attribution_disagreements.iter().map(|d| serde_json::json!({
+                "pr": d.pr,
+                "lease_spec": d.lease_spec,
+                "trailer_spec": d.trailer_spec,
+            })).collect::<Vec<_>>(),
         })
     }
 
@@ -955,6 +1003,13 @@ impl AwaitingReport {
                 self.escalations.len(),
                 "escalation",
                 "escalations",
+            ));
+        }
+        // trace:TASK-1445 | ai:claude
+        if !self.pr_attribution_disagreements.is_empty() {
+            parts.push(format!(
+                "{} attribution split",
+                self.pr_attribution_disagreements.len()
             ));
         }
         if parts.is_empty() {
@@ -1437,6 +1492,45 @@ mod tests {
         let json = r.to_json();
         assert_eq!(json["unshipped_work"][0]["spec_id"], "STORY-1043");
         assert_eq!(json["unshipped_work"][0]["commits_ahead"], 2);
+    }
+
+    // TASK-1445 (containment for BUG-1510 AC5): the disagreeing case must
+    // surface on the surface an operator/advisor already looks — render,
+    // JSON, and the per-turn compact line — naming both claimed owners.
+    // trace:TASK-1445 | ai:claude
+    #[test]
+    fn pr_attribution_disagreement_renders_json_and_notice_count() {
+        let r = AwaitingReport {
+            pr_attribution_disagreements: vec![PrAttributionDisagreementItem {
+                pr: 2043,
+                lease_spec: "STORY-1391".to_string(),
+                trailer_spec: "BUG-1420".to_string(),
+            }],
+            ..Default::default()
+        };
+        assert_eq!(r.total(), 1);
+        let line = r
+            .compact_line()
+            .expect("attribution disagreement yields a per-turn line");
+        assert!(line.contains("1 attribution split"), "compact line: {line}");
+
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(s.contains("PR-2043 attribution split"), "{s}");
+        assert!(s.contains("lease says STORY-1391"), "{s}");
+        assert!(s.contains("commit trailers say BUG-1420"), "{s}");
+
+        let json = r.to_json();
+        assert_eq!(json["pr_attribution_disagreements"][0]["pr"], 2043);
+        assert_eq!(
+            json["pr_attribution_disagreements"][0]["lease_spec"],
+            "STORY-1391"
+        );
+        assert_eq!(
+            json["pr_attribution_disagreements"][0]["trailer_spec"],
+            "BUG-1420"
+        );
     }
 
     // STORY-1419 review: the row advertises a spec id and the production call

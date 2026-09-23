@@ -69883,6 +69883,18 @@ fn collect_awaiting_report_inner(
         awaiting_you::rework_ready_rows(&candidates, seat.as_deref())
     };
 
+    // TASK-1445 (containment for BUG-1510 AC5): does a live drain's
+    // lease-based PR attribution agree with what the PR's own commits
+    // credit? Local-only (drain-state file + a git log per in-flight
+    // member) — no network — so it's skipped on the notice-fast path for
+    // the same latency reason as `unshipped_work` above.
+    // trace:TASK-1445 | ai:claude
+    let pr_attribution_disagreements = if notice_fast {
+        Vec::new()
+    } else {
+        collect_pr_attribution_disagreements(project_root)
+    };
+
     awaiting_you::AwaitingReport {
         mergeable_prs,
         unowned_failing_prs,
@@ -69897,6 +69909,7 @@ fn collect_awaiting_report_inner(
         shelved_total,
         unshipped_work,
         nightly_red,
+        pr_attribution_disagreements,
     }
 }
 
@@ -74888,6 +74901,80 @@ fn decide_shelve_attribution(commits: &[(String, String)], lease_spec: &str) -> 
             )),
         },
     }
+}
+
+// ============================================================================
+// TASK-1445 (containment for BUG-1510 AC5): surface a PR attribution split
+// between `aida drain status` (attributes a PR by the lease it ran under)
+// and the trailer/title-based detectors (`awaiting_you.rs` unshipped-work
+// code) — instead of letting the two sources silently disagree, as happened
+// for 52 seconds in the BUG-1510 incident before a reviewer verdict landed
+// on the wrong spec.
+// ============================================================================
+
+/// Pure, testable core: given the spec a PR's lease attributes it to and
+/// that PR's own commits, decide whether the two attribution sources agree.
+/// Reuses `decide_shelve_attribution` (TASK-1444) so this and the
+/// reviewer-verdict shelve guard agree on what "trailer evidence" means:
+/// `Confirmed` (a trailer names the lease spec) and `Uncertain` (the
+/// trailers don't settle it — zero or several distinct ids) are both
+/// non-disagreements; only a confident `Reattributed` to a DIFFERENT spec is
+/// a disagreement worth surfacing. Never silently prefers one source over
+/// the other — both claimed owners are returned.
+// trace:TASK-1445 | ai:claude
+fn pr_attribution_disagreement(
+    pr: u64,
+    commits: &[(String, String)],
+    lease_spec: &str,
+) -> Option<awaiting_you::PrAttributionDisagreementItem> {
+    match decide_shelve_attribution(commits, lease_spec) {
+        ShelveAttribution::Reattributed(trailer_spec) => {
+            Some(awaiting_you::PrAttributionDisagreementItem {
+                pr,
+                lease_spec: lease_spec.to_string(),
+                trailer_spec,
+            })
+        }
+        ShelveAttribution::Confirmed(_) | ShelveAttribution::Uncertain(_) => None,
+    }
+}
+
+/// Collect every attribution split for the currently live drain's in-flight
+/// members. Local-only: a `.aida/drain-state.json` read, the local lease
+/// list, and one `git log` per in-flight member with a recorded PR — no
+/// network call. Returns nothing when no drain is active, a member has no
+/// PR yet, or its lease's branch can't be resolved/read (fails open — a git
+/// hiccup here must not manufacture a false disagreement).
+// trace:TASK-1445 | ai:claude
+fn collect_pr_attribution_disagreements(
+    project_root: &std::path::Path,
+) -> Vec<awaiting_you::PrAttributionDisagreementItem> {
+    let state = match drain_state::probe(project_root) {
+        drain_state::DrainStatus::Active(state) => state,
+        drain_state::DrainStatus::None | drain_state::DrainStatus::Stale(_) => return Vec::new(),
+    };
+    let Some(default_ref) = resolve_default_branch_ref(project_root) else {
+        return Vec::new();
+    };
+    let leases = list_leases(project_root);
+    let mut out = Vec::new();
+    for member in state.members.iter().filter(|m| m.is_running()) {
+        let Some(pr) = member.pr else { continue };
+        let Some(lease) = leases
+            .iter()
+            .find(|l| l.scope.eq_ignore_ascii_case(&member.spec))
+        else {
+            continue;
+        };
+        let range = format!("{default_ref}..{}", lease.branch);
+        let Ok(commits) = read_commits_in_range(project_root, &range) else {
+            continue;
+        };
+        if let Some(disagreement) = pr_attribution_disagreement(pr as u64, &commits, &member.spec) {
+            out.push(disagreement);
+        }
+    }
+    out
 }
 
 /// Refuse (exit 1) to open a PR when no commit the branch adds over the
@@ -94989,3 +95076,8 @@ mod task_1442_pr_open_spec_guard_tests;
 #[cfg(test)]
 #[path = "tests/task_1444_shelve_attribution_tests.rs"]
 mod task_1444_shelve_attribution_tests;
+
+// trace:TASK-1445 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1445_pr_attribution_disagreement_tests.rs"]
+mod task_1445_pr_attribution_disagreement_tests;
