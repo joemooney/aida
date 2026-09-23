@@ -75125,6 +75125,147 @@ fn run_client_trailer_guard(project_root: &std::path::Path, surface: &str, force
     std::process::exit(1);
 }
 
+// ============================================================================
+// TASK-1442: PR-open spec-attribution guard (containment for BUG-1510).
+//
+// STORY-469's `run_client_trailer_guard` above checks that every `(SPEC-ID)`
+// trailer on the branch resolves to a LIVE spec — it never checks that a
+// trailer names the SPEC THE BRANCH IS FOR. BUG-1510's incident: STORY-1391's
+// drain opened PR #2043 whose commits were all trailered BUG-1420 — every
+// trailer was live, so Guard 1 passed, but the PR was misattributed. This
+// guard closes that gap: before a NEW PR is opened, at least one commit the
+// branch adds over the default branch must carry a trailer naming the spec
+// the branch is leased for.
+// ============================================================================
+
+/// Pure, testable core: given commits as `(sha, subject)` pairs and the spec
+/// the branch is leased for, return `None` when some commit's `(SPEC-ID)`
+/// trailer names `expected_spec` (attribution OK), or `Some(other_ids)` — the
+/// distinct spec ids the trailers DO name — when none does (refuse). Reuses
+/// the same trailer extractor + plan-commit exemption as Guard 1
+/// (`validate_trailer_references`) so the two guards agree on what a
+/// "trailer" is.
+// trace:TASK-1442 | ai:claude
+fn pr_open_spec_guard_violation(
+    commits: &[(String, String)],
+    expected_spec: &str,
+) -> Option<Vec<String>> {
+    let mut other_ids: Vec<String> = Vec::new();
+    for (_, subject) in commits {
+        if is_plan_commit_subject(subject) {
+            continue;
+        }
+        for id in extract_spec_ids_from_commit(subject) {
+            if id.eq_ignore_ascii_case(expected_spec) {
+                return None; // found a matching trailer — attributed correctly
+            }
+            if !other_ids
+                .iter()
+                .any(|s: &String| s.eq_ignore_ascii_case(&id))
+            {
+                other_ids.push(id);
+            }
+        }
+    }
+    Some(other_ids)
+}
+
+/// Refuse (exit 1) to open a PR when no commit the branch adds over the
+/// default branch carries a `(SPEC-ID)` trailer naming `expected_spec`. A
+/// no-op when the commit range can't be read (soft warning — a git hiccup
+/// shouldn't block shipping) or when the branch has no commits to ship.
+// trace:TASK-1442 | ai:claude
+fn run_pr_open_spec_guard(project_root: &std::path::Path, branch: &str, expected_spec: &str) {
+    let range = resolve_gate_range(project_root, None);
+    let commits = match read_commits_in_range(project_root, &range) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!(
+                "{} pr ship: PR-spec attribution check skipped — {}",
+                "warning:".yellow().bold(),
+                e
+            );
+            return;
+        }
+    };
+    if commits.is_empty() {
+        return;
+    }
+
+    let other_ids = match pr_open_spec_guard_violation(&commits, expected_spec) {
+        None => return,
+        Some(ids) => ids,
+    };
+
+    eprintln!(
+        "{} pr ship: refusing to open a PR — branch `{}` is leased for {} but no commit on \
+         it carries a `({})` trailer.",
+        crate::glyph(crate::glyphs::Glyph::Cross),
+        branch,
+        expected_spec,
+        expected_spec
+    );
+    if other_ids.is_empty() {
+        eprintln!("  no commit on this branch carries a (SPEC-ID) trailer at all.");
+    } else {
+        eprintln!(
+            "  commit trailer(s) instead name: {} — a mismatch against the leased spec {}.",
+            other_ids.join(", "),
+            expected_spec
+        );
+    }
+    eprintln!(
+        "  Fix the trailer(s) (`git commit --amend` / interactive rebase) to reference {}, or \
+         end this lease and open the PR from the branch that actually owns {}.",
+        expected_spec, expected_spec
+    );
+    std::process::exit(1);
+}
+
+/// TASK-1442 follow-up: the same PR-spec attribution check as
+/// `run_pr_open_spec_guard`, but as a `Result` instead of an exiting side
+/// effect. `run_pr_open_spec_guard` is only safe at `aida pr ship`'s own
+/// top level; the autonomous drain's PR-open recovery paths
+/// (`open_orchestrator_pr_for_implementer_worktree`,
+/// `open_orchestrator_pr_for_pushed_branch`) run INSIDE the orchestrator
+/// process, where `std::process::exit` would kill the whole drain instead of
+/// failing just the one phase. `repo` is the directory to run git in (the
+/// implementer worktree, or the main project root for a pushed branch);
+/// `branch_ref` is whatever ref names the branch's commits from there (a
+/// local branch name or `origin/<branch>`). A no-op when the default branch
+/// or commit range can't be resolved (soft — a git hiccup shouldn't block
+/// recovery) or when there are no commits to check.
+// trace:TASK-1442 | ai:claude
+fn ensure_pr_open_spec_attribution(
+    repo: &std::path::Path,
+    branch_ref: &str,
+    expected_spec: &str,
+) -> Result<()> {
+    let Some(default_ref) = resolve_default_branch_ref(repo) else {
+        return Ok(());
+    };
+    let range = format!("{default_ref}..{branch_ref}");
+    let commits = match read_commits_in_range(repo, &range) {
+        Ok(c) => c,
+        Err(_) => return Ok(()),
+    };
+    if commits.is_empty() {
+        return Ok(());
+    }
+    if let Some(other_ids) = pr_open_spec_guard_violation(&commits, expected_spec) {
+        let named = if other_ids.is_empty() {
+            "no commit carries a (SPEC-ID) trailer at all".to_string()
+        } else {
+            format!("commit trailer(s) instead name: {}", other_ids.join(", "))
+        };
+        anyhow::bail!(
+            "refusing to open a PR for {expected_spec} on `{branch_ref}` — no commit on it \
+             carries a `({expected_spec})` trailer; {named}"
+        );
+    }
+    Ok(())
+}
+
 /// CLI handler for `aida trace gate`. Reads the commit range from git, runs the
 /// pure validator against the live store, prints the result, and exits non-zero
 /// (code 1) when any commit references a dead/dangling SPEC-ID.
@@ -90286,15 +90427,58 @@ fn orchestrator_pr_title_and_body(commit_msg: &str) -> Result<(String, String)> 
     Ok((title, body))
 }
 
+// TASK-1443: adopt an already-open PR for `branch` instead of opening a
+// second one. #2042 and #2043 shared a head and were created 106 seconds
+// apart — two orchestrator drives raced the same branch and neither one
+// saw the other's freshly-opened PR before calling `open_change` again.
+// Reuses the same forge-neutral lookup `aida pr ship` uses to resume onto
+// an existing PR (`branch_pr_resolution_from_lookup`, TASK-141/STORY-516)
+// rather than re-deriving branch->PR lookup here. `Found` adopts (returns
+// the existing PR id); `Create` and every inconclusive lookup state
+// (`LookupFailed`) fall through to the caller's normal open-PR path — a
+// lookup we cannot trust must not block recovery, it only means this
+// race-guard cannot help for that call. trace:TASK-1443 | ai:claude
+fn existing_open_pr_for_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+    forge_kind: crate::forge::ForgeKind,
+) -> Option<u64> {
+    // Route through the EXPLICIT `forge_kind` the caller already resolved for
+    // this drive, not `change_lookup_for_branch`'s own auto-detection — a
+    // fixture/test remote (or a repo mid-migration) can auto-resolve to
+    // `PureGitForge`, whose `change_for_branch` deliberately reports the
+    // branch itself as `Found(id: 0)` (no PR concept). That sentinel is not
+    // an adoptable PR number, so it is filtered out here in addition to
+    // matching the caller's real forge. trace:TASK-1443 | ai:claude
+    let lookup = crate::forge::forge_for_kind(project_root, forge_kind)
+        .change_for_branch(branch)
+        .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}")));
+    match crate::pr_ship::branch_pr_resolution_from_lookup(&lookup) {
+        crate::pr_ship::BranchPrResolution::Found(id) if id != 0 => Some(id),
+        _ => None,
+    }
+}
+
 fn open_orchestrator_pr_for_implementer_worktree(
     project_root: &std::path::Path,
     worktree: &std::path::Path,
     branch: &str,
     forge_kind: crate::forge::ForgeKind,
+    spec: &str,
 ) -> Result<u64> {
     // trace:BUG-893 | ai:codex
     push_branch_from_implementer_worktree(worktree, branch)
         .map_err(|e| anyhow::anyhow!("{}", e.reason))?;
+    // TASK-1442 follow-up (containment for BUG-1510): before opening the PR,
+    // verify the branch actually carries a commit trailered for the spec
+    // this drive is for.
+    ensure_pr_open_spec_attribution(worktree, branch, spec)?;
+    // TASK-1443: a concurrent drive may have already opened a PR for this
+    // head between the push above and this point — adopt it rather than
+    // opening a second one. trace:TASK-1443 | ai:claude
+    if let Some(existing) = existing_open_pr_for_branch(project_root, branch, forge_kind) {
+        return Ok(existing);
+    }
     let commit_msg_out = std::process::Command::new("git")
         .current_dir(worktree)
         .args(["log", "-1", "--format=%B"])
@@ -90596,6 +90780,7 @@ fn open_orchestrator_pr_for_pushed_branch(
     project_root: &std::path::Path,
     branch: &str,
     forge_kind: crate::forge::ForgeKind,
+    spec: &str,
 ) -> Result<u64> {
     // BUG-895: phase 2 may have already pushed and removed the implementer
     // worktree. Recover from origin/<branch> without trying to push again.
@@ -90606,6 +90791,15 @@ fn open_orchestrator_pr_for_pushed_branch(
         anyhow::bail!("pushed branch `origin/{branch}` has no commits ahead of origin default");
     }
     let branch_ref = origin_branch_ref(branch);
+    // TASK-1442 follow-up (containment for BUG-1510): before opening the PR,
+    // verify the pushed branch actually carries a commit trailered for the
+    // spec this drive is for.
+    ensure_pr_open_spec_attribution(project_root, &branch_ref, spec)?;
+    // TASK-1443: adopt an already-open PR for this head instead of opening a
+    // second one (see `existing_open_pr_for_branch` above). trace:TASK-1443 | ai:claude
+    if let Some(existing) = existing_open_pr_for_branch(project_root, branch, forge_kind) {
+        return Ok(existing);
+    }
     let commit_msg = head_commit_message(project_root, &branch_ref)?;
     let (title, body) = orchestrator_pr_title_and_body(&commit_msg)?;
     let change = crate::forge::forge_for_kind(project_root, forge_kind)
@@ -90631,6 +90825,7 @@ fn try_open_orchestrator_pr_for_no_pr_worktree(
     worktree: &std::path::Path,
     branch: &str,
     forge_kind: crate::forge::ForgeKind,
+    spec: &str,
 ) -> Option<(u32, u64)> {
     // trace:BUG-893 trace:BUG-1037 | ai:codex
     let ahead = branch_commits_ahead_main(worktree, branch).unwrap_or(0);
@@ -90652,10 +90847,20 @@ fn try_open_orchestrator_pr_for_no_pr_worktree(
         // It returns None when the branch genuinely is not ahead, so the
         // no-work case still falls through exactly as before.
         // trace:BUG-1485 | ai:claude
-        return try_open_orchestrator_pr_for_no_pr_pushed_branch(project_root, branch, forge_kind);
+        return try_open_orchestrator_pr_for_no_pr_pushed_branch(
+            project_root,
+            branch,
+            forge_kind,
+            spec,
+        );
     }
-    match open_orchestrator_pr_for_implementer_worktree(project_root, worktree, branch, forge_kind)
-    {
+    match open_orchestrator_pr_for_implementer_worktree(
+        project_root,
+        worktree,
+        branch,
+        forge_kind,
+        spec,
+    ) {
         Ok(pr) => Some((ahead, pr)),
         Err(e) => {
             eprintln!(
@@ -90668,7 +90873,7 @@ fn try_open_orchestrator_pr_for_no_pr_worktree(
             // pushed-branch path can still succeed; if it never did, this
             // returns None and the caller falls back to punt/fail as before.
             // trace:BUG-1485 | ai:claude
-            try_open_orchestrator_pr_for_no_pr_pushed_branch(project_root, branch, forge_kind)
+            try_open_orchestrator_pr_for_no_pr_pushed_branch(project_root, branch, forge_kind, spec)
         }
     }
 }
@@ -90702,13 +90907,14 @@ fn try_open_orchestrator_pr_for_no_pr_pushed_branch(
     project_root: &std::path::Path,
     branch: &str,
     forge_kind: crate::forge::ForgeKind,
+    spec: &str,
 ) -> Option<(u32, u64)> {
     // trace:BUG-895 trace:BUG-1037 | ai:codex
     let ahead = match pushed_branch_commits_ahead_default(project_root, branch) {
         Ok(ahead) if ahead > 0 => ahead,
         _ => return None,
     };
-    match open_orchestrator_pr_for_pushed_branch(project_root, branch, forge_kind) {
+    match open_orchestrator_pr_for_pushed_branch(project_root, branch, forge_kind, spec) {
         Ok(pr) => Some((ahead, pr)),
         Err(e) => {
             eprintln!(
@@ -91595,6 +91801,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         &worktree_path,
                         &branch,
                         self.lifecycle_forge,
+                        &self.spec,
                     ) {
                         if !self.json {
                             eprintln!(
@@ -91646,6 +91853,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     &worktree_path,
                     &branch,
                     self.lifecycle_forge,
+                    &self.spec,
                 ) {
                     if !self.json {
                         eprintln!(
@@ -91706,6 +91914,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &self.project_root,
             &branch,
             self.lifecycle_forge,
+            &self.spec,
         )?;
         if !self.json {
             eprintln!(
@@ -95344,3 +95553,7 @@ mod bug_1418_drain_token_measurement_tests;
 #[cfg(test)]
 #[path = "tests/bug_1510_lease_brief_dispatch_tests.rs"]
 mod bug_1510_lease_brief_dispatch_tests;
+// trace:TASK-1442 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1442_pr_open_spec_guard_tests.rs"]
+mod task_1442_pr_open_spec_guard_tests;
