@@ -47,12 +47,12 @@ description: |
   - A rollup whose only failing check is the supervised hold gate does not produce a `ci-red` shelve, whether or not the check rows were readable.
   - A held PR whose code checks are green or pending is reported as awaiting review, not as a failure awaiting triage.
   - Regression test reproduces the observed rollup exactly: one concluded `failure` on the hold gate, one `in_progress` required build, rows fully readable — the shape BUG-1265's row-error guard does not cover.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:25:14.620023337Z
-modified_at: 2026-09-23T13:04:16.710017801Z
+modified_at: 2026-09-23T14:01:13.827380235Z
 req_type: Bug
 tags:
 - drain-safe
@@ -237,3 +237,21 @@ comments:
   created_at: 2026-09-23T13:04:06.460579090Z
   modified_at: 2026-09-23T13:04:06.460579090Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0ce92-0cdf-7cf3-9e35-832cf3747793
+  author: aida-auto-bump
+  timestamp: 2026-09-23T14:01:13.183384817Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0ce92-0f63-7532-979a-e018e91999f1
+  timestamp: 2026-09-23T14:01:13.827376154Z
+  agent: aida
+  commit_sha: bbeab46c4a39592bebd0054794aa3e55f58198f0
+  summary: Completed via merge bbeab46c
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T14:01:13.181608400Z
+  completion_sha: bbeab46c4a39592bebd0054794aa3e55f58198f0
