@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:14:13.323242098Z
-modified_at: 2026-09-23T21:43:16.965782952Z
+modified_at: 2026-09-23T22:22:23.843184532Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -140,6 +140,12 @@ comments:
   content: 'PROXY DECISION (operator''s proxy, 2026-09-23): the strict review of #2103 at 0990866f15 was request-changes. Needs a rebase. Held non-recusal PRs vanished from awaiting. A human could not clear a recusal hold without AIDA_AGENT_ID. The per-turn awaiting render wrote files and ran full process scans. Claude is taking the rework over on claude/story-1397, built from #2103''s head. A human at a TTY clears a recusal hold without an agent id and is recorded as human:<user>. The TTY integrity floor is unchanged. The render path becomes read-only.'
   created_at: 2026-09-23T21:43:16.965782952Z
   modified_at: 2026-09-23T21:43:16.965782952Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d05c-e463-7243-8c6f-23509cd32464
+  author: joe
+  content: 'Claude takeover on claude/story-1397 (7e59c979b9, #2103 merged with main). Held PRs: every open held PR stays in aida awaiting with its hold reason. Recusal holds keep their own rows. Supervision, rework, decision and unreadable holds now show in a held_prs channel in the human, JSON, TOON, notice and statusbar output. Clearing: a human at a terminal clears a recusal hold without AIDA_AGENT_ID. The clear is recorded as human:<user> in .aida/merge-hold-clearances/. The TTY floor is unchanged. LIMITATION: AIDA_AGENT_ID is self-declared, not an established identity, and nothing sets it. It is used only to personalize awaiting rows and to refuse a clear when it names a recused principal. It never satisfies independence, and review_recorded_by no longer uses it. Render: the awaiting render and the notice are now read-only. A moved head shows as stale-head in memory. Reconciliation now runs only from aida merge-hold list --fix, using a single-pid liveness probe.'
+  created_at: 2026-09-23T22:22:23.843184532Z
+  modified_at: 2026-09-23T22:22:23.843184532Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
 implementation_info:
