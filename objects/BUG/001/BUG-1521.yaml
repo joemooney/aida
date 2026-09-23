@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:30:38.833900428Z
-modified_at: 2026-09-23T11:13:36.605320945Z
+modified_at: 2026-09-23T11:13:42.598183119Z
 req_type: Bug
 tags:
 - aida:ps substrate-truth severity:operational papercut
@@ -72,4 +72,10 @@ comments:
   content: Commit c9cd2678fe references this requirement
   created_at: 2026-09-23T11:12:49.127224975Z
   modified_at: 2026-09-23T11:12:49.127224975Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdf8-b0c6-7ab1-980f-1ea09333bcc1
+  author: joe
+  content: 'Rework c9cd2678fe implements the proxy role order exactly (orchestrator-verified): a real lease role, then manifest_role, then jsonl_role, then the HARNESS_AGENT_TYPE placeholder. TASK-152/153 fixtures restored to advisor; the tautological tests replaced; agent-mode running: stays an integer. The root cause of the product-vs-advisor divergence is filed separately (role_from_jsonl unbounded scan).'
+  created_at: 2026-09-23T11:13:42.598183119Z
+  modified_at: 2026-09-23T11:13:42.598183119Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
