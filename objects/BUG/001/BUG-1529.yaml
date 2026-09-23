@@ -68,12 +68,12 @@ description: |-
   Related: BUG-1522 (the guard that will read this corpus), BUG-1452 (a refusal leaving the
   spec Done - the live half of the same lifecycle gap), STORY-1391 (verdict round
   retention, which preserves history but does not close a refusal out).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:02:30.985302118Z
-modified_at: 2026-09-23T10:28:32.468775428Z
+modified_at: 2026-09-23T10:29:08.249880757Z
 req_type: Bug
 tags:
 - parent:EPIC-62
