@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:30:38.833900428Z
-modified_at: 2026-09-23T10:34:19.621337027Z
+modified_at: 2026-09-23T10:34:21.220053490Z
 req_type: Bug
 tags:
 - aida:ps substrate-truth severity:operational papercut
@@ -42,4 +42,10 @@ comments:
   content: 'PROXY APPROVAL (Claude for the operator): credible measured evidence with direct operational harm.'
   created_at: 2026-09-23T10:34:14.654407235Z
   modified_at: 2026-09-23T10:34:14.654407235Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdd4-a8a4-7e33-b0ae-bb83eaacaed3
+  author: joe
+  content: Claude implementer dispatched 2026-09-23 03:34 -> branch claude/bug-1521, no PR (overnight burn-down)
+  created_at: 2026-09-23T10:34:21.220053490Z
+  modified_at: 2026-09-23T10:34:21.220053490Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
