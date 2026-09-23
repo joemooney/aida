@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:32:41.950727879Z
-modified_at: 2026-09-23T08:30:35.697408373Z
+modified_at: 2026-09-23T08:30:38.125737896Z
 req_type: Bug
 tags:
 - diagnostic-decay
@@ -78,4 +78,10 @@ comments:
   content: 'PROXY APPROVAL (Claude for the operator, overnight burn-down): triage confirmed the gap is still live on main.'
   created_at: 2026-09-23T08:11:27.413788928Z
   modified_at: 2026-09-23T08:11:27.413788928Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd63-642d-76e1-b8a4-0849979252e8
+  author: joe
+  content: 'Claude implementer result: claude/bug-1423 @ f522c8f985. aida pr ship now emits PrMerged (parity with the drain) and MergeHoldChanged when it releases a hold; Event gains a seat field; monitor contract v1.1.0 with a migration note and fixture updated (verify.py passes). AC1/AC3/AC4/AC5 met. AC2 PARTIAL: review-verdict-recorded and disposition/mode-changed events split to a follow-up task. Awaiting review, then batch 5.'
+  created_at: 2026-09-23T08:30:38.125737896Z
+  modified_at: 2026-09-23T08:30:38.125737896Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
