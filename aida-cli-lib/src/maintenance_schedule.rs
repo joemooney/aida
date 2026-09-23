@@ -1458,20 +1458,45 @@ pub(crate) fn tick_cron_marker(project_root: &Path) -> String {
 }
 
 /// Pure line-builder, split out from [`tick_cron_line`] so the exact shape
-/// is unit-testable without touching `std::env::current_exe`.
+/// is unit-testable without touching `std::env::current_exe`. Errors when
+/// any path component contains `%`: cron's OWN parser (before `/bin/sh`
+/// ever sees the line, and regardless of shell quoting) turns an unescaped
+/// `%` in the command field into a literal newline plus stdin redirection —
+/// see crontab(5). That would silently corrupt this entry (both the `cd`
+/// target and the trailing marker comment, which cron scans the same way),
+/// and escaping it consistently would require re-escaping the same way on
+/// every later read-back comparison against `tick_cron_marker`. Rejecting
+/// outright is simpler and auditable for a character that should never
+/// legitimately appear in an install path.
 // trace:STORY-1463 | ai:claude
-pub(crate) fn build_tick_cron_line(repo: &Path, aida_exe: &Path) -> String {
+pub(crate) fn build_tick_cron_line(repo: &Path, aida_exe: &Path) -> Result<String> {
+    let repo_str = repo.display().to_string();
+    let aida_exe_str = aida_exe.display().to_string();
     let bin_dir = aida_exe
         .parent()
         .map(|p| p.display().to_string())
         .unwrap_or_default();
-    format!(
-        "*/15 * * * * cd {} && PATH={}:/usr/local/bin:/usr/bin:/bin {} schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1 # {}",
-        shell_quote(&repo.display().to_string()),
-        bin_dir,
-        shell_quote(&aida_exe.display().to_string()),
+    for (label, value) in [
+        ("repo path", repo_str.as_str()),
+        ("aida binary path", aida_exe_str.as_str()),
+        ("aida binary directory", bin_dir.as_str()),
+    ] {
+        if value.contains('%') {
+            anyhow::bail!(
+                "cannot build a scheduler-tick crontab entry: {label} '{value}' contains '%', \
+                 which cron's own parser treats as a literal newline in the command field \
+                 (crontab(5)) — rename the path to avoid '%' and retry"
+            );
+        }
+    }
+    let path_assignment = format!("{bin_dir}:/usr/local/bin:/usr/bin:/bin");
+    Ok(format!(
+        "*/15 * * * * cd {} && PATH={} {} schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1 # {}",
+        shell_quote(&repo_str),
+        shell_quote(&path_assignment),
+        shell_quote(&aida_exe_str),
         tick_cron_marker(repo),
-    )
+    ))
 }
 
 /// The crontab entry that drives `aida schedule tick` for `project_root`
@@ -1487,7 +1512,7 @@ pub(crate) fn tick_cron_line(project_root: &Path) -> Result<String> {
     let aida_exe =
         std::env::current_exe().context("could not resolve the current `aida` binary path")?;
     let aida_exe = aida_exe.canonicalize().unwrap_or(aida_exe);
-    Ok(build_tick_cron_line(&repo, &aida_exe))
+    build_tick_cron_line(&repo, &aida_exe)
 }
 
 /// Read the current user's crontab. `Ok(None)` means no crontab exists yet
@@ -1537,12 +1562,25 @@ fn write_crontab(body: &str) -> Result<()> {
     Ok(())
 }
 
+/// Whether `line` carries exactly this marker as its trailing `# <marker>`
+/// comment — never a bare substring match. A substring match on the marker
+/// (or on the whole crontab body) wrongly matches a repo whose path is a
+/// strict PREFIX of another's: `aida-schedule-tick:/x/aida` is a substring
+/// of `aida-schedule-tick:/x/aida-web`, so `/x/aida`'s install/uninstall
+/// must never touch `/x/aida-web`'s entry (or vice versa). Anchoring on the
+/// trailing `# marker` token — the exact shape `build_tick_cron_line`
+/// writes — rules that out.
+// trace:STORY-1463 | ai:claude
+fn line_has_marker(line: &str, marker: &str) -> bool {
+    line.trim_end().ends_with(&format!("# {marker}"))
+}
+
 /// Pure: the new crontab body after installing `line` (marked by `marker`),
 /// or `None` when `marker` is already present (idempotent no-op). Appends —
 /// never rewrites or reorders whatever `crontab -l` already printed.
 // trace:STORY-1463 | ai:claude
 pub(crate) fn crontab_after_install(existing: &str, marker: &str, line: &str) -> Option<String> {
-    if existing.contains(marker) {
+    if existing.lines().any(|l| line_has_marker(l, marker)) {
         return None;
     }
     let mut body = existing.to_string();
@@ -1554,16 +1592,16 @@ pub(crate) fn crontab_after_install(existing: &str, marker: &str, line: &str) ->
     Some(body)
 }
 
-/// Pure: the new crontab body with every line containing `marker` removed,
-/// or `None` when `marker` was not present (idempotent no-op).
+/// Pure: the new crontab body with every line carrying `marker` removed, or
+/// `None` when `marker` was not present (idempotent no-op).
 // trace:STORY-1463 | ai:claude
 pub(crate) fn crontab_after_uninstall(existing: &str, marker: &str) -> Option<String> {
-    if !existing.contains(marker) {
+    if !existing.lines().any(|l| line_has_marker(l, marker)) {
         return None;
     }
     let mut body = existing
         .lines()
-        .filter(|line| !line.contains(marker))
+        .filter(|line| !line_has_marker(line, marker))
         .collect::<Vec<_>>()
         .join("\n");
     if !body.is_empty() {
@@ -1639,7 +1677,9 @@ pub(crate) fn classify_cron_driver(
     marker: &str,
 ) -> CronDriverStatus {
     match crontab {
-        Ok(Some(body)) if body.contains(marker) => CronDriverStatus::Installed,
+        Ok(Some(body)) if body.lines().any(|l| line_has_marker(l, marker)) => {
+            CronDriverStatus::Installed
+        }
         Ok(_) => CronDriverStatus::Missing,
         Err(reason) => CronDriverStatus::Unknown(reason),
     }

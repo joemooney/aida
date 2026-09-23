@@ -84,13 +84,15 @@ fn tick_cron_marker_is_keyed_by_repo_path() {
 fn build_tick_cron_line_matches_reference_shape() {
     let repo = Path::new("/home/joe/ai/aida");
     let aida_exe = Path::new("/home/joe/.aida/bin/aida");
-    let line = build_tick_cron_line(repo, aida_exe);
+    let line = build_tick_cron_line(repo, aida_exe).unwrap();
 
-    // */15 * * * * cd <repo> && PATH=<bin-dir>:... <abs-aida> schedule tick
+    // */15 * * * * cd <repo> && PATH='<bin-dir>:...' <abs-aida> schedule tick
     // --format json >> ~/.aida/schedule-tick.log 2>&1 # <marker>
     assert!(line.starts_with("*/15 * * * * cd "), "{line}");
+    // The whole PATH assignment is quoted as one shell word (not just the
+    // bin dir) so it can never be split or glob-expanded on the way in.
     assert!(
-        line.contains("PATH=/home/joe/.aida/bin:/usr/local/bin:/usr/bin:/bin"),
+        line.contains("PATH='/home/joe/.aida/bin:/usr/local/bin:/usr/bin:/bin'"),
         "{line}"
     );
     assert!(
@@ -101,7 +103,30 @@ fn build_tick_cron_line_matches_reference_shape() {
         line.contains("schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1"),
         "{line}"
     );
-    assert!(line.contains(&tick_cron_marker(repo)), "{line}");
+    assert!(
+        line.ends_with(&format!("# {}", tick_cron_marker(repo))),
+        "{line}"
+    );
+}
+
+#[test]
+fn build_tick_cron_line_rejects_a_percent_in_any_path_component() {
+    // crontab(5): an unescaped `%` in the command field becomes a literal
+    // newline (+ stdin redirection) — cron's own parser, before /bin/sh
+    // ever runs, regardless of shell quoting. Reject outright rather than
+    // silently write a corrupted entry.
+    let bad_repo = Path::new("/home/joe/ai/100%-done");
+    let aida_exe = Path::new("/home/joe/.aida/bin/aida");
+    let err = build_tick_cron_line(bad_repo, aida_exe).unwrap_err();
+    assert!(err.to_string().contains('%'), "{err}");
+
+    let good_repo = Path::new("/home/joe/ai/aida");
+    let bad_exe = Path::new("/home/joe/.aida%/bin/aida");
+    let err = build_tick_cron_line(good_repo, bad_exe).unwrap_err();
+    assert!(err.to_string().contains('%'), "{err}");
+
+    // A clean pair still builds fine.
+    assert!(build_tick_cron_line(good_repo, aida_exe).is_ok());
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +186,66 @@ fn crontab_after_uninstall_no_op_when_marker_absent() {
     assert_eq!(
         crontab_after_uninstall(existing, "aida-schedule-tick:/repo"),
         None
+    );
+}
+
+/// Regression: `/x/aida`'s marker is a textual PREFIX of `/x/aida-web`'s
+/// marker (`aida-schedule-tick:/x/aida` vs `aida-schedule-tick:/x/aida-web`).
+/// A naive `.contains(marker)` on `/x/aida-web`'s line would wrongly match
+/// while checking `/x/aida`'s marker — install would think it's already
+/// installed, and uninstall would delete the WRONG repo's entry. Anchoring
+/// on the trailing `# <marker>` token must tell them apart.
+#[test]
+fn marker_matching_does_not_confuse_a_repo_whose_path_is_a_prefix_of_another() {
+    let marker_short = tick_cron_marker(Path::new("/x/aida"));
+    let marker_long = tick_cron_marker(Path::new("/x/aida-web"));
+    assert_ne!(marker_short, marker_long);
+    assert!(
+        marker_long.starts_with(&marker_short),
+        "the test setup must exercise a genuine textual prefix: {marker_short} / {marker_long}"
+    );
+
+    let line_long = format!("*/15 * * * * cd /x/aida-web && aida schedule tick # {marker_long}");
+    let existing = format!("{line_long}\n");
+
+    // Installing the SHORT repo's entry must not be short-circuited by the
+    // long repo's line already being present.
+    let body = crontab_after_install(&existing, &marker_short, "irrelevant-new-line").unwrap();
+    assert!(body.contains(&line_long), "must keep the long repo's entry");
+    assert!(
+        body.contains("irrelevant-new-line"),
+        "must actually append the short repo's entry, not treat it as already installed"
+    );
+
+    // Uninstalling the SHORT repo's entry must not delete the long repo's
+    // line even though it's a textual superset match.
+    assert_eq!(
+        crontab_after_uninstall(&existing, &marker_short),
+        None,
+        "the short repo's marker is not present as its own line — must be a no-op, not a false hit on the long repo's line"
+    );
+
+    // And uninstalling the LONG repo's entry (which IS present) must still
+    // work correctly.
+    let body = crontab_after_uninstall(&existing, &marker_long).unwrap();
+    assert!(!body.contains(&marker_long));
+}
+
+#[test]
+fn classify_cron_driver_does_not_confuse_a_repo_whose_path_is_a_prefix_of_another() {
+    let marker_short = tick_cron_marker(Path::new("/x/aida"));
+    let marker_long = tick_cron_marker(Path::new("/x/aida-web"));
+    let body = format!("*/15 * * * * cd /x/aida-web && aida schedule tick # {marker_long}\n");
+
+    // Only the long repo's driver is actually installed.
+    assert_eq!(
+        classify_cron_driver(Ok(Some(body.clone())), &marker_long),
+        CronDriverStatus::Installed
+    );
+    assert_eq!(
+        classify_cron_driver(Ok(Some(body)), &marker_short),
+        CronDriverStatus::Missing,
+        "must not report the short repo's driver as installed off a prefix match on the long repo's line"
     );
 }
 
