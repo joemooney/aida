@@ -19,12 +19,12 @@ description: |
   5. A test covers the shape: a spec at Draft whose trailered commit is on the default branch is detected, and one whose trailered commit is only on a branch is not.
 
   PROVENANCE. Originally added to BUG-1454 as items (a) and (b) in an advisor COMMENT on 2026-09-20 rather than in its ACCEPTANCE block. A drain implements the acceptance block, so the criteria were invisible at the rung the implementer reads and PR #2040 correctly implemented the six visible criteria and none of these. Split out here so BUG-1454 can merge without burying a real remaining deliverable behind a terminal Completed status. The misfiling is recorded in TASK-1303 as an instance of the rung class.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:33:09.166796821Z
-modified_at: 2026-09-21T04:20:07.132811202Z
+modified_at: 2026-09-23T02:46:03.640124102Z
 req_type: Bug
 tags:
 - batch:night-0920 lifecycle drain-safe from:review-pr-2040
