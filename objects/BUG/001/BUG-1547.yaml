@@ -48,12 +48,12 @@ description: |-
   NOT IN SCOPE, deliberately: the 42-record legacy shape itself (keys ['findings','head','mode','pr','summary','verdict'] — no reviewed_sha, no recorded_by, no recorded_at). That is a wider question about a format nothing reads, and it should not be tangled with a default-direction decision that stands on its own.
 
   NOT LIVE TONIGHT, stated so nobody over-prices it: all 42 are on closed PRs, #2042's blocking verdict parses correctly as RequestChanges, and nothing is being waved through right now.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:38:14.762548458Z
-modified_at: 2026-09-23T06:25:19.749056325Z
+modified_at: 2026-09-23T07:36:19.980788245Z
 req_type: Bug
 comments:
 - id: 01a0cc9e-237d-7010-a0a5-7a531d729839
