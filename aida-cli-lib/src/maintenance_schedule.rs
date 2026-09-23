@@ -2216,19 +2216,65 @@ fn valid_commands() -> Vec<&'static str> {
         .collect()
 }
 
+/// Review follow-up: the wall-clock ceiling a single scheduled substrate
+/// child (`aida doctor check ...`, `aida fetch --code-only`, …) may run
+/// before [`crate::command_output_with_timeout`] gives up on it. `run_now`
+/// holds the tick lock (`try_tick_lock`) for the duration of the run, so an
+/// unbounded child — a stalled network call inside `doctor check
+/// remote-drift`, a hung `git fetch` — would wedge every other job behind it
+/// indefinitely. Generous rather than tight: these are periodic maintenance
+/// checks, not a latency-sensitive per-turn hook path (that path already
+/// skips network-touching jobs — see `tick`'s `hook` flag).
+const SCHEDULED_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
 fn run_aida_command(project_root: &Path, command: &ScheduledCommand) -> Result<TaskOutcome> {
-    let exe = crate::aida_exe_path();
-    let output = ProcessCommand::new(exe)
-        .current_dir(project_root)
+    let mut cmd = ProcessCommand::new(crate::aida_exe_path());
+    cmd.args(command.args);
+    Ok(run_with_kill_timeout(
+        cmd,
+        command.display,
+        project_root,
+        SCHEDULED_COMMAND_TIMEOUT,
+    ))
+}
+
+/// The timeout-wrapped child run, factored out of [`run_aida_command`] so a
+/// test can point `cmd` at a hanging fake binary (e.g. `sleep 30`) through
+/// the exact same path production uses, rather than only exercising
+/// [`crate::command_output_with_timeout`] in isolation.
+fn run_with_kill_timeout(
+    mut cmd: ProcessCommand,
+    display: &str,
+    project_root: &Path,
+    timeout: std::time::Duration,
+) -> TaskOutcome {
+    cmd.current_dir(project_root)
         .env("AIDA_SCHEDULE_CHILD", "1")
-        .args(command.args)
-        .output()
-        .with_context(|| format!("failed to run `aida {}`", command.display))?;
-    Ok(TaskOutcome {
-        status: output.status.code().unwrap_or(1),
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-    })
+        // Never let a scheduled child block on a credential prompt nobody is
+        // there to answer — same convention as the other unattended git legs
+        // (`fetch --code-only`).
+        .env("GIT_TERMINAL_PROMPT", "0");
+    // BUG-1288's `command_output_with_timeout`: a portable kill-on-timeout
+    // wait, reused rather than reimplemented. `None` (spawn failure OR
+    // timeout) maps to exit 124 (the conventional `timeout(1)` sentinel) —
+    // non-zero, so the existing tick machinery records it as a FAILURE
+    // (`record_outcome_local`/`failure_trip`), never as ok. PRIN-5: a result
+    // we could not observe must never be reported as the ok/success case.
+    match crate::command_output_with_timeout(cmd, timeout) {
+        Some(output) => TaskOutcome {
+            status: output.status.code().unwrap_or(1),
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        },
+        None => TaskOutcome {
+            status: 124,
+            stdout: String::new(),
+            stderr: format!(
+                "{display} did not complete within {}s (killed) or could not be spawned",
+                timeout.as_secs()
+            ),
+        },
+    }
 }
 
 fn quiet_now(task: &Task) -> bool {
@@ -2634,6 +2680,52 @@ mod tests {
             .to_string();
         assert!(err.contains("unknown scheduled task command"));
         assert!(err.contains("cache verify"));
+    }
+
+    // Review follow-up: a scheduled child that never exits (a stalled network
+    // call inside a `doctor check` substrate job) must be killed at the
+    // timeout ceiling rather than left to run `run_now`/`try_tick_lock`
+    // indefinitely, and the outcome it produces must read as a FAILURE
+    // (PRIN-5: an unobserved result is never reported as ok), never as a
+    // silent success. Drives a real hanging `sleep` child through
+    // `run_with_kill_timeout` — the exact function `run_aida_command` calls
+    // in production — with a timeout far shorter than the sleep duration.
+    #[test]
+    fn hanging_command_is_killed_at_the_timeout_and_reported_as_a_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut cmd = ProcessCommand::new("sleep");
+        cmd.arg("30");
+        let started = std::time::Instant::now();
+        let outcome = run_with_kill_timeout(
+            cmd,
+            "sleep 30",
+            tmp.path(),
+            std::time::Duration::from_millis(300),
+        );
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < std::time::Duration::from_secs(10),
+            "the 30s sleep must be killed near the 300ms timeout, not waited out; took {elapsed:?}"
+        );
+        assert_ne!(outcome.status, 0, "a timed-out child must never read as ok");
+        assert_eq!(outcome.status, 124, "the conventional timeout(1) sentinel");
+        assert!(
+            outcome.stderr.contains("did not complete within"),
+            "{}",
+            outcome.stderr
+        );
+
+        // Wire the same outcome through `failure_trip` / `record_outcome_local`
+        // the way the real tick does, to pin that a timeout actually trips the
+        // job (non-zero status is all `failure_trip` requires) rather than
+        // merely LOOKING like a failure in isolation.
+        let task = task(
+            "hang-guard",
+            "1h",
+            "doctor check remote-drift --fail-on-findings",
+        );
+        let trip = failure_trip(&task, at(12), &outcome);
+        assert!(trip.is_some(), "a 124 exit must mint a failure trip");
     }
 
     // BUG-1557: every `command = "..."` string the scaffolded config template
