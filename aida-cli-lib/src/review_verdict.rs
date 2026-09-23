@@ -176,6 +176,57 @@ pub fn is_outstanding_refusal(verdict: &RecordedVerdict, spec_completed: bool) -
 
 /// Path of the per-spec verdict file. Spec ids are upper-cased so
 /// `bug-775` and `BUG-775` resolve to the same record.
+/// Stage `body` in a temp file next to `path`, rename it into place (atomic
+/// on the same filesystem — no reader ever observes a half-written file),
+/// then read the file back and confirm the bytes landed. BUG-1571: a bare
+/// `fs::write` returning `Ok(())` is not proof the artefact is durably on
+/// disk under concurrent activity (another writer, a sweep, a racy
+/// filesystem) — this makes "written" mean "confirmed present with the
+/// staged content", not "the syscall returned". Every writer in this module
+/// routes through this one boundary so the guarantee is uniform.
+// trace:BUG-1571 | ai:claude
+pub(crate) fn write_verdict_atomic(path: &Path, body: &str) -> std::io::Result<()> {
+    let dir = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(dir)?;
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("verdict.json");
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp_path = dir.join(format!(".{file_name}.tmp-{}-{nanos}", std::process::id()));
+    let staged = (|| -> std::io::Result<()> {
+        std::fs::write(&tmp_path, body)?;
+        std::fs::rename(&tmp_path, path)?;
+        Ok(())
+    })();
+    if let Err(e) = staged {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(std::io::Error::new(
+            e.kind(),
+            format!("could not write {}: {e}", path.display()),
+        ));
+    }
+    // Verify: an honest "written" claim reads the artefact back rather than
+    // trusting the write syscall's return value.
+    match std::fs::read_to_string(path) {
+        Ok(on_disk) if on_disk == body => Ok(()),
+        Ok(_) => Err(std::io::Error::other(format!(
+            "wrote {} but the content on disk does not match what was staged",
+            path.display()
+        ))),
+        Err(e) => Err(std::io::Error::other(format!(
+            "wrote {} but could not read it back to confirm: {e}",
+            path.display()
+        ))),
+    }
+}
+
 pub fn verdict_path(project_root: &Path, spec: &str) -> PathBuf {
     project_root
         .join(".aida")
@@ -827,7 +878,7 @@ pub fn backfill_abbreviated_shas(
         if !dry_run {
             let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
                 .unwrap_or_else(|_| "{}".to_string());
-            std::fs::write(&path, format!("{body}\n"))?;
+            write_verdict_atomic(&path, &format!("{body}\n"))?;
         }
     }
     Ok(report)
@@ -856,13 +907,15 @@ pub fn record_verdict(
     )
 }
 
-/// Record a verdict at an explicitly anchored artifact path. The orchestrator
-/// uses this for `PR-N.json`; sharing this boundary with spec-keyed records is
-/// what prevents the authoritative handshake from silently clobbering another
-/// reviewer's evidence.
-// trace:BUG-1581 | ai:codex
+/// Build the verdict JSON object for `path` without writing it. Split out of
+/// [`record_verdict_at_path`] so a caller that must layer extra fields onto
+/// the same record (the orchestrator's phase-3 handshake adds `mode`) can do
+/// so before the single durable write, instead of writing once and then
+/// read-modify-writing the same path again — every extra write to one path
+/// is another window for BUG-1571's "reported written, wasn't" failure mode.
+// trace:BUG-1571 | ai:claude
 #[allow(clippy::too_many_arguments)]
-pub fn record_verdict_at_path(
+pub(crate) fn build_verdict_object(
     project_root: &Path,
     path: &Path,
     verdict: Option<&str>,
@@ -871,11 +924,8 @@ pub fn record_verdict_at_path(
     summary: Option<&str>,
     findings: &[String],
     recorded_by: &str,
-) -> std::io::Result<PathBuf> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let mut obj = std::fs::read_to_string(&path)
+) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+    let mut obj = std::fs::read_to_string(path)
         .ok()
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned())
@@ -943,10 +993,57 @@ pub fn record_verdict_at_path(
     if !findings.is_empty() {
         obj.insert("findings".to_string(), serde_json::Value::Array(findings));
     }
-    let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
-        .unwrap_or_else(|_| "{}".to_string());
-    std::fs::write(&path, format!("{body}\n"))?;
+    Ok(obj)
+}
+
+/// Record a verdict at an explicitly anchored artifact path. The orchestrator
+/// uses this for `PR-N.json`; sharing this boundary with spec-keyed records is
+/// what prevents the authoritative handshake from silently clobbering another
+/// reviewer's evidence. Builds the object via [`build_verdict_object`] and
+/// performs exactly one durable, verified write (BUG-1571) — a caller that
+/// needs to add fields on top of the same record should call
+/// `build_verdict_object` + `write_verdict_object` directly rather than
+/// writing here and then again, which is the double-write BUG-1571 removed.
+// trace:BUG-1581 | ai:codex
+// trace:BUG-1571 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub fn record_verdict_at_path(
+    project_root: &Path,
+    path: &Path,
+    verdict: Option<&str>,
+    reviewed_sha: Option<&str>,
+    reviewed_branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    recorded_by: &str,
+) -> std::io::Result<PathBuf> {
+    let obj = build_verdict_object(
+        project_root,
+        path,
+        verdict,
+        reviewed_sha,
+        reviewed_branch,
+        summary,
+        findings,
+        recorded_by,
+    )?;
+    write_verdict_object(path, &obj)?;
     Ok(path.to_path_buf())
+}
+
+/// Serialize `obj` and durably write it to `path` (BUG-1571: atomic
+/// rename + read-back verification via [`write_verdict_atomic`]). Public so
+/// a caller that folds extra fields onto a [`build_verdict_object`] result
+/// (the orchestrator's phase-3 handshake) still writes through the one
+/// verified boundary instead of a bare `fs::write`.
+// trace:BUG-1571 | ai:claude
+pub(crate) fn write_verdict_object(
+    path: &Path,
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> std::io::Result<()> {
+    let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj.clone()))
+        .unwrap_or_else(|_| "{}".to_string());
+    write_verdict_atomic(path, &format!("{body}\n"))
 }
 
 /// BUG-1529 criterion 1: close a spec's outstanding refusal out when its
@@ -1014,7 +1111,7 @@ pub fn close_verdict_on_merge(
     );
     let pretty = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
         .unwrap_or_else(|_| "{}".to_string());
-    std::fs::write(&path, format!("{pretty}\n"))?;
+    write_verdict_atomic(&path, &format!("{pretty}\n"))?;
     Ok(true)
 }
 
