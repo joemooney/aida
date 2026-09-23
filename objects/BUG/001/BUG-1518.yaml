@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:23:03.243517526Z
-modified_at: 2026-09-23T03:14:27.942526464Z
+modified_at: 2026-09-23T03:14:33.264113307Z
 req_type: Bug
 tags:
 - batch:night-0920 review-method agent-surface drain-safe from:session-0920
@@ -54,4 +54,10 @@ comments:
   content: Commit 2af11fb756 references this requirement
   created_at: 2026-09-23T03:12:22.029975481Z
   modified_at: 2026-09-23T03:12:22.029975481Z
+  session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
+- id: 01a0cc42-02b0-7d92-aabe-348cad338a29
+  author: joe
+  content: 'Implemented on branch claude/bug-1518 @ 5be2ee9eef (pushed, no PR, not merged). Docs-only: aida-review skill step 2b + git-sync-and-review discipline doc name the merge-base / forge PR diff as the review instrument, require a behind-count label, forbid deciding from a moving-base tree diff. No code path renders a two-dot review diff (harvest.rs, doctor_cmd.rs already merge-base). Advisor added 5be2ee9eef syncing the tracked .aida/discipline copy: project_discipline_pack_matches_master fails on 2af11fb756 and passes on 5be2ee9eef (verified both). Needs: PR + independent review + merge.'
+  created_at: 2026-09-23T03:14:33.264113307Z
+  modified_at: 2026-09-23T03:14:33.264113307Z
   session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
