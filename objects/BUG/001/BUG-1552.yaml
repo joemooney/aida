@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T13:05:16.129070411Z
-modified_at: 2026-09-23T14:46:26.695706467Z
+modified_at: 2026-09-23T14:46:28.320961549Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -96,4 +96,10 @@ comments:
   content: 'Merged via integration batch 13, PR #2124 (2026-09-23 07:45).'
   created_at: 2026-09-23T14:45:53.543012275Z
   modified_at: 2026-09-23T14:45:53.543012275Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cebb-7ae0-7e00-9d6e-56061ba581b1
+  author: joe
+  content: 'CORRECTION (orchestrator): the previous ''Merged via integration batch 13'' comment and the Completed status were written in error. The merge of PR #2124 failed on a network error at 07:45; status reverted to Done until the merge actually lands.'
+  created_at: 2026-09-23T14:46:28.320961549Z
+  modified_at: 2026-09-23T14:46:28.320961549Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
