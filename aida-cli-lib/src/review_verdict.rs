@@ -932,6 +932,73 @@ pub fn classify_tip_relation(
     }
 }
 
+/// Whether a routed reviewer-queue entry is actionable BY THE REVIEWER, or
+/// whether it already has a verdict covering the current head and the real
+/// next step lies elsewhere. BUG-1508: a routed entry that doesn't say this
+/// reads as review-to-do even when four out of five are really rework, so a
+/// queue that "reads five-deep" can in fact have one real review outstanding.
+// trace:BUG-1508 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewActionability {
+    /// No verdict exists that provably covers the current head: no verdict
+    /// at all, a verdict whose sha differs from the head (advanced or
+    /// rewritten), OR a verdict that can never be placed against a head
+    /// (no `reviewed_sha` recorded) — criterion 8 treats that last case as
+    /// ABSENT rather than reassuring, per PRIN-5. Actionable to the reviewer.
+    NeedsReview,
+    /// A blocking verdict (request-changes / rejected) covers the EXACT
+    /// current head. The spec still needs attention — criterion 2 — but the
+    /// attention is rework by the implementer, not a fresh review.
+    AwaitingRework,
+    /// A non-blocking verdict (approved) covers the exact current head.
+    /// Nothing further is owed to the reviewer role for this head.
+    Resolved,
+}
+
+impl ReviewActionability {
+    /// Stable machine-readable token (used for `--json` output and the
+    /// queue-list annotation). Never a user-facing sentence.
+    // trace:BUG-1508 | ai:claude
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ReviewActionability::NeedsReview => "needs-review",
+            ReviewActionability::AwaitingRework => "awaiting-rework",
+            ReviewActionability::Resolved => "resolved",
+        }
+    }
+}
+
+/// Classify a routed reviewer entry's actionability from its recorded
+/// verdict and where the current head sits relative to it (criterion 1).
+///
+/// Deliberately re-derived from live inputs every call rather than cached:
+/// when the head later moves, `relation` stops being `AtReviewedSha` on the
+/// very next read and the entry reappears as `NeedsReview` with no special
+/// handling required — criterion 3.
+///
+/// `TipRelation::Unknown` already covers both "no `reviewed_sha` was ever
+/// recorded" (criterion 8's permanently-indeterminate population — 409 of
+/// 543 verdict files corpus-wide) and "the ancestry probe itself failed" —
+/// both fold into `NeedsReview` here, the fail-closed, PRIN-5-consistent
+/// answer: absent evidence is never read as good evidence.
+// trace:BUG-1508 | ai:claude
+pub fn review_actionability(
+    verdict: Option<&RecordedVerdict>,
+    relation: TipRelation,
+) -> ReviewActionability {
+    let Some(v) = verdict else {
+        return ReviewActionability::NeedsReview;
+    };
+    if relation != TipRelation::AtReviewedSha {
+        return ReviewActionability::NeedsReview;
+    }
+    if v.kind.blocks_done() {
+        ReviewActionability::AwaitingRework
+    } else {
+        ReviewActionability::Resolved
+    }
+}
+
 /// The gate's decision. `Refuse` lines are printed and the command exits
 /// non-zero; `Warn` lines are printed and the command continues.
 #[derive(Debug, Clone, PartialEq, Eq)]

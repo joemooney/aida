@@ -914,6 +914,21 @@ pub enum ReviewCommand {
         #[clap(long)]
         dry_run: bool,
     },
+
+    /// Report specs stranded by a refusal at the PR's current head: still
+    /// Done, unheld, unqueued. Read-only by default; `--fix` applies the
+    /// same protection a fresh refusal gets (merge hold + Needs Attention).
+    Stranded {
+        /// Emit the raw report as JSON.
+        #[clap(long)]
+        json: bool,
+
+        /// Explicit opt-in remediation: hold the PR and park the spec in
+        /// Needs Attention. Idempotent — a spec already protected is left
+        /// alone, so a second run changes nothing.
+        #[clap(long)]
+        fix: bool,
+    },
 }
 
 /// Per-scope disposition / triage lease commands (the intake gate).
@@ -14449,5 +14464,37 @@ mod tests {
             msg.contains("unexpected argument") || msg.contains("unrecognized"),
             "expected a clear parse error for the mistyped flag, got: {msg}"
         );
+    }
+
+    // trace:TASK-1307 | ai:claude
+    #[test]
+    fn review_stranded_parses_json_and_fix_flags() {
+        let cli = Cli::try_parse_from(["aida", "review", "stranded", "--json", "--fix"]).unwrap();
+        match cli.command {
+            Command::Review {
+                cmd: Some(ReviewCommand::Stranded { json, fix }),
+                ..
+            } => {
+                assert!(json);
+                assert!(fix);
+            }
+            other => panic!("expected review stranded command, got {other:?}"),
+        }
+    }
+
+    // trace:TASK-1307 | ai:claude
+    #[test]
+    fn review_stranded_defaults_to_read_only() {
+        let cli = Cli::try_parse_from(["aida", "review", "stranded"]).unwrap();
+        match cli.command {
+            Command::Review {
+                cmd: Some(ReviewCommand::Stranded { json, fix }),
+                ..
+            } => {
+                assert!(!json);
+                assert!(!fix, "the sweep must default to read-only");
+            }
+            other => panic!("expected review stranded command, got {other:?}"),
+        }
     }
 }

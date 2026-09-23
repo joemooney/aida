@@ -148,6 +148,7 @@ fn linkage(
         files: Vec::new(),
         shipped,
         branch: branch.map(|b| b.to_string()),
+        other_branches: Vec::new(),
         worktree: None,
         shipped_pr,
         repo: None,
@@ -520,6 +521,76 @@ fn linkage_for_in_flight_spec() {
     assert_eq!(l.commits.len(), 1);
     assert!(!l.shipped, "commit is not on main");
     assert_eq!(l.branch.as_deref(), Some("feature/y"));
+}
+
+/// BUG-1528 (AC1): a spec whose ONLY branch uses the drain's `<spec-id>-work`
+/// naming convention — the shape the report suspected the resolver missed.
+// trace:BUG-1528 | ai:claude
+#[test]
+fn linkage_resolves_spec_id_work_suffix_branch() {
+    let (_tmp, root) = init_repo();
+    git(&root, &["checkout", "-q", "-b", "bug-1420-work"]);
+    commit(&root, "c.txt", "z", "fix: something (BUG-1420)");
+    git(&root, &["checkout", "-q", "main"]);
+
+    let l = collect_git_linkage(&root, &["BUG-1420".to_string()]);
+    assert_eq!(l.commits.len(), 1);
+    assert!(!l.shipped);
+    assert_eq!(
+        l.branch.as_deref(),
+        Some("bug-1420-work"),
+        "must resolve the local <spec-id>-work branch, not report it missing"
+    );
+    assert!(l.other_branches.is_empty());
+}
+
+/// BUG-1528 (AC1/AC3/AC4): the exact BUG-1420 shape from the report — a
+/// branch present locally (`bug-1420-work`) plus a SECOND, newer branch
+/// referencing the same spec that only exists as a remote-tracking ref
+/// (`bug-1420-round2`, simulating a branch never checked out locally).
+/// Anchoring resolution on only the single newest referencing commit made
+/// the local branch unreachable via `--contains <newest sha>` and yielded
+/// `branch: None` → "branch not found locally" even though `git branch
+/// --list` plainly shows it. The fix must (a) still resolve a branch,
+/// naming the spec's own local branch when one matches, and (b) surface
+/// the second branch rather than dropping it silently.
+// trace:BUG-1528 | ai:claude
+#[test]
+fn linkage_branch_crossing_surfaces_all_matching_branches() {
+    let (_tmp, root) = init_repo();
+
+    // Local branch, older commit.
+    git(&root, &["checkout", "-q", "-b", "bug-1420-work"]);
+    commit(&root, "a.txt", "1", "fix: first pass (BUG-1420)");
+    git(&root, &["checkout", "-q", "main"]);
+
+    // A second branch, NEWER commit, present only as a remote-tracking ref
+    // (never checked out locally) — the shape `git ls-remote` would show
+    // but a purely-local resolver keyed on the newest commit would anchor
+    // on exclusively.
+    git(&root, &["checkout", "-q", "-b", "bug-1420-round2"]);
+    commit(&root, "b.txt", "2", "fix: round 2 (BUG-1420)");
+    let sha = git(&root, &["rev-parse", "bug-1420-round2"]);
+    git(&root, &["checkout", "-q", "main"]);
+    git(&root, &["branch", "-D", "bug-1420-round2"]);
+    git(
+        &root,
+        &["update-ref", "refs/remotes/origin/bug-1420-round2", &sha],
+    );
+
+    let l = collect_git_linkage(&root, &["BUG-1420".to_string()]);
+    assert_eq!(l.commits.len(), 2, "both commits reference the spec");
+    assert!(!l.shipped);
+    assert_eq!(
+        l.branch.as_deref(),
+        Some("bug-1420-work"),
+        "the spec's own local branch must resolve, not report not-found"
+    );
+    assert_eq!(
+        l.other_branches,
+        vec!["bug-1420-round2".to_string()],
+        "the second branch-crossing branch must be surfaced, not dropped"
+    );
 }
 
 /// BUG-816: the human-review "open PR" hint must name the branch explicitly.

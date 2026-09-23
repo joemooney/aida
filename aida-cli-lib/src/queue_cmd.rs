@@ -618,6 +618,23 @@ pub(crate) fn queue_json_rows(
         .collect()
 }
 
+/// Human-readable chip for a reviewer-routed row's actionability. Rendered
+/// inline -- rows never vanish because of this label, they're annotated.
+// trace:BUG-1508 | ai:claude
+pub(crate) fn reviewer_state_chip(state: review_verdict::ReviewActionability) -> String {
+    match state {
+        review_verdict::ReviewActionability::NeedsReview => {
+            format!("[{}]", "needs-review".yellow().bold())
+        }
+        review_verdict::ReviewActionability::AwaitingRework => {
+            format!("[{}]", "awaiting-rework".blue())
+        }
+        review_verdict::ReviewActionability::Resolved => {
+            format!("[{}]", "resolved".green().dimmed())
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct QueueDestinationDetails {
     pub(crate) identity: String,
@@ -1315,7 +1332,63 @@ pub(crate) fn handle_queue_command(
                 };
                 let backend = advance_backend(store_path)?;
                 let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
-                let rows = queue_json_rows(&raw, &summaries);
+                let mut rows = queue_json_rows(&raw, &summaries);
+                // BUG-1508 AC1: annotate reviewer-routed rows with their
+                // actionability. Local-only (verdict file + git refs) and
+                // only paid for when a reviewer row is actually present, so
+                // the common (non-reviewer) cache-fast read is unaffected.
+                // trace:BUG-1508 | ai:claude
+                if raw
+                    .iter()
+                    .any(|e| e.for_role.as_deref() == Some("reviewer"))
+                {
+                    if let Ok(project_root) = find_project_root() {
+                        if let Ok(full_store) = storage.load() {
+                            let leases = list_leases(&project_root);
+                            for entry in raw
+                                .iter()
+                                .filter(|e| e.for_role.as_deref() == Some("reviewer"))
+                            {
+                                let Some(req) = full_store
+                                    .requirements
+                                    .iter()
+                                    .find(|r| r.id == entry.requirement_id)
+                                else {
+                                    continue;
+                                };
+                                let display_id = req
+                                    .agreed_id
+                                    .as_deref()
+                                    .or(req.spec_id.as_deref())
+                                    .unwrap_or("?");
+                                let state = reviewer_row_actionability(
+                                    &project_root,
+                                    req,
+                                    &leases,
+                                    |uuid| {
+                                        full_store
+                                            .requirements
+                                            .iter()
+                                            .find(|r| r.id == uuid)
+                                            .and_then(|r| {
+                                                r.agreed_id.clone().or_else(|| r.spec_id.clone())
+                                            })
+                                    },
+                                );
+                                if let Some(row) = rows.iter_mut().find(|r| {
+                                    r.get("spec_id").and_then(|v| v.as_str()) == Some(display_id)
+                                }) {
+                                    if let Some(obj) = row.as_object_mut() {
+                                        obj.insert(
+                                            "reviewer_state".to_string(),
+                                            serde_json::Value::String(state.as_str().to_string()),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 println!("{}", serde_json::to_string(&rows)?);
                 return Ok(());
             }
@@ -1345,6 +1418,25 @@ pub(crate) fn handle_queue_command(
                 // raw queue (which retains Done-awaiting-merge + shipped specs)
                 // balloons the agent output far past the human view. trace:TASK-964
                 let show_terminal = *include_terminal || *include_completed;
+                // BUG-1508 AC1/AC4/AC7: as with the BUG-616 JSON panel read,
+                // only load the full store + leases when a reviewer-routed
+                // row is present, so the common agent read stays cache-fast.
+                // trace:BUG-1508 | ai:claude
+                let reviewer_ctx = if raw
+                    .iter()
+                    .any(|e| e.for_role.as_deref() == Some("reviewer"))
+                {
+                    find_project_root().ok().and_then(|root| {
+                        storage.load().ok().map(|full_store| {
+                            let leases = list_leases(&root);
+                            (root, full_store, leases)
+                        })
+                    })
+                } else {
+                    None
+                };
+                let mut reviewer_routed = 0usize;
+                let mut reviewer_actionable = 0usize;
                 let rows: Vec<Vec<String>> = raw
                     .iter()
                     .filter_map(|e| {
@@ -1364,18 +1456,62 @@ pub(crate) fn handle_queue_command(
                             .or(s.spec_id.as_deref())
                             .unwrap_or("")
                             .to_string();
+                        let reviewer_state = if e.for_role.as_deref() == Some("reviewer") {
+                            reviewer_ctx
+                                .as_ref()
+                                .and_then(|(root, full_store, leases)| {
+                                    full_store
+                                        .requirements
+                                        .iter()
+                                        .find(|r| r.id == e.requirement_id)
+                                        .map(|req| {
+                                            reviewer_row_actionability(root, req, leases, |uuid| {
+                                                full_store
+                                                    .requirements
+                                                    .iter()
+                                                    .find(|r| r.id == uuid)
+                                                    .and_then(|r| {
+                                                        r.agreed_id
+                                                            .clone()
+                                                            .or_else(|| r.spec_id.clone())
+                                                    })
+                                            })
+                                        })
+                                })
+                                .map(|state| {
+                                    reviewer_routed += 1;
+                                    if state == review_verdict::ReviewActionability::NeedsReview {
+                                        reviewer_actionable += 1;
+                                    }
+                                    state.as_str().to_string()
+                                })
+                                .unwrap_or_default()
+                        } else {
+                            String::new()
+                        };
                         Some(vec![
                             id,
                             s.title.clone(),
                             toon_status_token(&s.status),
                             e.for_role.clone().unwrap_or_default(),
+                            reviewer_state,
                         ])
                     })
                     .collect();
                 println!("count: {}", rows.len());
+                if reviewer_routed > 0 {
+                    println!(
+                        "reviewer: actionable {} of {} routed",
+                        reviewer_actionable, reviewer_routed
+                    );
+                }
                 println!(
                     "{}",
-                    crate::toon::table_raw("queue", &["id", "title", "status", "for_role"], &rows)
+                    crate::toon::table_raw(
+                        "queue",
+                        &["id", "title", "status", "for_role", "reviewer_state"],
+                        &rows
+                    )
                 );
                 // TASK-974 (AXI #9): next-step block — start/show the queue head
                 // when non-empty, else point at the approvable backlog to fill
@@ -1928,6 +2064,69 @@ pub(crate) fn handle_queue_command(
             // trace:TASK-222 | ai:claude
             let skip_regular_render = *in_flight_only || pending_empty;
 
+            // BUG-1508 AC1/AC4/AC7: resolve each reviewer-routed row's
+            // actionability LOCALLY (verdict file + `refs/remotes/origin/*` /
+            // `refs/heads/*` -- no forge call), so the depth figure used for
+            // capacity decisions can say "actionable N of M routed" instead
+            // of a bare routed count that reads deep even when most rows are
+            // really awaiting rework, not review. Only paid for when a
+            // reviewer-routed row is actually present. trace:BUG-1508 | ai:claude
+            let reviewer_state_by_entry: std::collections::HashMap<
+                Uuid,
+                review_verdict::ReviewActionability,
+            > = if entries
+                .iter()
+                .any(|e| e.for_role.as_deref() == Some("reviewer"))
+            {
+                match find_project_root() {
+                    Ok(project_root) => {
+                        let leases = list_leases(&project_root);
+                        entries
+                            .iter()
+                            .filter(|e| e.for_role.as_deref() == Some("reviewer"))
+                            .filter_map(|e| {
+                                store
+                                    .requirements
+                                    .iter()
+                                    .find(|r| r.id == e.requirement_id)
+                                    .map(|req| {
+                                        (
+                                            e.requirement_id,
+                                            reviewer_row_actionability(
+                                                &project_root,
+                                                req,
+                                                &leases,
+                                                |uuid| {
+                                                    store
+                                                        .requirements
+                                                        .iter()
+                                                        .find(|r| r.id == uuid)
+                                                        .and_then(|r| {
+                                                            r.agreed_id
+                                                                .clone()
+                                                                .or_else(|| r.spec_id.clone())
+                                                        })
+                                                },
+                                            ),
+                                        )
+                                    })
+                            })
+                            .collect()
+                    }
+                    Err(_) => std::collections::HashMap::new(),
+                }
+            } else {
+                std::collections::HashMap::new()
+            };
+            let reviewer_routed_count = entries
+                .iter()
+                .filter(|e| e.for_role.as_deref() == Some("reviewer"))
+                .count();
+            let reviewer_actionable_count = reviewer_state_by_entry
+                .values()
+                .filter(|s| **s == review_verdict::ReviewActionability::NeedsReview)
+                .count();
+
             if !skip_regular_render {
                 let total = entries.len() + global_entries.len();
                 let title = if only_unrouted {
@@ -1938,6 +2137,19 @@ pub(crate) fn handle_queue_command(
                     )
                 } else {
                     match &role_filter {
+                        // BUG-1508 AC4/AC7: the reviewer queue's headline
+                        // number is "actionable N of M routed" -- routed
+                        // rows never vanish (AC2), but the figure that
+                        // decides capacity is the actionable one, and both
+                        // are shown together because the gap is the signal.
+                        Some(r)
+                            if r.eq_ignore_ascii_case("reviewer") && reviewer_routed_count > 0 =>
+                        {
+                            format!(
+                                "My Queue · role:{} (actionable {} of {} routed)",
+                                r, reviewer_actionable_count, reviewer_routed_count,
+                            )
+                        }
                         Some(r) => format!(
                             "My Queue · role:{} ({} item{})",
                             r,
@@ -2069,8 +2281,15 @@ pub(crate) fn handle_queue_command(
                                     )
                                 })
                                 .unwrap_or_default();
+                            // BUG-1508: reviewer-routed rows get an
+                            // actionability chip -- needs-review /
+                            // awaiting-rework / resolved.
+                            let reviewer_state_chip_str = reviewer_state_by_entry
+                                .get(&entry.requirement_id)
+                                .map(|s| format!("  {}", reviewer_state_chip(*s)))
+                                .unwrap_or_default();
                             println!(
-                                "  {} {}{}  {}  [{}]{}{}{}{}",
+                                "  {} {}{}  {}  [{}]{}{}{}{}{}",
                                 glyph.dimmed(),
                                 display_id_owned.bold(),
                                 pad,
@@ -2080,6 +2299,7 @@ pub(crate) fn handle_queue_command(
                                 routed_chip,
                                 supervised_chip,
                                 tag_chip,
+                                reviewer_state_chip_str,
                             );
                         };
 
@@ -2212,6 +2432,12 @@ pub(crate) fn handle_queue_command(
                         title_owned
                     );
                     print!("  [{}]", status_badge);
+                    // BUG-1508: reviewer-routed rows get an actionability
+                    // chip -- needs-review / awaiting-rework / resolved.
+                    // The row itself never vanishes; this only annotates it.
+                    if let Some(state) = reviewer_state_by_entry.get(&entry.requirement_id) {
+                        print!("  {}", reviewer_state_chip(*state));
+                    }
                     // BUG-492: an archived spec that is still queued is
                     // contradictory state (`aida list` hides it, this view
                     // keeps showing it). Flag it loudly so the user can
@@ -11978,6 +12204,7 @@ mod bug_1581_integration_probe_tests {
                 review_decision: None,
                 head_sha: Some("ac772eaca9d389fa762a232156df996023bfdf7a".into()),
                 labels: Vec::new(),
+                created_at: None,
             },
         );
         snapshot

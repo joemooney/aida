@@ -12,6 +12,7 @@
 //!
 //! trace:STORY-465 | ai:claude
 
+use crate::review_verdict;
 use crate::status_cleanup::OpenPrItem;
 use colored::Colorize;
 use std::io::Write;
@@ -385,6 +386,11 @@ pub(crate) struct UnownedFailingPrItem {
     pub number: u64,
     pub title: String,
     pub head_branch: String,
+    /// BUG-1514: `Some(spec_id)` when this row is the two-way inconsistency —
+    /// a spec already marked Done whose PR (named in the title) is failing —
+    /// rather than the ordinary no-owner/no-route case. `None` for the
+    /// latter.
+    pub done_spec: Option<String>,
 }
 
 /// Routing facts layered over the forge snapshot. Kept separate from
@@ -398,6 +404,10 @@ pub(crate) struct UnownedFailingPrCandidate {
     pub held: bool,
     pub route: ReviewerRoute,
     pub actively_owned: bool,
+    /// BUG-1514: `Some(spec_id)` when the PR title names a spec whose status
+    /// is currently Done. The caller resolves this so the classifier stays
+    /// pure — no store lookup here.
+    pub done_spec: Option<String>,
 }
 
 /// Fail-closed knowledge of the reviewer queue. Queue read or parse failures
@@ -410,17 +420,62 @@ pub(crate) enum ReviewerRoute {
     Unknown,
 }
 
-/// The complement of the green orphan-review lane: only definitively red work
-/// with no existing route is actionable here. Pending is not red; green/no-CI
-/// belongs to the reviewer sweep; any ownership signal suppresses the row.
-// trace:TASK-192 | ai:codex
+/// BUG-1514: minimum time a PR must have been red before this channel
+/// surfaces it. A PR is routinely red for several minutes mid push-fix-
+/// repush; #2035, the motivating instance, was red and unowned for 3.8
+/// hours. 30 minutes sits comfortably above normal rework-cycle latency
+/// (CI run + notice + fix + repush) and far below the hours of neglect the
+/// bug describes, so it debounces routine churn without hiding real
+/// staleness for long. Named here rather than left implicit per acceptance
+/// criterion #3.
+// trace:BUG-1514 | ai:claude
+pub(crate) const UNOWNED_FAILING_PR_MIN_AGE_MINUTES: i64 = 30;
+
+/// BUG-1514: age-gate a PR against [`UNOWNED_FAILING_PR_MIN_AGE_MINUTES`].
+/// Unknown creation time (missing/malformed `createdAt`) fails OPEN — this
+/// bug is precisely about evidence gaps turning into silent invisibility,
+/// so "we don't know how old it is" must not mean "never surface it."
+// trace:BUG-1514 | ai:claude
+fn pr_meets_min_age(
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    match created_at {
+        None => true,
+        Some(created) => {
+            now.signed_duration_since(created)
+                >= chrono::Duration::minutes(UNOWNED_FAILING_PR_MIN_AGE_MINUTES)
+        }
+    }
+}
+
+/// The complement of the green orphan-review lane, PLUS the BUG-1514
+/// two-way inconsistency: a spec already marked Done whose PR (named in the
+/// title) is red. The ordinary no-owner/no-route case still requires every
+/// ownership signal to be absent; the Done-spec case bypasses verdict/route/
+/// ownership (the spec's own status already contradicts red CI, independent
+/// of who is reviewing or holding the branch) but still respects an active
+/// merge hold, so it doesn't duplicate a row another surface already owns.
+/// Pending is not red; green/no-CI belongs to the reviewer sweep. Both paths
+/// share the same minimum-age debounce.
+///
+/// NOT COVERED: a Done spec whose PR is closed, missing, or conflicting
+/// rather than open-and-red. That needs a spec-driven forge lookup (one
+/// `gh` call per Done spec) rather than this PR-driven pass over the
+/// already-fetched open-PR snapshot, and is left as a follow-on — the same
+/// cost/generality tradeoff TASK-192 made for the green sweep's complement.
+// trace:TASK-192 trace:BUG-1514 | ai:claude ai:codex
 pub(crate) fn classify_unowned_failing_prs(
     candidates: &[UnownedFailingPrCandidate],
+    now: chrono::DateTime<chrono::Utc>,
 ) -> Vec<UnownedFailingPrItem> {
     candidates
         .iter()
         .filter(|c| c.pr.ci_rollup.as_deref() == Some("fail"))
         .filter(|c| {
+            if c.done_spec.is_some() {
+                return true;
+            }
             let forge_verdict =
                 c.pr.review_decision
                     .as_deref()
@@ -429,11 +484,17 @@ pub(crate) fn classify_unowned_failing_prs(
             !matches!(forge_verdict.as_str(), "APPROVED" | "CHANGES_REQUESTED")
                 && !c.has_local_verdict
         })
-        .filter(|c| !c.held && c.route == ReviewerRoute::Unrouted && !c.actively_owned)
+        .filter(|c| {
+            !c.held
+                && (c.done_spec.is_some()
+                    || (c.route == ReviewerRoute::Unrouted && !c.actively_owned))
+        })
+        .filter(|c| pr_meets_min_age(c.pr.created_at, now))
         .map(|c| UnownedFailingPrItem {
             number: c.pr.number,
             title: c.pr.title.clone(),
             head_branch: c.pr.head_branch.clone(),
+            done_spec: c.done_spec.clone(),
         })
         .collect()
 }
@@ -465,6 +526,12 @@ pub(crate) struct PendingBriefItem {
 pub(crate) struct ReviewerQueueItem {
     pub spec_id: String,
     pub title: String,
+    /// Does a verdict already cover the current head? Resolved locally by
+    /// `crate::reviewer_row_actionability` -- verdict file + git refs, no
+    /// forge call. The row is kept and rendered regardless of state (routed
+    /// rows never vanish); this only changes how it reads.
+    // trace:BUG-1508 | ai:claude
+    pub state: review_verdict::ReviewActionability,
 }
 
 #[derive(Debug, Clone)]
@@ -516,6 +583,8 @@ impl AwaitingReport {
             + self.rework_ready.len()
             + (if self.nightly_red.is_some() { 1 } else { 0 })
             + self.reviewer_queue_items.len()
+            // BUG-1508 AC4/AC7: the "actionable N of M routed" summary line.
+            + (if !self.reviewer_queue_items.is_empty() { 1 } else { 0 })
             + (if self.shelved_total > 0 { 1 } else { 0 })
             + self.escalations.len()
     }
@@ -602,11 +671,17 @@ impl AwaitingReport {
                 overflow += 1;
                 continue;
             }
+            // trace:BUG-1514 | ai:claude — name WHY it's stuck (acceptance #5).
+            let reason = match &pr.done_spec {
+                Some(spec) => format!("{spec} is marked Done but its CI is failing"),
+                None => "CI failing with no owner or route".to_string(),
+            };
             writeln!(
                 w,
-                "  {} PR-{} CI failing with no owner or route — {} · inspect `{}`",
+                "  {} PR-{} {} — {} · inspect `{}`",
                 "🔴".red(),
                 pr.number.to_string().bold(),
+                reason,
                 pr.title,
                 format!("gh pr checks {}", pr.number).cyan(),
             )?;
@@ -763,12 +838,50 @@ impl AwaitingReport {
                 budget -= 1;
             }
         }
+        // BUG-1508 AC4/AC7: the summary line carries BOTH numbers --
+        // actionable and routed -- because the gap between them is itself
+        // the signal (a queue that reads five-deep on review when four are
+        // really awaiting rework misdirects capacity at the wrong seat).
+        // trace:BUG-1508 | ai:claude
+        if !self.reviewer_queue_items.is_empty() {
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                let actionable = self
+                    .reviewer_queue_items
+                    .iter()
+                    .filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview)
+                    .count();
+                writeln!(
+                    w,
+                    "  🔎 reviewer: actionable {} of {} routed",
+                    actionable,
+                    self.reviewer_queue_items.len()
+                )?;
+                budget -= 1;
+            }
+        }
+        // BUG-1508 AC2: every routed row still renders -- an
+        // already-reviewed row is never dropped, only annotated, so it
+        // reads as rework/resolved rather than silently disappearing.
         for q in &self.reviewer_queue_items {
             if budget == 0 {
                 overflow += 1;
                 continue;
             }
-            writeln!(w, "  👀 verdict needed: {} — {}", q.spec_id.bold(), q.title,)?;
+            let (glyph, label) = match q.state {
+                review_verdict::ReviewActionability::NeedsReview => ("👀", "needs-review"),
+                review_verdict::ReviewActionability::AwaitingRework => ("🔧", "awaiting-rework"),
+                review_verdict::ReviewActionability::Resolved => ("✅", "resolved"),
+            };
+            writeln!(
+                w,
+                "  {} {}: {} — {}",
+                glyph,
+                label,
+                q.spec_id.bold(),
+                q.title,
+            )?;
             budget -= 1;
         }
         if self.shelved_total > 0 {
@@ -825,6 +938,8 @@ impl AwaitingReport {
                 "head_branch": p.head_branch,
                 "ci_rollup": "fail",
                 "action": format!("gh pr checks {}", p.number),
+                // trace:BUG-1514 | ai:claude
+                "done_spec": p.done_spec,
             })).collect::<Vec<_>>(),
             "pending_briefs": self.pending_briefs.iter().map(|b| serde_json::json!({
                 "agent": b.agent,
@@ -865,7 +980,14 @@ impl AwaitingReport {
             "reviewer_queue_items": self.reviewer_queue_items.iter().map(|q| serde_json::json!({
                 "spec_id": q.spec_id,
                 "title": q.title,
+                "state": q.state.as_str(),
             })).collect::<Vec<_>>(),
+            // BUG-1508 AC4/AC7: the depth figure that decides reviewer
+            // capacity is actionable-of-routed, not a bare routed count.
+            "reviewer_actionable_of_routed": {
+                "actionable": self.reviewer_queue_items.iter().filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview).count(),
+                "routed": self.reviewer_queue_items.len(),
+            },
             "shelved_total": self.shelved_total,
             "escalations": self.escalations.iter().map(|e| serde_json::json!({
                 "spec_id": e.spec_id,
@@ -941,10 +1063,17 @@ impl AwaitingReport {
             parts.push("nightly-red".to_string());
         }
         if !self.reviewer_queue_items.is_empty() {
-            parts.push(pluralize(
-                self.reviewer_queue_items.len(),
-                "verdict",
-                "verdicts",
+            // BUG-1508 AC4/AC7: "actionable N of M routed" everywhere this
+            // depth figure is printed, including the compact per-turn line.
+            let actionable = self
+                .reviewer_queue_items
+                .iter()
+                .filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview)
+                .count();
+            parts.push(format!(
+                "actionable {} of {} routed",
+                actionable,
+                self.reviewer_queue_items.len()
             ));
         }
         if self.shelved_total > 0 {
@@ -1042,6 +1171,7 @@ mod tests {
             review_decision: verdict.map(String::from),
             head_sha: None,
             labels: Vec::new(),
+            created_at: None,
         }
     }
 
@@ -1052,7 +1182,14 @@ mod tests {
             held: false,
             route: ReviewerRoute::Unrouted,
             actively_owned: false,
+            done_spec: None,
         }
+    }
+
+    fn fixed_now() -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339("2026-09-22T12:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc)
     }
 
     // TASK-192: the historical PR-2035 shape is red and has no route at all.
@@ -1062,7 +1199,8 @@ mod tests {
     fn red_unrouted_unheld_unowned_pr_is_actionable() {
         let mut review_required = failing_candidate(2036);
         review_required.pr.review_decision = Some("REVIEW_REQUIRED".into());
-        let rows = classify_unowned_failing_prs(&[failing_candidate(2035), review_required]);
+        let rows =
+            classify_unowned_failing_prs(&[failing_candidate(2035), review_required], fixed_now());
         assert_eq!(
             rows.iter().map(|row| row.number).collect::<Vec<_>>(),
             vec![2035, 2036],
@@ -1089,16 +1227,19 @@ mod tests {
         let mut approved = failing_candidate(8);
         approved.pr.review_decision = Some("APPROVED".into());
 
-        assert!(classify_unowned_failing_prs(&[
-            green,
-            pending,
-            held,
-            routed,
-            owned,
-            local_verdict,
-            forge_verdict,
-            approved,
-        ])
+        assert!(classify_unowned_failing_prs(
+            &[
+                green,
+                pending,
+                held,
+                routed,
+                owned,
+                local_verdict,
+                forge_verdict,
+                approved,
+            ],
+            fixed_now(),
+        )
         .is_empty());
     }
 
@@ -1106,13 +1247,72 @@ mod tests {
     fn unknown_reviewer_queue_fails_closed() {
         let mut unavailable = failing_candidate(9);
         unavailable.route = ReviewerRoute::Unknown;
-        assert!(classify_unowned_failing_prs(&[unavailable]).is_empty());
+        assert!(classify_unowned_failing_prs(&[unavailable], fixed_now()).is_empty());
+    }
+
+    // BUG-1514: a Done spec whose PR is red is an inconsistency even though a
+    // merge hold, in this specific test, is deliberately NOT set — the row
+    // must still surface despite full ownership (routed + actively owned +
+    // has_local_verdict), because none of those facts make "Done" true.
+    #[test]
+    fn done_spec_with_failing_pr_surfaces_despite_full_ownership() {
+        let mut owned_and_routed = failing_candidate(2050);
+        owned_and_routed.route = ReviewerRoute::Routed;
+        owned_and_routed.actively_owned = true;
+        owned_and_routed.has_local_verdict = true;
+        owned_and_routed.pr.review_decision = Some("APPROVED".into());
+        owned_and_routed.done_spec = Some("BUG-1470".into());
+
+        let rows = classify_unowned_failing_prs(&[owned_and_routed], fixed_now());
+        assert_eq!(
+            rows.len(),
+            1,
+            "Done+red must surface regardless of ownership"
+        );
+        assert_eq!(rows[0].done_spec.as_deref(), Some("BUG-1470"));
+    }
+
+    // BUG-1514: a merge hold is an existing, independent "something is
+    // already stopping this" signal — the Done-spec bypass must not
+    // duplicate a row that surface already owns.
+    #[test]
+    fn done_spec_with_failing_pr_still_respects_a_merge_hold() {
+        let mut held = failing_candidate(2051);
+        held.held = true;
+        held.done_spec = Some("BUG-1470".into());
+        assert!(classify_unowned_failing_prs(&[held], fixed_now()).is_empty());
+    }
+
+    // BUG-1514 acceptance #3: freshly-red PRs must not alarm.
+    #[test]
+    fn freshly_red_pr_is_debounced_below_the_min_age() {
+        let mut fresh = failing_candidate(2052);
+        fresh.pr.created_at = Some(fixed_now() - chrono::Duration::minutes(5));
+        assert!(
+            classify_unowned_failing_prs(&[fresh], fixed_now()).is_empty(),
+            "5 minutes red is routine rework-cycle churn, not neglect"
+        );
+    }
+
+    #[test]
+    fn red_pr_past_the_min_age_surfaces() {
+        let mut stale = failing_candidate(2053);
+        stale.pr.created_at = Some(fixed_now() - chrono::Duration::hours(4));
+        let rows = classify_unowned_failing_prs(&[stale], fixed_now());
+        assert_eq!(
+            rows.len(),
+            1,
+            "3.8h+ red-and-unowned is exactly #2035's shape"
+        );
     }
 
     #[test]
     fn broken_unowned_row_reaches_human_and_json_surfaces() {
         let report = AwaitingReport {
-            unowned_failing_prs: classify_unowned_failing_prs(&[failing_candidate(2035)]),
+            unowned_failing_prs: classify_unowned_failing_prs(
+                &[failing_candidate(2035)],
+                fixed_now(),
+            ),
             ..Default::default()
         };
         let mut rendered = Vec::new();
@@ -1962,5 +2162,62 @@ mod tests {
             out.push(c);
         }
         out
+    }
+
+    fn reviewer_item(
+        spec_id: &str,
+        state: review_verdict::ReviewActionability,
+    ) -> ReviewerQueueItem {
+        ReviewerQueueItem {
+            spec_id: spec_id.to_string(),
+            title: format!("title for {spec_id}"),
+            state,
+        }
+    }
+
+    // BUG-1508 AC2/AC4/AC7: routed rows never vanish (all render, each
+    // annotated), and the depth figure everywhere it's printed is
+    // "actionable N of M routed" -- both numbers, because the gap between
+    // them is the signal.
+    #[test]
+    fn reviewer_rows_all_render_and_report_actionable_of_routed() {
+        let r = AwaitingReport {
+            reviewer_queue_items: vec![
+                reviewer_item("BUG-1", review_verdict::ReviewActionability::NeedsReview),
+                reviewer_item("BUG-2", review_verdict::ReviewActionability::AwaitingRework),
+                reviewer_item("BUG-3", review_verdict::ReviewActionability::Resolved),
+            ],
+            ..Default::default()
+        };
+
+        // The depth figure used for capacity decisions: actionable (1) of
+        // routed (3) -- not a bare routed count of 3.
+        let compact = r.compact_line().expect("populated report must have a line");
+        assert!(compact.contains("actionable 1 of 3 routed"), "{compact}");
+
+        let mut buf = Vec::new();
+        assert!(r.render(true, &mut buf).unwrap());
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(out.contains("reviewer: actionable 1 of 3 routed"), "{out}");
+        // AC2: none of the three rows vanish -- each is present, annotated
+        // by its own state.
+        assert!(out.contains("needs-review: BUG-1"), "{out}");
+        assert!(out.contains("awaiting-rework: BUG-2"), "{out}");
+        assert!(out.contains("resolved: BUG-3"), "{out}");
+    }
+
+    #[test]
+    fn reviewer_state_reaches_json() {
+        let r = AwaitingReport {
+            reviewer_queue_items: vec![reviewer_item(
+                "BUG-7",
+                review_verdict::ReviewActionability::AwaitingRework,
+            )],
+            ..Default::default()
+        };
+        let v = r.to_json();
+        assert_eq!(v["reviewer_queue_items"][0]["state"], "awaiting-rework");
+        assert_eq!(v["reviewer_actionable_of_routed"]["actionable"], 0);
+        assert_eq!(v["reviewer_actionable_of_routed"]["routed"], 1);
     }
 }
