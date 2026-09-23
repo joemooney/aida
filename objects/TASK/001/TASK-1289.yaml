@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-21T22:36:16.634606502Z
+modified_at: 2026-09-23T06:23:56.794236562Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -1325,6 +1325,12 @@ comments:
   created_at: 2026-09-21T22:35:26.188475059Z
   modified_at: 2026-09-21T22:36:16.634606037Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0ccef-677a-7b90-ad2c-1de3e60d791b
+  author: joe
+  content: 'PROXY DISPOSITION (Claude for the operator, overnight burn-down): ALREADY FIXED on main, verified. Evidence: Merged commit 4cf2c6d600 "[AI:codex] feat(preflight): gate publication with CI shell parity (BUG-1420)" on origin/main implements exactly the asked-for boundary: lib.rs ~90760 now runs `implementer_preflight::run()` "before either accepting an agent-opened PR or exercising the BUG-893 auto-open recovery", with an explicit `// TASK-1289: the orchestrator owns the publication boundary` comment. The three named implemented-by PRs (1972/2009/2043) were closed unmerged but the functionality landed via 4cf2c6d600. aida-cli-lib/src/lib.rs, aida-cli-lib/src/implementer_preflight.rs'
+  created_at: 2026-09-23T06:23:56.794236562Z
+  modified_at: 2026-09-23T06:23:56.794236562Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
 implementation_info:
   implemented: true
