@@ -747,27 +747,36 @@ fn scan_scaffold_drift(
 ///
 /// Per-shape rather than one global number, so guarding a second command is a
 /// new row rather than a reshaped config.
-// trace:STORY-1422 | ai:claude
+///
+/// ADR-53: `budget_ms` alone cannot express a single-call ceiling — a
+/// proportion is invariant to the magnitude of its own outliers, and improves
+/// as its denominator grows, so it can go quiet while the worst call gets
+/// worse. `ceiling_ms` is the second, independent limb: ANY single call over
+/// it trips the gate regardless of how healthy the proportion looks.
+// trace:STORY-1422 trace:ADR-53 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PerformanceBudget {
     pub(crate) cmd: String,
     pub(crate) budget_ms: u64,
+    pub(crate) ceiling_ms: Option<u64>,
 }
 
 /// Read `[performance.budgets]` — a table of command shape to millisecond
-/// budget:
+/// budget, in one of two forms:
 ///
 /// ```toml
 /// [performance.budgets]
-/// show = 1000
-/// "queue list" = 2000
+/// show = 1000                                    # budget only, no ceiling
+/// "queue list" = { budget_ms = 2000, ceiling_ms = 8000 }
 /// ```
 ///
 /// A TABLE rather than `show_budget_ms`-style keys because a command shape can
 /// contain a space (`queue list`), which a key suffix cannot express without
 /// mangling. Absent section means no guarded commands, which is not a failure —
-/// a project that has not opted in has nothing to breach.
-// trace:STORY-1422 | ai:claude
+/// a project that has not opted in has nothing to breach. `ceiling_ms` is
+/// optional (ADR-53): a shape with no ceiling is judged on proportion alone,
+/// same as before this limb existed.
+// trace:STORY-1422 trace:ADR-53 | ai:claude
 pub(crate) fn performance_budgets(cfg: Option<&toml::Value>) -> Vec<PerformanceBudget> {
     let Some(table) = cfg
         .and_then(|c| c.get("performance"))
@@ -779,10 +788,25 @@ pub(crate) fn performance_budgets(cfg: Option<&toml::Value>) -> Vec<PerformanceB
     let mut budgets: Vec<PerformanceBudget> = table
         .iter()
         .filter_map(|(cmd, value)| {
-            let budget_ms = value.as_integer().filter(|ms| *ms > 0)? as u64;
+            if let Some(ms) = value.as_integer() {
+                let budget_ms = (ms > 0).then_some(ms as u64)?;
+                return Some(PerformanceBudget {
+                    cmd: cmd.to_string(),
+                    budget_ms,
+                    ceiling_ms: None,
+                });
+            }
+            let inline = value.as_table()?;
+            let budget_ms = inline.get("budget_ms")?.as_integer().filter(|ms| *ms > 0)? as u64;
+            let ceiling_ms = inline
+                .get("ceiling_ms")
+                .and_then(|v| v.as_integer())
+                .filter(|ms| *ms > 0)
+                .map(|ms| ms as u64);
             Some(PerformanceBudget {
                 cmd: cmd.to_string(),
                 budget_ms,
+                ceiling_ms,
             })
         })
         .collect();
@@ -1089,6 +1113,22 @@ pub(crate) fn binary_breakdown_phrase(per_binary: &[BinaryTally], lineage_scoped
     phrase
 }
 
+/// ADR-53's ceiling limb, rendered onto a breach summary. Reports the
+/// ceiling's presence and status even when it did NOT trip the gate, so a
+/// reader can tell "no ceiling configured" from "ceiling configured and
+/// clear" — the same absent-evidence-is-not-good-evidence rule the
+/// unobserved-budget finding already follows.
+// trace:ADR-53 | ai:claude
+fn ceiling_clause(ceiling_ms: Option<u64>, worst_ms: u64, breached: bool) -> String {
+    match ceiling_ms {
+        Some(c) if breached => {
+            format!("; CEILING BREACHED — a single call ran {worst_ms} ms against a {c} ms ceiling")
+        }
+        Some(c) => format!("; ceiling {c} ms not breached"),
+        None => String::new(),
+    }
+}
+
 /// One breached budget, kept machine-readable for the ledger.
 ///
 /// `budget_ms` and `tolerated_pct` are both recorded because a CONFIGURED
@@ -1118,6 +1158,12 @@ pub(crate) struct PerformanceBreach {
     /// "nothing was excluded" and "the scope was off" otherwise render
     /// identically, and only the second means the denominator is machine-wide.
     pub(crate) lineage_scoped: bool,
+    /// ADR-53's second limb: the configured single-call ceiling, if any.
+    pub(crate) ceiling_ms: Option<u64>,
+    /// Did `worst_ms` exceed `ceiling_ms`? A breach can be recorded on this
+    /// limb alone even while `over_pct` sits comfortably under `tolerated_pct`
+    /// — that gap is the whole reason ADR-53 exists.
+    pub(crate) ceiling_breached: bool,
 }
 
 /// Parse a usage event's timestamp, tolerating both `Z` and offset forms.
@@ -1182,7 +1228,12 @@ pub(crate) fn performance_breaches(
         }
         let over_budget = counted.iter().filter(|ms| **ms > budget.budget_ms).count();
         let over_pct = (over_budget as f64) * 100.0 / (counted.len() as f64);
-        if over_pct > policy.tolerated_pct {
+        let worst_ms = counted.iter().copied().max().unwrap_or(0);
+        // ADR-53: a single call over the ceiling trips the gate on its own —
+        // a proportion cannot express this, because it is invariant to the
+        // magnitude of its own outliers and improves as its denominator grows.
+        let ceiling_breached = budget.ceiling_ms.is_some_and(|c| worst_ms > c);
+        if over_pct > policy.tolerated_pct || ceiling_breached {
             breaches.push(PerformanceBreach {
                 cmd: budget.cmd.clone(),
                 budget_ms: budget.budget_ms,
@@ -1191,10 +1242,12 @@ pub(crate) fn performance_breaches(
                 over_pct,
                 tolerated_pct: policy.tolerated_pct,
                 window_hours: policy.window_hours,
-                worst_ms: counted.iter().copied().max().unwrap_or(0),
+                worst_ms,
                 per_binary,
                 excluded_samples: window.len() - counted.len(),
                 lineage_scoped: lineage.is_scoped(),
+                ceiling_ms: budget.ceiling_ms,
+                ceiling_breached,
             });
         }
     }
@@ -1272,7 +1325,7 @@ pub(crate) fn performance_findings(
                 id: b.cmd.clone(),
                 summary: format!(
                     "`aida {}` exceeded its {} ms budget on {:.1}% of {} calls in the last {}h \
-                 (tolerated {:.1}%, worst {} ms){}",
+                 (tolerated {:.1}%, worst {} ms){}{}",
                     b.cmd,
                     b.budget_ms,
                     b.over_pct,
@@ -1280,12 +1333,21 @@ pub(crate) fn performance_findings(
                     b.window_hours,
                     b.tolerated_pct,
                     b.worst_ms,
+                    ceiling_clause(b.ceiling_ms, b.worst_ms, b.ceiling_breached),
                     binary_breakdown_phrase(&b.per_binary, b.lineage_scoped)
                 ),
-                action: "investigate the regression, or change the budget deliberately in \
+                action: if b.ceiling_breached {
+                    "a single call exceeded the ceiling — that trips regardless of the \
+                     proportion, because a proportion cannot express one bad call; \
+                     investigate that call, or raise the ceiling deliberately in \
+                     [performance.budgets] with the consequence in front of you"
+                        .to_string()
+                } else {
+                    "investigate the regression, or change the budget deliberately in \
                  [performance] — raising a threshold the moment it trips is how a latency gate \
                  dies, so the numbers in force are recorded with the trip"
-                    .to_string(),
+                        .to_string()
+                },
                 safe_heal: false,
             })
             .collect();
@@ -1353,6 +1415,8 @@ fn performance_audit_records(
             worst_ms: Some(b.worst_ms),
             excluded_samples: b.excluded_samples,
             lineage_scoped: b.lineage_scoped,
+            ceiling_ms: b.ceiling_ms,
+            ceiling_breached: b.ceiling_breached,
         })
         .collect();
     for u in performance_unobserved(events, budgets, policy, now, lineage) {
@@ -1370,6 +1434,8 @@ fn performance_audit_records(
             worst_ms: None,
             excluded_samples: u.excluded_samples,
             lineage_scoped: lineage.is_scoped(),
+            ceiling_ms: budget.ceiling_ms,
+            ceiling_breached: false,
         });
     }
     out.sort_by(|a, b| a.command.cmp(&b.command));
@@ -1405,6 +1471,7 @@ mod story_1422_performance_gate_tests {
         PerformanceBudget {
             cmd: cmd.to_string(),
             budget_ms,
+            ceiling_ms: None,
         }
     }
 
@@ -1608,6 +1675,111 @@ mod story_1422_performance_gate_tests {
             .unwrap();
         assert_eq!(performance_policy(Some(&bad)), PerformancePolicy::default());
     }
+
+    /// ADR-53: `ceiling_ms` parses from the table form, and the plain-integer
+    /// form still parses with `ceiling_ms: None` — the pre-ADR-53 config keeps
+    /// working unchanged.
+    // trace:ADR-53 | ai:claude
+    #[test]
+    fn ceiling_ms_parses_from_the_table_form_and_defaults_to_none() {
+        let cfg: toml::Value =
+            "[performance.budgets]\nshow = { budget_ms = 1000, ceiling_ms = 5000 }\n\"queue list\" = 2000\n"
+                .parse()
+                .unwrap();
+        let budgets = performance_budgets(Some(&cfg));
+        assert_eq!(
+            budgets,
+            vec![
+                budget("queue list", 2000),
+                PerformanceBudget {
+                    cmd: "show".to_string(),
+                    budget_ms: 1000,
+                    ceiling_ms: Some(5000),
+                },
+            ]
+        );
+    }
+
+    /// A zero/non-positive `ceiling_ms` is ignored (treated as unset) rather
+    /// than manufacturing a ceiling that trips on every call — same rule as a
+    /// malformed `budget_ms`.
+    // trace:ADR-53 | ai:claude
+    #[test]
+    fn a_malformed_ceiling_ms_is_ignored_not_treated_as_zero() {
+        let cfg: toml::Value =
+            "[performance.budgets]\nshow = { budget_ms = 1000, ceiling_ms = 0 }\n"
+                .parse()
+                .unwrap();
+        assert_eq!(performance_budgets(Some(&cfg)), vec![budget("show", 1000)]);
+    }
+
+    fn budget_with_ceiling(cmd: &str, budget_ms: u64, ceiling_ms: u64) -> PerformanceBudget {
+        PerformanceBudget {
+            cmd: cmd.to_string(),
+            budget_ms,
+            ceiling_ms: Some(ceiling_ms),
+        }
+    }
+
+    /// ADR-53's whole point: a single call over the ceiling trips the gate
+    /// even while the PROPORTION sits comfortably under tolerance — the exact
+    /// gap the measured 2.9%-at-n=170 / 69,240ms-worst-call reading exposed.
+    // trace:ADR-53 | ai:claude
+    #[test]
+    fn a_single_call_over_the_ceiling_trips_the_gate_even_with_a_healthy_proportion() {
+        // 1 of 170 over budget — 0.6%, nowhere near the 10% tolerance — but
+        // that one call is a 69,240ms outlier, over the 5000ms ceiling.
+        let mut events: Vec<_> = (0..169).map(|_| ev_at("show", 400, 1)).collect();
+        events.push(ev_at("show", 69_240, 1));
+        let budgets = [budget_with_ceiling("show", 1000, 5_000)];
+        let breaches = performance_breaches(
+            &events,
+            &budgets,
+            &PerformancePolicy::default(),
+            now(),
+            &BinaryLineage::unscoped(),
+        );
+        assert_eq!(breaches.len(), 1, "{breaches:?}");
+        assert!(
+            breaches[0].over_pct < PerformancePolicy::default().tolerated_pct,
+            "the proportion limb alone must NOT explain this trip: {}",
+            breaches[0].over_pct
+        );
+        assert!(breaches[0].ceiling_breached);
+        assert_eq!(breaches[0].worst_ms, 69_240);
+
+        let summary = &performance_findings(
+            &events,
+            &budgets,
+            &PerformancePolicy::default(),
+            now(),
+            &BinaryLineage::unscoped(),
+        )[0]
+        .summary;
+        assert!(summary.contains("CEILING BREACHED"), "{summary}");
+        assert!(summary.contains("69240 ms"), "{summary}");
+        assert!(summary.contains("5000 ms ceiling"), "{summary}");
+    }
+
+    /// The mirror image: proportion AND ceiling both clear must NOT trip —
+    /// a configured-but-unbreached ceiling is not itself a finding.
+    // trace:ADR-53 | ai:claude
+    #[test]
+    fn a_configured_ceiling_that_is_not_breached_does_not_trip() {
+        let events = mix(29, 1000); // 2.9% over budget, worst call 9,900ms
+        let budgets = [budget_with_ceiling("show", 1000, 15_000)];
+        assert!(
+            performance_breaches(
+                &events,
+                &budgets,
+                &PerformancePolicy::default(),
+                now(),
+                &BinaryLineage::unscoped()
+            )
+            .is_empty(),
+            "2.9% clears the 10% tolerance and the 9,900ms worst call clears a 15,000ms ceiling"
+        );
+    }
 }
 
 /// BUG-1572: the gate reads a MACHINE-GLOBAL log, so its population must be
@@ -1639,6 +1811,7 @@ mod bug_1572_binary_lineage_tests {
         PerformanceBudget {
             cmd: cmd.to_string(),
             budget_ms,
+            ceiling_ms: None,
         }
     }
 
