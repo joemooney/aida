@@ -44,7 +44,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:38:17.221867061Z
-modified_at: 2026-09-21T05:07:12.581580834Z
+modified_at: 2026-09-23T06:27:50.958199035Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -167,3 +167,9 @@ comments:
   created_at: 2026-09-21T05:07:12.581580834Z
   modified_at: 2026-09-21T05:07:12.581580834Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0ccf2-fa2e-7f93-b940-57161b1e028b
+  author: joe
+  content: 'PROXY DISPOSITION (Claude for the operator): DUPLICATE of BUG-1530. Same underlying defect family as BUG-1530 (awaiting/notice channel-set mismatch is the seat-scoping problem''s twin symptom — both split out of the same TASK-1-167 origin on 2026-09-20); BUG-1530''s acceptance criteria (headline scoped to seat, reviewer[] surfaced, derived from session role) subsume TASK-193''s notice-vs-report mismatch since a correctly seat-scoped notice/report pair would no longer disagree on channel sets'
+  created_at: 2026-09-23T06:27:50.958199035Z
+  modified_at: 2026-09-23T06:27:50.958199035Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
