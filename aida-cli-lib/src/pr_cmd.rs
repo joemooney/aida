@@ -1137,6 +1137,28 @@ fn acquire_merge_lease(
     })
 }
 
+// Emit the same `PrMerged` event the drain's merge phase emits
+// (`DriveContext::merge_pr` in `lib.rs`), from `aida pr ship` — so a feed
+// consumer cannot tell whether a merge came from the orchestrator or an
+// explicit ship. One event per spec the PR is credited to; a PR crediting no
+// resolvable spec still emits once with `spec: None` so the merge is never
+// silently dropped. `emit` itself is best-effort (never errors the ship);
+// isolated here so the target-derivation logic is unit-testable without
+// stubbing `gh`. trace:BUG-1423 | ai:claude
+fn emit_ship_pr_merged(main_worktree: &std::path::Path, pr: u32, spec_ids: &[String]) {
+    let seat = crate::events::active_seat();
+    let targets: Vec<Option<String>> = if spec_ids.is_empty() {
+        vec![None]
+    } else {
+        spec_ids.iter().cloned().map(Some).collect()
+    };
+    for spec in targets {
+        let mut ev = crate::events::Event::new(spec, "", crate::events::EventKind::PrMerged { pr });
+        ev.seat = seat.clone();
+        crate::events::emit(main_worktree, &ev);
+    }
+}
+
 pub(crate) fn pr_ship_handler(
     n: Option<u64>,
     no_pull: bool,
@@ -1883,6 +1905,21 @@ pub(crate) fn pr_ship_handler(
                 reason,
             );
             let _ = crate::merge_hold::clear_hold(&hold_root, pr_number);
+            // BUG-1423: this IS the coordination-seat action the missing
+            // event taxonomy could not record — an explicit advisor/human
+            // `aida pr ship` releasing a supervised merge-hold. Best-effort,
+            // never affects the ship outcome. trace:BUG-1423 | ai:claude
+            let mut hold_event = crate::events::Event::new(
+                None,
+                "",
+                crate::events::EventKind::MergeHoldChanged {
+                    pr: pr_number as u32,
+                    placed: false,
+                    reason: Some(reason.to_string()),
+                },
+            );
+            hold_event.seat = crate::events::active_seat();
+            crate::events::emit(&hold_root, &hold_event);
             if let Err(err) = crate::merge_hold::sync_label(&hold_root, pr_number, false) {
                 eprintln!(
                     "  {} could not remove the merge-hold label ({err}) — branch protection will keep the merge closed",
@@ -1985,9 +2022,18 @@ pub(crate) fn pr_ship_handler(
     // populates N records. Best-effort: a `gh` blip here leaves the merge
     // landed and just skips the capture.
     // trace:STORY-439 | ai:claude
+    // BUG-1423: the decisive gap — a merge performed by `aida pr ship`
+    // (the advisor/product seat's explicit merge path) never appended a
+    // `PrMerged` event, so the feed recorded only drain merges. Mirror the
+    // drain merge phase's emit here (`DriveContext::merge_pr` in `lib.rs`)
+    // so a feed consumer cannot tell whether a merge came from the
+    // orchestrator or this command — same kind, same terminal semantics.
+    // Best-effort: emit failures never fail the ship. trace:BUG-1423 | ai:claude
+    let mut pr_merged_spec_ids: Vec<String> = Vec::new();
     if let Ok(pr_meta) = fetch_pr_ship_metadata_via_gh(&project_root, pr_number) {
         let spec_ids =
             pr_ship::derive_squash_subject_spec_ids(&pr_meta.title, &branch, &pr_meta.body);
+        pr_merged_spec_ids = spec_ids.clone();
         for spec in &spec_ids {
             let punts = complexity_calibration::punt_count_for_spec(&main_worktree, spec);
             if let Err(e) =
@@ -2016,6 +2062,15 @@ pub(crate) fn pr_ship_handler(
                 opts.effort,
             );
         }
+    }
+    // BUG-1423: emit only for a merge THIS invocation performed — matches
+    // the drain's own emit-on-success semantics and keeps a re-run against
+    // an already-merged PR (BUG-574) from re-appending a duplicate event.
+    // A PR crediting no resolvable spec still emits once (spec: None) so
+    // the merge is never silently dropped from the feed.
+    // trace:BUG-1423 | ai:claude
+    if merged_this_run {
+        emit_ship_pr_merged(&main_worktree, pr_number as u32, &pr_merged_spec_ids);
     }
 
     // ---- Step 4: aida pull (from the main worktree). ----
@@ -3622,6 +3677,61 @@ mod pr_ship_environment_tests {
             crate::merge_hold::read_hold(&sibling, 1188).is_none(),
             "the regression was reading the sibling worktree's empty .aida directory"
         );
+    }
+
+    // BUG-1423: `aida pr ship` merging a PR outside a drain phase must append
+    // the same `PrMerged` event the drain's merge phase does — one per
+    // credited spec, carrying the acting seat when known. This is the
+    // decisive gap the bug measured: nine of ten advisor merges recorded
+    // nothing.
+    #[test]
+    fn emit_ship_pr_merged_writes_one_event_per_credited_spec_with_seat() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+
+        emit_ship_pr_merged(
+            tmp.path(),
+            4242,
+            &["BUG-1423".to_string(), "TASK-1".to_string()],
+        );
+
+        let events = crate::events::read_all(tmp.path());
+        assert_eq!(events.len(), 2, "one PrMerged per credited spec");
+        for (ev, expected_spec) in events.iter().zip(["BUG-1423", "TASK-1"]) {
+            assert!(
+                matches!(ev.kind, crate::events::EventKind::PrMerged { pr } if pr == 4242),
+                "expected PrMerged{{pr: 4242}}, got {:?}",
+                ev.kind
+            );
+            assert_eq!(ev.spec.as_deref(), Some(expected_spec));
+            assert_eq!(
+                ev.seat.as_deref(),
+                Some("advisor"),
+                "the acting seat must ride along — this is the field the \
+                 PrMerged undercount hid: an advisor merge and a drain merge \
+                 must be distinguishable in the feed"
+            );
+        }
+    }
+
+    // BUG-1423: a PR crediting no resolvable spec (title/branch/body all
+    // miss) must still emit — the merge itself is never silently dropped
+    // from the feed just because spec attribution failed.
+    #[test]
+    fn emit_ship_pr_merged_emits_once_with_no_spec_when_none_resolved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _seat = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
+
+        emit_ship_pr_merged(tmp.path(), 99, &[]);
+
+        let events = crate::events::read_all(tmp.path());
+        assert_eq!(events.len(), 1);
+        assert!(events[0].spec.is_none());
+        assert!(events[0].seat.is_none());
+        assert!(matches!(
+            events[0].kind,
+            crate::events::EventKind::PrMerged { pr: 99 }
+        ));
     }
 }
 
