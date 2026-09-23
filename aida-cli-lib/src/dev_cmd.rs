@@ -996,6 +996,17 @@ fn handle_dev_status() -> Result<()> {
                     "Binary SHA:   {} → HEAD {}  [{}]",
                     bin_short, head_short, label
                 );
+                // TASK-188: a behind-HEAD dev binary also gets a stderr line so
+                // it survives `aida dev status > file` / piping.
+                // trace:TASK-188 | ai:claude
+                if matches!(kind, ShaMatch::Ancestor) {
+                    eprintln!(
+                        "{} your dev aida binary (build {}) is behind HEAD ({}) — run `make build-fast`",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                        bin_short,
+                        head_short
+                    );
+                }
                 if matches!(kind, ShaMatch::Unrelated) {
                     println!(
                         "      {}: rebuild with `cargo build --release` (or `cargo build`)",

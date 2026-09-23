@@ -5359,6 +5359,7 @@ pub(crate) fn handle_queue_command(
             resume_drain,
             drain_id,
             resume_dry_run,
+            allow_stale_binary,
             from_pr,
             no_human,
             escalate_blocks,
@@ -5955,6 +5956,13 @@ pub(crate) fn handle_queue_command(
                         c
                     };
                     let project_root = find_main_worktree_root()?;
+                    // STORY-1414: refuse to pin a stale dev binary for the
+                    // wave. Before the lock so the lock records a bypass.
+                    // trace:STORY-1414 | ai:claude
+                    crate::freshness_gate::enforce_wave_launch_gate(
+                        &project_root,
+                        *allow_stale_binary,
+                    )?;
                     drain_cmd::install_stop_request_env(&project_root);
                     drain_cmd::clear_stop_request(&project_root);
                     Some(drain_lock::acquire_drain_lock(

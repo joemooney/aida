@@ -62,6 +62,7 @@ mod doctor_cmd;
 mod drain_caps;
 mod drain_cmd;
 mod drain_lock;
+mod freshness_gate;
 mod git_backend_cmd;
 mod machine_readiness;
 mod mcp_cmd;
@@ -3711,6 +3712,14 @@ fn run() -> Result<()> {
     {
         // trace:BUG-1289 | ai:claude
         return handle_status_spec(spec, *idle_minutes, *json || output_format_is_json());
+    }
+
+    // TASK-188: make dev-binary staleness visible at the point of use. One
+    // stderr line, local git only (no network), silent outside the AIDA
+    // workspace or when the running build matches the default branch.
+    // trace:TASK-188 | ai:claude
+    if let Command::Status { spec: None, .. } = &cli.command {
+        crate::freshness_gate::warn_if_running_binary_stale();
     }
 
     // STORY-769: the `aida awaiting --notice` per-turn hook ALWAYS leads with a
@@ -51302,8 +51311,15 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             force,
             vendor,
             panes,
+            allow_stale_binary,
         } => {
             install_burndown_order_override(order.as_ref())?;
+            // STORY-1414: the flag is the deliberate override; exporting it
+            // lets the launch gate (and any child it spawns) honour it.
+            // trace:STORY-1414 | ai:claude
+            if *allow_stale_binary {
+                std::env::set_var(crate::freshness_gate::ALLOW_STALE_ENV, "1");
+            }
             handle_burndown_run(
                 status,
                 tag.as_deref(),
@@ -51686,6 +51702,10 @@ fn handle_burndown_run(
         burndown::selector_summary(status, tag, batch)
     );
     let project_root = find_main_worktree_root()?;
+    // STORY-1414: a wave pins its launching binary — refuse a stale dev build
+    // before the lock is taken (the override is exported above).
+    // trace:STORY-1414 | ai:claude
+    crate::freshness_gate::enforce_wave_launch_gate(&project_root, false)?;
     // BUG-759: record the blessed spec set in the lock so `aida drain status`
     // can name what this launcher-held drain is working (pid + started +
     // specs) for its entire wall-clock — the launcher writes no per-phase

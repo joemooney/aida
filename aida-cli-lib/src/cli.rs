@@ -2320,6 +2320,14 @@ pub enum BurndownCommand {
         // trace:TASK-1120 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long, value_name = "HOST", num_args = 0..=1, default_missing_value = "tmux")]
         panes: Option<String>,
+        /// Launch even when this dev build of aida is not the default branch
+        /// HEAD. Without it, a dev build that is behind (or cannot be matched
+        /// to) HEAD refuses to launch, because the wave pins its launching
+        /// binary. The bypass is recorded in `.aida/drain.lock`. Released
+        /// binaries are never gated.
+        // trace:STORY-1414 | ai:claude
+        #[clap(long)]
+        allow_stale_binary: bool,
     },
     /// Is a drain running, and what is it doing? The read-side companion to
     /// `burndown run`. Reads the global drain lock — pid, start time, the
@@ -6044,6 +6052,15 @@ pub enum QueueCommand {
         // trace:TASK-405 | ai:claude — now also previews a `--from-pr` drive.
         #[clap(long, requires = "auto_complete")]
         resume_dry_run: bool,
+        /// Launch the drain even when this dev build of aida is not the
+        /// default branch HEAD. Without it, a dev build that is behind (or
+        /// cannot be matched to) HEAD refuses to launch, because the wave pins
+        /// its launching binary. Use it to pin an older binary on purpose,
+        /// e.g. to bisect an orchestration regression. The bypass is recorded
+        /// in `.aida/drain.lock`. Released binaries are never gated.
+        // trace:STORY-1414 | ai:claude
+        #[clap(long, requires = "auto_complete")]
+        allow_stale_binary: bool,
         /// PR-only invocation: implementation already shipped OUTSIDE the
         /// orchestrator (a PR is already open for the spec), so SKIP the
         /// implementer phase and drive the remaining phases
