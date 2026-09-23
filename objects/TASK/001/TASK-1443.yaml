@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T03:44:19.644493754Z
-modified_at: 2026-09-23T07:36:13.907972839Z
+modified_at: 2026-09-23T07:36:17.176241675Z
 req_type: Task
 tags:
 - parent:BUG-1510 orchestrator integrity attribution split-from:BUG-1510
@@ -33,4 +33,10 @@ comments:
   content: 'Claude implementer result: branch claude/task-1443 @ 4407680a86 (pushed, no PR), STACKED on claude/task-1442, so merge 1442 first. existing_open_pr_for_branch (lib.rs) runs before open_change in open_orchestrator_pr_for_implementer_worktree / open_orchestrator_pr_for_pushed_branch and ADOPTS an existing open PR for the branch (reusing pr_ship::branch_pr_resolution_from_lookup; skips PureGitForge''s id-0 sentinel). AC1 met; AC2 met by the no-network fake-gh test post_push_pr_recovery_adopts_existing_open_pr_instead_of_creating_another (4 pass). REVIEWER NOTE: this fails OPEN. A forge lookup failure (CliFailed/CliMissing/Unreachable) falls through to create, so a flaky gh can still produce a duplicate. Consider failing the phase on LookupFailed instead.'
   created_at: 2026-09-23T04:24:33.822243337Z
   modified_at: 2026-09-23T04:24:33.822243337Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd31-a218-7202-8ccd-35a3283a4e76
+  author: joe
+  content: 'Merged to main via integration batch 2, PR #2112 squash bc61c0a04a (2026-09-23 00:34). Completed by hand because aida pull''s auto-bump missed this trailer in the multi-spec squash body.'
+  created_at: 2026-09-23T07:36:17.176241675Z
+  modified_at: 2026-09-23T07:36:17.176241675Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
