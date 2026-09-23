@@ -36,16 +36,12 @@ description: |-
   NOT IN SCOPE: preventing a human from deliberately overriding. The goal is that the merger KNOWS, not that they are forbidden.
 
   Raised by claude-reviewer-1 from instance 1, who declined to file it on the grounds that an in-flight marker is a design question rather than a defect. That is a fair reading of instance 1 alone. Instance 2 is what makes it a defect: the same gap has already cost a wasted review round and a ledger entry recording a broken independence rule.
-  execution_mode: drain
-  relationships[3]{rel,id,title}:
-    Related,BUG-1490,"aida awaiting keeps listing a PR as awaiting-you after a reviewer records CHANGES REQUESTED, because it reads GitHub's reviewDecision and not AIDA's own verdict"
-    Related,BUG-1429,"The in-drive ship guard decides liveness by matching a state string another module formats, so a reword opens the gate
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T21:22:32.534380767Z
-modified_at: 2026-09-23T10:01:30.497388221Z
+modified_at: 2026-09-23T11:26:59.051893557Z
 req_type: Story
 tags:
 - batch:night-0920
