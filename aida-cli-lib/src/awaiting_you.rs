@@ -109,6 +109,39 @@ pub(crate) struct AwaitingReport {
     /// `unshipped_work`.
     // trace:TASK-1445 | ai:claude
     pub pr_attribution_disagreements: Vec<PrAttributionDisagreementItem>,
+    /// BUG-1564: In-Progress specs with no live session, lease or process
+    /// backing the flag — the anomaly `aida ps` already detects (the
+    /// flag-only column + the orphan pass) but that, until now, only a
+    /// human who read that column and knew what it meant could see. Reuses
+    /// `gather_running_work`'s orphan verdict verbatim (no second
+    /// implementation); a spec a live fan-out is plausibly building
+    /// (`likely_fanout`) is excluded here exactly as it is on `aida ps` —
+    /// informational, not a genuine anomaly. Full-report only: it walks
+    /// leases + a live-process probe via `gather_running_work`, the same
+    /// "needs a heavier local probe" tier as `unshipped_work` /
+    /// `pr_attribution_disagreements`, so the per-turn `--notice` path
+    /// (which must stay local and fast, no full-store load) leaves it empty.
+    // trace:BUG-1564 | ai:claude
+    pub orphaned_in_progress: Vec<OrphanedInProgressItem>,
+}
+
+/// BUG-1564: one In-Progress spec with no live session/lease/process behind
+/// it. `abandoned = true` means a spec-scoped lease existed but its holder
+/// process is dead (work started, then the session died — ABANDONED);
+/// `abandoned = false` means no spec-scoped lease ever existed for this spec
+/// (nothing has picked it up — NOT-YET-STARTED). `since_label` is a
+/// best-effort "how long" signal derived from the spec's last-modified
+/// timestamp (a proxy, not a confirmed transition time — the exact
+/// InProgress-since moment lives in the orphan-branch git log via `aida
+/// history events`, which this fast surface does not walk) and says so
+/// plainly when it can't be resolved at all.
+// trace:BUG-1564 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct OrphanedInProgressItem {
+    pub spec_id: String,
+    pub title: String,
+    pub abandoned: bool,
+    pub since_label: String,
 }
 
 /// STORY-1419: one PR whose rework has landed on a refusal you recorded.
@@ -633,6 +666,7 @@ impl AwaitingReport {
             + (if self.shelved_total > 0 { 1 } else { 0 })
             + self.escalations.len()
             + self.pr_attribution_disagreements.len()
+            + self.orphaned_in_progress.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -972,6 +1006,28 @@ impl AwaitingReport {
             writeln!(w, "  🗣️ escalation: {} — {}", e.spec_id.bold(), e.title,)?;
             budget -= 1;
         }
+        // trace:BUG-1564 | ai:claude
+        for o in &self.orphaned_in_progress {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            let state = if o.abandoned {
+                "abandoned — lease died"
+            } else {
+                "not yet started — no lease"
+            };
+            writeln!(
+                w,
+                "  {} orphaned In-Progress: {} — {}, {} — `{}`",
+                "⚠️".yellow(),
+                o.spec_id.bold(),
+                state,
+                o.since_label,
+                "aida ps".cyan(),
+            )?;
+            budget -= 1;
+        }
 
         if overflow > 0 {
             writeln!(
@@ -1063,6 +1119,13 @@ impl AwaitingReport {
                 "pr": d.pr,
                 "lease_spec": d.lease_spec,
                 "trailer_spec": d.trailer_spec,
+            })).collect::<Vec<_>>(),
+            // trace:BUG-1564 | ai:claude
+            "orphaned_in_progress": self.orphaned_in_progress.iter().map(|o| serde_json::json!({
+                "spec_id": o.spec_id,
+                "title": o.title,
+                "abandoned": o.abandoned,
+                "since_label": o.since_label,
             })).collect::<Vec<_>>(),
         })
     }
@@ -1162,6 +1225,14 @@ impl AwaitingReport {
             parts.push(format!(
                 "{} attribution split",
                 self.pr_attribution_disagreements.len()
+            ));
+        }
+        // trace:BUG-1564 | ai:claude
+        if !self.orphaned_in_progress.is_empty() {
+            parts.push(pluralize(
+                self.orphaned_in_progress.len(),
+                "orphaned in-progress",
+                "orphaned in-progress",
             ));
         }
         if parts.is_empty() {
@@ -1736,6 +1807,54 @@ mod tests {
         let json = r.to_json();
         assert_eq!(json["unshipped_work"][0]["spec_id"], "STORY-1043");
         assert_eq!(json["unshipped_work"][0]["commits_ahead"], 2);
+    }
+
+    // trace:BUG-1564 | ai:claude
+    #[test]
+    fn orphaned_in_progress_renders_and_distinguishes_abandoned_from_not_yet_started() {
+        let r = AwaitingReport {
+            orphaned_in_progress: vec![
+                OrphanedInProgressItem {
+                    spec_id: "BUG-9001".to_string(),
+                    title: "crashed session".to_string(),
+                    abandoned: true,
+                    since_label: "last touched 3h ago".to_string(),
+                },
+                OrphanedInProgressItem {
+                    spec_id: "TASK-9002".to_string(),
+                    title: "never picked up".to_string(),
+                    abandoned: false,
+                    since_label: "last-touched time unknown".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+        assert_eq!(r.total(), 2);
+        let line = r
+            .compact_line()
+            .expect("orphaned in-progress yields a per-turn line");
+        assert!(
+            line.contains("2 orphaned in-progress"),
+            "compact line: {line}"
+        );
+
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(
+            s.contains("BUG-9001") && s.contains("abandoned — lease died"),
+            "{s}"
+        );
+        assert!(
+            s.contains("TASK-9002") && s.contains("not yet started — no lease"),
+            "{s}"
+        );
+        assert!(s.contains("last-touched time unknown"), "{s}");
+
+        let json = r.to_json();
+        assert_eq!(json["orphaned_in_progress"][0]["spec_id"], "BUG-9001");
+        assert_eq!(json["orphaned_in_progress"][0]["abandoned"], true);
+        assert_eq!(json["orphaned_in_progress"][1]["abandoned"], false);
     }
 
     // trace:TASK-1305 | ai:claude

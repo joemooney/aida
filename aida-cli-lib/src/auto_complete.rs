@@ -3687,6 +3687,51 @@ pub(crate) fn orchestrate_with_resume(
             }
         }
         driver.begin_rework_guard();
+        // BUG-1522: the rework no-op guard was consulted on only ONE of the
+        // implementer-advance arms below (PrOpened) — but a rework round runs
+        // against a PR that is ALREADY open, so it never returns PrOpened.
+        // The guard was wired to the one case it was not written for, and an
+        // unchanged, already-refused head advanced silently on every other
+        // arm. This macro is the single check point every advancing arm
+        // (Err(f)-recovered, Punted->Proceed, PrOpened, AlreadyMerged,
+        // Inconclusive, Held) now runs through, so the six call sites cannot
+        // drift apart again. trace:BUG-1522 | ai:claude
+        //
+        // The optional `$hint_override` arm exists for exactly one caller:
+        // the Inconclusive arm below. `driver.rework_no_op_failure()` always
+        // resolves its own generic `FailureKind::ReworkNoOp` hint ("push a
+        // fixup commit or punt the finding") through `recovery_hint`, which
+        // is right for a genuine no-progress rework round but wrong when
+        // phase 1 ALSO reported Inconclusive (BUG-257/BUG-266 — a transient
+        // GH/Anthropic-API blip, not a stalled rework): that case's own
+        // `retry_hint` (the `--resume <session>` hint `finish_inconclusive`
+        // showed before this guard intercepted it) is what an operator needs
+        // to recover, and PhaseFailure::with_hint_override is the same BUG-
+        // 1299 mechanism that already carries a resolved-together hint
+        // through `resolve_phase_failure` instead of a kind-only re-
+        // derivation. trace:BUG-1522 | ai:claude
+        macro_rules! fail_on_rework_no_op {
+            () => {
+                fail_on_rework_no_op!(None::<String>);
+            };
+            ($hint_override:expr) => {
+                if let Some(f) = driver.rework_no_op_failure() {
+                    let f = match $hint_override {
+                        Some(hint) => f.with_hint_override(hint),
+                        None => f,
+                    };
+                    return resolve_phase_failure(
+                        driver,
+                        Phase::Implementer,
+                        spec,
+                        json,
+                        &start,
+                        &f,
+                        durations,
+                    );
+                }
+            };
+        }
         let phase_start = Instant::now();
         let mut retries_used = 0usize;
         loop {
@@ -3695,6 +3740,7 @@ pub(crate) fn orchestrate_with_resume(
                     if let Some(reentry_phase) = driver.recover_phase1_failure_with_open_pr(&f) {
                         driver.capture_phase_done_pr();
                         durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                        fail_on_rework_no_op!();
                         emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
                         start_phase = reentry_phase;
                         break;
@@ -3752,6 +3798,7 @@ pub(crate) fn orchestrate_with_resume(
                         // with a PR — the pipeline continues to CI.
                         PuntFlow::Proceed => {
                             driver.capture_phase_done_pr();
+                            fail_on_rework_no_op!();
                             emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
                         }
                     }
@@ -3759,17 +3806,7 @@ pub(crate) fn orchestrate_with_resume(
                 Ok(ImplementerOutcome::PrOpened) => {
                     driver.capture_phase_done_pr();
                     durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-                    if let Some(f) = driver.rework_no_op_failure() {
-                        return resolve_phase_failure(
-                            driver,
-                            Phase::Implementer,
-                            spec,
-                            json,
-                            &start,
-                            &f,
-                            durations,
-                        );
-                    }
+                    fail_on_rework_no_op!();
                     emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
                 }
                 // BUG-709: the implementer already merged its own PR (it ran the
@@ -3778,7 +3815,9 @@ pub(crate) fn orchestrate_with_resume(
                 // instead of shepherding a merged PR through CI/review/merge again.
                 // trace:BUG-709 | ai:claude
                 Ok(ImplementerOutcome::AlreadyMerged { pr_number }) => {
+                    driver.capture_phase_done_pr();
                     durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                    fail_on_rework_no_op!();
                     if !json {
                         eprintln!(
                             "  {} PR-{} already merged by the implementer — work shipped; \
@@ -3799,7 +3838,13 @@ pub(crate) fn orchestrate_with_resume(
                 // design-fork was raised) and from a failure (nothing is broken).
                 // trace:BUG-257 BUG-266
                 Ok(ImplementerOutcome::Inconclusive { reason, retry_hint }) => {
+                    driver.capture_phase_done_pr();
                     durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                    // BUG-1522: if the rework guard also shelves this round as a
+                    // no-op, keep the `--resume` hint this Inconclusive arm would
+                    // otherwise have shown (see the macro doc above) rather than
+                    // losing it to the generic ReworkNoOp hint.
+                    fail_on_rework_no_op!(retry_hint.clone());
                     // TASK-136: in a batch drain, shelve-and-advance instead of pausing
                     // the whole batch at this head; single-spec keeps the pause.
                     if batch {
@@ -3824,7 +3869,9 @@ pub(crate) fn orchestrate_with_resume(
                 // 1 with the correct "open the PR when your gate passes" hint.
                 // trace:BUG-250
                 Ok(ImplementerOutcome::Held { reason, branch }) => {
+                    driver.capture_phase_done_pr();
                     durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                    fail_on_rework_no_op!();
                     return finish_held(
                         spec,
                         json,
@@ -6174,6 +6221,12 @@ mod tests {
         /// orchestrator's phase-1 PR lookup hit a transient GH-API blip and
         /// cannot tell whether a PR was opened. The drain pauses.
         inconclusive: Option<String>,
+        /// BUG-266/BUG-1522: the `retry_hint` carried alongside `inconclusive`
+        /// on the mocked `ImplementerOutcome::Inconclusive`. `None` (default)
+        /// matches the pre-existing mock behaviour (BUG-257's plain GH-blip
+        /// shape); `Some` simulates the Anthropic-API `--resume` hint so a
+        /// test can assert it survives the BUG-1522 rework-no-op guard.
+        inconclusive_retry_hint: Option<String>,
         /// BUG-250: when set, `run_implementer` returns
         /// [`ImplementerOutcome::Held`] — the implementer deliberately held the
         /// PR (branch pushed, PR withheld for a manual gate). The drain reports
@@ -6271,6 +6324,11 @@ mod tests {
         /// BUG-1213: successful phase 1 that nevertheless left the rework PR
         /// at its prior head.
         rework_no_op: bool,
+        /// BUG-709: `run_implementer` returns
+        /// [`ImplementerOutcome::AlreadyMerged`] with this PR number instead
+        /// of the default `PrOpened`.
+        // trace:BUG-1522 | ai:claude
+        already_merged: Option<u32>,
         /// BUG-1244: selected phase-1 worktree/branch, when a test needs to
         /// exercise the cross-spec isolation gate.
         workspace: Option<(String, String)>,
@@ -6298,6 +6356,7 @@ mod tests {
                 advisor_calls: 0,
                 resume: None,
                 inconclusive: None,
+                inconclusive_retry_hint: None,
                 held: None,
                 mark_escalated_calls: 0,
                 shelve_succeeds: false,
@@ -6325,6 +6384,7 @@ mod tests {
                 phase1_pr_recovery: None,
                 harvest_gate_calls: 0,
                 rework_no_op: false,
+                already_merged: None,
                 workspace: None,
                 phase_done_pr: None,
                 suppress_phase_done_pr: false,
@@ -6448,6 +6508,18 @@ mod tests {
         fn holding_at_implementer(reason: &str) -> Self {
             Self {
                 held: Some(reason.to_string()),
+                ..Self::base()
+            }
+        }
+
+        /// BUG-709: make `run_implementer` return
+        /// [`ImplementerOutcome::AlreadyMerged`] — the implementer discovered
+        /// its own PR already merged (it ran the full ship itself).
+        // trace:BUG-1522 | ai:claude
+        fn already_merged_at_implementer(pr_number: u32) -> Self {
+            Self {
+                already_merged: Some(pr_number),
+                pr_number: Some(pr_number),
                 ..Self::base()
             }
         }
@@ -6610,10 +6682,13 @@ mod tests {
                 "BUG-657: run_implementer must never be called for a terminal-status spec",
             );
             self.record(Phase::Implementer)?;
+            if let Some(pr_number) = self.already_merged {
+                return Ok(ImplementerOutcome::AlreadyMerged { pr_number });
+            }
             if let Some(reason) = &self.inconclusive {
                 return Ok(ImplementerOutcome::Inconclusive {
                     reason: reason.clone(),
-                    retry_hint: None,
+                    retry_hint: self.inconclusive_retry_hint.clone(),
                 });
             }
             if let Some(reason) = &self.held {
@@ -10080,6 +10155,218 @@ mod tests {
         let result = orchestrate(
             &mut driver,
             "BUG-1213",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::ReworkNoOp)
+        );
+        assert!(result.shelved_reason.is_some());
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+    }
+
+    /// BUG-1522: `PrOpened` was the ONLY implementer-advance arm that
+    /// consulted `rework_no_op_failure` — but the arm a rework round against
+    /// an already-open PR actually returns (confirmed by reading
+    /// `RealPhaseDriver::run_implementer`'s `Phase1PrResolve::Found(pr) =>`
+    /// handling, which matches to `Ok(ImplementerOutcome::PrOpened)`
+    /// regardless of whether the PR was newly opened or already existed) IS
+    /// `PrOpened` in the ordinary case — so this arm was never the gap.
+    /// BUG-1460's silent readvance instead traveled the `Err(f)` arm's
+    /// `recover_phase1_failure_with_open_pr` re-entry (matching BUG-1524's
+    /// "phase 1 refuses, the refusal is recovered as an open-PR re-entry"
+    /// shape): phase 1 fails, an open PR is found, the drain continues from
+    /// the re-entry phase with no no-op check on the way through. This test
+    /// exercises exactly that arm.
+    // trace:BUG-1522 | ai:claude
+    #[test]
+    fn unchanged_rework_head_shelves_via_recovered_phase1_failure() {
+        let mut driver = MockPhaseDriver {
+            rework_no_op: true,
+            shelve_succeeds: true,
+            fail_at: Some(Phase::Implementer),
+            phase1_pr_recovery: Some(Phase::Ci),
+            ..MockPhaseDriver::base()
+        };
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1522",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::ReworkNoOp)
+        );
+        assert!(result.shelved_reason.is_some());
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Implementer],
+            "the guard must fire before Ci — a recovered phase-1 failure must \
+             not readvance an unchanged, already-refused head"
+        );
+    }
+
+    /// BUG-1522: the advisor-resolved-punt `Proceed` arm must also refuse an
+    /// unchanged head — the resumed implementer never re-enters via
+    /// `PrOpened`.
+    // trace:BUG-1522 | ai:claude
+    #[test]
+    fn unchanged_rework_head_shelves_via_resolved_punt_resume() {
+        let mut driver = MockPhaseDriver::punting_at_implementer("auth flow fork")
+            .advisor_resolves("use OAuth — the recorded convention")
+            .resume_opens_pr();
+        driver.rework_no_op = true;
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1522",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::ReworkNoOp)
+        );
+        assert!(result.shelved_reason.is_some());
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Implementer],
+            "the guard must fire before Ci on the resumed-after-punt path"
+        );
+    }
+
+    /// BUG-1522 / BUG-709: `AlreadyMerged` must also refuse an unchanged
+    /// head — e.g. a redispatch that only rediscovers a merge a prior run
+    /// already shipped, with nothing new on the dispatched spec's branch.
+    // trace:BUG-1522 | ai:claude
+    #[test]
+    fn unchanged_rework_head_shelves_via_already_merged() {
+        let mut driver = MockPhaseDriver::already_merged_at_implementer(99);
+        driver.rework_no_op = true;
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1522",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::ReworkNoOp)
+        );
+        assert!(result.shelved_reason.is_some());
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+    }
+
+    /// BUG-1522: a genuine `AlreadyMerged` (rework guard not tripped, or no
+    /// rework round in play) still completes cleanly — the fix is a targeted
+    /// no-op check, not a blanket refusal of this outcome.
+    // trace:BUG-1522 | ai:claude
+    #[test]
+    fn already_merged_without_rework_no_op_still_completes() {
+        let mut driver = MockPhaseDriver::already_merged_at_implementer(99);
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1522",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert!(result.failed_phase.is_none());
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+    }
+
+    /// BUG-1522: `Inconclusive` must also refuse an unchanged head — this is
+    /// one of the two "could not determine what happened" shapes the
+    /// original report missed, and precisely where a silent no-op is most
+    /// likely.
+    // trace:BUG-1522 | ai:claude
+    #[test]
+    fn unchanged_rework_head_shelves_via_inconclusive() {
+        let mut driver = MockPhaseDriver::inconclusive_at_implementer("GH API blip");
+        driver.rework_no_op = true;
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1522",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::ReworkNoOp)
+        );
+        assert!(result.shelved_reason.is_some());
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+    }
+
+    /// BUG-1522: when the Inconclusive arm's rework-no-op guard shelves the
+    /// round, the shelved `FailureReason` must keep the leg-specific
+    /// `--resume` hint (BUG-266) `finish_inconclusive` would have shown had
+    /// the guard not intercepted it first — not the generic
+    /// `FailureKind::ReworkNoOp` "push a fixup commit or punt" hint, which is
+    /// actively misleading when the round was cut short by an API outage
+    /// rather than a stalled rework.
+    // trace:BUG-1522 | ai:claude
+    #[test]
+    fn inconclusive_rework_no_op_keeps_the_resume_hint() {
+        let mut driver = MockPhaseDriver::inconclusive_at_implementer(
+            "Anthropic API outage during the headless implementer: API Error: 529 Overloaded",
+        );
+        driver.inconclusive_retry_hint =
+            Some("aida queue work BUG-1522 --resume 019e2f423e7c".to_string());
+        driver.rework_no_op = true;
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1522",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::ReworkNoOp)
+        );
+        let shelved = result
+            .shelved_reason
+            .as_ref()
+            .expect("the no-op round must shelve");
+        assert_eq!(
+            shelved.recovery_hint.as_deref(),
+            Some("aida queue work BUG-1522 --resume 019e2f423e7c"),
+            "the shelved reason must carry the Inconclusive arm's --resume hint, \
+             not the generic ReworkNoOp hint"
+        );
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+    }
+
+    /// BUG-1522: `Held` must also refuse an unchanged head — the other
+    /// "could not determine what happened" shape the original report
+    /// missed.
+    // trace:BUG-1522 | ai:claude
+    #[test]
+    fn unchanged_rework_head_shelves_via_held() {
+        let mut driver = MockPhaseDriver::holding_at_implementer("waiting on manual gate");
+        driver.rework_no_op = true;
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1522",
             AutoCompleteVariant::Full,
             false,
             EscalateMode::Blocks,

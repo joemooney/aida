@@ -47685,6 +47685,7 @@ pub(crate) fn collect_git_linkage_opts(
             // commit is found too. trace:BUG-1528 | ai:claude
             let norm_id = |s: &str| s.to_ascii_lowercase().replace([' ', '_'], "-");
             let mut candidates: Vec<String> = Vec::new();
+            let mut local_candidates: Vec<String> = Vec::new();
             for (commit_full, _, _) in &commits {
                 let Some(contains) = git(&[
                     "branch",
@@ -47710,8 +47711,19 @@ pub(crate) fn collect_git_linkage_opts(
                 // in parens) — never offer it as the spec's review branch, or
                 // `aida review`/`aida human review` prompts to PR the entire
                 // requirements store as a code change.
-                for b in contains.lines() {
-                    let b = b.trim().trim_start_matches("origin/");
+                for raw in contains.lines() {
+                    let raw = raw.trim();
+                    // BUG-1591: remember which candidates exist as a LOCAL
+                    // branch — stripping `origin/` erased that, so selection
+                    // fell to commit recency and a newer remote-only branch
+                    // beat the spec's own local branch. trace:BUG-1591 | ai:claude
+                    let is_remote = raw.starts_with("origin/") || raw.starts_with("remotes/");
+                    let b = raw
+                        .trim_start_matches("remotes/")
+                        .trim_start_matches("origin/");
+                    if !is_remote && !b.is_empty() && !local_candidates.iter().any(|c| c == b) {
+                        local_candidates.push(b.to_string());
+                    }
                     if !b.is_empty()
                         && b != "HEAD"
                         && b != "main"
@@ -47738,6 +47750,11 @@ pub(crate) fn collect_git_linkage_opts(
                 })
                 .cloned()
                 .collect();
+            // BUG-1591: a spec's own LOCAL branch outranks a remote-only one;
+            // recency order is kept within each group (stable sort), so the
+            // choice no longer depends on which commit git lists first.
+            // trace:BUG-1591 | ai:claude
+            id_matches.sort_by_key(|b| !local_candidates.iter().any(|c| c == b));
             if id_matches.is_empty() {
                 // No candidate matches the spec's own id by name — fall back
                 // to the first (newest) candidate found, as before.
@@ -70985,6 +71002,50 @@ fn collect_awaiting_report_inner(
         collect_pr_attribution_disagreements(project_root)
     };
 
+    // BUG-1564: In-Progress specs with no live session/lease/process behind
+    // the flag — reuses `gather_running_work`'s orphan pass verbatim (the
+    // same verdict `aida ps` computes), so this is not a second
+    // implementation of the detection. Needs a lease scan + a live-process
+    // probe, the same "heavier local probe" tier as `unshipped_work` /
+    // `pr_attribution_disagreements` above, so it is skipped on the
+    // notice-fast path to keep the per-turn hook local and fast (no
+    // full-store load, no network).
+    // trace:BUG-1564 | ai:claude
+    let orphaned_in_progress = if notice_fast {
+        Vec::new()
+    } else {
+        let (_rows, orphans) = gather_running_work(project_root);
+        orphans
+            .into_iter()
+            // TASK-1064: a fan-out-worked flag-only spec is informational on
+            // `aida ps` too — not a genuine anomaly, so it's excluded here.
+            .filter(|o| !o.likely_fanout)
+            .map(|o| {
+                let since_label = summaries
+                    .iter()
+                    .find(|s| {
+                        s.agreed_id.as_deref() == Some(o.spec.as_str())
+                            || s.spec_id.as_deref() == Some(o.spec.as_str())
+                    })
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s.modified_at).ok())
+                    .map(|t| {
+                        let secs = chrono::Utc::now()
+                            .signed_duration_since(t.with_timezone(&chrono::Utc))
+                            .num_seconds()
+                            .max(0) as u64;
+                        format!("last touched {} ago", humanize_duration_secs(secs))
+                    })
+                    .unwrap_or_else(|| "last-touched time unknown".to_string());
+                awaiting_you::OrphanedInProgressItem {
+                    spec_id: o.spec,
+                    title: o.title,
+                    abandoned: o.stale_lease,
+                    since_label,
+                }
+            })
+            .collect()
+    };
+
     awaiting_you::AwaitingReport {
         mergeable_prs,
         unowned_failing_prs,
@@ -71000,6 +71061,7 @@ fn collect_awaiting_report_inner(
         unshipped_work,
         nightly_red,
         pr_attribution_disagreements,
+        orphaned_in_progress,
     }
 }
 

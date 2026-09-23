@@ -569,6 +569,11 @@ fn linkage_branch_crossing_surfaces_all_matching_branches() {
     // but a purely-local resolver keyed on the newest commit would anchor
     // on exclusively.
     git(&root, &["checkout", "-q", "-b", "bug-1420-round2"]);
+    // BUG-1591: make round2 STRICTLY newer so recency ordering always ranks
+    // it first — the assertion below then pins the local-branch preference
+    // instead of passing only when both commits share a timestamp.
+    // trace:BUG-1591 | ai:claude
+    std::thread::sleep(std::time::Duration::from_millis(1100));
     commit(&root, "b.txt", "2", "fix: round 2 (BUG-1420)");
     let sha = git(&root, &["rev-parse", "bug-1420-round2"]);
     git(&root, &["checkout", "-q", "main"]);
