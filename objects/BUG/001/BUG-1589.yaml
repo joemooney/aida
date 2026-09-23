@@ -1,0 +1,39 @@
+id: 01a0cbf5-9bcf-7581-9afe-6f0767ab39a2
+spec_id: BUG-1589
+agreed_id: BUG-1589
+title: 'Two seats spent ~9.8B tokens in one day answering their own mail-tick crons: a model-side recurring poll re-fired ~0.2s after every turn instead of on schedule, and the shipped event-driven heartbeat '
+description: |
+  ## What happened (measured from ~/.claude/projects transcripts, deduped by requestId)
+  UTC day 2026-09-21: 11.6B tokens across Claude seats; 99.8% cache reads, ~8M output total.
+  - reviewer seat, session 01a0bfde-4e75-74c0-a388-be9233da07a4 (CC 2.1.276): 5.13B, 8,678 calls, avg 590k context/call
+  - advisor seat, session 01a0adee-16e1-7982-ac9f-e15abb207b6c (CC 2.1.274): 4.64B, 8,006 calls, avg 579k
+  - operator/solo seat, session 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5: 1.19B, 2,174 calls (198 task-notifications + until-grep polling)
+
+  Cause: model-side recurring mail polls.
+  - advisor: CronCreate '7,17,27,37,47,57 * * * *' (every 10m), created 2026-09-18T18:18Z. Ran correctly at 6/h until ~2026-09-20T17:00Z, then 15, 44, 100+/h.
+  - reviewer: CronCreate '*/5 * * * *' PLUS a /loop 5m that re-issued ScheduleWakeup on every turn (456 ScheduleWakeup calls on 09-21) - two stacked mechanisms.
+  - 09-21: advisor received 2,821 ticks, reviewer 3,058. Median inter-tick gap 7-10s; each tick arrived 0.15-0.3s after the previous assistant turn ended, uniformly across minutes (not on the cron minutes). isMeta=true, promptSource=system.
+  - 2,446 of 2,821 advisor ticks were answered 'mail tick: quiet' - nothing to do. Each quiet tick still cost ~3 calls x ~580k cached context.
+  - By attributing each call to its preceding trigger prompt, ~96-99% of calls in both sessions followed a mail tick.
+  - Sessions ran near the 1M ceiling (peak 967k) and were auto-compacted 6-9 times rather than restarted, so every call's cost stayed maximal.
+  - Throughput over the same window (09-20T17Z to 09-22T00Z): 53 commits on main touching 49 spec ids.
+
+  Unresolved: whether the idle re-fire is a Claude Code harness defect or an interaction of the stacked cron + /loop. Version did not change at onset for the advisor session. Worth reporting upstream with the session ids above.
+
+  ## Why AIDA owns part of this
+  TASK-1245 shipped an event-driven heartbeat (wake only when aida awaiting is non-empty) and STORY-712 shipped a zero-token watcher, yet the seats hand-rolled model-side CronCreate / /loop polling. The cheap path exists; nothing steers a seat onto it or refuses the expensive one. Even with no harness bug, a 10-minute model-side tick at ~580k context costs ~250M tokens/day/seat.
+
+  ## Acceptance
+  1. Seat guidance (advisor-role.md, the aida-read-mail skill, and any skill/role prompt that sets up waiting for mail) names the zero-token wait as the one supported pattern - a shell-side wait (Monitor / background until-loop on aida awaiting --notice, or the TASK-1245 heartbeat) that wakes the model only when something is actionable - and explicitly forbids model-side CronCreate / /loop / ScheduleWakeup for mailbox polling.
+  2. Where AIDA scaffolds or launches a seat (aida agent new, role enter, drain supervision skills), no path creates a model-side recurring mail poll; a grep of aida-core/templates for CronCreate/loop-based mail polling returns none.
+  3. A doc (docs/agents/ or the discipline pack) records the cost model: tokens per wake ~= calls x context size, so the lever is wake count and context size, not output length.
+  4. The upstream harness question (idle re-fire) is either reported with the evidence above or recorded as reported, with the outcome linked here.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T01:51:06.191825231Z
+modified_at: 2026-09-23T01:51:06.191825231Z
+req_type: Bug
+tags:
+- cost token-economics seat-discipline heartbeat incident:2026-09-21 parent:EPIC-71
