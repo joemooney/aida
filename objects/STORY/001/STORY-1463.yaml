@@ -1,0 +1,29 @@
+id: 01a0cbf9-14da-7182-9467-b91c99926461
+spec_id: STORY-1463
+agreed_id: STORY-1463
+title: aida init offers to install the scheduler tick, and aida doctor flags a repo whose scheduler nothing drives - a registered job otherwise never runs
+description: |
+  ## Why
+  The aida schedule registry (STORY-1226) only acts when something calls aida schedule tick, and nothing installed that. In this repo performance-guard (every 6h) sat overdue from 2026-09-21T21:50Z until the operator hand-installed a crontab line on 2026-09-22. Any job registered later (the STORY-1462 runaway-seat watchdog) inherits the same silent non-execution. Split out of STORY-1462 criterion 5 so it can ship first.
+
+  Related defect found while installing: aida schedule emit-cron printed '0 3 * * * ... aida schedule run performance-guard' for a job registered 'every 6h' - wrong cadence, and it cron'd one named job rather than the tick, so every newly registered job would need a crontab edit.
+
+  The line the operator installed (the reference shape):
+  */15 * * * * cd <repo> && PATH=<bin-dir>:/usr/local/bin:/usr/bin:/bin <abs-aida> schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1
+
+  ## Acceptance
+  1. aida init, at a TTY, offers to install the tick for this repo (default yes), shows the exact line first, and installs it on Linux/macOS via crontab (appended, never clobbering existing entries). Non-interactive init installs nothing unless --with-scheduler is passed; --no-scheduler skips the prompt. Windows: print the instruction and skip (cross-platform deferred per ADR-47).
+  2. The installed entry carries a marker comment naming the repo path, so install is idempotent (re-running init does not duplicate it) and it can be found and removed (aida schedule uninstall-cron or equivalent).
+  3. The entry uses an absolute aida path and sets PATH explicitly (cron's PATH is minimal), and cd's into the repo.
+  4. aida schedule emit-cron emits the tick line (one entry, every 15 min by default) instead of per-job lines, so jobs added later need no crontab change; the per-job cadence is left to tick.
+  5. aida doctor reports a finding when the repo has enabled substrate jobs but no installed tick entry, and a separate finding when any substrate job is overdue by more than 2x its interval (the observable symptom even if an entry exists but is broken). The finding's fix hint is the install command.
+  6. The tick itself never launches a model session (seat jobs are delivered as notices only) - pinned by a test, so installing it by default can never become a token-spend path.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T01:54:53.786005560Z
+modified_at: 2026-09-23T01:54:53.786005560Z
+req_type: Story
+tags:
+- scheduler aida:init aida:schedule onboarding substrate-as-bouncer parent:EPIC-71
