@@ -3212,3 +3212,14 @@ fn queue_close_is_tty_gated_so_the_emission_is_unreachable_headlessly() {
         "and with no transition there must be no ship record"
     );
 }
+
+// Review fix: whole-id matching for the open-PR diagnostic.
+// trace:TASK-1446 | ai:claude
+#[test]
+fn open_pr_id_matching_is_whole_id_only() {
+    let ids = vec!["BUG-1".to_string(), "TASK-7".to_string()];
+    assert_eq!(count_ids_mentioned("fix(x): thing (BUG-10)", &ids), 0);
+    assert_eq!(count_ids_mentioned("XBUG-1 and TASK-77", &ids), 0);
+    assert_eq!(count_ids_mentioned("fix(x): thing (bug-1)", &ids), 1);
+    assert_eq!(count_ids_mentioned("BUG-1, TASK-7.", &ids), 2);
+}

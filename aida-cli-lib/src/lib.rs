@@ -65766,16 +65766,16 @@ fn reconcile_no_flip_message(
 fn count_completed_specs_with_open_prs(
     project_root: &std::path::Path,
     candidate_ids: &[String],
-) -> usize {
+) -> Option<usize> {
+    // Review fix (PRIN-5): every failure path is `None` ("could not check"),
+    // never `0` — a zero must mean "checked, found none".
     if !matches!(
         forge::resolve_forge_kind(project_root),
         forge::ForgeKind::GitHub
     ) {
-        return 0;
+        return None;
     }
-    let Some(gh) = resolve_gh_binary() else {
-        return 0;
-    };
+    let gh = resolve_gh_binary()?;
     let out = std::process::Command::new(&gh)
         .current_dir(project_root)
         .args([
@@ -65788,19 +65788,13 @@ fn count_completed_specs_with_open_prs(
             "--json",
             "title,body",
         ])
-        .output();
-    let Ok(out) = out else {
-        return 0;
-    };
+        .output()
+        .ok()?;
     if !out.status.success() {
-        return 0;
+        return None;
     }
-    let Ok(rows) = serde_json::from_slice::<serde_json::Value>(&out.stdout) else {
-        return 0;
-    };
-    let Some(items) = rows.as_array() else {
-        return 0;
-    };
+    let rows = serde_json::from_slice::<serde_json::Value>(&out.stdout).ok()?;
+    let items = rows.as_array()?;
     let haystack: String = items
         .iter()
         .map(|item| {
@@ -65811,11 +65805,29 @@ fn count_completed_specs_with_open_prs(
             )
         })
         .collect::<Vec<_>>()
-        .join("\n")
-        .to_lowercase();
+        .join("\n");
+    Some(count_ids_mentioned(&haystack, candidate_ids))
+}
+
+/// Counts candidate spec ids that appear in `haystack` as WHOLE ids
+/// (case-insensitive): `BUG-1` must not match inside `BUG-10` or `XBUG-1`.
+// trace:TASK-1446 | ai:claude
+fn count_ids_mentioned(haystack: &str, candidate_ids: &[String]) -> usize {
+    let hay = haystack.to_ascii_lowercase();
+    let is_id_char = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_';
     candidate_ids
         .iter()
-        .filter(|id| haystack.contains(&id.to_lowercase()))
+        .filter(|id| {
+            let needle = id.to_ascii_lowercase();
+            if needle.is_empty() {
+                return false;
+            }
+            hay.match_indices(&needle).any(|(at, m)| {
+                let before = hay[..at].chars().next_back();
+                let after = hay[at + m.len()..].chars().next();
+                !before.is_some_and(is_id_char) && !after.is_some_and(is_id_char)
+            })
+        })
         .count()
 }
 
@@ -66135,8 +66147,8 @@ fn handle_db_reconcile_status(
         })
         .map(|(spec_id, _)| spec_id.clone())
         .collect();
-    let completed_with_open_pr_count = if completed_candidate_ids.is_empty() {
-        0
+    let completed_with_open_pr_count: Option<usize> = if completed_candidate_ids.is_empty() {
+        Some(0)
     } else {
         // TASK-1446: ONE `gh pr list` call for every open PR, not one
         // `specs_with_open_prs`-style search per candidate — `specs_with_open_prs`
@@ -66153,8 +66165,10 @@ fn handle_db_reconcile_status(
         "↔".cyan(),
         pre_done_merged_count,
         if pre_done_merged_count == 1 { "" } else { "s" },
-        completed_with_open_pr_count,
-        if completed_with_open_pr_count == 1 {
+        completed_with_open_pr_count
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "unknown (forge unavailable)".to_string()),
+        if completed_with_open_pr_count == Some(1) {
             ""
         } else {
             "s"
