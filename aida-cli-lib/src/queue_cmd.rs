@@ -12744,6 +12744,149 @@ pub(crate) fn build_focus_display_subtree(
     Some(display)
 }
 
+// BUG-1574: a headless drain rebased + force-pushed a topic branch that was
+// NEITHER a member of its declared batch NOR eligible for unattended work at
+// all (tagged keyboard-only), clobbering an active rework lane's commit. The
+// stack-aware promotion below is the concrete, reachable place this happens —
+// it rebases + force-pushes a STACKED CHILD's own PR branch on behalf of the
+// (unrelated) drain that just merged the child's parent, with no check that
+// the child is even part of that drain's work. Refuse before touching the
+// branch when either:
+//   (a) the spec's `execution_mode` marks it supervised/keyboard-only
+//       (Guided/Operator/Decide — the same set `guarded_execution_mode_for_drain`
+//       fences off from headless auto-progress elsewhere), or
+//   (b) a batch drain is CURRENTLY active for this project (per
+//       `.aida/drain-state.json`) and the spec is not one of its declared
+//       members — reaching outside a batch's own member set is exactly the
+//       incident this guards against.
+// Returns the refusal reason, or `None` when the promotion may proceed.
+// trace:BUG-1574 | ai:claude
+fn stacked_promotion_headless_refusal(
+    storage: &Storage,
+    project_root: &Path,
+    spec: &str,
+) -> Option<String> {
+    if let Ok(store) = storage.load() {
+        if let Some(req) = store.get_requirement_by_spec_id(spec) {
+            if let Some(mode) = req.execution_mode {
+                if matches!(
+                    mode,
+                    aida_core::ExecutionMode::Guided
+                        | aida_core::ExecutionMode::Operator
+                        | aida_core::ExecutionMode::Decide
+                ) {
+                    return Some(format!(
+                        "{spec} is keyboard-only (execution_mode: {mode}) — refusing an \
+                         unattended rebase/force-push; resolve with a guided/interactive \
+                         session instead"
+                    ));
+                }
+            }
+        }
+    }
+    if let Some(state) = drain_state::DrainState::read(project_root) {
+        if let Some(batch) = &state.batch {
+            if !state.members.iter().any(|m| m.spec == spec) {
+                return Some(format!(
+                    "{spec} is not a member of the active batch `{batch}` — refusing to \
+                     rebase/force-push a branch outside its declared scope"
+                ));
+            }
+        }
+    }
+    None
+}
+
+// trace:BUG-1574 | ai:claude
+#[cfg(test)]
+mod bug_1574_stacked_promotion_guard_tests {
+    use super::*;
+    use aida_core::{ExecutionMode, Requirement, RequirementsStore};
+
+    fn storage_with(spec: &str, mode: Option<ExecutionMode>) -> (tempfile::TempDir, Storage) {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::new(dir.path().join("requirements.yaml"));
+        let mut store = RequirementsStore::new();
+        let mut req = Requirement::new(format!("{spec} title"), "body".into());
+        req.spec_id = Some(spec.to_string());
+        req.execution_mode = mode;
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+        (dir, storage)
+    }
+
+    // ── keyboard-only execution_mode refusals ───────────────────────────────
+
+    #[test]
+    fn refuses_guided_spec() {
+        let (dir, storage) = storage_with("TASK-1274", Some(ExecutionMode::Guided));
+        let reason = stacked_promotion_headless_refusal(&storage, dir.path(), "TASK-1274");
+        assert!(reason.is_some(), "guided spec must be refused");
+        assert!(reason.unwrap().contains("keyboard-only"));
+    }
+
+    #[test]
+    fn refuses_operator_spec() {
+        let (dir, storage) = storage_with("TASK-1274", Some(ExecutionMode::Operator));
+        assert!(stacked_promotion_headless_refusal(&storage, dir.path(), "TASK-1274").is_some());
+    }
+
+    #[test]
+    fn refuses_decide_spec() {
+        let (dir, storage) = storage_with("TASK-1274", Some(ExecutionMode::Decide));
+        assert!(stacked_promotion_headless_refusal(&storage, dir.path(), "TASK-1274").is_some());
+    }
+
+    // ── batch-membership refusals ────────────────────────────────────────────
+
+    #[test]
+    fn refuses_spec_outside_active_batch() {
+        let (dir, storage) = storage_with("TASK-1274", Some(ExecutionMode::Drain));
+        drain_state::DrainState::new_batch(
+            "night-0920",
+            &["STORY-1".to_string(), "STORY-2".to_string()],
+        )
+        .write(dir.path())
+        .unwrap();
+        let reason = stacked_promotion_headless_refusal(&storage, dir.path(), "TASK-1274");
+        assert!(reason.is_some(), "non-member spec must be refused");
+        assert!(reason.unwrap().contains("night-0920"));
+    }
+
+    // ── control: the allowed path ────────────────────────────────────────────
+
+    #[test]
+    fn allows_drain_mode_member_of_active_batch() {
+        let (dir, storage) = storage_with("TASK-1274", Some(ExecutionMode::Drain));
+        drain_state::DrainState::new_batch(
+            "night-0920",
+            &["TASK-1274".to_string(), "STORY-2".to_string()],
+        )
+        .write(dir.path())
+        .unwrap();
+        assert!(stacked_promotion_headless_refusal(&storage, dir.path(), "TASK-1274").is_none());
+    }
+
+    #[test]
+    fn allows_no_execution_mode_when_no_batch_is_active() {
+        // No drain-state.json at all (no batch currently running) and no
+        // execution_mode set — nothing to refuse on.
+        let (dir, storage) = storage_with("TASK-1274", None);
+        assert!(stacked_promotion_headless_refusal(&storage, dir.path(), "TASK-1274").is_none());
+    }
+
+    #[test]
+    fn allows_unlisted_spec_when_no_batch_is_active() {
+        // A single-spec / next-n drain writes drain-state.json with
+        // `batch: None` — never refuse on membership in that case.
+        let (dir, storage) = storage_with("TASK-1274", Some(ExecutionMode::Drain));
+        drain_state::DrainState::new_single("TASK-1274", "run-uuid", false)
+            .write(dir.path())
+            .unwrap();
+        assert!(stacked_promotion_headless_refusal(&storage, dir.path(), "TASK-1274").is_none());
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_queue_integrate(
     storage: &Storage,
@@ -13052,6 +13195,33 @@ pub(crate) fn handle_queue_integrate(
                     .map(|e| e.parent_branch_sha.clone());
                 let parent_gone = remote_branch_gone(&project_root, &d.blocked_on_branch);
                 let pr_num = pr_numbers.get(&d.id).and_then(|p| *p);
+
+                // BUG-1574: refuse the rebase/force-push before it happens —
+                // not after — when the child is keyboard-only or outside the
+                // currently active batch's declared member set.
+                // trace:BUG-1574 | ai:claude
+                if let Some(reason) =
+                    stacked_promotion_headless_refusal(storage, &project_root, &d.id)
+                {
+                    println!("  {} {} — {}", "⏸".yellow(), d.id, reason);
+                    if !dry_run {
+                        if let Err(e) = shelve_spec_on_failure(
+                            &project_root,
+                            &d.id,
+                            "integrate",
+                            0,
+                            "stacked-rebase-refused",
+                            &reason,
+                            "resolve by hand: `aida pr rebase <PR> --onto-parent <SHA>` from an \
+                             interactive/guided session, or add the spec to the active batch, \
+                             then re-run `aida queue integrate --strategy stacked`",
+                        ) {
+                            eprintln!("  {} could not park {}: {e}", "Note:".dimmed(), d.id);
+                        }
+                    }
+                    still_deferred += 1;
+                    continue;
+                }
                 match integrate::classify_stacked_promotion(
                     recorded_sha.as_deref(),
                     parent_gone,

@@ -1150,6 +1150,39 @@ pub(crate) struct HumanFinishOptions {
     pub(crate) no_trailer_check: bool,
 }
 
+/// BUG-1574: the `--force-with-lease` flag for the finish ceremony's push —
+/// anchored to `remote_tip` (the live remote sha read right before pushing)
+/// when known, so the push can never clobber a commit it did not see. A
+/// `None` tip means the branch does not exist on the remote yet (first push),
+/// which has nothing to clobber, so the bare flag is safe there.
+// trace:BUG-1574 | ai:claude
+fn force_lease_flag(branch: &str, remote_tip: Option<&str>) -> String {
+    match remote_tip {
+        Some(sha) => format!("--force-with-lease={branch}:{sha}"),
+        None => "--force-with-lease".to_string(),
+    }
+}
+
+// trace:BUG-1574 | ai:claude
+#[cfg(test)]
+mod bug_1574_force_lease_flag_tests {
+    use super::*;
+
+    #[test]
+    fn anchors_to_the_live_remote_tip_when_known() {
+        let flag = force_lease_flag("task-274", Some("deadbeef"));
+        assert_eq!(flag, "--force-with-lease=task-274:deadbeef");
+    }
+
+    #[test]
+    fn falls_back_to_bare_flag_when_remote_has_no_ref_yet() {
+        // Control: nothing to clobber on a first push, so an anchor would be
+        // meaningless — the bare flag is the correct, safe choice here.
+        let flag = force_lease_flag("task-274", None);
+        assert_eq!(flag, "--force-with-lease");
+    }
+}
+
 /// STORY-720: the one-shot HUMAN-implementer finish — commit → rebase → push
 /// → PR → CI → squash-merge → pull → worktree-cleanup.
 ///
@@ -1316,15 +1349,33 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     );
 
     // ---- Step 3: push (force-with-lease — the rebase may have rewritten history). ----
+    // BUG-1574: anchor the lease to the LIVE remote tip read right before
+    // pushing — not a possibly-stale local remote-tracking ref — so this can
+    // never silently clobber a commit that landed on `branch` since our last
+    // fetch. Mirrors the anchored-lease shape `aida pr rebase`'s BUG-640
+    // guard already uses. No remote ref yet (first push of a new branch) has
+    // nothing to clobber, so the bare flag is safe in that case.
+    // trace:BUG-1574 | ai:claude
     eprintln!("  step 3: pushing {} to origin", branch);
+    let remote_branch_ref = format!("refs/heads/{branch}");
+    let remote_tip = std::process::Command::new("git")
+        .current_dir(&project_root)
+        .args(["ls-remote", "origin", &remote_branch_ref])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| {
+            pr_rebase::parse_ls_remote_tip(&String::from_utf8_lossy(&o.stdout), &remote_branch_ref)
+        });
+    let force_flag = force_lease_flag(&branch, remote_tip.as_deref());
     let push = std::process::Command::new("git")
         .current_dir(&project_root)
-        .args(["push", "--force-with-lease", "-u", "origin", &branch])
+        .args(["push", &force_flag, "-u", "origin", &branch])
         .status()
         .context("could not invoke `git push`")?;
     if !push.success() {
         anyhow::bail!(
-            "`git push --force-with-lease -u origin {branch}` failed — investigate before retrying"
+            "`git push {force_flag} -u origin {branch}` failed — investigate before retrying"
         );
     }
     eprintln!(
