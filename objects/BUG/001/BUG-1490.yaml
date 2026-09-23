@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T20:54:30.012636986Z
-modified_at: 2026-09-23T06:40:02.704696179Z
+modified_at: 2026-09-23T06:40:09.791265489Z
 req_type: Bug
 tags:
 - awaiting review verdicts merge-safety prin-5 from:review-pr-2030
@@ -82,4 +82,10 @@ comments:
   created_at: 2026-09-20T20:55:46.584253870Z
   modified_at: 2026-09-20T20:55:46.584253870Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0ccfe-403f-7991-9bb6-6c2d55a6f569
+  author: joe
+  content: Claude implementer dispatched 2026-09-22 23:40 -> branch claude/bug-1490, no PR (overnight burn-down)
+  created_at: 2026-09-23T06:40:09.791265489Z
+  modified_at: 2026-09-23T06:40:09.791265489Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
