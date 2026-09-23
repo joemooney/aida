@@ -1,0 +1,21 @@
+id: 01a0cd51-33f5-7681-9b53-b530ddb522b4
+spec_id: BUG-1591
+agreed_id: BUG-1591
+title: 'linkage_branch_crossing_surfaces_all_matching_branches is flaky: it picked bug-1420-round2 over the spec''s local branch once, then passed 12 of 12 runs'
+description: |-
+  Seen 2026-09-23 01:05 in a local full-workspace run on the batch-4 integration tree (a heavily loaded host). The assertion at in_flight_linkage_integration_tests.rs:584 failed: left Some("bug-1420-round2"), right Some("bug-1420-work"). It reproduced once more immediately, then passed 6 of 6 on main's tree and 6 of 6 on the same batch-4 tree. The test creates both commits within the same second, so any resolver ordering keyed on commit time (or a git-log tie-break) is nondeterministic. BUG-1528's branch-selection preference for 'the spec's own local branch' should not depend on timestamp order.
+
+  ## Acceptance
+  1. Branch selection in collect_git_linkage_opts is deterministic when referencing commits share a timestamp (prefer a local branch whose name contains the spec id, then a stable tie-break).
+  2. The test sets explicit, distinct GIT_COMMITTER_DATE values, or loops 50 times, so a tie cannot mask the ordering.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T08:10:46.133697492Z
+modified_at: 2026-09-23T08:10:46.133697492Z
+req_type: Bug
+tags:
+- drain-safe
+- flaky-test
+- parent:BUG-1528
