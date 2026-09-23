@@ -5246,6 +5246,7 @@ fn run() -> Result<()> {
                     UsageCommand::Show {
                         spec,
                         group_by,
+                        cost,
                         json,
                         toon,
                     } => {
@@ -5253,6 +5254,7 @@ fn run() -> Result<()> {
                             &find_project_root()?,
                             spec,
                             group_by,
+                            *cost,
                             *json || output_format_is_json(),
                             *toon,
                         )?;

@@ -1,0 +1,50 @@
+schema_version = 1
+table_version = "2026-09-22.1"
+published_at = "2026-09-22T00:00:00Z"
+currency = "USD"
+unit_tokens = 1000000
+source_url = "https://github.com/BerriAI/litellm/blob/5b287f66d7847e90ba8b6ad4071fe33217a152da/model_prices_and_context_window.json"
+source_revision = "5b287f66d7847e90ba8b6ad4071fe33217a152da"
+source_retrieved_at = "2026-09-22T00:00:00Z"
+license = "MIT; adapted subset. Verify upstream and vendor terms before updates."
+
+# Rates are decimal USD per one million tokens. Missing classes are deliberately
+# unpriced; absence never means zero. Intervals are [effective_from,effective_to).
+
+[[rates]]
+id = "anthropic-claude-sonnet-4-20250514-2025-05-14"
+provider = "claude"
+model = "claude-sonnet-4-20250514"
+effective_from = "2025-05-14T00:00:00Z"
+currency = "USD"
+source_url = "https://github.com/BerriAI/litellm/blob/5b287f66d7847e90ba8b6ad4071fe33217a152da/model_prices_and_context_window.json"
+source_revision = "5b287f66d7847e90ba8b6ad4071fe33217a152da"
+source_retrieved_at = "2026-09-22T00:00:00Z"
+input_uncached = "3.000000"
+input_cache_write = "3.750000"
+input_cache_read = "0.300000"
+output = "15.000000"
+
+[[rates]]
+id = "anthropic-claude-opus-4-1-20250805-2025-08-05"
+provider = "claude"
+model = "claude-opus-4-1-20250805"
+effective_from = "2025-08-05T00:00:00Z"
+currency = "USD"
+source_url = "https://github.com/BerriAI/litellm/blob/5b287f66d7847e90ba8b6ad4071fe33217a152da/model_prices_and_context_window.json"
+source_revision = "5b287f66d7847e90ba8b6ad4071fe33217a152da"
+source_retrieved_at = "2026-09-22T00:00:00Z"
+input_uncached = "15.000000"
+input_cache_write = "18.750000"
+input_cache_read = "1.500000"
+output = "75.000000"
+
+[[aliases]]
+id = "claude-sonnet-4-alias-2025-05-14"
+provider = "claude"
+alias = "claude-sonnet-4"
+canonical_model = "claude-sonnet-4-20250514"
+effective_from = "2025-05-14T00:00:00Z"
+source_url = "https://github.com/BerriAI/litellm/blob/5b287f66d7847e90ba8b6ad4071fe33217a152da/model_prices_and_context_window.json"
+source_revision = "5b287f66d7847e90ba8b6ad4071fe33217a152da"
+source_retrieved_at = "2026-09-22T00:00:00Z"

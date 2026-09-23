@@ -1131,6 +1131,7 @@ pub(crate) fn handle_git_backend_command(
                     UsageCommand::Show {
                         spec,
                         group_by,
+                        cost,
                         json,
                         toon,
                     } => {
@@ -1139,6 +1140,7 @@ pub(crate) fn handle_git_backend_command(
                             root,
                             spec,
                             group_by,
+                            *cost,
                             *json || output_format_is_json(),
                             *toon,
                         );

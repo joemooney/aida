@@ -16,6 +16,298 @@ use std::process::Command;
 const SCHEMA_VERSION: i64 = 1;
 const MAX_SOURCE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
+const RATE_TABLE_TOML: &str = include_str!("../../data/token-rates/v1.toml");
+
+// trace:TASK-1434 | ai:codex
+#[derive(Debug, Clone, Deserialize)]
+struct RateTable {
+    schema_version: u32,
+    table_version: String,
+    published_at: String,
+    currency: String,
+    unit_tokens: u64,
+    source_url: String,
+    source_revision: String,
+    source_retrieved_at: String,
+    license: String,
+    rates: Vec<RateEntry>,
+    #[serde(default)]
+    aliases: Vec<RateAlias>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RateEntry {
+    id: String,
+    provider: String,
+    model: String,
+    effective_from: String,
+    effective_to: Option<String>,
+    currency: String,
+    source_url: String,
+    source_revision: String,
+    source_retrieved_at: String,
+    input_uncached: Option<String>,
+    input_cache_write: Option<String>,
+    input_cache_read: Option<String>,
+    output: Option<String>,
+    output_reasoning: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RateAlias {
+    id: String,
+    provider: String,
+    alias: String,
+    canonical_model: String,
+    effective_from: String,
+    effective_to: Option<String>,
+    source_url: String,
+    source_revision: String,
+    source_retrieved_at: String,
+}
+
+#[derive(Debug, Clone)]
+struct MatchedRate<'a> {
+    entry: &'a RateEntry,
+    resolved_model: &'a str,
+    alias_id: Option<&'a str>,
+}
+
+fn parse_rate_pico_per_token(value: &str) -> Result<i128> {
+    let value = value.trim();
+    if value.starts_with('-') || value.starts_with('+') || value.is_empty() {
+        bail!("rate must be a non-negative decimal");
+    }
+    let mut pieces = value.split('.');
+    let whole = pieces.next().unwrap_or("");
+    let fraction = pieces.next().unwrap_or("");
+    if pieces.next().is_some()
+        || whole.is_empty()
+        || !whole.bytes().all(|b| b.is_ascii_digit())
+        || !fraction.bytes().all(|b| b.is_ascii_digit())
+        || fraction.len() > 6
+    {
+        bail!("rate must have at most six decimal places in USD per million tokens");
+    }
+    let whole: i128 = whole.parse()?;
+    let fraction: i128 = if fraction.is_empty() {
+        0
+    } else {
+        format!("{fraction:0<6}").parse()?
+    };
+    whole
+        .checked_mul(1_000_000)
+        .and_then(|n| n.checked_add(fraction))
+        .ok_or_else(|| anyhow::anyhow!("rate overflows fixed-point representation"))
+}
+
+fn parse_rate_time(value: &str) -> Result<DateTime<Utc>> {
+    Ok(DateTime::parse_from_rfc3339(value)?.with_timezone(&Utc))
+}
+
+fn active_interval(at: DateTime<Utc>, from: &str, to: Option<&str>) -> Result<bool> {
+    let from = parse_rate_time(from)?;
+    let to = to.map(parse_rate_time).transpose()?;
+    Ok(at >= from && to.is_none_or(|end| at < end))
+}
+
+fn validate_rate_table(table: &RateTable) -> Result<()> {
+    if table.schema_version != 1 || table.currency != "USD" || table.unit_tokens != 1_000_000 {
+        bail!("unsupported rate table schema, currency, or token unit");
+    }
+    if table.rates.len() > 1_000 || table.aliases.len() > 1_000 {
+        bail!("rate table exceeds bounded entry count");
+    }
+    let mut ids = BTreeSet::new();
+    for rate in &table.rates {
+        if !ids.insert(rate.id.as_str())
+            || rate.provider.len() > 128
+            || rate.model.len() > 256
+            || rate.currency != table.currency
+        {
+            bail!("duplicate or oversized rate identity");
+        }
+        if !rate.source_url.starts_with("https://")
+            || rate.source_revision.trim().is_empty()
+            || parse_rate_time(&rate.source_retrieved_at).is_err()
+        {
+            bail!("rate entry lacks valid provenance");
+        }
+        parse_rate_time(&rate.effective_from)?;
+        if let Some(to) = rate.effective_to.as_deref() {
+            if parse_rate_time(to)? <= parse_rate_time(&rate.effective_from)? {
+                bail!("invalid effective interval for {}", rate.id);
+            }
+        }
+        for value in [
+            &rate.input_uncached,
+            &rate.input_cache_write,
+            &rate.input_cache_read,
+            &rate.output,
+            &rate.output_reasoning,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            parse_rate_pico_per_token(value)?;
+        }
+    }
+    if !table.source_url.starts_with("https://") || table.license.trim().is_empty() {
+        bail!("rate table requires HTTPS provenance and license metadata");
+    }
+    for alias in &table.aliases {
+        if !ids.insert(alias.id.as_str()) || alias.alias.len() > 256 {
+            bail!("duplicate or oversized alias identity");
+        }
+        if !alias.source_url.starts_with("https://")
+            || alias.source_revision.trim().is_empty()
+            || parse_rate_time(&alias.source_retrieved_at).is_err()
+        {
+            bail!("alias entry lacks valid provenance");
+        }
+        parse_rate_time(&alias.effective_from)?;
+        if let Some(to) = alias.effective_to.as_deref() {
+            if parse_rate_time(to)? <= parse_rate_time(&alias.effective_from)? {
+                bail!("invalid alias interval for {}", alias.id);
+            }
+        }
+    }
+    for (index, left) in table.rates.iter().enumerate() {
+        for right in table.rates.iter().skip(index + 1) {
+            if left.provider == right.provider
+                && left.model == right.model
+                && intervals_overlap(
+                    &left.effective_from,
+                    left.effective_to.as_deref(),
+                    &right.effective_from,
+                    right.effective_to.as_deref(),
+                )?
+            {
+                bail!(
+                    "overlapping rate intervals for {}/{}",
+                    left.provider,
+                    left.model
+                );
+            }
+        }
+    }
+    for (index, left) in table.aliases.iter().enumerate() {
+        for right in table.aliases.iter().skip(index + 1) {
+            if left.provider == right.provider
+                && left.alias == right.alias
+                && intervals_overlap(
+                    &left.effective_from,
+                    left.effective_to.as_deref(),
+                    &right.effective_from,
+                    right.effective_to.as_deref(),
+                )?
+            {
+                bail!(
+                    "overlapping alias intervals for {}/{}",
+                    left.provider,
+                    left.alias
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+fn intervals_overlap(
+    left_from: &str,
+    left_to: Option<&str>,
+    right_from: &str,
+    right_to: Option<&str>,
+) -> Result<bool> {
+    let left_from = parse_rate_time(left_from)?;
+    let right_from = parse_rate_time(right_from)?;
+    let left_to = left_to.map(parse_rate_time).transpose()?;
+    let right_to = right_to.map(parse_rate_time).transpose()?;
+    Ok(left_to.is_none_or(|end| right_from < end) && right_to.is_none_or(|end| left_from < end))
+}
+
+fn load_rate_table() -> Result<RateTable> {
+    let table: RateTable = toml::from_str(RATE_TABLE_TOML)?;
+    validate_rate_table(&table)?;
+    Ok(table)
+}
+
+fn match_rate<'a>(
+    table: &'a RateTable,
+    provider: &str,
+    raw_model: &str,
+    at: DateTime<Utc>,
+) -> Result<MatchedRate<'a>, String> {
+    let direct_known = table
+        .rates
+        .iter()
+        .filter(|r| r.provider == provider && r.model == raw_model)
+        .collect::<Vec<_>>();
+    let direct: Vec<_> = direct_known
+        .iter()
+        .copied()
+        .filter(|r| {
+            active_interval(at, &r.effective_from, r.effective_to.as_deref()).unwrap_or(false)
+        })
+        .collect();
+    if direct.len() == 1 {
+        return Ok(MatchedRate {
+            entry: direct[0],
+            resolved_model: direct[0].model.as_str(),
+            alias_id: None,
+        });
+    }
+    if direct.len() > 1 {
+        return Err("ambiguous_rate_interval".into());
+    }
+    if !direct_known.is_empty() {
+        return Err("rate_out_of_range".into());
+    }
+    let alias_known = table
+        .aliases
+        .iter()
+        .filter(|a| a.provider == provider && a.alias == raw_model)
+        .collect::<Vec<_>>();
+    let aliases: Vec<_> = alias_known
+        .iter()
+        .copied()
+        .filter(|a| {
+            active_interval(at, &a.effective_from, a.effective_to.as_deref()).unwrap_or(false)
+        })
+        .collect();
+    if aliases.len() > 1 {
+        return Err("ambiguous_alias".into());
+    }
+    let Some(alias) = aliases.first() else {
+        return Err(if alias_known.is_empty() {
+            "unknown_model"
+        } else {
+            "alias_out_of_range"
+        }
+        .into());
+    };
+    let resolved: Vec<_> = table
+        .rates
+        .iter()
+        .filter(|r| r.provider == provider && r.model == alias.canonical_model)
+        .filter(|r| {
+            active_interval(at, &r.effective_from, r.effective_to.as_deref()).unwrap_or(false)
+        })
+        .collect();
+    if resolved.len() != 1 {
+        return Err(if resolved.is_empty() {
+            "alias_target_out_of_range"
+        } else {
+            "ambiguous_rate_interval"
+        }
+        .into());
+    }
+    Ok(MatchedRate {
+        entry: resolved[0],
+        resolved_model: resolved[0].model.as_str(),
+        alias_id: Some(alias.id.as_str()),
+    })
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 struct Tokens {
@@ -1041,6 +1333,7 @@ impl TokenTotal {
 struct Group {
     phase: Option<String>,
     vendor: Option<String>,
+    model: Option<String>,
     round: Option<u32>,
     records: u64,
     input_uncached: TokenTotal,
@@ -1048,6 +1341,39 @@ struct Group {
     input_cache_read: TokenTotal,
     output: TokenTotal,
     output_reasoning: TokenTotal,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cost: Option<GroupCost>,
+}
+
+// Cost is a derived estimate. Integer pico-USD prevents floating-point drift;
+// the fixed six-decimal USD string is presentation only.
+// trace:TASK-1434 | ai:codex
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+struct GroupCost {
+    priced_measured_tokens: u64,
+    unpriced_measured_tokens: u64,
+    cost_pico_usd: i128,
+    cost_usd: String,
+    unpriced_reasons: BTreeMap<String, u64>,
+    matched_rate_ids: BTreeSet<String>,
+    resolved_models: BTreeSet<String>,
+    alias_ids: BTreeSet<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+struct CostSummary {
+    semantics: &'static str,
+    currency: String,
+    rate_table_version: String,
+    rate_table_published_at: String,
+    source_url: String,
+    source_revision: String,
+    source_retrieved_at: String,
+    priced_measured_tokens: u64,
+    unpriced_measured_tokens: u64,
+    cost_pico_usd: i128,
+    cost_usd: String,
+    unpriced_reasons: BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -1062,11 +1388,14 @@ struct SpecCoverage {
 struct QueryPayload {
     schema_version: i64,
     spec_id: String,
+    grouped_by_model: bool,
     groups: Vec<Group>,
     spec_coverage: SpecCoverage,
     attribution_reasons: BTreeMap<String, BTreeMap<String, u64>>,
     ledger_global_collector_diagnostics: BTreeMap<String, u64>,
     pricing: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cost: Option<CostSummary>,
     legacy_drain_summary: &'static str,
 }
 
@@ -1091,13 +1420,213 @@ fn reason_counts(conn: &Connection, spec: &str) -> Result<BTreeMap<String, BTree
     Ok(out)
 }
 
-fn query_payload(conn: &Connection, spec: &str, group_by: &str) -> Result<QueryPayload> {
+fn format_usd_6(pico: i128) -> String {
+    // One micro-dollar is 1,000,000 pico-dollars. Round half-even only at the
+    // presentation boundary; aggregation always uses exact pico-dollar ints.
+    let divisor = 1_000_000i128;
+    let quotient = pico / divisor;
+    let remainder = pico % divisor;
+    let half = divisor / 2;
+    let micros = quotient
+        + if remainder > half || (remainder == half && quotient % 2 != 0) {
+            1
+        } else {
+            0
+        };
+    format!("{}.{:06}", micros / 1_000_000, micros % 1_000_000)
+}
+
+fn add_reason(cost: &mut GroupCost, reason: &str, tokens: u64) -> Result<()> {
+    cost.unpriced_measured_tokens = cost
+        .unpriced_measured_tokens
+        .checked_add(tokens)
+        .ok_or_else(|| anyhow::anyhow!("token arithmetic overflow"))?;
+    let count = cost.unpriced_reasons.entry(reason.to_string()).or_default();
+    *count = count
+        .checked_add(tokens)
+        .ok_or_else(|| anyhow::anyhow!("token arithmetic overflow"))?;
+    Ok(())
+}
+
+fn price_token_class(
+    cost: &mut GroupCost,
+    tokens: Option<u64>,
+    rate: Option<&String>,
+    class: &str,
+) -> Result<()> {
+    let Some(tokens) = tokens else {
+        return Ok(());
+    };
+    let Some(rate) = rate else {
+        add_reason(cost, &format!("missing_rate:{class}"), tokens)?;
+        return Ok(());
+    };
+    let per_token = parse_rate_pico_per_token(rate)?;
+    let line = per_token
+        .checked_mul(i128::from(tokens))
+        .ok_or_else(|| anyhow::anyhow!("cost arithmetic overflow"))?;
+    cost.cost_pico_usd = cost
+        .cost_pico_usd
+        .checked_add(line)
+        .ok_or_else(|| anyhow::anyhow!("cost arithmetic overflow"))?;
+    cost.priced_measured_tokens = cost
+        .priced_measured_tokens
+        .checked_add(tokens)
+        .ok_or_else(|| anyhow::anyhow!("token arithmetic overflow"))?;
+    Ok(())
+}
+
+fn apply_pricing(
+    conn: &Connection,
+    spec: &str,
+    dims: &BTreeSet<&str>,
+    payload: &mut QueryPayload,
+) -> Result<()> {
+    let table = load_rate_table()?;
+    let mut stmt = conn.prepare("SELECT a.phase,u.vendor,u.raw_model,a.round,u.occurred_at,u.input_uncached,u.input_cache_write,u.input_cache_read,u.output,u.output_reasoning FROM usage_record u JOIN attribution a USING(record_id) WHERE upper(a.spec_id)=upper(?1) AND u.collection_status='measured' ORDER BY u.record_id")?;
+    let rows = stmt.query_map([spec], |r| {
+        Ok((
+            r.get::<_, Option<String>>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, Option<String>>(2)?,
+            r.get::<_, Option<u32>>(3)?,
+            r.get::<_, Option<String>>(4)?,
+            [r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?],
+        ))
+    })?;
+    for row in rows {
+        let (phase, vendor, model, round, occurred_at, tokens): (
+            Option<String>,
+            String,
+            Option<String>,
+            Option<u32>,
+            Option<String>,
+            [Option<u64>; 5],
+        ) = row?;
+        let group = payload
+            .groups
+            .iter_mut()
+            .find(|g| {
+                (!dims.contains("phase") || g.phase == phase)
+                    && (!dims.contains("vendor") || g.vendor.as_deref() == Some(vendor.as_str()))
+                    && (!dims.contains("model") || g.model == model)
+                    && (!dims.contains("round") || g.round == round)
+            })
+            .ok_or_else(|| anyhow::anyhow!("priced row did not map to a usage group"))?;
+        let cost = group.cost.get_or_insert_with(GroupCost::default);
+        let known_total = tokens
+            .iter()
+            .flatten()
+            .try_fold(0u64, |sum, value| sum.checked_add(*value))
+            .ok_or_else(|| anyhow::anyhow!("token arithmetic overflow"))?;
+        let Some(model) = model.as_deref() else {
+            add_reason(cost, "missing_model", known_total)?;
+            continue;
+        };
+        let Some(occurred_at) = occurred_at.as_deref() else {
+            add_reason(cost, "missing_timestamp", known_total)?;
+            continue;
+        };
+        let at = match parse_rate_time(occurred_at) {
+            Ok(at) => at,
+            Err(_) => {
+                add_reason(cost, "invalid_timestamp", known_total)?;
+                continue;
+            }
+        };
+        let matched = match match_rate(&table, &vendor, model, at) {
+            Ok(matched) => matched,
+            Err(reason) => {
+                add_reason(cost, &reason, known_total)?;
+                continue;
+            }
+        };
+        cost.matched_rate_ids.insert(matched.entry.id.clone());
+        cost.resolved_models
+            .insert(matched.resolved_model.to_string());
+        if let Some(alias) = matched.alias_id {
+            cost.alias_ids.insert(alias.to_string());
+        }
+        price_token_class(
+            cost,
+            tokens[0],
+            matched.entry.input_uncached.as_ref(),
+            "input_uncached",
+        )?;
+        price_token_class(
+            cost,
+            tokens[1],
+            matched.entry.input_cache_write.as_ref(),
+            "input_cache_write",
+        )?;
+        price_token_class(
+            cost,
+            tokens[2],
+            matched.entry.input_cache_read.as_ref(),
+            "input_cache_read",
+        )?;
+        price_token_class(cost, tokens[3], matched.entry.output.as_ref(), "output")?;
+        price_token_class(
+            cost,
+            tokens[4],
+            matched.entry.output_reasoning.as_ref(),
+            "output_reasoning",
+        )?;
+    }
+    let mut summary = CostSummary {
+        semantics: "local_estimate_not_billing",
+        currency: table.currency.clone(),
+        rate_table_version: table.table_version.clone(),
+        rate_table_published_at: table.published_at.clone(),
+        source_url: table.source_url.clone(),
+        source_revision: table.source_revision.clone(),
+        source_retrieved_at: table.source_retrieved_at.clone(),
+        priced_measured_tokens: 0,
+        unpriced_measured_tokens: 0,
+        cost_pico_usd: 0,
+        cost_usd: String::new(),
+        unpriced_reasons: BTreeMap::new(),
+    };
+    for group in &mut payload.groups {
+        if let Some(cost) = &mut group.cost {
+            cost.cost_usd = format_usd_6(cost.cost_pico_usd);
+            summary.priced_measured_tokens = summary
+                .priced_measured_tokens
+                .checked_add(cost.priced_measured_tokens)
+                .ok_or_else(|| anyhow::anyhow!("token arithmetic overflow"))?;
+            summary.unpriced_measured_tokens = summary
+                .unpriced_measured_tokens
+                .checked_add(cost.unpriced_measured_tokens)
+                .ok_or_else(|| anyhow::anyhow!("token arithmetic overflow"))?;
+            summary.cost_pico_usd = summary
+                .cost_pico_usd
+                .checked_add(cost.cost_pico_usd)
+                .ok_or_else(|| anyhow::anyhow!("cost arithmetic overflow"))?;
+            for (reason, count) in &cost.unpriced_reasons {
+                let total = summary.unpriced_reasons.entry(reason.clone()).or_default();
+                *total = total
+                    .checked_add(*count)
+                    .ok_or_else(|| anyhow::anyhow!("token arithmetic overflow"))?;
+            }
+        }
+    }
+    summary.cost_usd = format_usd_6(summary.cost_pico_usd);
+    payload.cost = Some(summary);
+    Ok(())
+}
+
+fn query_payload(
+    conn: &Connection,
+    spec: &str,
+    group_by: &str,
+    with_cost: bool,
+) -> Result<QueryPayload> {
     let dims: BTreeSet<_> = group_by.split(',').map(str::trim).collect();
     if dims
         .iter()
-        .any(|d| !matches!(*d, "phase" | "vendor" | "round"))
+        .any(|d| !matches!(*d, "phase" | "vendor" | "model" | "round"))
     {
-        bail!("--group-by accepts phase,vendor,round");
+        bail!("--group-by accepts phase,vendor,model,round");
     }
     let phase_expr = if dims.contains("phase") {
         "a.phase"
@@ -1109,18 +1638,23 @@ fn query_payload(conn: &Connection, spec: &str, group_by: &str) -> Result<QueryP
     } else {
         "NULL"
     };
+    let model_expr = if dims.contains("model") {
+        "u.raw_model"
+    } else {
+        "NULL"
+    };
     let round_expr = if dims.contains("round") {
         "a.round"
     } else {
         "NULL"
     };
     let query = format!(
-        "SELECT {phase_expr},{vendor_expr},{round_expr},COUNT(*),SUM(u.input_uncached),COUNT(u.input_uncached),SUM(u.input_cache_write),COUNT(u.input_cache_write),SUM(u.input_cache_read),COUNT(u.input_cache_read),SUM(u.output),COUNT(u.output),SUM(u.output_reasoning),COUNT(u.output_reasoning) FROM usage_record u JOIN attribution a USING(record_id) WHERE upper(a.spec_id)=upper(?1) AND u.collection_status='measured' GROUP BY {phase_expr},{vendor_expr},{round_expr} ORDER BY {phase_expr},{vendor_expr},{round_expr}"
+        "SELECT {phase_expr},{vendor_expr},{model_expr},{round_expr},COUNT(*),SUM(u.input_uncached),COUNT(u.input_uncached),SUM(u.input_cache_write),COUNT(u.input_cache_write),SUM(u.input_cache_read),COUNT(u.input_cache_read),SUM(u.output),COUNT(u.output),SUM(u.output_reasoning),COUNT(u.output_reasoning) FROM usage_record u JOIN attribution a USING(record_id) WHERE upper(a.spec_id)=upper(?1) AND u.collection_status='measured' GROUP BY {phase_expr},{vendor_expr},{model_expr},{round_expr} ORDER BY {phase_expr},{vendor_expr},{model_expr},{round_expr}"
     );
     let mut stmt = conn.prepare(&query)?;
     let groups = stmt
         .query_map([spec], |r| {
-            let records: u64 = r.get(3)?;
+            let records: u64 = r.get(4)?;
             let total = |sum_index, count_index| -> rusqlite::Result<TokenTotal> {
                 let known: u64 = r.get(count_index)?;
                 Ok(TokenTotal {
@@ -1140,17 +1674,23 @@ fn query_payload(conn: &Connection, spec: &str, group_by: &str) -> Result<QueryP
                 } else {
                     None
                 },
-                round: if dims.contains("round") {
+                model: if dims.contains("model") {
                     r.get(2)?
                 } else {
                     None
                 },
+                round: if dims.contains("round") {
+                    r.get(3)?
+                } else {
+                    None
+                },
                 records,
-                input_uncached: total(4, 5)?,
-                input_cache_write: total(6, 7)?,
-                input_cache_read: total(8, 9)?,
-                output: total(10, 11)?,
-                output_reasoning: total(12, 13)?,
+                input_uncached: total(5, 6)?,
+                input_cache_write: total(7, 8)?,
+                input_cache_read: total(9, 10)?,
+                output: total(11, 12)?,
+                output_reasoning: total(13, 14)?,
+                cost: None,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -1164,9 +1704,10 @@ fn query_payload(conn: &Connection, spec: &str, group_by: &str) -> Result<QueryP
     let (candidate_records, measured_records, unknown): (u64, u64, u64) = conn.query_row(
         "SELECT COUNT(*),SUM(CASE WHEN u.collection_status='measured' THEN 1 ELSE 0 END),SUM(CASE WHEN a.run_uuid IS NULL OR a.spec_id IS NULL OR a.seat IS NULL OR a.phase IS NULL OR a.round IS NULL THEN 1 ELSE 0 END) FROM usage_record u JOIN attribution a USING(record_id) WHERE upper(a.spec_id)=upper(?1)",
         [spec], |r| Ok((r.get(0)?, r.get::<_, Option<u64>>(1)?.unwrap_or(0), r.get::<_, Option<u64>>(2)?.unwrap_or(0))))?;
-    Ok(QueryPayload {
+    let mut payload = QueryPayload {
         schema_version: SCHEMA_VERSION,
         spec_id: spec.to_ascii_uppercase(),
+        grouped_by_model: dims.contains("model"),
         groups,
         spec_coverage: SpecCoverage {
             candidate_records,
@@ -1176,9 +1717,18 @@ fn query_payload(conn: &Connection, spec: &str, group_by: &str) -> Result<QueryP
         },
         attribution_reasons: reason_counts(conn, spec)?,
         ledger_global_collector_diagnostics,
-        pricing: "out_of_scope",
+        pricing: if with_cost {
+            "local_estimate_not_billing"
+        } else {
+            "not_requested"
+        },
+        cost: None,
         legacy_drain_summary: "lower_bound_only",
-    })
+    };
+    if with_cost {
+        apply_pricing(conn, spec, &dims, &mut payload)?;
+    }
+    Ok(payload)
 }
 
 fn render_query(payload: &QueryPayload, json: bool, toon: bool) -> Result<String> {
@@ -1192,7 +1742,21 @@ fn render_query(payload: &QueryPayload, json: bool, toon: bool) -> Result<String
         out.push_str(&format!("Token usage for {} (local telemetry; not billing)\nSpec coverage: candidates={} measured={} non-measured={} unknown-dimensions={}\n", payload.spec_id, payload.spec_coverage.candidate_records, payload.spec_coverage.measured_records, payload.spec_coverage.non_measured_records, payload.spec_coverage.records_with_unknown_dimensions));
     }
     for g in &payload.groups {
-        out.push_str(&format!("  phase={} vendor={} round={} records={} uncached={} cache-write={} cache-read={} output={} reasoning={}\n", g.phase.as_deref().unwrap_or("unknown"), g.vendor.as_deref().unwrap_or("unknown"), g.round.map(|x|x.to_string()).unwrap_or_else(||"unknown".into()), g.records, g.input_uncached.display(), g.input_cache_write.display(), g.input_cache_read.display(), g.output.display(), g.output_reasoning.display()));
+        let model = if payload.grouped_by_model {
+            format!(" model={}", g.model.as_deref().unwrap_or("unknown"))
+        } else {
+            String::new()
+        };
+        out.push_str(&format!("  phase={} vendor={}{} round={} records={} uncached={} cache-write={} cache-read={} output={} reasoning={}\n", g.phase.as_deref().unwrap_or("unknown"), g.vendor.as_deref().unwrap_or("unknown"), model, g.round.map(|x|x.to_string()).unwrap_or_else(||"unknown".into()), g.records, g.input_uncached.display(), g.input_cache_write.display(), g.input_cache_read.display(), g.output.display(), g.output_reasoning.display()));
+        if let Some(cost) = &g.cost {
+            out.push_str(&format!(
+                "    cost_usd={} priced_tokens={} unpriced_tokens={} unpriced_reasons={:?}\n",
+                cost.cost_usd,
+                cost.priced_measured_tokens,
+                cost.unpriced_measured_tokens,
+                cost.unpriced_reasons
+            ));
+        }
     }
     if payload.groups.is_empty() {
         out.push_str("  no measured attributed records (unknown, not zero)\n");
@@ -1212,17 +1776,34 @@ fn render_query(payload: &QueryPayload, json: bool, toon: bool) -> Result<String
             }
         ));
     }
-    out.push_str(&format!("Ledger-global collector diagnostics (not spec coverage): {:?}\npricing: out of scope; historical drain summaries are lower bounds only", payload.ledger_global_collector_diagnostics));
+    out.push_str(&format!(
+        "Ledger-global collector diagnostics (not spec coverage): {:?}\n",
+        payload.ledger_global_collector_diagnostics
+    ));
+    if let Some(cost) = &payload.cost {
+        out.push_str(&format!("Cost estimate: USD {} ({} pico-USD); priced measured tokens={} unpriced measured tokens={} reasons={:?}\nRate table {} published {} source revision {}\nLOCAL ESTIMATE ONLY — NOT BILLING; historical drain summaries are lower bounds only", cost.cost_usd, cost.cost_pico_usd, cost.priced_measured_tokens, cost.unpriced_measured_tokens, cost.unpriced_reasons, cost.rate_table_version, cost.rate_table_published_at, cost.source_revision));
+    } else {
+        out.push_str(
+            "pricing: not requested; use --cost; historical drain summaries are lower bounds only",
+        );
+    }
     Ok(out)
 }
 
-pub(crate) fn show(root: &Path, spec: &str, group_by: &str, json: bool, toon: bool) -> Result<()> {
+pub(crate) fn show(
+    root: &Path,
+    spec: &str,
+    group_by: &str,
+    cost: bool,
+    json: bool,
+    toon: bool,
+) -> Result<()> {
     let path = ledger_path(root);
     if !path.exists() {
         bail!("token ledger not found; run `aida usage rebuild`");
     }
     let conn = Connection::open(path)?;
-    let payload = query_payload(&conn, spec, group_by)?;
+    let payload = query_payload(&conn, spec, group_by, cost)?;
     println!("{}", render_query(&payload, json, toon)?);
     Ok(())
 }
@@ -1231,6 +1812,166 @@ pub(crate) fn show(root: &Path, spec: &str, group_by: &str, json: bool, toon: bo
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    fn fixture_rate_table() -> RateTable {
+        RateTable {
+            schema_version: 1,
+            table_version: "test-v1".into(),
+            published_at: "2026-01-01T00:00:00Z".into(),
+            currency: "USD".into(),
+            unit_tokens: 1_000_000,
+            source_url: "https://example.test/rates".into(),
+            source_revision: "abc".into(),
+            source_retrieved_at: "2026-01-01T00:00:00Z".into(),
+            license: "test".into(),
+            rates: vec![RateEntry {
+                id: "r1".into(),
+                provider: "claude".into(),
+                model: "exact-model".into(),
+                effective_from: "2026-01-01T00:00:00Z".into(),
+                effective_to: Some("2026-02-01T00:00:00Z".into()),
+                currency: "USD".into(),
+                source_url: "https://example.test/rates".into(),
+                source_revision: "abc".into(),
+                source_retrieved_at: "2026-01-01T00:00:00Z".into(),
+                input_uncached: Some("3.000000".into()),
+                input_cache_write: Some("3.750000".into()),
+                input_cache_read: Some("0.300000".into()),
+                output: Some("15.000000".into()),
+                output_reasoning: None,
+            }],
+            aliases: vec![RateAlias {
+                id: "a1".into(),
+                provider: "claude".into(),
+                alias: "friendly-model".into(),
+                canonical_model: "exact-model".into(),
+                effective_from: "2026-01-01T00:00:00Z".into(),
+                effective_to: Some("2026-02-01T00:00:00Z".into()),
+                source_url: "https://example.test/rates".into(),
+                source_revision: "abc".into(),
+                source_retrieved_at: "2026-01-01T00:00:00Z".into(),
+            }],
+        }
+    }
+
+    // trace:TASK-1434 | ai:codex
+    #[test]
+    fn rate_matching_is_exact_dated_and_aliases_are_explicit() {
+        let table = fixture_rate_table();
+        validate_rate_table(&table).unwrap();
+        let start = parse_rate_time("2026-01-01T00:00:00Z").unwrap();
+        let end = parse_rate_time("2026-02-01T00:00:00Z").unwrap();
+        assert_eq!(
+            match_rate(&table, "claude", "exact-model", start)
+                .unwrap()
+                .entry
+                .id,
+            "r1"
+        );
+        let alias = match_rate(&table, "claude", "friendly-model", start).unwrap();
+        assert_eq!(alias.alias_id, Some("a1"));
+        assert_eq!(alias.resolved_model, "exact-model");
+        assert_eq!(
+            match_rate(&table, "claude", "exact", start).unwrap_err(),
+            "unknown_model"
+        );
+        assert_eq!(
+            match_rate(&table, "claude", "exact-model", end).unwrap_err(),
+            "rate_out_of_range"
+        );
+        let mut ambiguous = table.clone();
+        let mut duplicate = ambiguous.rates[0].clone();
+        duplicate.id = "r2".into();
+        ambiguous.rates.push(duplicate);
+        assert!(validate_rate_table(&ambiguous)
+            .unwrap_err()
+            .to_string()
+            .contains("overlapping rate intervals"));
+    }
+
+    #[test]
+    fn fixed_point_pricing_keeps_zero_missing_classes_and_rounding_distinct() {
+        assert_eq!(parse_rate_pico_per_token("3.000000").unwrap(), 3_000_000);
+        assert!(parse_rate_pico_per_token("0.0000001").is_err());
+        let mut cost = GroupCost::default();
+        price_token_class(&mut cost, Some(0), Some(&"3.000000".into()), "input").unwrap();
+        price_token_class(&mut cost, Some(2), None, "reasoning").unwrap();
+        assert_eq!(cost.priced_measured_tokens, 0);
+        assert_eq!(cost.cost_pico_usd, 0);
+        assert_eq!(cost.unpriced_measured_tokens, 2);
+        assert_eq!(cost.unpriced_reasons["missing_rate:reasoning"], 2);
+        assert_eq!(format_usd_6(1_500_000), "0.000002");
+        assert_eq!(format_usd_6(2_500_000), "0.000002", "half-even");
+    }
+
+    #[test]
+    fn cost_query_groups_implementation_review_rework_and_mixed_coverage() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE usage_record(record_id TEXT PRIMARY KEY,vendor TEXT NOT NULL,vendor_session_id TEXT NOT NULL,vendor_event_id TEXT NOT NULL,occurred_at TEXT,ordinal INTEGER,raw_model TEXT,source_basename TEXT NOT NULL,source_hash TEXT NOT NULL,collection_status TEXT NOT NULL,status_reason TEXT,input_uncached INTEGER,input_cache_write INTEGER,input_cache_read INTEGER,output INTEGER,output_reasoning INTEGER,vendor_usage_json TEXT NOT NULL);
+             CREATE TABLE attribution(record_id TEXT PRIMARY KEY,aida_session_id TEXT,run_uuid TEXT,spec_id TEXT,seat TEXT,phase TEXT,round INTEGER,session_reason TEXT,run_reason TEXT,spec_reason TEXT,seat_reason TEXT,phase_reason TEXT,round_reason TEXT);
+             CREATE TABLE coverage(key TEXT PRIMARY KEY,value INTEGER NOT NULL);
+             INSERT INTO coverage VALUES('measured_unique',3);
+             INSERT INTO usage_record VALUES('i','claude','s','i','2026-01-01T00:00:00Z',1,'exact-model','f','h','measured',NULL,1,NULL,NULL,NULL,2,'{}');
+             INSERT INTO attribution VALUES('i','a','run','TASK-1434','implementer','implementer',1,NULL,NULL,NULL,NULL,NULL,NULL);
+             INSERT INTO usage_record VALUES('v','claude','s','v','2026-01-01T00:00:01Z',2,'friendly-model','f','h','measured',NULL,0,NULL,NULL,2,NULL,'{}');
+             INSERT INTO attribution VALUES('v','a','run','TASK-1434','reviewer','reviewer',1,NULL,NULL,NULL,NULL,NULL,NULL);
+             INSERT INTO usage_record VALUES('r','claude','s','r','2026-01-01T00:00:02Z',3,'unknown-model','f','h','measured',NULL,3,NULL,NULL,NULL,NULL,'{}');
+             INSERT INTO attribution VALUES('r','a','run','TASK-1434','implementer','rework',2,NULL,NULL,NULL,NULL,NULL,NULL);",
+        )
+        .unwrap();
+        let mut table = fixture_rate_table();
+        // Exercise the production data shape by temporarily checking the same
+        // arithmetic against its independently parsed fixture first.
+        table.rates[0].effective_to = Some("2027-01-01T00:00:00Z".into());
+        table.aliases[0].effective_to = Some("2027-01-01T00:00:00Z".into());
+        assert!(match_rate(
+            &table,
+            "claude",
+            "friendly-model",
+            parse_rate_time("2026-01-01T00:00:01Z").unwrap()
+        )
+        .is_ok());
+
+        // The bundled table uses different production model names, so replace
+        // fixture identifiers with its explicit alias/direct model names.
+        conn.execute(
+            "UPDATE usage_record SET raw_model='claude-sonnet-4-20250514' WHERE record_id='i'",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE usage_record SET raw_model='claude-sonnet-4' WHERE record_id='v'",
+            [],
+        )
+        .unwrap();
+        let payload = query_payload(&conn, "TASK-1434", "phase,vendor,model,round", true).unwrap();
+        assert_eq!(payload.groups.len(), 3);
+        assert_eq!(
+            payload
+                .groups
+                .iter()
+                .map(|g| g.phase.as_deref().unwrap())
+                .collect::<Vec<_>>(),
+            vec!["implementer", "reviewer", "rework"]
+        );
+        let cost = payload.cost.as_ref().unwrap();
+        assert_eq!(
+            cost.priced_measured_tokens, 3,
+            "zero is known but adds no tokens"
+        );
+        assert_eq!(cost.unpriced_measured_tokens, 5);
+        assert_eq!(cost.cost_pico_usd, 33_000_000);
+        assert_eq!(cost.cost_usd, "0.000033");
+        assert_eq!(cost.unpriced_reasons["missing_rate:output_reasoning"], 2);
+        assert_eq!(cost.unpriced_reasons["unknown_model"], 3);
+        let json = serde_json::to_value(&payload).unwrap();
+        assert_eq!(json["pricing"], "local_estimate_not_billing");
+        let human = render_query(&payload, false, false).unwrap();
+        let toon = render_query(&payload, false, true).unwrap();
+        assert!(human.contains("LOCAL ESTIMATE ONLY — NOT BILLING"));
+        assert!(toon.contains("Rate table 2026-09-22.1"));
+    }
 
     #[test]
     fn claude_duplicate_representation_is_counted_once() {
@@ -1581,12 +2322,12 @@ mod tests {
             values
         };
         let first_rows = logical_rows(&first);
-        let first_totals = query_payload(&first, "TASK-1", "phase,vendor,round").unwrap();
+        let first_totals = query_payload(&first, "TASK-1", "phase,vendor,round", false).unwrap();
         drop(first);
         rebuild(root, false).unwrap();
         let second = Connection::open(ledger_path(root)).unwrap();
         let second_rows = logical_rows(&second);
-        let second_totals = query_payload(&second, "TASK-1", "phase,vendor,round").unwrap();
+        let second_totals = query_payload(&second, "TASK-1", "phase,vendor,round", false).unwrap();
         assert_eq!(first_rows, second_rows);
         assert_eq!(first_totals, second_totals);
         assert_eq!(second_rows.len(), 1);
@@ -1656,7 +2397,7 @@ mod tests {
         .unwrap();
         rebuild(root, false).unwrap();
         let conn = Connection::open(ledger_path(root)).unwrap();
-        let payload = query_payload(&conn, "TASK-1427", "phase,vendor,round").unwrap();
+        let payload = query_payload(&conn, "TASK-1427", "phase,vendor,round", false).unwrap();
         assert_eq!(
             payload.spec_coverage,
             SpecCoverage {
