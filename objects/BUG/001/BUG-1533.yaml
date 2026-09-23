@@ -53,12 +53,12 @@ description: |-
   ACCEPTANCE CRITERIA 1-5 STAND AS WRITTEN. They were aimed at the right target; criterion 1 (authoring seat in the envelope, resolved at send time) fixes all three points above. Criterion 4 should additionally assert that ONE seat produces ONE envelope identity across a session -- the two-identity case is not covered by "two seats sharing a shell user".
 
   METHOD NOTE, third instance tonight of the same error shape: I measured something narrow and true (216 of 336 from=joe carry no tag) and stated something broad and false (the envelope carries nothing). Same as asserting 419 files were not legacy from two live instances, and sizing a per-call guard against a corpus-wide 77 percent. The measurement was never wrong; the sentence wrapped around it was.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:25:43.763465229Z
-modified_at: 2026-09-23T09:21:36.145772484Z
+modified_at: 2026-09-23T09:22:18.819585536Z
 req_type: Bug
 tags:
 - mailbox identity attribution substrate-truth severity:operational
