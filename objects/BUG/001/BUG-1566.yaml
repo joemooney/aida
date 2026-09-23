@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T19:47:03.211329757Z
-modified_at: 2026-09-21T22:29:48.832455478Z
+modified_at: 2026-09-23T06:24:32.697728897Z
 req_type: Bug
 tags:
 - integrity-floor
@@ -120,3 +120,9 @@ comments:
   created_at: 2026-09-21T22:29:45.881451444Z
   modified_at: 2026-09-21T22:29:45.881451444Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0ccef-f3b9-7b83-9627-10f47e90649b
+  author: joe
+  content: 'PROXY DECISION (Claude for the operator, overnight burn-down; design calls delegated). Question and ruling (recommended option adopted): Confirmed still unfixed: pr_cmd.rs ~1795 has an explicit `// KNOWN ASYMMETRY (BUG-1566)` comment admitting `pr ship`''s BUG-1167 release site clears a merge-hold with no TTY check, unlike `merge-hold clear`''s `has_integrity_floor_authority()`. Q: gate the release site on the same floor, or document why `pr ship`''s human/advisor framing is sufficient? Recommend: gate it — PRIN-5 fail-closed-on-unknowns argues for consistency between the two release paths for the same class of hold; carve out only the case where `pr ship` is itself invoked at an interactive TTY (which already satisfies the floor), so headless/advisor-invoked `pr ship` is blocked exactly like a headless `merge-hold clear` would be. Also needs an explicit ruling on reviewer-placed "clear only on my re-review" holds vs. the human-only floor.. Now IMPLEMENT-ready.'
+  created_at: 2026-09-23T06:24:32.697728897Z
+  modified_at: 2026-09-23T06:24:32.697728897Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
