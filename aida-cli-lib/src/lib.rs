@@ -62452,6 +62452,116 @@ fn report_autostash_restore(project_root: &std::path::Path, pre_stash_top: Optio
 /// (via `git_ops::pull_rebase`, matching `aida db sync --pull`). Each
 /// leg skips cleanly when its remote isn't configured, so the command
 /// is safe to run in any project state. trace:TASK-43 | ai:claude
+// BUG-1500: `aida pull`'s store-leg failure message used to advise
+// `git rebase --abort` unconditionally, on every store-leg error —
+// including a transient network failure (e.g. a 502) where no rebase
+// is in progress and the abort is the wrong action. Check the actual
+// rebase state (a cheap filesystem stat via `git_ops::rebase_in_progress`)
+// before recommending it, so a transient failure doesn't read as a
+// broken/corrupted store.
+// trace:BUG-1500 | ai:claude
+fn store_pull_failure_hint(store_path: &std::path::Path, err_display: &str) -> String {
+    if aida_core::git_ops::rebase_in_progress(store_path) {
+        format!(
+            "{}\n  The orphan store is mid-rebase. To recover:\n    \
+                 cd {} && git rebase --abort\n  \
+             Then re-run `aida pull` or `aida db sync --pull`.",
+            err_display,
+            store_path.display()
+        )
+    } else {
+        format!(
+            "{}\n  This looks like a transient failure (e.g. network); \
+             the store is not mid-rebase. Re-run `aida pull` or `aida db sync --pull`.",
+            err_display
+        )
+    }
+}
+
+#[cfg(test)]
+mod bug_1500_store_pull_hint_tests {
+    use super::store_pull_failure_hint;
+
+    // trace:BUG-1500 | ai:claude
+    #[test]
+    fn no_rebase_in_progress_does_not_suggest_abort() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        // A plain non-repo directory: `rebase_in_progress` returns false
+        // for it (no `.git` at all), the same as a repo that is simply
+        // not mid-rebase — e.g. a transient network 502.
+        let hint = store_pull_failure_hint(tmp.path(), "connection reset (502)");
+        assert!(
+            !hint.contains("rebase --abort"),
+            "hint should not advise `git rebase --abort` when no rebase is in progress: {hint}"
+        );
+        assert!(hint.contains("transient failure"));
+        assert!(hint.contains("connection reset (502)"));
+    }
+
+    // trace:BUG-1500 | ai:claude
+    #[test]
+    fn rebase_in_progress_still_suggests_abort() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path();
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(repo)
+            .status()
+            .expect("git init")
+            .success());
+        // Simulate a rebase actually in progress: create the marker
+        // directory `rebase_in_progress` checks for.
+        std::fs::create_dir(repo.join(".git").join("rebase-merge")).expect("mkdir rebase-merge");
+
+        let hint = store_pull_failure_hint(repo, "some pull error");
+        assert!(
+            hint.contains("rebase --abort"),
+            "hint should advise `git rebase --abort` when a rebase IS in progress: {hint}"
+        );
+    }
+
+    // trace:BUG-1500 | ai:claude
+    // Covers the second emission site: `aida db sync --pull`'s
+    // `handle_git_backend_command` (aida-cli-lib/src/git_backend_cmd.rs)
+    // wraps the same `store_pull_failure_hint` output as
+    // `anyhow::bail!("Pull failed: {}", ...)`. This mirrors that exact
+    // format string so a regression there (e.g. reverting to the old
+    // unconditional "may be mid-rebase" text) is caught here too.
+    #[test]
+    fn db_sync_pull_bail_message_omits_abort_hint_without_rebase() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let hint = store_pull_failure_hint(tmp.path(), "connection reset (502)");
+        let bail_message = format!("Pull failed: {}", hint);
+        assert!(
+            !bail_message.contains("rebase --abort"),
+            "db sync --pull's bail message should not advise `git rebase --abort` \
+             when no rebase is in progress: {bail_message}"
+        );
+    }
+
+    // trace:BUG-1500 | ai:claude
+    #[test]
+    fn db_sync_pull_bail_message_includes_abort_hint_with_rebase() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path();
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(repo)
+            .status()
+            .expect("git init")
+            .success());
+        std::fs::create_dir(repo.join(".git").join("rebase-merge")).expect("mkdir rebase-merge");
+
+        let hint = store_pull_failure_hint(repo, "some pull error");
+        let bail_message = format!("Pull failed: {}", hint);
+        assert!(
+            bail_message.contains("rebase --abort"),
+            "db sync --pull's bail message should advise `git rebase --abort` \
+             when a rebase IS in progress: {bail_message}"
+        );
+    }
+}
+
 fn handle_pull_command(
     store_path: &std::path::Path,
     code_only: bool,
@@ -62876,12 +62986,9 @@ fn handle_pull_command(
             }
             Err(e) => {
                 eprintln!(
-                    "  {} {}\n  The orphan store may be mid-rebase. To recover:\n    \
-                         cd {} && git rebase --abort\n  \
-                     Then re-run `aida pull` or `aida db sync --pull`.",
+                    "  {} {}",
                     "Warning:".yellow().bold(),
-                    e,
-                    store_path.display()
+                    store_pull_failure_hint(store_path, &e.to_string())
                 );
                 store_failed = Some(format!("store leg pull_rebase failed: {}", e));
             }

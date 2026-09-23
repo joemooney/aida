@@ -6627,15 +6627,16 @@ pub(crate) fn handle_git_backend_command(
                     }
                     Err(e) => {
                         // A failed rebase leaves the repo in a partial
-                        // state. Bail with a recovery hint so the user
-                        // doesn't end up with weirder downstream errors.
+                        // state — but only advise `git rebase --abort`
+                        // when a rebase is actually in progress; a
+                        // transient failure (e.g. a network 502) with no
+                        // rebase in flight is a different situation.
+                        // Reuses the same check as `aida pull`'s
+                        // store-leg hint so both emission sites agree.
+                        // trace:BUG-1500 | ai:claude
                         anyhow::bail!(
-                            "Pull failed: {}\n\
-                             The orphan store may be mid-rebase. To recover:\n  \
-                                 cd {} && git rebase --abort\n\
-                             Then re-run `aida db sync --pull`.",
-                            e,
-                            store_path.display()
+                            "Pull failed: {}",
+                            crate::store_pull_failure_hint(store_path, &e.to_string())
                         );
                     }
                 }
