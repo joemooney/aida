@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T06:45:05.301647405Z
-modified_at: 2026-09-23T12:39:19.568533191Z
+modified_at: 2026-09-23T12:43:43.547369418Z
 req_type: Task
 tags:
 - drain-safe
@@ -48,4 +48,10 @@ comments:
   content: 'Claude implementer result: claude/task-1446 @ c54aa17482. reconcile-status prints bidirectional counts (real store: 0 pre-Done-with-merged-trailer, 0 Completed-with-open-PR, over 221 Completed in the window); reopen guard via a new ImplementationInfo.reopened_at_sha stamped on any transition into Draft. 3 tests; auto_bump+reconcile 87 pass. Awaiting review.'
   created_at: 2026-09-23T12:39:19.568533191Z
   modified_at: 2026-09-23T12:39:19.568533191Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce4b-1a3b-7240-82ba-50df232f2497
+  author: joe
+  content: 'Review blockers fixed by the orchestrator: whole-id matching (count_ids_mentioned, tested: BUG-1 never matches BUG-10) and the open-PR count is Option: a forge failure prints ''unknown (forge unavailable)'', never 0. auto_bump+reconcile 88 pass.'
+  created_at: 2026-09-23T12:43:43.547369418Z
+  modified_at: 2026-09-23T12:43:43.547369418Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
