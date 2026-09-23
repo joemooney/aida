@@ -155,6 +155,36 @@ reading the code, the reviewer is usually right. Read the reviewer's
 cited evidence before pushing back; if you push back, do the diff inspection
 yourself.
 
+## Absolutes are the more fluent error
+
+When a claim can be written in a strong form or a precise form, the
+strong form usually reads better — shorter, more quotable, more
+decisive. Under time pressure a writer selects for fluency without
+experiencing it as a choice, so the errors that survive are not random:
+they are the ones that read better than the truth. "Be more careful"
+does not fix this, because the error is not what the writer failed to
+notice — it is what the writer preferred.
+
+The detectable signature is an **absolute in a statement of fact**:
+"does not exist", "every", "never", "unrecoverable", "only", "all". A
+status check has the same failure mode in code form — `exit=$?` read
+after a pipe to `head`/`cat` reports the pipe's exit code, not the
+command's, and asserts success (`exit=0`) on a failed command.
+
+Worked instance: an advisor wrote "unrecoverable" for a lost verdict in
+a finding; the reviewer read back "I checked three places I thought of"
+instead. The fluent form was also the more dramatic one — it made the
+finding sound more important, so the pressure ran toward significance,
+not only toward brevity. It was false: the verdict turned up in a
+session log twenty minutes later.
+
+This is greppable in binding text — acceptance criteria, ADRs, review
+verdicts — in a way that "check your claims" is not, but it flags
+sentences worth re-reading rather than sentences that are wrong: two
+correct, load-bearing absolutes ("the trailers stay", "neither PR
+merges") turned up in the same sweep that found the false ones, so
+expect roughly half the hits to be fine.
+
 ## Knowing what a change is for makes you worse at finding how it fails
 
 "Trust the reviewer over intuition" says the reviewer is usually right when a
