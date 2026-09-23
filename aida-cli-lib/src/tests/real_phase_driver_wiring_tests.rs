@@ -1502,3 +1502,124 @@ fn shelve_on_failure_always_shelves_the_lease_spec_with_an_attribution_note() {
         ShelveAttribution::Reattributed("BUG-1420".to_string())
     );
 }
+
+/// BUG-1527: a drain dispatched for one spec must not accept an implementer
+/// that swapped to a DIFFERENT spec's branch mid-phase and write Done for
+/// the dispatched spec on that other spec's work. The fake `aida` launcher
+/// plays the implementer: it records the lease with the ORIGINALLY-dispatched
+/// branch (the session-start snapshot `reconcile_orchestrated_branch` reads),
+/// but checks the worktree out onto a totally different branch and commits
+/// there trailered for a different spec — exactly BUG-1527's incident shape
+/// (`bug-1442-work` -> `bug-1485-work`). `run_implementer()` must refuse
+/// BEFORE any PR lookup or Done write: no `gh` stub is even wired, so a
+/// regression that fell through to the PR-lookup/Done-write path would fail
+/// this test by trying (and failing) to spawn `gh`, not just by writing the
+/// wrong status.
+// trace:BUG-1527 | ai:claude
+#[cfg(unix)]
+#[test]
+fn phase1_refuses_when_implementer_ends_on_another_specs_branch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let remote = tmp.path().join("origin.git");
+    let root = tmp.path().join("root");
+    let dispatched_branch = "story-9001-work";
+
+    git(tmp.path(), &["init", "--bare", "-b", "main", "origin.git"]);
+    std::fs::create_dir_all(&root).unwrap();
+    git(&root, &["init", "-q"]);
+    git(&root, &["config", "user.email", "aida@example.invalid"]);
+    git(&root, &["config", "user.name", "AIDA Test"]);
+    git(&root, &["checkout", "-q", "-b", "main"]);
+    git(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    write_commit(&root, "README.md", "fixture\n", "chore: init");
+    git(&root, &["push", "-q", "-u", "origin", "main"]);
+    git(&root, &["remote", "set-head", "origin", "main"]);
+    git(&root, &["checkout", "-q", "-b", dispatched_branch]);
+
+    let fake_aida = tmp.path().join("aida");
+    write_executable(
+        &fake_aida,
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+session_id=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --session-id)
+      session_id="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+mkdir -p .aida/sessions .aida/headless-logs
+printf '{"type":"assistant","message":{"content":[{"type":"text","text":"fake work done"}]}}\n' > ".aida/headless-logs/${AIDA_FAKE_BRANCH}-${session_id}.jsonl"
+# The swap: check out a DIFFERENT branch than the one this phase was
+# dispatched for, and commit work trailered for a DIFFERENT spec.
+git checkout -q -b "${AIDA_SWAP_BRANCH}"
+printf 'swapped\n' > swapped.txt
+git add swapped.txt
+git commit -q -m "[AI:codex] fix(other): unrelated fix (${AIDA_SWAP_SPEC})"
+lease_id="lease-bug-1527"
+cat > ".aida/sessions/${lease_id}.toml" <<EOF
+id = "${lease_id}"
+scope = "STORY-9001"
+slug = "story-9001"
+owner = "codex@example.test"
+worktree_path = "${AIDA_FAKE_WORKTREE}"
+branch = "${AIDA_FAKE_BRANCH}"
+started_at = "2026-09-23T00:00:00Z"
+hostname = "test"
+role = "implementer"
+EOF
+cat > ".aida/sessions/${lease_id}.manifest.toml" <<EOF
+session_id = "${lease_id}"
+planned_at = "2026-09-23T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "${session_id}"
+items = []
+EOF
+exit 0
+"#,
+    );
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_FAKE_BRANCH", dispatched_branch),
+        ("AIDA_SWAP_BRANCH", "bug-9002-work"),
+        ("AIDA_SWAP_SPEC", "BUG-9002"),
+        ("AIDA_FAKE_WORKTREE", root.to_str().unwrap()),
+        ("AIDA_EXIT_POLL_MS", "1"),
+        ("AIDA_GH_VERIFY_RETRIES", "0"),
+    ]);
+
+    let mut driver = driver(&root, "STORY-9001");
+    driver.aida_exe = fake_aida;
+    driver.no_human = Some(crate::auto_complete::NoHumanMode::Both);
+
+    let outcome = driver.run_implementer();
+    let failure = match outcome {
+        Err(f) => f,
+        Ok(ok) => {
+            panic!("expected the swap to refuse phase 1, got a success outcome instead: {ok:?}")
+        }
+    };
+    assert_eq!(failure.kind, FailureKind::ShippedMismatch);
+    assert!(
+        failure.reason.contains(dispatched_branch) && failure.reason.contains("bug-9002-work"),
+        "expected the failure to name both the dispatched and the swapped-to branch, got: {}",
+        failure.reason
+    );
+    assert!(
+        failure.reason.contains("BUG-9002"),
+        "expected the failure to name which spec the swapped branch actually credits, got: {}",
+        failure.reason
+    );
+
+    // The dispatched spec's own branch never moved, and the swapped-to
+    // branch's PR was never looked up or touched — `driver.pr_number` stays
+    // unset, proving no Done write (which requires a PR) was ever attempted.
+    assert_eq!(driver.pr_number, None);
+}

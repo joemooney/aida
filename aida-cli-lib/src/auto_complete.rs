@@ -542,6 +542,14 @@ pub(crate) enum FailureKind {
     /// stable gate, so preserve it as a typed, non-transient shelve cause.
     // trace:BUG-1316 | ai:codex
     MergeHold,
+    /// BUG-1527: the implementer's worktree ended on a branch other than the
+    /// one this phase was dispatched for, AND that branch's commits credit a
+    /// DIFFERENT spec — the drain accepted a branch swap and nearly marked
+    /// the dispatched spec Done on someone else's PR. Never retried (a retry
+    /// would just re-launch against the same swapped-away worktree); shelved
+    /// so the swap is triaged rather than silently written over.
+    // trace:BUG-1527 | ai:claude
+    ShippedMismatch,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -591,6 +599,8 @@ impl FailureKind {
                 | Self::StaleBaseConflict
                 | Self::MergeHold
                 | Self::Failed
+                // trace:BUG-1527 | ai:claude
+                | Self::ShippedMismatch
         )
     }
 
@@ -620,6 +630,8 @@ impl FailureKind {
             Self::StaleBaseConflict => "stale-base-conflict",
             Self::MergeHold => "merge-hold",
             Self::Failed => "tool-exit",
+            // trace:BUG-1527 | ai:claude
+            Self::ShippedMismatch => "shipped-mismatch",
         }
     }
 }
@@ -1946,6 +1958,13 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
         (Phase::Implementer, FailureKind::MissingTool) => {
             forge_cli_missing_hint(ctx.forge, "track the PR", "re-run")
         }
+        // trace:BUG-1527 | ai:claude
+        (Phase::Implementer, FailureKind::ShippedMismatch) => format!(
+            "The implementer's worktree ended on a different branch than {spec} was dispatched \
+             on — read the failure detail for which spec the new branch actually credits. That \
+             PR is untouched and stands on its own; re-queue {spec} for a fresh attempt: \
+             `aida queue rework {spec} --work`"
+        ),
         // trace:BUG-1445 | ai:codex
         (Phase::Implementer, FailureKind::ReworkNoOp) => format!(
             "The rework round produced no patch-unique change (the failure detail says whether \
