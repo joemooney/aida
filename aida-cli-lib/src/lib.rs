@@ -65416,6 +65416,32 @@ fn auto_bump_done_to_completed(
         }
     }
 
+    // BUG-1529: a spec that just flipped Done → Completed here may carry a
+    // stale "changes requested" / "rejected" verdict from a round that was
+    // refused, reworked, and — since it just landed — evidently addressed.
+    // Nothing else ever recorded that the refusal was answered, so the
+    // verdict file would say REFUSED forever even though the work shipped.
+    // Close it out now, at the same moment the merge is detected, rather than
+    // leaving a permanent false positive for every reader of the verdict
+    // corpus. Best-effort like the `emit_spec_completed` calls above: a
+    // missing or unwritable verdict file must never fail the bump itself.
+    // trace:BUG-1529 | ai:claude
+    for flip in &confirmed {
+        let _ = review_verdict::close_verdict_on_merge(project_root, &flip.spec_id, &flip.sha);
+    }
+    for (spec_id, sha, _, _) in &confirmed_stale {
+        let _ = review_verdict::close_verdict_on_merge(project_root, spec_id, sha);
+    }
+    for resolution in &confirmed_stranded {
+        if resolution.outcome == StrandedReviewPrOutcome::Merged {
+            let _ = review_verdict::close_verdict_on_merge(
+                project_root,
+                &resolution.spec_id,
+                &format!("PR-{}", resolution.pr_n),
+            );
+        }
+    }
+
     // ── Step 6: activity log ──
     for flip in &confirmed {
         record_role_activity(&flip.spec_id, "auto-completed");

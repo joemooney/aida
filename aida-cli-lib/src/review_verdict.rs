@@ -127,6 +127,51 @@ pub struct RecordedVerdict {
     /// to route a row to the reviewer WHO REFUSED had no way to ask.
     // trace:STORY-1419 | ai:claude
     pub recorded_by: Option<String>,
+    /// BUG-1529: the commit that closed this verdict out, when a refused
+    /// spec's reworked PR later merged. Distinct from a fresh `verdict`
+    /// overwrite — the refusal itself is left intact (audit trail), this
+    /// only records that the branch shipped past it. `None` on every file
+    /// this repo has never closed, including all pre-BUG-1529 records, so
+    /// old files keep reading fine.
+    // trace:BUG-1529 | ai:claude
+    pub closed_by_merge: Option<String>,
+    /// RFC-3339 timestamp of when `closed_by_merge` was recorded.
+    // trace:BUG-1529 | ai:claude
+    pub closed_at: Option<String>,
+}
+
+impl RecordedVerdict {
+    /// True once a merge has closed this verdict out — see
+    /// `closed_by_merge`. A closed verdict is not a fresh approval; it is
+    /// the original verdict PLUS a record that the branch moved on.
+    // trace:BUG-1529 | ai:claude
+    pub fn is_closed(&self) -> bool {
+        self.closed_by_merge.is_some()
+    }
+}
+
+/// BUG-1529 criterion 3: does this recorded verdict represent a refusal that
+/// is still OUTSTANDING — i.e. something a reader building an "outstanding
+/// refusals" report should surface?
+///
+/// Two independent ways a blocking verdict stops being outstanding:
+///   - it was explicitly closed by a merge (`closed_by_merge`, set going
+///     forward by `close_verdict_on_merge`), or
+///   - the caller's own store already shows the spec as `Completed` — the
+///     BUG-1529 criterion 4 fallback for the pre-existing corpus this fix
+///     cannot retroactively rewrite (this module never touches a live verdict
+///     file except at the moment a merge is observed). A Completed spec's
+///     work shipped by definition, so a still-`request-changes` record on it
+///     is exactly the false positive this bug measured (STORY-1033, STORY-818)
+///     and must not read as outstanding regardless of whether it was ever
+///     closed.
+///
+/// `spec_completed` is supplied by the caller (this module deliberately does
+/// not depend on `aida_core`'s store/status types, to stay a small, pure,
+/// filesystem-only module).
+// trace:BUG-1529 | ai:claude
+pub fn is_outstanding_refusal(verdict: &RecordedVerdict, spec_completed: bool) -> bool {
+    verdict.kind.blocks_done() && !verdict.is_closed() && !spec_completed
 }
 
 /// Path of the per-spec verdict file. Spec ids are upper-cased so
@@ -171,6 +216,8 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         reviewed_branch: str_field("reviewed_branch"),
         recorded_by: str_field("recorded_by"),
         recorded_at: str_field("recorded_at"),
+        closed_by_merge: str_field("closed_by_merge"),
+        closed_at: str_field("closed_at"),
         summary: str_field("summary"),
         comment_url: str_field("comment_url"),
         review_comment: str_field("review_comment")
@@ -897,6 +944,75 @@ pub fn record_verdict_at_path(
     Ok(path.to_path_buf())
 }
 
+/// BUG-1529 criterion 1: close a spec's outstanding refusal out when its
+/// reworked work merges. Called from the same place `auto_bump_done_to_completed`
+/// (and its stranded/stale-review siblings in `lib.rs`) already detect a
+/// Done→Completed transition, so this reuses their merge-detection rather than
+/// re-deriving it.
+///
+/// Deliberately narrow:
+///   - a no-op (`Ok(false)`) when there is no verdict file, when the recorded
+///     verdict is not blocking (nothing to close — an approval was never a
+///     refusal), or when it is already closed (first closing sha wins; this
+///     never overwrites `closed_by_merge`, so an idempotent re-run of the
+///     auto-bump scan can't spuriously rewrite the record).
+///   - never touches `verdict`, `summary`, `findings`, or `rounds` — closing
+///     is an ANNOTATION on the refusal, not a new review. Criterion 2: a
+///     closed refusal must stay distinguishable from a fresh approving
+///     review, and overwriting the verdict word would erase that distinction
+///     (and the audit trail STORY-1391 exists to keep).
+///
+/// `merge_ref` is normally the merge/landing commit sha; when the landing
+/// commit is unknown (e.g. the stranded-review-PR path, which only has a PR
+/// number from the forge) callers pass a `PR-<n>` marker instead — either way
+/// it is a human-readable pointer to WHAT closed the refusal, and an empty
+/// string is refused rather than silently recorded as a closer with no
+/// evidence.
+// trace:BUG-1529 | ai:claude
+pub fn close_verdict_on_merge(
+    project_root: &Path,
+    spec: &str,
+    merge_ref: &str,
+) -> std::io::Result<bool> {
+    let merge_ref = merge_ref.trim();
+    if merge_ref.is_empty() {
+        return Ok(false);
+    }
+    let path = verdict_path(project_root, spec);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return Ok(false);
+    };
+    let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&body) else {
+        return Ok(false);
+    };
+    let Some(raw_verdict) = obj.get("verdict").and_then(|v| v.as_str()) else {
+        return Ok(false);
+    };
+    if !VerdictKind::parse(raw_verdict).blocks_done() {
+        return Ok(false);
+    }
+    let already_closed = obj
+        .get("closed_by_merge")
+        .and_then(|v| v.as_str())
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+    if already_closed {
+        return Ok(false);
+    }
+    obj.insert(
+        "closed_by_merge".to_string(),
+        serde_json::Value::String(merge_ref.to_string()),
+    );
+    obj.insert(
+        "closed_at".to_string(),
+        serde_json::Value::String(chrono::Utc::now().to_rfc3339()),
+    );
+    let pretty = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
+        .unwrap_or_else(|_| "{}".to_string());
+    std::fs::write(&path, format!("{pretty}\n"))?;
+    Ok(true)
+}
+
 /// Where the branch tip sits relative to the commit the verdict named.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TipRelation {
@@ -992,6 +1108,14 @@ pub fn review_actionability(
     let Some(v) = verdict else {
         return ReviewActionability::NeedsReview;
     };
+    // BUG-1529: a refusal that was closed out by a merge is not something the
+    // reviewer role still owes rework on — the branch that would have
+    // answered it already shipped. Checked ahead of the sha relation so a
+    // closed record reads Resolved even though the head has since moved past
+    // the reviewed sha (it always has, by the time a merge closes it).
+    if v.is_closed() {
+        return ReviewActionability::Resolved;
+    }
     if relation != TipRelation::AtReviewedSha {
         return ReviewActionability::NeedsReview;
     }

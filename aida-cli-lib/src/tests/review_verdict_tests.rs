@@ -20,6 +20,8 @@ fn rc(kind_raw: &str, sha: Option<&str>) -> RecordedVerdict {
         findings: Vec::new(),
         surviving_findings: Vec::new(),
         recorded_by: None,
+        closed_by_merge: None,
+        closed_at: None,
     }
 }
 
@@ -1098,4 +1100,145 @@ fn permanently_indeterminate_verdict_is_treated_as_absent() {
         review_actionability(Some(&v), relation),
         ReviewActionability::NeedsReview
     );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// BUG-1529: closing a refusal's verdict record when its reworked PR merges.
+// ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn close_verdict_on_merge_stamps_a_blocking_verdict() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    record_verdict(
+        root,
+        "STORY-1",
+        Some("request-changes"),
+        Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        None,
+        Some("three blocking defects"),
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+
+    let closed = close_verdict_on_merge(root, "STORY-1", "cccccccccccc").unwrap();
+    assert!(closed, "a blocking verdict must be closeable");
+
+    let v = read_recorded_verdict(root, "STORY-1").expect("verdict still parses");
+    assert!(v.is_closed());
+    assert_eq!(v.closed_by_merge.as_deref(), Some("cccccccccccc"));
+    assert!(v.closed_at.is_some());
+    // The refusal itself is untouched -- criterion 2: closing is not a fresh
+    // approving review.
+    assert_eq!(v.kind, VerdictKind::RequestChanges);
+    assert_eq!(v.summary.as_deref(), Some("three blocking defects"));
+}
+
+#[test]
+fn close_verdict_on_merge_is_a_no_op_for_a_non_blocking_verdict() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    record_verdict(
+        root,
+        "STORY-2",
+        Some("approved"),
+        Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        None,
+        None,
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+
+    assert!(!close_verdict_on_merge(root, "STORY-2", "cccccccccccc").unwrap());
+    let v = read_recorded_verdict(root, "STORY-2").unwrap();
+    assert!(!v.is_closed());
+}
+
+#[test]
+fn close_verdict_on_merge_never_overwrites_the_first_closer() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    record_verdict(
+        root,
+        "STORY-3",
+        Some("request-changes"),
+        Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        None,
+        None,
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+
+    assert!(close_verdict_on_merge(root, "STORY-3", "first-sha").unwrap());
+    // A second call (e.g. a re-run of the auto-bump scan) must not clobber
+    // the original closing reference.
+    assert!(!close_verdict_on_merge(root, "STORY-3", "second-sha").unwrap());
+    let v = read_recorded_verdict(root, "STORY-3").unwrap();
+    assert_eq!(v.closed_by_merge.as_deref(), Some("first-sha"));
+}
+
+#[test]
+fn close_verdict_on_merge_is_a_no_op_with_no_file_or_empty_ref() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    assert!(!close_verdict_on_merge(root, "STORY-4", "some-sha").unwrap());
+
+    record_verdict(
+        root,
+        "STORY-5",
+        Some("rejected"),
+        Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        None,
+        None,
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+    assert!(!close_verdict_on_merge(root, "STORY-5", "   ").unwrap());
+}
+
+#[test]
+fn outstanding_refusal_query_excludes_closed_and_completed_specs() {
+    // A live refusal, spec still open: outstanding.
+    let live = rc("request-changes", Some("aaaa"));
+    assert!(is_outstanding_refusal(&live, false));
+
+    // Same refusal, but the spec is Completed -- criterion 4's fallback for
+    // the pre-existing corpus this fix cannot retroactively rewrite.
+    assert!(!is_outstanding_refusal(&live, true));
+
+    // A refusal closed by a merge is not outstanding even while the spec
+    // status is unknown/open in the caller's view.
+    let mut closed = rc("request-changes", Some("aaaa"));
+    closed.closed_by_merge = Some("deadbeef".to_string());
+    assert!(!is_outstanding_refusal(&closed, false));
+
+    // An approval was never a refusal.
+    let approved = rc("approved", Some("aaaa"));
+    assert!(!is_outstanding_refusal(&approved, false));
+}
+
+// trace:BUG-1529 | ai:claude
+#[test]
+fn a_closed_verdict_reads_resolved_regardless_of_tip_relation() {
+    // The head has necessarily moved past the reviewed sha by the time a
+    // merge closes the verdict, so AdvancedPast/Rewritten/Unknown must not
+    // reroute a closed record back to NeedsReview / AwaitingRework.
+    let mut v = rc("request-changes", Some("aaaa"));
+    v.closed_by_merge = Some("deadbeef".to_string());
+    for relation in [
+        TipRelation::AtReviewedSha,
+        TipRelation::AdvancedPast,
+        TipRelation::Rewritten,
+        TipRelation::Unknown,
+    ] {
+        assert_eq!(
+            review_actionability(Some(&v), relation),
+            ReviewActionability::Resolved,
+            "closed verdict should read Resolved at relation {relation:?}"
+        );
+    }
 }

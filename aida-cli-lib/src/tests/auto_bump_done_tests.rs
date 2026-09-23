@@ -566,6 +566,74 @@ fn auto_bump_picks_up_subject_refs_on_default_branch() {
     );
 }
 
+// BUG-1529 criterion 5: record a refusal, move the branch past the reviewed
+// sha, merge, and assert the spec no longer reports an outstanding refusal.
+// trace:BUG-1529 | ai:claude
+#[test]
+fn auto_bump_closes_the_refusal_verdict_when_reworked_pr_merges() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    let spec_id = seed_done_spec(&store_path, "STORY-9002");
+
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+
+    // A reviewer refused the work at the pre-rework sha.
+    crate::review_verdict::record_verdict(
+        &project_root,
+        &spec_id,
+        Some("request-changes"),
+        Some(&pre_sha),
+        None,
+        Some("blocking defect"),
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+    let before = crate::review_verdict::read_recorded_verdict(&project_root, &spec_id)
+        .expect("verdict recorded");
+    assert!(
+        crate::review_verdict::is_outstanding_refusal(&before, false),
+        "a fresh refusal with the spec still open must read as outstanding"
+    );
+
+    // The rework lands and the spec's commit references it — the branch has
+    // moved past the reviewed sha.
+    std::fs::write(project_root.join("fix.txt"), "reworked\n").unwrap();
+    run_git(&project_root, &["add", "fix.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", &format!("fix: address review ({spec_id})")],
+    );
+    let merge_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+
+    let storage = Storage::new(store_path.clone());
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert_eq!(flips.len(), 1, "the reworked spec should flip Completed");
+
+    let after = storage.load().unwrap();
+    let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+    assert!(matches!(req.status, RequirementStatus::Completed));
+
+    let closed = crate::review_verdict::read_recorded_verdict(&project_root, &spec_id)
+        .expect("verdict still on disk");
+    assert!(
+        closed.is_closed(),
+        "the verdict should be closed once the reworked PR merges"
+    );
+    assert_eq!(closed.closed_by_merge.as_deref(), Some(merge_sha.as_str()));
+    // The refusal itself is preserved, not rewritten to an approval.
+    assert_eq!(
+        closed.kind,
+        crate::review_verdict::VerdictKind::RequestChanges
+    );
+
+    // The whole point: a reader asking "does this spec carry an outstanding
+    // refusal?" now gets no, using the spec's real (post-merge) status.
+    assert!(!crate::review_verdict::is_outstanding_refusal(
+        &closed, true
+    ));
+}
+
 // trace:BUG-1286 | ai:codex
 #[test]
 fn auto_bump_multi_spec_trailer_emits_one_terminal_event_per_spec() {
