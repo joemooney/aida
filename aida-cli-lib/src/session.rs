@@ -3313,8 +3313,12 @@ fn parse_session_meta_for_agent(
     let mut started_at: Option<chrono::DateTime<chrono::Utc>> = None;
     let mut last_cwd: Option<String> = None;
     let mut role_resolved = false;
+    // BUG-1593: the cap is honoured unconditionally. A role unresolved by
+    // MAX_LINES is `unknown` (None), never a late match found by scanning
+    // further into a transcript that may still be growing.
+    // trace:BUG-1593 | ai:claude
     for (i, line) in reader.lines().enumerate() {
-        if i >= MAX_LINES && title.is_some() && role.is_some() && started_at.is_some() {
+        if i >= MAX_LINES {
             break;
         }
         let Ok(line) = line else { continue };
@@ -3371,21 +3375,29 @@ fn parse_session_meta_for_agent(
             }
         }
 
-        // Role markers — Claude Code logs hook text as ordinary message
-        // content, while commands like `aida role show` and shell echos of
-        // $AIDA_SESSION_ROLE that ran early in the session leave reliable
-        // strings:
-        //   - `Role: implementer`     (from aida role show)
-        //   - `AIDA_SESSION_ROLE=implementer`
-        //   - `AIDA · role: implementer`
-        //   - `AIDA active role: implementer`
-        // Both are checked; the first plausible match wins.
+        // Role markers — only STRUCTURAL markers AIDA itself writes into a
+        // session's own launch/hook context count, never an arbitrary
+        // substring that happened to be echoed back through ordinary tool
+        // output or quoted text:
+        //   - `AIDA_SESSION_ROLE=implementer`  (env, set at session start)
+        //   - `- Role: implementer`            (render_agent_launch_context's
+        //                                        launch-context line, the
+        //                                        dash anchors it to that
+        //                                        exact structural line)
+        //   - `AIDA · role: implementer`       (aida-session-context.sh hook)
+        //   - `AIDA active role: implementer`  (aida-role-context.sh hook)
+        // A bare `Role: ` (e.g. from piping `aida role show` output through
+        // a tool call, or a transcript quoting someone else's "Role: X")
+        // is deliberately NOT matched — that was the BUG-1593 root cause:
+        // it can appear anywhere in arbitrary tool output or pasted text.
+        // The first plausible match (in file order) wins.
         // trace:FR-1-043 | ai:claude
         // trace:BUG-837 | ai:codex
+        // trace:BUG-1593 | ai:claude
         if !role_resolved {
             for marker in [
                 "AIDA_SESSION_ROLE=",
-                "Role: ",
+                "- Role: ",
                 "AIDA · role: ",
                 "AIDA active role: ",
             ] {
@@ -3425,10 +3437,6 @@ fn parse_session_meta_for_agent(
             if let Some(s) = first_spec_id(&line) {
                 spec = Some(s);
             }
-        }
-
-        if i >= MAX_LINES {
-            break;
         }
     }
 
@@ -4484,6 +4492,41 @@ mod tests {
             ]),
             None
         );
+    }
+
+    // BUG-1593: the launch context's own `- Role: <role>` line wins even
+    // when a later line in the same (pre-cap) transcript echoes a foreign,
+    // unanchored `Role: <other>` string — e.g. a tool result quoting
+    // someone else's status text. Only the structural, dash-anchored
+    // marker is trusted; the bare substring is not.
+    // trace:BUG-1593 | ai:claude
+    #[test]
+    fn foreign_echoed_role_string_does_not_override_launch_role() {
+        assert_eq!(
+            parse_session_role_from_lines(&[
+                r#"{"message":"AIDA Launch Context / - Role: implementer"}"#,
+                r#"{"message":"tool output quoting someone else's status: Role: product"}"#,
+            ]),
+            Some("implementer".to_string())
+        );
+    }
+
+    // BUG-1593: a role marker that only appears past the MAX_LINES cap must
+    // never be found — the scan honours the cap regardless of whether role
+    // (or title/started_at) resolved by then, so the result is `unknown`
+    // (None) rather than a late, possibly-stale match from a still-growing
+    // transcript.
+    // trace:BUG-1593 | ai:claude
+    #[test]
+    fn role_marker_past_the_line_cap_is_unknown() {
+        // MAX_LINES is 400 (private to `parse_session_meta_for_agent`); pad
+        // well past it before the marker to land the marker outside the cap.
+        let mut lines: Vec<String> = (0..410)
+            .map(|n| format!(r#"{{"message":"filler line {n}"}}"#))
+            .collect();
+        lines[405] = r#"{"message":"- Role: implementer"}"#.to_string();
+        let refs: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
+        assert_eq!(parse_session_role_from_lines(&refs), None);
     }
 
     // trace:STORY-822 | ai:codex
