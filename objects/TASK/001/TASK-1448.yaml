@@ -1,0 +1,22 @@
+id: 01a0cd53-9e23-7e51-8124-1ecb0d2f2406
+spec_id: TASK-1448
+agreed_id: TASK-1448
+title: Merge-time gate refuses a PR whose approving verdict does not cover the current head
+description: |-
+  Split from BUG-1549 (proxy decision 2026-09-23). The spec prefers a gate that stops the merge (aida pr ship, and the drain merge phase) when the approval's reviewed_sha is not the PR head, is missing, or is incomparable (PRIN-5), in addition to the awaiting surface BUG-1549 delivers.
+
+  ## Acceptance
+  1. aida pr ship refuses to merge a PR whose recorded approval does not cover the current head sha, naming both shas, with an explicit override.
+  2. The drain merge phase shelves (never exits) in the same case.
+  3. Tests cover approval at head (allowed), behind head (refused) and sha-less (refused).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T08:13:24.387700830Z
+modified_at: 2026-09-23T08:13:24.387700830Z
+req_type: Task
+tags:
+- followup
+- merge-safety
+- parent:BUG-1549
