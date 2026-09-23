@@ -27,12 +27,12 @@ description: |-
   - The required-check set is derived from the branch protection or the workflow rather than hardcoded, so adding a required check does not silently leave awaiting reporting on a stale list.
   - A test covers the exact PR-2009 shape: a head with one green non-required check and no build check, asserting it is NOT classified as mergeable-with-CI-green. The existing tests all construct PRs via a helper that passes Some("pass") directly, so they assert the classifier given a rollup and never exercise how the rollup is derived - the defect is upstream of every current test and no assertion added to them would reach it.
   - Cross-check against BUG-1466 so the missing-vs-mismatched-vs-present distinction is handled the same way in both places rather than two different ad-hoc rules.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:33.668555610Z
-modified_at: 2026-09-21T12:22:15.449854227Z
+modified_at: 2026-09-23T15:15:31.327125455Z
 req_type: Bug
 tags:
 - awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
