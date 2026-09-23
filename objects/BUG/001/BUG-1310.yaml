@@ -20,19 +20,12 @@ description: |-
   NOT IN SCOPE: changing what any classifier decides today, and adding a dependency to parse a tool's output where we currently shell out.
 
   Filed by the advisor while reviewing PR #1993, where the exclusion was argued explicitly and well. The reasoning there is worth reading alongside this.
-  "
-  execution_mode: drain
-  relationships[4]{rel,id,title}:
-    Related,BUG-1295,"The orchestrator recovers typed rebase failure causes by substring-matching another AIDA command's prose, so any reword silently downgrades a conflict to an untyped failure and drops its recovery reci"
-    Related,PRIN-4,A diagnostic must be unable to drift away from the decision it explains
-    Related,STORY-1384,"Review PR-2016: [AI:codex] fix(classifiers): inventory external prose contracts (BUG-1310)"
-    Related,BUG-1445,"A rebase-only rework round is indistinguishable from a real failed attempt, so requeueing a shelved spec can loop forever while reporting progress
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-23T10:01:24.714089197Z
+modified_at: 2026-09-23T11:26:53.599784377Z
 req_type: Bug
 tags:
 - diagnostic-decay
