@@ -1013,6 +1013,87 @@ pub(crate) fn dead_queue_entries<'a>(
         .collect()
 }
 
+/// BUG-1512: which of `summaries` look like auto-queued review rows ("Review
+/// PR-N: ...") and aren't already flagged dead by the target-spec rule above.
+/// A routed review entry's liveness must not hinge on the review STORY's own
+/// status — that status only says whether a reviewer closed it, not whether
+/// the PR it reviews is still open. Pure — no forge, no network — so it's
+/// unit-testable on its own; the caller resolves each returned PR number's
+/// merged-or-closed state (via `review_pr_is_merged_or_closed`, or a test
+/// double) and feeds the resolved ids to [`merged_pr_review_entries`].
+// trace:BUG-1512 | ai:claude
+pub(crate) fn review_summaries_pending_merge_check<'a>(
+    summaries: &'a [aida_core::RequirementSummary],
+    already_dead: &std::collections::HashSet<uuid::Uuid>,
+) -> Vec<(&'a aida_core::RequirementSummary, u64)> {
+    summaries
+        .iter()
+        .filter(|s| !already_dead.contains(&s.id))
+        .filter_map(|s| parse_review_story_pr_number(&s.title).map(|pr| (s, pr)))
+        .collect()
+}
+
+/// BUG-1512: the routed review entries whose PR already merged or closed —
+/// additive to `dead_queue_entries`'s target-spec rule, never a replacement
+/// for it (an entry the target-spec rule already caught is excluded via
+/// `already_dead` so the two conditions don't double-count). `merged_pr_ids`
+/// is the set of requirement ids whose PR was confirmed merged/closed (see
+/// `review_summaries_pending_merge_check` for how the caller builds the
+/// candidate list). Pure over its inputs, mirroring `dead_queue_entries`'s
+/// shape so both are unit-testable without a forge/network dependency.
+///
+/// DECISION (BUG-1512 AC3): the review STORY's own status is left untouched
+/// here — still Draft (or whatever it was), just unrouted. It is
+/// deliberately NOT bumped to Completed (that would assert a review that
+/// never happened) and this fix does not invent a new terminal
+/// "closed-unreviewed" status either, since a bare Draft-and-unrouted spec
+/// already reads as "nobody signed off on this" and a new status is a
+/// bigger surface change than this entry-level bug calls for.
+// trace:BUG-1512 | ai:claude
+pub(crate) fn merged_pr_review_entries<'a>(
+    entries: &'a [aida_core::models::QueueEntry],
+    merged_pr_ids: &std::collections::HashSet<uuid::Uuid>,
+    already_dead: &std::collections::HashSet<uuid::Uuid>,
+    for_role: Option<&str>,
+) -> Vec<&'a aida_core::models::QueueEntry> {
+    entries
+        .iter()
+        .filter(|e| match for_role {
+            None => true,
+            Some(want) => e
+                .for_role
+                .as_deref()
+                .is_some_and(|have| want.eq_ignore_ascii_case(have)),
+        })
+        .filter(|e| !already_dead.contains(&e.requirement_id))
+        .filter(|e| merged_pr_ids.contains(&e.requirement_id))
+        .collect()
+}
+
+/// BUG-1512 AC1: a routed review's reason for existing ends when its PR
+/// either MERGED or was CLOSED without merging — a declined PR needs no more
+/// review either, so both are terminal for this purpose. Mirrors
+/// `pr_is_merged_with_sink`'s shape (same `None` = "cannot confirm, don't
+/// collect" contract) but widens the accepted state. `None` on any forge
+/// failure (gh missing/unreachable, no forge configured), never a silent
+/// collect.
+// trace:BUG-1512 | ai:claude
+fn review_pr_is_merged_or_closed(
+    project_root: &std::path::Path,
+    pr: u32,
+    sink: &mut dyn network_retry::RetrySink,
+) -> Option<bool> {
+    crate::forge::forge_for(project_root)
+        .change_metadata(pr as u64, sink)
+        .ok()
+        .map(|m| {
+            matches!(
+                m.state,
+                crate::forge::ChangeState::Merged | crate::forge::ChangeState::Closed
+            )
+        })
+}
+
 /// BUG-772: the UNSATISFIED `BlockedBy` predecessors of `req`, as the
 /// path-to-empty footer's plain-data facts — display id + status, with `None`
 /// status marking a dangling edge (target no longer in the store). A Completed
@@ -1408,6 +1489,22 @@ pub(crate) fn handle_queue_command(
                         *include_completed,
                     )?
                 };
+                // BUG-1513: `queue_list_with_role_fallback` deliberately passes
+                // the CALLER'S OWN entries through unfiltered (it widens the
+                // caller's own queue with peers' role-routed additions, per
+                // BUG-774) — that is correct for the passive/no-`--for` view,
+                // but here an explicit `--for <role>` (or the active session
+                // role) is a stated request for ONLY that role's rows. Without
+                // this second pass, an own-queue entry routed to a different
+                // role rode along in both the printed rows and the declared
+                // `count:`, so the header disagreed with the filter it claimed
+                // to apply. Re-derive the same role/only-unrouted resolution
+                // the human TTY view already uses and apply it here too, so
+                // every row this command emits actually satisfies the filter
+                // it was asked for. trace:BUG-1513 | ai:claude
+                let agent_session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+                let (agent_role_filter, agent_only_unrouted) =
+                    resolve_queue_role_filter(role.as_deref(), *all, agent_session_role.as_deref());
                 let backend = advance_backend(store_path)?;
                 let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
                 let by_id: std::collections::HashMap<Uuid, &aida_core::RequirementSummary> =
@@ -1439,6 +1536,13 @@ pub(crate) fn handle_queue_command(
                 let mut reviewer_actionable = 0usize;
                 let rows: Vec<Vec<String>> = raw
                     .iter()
+                    .filter(|e| {
+                        entry_matches_role_filter(
+                            e.for_role.as_deref(),
+                            agent_role_filter.as_deref(),
+                            agent_only_unrouted,
+                        )
+                    })
                     .filter_map(|e| {
                         let s = by_id.get(&e.requirement_id)?;
                         if !show_terminal {
@@ -1498,7 +1602,11 @@ pub(crate) fn handle_queue_command(
                         ])
                     })
                     .collect();
-                println!("count: {}", rows.len());
+                // BUG-1513 AC6: print the resolved caller identity alongside
+                // the count — the queue is keyed off shell identity (BUG-89),
+                // so two callers comparing a bare count with no identity
+                // attached are not comparing the same filter's output.
+                println!("count: {} for_user: {}", rows.len(), user_id);
                 if reviewer_routed > 0 {
                     println!(
                         "reviewer: actionable {} of {} routed",
@@ -3998,7 +4106,12 @@ pub(crate) fn handle_queue_command(
         // TASK-1052: queue-GC — sweep dead routed entries (target spec
         // archived / Completed / Rejected) and report the count. The explicit
         // companion to the opportunistic self-heal that runs on `queue list`.
+        // BUG-1512: additionally sweeps routed review entries whose PR
+        // already merged, independent of the review STORY's own status — see
+        // `merged_pr_review_entries` for why that's a second, additive
+        // condition rather than a change to the target-spec rule.
         // trace:TASK-1052 | ai:claude
+        // trace:BUG-1512 | ai:claude
         QueueCommand::Gc {
             user,
             r#for,
@@ -4009,8 +4122,35 @@ pub(crate) fn handle_queue_command(
             let summaries =
                 advance_backend(store_path)?.list_summaries(&queue_dead_target_summary_filter())?;
             let dead = dead_queue_entries(&entries, &summaries, r#for.as_deref());
+            let dead_ids: std::collections::HashSet<Uuid> =
+                dead.iter().map(|e| e.requirement_id).collect();
 
-            if dead.is_empty() {
+            // BUG-1512: resolve the merge state of any candidate review rows
+            // not already caught above. This is the one network/gh-backed
+            // step in the sweep; everything upstream and downstream of it
+            // (the candidate selection and the removal) is pure and covered
+            // by unit tests.
+            let review_candidates = review_summaries_pending_merge_check(&summaries, &dead_ids);
+            let mut merged_pr_by_id: std::collections::HashMap<Uuid, u64> =
+                std::collections::HashMap::new();
+            if !review_candidates.is_empty() {
+                let project_root = find_project_root()?;
+                let mut sink = network_retry::NoopSink;
+                for (s, pr) in review_candidates {
+                    if review_pr_is_merged_or_closed(&project_root, pr as u32, &mut sink)
+                        == Some(true)
+                    {
+                        merged_pr_by_id.insert(s.id, pr);
+                    }
+                }
+            }
+            let merged_pr_ids: std::collections::HashSet<Uuid> =
+                merged_pr_by_id.keys().copied().collect();
+            let merged_dead =
+                merged_pr_review_entries(&entries, &merged_pr_ids, &dead_ids, r#for.as_deref());
+
+            let total = dead.len() + merged_dead.len();
+            if total == 0 {
                 println!(
                     "{} No dead queue entries found{}",
                     crate::glyph(crate::glyphs::Glyph::Check).green(),
@@ -4021,7 +4161,6 @@ pub(crate) fn handle_queue_command(
                     }
                 );
             } else {
-                let n = dead.len();
                 println!(
                     "{} {} dead queue entr{} ({})",
                     if *dry_run {
@@ -4029,8 +4168,8 @@ pub(crate) fn handle_queue_command(
                     } else {
                         crate::glyph(crate::glyphs::Glyph::Cross).yellow()
                     },
-                    n.to_string().bold(),
-                    if n == 1 { "y" } else { "ies" },
+                    total.to_string().bold(),
+                    if total == 1 { "y" } else { "ies" },
                     if *dry_run { "would remove" } else { "removing" },
                 );
                 let by_id: std::collections::HashMap<Uuid, &aida_core::RequirementSummary> =
@@ -4054,6 +4193,31 @@ pub(crate) fn handle_queue_command(
                         .unwrap_or_default();
                     println!("  pos {:2}  {}{}", e.position, label.dimmed(), role);
                 }
+                // BUG-1512: a distinct "why" per row — this class survives
+                // the target-spec check above (the story is still Draft) but
+                // its PR already merged, so the review is unrouted, not
+                // completed (see the decision note on `merged_pr_review_entries`).
+                for e in &merged_dead {
+                    let id = by_id
+                        .get(&e.requirement_id)
+                        .and_then(|s| s.agreed_id.as_deref().or(s.spec_id.as_deref()))
+                        .unwrap_or("?");
+                    let pr = merged_pr_by_id
+                        .get(&e.requirement_id)
+                        .map(|n| n.to_string())
+                        .unwrap_or_else(|| "?".to_string());
+                    let role = e
+                        .for_role
+                        .as_deref()
+                        .map(|r| format!(" [for:{r}]"))
+                        .unwrap_or_default();
+                    println!(
+                        "  pos {:2}  {}{}",
+                        e.position,
+                        format!("{id} [PR #{pr} merged/closed — review never closed]").dimmed(),
+                        role,
+                    );
+                }
                 if *dry_run {
                     println!();
                     println!("  {}", "Re-run without --dry-run to remove.".dimmed());
@@ -4061,18 +4225,23 @@ pub(crate) fn handle_queue_command(
                     // for_role None → bulk remove-by-spec (one commit). With a
                     // role filter, drop only the matching-role entry per spec so
                     // a sibling entry routed to another role survives.
+                    let all_dead: Vec<&aida_core::models::QueueEntry> = dead
+                        .iter()
+                        .copied()
+                        .chain(merged_dead.iter().copied())
+                        .collect();
                     let removed = if r#for.is_none() {
-                        let ids: Vec<Uuid> = dead.iter().map(|e| e.requirement_id).collect();
+                        let ids: Vec<Uuid> = all_dead.iter().map(|e| e.requirement_id).collect();
                         storage.queue_remove_many(&user_id, &ids)?.len()
                     } else {
-                        for e in &dead {
+                        for e in &all_dead {
                             storage.queue_remove_for_role(
                                 &user_id,
                                 &e.requirement_id,
                                 r#for.as_deref(),
                             )?;
                         }
-                        dead.len()
+                        all_dead.len()
                     };
                     println!(
                         "{} Removed {} dead queue entr{}",

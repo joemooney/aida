@@ -804,6 +804,9 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
     // trace:STORY-1043 | ai:codex
     if !opts.json && !report.unshipped_work.is_empty() && !opts.quiet_when_empty {
         println!("Unshipped work detected ({}):", report.unshipped_work.len());
+        // trace:TASK-1305 | ai:claude — this surface also renders `recovery`,
+        // so it shares awaiting_you's helper rather than reading the field
+        // straight (see TASK-1305 note on UnshippedWorkItem::recovery).
         for row in &report.unshipped_work {
             println!(
                 "  {} {} on `{}` — {} commit{} ahead, age {} — `{}`",
@@ -813,7 +816,7 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
                 row.commits_ahead,
                 if row.commits_ahead == 1 { "" } else { "s" },
                 row.age,
-                row.recovery.cyan()
+                awaiting_you::unshipped_work_recovery_hint(row).cyan()
             );
         }
     }

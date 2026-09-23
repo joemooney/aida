@@ -551,6 +551,26 @@ pub(crate) struct UnshippedWorkItem {
     pub pr_state: String,
 }
 
+// TASK-1305: `recovery` is recorded once by the collector as the "no PR yet"
+// hint (`aida pr ship <branch>`), which is correct for `pr_state` "absent"
+// (and still reasonable for "merged"/"unknown", where shipping the remaining
+// commits is the right move either way). It is actively wrong for "open" —
+// the branch already has a PR in the review path, so the ask is a merge
+// decision, not another PR. Every render surface for this item must route
+// its action hint through here rather than reading `.recovery` directly, so
+// the "open" case can never regress back to the identical-row bug this spec
+// exists to fix. trace:TASK-1305 | ai:claude
+pub(crate) fn unshipped_work_recovery_hint(item: &UnshippedWorkItem) -> String {
+    if item.pr_state == "open" {
+        format!(
+            "gh pr view {} — PR already open, needs a merge decision",
+            item.branch
+        )
+    } else {
+        item.recovery.clone()
+    }
+}
+
 // trace:STORY-1043 | ai:codex
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct NightlyRedItem {
@@ -812,6 +832,8 @@ impl AwaitingReport {
                 overflow += 1;
                 continue;
             }
+            // trace:TASK-1305 | ai:claude — route through the shared hint so a
+            // branch with an open PR is never told to open one.
             writeln!(
                 w,
                 "  🧭 unshipped work: {} on `{}` — {} commit{} ahead, age {}, PR {} — `{}`",
@@ -821,7 +843,7 @@ impl AwaitingReport {
                 if item.commits_ahead == 1 { "" } else { "s" },
                 item.age,
                 item.pr_state,
-                item.recovery.cyan(),
+                unshipped_work_recovery_hint(item).cyan(),
             )?;
             budget -= 1;
         }
@@ -1637,6 +1659,68 @@ mod tests {
         let json = r.to_json();
         assert_eq!(json["unshipped_work"][0]["spec_id"], "STORY-1043");
         assert_eq!(json["unshipped_work"][0]["commits_ahead"], 2);
+    }
+
+    // trace:TASK-1305 | ai:claude
+    #[test]
+    fn unshipped_work_no_pr_and_open_pr_render_differently() {
+        let no_pr = UnshippedWorkItem {
+            spec_id: "STORY-2001".to_string(),
+            branch: "story-2001-no-pr".to_string(),
+            commits_ahead: 3,
+            age: "2h".to_string(),
+            recovery: "aida pr ship story-2001-no-pr".to_string(),
+            pr_state: "absent".to_string(),
+        };
+        let open_pr = UnshippedWorkItem {
+            spec_id: "STORY-2002".to_string(),
+            branch: "story-2002-open-pr".to_string(),
+            commits_ahead: 3,
+            age: "2h".to_string(),
+            // The collector still records the generic "ship it" hint on the
+            // item — the render layer is what must not repeat it verbatim
+            // for an already-open PR.
+            recovery: "aida pr ship story-2002-open-pr".to_string(),
+            pr_state: "open".to_string(),
+        };
+
+        let r = AwaitingReport {
+            unshipped_work: vec![no_pr, open_pr],
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        let lines: Vec<&str> = s
+            .lines()
+            .filter(|l| l.contains("unshipped work:"))
+            .collect();
+        assert_eq!(lines.len(), 2, "expected one row per branch:\n{s}");
+
+        let no_pr_line = lines
+            .iter()
+            .find(|l| l.contains("STORY-2001"))
+            .expect("no-PR row present");
+        let open_pr_line = lines
+            .iter()
+            .find(|l| l.contains("STORY-2002"))
+            .expect("open-PR row present");
+
+        // Criterion 1: the two states are distinguishable without opening the PR.
+        assert_ne!(no_pr_line, open_pr_line);
+        assert!(no_pr_line.contains("PR absent"), "{no_pr_line}");
+        assert!(open_pr_line.contains("PR open"), "{open_pr_line}");
+
+        // Criterion 2: a branch with an open PR is not told to open one.
+        assert!(
+            no_pr_line.contains("aida pr ship story-2001-no-pr"),
+            "{no_pr_line}"
+        );
+        assert!(
+            !open_pr_line.contains("aida pr ship"),
+            "an open-PR row must not repeat the 'open a PR' hint: {open_pr_line}"
+        );
+        assert!(open_pr_line.contains("merge decision"), "{open_pr_line}");
     }
 
     // STORY-1419 review: the row advertises a spec id and the production call

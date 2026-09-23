@@ -1141,7 +1141,7 @@ fn repo_with_pushed_branch_ahead_of_origin_default(
         &work,
         "finished.txt",
         "done\n",
-        "fix: completed implementation",
+        "fix: completed implementation (BUG-878)",
     );
     git(&work, &["push", "-q", "-u", "origin", "bug-878"]);
     (tmp, work, remote)
@@ -1214,6 +1214,7 @@ fn post_push_pr_recovery_completes_when_the_recorded_worktree_is_gone() {
         &gone,
         "bug-878",
         crate::forge::ForgeKind::GitHub,
+        "BUG-878",
     );
 
     let (ahead, pr) = recovered.expect(
@@ -1243,9 +1244,113 @@ fn post_push_pr_recovery_declines_when_the_branch_was_never_pushed() {
         &gone,
         "branch-that-was-never-pushed",
         crate::forge::ForgeKind::GitHub,
+        "BUG-878",
     );
     assert!(
         recovered.is_none(),
         "no pushed branch means nothing to recover; got {recovered:?}"
+    );
+}
+
+// A `gh` stub that answers `pr list` (the branch-lookup `aida pr ship`
+// reuses) with ONE already-open PR for the head, and `pr create` with a
+// DIFFERENT PR number. A test asserting the returned PR is the `pr list`
+// number, never the `pr create` one, proves adoption happened instead of a
+// second PR being opened. trace:TASK-1443 | ai:claude
+#[cfg(unix)]
+fn fake_gh_with_existing_open_pr(
+    dir: &std::path::Path,
+    existing_pr: u64,
+    branch: &str,
+) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let path = dir.join("fake-gh-existing-pr");
+    std::fs::write(
+        &path,
+        format!(
+            "#!/usr/bin/env bash\n\
+             if [ \"$1\" = \"--version\" ]; then echo 'gh version test'; exit 0; fi\n\
+             case \"$*\" in\n\
+             \t*\"pr list\"*) echo -e '{existing_pr}\\ttitle\\thttps://github.com/example/aida/pull/{existing_pr}\\t{branch}'; exit 0 ;;\n\
+             \t*\"pr create\"*) echo 'https://github.com/example/aida/pull/9999'; exit 0 ;;\n\
+             esac\n\
+             exit 1\n"
+        ),
+    )
+    .unwrap();
+    let mut perms = std::fs::metadata(&path).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&path, perms).unwrap();
+    path
+}
+
+/// TASK-1443: the orchestrator must not open a second PR for a head that
+/// already has an open one (#2042 and #2043 shared a head, 106 seconds
+/// apart — two drives raced the same branch). Reuses the BUG-1485
+/// pushed-branch-worktree-gone fixture; the `gh` stub answers `pr list`
+/// with an existing open PR, and `pr create` with a different number so a
+/// regression that skips the adopt-check is caught opening PR #9999
+/// instead of returning the existing #2042.
+// trace:TASK-1443 | ai:claude
+#[cfg(unix)]
+#[test]
+fn post_push_pr_recovery_adopts_existing_open_pr_instead_of_creating_another() {
+    let (_tmp, work, _remote) = repo_with_pushed_branch_ahead_of_origin_default();
+    let gone = work.parent().unwrap().join("torn-down-worktree");
+
+    let fake_gh = fake_gh_with_existing_open_pr(work.parent().unwrap(), 2042, "bug-878");
+    let _env =
+        crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake_gh.to_str().unwrap())]);
+
+    let recovered = try_open_orchestrator_pr_for_no_pr_worktree(
+        &work,
+        &gone,
+        "bug-878",
+        crate::forge::ForgeKind::GitHub,
+        "BUG-878",
+    );
+
+    let (_ahead, pr) = recovered.expect("an already-open PR must be adopted, not treated as none");
+    assert_eq!(
+        pr, 2042,
+        "must adopt the existing open PR (2042), never call `pr create` for a second one (would be 9999)"
+    );
+}
+
+/// TASK-1442 follow-up (containment for BUG-1510): the drain's own PR-open
+/// recovery path must refuse to open a PR when the branch's commits are
+/// trailered for a DIFFERENT spec than the one this drive is for — the exact
+/// shape of the BUG-1510 incident (STORY-1391's drain opened PR #2043 whose
+/// commits were all trailered BUG-1420). Reuses the same pushed-branch
+/// fixture as the BUG-1485 tests above (worktree gone, work safe on origin,
+/// commit trailered `(BUG-878)`); only the expected spec passed to recovery
+/// differs. No real `gh` involvement is needed because the guard runs BEFORE
+/// the forge is ever called — the fake `gh` stub is still wired so a
+/// regression that skips the guard would be caught opening PR #4242 instead
+/// of refusing.
+// trace:TASK-1442 | ai:claude
+#[cfg(unix)]
+#[test]
+fn post_push_pr_recovery_refuses_when_commit_trailer_names_a_different_spec() {
+    let (_tmp, work, _remote) = repo_with_pushed_branch_ahead_of_origin_default();
+    let gone = work.parent().unwrap().join("torn-down-worktree");
+
+    let fake_gh = fake_gh_that_opens_pr(work.parent().unwrap(), 4242);
+    let _env =
+        crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake_gh.to_str().unwrap())]);
+
+    // The pushed commit is trailered `(BUG-878)` (see the fixture), but this
+    // drive claims to be working a DIFFERENT spec — the misattribution.
+    let recovered = try_open_orchestrator_pr_for_no_pr_worktree(
+        &work,
+        &gone,
+        "bug-878",
+        crate::forge::ForgeKind::GitHub,
+        "STORY-1391",
+    );
+    assert!(
+        recovered.is_none(),
+        "a branch whose only commit is trailered for a different spec must not get a PR \
+         opened under the wrong spec's identity; got {recovered:?}"
     );
 }
