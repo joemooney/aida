@@ -62,12 +62,12 @@ description: |-
   WAVE LAUNCH IS THE RIGHT BOUNDARY - AGREED, AND FOR A SECOND REASON. The spec argues it from mid-wave semantic consistency, which is correct. The additional reason: per-implementer freshness would make a wave's members individually unauditable. Today `drain.lock` records one binary_sha for the wave, and that single fact is what let tonight's staleness be established at all. Per-implementer re-exec replaces one auditable fact with N, recorded nowhere, and the question "what was this wave running" stops having an answer.
 
   ADVISOR DISPOSITION: approved. execution_mode DRIVE, not drain. This is orchestrator-reliability work of the class that ships at the keyboard rather than in an unattended headless wave - a defect here disables the freshness gate for every future wave, and it would be tested by the very mechanism it modifies.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:29:06.068323940Z
-modified_at: 2026-09-23T06:28:24.551618077Z
+modified_at: 2026-09-23T21:49:25.436199698Z
 req_type: Story
 tags:
 - drain-safe
