@@ -4333,6 +4333,15 @@ pub(crate) fn orchestrate_with_resume(
         // `pr rebase --no-smoke` subprocess as the STORY-429 phase-3
         // auto-rebase) and retries the merge exactly once before the failure
         // falls through to shelve. trace:TASK-975 | ai:claude
+        //
+        // TASK-1458 (known limit): since TASK-1448 the retried merge always
+        // meets the approval-covers-head gate, and a rebase always moves the
+        // head past the recorded approval — so in practice this path SHELVES
+        // the spec (`StaleApproval`) rather than shipping. The rebase is not
+        // wasted: the shelved PR is conflict-free and needs only a re-review
+        // of the rebased head. Accepting a rebased head whose patch-id is
+        // unchanged, or re-requesting review in-drain, is the open redesign.
+        // trace:TASK-1458 | ai:claude
         let mut conflict_rebase_attempted = false;
         let mut retries_used = 0usize;
         loop {
@@ -7013,6 +7022,13 @@ mod tests {
         }
         fn attempt_merge_conflict_rebase(&mut self, _failure: &PhaseFailure) -> bool {
             self.conflict_rebase_calls += 1;
+            // TASK-1458: model the real driver faithfully — a clean rebase
+            // moves the PR head past the recorded approval, so the retried
+            // merge meets the TASK-1448 approval-covers-head gate.
+            // trace:TASK-1458 | ai:claude
+            if self.conflict_rebase_ok {
+                self.merge_stale_approval = true;
+            }
             self.conflict_rebase_ok
         }
         fn transient_retry_budget(&self) -> usize {
@@ -7810,12 +7826,18 @@ mod tests {
         assert_eq!(ci_polls, 1, "no re-poll when nothing was pushed");
     }
 
-    /// TASK-975: a merge conflict resolved by one in-drain rebase retries the
-    /// merge once and ships.
-    // trace:TASK-975 | ai:claude
+    /// TASK-975 + TASK-1458: a merge conflict resolved by one in-drain rebase
+    /// retries the merge once — and that retry SHELVES, because the rebase
+    /// moved the head past the recorded approval and the TASK-1448 gate
+    /// refuses an approval that does not cover the head. The rebase path
+    /// cannot ship on its own until re-review (or a patch-id-equivalence
+    /// rule) exists; this test pins that honest outcome instead of the old
+    /// mock-only "ships".
+    // trace:TASK-975 trace:TASK-1458 | ai:claude
     #[test]
-    fn orchestrate_merge_conflict_rebased_in_drain_ships() {
+    fn orchestrate_merge_conflict_rebased_in_drain_shelves_on_stale_approval() {
         let mut driver = MockPhaseDriver::merge_conflict_with_rebase(1, 1, true);
+        driver.shelve_succeeds = true;
         let result = orchestrate(
             &mut driver,
             "TASK-1",
@@ -7823,10 +7845,20 @@ mod tests {
             false,
             EscalateMode::Blocks,
         );
-        assert_eq!(result.exit_code, 0, "{:?}", result.failure);
         assert_eq!(driver.conflict_rebase_calls, 1);
         let merges = driver.calls.iter().filter(|p| **p == Phase::Merge).count();
         assert_eq!(merges, 2, "one retry after the clean rebase");
+        assert_eq!(result.failed_phase, Some(Phase::Merge));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::StaleApproval),
+            "the retry meets the approval-covers-head gate"
+        );
+        assert!(result.shelved_reason.is_some(), "shelved, never shipped");
+        assert!(
+            !driver.calls.contains(&Phase::Pull),
+            "a refused merge never reaches pull"
+        );
     }
 
     /// TASK-975: a rebase that itself conflicts leaves the merge failure

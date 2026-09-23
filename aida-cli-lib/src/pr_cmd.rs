@@ -1498,6 +1498,54 @@ fn pr_head_sha_for_merge_gate(
         .filter(|sha| !sha.is_empty())
 }
 
+/// TASK-1448 + TASK-1458: `aida pr ship`'s approval-covers-head gate.
+/// `Ok(pin)` = merge, pinned to `pin` (`MergeOptions.match_head`, i.e. gh
+/// `--match-head-commit`) so a push between this check and the merge is
+/// refused by the forge instead of landing unreviewed. The pin is the
+/// approved head when an open approval covers it, `None` when there is no
+/// approval, and — under `--override-stale-approval` — the head the override
+/// was granted for, after a durable `advisor-activity.jsonl` record naming
+/// both shas. `Err` = refused (logged as a failed merge step).
+// trace:TASK-1458 | ai:claude
+pub(crate) fn pr_ship_approval_gate(
+    main_worktree: &std::path::Path,
+    pr_number: u64,
+    candidates: &[crate::review_verdict::RecordedVerdict],
+    head_sha: Option<&str>,
+    override_stale_approval: bool,
+    delete_branch: bool,
+) -> Result<Option<String>> {
+    let Some(refusal) = pr_ship::approval_head_refusal(candidates, head_sha) else {
+        return Ok(pr_ship::approved_match_head(candidates, head_sha));
+    };
+    let message = pr_ship::approval_head_refusal_message(pr_number, &refusal);
+    if !override_stale_approval {
+        log_ship_activity(
+            main_worktree,
+            Some(pr_number),
+            &pr_ship::ShipStep::Merge { delete_branch },
+            &pr_ship::StepOutcome::Failed(message.clone()),
+        );
+        anyhow::bail!("{message} (To merge anyway, re-run with `--override-stale-approval`.)");
+    }
+    append_ship_activity_line(
+        main_worktree,
+        &pr_ship::format_stale_approval_override_event(
+            &chrono::Utc::now().to_rfc3339(),
+            pr_number,
+            &refusal,
+        ),
+    );
+    eprintln!(
+        "  {} {message} — shipping anyway (--override-stale-approval)",
+        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+    );
+    Ok(head_sha
+        .map(str::trim)
+        .filter(|sha| !sha.is_empty())
+        .map(str::to_string))
+}
+
 pub(crate) fn pr_ship_handler(
     n: Option<u64>,
     no_pull: bool,
@@ -2219,25 +2267,17 @@ pub(crate) fn pr_ship_handler(
             pr_number,
             &gate_spec_ids,
         );
-        if let Some(refusal) = pr_ship::approval_head_refusal(&candidates, head_sha.as_deref()) {
-            let message = pr_ship::approval_head_refusal_message(pr_number, &refusal);
-            if override_stale_approval {
-                eprintln!(
-                    "  {} {message} — shipping anyway (--override-stale-approval)",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                );
-            } else {
-                log_ship_activity(
-                    &main_worktree,
-                    Some(pr_number),
-                    &ShipStep::Merge { delete_branch },
-                    &StepOutcome::Failed(message.clone()),
-                );
-                anyhow::bail!(
-                    "{message} (To merge anyway, re-run with `--override-stale-approval`.)"
-                );
-            }
-        }
+        // TASK-1458: gate + merge pin + durable override audit, in one
+        // function so the wiring test drives exactly what ship runs.
+        // trace:TASK-1458 | ai:claude
+        let match_head = pr_ship_approval_gate(
+            &main_worktree,
+            pr_number,
+            &candidates,
+            head_sha.as_deref(),
+            override_stale_approval,
+            delete_branch,
+        )?;
         if branch_in_sibling {
             eprintln!(
                 "  step 3: branch {} is checked out in a sibling worktree — \
@@ -2270,6 +2310,7 @@ pub(crate) fn pr_ship_handler(
             method: crate::forge::MergeMethod::Squash,
             squash_subject: explicit_squash_subject.clone(),
             delete_branch,
+            match_head, // trace:TASK-1458 | ai:claude
         };
         let change_ref = crate::forge::ChangeRef {
             id: pr_number,
@@ -3390,6 +3431,13 @@ pub(crate) fn log_ship_activity(
 ) {
     let now = chrono::Utc::now().to_rfc3339();
     let line = pr_ship::format_activity_event(&now, pr_number, step, outcome);
+    append_ship_activity_line(main_worktree, &line);
+}
+
+/// Append one pre-formatted JSON line to `.aida/advisor-activity.jsonl`
+/// (best-effort, like every activity-log write).
+// trace:TASK-1458 | ai:claude
+pub(crate) fn append_ship_activity_line(main_worktree: &std::path::Path, line: &str) {
     let aida_dir = main_worktree.join(".aida");
     if std::fs::create_dir_all(&aida_dir).is_err() {
         return;
@@ -4308,5 +4356,111 @@ mod task_1416_lookup_failure_tests {
         assert!(finish_base_lookup_failed(&ChangeLookup::Unreachable(
             "offline".into()
         )));
+    }
+}
+
+/// TASK-1458: the `aida pr ship` approval gate as `pr_ship_handler` runs it —
+/// the merge pin it returns and the durable activity records it writes.
+// trace:TASK-1458 | ai:claude
+#[cfg(test)]
+mod task_1458_pr_ship_approval_gate_tests {
+    use super::pr_ship_approval_gate;
+    use crate::review_verdict::{RecordedVerdict, VerdictKind};
+
+    const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const OLD: &str = "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    fn approval(sha: &str) -> RecordedVerdict {
+        RecordedVerdict {
+            kind: VerdictKind::Approved,
+            raw: "approved".into(),
+            reviewed_sha: Some(sha.into()),
+            recorded_at: Some("2026-09-23T00:00:00Z".into()),
+            ..Default::default()
+        }
+    }
+
+    fn activity(root: &std::path::Path) -> Vec<serde_json::Value> {
+        std::fs::read_to_string(root.join(".aida").join("advisor-activity.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn covering_approval_pins_the_merge_to_the_approved_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pin = pr_ship_approval_gate(tmp.path(), 5, &[approval(HEAD)], Some(HEAD), false, true)
+            .expect("an approval at the head merges");
+        assert_eq!(pin.as_deref(), Some(HEAD));
+        assert!(activity(tmp.path()).is_empty(), "nothing to audit");
+    }
+
+    #[test]
+    fn no_approval_merges_unpinned() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pin = pr_ship_approval_gate(tmp.path(), 5, &[], Some(HEAD), false, true).unwrap();
+        assert_eq!(pin, None);
+    }
+
+    #[test]
+    fn stale_approval_refuses_and_logs_a_failed_merge_step() {
+        let tmp = tempfile::tempdir().unwrap();
+        let err = pr_ship_approval_gate(tmp.path(), 5, &[approval(OLD)], Some(HEAD), false, true)
+            .expect_err("a stale approval refuses");
+        assert!(
+            err.to_string().contains("--override-stale-approval"),
+            "{err}"
+        );
+        let log = activity(tmp.path());
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0]["step"], "pr-merge");
+        assert_eq!(log[0]["status"], "failed");
+    }
+
+    #[test]
+    fn override_is_recorded_durably_with_both_shas_and_pins_the_overridden_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pin = pr_ship_approval_gate(tmp.path(), 5, &[approval(OLD)], Some(HEAD), true, true)
+            .expect("the override ships");
+        assert_eq!(
+            pin.as_deref(),
+            Some(HEAD),
+            "the override is granted for THIS head only"
+        );
+        let log = activity(tmp.path());
+        assert_eq!(log.len(), 1, "{log:?}");
+        assert_eq!(log[0]["step"], "pr-merge-override-stale-approval");
+        assert_eq!(log[0]["pr"], 5);
+        assert_eq!(log[0]["reviewed_sha"], OLD);
+        assert_eq!(log[0]["head_sha"], HEAD);
+    }
+}
+
+/// TASK-1458: source-shape guard — `pr_ship_handler` routes its merge
+/// through `pr_ship_approval_gate` and hands the returned pin to the forge
+/// merge, so the tested gate is the one ship runs. Needles are split so this
+/// block cannot match its own literals.
+// trace:TASK-1458 | ai:claude
+#[cfg(test)]
+mod task_1458_pr_ship_wiring_guard {
+    #[test]
+    fn pr_ship_handler_pins_its_merge_through_the_approval_gate() {
+        let src = include_str!("pr_cmd.rs");
+        let start = src
+            .find(concat!("pub(crate) fn pr_ship_", "handler("))
+            .expect("handler");
+        let body = &src[start..];
+        let gate = body
+            .find(concat!("let match_head = pr_ship_", "approval_gate("))
+            .expect("the handler runs the approval gate");
+        let opts = body
+            .find(concat!("match_head, // trace:", "TASK-1458"))
+            .expect("the gate's pin reaches MergeOptions");
+        let merge = body
+            .find(concat!(".merge_", "change("))
+            .expect("the handler merges");
+        assert!(gate < opts && opts < merge, "gate → pin → merge order");
     }
 }
