@@ -32,12 +32,12 @@ description: |-
   - A GitHub CHANGES_REQUESTED continues to suppress as it does today; the two sources are unioned, not swapped.
   - The recorded verdict is honoured only when it applies to the CURRENT head. A verdict recorded against an older commit must not suppress a PR that has since been pushed to - this depends on BUG-1466, which is why these two should land in an order where this one does not encode the missing-sha behaviour as acceptable.
   - A test covers the exact shape observed: an open MERGEABLE PR with empty GitHub reviewDecision and an AIDA RequestChanges verdict at the current head, asserting it is NOT classified as awaiting-you. Every existing test in this module constructs review_decision directly via the pr() helper and never consults a verdict file, so no assertion added to them reaches this path.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T20:54:30.012636986Z
-modified_at: 2026-09-23T06:57:35.229300247Z
+modified_at: 2026-09-23T08:10:19.621459627Z
 req_type: Bug
 tags:
 - awaiting review verdicts merge-safety prin-5 from:review-pr-2030
@@ -94,4 +94,22 @@ comments:
   created_at: 2026-09-23T06:57:35.229300247Z
   modified_at: 2026-09-23T06:57:35.229300247Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cd50-cc5e-7261-a7e9-a8a1217d68ef
+  author: aida-auto-bump
+  timestamp: 2026-09-23T08:10:19.614743215Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cd50-cc65-7443-8c6c-f7d5c84e6de0
+  timestamp: 2026-09-23T08:10:19.621458679Z
+  agent: aida
+  commit_sha: 91155561e725f90389e9ddcad8cf0c6209892635
+  summary: Completed via merge 91155561
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T08:10:18.535908585Z
+  completion_sha: 91155561e725f90389e9ddcad8cf0c6209892635
