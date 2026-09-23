@@ -10447,6 +10447,23 @@ pub(crate) fn handle_queue_work(
                     force_claim_note
                 );
             }
+
+            // BUG-1574 AC1: `--steal` may only steal a scope that is either
+            // outside any active batch's scoping (no batch currently
+            // running) or IS a declared member of the currently active
+            // batch — and never a keyboard-only spec (tag or
+            // execution_mode), headless or not. Fail-closed on a
+            // store-load failure or malformed drain-state.json too.
+            // trace:BUG-1574 | ai:claude
+            if let Some(reason) = unattended_git_mutation_refusal(
+                &project_root_for_conflict,
+                &plan.scope,
+                "steal",
+                Some(conflict.branch.as_str()),
+            ) {
+                anyhow::bail!("`--steal` refused for scope `{}`: {}", plan.scope, reason);
+            }
+
             eprintln!(
                 "  {} {} — ending it first (--steal)",
                 "⟲".cyan().bold(),
@@ -13052,6 +13069,38 @@ pub(crate) fn handle_queue_integrate(
                     .map(|e| e.parent_branch_sha.clone());
                 let parent_gone = remote_branch_gone(&project_root, &d.blocked_on_branch);
                 let pr_num = pr_numbers.get(&d.id).and_then(|p| *p);
+
+                // BUG-1574: refuse the rebase/force-push before it happens —
+                // not after — when the child is keyboard-only (tag or
+                // execution_mode) or outside the currently active batch's
+                // declared member set. Fail-closed on a store-load failure
+                // or malformed drain-state.json too.
+                // trace:BUG-1574 | ai:claude
+                if let Some(reason) = crate::unattended_git_mutation_refusal(
+                    &project_root,
+                    &d.id,
+                    "rebase/force-push",
+                    child_branch.as_deref(),
+                ) {
+                    println!("  {} {} — {}", "⏸".yellow(), d.id, reason);
+                    if !dry_run {
+                        if let Err(e) = shelve_spec_on_failure(
+                            &project_root,
+                            &d.id,
+                            "integrate",
+                            0,
+                            "stacked-rebase-refused",
+                            &reason,
+                            "resolve by hand: `aida pr rebase <PR> --onto-parent <SHA>` from an \
+                             interactive/guided session, or add the spec to the active batch, \
+                             then re-run `aida queue integrate --strategy stacked`",
+                        ) {
+                            eprintln!("  {} could not park {}: {e}", "Note:".dimmed(), d.id);
+                        }
+                    }
+                    still_deferred += 1;
+                    continue;
+                }
                 match integrate::classify_stacked_promotion(
                     recorded_sha.as_deref(),
                     parent_gone,
