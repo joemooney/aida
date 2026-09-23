@@ -918,7 +918,7 @@ pub fn detect_forge_kind(origin_url: &str) -> ForgeKind {
 }
 
 /// Extract the host from an SSH or HTTPS git remote URL.
-fn forge_host_of(url: &str) -> Option<String> {
+pub(crate) fn forge_host_of(url: &str) -> Option<String> {
     let url = url.trim();
     if url.is_empty() {
         return None;

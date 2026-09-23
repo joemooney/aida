@@ -30783,16 +30783,44 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
     match action {
         crate::cli::MergeHoldAction::List { json, fix } => {
             let holds = merge_hold::list_holds(&root);
-            let (stale, live) = partition_stale_holds(holds, |pr| {
-                let mut sink = network_retry::StderrSink;
-                pr_is_merged_with_sink(&root, pr as u32, &mut sink)
+            // TASK-1455 / TASK-189: ONE pinned forge read per hold answers
+            // both "is the PR merged" (stale sweep) and "does the forge carry
+            // the label" (the column). The label column reports the FORGE,
+            // not the marker's recorded claim, so it can see marker/label
+            // divergence. trace:TASK-1455 trace:TASK-189 | ai:claude
+            let forge_kind = forge::resolve_forge_kind(&root);
+            let fetch_all = |holds: &[(u64, String)]| {
+                holds
+                    .iter()
+                    .map(|(pr, _)| (*pr, merge_hold::fetch_pinned_change(&root, forge_kind, *pr)))
+                    .collect::<std::collections::HashMap<_, _>>()
+            };
+            let mut facts = fetch_all(&holds);
+            let (stale, live) = partition_stale_holds(holds, |pr| match facts.get(&pr) {
+                Some(Ok(Some(change))) => Some(change.merged),
+                // pure-git: no forge repo to pin; keep the forge-routed check.
+                Some(Ok(None)) => {
+                    let mut sink = network_retry::StderrSink;
+                    pr_is_merged_with_sink(&root, pr as u32, &mut sink)
+                }
+                // unreadable / unpinnable: cannot confirm merged → stays live.
+                _ => None,
             });
             // BUG-1236: `--fix` re-syncs the Layer-2 label on every LIVE hold
-            // whose recorded state is not `synced`, then reports.
+            // whose FORGE label is not confirmed present, then reports.
+            // TASK-189: keyed off the forge read, not the recorded state, so a
+            // label removed at the forge after a `synced` record is repaired.
             if *fix {
                 let mut fixed = 0usize;
                 for (pr, _) in &live {
-                    if merge_hold::read_label_state(&root, *pr) == merge_hold::LabelState::Synced {
+                    let forge_label = facts
+                        .get(pr)
+                        .map(merge_hold::ForgeLabel::from_fetch)
+                        .unwrap_or(merge_hold::ForgeLabel::Unknown(String::new()));
+                    if matches!(
+                        forge_label,
+                        merge_hold::ForgeLabel::Present | merge_hold::ForgeLabel::NoForge
+                    ) {
                         continue;
                     }
                     match merge_hold::sync_label(&root, *pr, true) {
@@ -30805,6 +30833,11 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                 }
                 if fixed == 0 {
                     println!("No live hold needed a label re-sync.");
+                } else {
+                    // Re-read so the listing below shows the post-fix forge.
+                    let all: Vec<(u64, String)> =
+                        live.iter().chain(stale.iter()).cloned().collect();
+                    facts = fetch_all(&all);
                 }
                 // STORY-1397: recusal routing is reconciled HERE, on an
                 // explicit command, never on the awaiting render. It adopts a
@@ -30850,14 +30883,20 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     }
                 }
             }
-            let label_of = |pr: u64| merge_hold::read_label_state(&root, pr);
+            let forge_label_of = |pr: u64| {
+                facts
+                    .get(&pr)
+                    .map(merge_hold::ForgeLabel::from_fetch)
+                    .unwrap_or(merge_hold::ForgeLabel::Unknown(String::new()))
+            };
+            let recorded_of = |pr: u64| match merge_hold::read_label_state(&root, pr) {
+                merge_hold::LabelState::Synced => "synced".to_string(),
+                merge_hold::LabelState::Unsynced(e) => format!("unsynced: {e}"),
+                merge_hold::LabelState::Unknown => "unknown".to_string(),
+            };
             if *json {
                 let row = |pr: u64, reason: &str, is_stale: bool| {
-                    let label = match label_of(pr) {
-                        merge_hold::LabelState::Synced => "synced".to_string(),
-                        merge_hold::LabelState::Unsynced(e) => format!("unsynced: {e}"),
-                        merge_hold::LabelState::Unknown => "unknown".to_string(),
-                    };
+                    let forge_label = forge_label_of(pr);
                     let record = merge_hold::read_hold_record(&root, pr);
                     let kind = record
                         .as_ref()
@@ -30871,16 +30910,30 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         .as_ref()
                         .map(|r| r.recused_principals.clone())
                         .unwrap_or_default();
-                    format!("{{\"pr\":{pr},\"reason\":{reason:?},\"reason_kind\":{kind:?},\"routing_state\":{routing:?},\"recused_principals\":{},\"stale\":{is_stale},\"label\":{label:?}}}", serde_json::to_string(&recused).unwrap_or_else(|_| "[]".into()))
+                    serde_json::json!({
+                        "pr": pr,
+                        "reason": reason,
+                        "reason_kind": kind,
+                        "routing_state": routing,
+                        "recused_principals": recused,
+                        "stale": is_stale,
+                        "label": forge_label.as_str(),
+                        "label_recorded": recorded_of(pr),
+                        "label_diverged": if is_stale {
+                            None
+                        } else {
+                            merge_hold::label_diverged(&forge_label)
+                        },
+                    })
                 };
-                let mut items: Vec<String> = Vec::new();
+                let mut items: Vec<serde_json::Value> = Vec::new();
                 for (pr, reason) in &live {
                     items.push(row(*pr, reason, false));
                 }
                 for (pr, reason) in &stale {
                     items.push(row(*pr, reason, true));
                 }
-                println!("{{\"merge_holds\":[{}]}}", items.join(","));
+                println!("{}", serde_json::json!({ "merge_holds": items }));
                 return Ok(());
             }
             if live.is_empty() && stale.is_empty() {
@@ -30889,17 +30942,23 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             }
             println!("Active merge-holds:");
             for (pr, reason) in &live {
-                let state = label_of(*pr);
-                let rendered = match &state {
-                    merge_hold::LabelState::Synced => state.render().green().to_string(),
-                    merge_hold::LabelState::Unsynced(_) => {
-                        format!("{} (`aida merge-hold list --fix`)", state.render())
-                            .red()
-                            .to_string()
+                let forge_label = forge_label_of(*pr);
+                let recorded = recorded_of(*pr);
+                let rendered = match &forge_label {
+                    merge_hold::ForgeLabel::Present => "label: present".green().to_string(),
+                    merge_hold::ForgeLabel::NoForge => "label: n/a (no forge)".dimmed().to_string(),
+                    merge_hold::ForgeLabel::Absent => "label: ABSENT — DIVERGED: marker holds but the forge gate is not armed (`aida merge-hold list --fix`)"
+                    .red()
+                    .to_string(),
+                    merge_hold::ForgeLabel::Unknown(err) => if err.is_empty() {
+                        "label: unknown (forge not read)".to_string()
+                    } else {
+                        format!("label: unknown (forge not read: {err})")
                     }
-                    merge_hold::LabelState::Unknown => state.render().yellow().to_string(),
+                    .yellow()
+                    .to_string(),
                 };
-                println!("  PR #{pr}  {reason}  [{rendered}]");
+                println!("  PR #{pr}  {reason}  [{rendered} | recorded: {recorded}]");
             }
             for (pr, reason) in &stale {
                 println!(
@@ -31048,9 +31107,20 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                 }
                 (None, true) => {
                     let holds = merge_hold::list_holds(&root);
+                    // TASK-1455: the "is it merged" read that authorises
+                    // removing a marker is pinned to this project's repo — a
+                    // same-numbered merged PR elsewhere must not sweep a live
+                    // hold here. trace:TASK-1455 | ai:claude
+                    let forge_kind = forge::resolve_forge_kind(&root);
                     let (stale, _live) = partition_stale_holds(holds, |pr| {
-                        let mut sink = network_retry::StderrSink;
-                        pr_is_merged_with_sink(&root, pr as u32, &mut sink)
+                        match merge_hold::fetch_pinned_change(&root, forge_kind, pr) {
+                            Ok(Some(change)) => Some(change.merged),
+                            Ok(None) => {
+                                let mut sink = network_retry::StderrSink;
+                                pr_is_merged_with_sink(&root, pr as u32, &mut sink)
+                            }
+                            Err(_) => None,
+                        }
                     });
                     if stale.is_empty() {
                         println!("No stale merge-holds (every marker's PR is still open).");
@@ -83657,18 +83727,28 @@ fn handle_review_record_at(
         .filter(|s| !s.trim().is_empty());
     let forge_pr_sha = if sha.is_none() && envelope_pr_sha.is_none() {
         match pr {
+            // TASK-1455: the verdict's head is read from the PINNED repo and
+            // refused if the forge answers for any other repo, so a PR number
+            // can never stamp this verdict with another repo's head.
+            // trace:TASK-1455 | ai:claude
             Some(n) => Some(
-                pr_cmd::fetch_change_info_via_resolved_forge(
+                merge_hold::fetch_pinned_change(
                     &project_root,
-                    n,
                     crate::forge::resolve_open_change_forge_kind(&project_root),
+                    n,
                 )
+                .and_then(|change| {
+                    change
+                        .ok_or_else(|| "this project has no forge (pure-git)".to_string())?
+                        .head_sha
+                        .ok_or_else(|| format!("the forge did not return a head SHA for #{n}"))
+                })
+                .map_err(|e| anyhow::anyhow!(e))
                 .with_context(|| {
                     format!(
                         "could not resolve PR {n}'s current head for the verdict; pass `--sha <commit>` explicitly"
                     )
-                })?
-                .head_oid,
+                })?,
             ),
             None => None,
         }
