@@ -38723,7 +38723,37 @@ fn branch_name_references_spec(branch: &str, spec: &str) -> bool {
         .trim()
         .trim_start_matches("origin/")
         .to_ascii_lowercase();
-    !slug.is_empty() && (branch == slug || branch.contains(&slug))
+    if slug.is_empty() {
+        return false;
+    }
+    // BUG-1525 review fix: the slug must be a whole segment of the branch
+    // name. A raw substring let BUG-15 match `bug-150-work` and BUG-152
+    // match `claude/bug-1525`. A boundary is start/end or one of `/-._`,
+    // and the character after the slug must not be a digit or letter.
+    // trace:BUG-1525 | ai:claude
+    let is_sep = |c: char| matches!(c, '/' | '-' | '.' | '_');
+    branch.match_indices(&slug).any(|(at, m)| {
+        let before_ok = branch[..at].chars().next_back().is_none_or(is_sep);
+        let after_ok = branch[at + m.len()..].chars().next().is_none_or(is_sep);
+        before_ok && after_ok
+    })
+}
+
+#[cfg(test)]
+mod bug_1525_branch_match_tests {
+    use super::branch_name_references_spec as m;
+
+    // trace:BUG-1525 | ai:claude
+    #[test]
+    fn branch_match_is_whole_segment_only() {
+        assert!(m("bug-15-work", "BUG-15"));
+        assert!(m("claude/bug-15", "BUG-15"));
+        assert!(m("origin/bug-15", "BUG-15"));
+        assert!(m("bug-15", "BUG-15"));
+        assert!(!m("bug-150-work", "BUG-15"));
+        assert!(!m("claude/bug-1525", "BUG-152"));
+        assert!(!m("xbug-15", "BUG-15"));
+    }
 }
 
 fn open_pr_commit_headlines_reference_spec(
