@@ -8325,6 +8325,26 @@ fn dispatched_branch_head_sha(project_root: &std::path::Path, branch: &str) -> O
     git_rev_parse_quiet(project_root, &format!("origin/{branch}"))
 }
 
+/// TASK-1448: the drain merge phase's approval-covers-head gate. `Err` is a
+/// shelvable, never-retried `StaleApproval` failure carrying the same
+/// refusal text `aida pr ship` prints — the drain parks the spec and moves
+/// on rather than exiting. Pure over the verdicts + head so every branch is
+/// testable without a forge.
+// trace:TASK-1448 | ai:claude
+fn drain_merge_approval_gate(
+    candidates: &[review_verdict::RecordedVerdict],
+    head_sha: Option<&str>,
+    pr: u64,
+) -> Result<(), auto_complete::PhaseFailure> {
+    match pr_ship::approval_head_refusal(candidates, head_sha) {
+        None => Ok(()),
+        Some(refusal) => Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::StaleApproval,
+            pr_ship::approval_head_refusal_message(pr, &refusal),
+        )),
+    }
+}
+
 /// Add the orchestrator-owned review context to a reviewer-written PR verdict.
 ///
 /// The reviewer owns the verdict, summary, findings, and any future fields;
@@ -8371,6 +8391,90 @@ fn stamp_pr_review_verdict(
         std::fs::write(&path, serde_json::to_vec_pretty(&value)?)?;
     }
     Ok(path)
+}
+
+#[cfg(test)]
+mod task_1448_drain_merge_approval_gate_tests {
+    // trace:TASK-1448 | ai:claude
+    use super::*;
+
+    const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const OLD: &str = "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    fn approval(sha: Option<&str>) -> review_verdict::RecordedVerdict {
+        review_verdict::RecordedVerdict {
+            kind: review_verdict::VerdictKind::Approved,
+            raw: "approved".into(),
+            reviewed_sha: sha.map(str::to_string),
+            ..Default::default()
+        }
+    }
+
+    fn assert_shelves(result: Result<(), auto_complete::PhaseFailure>) -> String {
+        let failure = result.expect_err("the merge phase must refuse");
+        assert_eq!(failure.kind, auto_complete::FailureKind::StaleApproval);
+        // Shelve-and-continue, never stop the drain; never a transient retry.
+        assert!(failure.kind.is_shelvable());
+        assert!(!auto_complete::should_retry_transient_failure(
+            failure.kind,
+            0,
+            3
+        ));
+        assert!(
+            failure.reason.contains("Re-review the current head"),
+            "{}",
+            failure.reason
+        );
+        failure.reason
+    }
+
+    #[test]
+    fn approval_at_head_lets_the_drain_merge() {
+        assert!(drain_merge_approval_gate(&[approval(Some(HEAD))], Some(HEAD), 5).is_ok());
+    }
+
+    #[test]
+    fn approval_behind_head_shelves() {
+        let reason = assert_shelves(drain_merge_approval_gate(
+            &[approval(Some(OLD))],
+            Some(HEAD),
+            5,
+        ));
+        assert!(
+            reason.contains(&OLD[..12]) && reason.contains(&HEAD[..12]),
+            "{reason}"
+        );
+    }
+
+    #[test]
+    fn approval_without_sha_shelves() {
+        assert_shelves(drain_merge_approval_gate(&[approval(None)], Some(HEAD), 5));
+    }
+
+    #[test]
+    fn unreadable_head_shelves() {
+        assert_shelves(drain_merge_approval_gate(&[approval(Some(HEAD))], None, 5));
+    }
+
+    #[test]
+    fn stale_approval_recovery_hint_names_the_re_review() {
+        let ctx = auto_complete::HintContext {
+            spec: "TASK-1448".into(),
+            pr_number: Some(5),
+            ..Default::default()
+        };
+        let hint = auto_complete::recovery_hint(
+            auto_complete::Phase::Merge,
+            auto_complete::FailureKind::StaleApproval,
+            &ctx,
+        );
+        assert!(hint.contains("Re-review the"), "{hint}");
+        assert!(hint.contains("PR-5"), "{hint}");
+        assert_eq!(
+            auto_complete::FailureKind::StaleApproval.cause_slug(),
+            "stale-approval"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -96820,6 +96924,30 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             crate::merge_lock::DEFAULT_WAIT,
         )
         .map_err(|e| drain_merge_lease_failure(&e, &lease_target, pr))?;
+        // TASK-1448: refuse (shelve, never exit) when the newest recorded
+        // approval does not cover the PR's current head. Checked under the
+        // merge lease, immediately before the merge. trace:TASK-1448 | ai:claude
+        let head_sha = pr_head_sha_best_effort(self, pr).or_else(|| {
+            let branch = self.branch.clone().unwrap_or_default();
+            let status_ref = crate::forge::ChangeRef {
+                id: pr as u64,
+                url: String::new(),
+                branch,
+                base: String::new(),
+                title: None,
+            };
+            self.lifecycle_forge()
+                .change_status(&status_ref)
+                .ok()
+                .map(|status| status.head_sha.trim().to_string())
+                .filter(|sha| !sha.is_empty())
+        });
+        let candidates = pr_ship::merge_gate_verdict_candidates(
+            &[self.project_root.as_path(), lease_root.as_path()],
+            pr as u64,
+            std::slice::from_ref(&self.spec),
+        );
+        drain_merge_approval_gate(&candidates, head_sha.as_deref(), pr as u64)?;
         self.lifecycle_forge()
             .merge_change(&change_ref, &opts, &mut sink)
             .map_err(|e| classify_drain_merge_failure(self.lifecycle_forge, pr, &e))?;
