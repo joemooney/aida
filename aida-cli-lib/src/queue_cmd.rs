@@ -1335,6 +1335,22 @@ pub(crate) fn handle_queue_command(
                         *include_completed,
                     )?
                 };
+                // BUG-1513: `queue_list_with_role_fallback` deliberately passes
+                // the CALLER'S OWN entries through unfiltered (it widens the
+                // caller's own queue with peers' role-routed additions, per
+                // BUG-774) — that is correct for the passive/no-`--for` view,
+                // but here an explicit `--for <role>` (or the active session
+                // role) is a stated request for ONLY that role's rows. Without
+                // this second pass, an own-queue entry routed to a different
+                // role rode along in both the printed rows and the declared
+                // `count:`, so the header disagreed with the filter it claimed
+                // to apply. Re-derive the same role/only-unrouted resolution
+                // the human TTY view already uses and apply it here too, so
+                // every row this command emits actually satisfies the filter
+                // it was asked for. trace:BUG-1513 | ai:claude
+                let agent_session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+                let (agent_role_filter, agent_only_unrouted) =
+                    resolve_queue_role_filter(role.as_deref(), *all, agent_session_role.as_deref());
                 let backend = advance_backend(store_path)?;
                 let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
                 let by_id: std::collections::HashMap<Uuid, &aida_core::RequirementSummary> =
@@ -1347,6 +1363,13 @@ pub(crate) fn handle_queue_command(
                 let show_terminal = *include_terminal || *include_completed;
                 let rows: Vec<Vec<String>> = raw
                     .iter()
+                    .filter(|e| {
+                        entry_matches_role_filter(
+                            e.for_role.as_deref(),
+                            agent_role_filter.as_deref(),
+                            agent_only_unrouted,
+                        )
+                    })
                     .filter_map(|e| {
                         let s = by_id.get(&e.requirement_id)?;
                         if !show_terminal {
@@ -1372,7 +1395,11 @@ pub(crate) fn handle_queue_command(
                         ])
                     })
                     .collect();
-                println!("count: {}", rows.len());
+                // BUG-1513 AC6: print the resolved caller identity alongside
+                // the count — the queue is keyed off shell identity (BUG-89),
+                // so two callers comparing a bare count with no identity
+                // attached are not comparing the same filter's output.
+                println!("count: {} for_user: {}", rows.len(), user_id);
                 println!(
                     "{}",
                     crate::toon::table_raw("queue", &["id", "title", "status", "for_role"], &rows)
