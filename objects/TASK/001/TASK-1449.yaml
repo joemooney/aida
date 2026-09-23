@@ -10,12 +10,12 @@ description: |-
   2. The comparison is against the blocking verdict's reviewed_sha on the DISPATCHED branch; a test covers 'some head moved, but not the dispatched branch'.
   3. The BUG-1527 shape (the phase bound to another spec's PR) is caught, not silently passed.
   4. The Held/Inconclusive arms with pr_number None are either guarded or explicitly documented as unguardable.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T08:13:32.228974840Z
-modified_at: 2026-09-23T17:22:34.220181676Z
+modified_at: 2026-09-23T18:45:23.477427552Z
 req_type: Task
 tags:
 - drain
@@ -45,3 +45,21 @@ comments:
   created_at: 2026-09-23T17:22:34.220181676Z
   modified_at: 2026-09-23T17:22:34.220181676Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cf96-378d-74f3-8667-b25e3dd811ca
+  author: aida-auto-bump
+  timestamp: 2026-09-23T18:45:23.469967909Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cf96-3795-7b33-b032-c12e40cae8fa
+  timestamp: 2026-09-23T18:45:23.477425640Z
+  agent: aida
+  commit_sha: 68ff5c902374a15d2638909c136be8a20426ea00
+  summary: Completed via merge 68ff5c90
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T18:45:22.832979188Z
+  completion_sha: 68ff5c902374a15d2638909c136be8a20426ea00
