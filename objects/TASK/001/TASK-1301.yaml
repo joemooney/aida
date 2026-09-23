@@ -22,11 +22,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:05:14.397525688Z
-modified_at: 2026-09-20T22:03:13.422567458Z
+modified_at: 2026-09-23T06:20:54.095517564Z
 req_type: Task
 tags:
 - agent-surface
 - batch:night-0920
 - papercut
 - severity:cosmetic
+comments:
+- id: 01a0ccec-9dcf-7c31-b08b-301df1e182ed
+  author: joe
+  content: 'PROXY DISPOSITION (Claude for the operator, overnight burn-down): ALREADY FIXED on main, verified. Evidence: commit 222a3f8751 (TASK-190) added --body-file/--stdin to comment add, matching the acceptance criteria aida-cli-lib/src/cli.rs:4480-4490'
+  created_at: 2026-09-23T06:20:54.095517564Z
+  modified_at: 2026-09-23T06:20:54.095517564Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
