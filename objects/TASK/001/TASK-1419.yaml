@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T12:45:17.672410244Z
-modified_at: 2026-09-23T06:42:35.275844296Z
+modified_at: 2026-09-23T06:42:37.055766309Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -65,4 +65,10 @@ comments:
   content: Claude implementer dispatched 2026-09-22 23:31 -> branch claude/task-1419, no PR (overnight burn-down)
   created_at: 2026-09-23T06:31:30.419849588Z
   modified_at: 2026-09-23T06:31:30.419849588Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd00-7f7f-7a53-aaa3-77d9040e387d
+  author: joe
+  content: 'Claude implementer result: claude/task-1419 @ ebb9366d78, docs/plans/2026-09-22-task-1419-fixture-vs-real-store-latency.md. The real store (4226 objects, 23MB) gives list 0.51-0.89s, show 1.13s, cache rebuild 85.5s wall vs 1.6s CPU. A private 19-object fixture gives list 3.42s wall vs 0.03s CPU. The dominant term is HOST CONTENTION (~25-30 concurrent aida processes during measurement), not store size; per-object CPU is ~0.35-0.4ms. Answer to AC3: a fixture cannot model real-store wall latency on a loaded host; latency guards must use CPU time or an idle-runner precondition. Awaiting review, then batch.'
+  created_at: 2026-09-23T06:42:37.055766309Z
+  modified_at: 2026-09-23T06:42:37.055766309Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
