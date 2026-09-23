@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:53:14.701016287Z
-modified_at: 2026-09-23T22:59:00.108521209Z
+modified_at: 2026-09-23T22:59:22.701135148Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -207,6 +207,12 @@ comments:
   content: 'PROXY DECISION (Claude for the operator, 2026-09-22 overnight burn-down; the operator delegated design calls: ''make decisions on my behalf''). The question and the ruling (the recommended option is adopted): Q: which exposure-window strategy for portability defects (required Windows PR leg / merge-queue post-merge cross-platform run / accept-window+make-nightly-actionable)? Recommended: merge-queue post-merge-per-commit run — catches within one merge vs 24h, without reintroducing the PR cycle-time cost TASK-257 already rejected. Now IMPLEMENT-ready; overrule by commenting.'
   created_at: 2026-09-23T06:22:22.759374775Z
   modified_at: 2026-09-23T06:22:22.759374775Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d07e-bfcd-7df2-aa73-2a33b4c28182
+  author: joe
+  content: 'One instance fixed in #2137: the TASK-1444 test used a unix-only fixture without cfg(unix), which broke the Windows test build. The systemic criteria stay open.'
+  created_at: 2026-09-23T22:59:22.701135148Z
+  modified_at: 2026-09-23T22:59:22.701135148Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 history:
 - id: 01a0d07e-6785-7f11-a435-4ea0ce22410d
