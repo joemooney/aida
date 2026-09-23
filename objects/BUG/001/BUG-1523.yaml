@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:39:18.216626306Z
-modified_at: 2026-09-23T10:13:16.899935643Z
+modified_at: 2026-09-23T10:25:17.108185353Z
 req_type: Bug
 tags:
 - parent:BUG-1470 lifecycle substrate-truth severity:operational
@@ -42,4 +42,10 @@ comments:
   content: 'Orchestrator note (overnight burn-down): AC1 and AC2 are delivered by BUG-1564 (merged in batch 5, #2115); aida awaiting lists orphaned In-Progress specs, distinguishing abandoned (exited lease holder) from not-yet-started (no lease). Remaining is AC3, a test through the production mapping path (the BUG-1564 test covers rendering only). Dispatched as test-only work.'
   created_at: 2026-09-23T10:13:15.319262659Z
   modified_at: 2026-09-23T10:13:15.319262659Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdcc-5b34-7250-a09b-1e24de4a0dd0
+  author: joe
+  content: Commit 0fb2a7cdb3 references this requirement
+  created_at: 2026-09-23T10:25:17.108185353Z
+  modified_at: 2026-09-23T10:25:17.108185353Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
