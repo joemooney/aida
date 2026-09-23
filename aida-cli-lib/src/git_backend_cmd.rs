@@ -5280,6 +5280,24 @@ pub(crate) fn handle_git_backend_command(
                 // prior status (before the set). trace:STORY-738 | ai:claude
                 into_completed = is_into_completed_transition(&req.status, canonical);
                 req.set_status_from_str(canonical);
+                // TASK-1446: a spec deliberately reopened to Draft after its
+                // trailered commit already landed must not be flipped right
+                // back to Done by the next pull — `pre_sha=None` scans a
+                // `--max-count=50 HEAD` window that can still contain the
+                // same old commit. Stamp the code-repo HEAD sha at reopen
+                // time in its own field (not `completion_sha`, which the
+                // Done→Completed bump owns for BUG-410) so the Draft-landing
+                // guard can skip any candidate at or before this sha.
+                // trace:TASK-1446 | ai:claude
+                if matches!(req.status, RequirementStatus::Draft) {
+                    if let Ok(project_root) = find_project_root() {
+                        if let Ok(sha) = aida_core::git_ops::head_sha(&project_root) {
+                            req.implementation_info
+                                .get_or_insert_with(aida_core::ImplementationInfo::default)
+                                .reopened_at_sha = Some(sha);
+                        }
+                    }
+                }
                 // STORY-332 / EPIC-28: a spec triaged out of NeedsAttention is
                 // no longer paused — drop the now-stale punt metadata AND any
                 // orchestrator-shelving metadata. The punt ledger

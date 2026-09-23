@@ -63824,6 +63824,32 @@ fn is_auto_bump_work_type(req_type: &RequirementType) -> bool {
     )
 }
 
+/// TASK-1446: true when `candidate` is the reopen-marker sha itself or an
+/// ancestor of it on the code repo — i.e. the commit was already on the
+/// default branch at (or before) the moment the spec was deliberately
+/// reopened to `Draft`, so it is stale evidence that must NOT re-land the
+/// spec at `Done`. A DIFFERENT commit that lands *after* the reopen (not an
+/// ancestor of `reopen_sha`) is fresh evidence and still lands it. Best-effort:
+/// an unreadable/missing repo defaults to "not stale" (the pre-existing
+/// draft-landing behavior) rather than silently swallowing a legitimate flip.
+// trace:TASK-1446 | ai:claude
+fn sha_at_or_before_reopen(
+    project_root: &std::path::Path,
+    candidate: &str,
+    reopen_sha: &str,
+) -> bool {
+    if candidate.eq_ignore_ascii_case(reopen_sha) {
+        return true;
+    }
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["merge-base", "--is-ancestor", candidate, reopen_sha])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 /// BUG-1506: find Draft specs among `candidates` (spec_id → first-seen commit
 /// sha, the same map both the live pull-time scan and `reconcile-status`
 /// already build from `(SPEC-ID)` trailers) whose commit is already on the
@@ -63833,8 +63859,14 @@ fn is_auto_bump_work_type(req_type: &RequirementType) -> bool {
 /// way the reconcile-status replay narrows its own candidate scan. Restricted
 /// to `is_auto_bump_work_type` — see that function's doc comment for why
 /// non-work types (epics, ADRs, docs, …) must never be silently landed here.
-// trace:BUG-1506 | ai:claude
+///
+/// TASK-1446: also honors the reopen guard — a spec whose
+/// `implementation_info.reopened_at_sha` is set was deliberately taken back
+/// to Draft after landing once already; a candidate commit at or before that
+/// sha is the SAME old evidence that already fired, and must not re-land it.
+// trace:BUG-1506 | ai:claude trace:TASK-1446 | ai:claude
 fn collect_draft_landed_candidates(
+    project_root: &std::path::Path,
     store: &aida_core::RequirementsStore,
     candidates: &std::collections::BTreeMap<String, String>,
     spec: Option<&str>,
@@ -63850,10 +63882,22 @@ fn collect_draft_landed_candidates(
             if !is_auto_bump_work_type(&req.req_type) {
                 return None;
             }
-            aida_core::lifecycle::git_merge_lands_draft_at_done(
+            if !aida_core::lifecycle::git_merge_lands_draft_at_done(
                 aida_core::lifecycle::State::from_status(&req.status),
-            )
-            .then(|| (spec_id.clone(), sha.clone()))
+            ) {
+                return None;
+            }
+            // trace:TASK-1446 | ai:claude
+            if let Some(reopen_sha) = req
+                .implementation_info
+                .as_ref()
+                .and_then(|i| i.reopened_at_sha.as_deref())
+            {
+                if sha_at_or_before_reopen(project_root, sha, reopen_sha) {
+                    return None;
+                }
+            }
+            Some((spec_id.clone(), sha.clone()))
         })
         .collect()
 }
@@ -65134,7 +65178,7 @@ fn auto_bump_done_to_completed(
     // so it was never bumped at all and sat reading Draft indefinitely. Land
     // it at Done instead: visible, off the open-backlog shelf, one human
     // confirmation short of Completed. trace:BUG-1506 | ai:claude
-    let draft_landed = collect_draft_landed_candidates(&store, &candidates, None);
+    let draft_landed = collect_draft_landed_candidates(project_root, &store, &candidates, None);
     if !draft_landed.is_empty() {
         if let Ok(confirmed) = apply_draft_to_done_bumps(storage, &draft_landed) {
             if !confirmed.is_empty() {
@@ -65709,6 +65753,34 @@ fn reconcile_no_flip_message(
     }
 }
 
+/// TASK-1446 (BUG-1506 AC3): pure arithmetic for the reconcile-status sweep's
+/// "direction A" summary count — how many candidates in the scanned window
+/// are pre-Done (Draft, or one of Approved/Planned/InProgress about to flip
+/// straight to Completed, or a stale review story flipping the same way)
+/// with an already-merged trailered commit. Split out from
+/// `handle_db_reconcile_status` so the count is unit-testable without a git
+/// fixture. `Done`/`NeedsAttention` prior statuses are deliberately excluded
+/// — "pre-Done" means strictly before `Done` in the pipeline.
+// trace:TASK-1446 | ai:claude
+fn count_pre_done_merged(
+    draft_landed: usize,
+    stale_review_flips: usize,
+    flip_prior_statuses: impl Iterator<Item = RequirementStatus>,
+) -> usize {
+    draft_landed
+        + stale_review_flips
+        + flip_prior_statuses
+            .filter(|s| {
+                matches!(
+                    s,
+                    RequirementStatus::Approved
+                        | RequirementStatus::Planned
+                        | RequirementStatus::InProgress
+                )
+            })
+            .count()
+}
+
 fn handle_db_reconcile_status(
     store_path: &std::path::Path,
     since: Option<&str>,
@@ -65840,7 +65912,7 @@ fn handle_db_reconcile_status(
     // model, same `Done` landing (not `Completed`), so an operator recovering
     // a stranded Draft with a wider `--since` window gets the same outcome a
     // fresh pull would have given it at merge time. trace:BUG-1506 | ai:claude
-    let draft_landed = collect_draft_landed_candidates(&store, &candidates, spec);
+    let draft_landed = collect_draft_landed_candidates(project_root, &store, &candidates, spec);
 
     // Build the planned-flip list. For --spec, we narrow to that one
     // candidate (matched against either spec_id or review-story title).
@@ -65962,6 +66034,61 @@ fn handle_db_reconcile_status(
         }
         None => {}
     }
+
+    // TASK-1446 (BUG-1506 AC3): the sweep runs — and reports — in BOTH
+    // directions, not just the one that produces a flip.
+    //
+    //   direction A: pre-Done specs (Draft/Approved/Planned/InProgress) whose
+    //   trailered commit is already on the default branch — `draft_landed`
+    //   plus the eligible `flips`/`stale_review_flips` entries that started
+    //   short of `Done`. This is what the rest of this function actually acts
+    //   on.
+    //
+    //   direction B: the mirror image — specs already `Completed` that a
+    //   commit in THIS scan window still names, where an open PR still
+    //   references them. Nothing flips here (an already-Completed spec is
+    //   terminal); it is a pure diagnostic surfacing "shipped, but a PR is
+    //   still touching this" for an operator to look at.
+    // trace:TASK-1446 | ai:claude
+    let pre_done_merged_count = count_pre_done_merged(
+        draft_landed.len(),
+        stale_review_flips.len(),
+        flips.iter().map(|f| f.prior_status.clone()),
+    );
+    let completed_candidate_ids: Vec<String> = candidates
+        .iter()
+        .filter(|(spec_id, _)| {
+            spec.map(|t| spec_id.eq_ignore_ascii_case(t))
+                .unwrap_or(true)
+        })
+        .filter(|(spec_id, _)| {
+            store
+                .get_requirement_by_spec_id(spec_id)
+                .map(|r| matches!(r.status, RequirementStatus::Completed))
+                .unwrap_or(false)
+        })
+        .map(|(spec_id, _)| spec_id.clone())
+        .collect();
+    let completed_with_open_pr_count = if completed_candidate_ids.is_empty() {
+        0
+    } else {
+        specs_with_open_prs(project_root, completed_candidate_ids)
+            .map(|open| open.len())
+            .unwrap_or(0)
+    };
+    println!(
+        "{} sweep: {} pre-Done spec{} with a merged trailer, {} Completed spec{} still \
+         referenced by an open PR",
+        "↔".cyan(),
+        pre_done_merged_count,
+        if pre_done_merged_count == 1 { "" } else { "s" },
+        completed_with_open_pr_count,
+        if completed_with_open_pr_count == 1 {
+            ""
+        } else {
+            "s"
+        },
+    );
 
     if flips.is_empty() && stale_review_flips.is_empty() && draft_landed.is_empty() {
         if open_pr_deferred {
