@@ -68376,6 +68376,7 @@ mod bug_1291_orphan_sweep_tests {
             review_decision: None,
             head_sha: Some(head_sha.to_string()),
             labels: Vec::new(),
+            created_at: None,
         }
     }
 
