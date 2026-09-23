@@ -58617,15 +58617,21 @@ fn probe_mail_identity(_pid: u32) -> MailIdentityStatus {
     MailIdentityStatus::Unknown
 }
 
-/// BUG-1553: is a LIVE seat (a lease whose pid exists) actively working,
-/// stuck at a human approval gate, or in a state this probe cannot resolve?
-/// `LeaseState::Live` alone only answers "does a process exist" — the
-/// 2026-09-21 incident (see BUG-1553) showed that answer collapses three
-/// very different situations into one row: genuinely working, alive but
-/// waiting on a permission prompt nobody has answered, and (formerly)
-/// indistinguishable-from-exited. PRIN-5: `Working` is returned only when
-/// the transcript positively supports it — anything the probe can't read
-/// renders `Unknown`, never silently `Working`.
+/// BUG-1553: is a LIVE seat (a lease whose pid exists) actively working, on
+/// a long-running tool call, suspended (a stopped process), or in a state
+/// this probe cannot resolve? `LeaseState::Live` alone only answers "does a
+/// process exist" — the 2026-09-21 incident (see BUG-1553) showed that
+/// answer collapses several different situations into one row. PRIN-5:
+/// `Working` is returned only when the transcript positively supports it —
+/// anything the probe can't read renders `Unknown`, never silently
+/// `Working`. **None of these states asserts "blocked on your approval"** —
+/// per the 2026-09-23 strict-review PROXY DECISION, a purely time-based or
+/// process-state heuristic cannot distinguish a long-running tool call (or a
+/// deliberately paused process) from a genuine unanswered permission prompt,
+/// so both render neutral/warning, never red, and never claim to know a
+/// human is needed. A true "blocked on approval" verdict needs a recorded
+/// marker from Claude Code's Notification hook (the `permission_prompt`
+/// type) and is a follow-up task.
 // trace:BUG-1553 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum SeatActivity {
@@ -58633,12 +58639,16 @@ enum SeatActivity {
     /// tool call left unresolved past the stall threshold).
     Working,
     /// The transcript's last assistant turn called a tool that has had no
-    /// resolving result for longer than [`BLOCKED_PENDING_THRESHOLD_SECS`],
-    /// OR the process itself is job-control-stopped (`T` state) — both are
-    /// what a seat parked on an unanswered permission prompt looks like from
-    /// the outside. `pending_tool` names the tool when the transcript signal
-    /// is what triggered it (the "who/what" a human needs to go unblock).
-    Blocked { pending_tool: Option<String> },
+    /// resolving result for longer than [`LONG_TOOL_CALL_THRESHOLD_SECS`].
+    /// This is NOT evidence of a blocked approval prompt — a long Bash or
+    /// Task call is working, not blocked — so it renders as a neutral
+    /// informational note. `tool` names the pending tool when the
+    /// transcript names one; `secs` is how long it has been outstanding.
+    LongToolCall { tool: Option<String>, secs: i64 },
+    /// The process itself is job-control-stopped (`T`/`t` state in
+    /// `/proc/<pid>/stat`) — e.g. Ctrl-Z'd or paused under a debugger.
+    /// Neutral-to-warning, not "blocked on approval".
+    Suspended,
     /// No session transcript could be resolved/read for this pid at all —
     /// honestly "don't know", never guessed as Working.
     Unknown,
@@ -58648,7 +58658,8 @@ impl SeatActivity {
     fn label(&self) -> &'static str {
         match self {
             SeatActivity::Working => "working",
-            SeatActivity::Blocked { .. } => "blocked",
+            SeatActivity::LongToolCall { .. } => "long_tool_call",
+            SeatActivity::Suspended => "suspended",
             SeatActivity::Unknown => "unknown",
         }
     }
@@ -58656,13 +58667,13 @@ impl SeatActivity {
 
 /// BUG-1553: how long a pending tool call (an assistant turn's tool_use with
 /// no resolving tool_result yet, per the transcript tail) must sit unresolved
-/// before this reads as BLOCKED rather than "still executing". Wide enough
-/// that an ordinary slow tool call rarely trips it on its own; the row still
-/// frames the verdict as an inference ("possibly waiting on your approval"),
-/// not a certainty, because a handful of legitimately long-running tools
-/// (a full test suite) can still cross it.
+/// before this reads as a [`SeatActivity::LongToolCall`] rather than "still
+/// executing". Wide enough that an ordinary slow tool call rarely trips it on
+/// its own; the row frames the verdict as an informational note ("long tool
+/// call"), never an alarm, because a handful of legitimately long-running
+/// tools (a full test suite) routinely cross it.
 // trace:BUG-1553 | ai:claude
-const BLOCKED_PENDING_THRESHOLD_SECS: i64 = 240;
+const LONG_TOOL_CALL_THRESHOLD_SECS: i64 = 240;
 
 /// BUG-1553: pure scan of a session transcript's TAIL lines (most-recent
 /// last, as a JSONL tail naturally reads) for a pending tool call — the last
@@ -58746,7 +58757,10 @@ fn pending_tool_from_tail(
 /// BUG-1553: the pure verdict — given (optionally) a transcript tail and
 /// whether the process is job-control-stopped, classify seat activity.
 /// `tail: None` means "could not be read at all" (no jsonl resolved, or the
-/// read failed) → `Unknown`, never guessed as `Working`.
+/// read failed) → `Unknown`, never guessed as `Working`. Per the
+/// 2026-09-23 strict-review PROXY DECISION, neither branch below asserts
+/// "blocked on approval" — a job-control-stopped process reads `Suspended`
+/// and a long-outstanding tool call reads `LongToolCall`, both neutral.
 // trace:BUG-1553 | ai:claude
 fn classify_seat_activity(
     tail: Option<&[String]>,
@@ -58754,15 +58768,16 @@ fn classify_seat_activity(
     now: chrono::DateTime<chrono::Utc>,
 ) -> SeatActivity {
     if proc_stopped {
-        return SeatActivity::Blocked { pending_tool: None };
+        return SeatActivity::Suspended;
     }
     let Some(lines) = tail else {
         return SeatActivity::Unknown;
     };
     match pending_tool_from_tail(lines, now) {
-        Some((name, age)) if age >= BLOCKED_PENDING_THRESHOLD_SECS => {
-            SeatActivity::Blocked { pending_tool: name }
-        }
+        Some((name, age)) if age >= LONG_TOOL_CALL_THRESHOLD_SECS => SeatActivity::LongToolCall {
+            tool: name,
+            secs: age,
+        },
         _ => SeatActivity::Working,
     }
 }
@@ -58773,7 +58788,10 @@ fn classify_seat_activity(
 /// own speed constraint (STORY-707's "cache-fast, no full scan" discipline
 /// applied to this probe too). Returns whole lines only (a partial first
 /// line from the seek point is dropped). `None` when the file can't be
-/// opened/read at all.
+/// opened/read at all. Reads to the end of the file and decodes lossily
+/// (`from_utf8_lossy`) rather than `read_to_string`, because the seek point
+/// (`max_bytes` from the end) can land mid multi-byte UTF-8 character —
+/// `read_to_string` would hard-error on that instead of tolerating it.
 // trace:BUG-1553 | ai:claude
 fn read_transcript_tail(path: &std::path::Path, max_bytes: u64) -> Option<Vec<String>> {
     use std::io::{Read, Seek, SeekFrom};
@@ -58781,8 +58799,9 @@ fn read_transcript_tail(path: &std::path::Path, max_bytes: u64) -> Option<Vec<St
     let len = file.metadata().ok()?.len();
     let start = len.saturating_sub(max_bytes);
     file.seek(SeekFrom::Start(start)).ok()?;
-    let mut buf = String::new();
-    file.read_to_string(&mut buf).ok()?;
+    let mut raw = Vec::new();
+    file.read_to_end(&mut raw).ok()?;
+    let buf = String::from_utf8_lossy(&raw);
     let mut lines: Vec<String> = buf.lines().map(|l| l.to_string()).collect();
     // Drop a partial first line when we didn't start at byte 0.
     if start > 0 && !lines.is_empty() {
@@ -59997,8 +60016,9 @@ fn build_running_work(
     manifest_role_probe: impl Fn(&str) -> Option<String>,
     mail_identity_probe: impl Fn(u32) -> MailIdentityStatus,
     // BUG-1553: given the lease and its live pid, classify Working /
-    // Blocked / Unknown. Only called for a row with a resolved live pid —
-    // a Dormant/Stale row has no process to inspect and stays `None`.
+    // LongToolCall / Suspended / Unknown. Only called for a row with a
+    // resolved live pid — a Dormant/Stale row has no process to inspect and
+    // stays `None`.
     seat_activity_probe: impl Fn(&SessionLease, u32) -> SeatActivity,
 ) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let rows: Vec<PsRow> = leases
@@ -60251,11 +60271,16 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     // to probe); otherwise "attributed" / "unattributed" /
                     // "unknown" — never collapsed to a boolean "fine".
                     "mail_identity": row.mail_identity.map(MailIdentityStatus::as_str),
-                    // BUG-1553: "working" / "blocked" / "unknown", null when
-                    // no live pid backs the row (nothing to classify).
+                    // BUG-1553: "working" / "long_tool_call" / "suspended" /
+                    // "unknown", null when no live pid backs the row
+                    // (nothing to classify).
                     "activity": row.activity.as_ref().map(SeatActivity::label),
                     "activity_pending_tool": match &row.activity {
-                        Some(SeatActivity::Blocked { pending_tool }) => pending_tool.clone(),
+                        Some(SeatActivity::LongToolCall { tool, .. }) => tool.clone(),
+                        _ => None,
+                    },
+                    "activity_secs": match &row.activity {
+                        Some(SeatActivity::LongToolCall { secs, .. }) => Some(*secs),
                         _ => None,
                     },
                 })
@@ -60400,7 +60425,8 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         .unwrap_or_default()
                         .to_string(),
                     // BUG-1553: blank when no live pid backs the row;
-                    // otherwise "working" / "blocked" / "unknown".
+                    // otherwise "working" / "long_tool_call" / "suspended" /
+                    // "unknown".
                     r.activity
                         .as_ref()
                         .map(SeatActivity::label)
@@ -60574,21 +60600,17 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                 now.with_timezone(&chrono::Local).date_naive(),
             );
             let live_label = format!("{} {}", row.state.glyph(), row.state.label());
+            // BUG-1553 (2026-09-23 PROXY DECISION): neither `LongToolCall`
+            // nor `Suspended` overrides this cell's color/text — a purely
+            // time-based or process-state heuristic cannot assert "blocked
+            // on your approval", so the `live` cell always keeps its
+            // ordinary Live/Dormant/Stale coloring; the neutral/warning
+            // activity note prints as an extra line below instead.
+            // trace:BUG-1553 | ai:claude
             let live_col = match row.state {
                 LeaseState::Live => live_label.green(),
                 LeaseState::Dormant => live_label.cyan(),
                 LeaseState::Stale => live_label.yellow(),
-            };
-            // BUG-1553: a Blocked seat overrides the cell's own color/text —
-            // this is the ONE state a human can fix, so it must not render
-            // identically to a normal working row (acceptance #1: "visually
-            // distinct, not a footnote"). trace:BUG-1553 | ai:claude
-            let live_col = if matches!(row.activity, Some(SeatActivity::Blocked { .. })) {
-                format!("{} blocked", crate::glyph(crate::glyphs::Glyph::Warning))
-                    .red()
-                    .bold()
-            } else {
-                live_col
             };
             // TASK-1143: the worktree lock owner, blank when unlocked. Plain
             // text (paddable), so it slots into the fixed-width table before the
@@ -60667,22 +60689,31 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     );
                 }
             }
-            // BUG-1553: the loud, actionable line for a blocked seat — this
-            // is the ONE state a human can fix, so name what's pending
-            // (acceptance #2's "who/what is being waited on") rather than
-            // let it hide behind the table cell alone. `Unknown` gets its
-            // own honest, quieter note (acceptance #3: say so rather than
-            // guess); silent for `Working` (nothing to flag) and `None` (no
-            // live pid to probe at all).
+            // BUG-1553 (2026-09-23 PROXY DECISION): a neutral informational
+            // note for a long-outstanding tool call — a long Bash or Task
+            // call is working, not blocked, so this is dim/neutral, never
+            // red and never framed as "waiting on your approval". A
+            // job-control-stopped process gets its own neutral-to-warning
+            // "suspended" note. `Unknown` gets its own honest, quieter note
+            // (say so rather than guess); silent for `Working` (nothing to
+            // flag) and `None` (no live pid to probe at all).
             match &row.activity {
-                Some(SeatActivity::Blocked { pending_tool }) => {
-                    let what = pending_tool.as_deref().unwrap_or("a tool call");
+                Some(SeatActivity::LongToolCall { tool, secs }) => {
+                    let what = tool.as_deref().unwrap_or("a tool call");
                     println!(
-                        "{}{} {}: possibly waiting on your approval for {what} — no transcript activity in over {}",
+                        "{}{} {}: {what} ({})",
+                        " ".repeat(11),
+                        crate::glyph(crate::glyphs::Glyph::Neutral),
+                        "long tool call".dimmed(),
+                        humanize_duration_secs(*secs as u64),
+                    );
+                }
+                Some(SeatActivity::Suspended) => {
+                    println!(
+                        "{}{} {}",
                         " ".repeat(11),
                         crate::glyph(crate::glyphs::Glyph::Warning),
-                        "blocked".red().bold(),
-                        humanize_duration_secs(BLOCKED_PENDING_THRESHOLD_SECS as u64),
+                        "suspended (stopped process)".yellow(),
                     );
                 }
                 Some(SeatActivity::Unknown) => {

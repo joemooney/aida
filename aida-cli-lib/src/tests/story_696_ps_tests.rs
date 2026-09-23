@@ -1700,7 +1700,10 @@ fn ps_listed_session_keeps_its_own_role_not_a_foreign_probe_match() {
 }
 
 // ============================================================================
-// BUG-1553: seat activity — working / blocked / unknown, distinct rendering.
+// BUG-1553: seat activity — working / long tool call / suspended / unknown,
+// distinct rendering. No state asserts "blocked on your approval" — that
+// needs a recorded Notification-hook marker (follow-up task); see the
+// 2026-09-23 strict-review PROXY DECISION.
 // ============================================================================
 
 mod bug_1553_seat_activity {
@@ -1708,27 +1711,28 @@ mod bug_1553_seat_activity {
 
     // trace:BUG-1553 | ai:claude
     #[test]
-    fn pending_tool_use_with_no_result_past_threshold_reads_blocked() {
+    fn pending_tool_use_with_no_result_past_threshold_reads_long_tool_call() {
         let now = chrono::Utc::now();
-        let old = now - chrono::Duration::seconds(BLOCKED_PENDING_THRESHOLD_SECS + 30);
+        let old = now - chrono::Duration::seconds(LONG_TOOL_CALL_THRESHOLD_SECS + 30);
         let tail = vec![format!(
             r#"{{"type":"assistant","timestamp":"{}","message":{{"content":[{{"type":"tool_use","id":"t1","name":"Bash"}}]}}}}"#,
             old.to_rfc3339()
         )];
         let activity = classify_seat_activity(Some(&tail), false, now);
-        assert_eq!(
-            activity,
-            SeatActivity::Blocked {
-                pending_tool: Some("Bash".to_string())
+        match activity {
+            SeatActivity::LongToolCall { tool, secs } => {
+                assert_eq!(tool, Some("Bash".to_string()));
+                assert!(secs >= LONG_TOOL_CALL_THRESHOLD_SECS);
             }
-        );
+            other => panic!("expected LongToolCall, got {other:?}"),
+        }
     }
 
     // trace:BUG-1553 | ai:claude
     #[test]
     fn resolved_tool_call_reads_working_even_when_old() {
         let now = chrono::Utc::now();
-        let old = now - chrono::Duration::seconds(BLOCKED_PENDING_THRESHOLD_SECS + 30);
+        let old = now - chrono::Duration::seconds(LONG_TOOL_CALL_THRESHOLD_SECS + 30);
         let tail = vec![
             format!(
                 r#"{{"type":"assistant","timestamp":"{}","message":{{"content":[{{"type":"tool_use","id":"t1","name":"Bash"}}]}}}}"#,
@@ -1743,7 +1747,7 @@ mod bug_1553_seat_activity {
 
     // trace:BUG-1553 | ai:claude
     #[test]
-    fn pending_tool_use_within_threshold_reads_working_not_blocked() {
+    fn pending_tool_use_within_threshold_reads_working_not_long_tool_call() {
         let now = chrono::Utc::now();
         let recent = now - chrono::Duration::seconds(5);
         let tail = vec![format!(
@@ -1764,24 +1768,64 @@ mod bug_1553_seat_activity {
 
     // trace:BUG-1553 | ai:claude
     #[test]
-    fn stopped_process_reads_blocked_regardless_of_transcript() {
+    fn stopped_process_reads_suspended_regardless_of_transcript() {
         let now = chrono::Utc::now();
         // No pending tool at all in the tail — the stopped-process signal
-        // alone must still trip Blocked.
+        // alone must still trip Suspended.
         let tail: Vec<String> = vec![];
         let activity = classify_seat_activity(Some(&tail), true, now);
-        assert_eq!(activity, SeatActivity::Blocked { pending_tool: None });
+        assert_eq!(activity, SeatActivity::Suspended);
     }
 
     // trace:BUG-1553 | ai:claude
     #[test]
-    fn the_three_states_plus_none_render_differently_in_build_running_work() {
+    fn tail_starting_mid_utf8_character_still_parses() {
+        // Simulate the 64KB seek landing mid-character: build a file where
+        // the byte at `start = len - max_bytes` falls INSIDE a multi-byte
+        // UTF-8 sequence ("€" = 0xE2 0x82 0xAC), so the seeked-to tail opens
+        // on a dangling continuation byte. `read_to_end` + `from_utf8_lossy`
+        // must tolerate this (replacing the stray bytes) rather than
+        // failing the whole read the way `read_to_string` would.
+        let now = chrono::Utc::now();
+        let json_line = format!(
+            r#"{{"type":"assistant","timestamp":"{}","message":{{"content":[{{"type":"tool_use","id":"t1","name":"Bash"}}]}}}}"#,
+            now.to_rfc3339()
+        );
+        let prefix = b"padding before the multi-byte char";
+        let euro = "€".as_bytes(); // 0xE2 0x82 0xAC — 3 bytes
+        let mut full = Vec::new();
+        full.extend_from_slice(prefix);
+        full.extend_from_slice(euro);
+        full.push(b'\n');
+        full.extend_from_slice(json_line.as_bytes());
+        full.push(b'\n');
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), &full).unwrap();
+
+        // Seek to one byte INTO the euro sequence — a genuine mid-character
+        // split, not byte 0.
+        let start = prefix.len() + 1;
+        let max_bytes = (full.len() - start) as u64;
+        let lines = read_transcript_tail(tmp.path(), max_bytes);
+        assert!(lines.is_some(), "a mid-character tail must still parse");
+        let lines = lines.unwrap();
+        assert!(
+            lines.iter().any(|l| l.contains("tool_use")),
+            "the well-formed trailing line must survive lossy decoding: {lines:?}"
+        );
+    }
+
+    // trace:BUG-1553 | ai:claude
+    #[test]
+    fn the_four_states_plus_none_render_differently_in_build_running_work() {
         let tmp = tempfile::tempdir().unwrap();
 
         let mut working = ps_lease("l-working", "STORY-1", tmp.path().join("w"));
         working.active_pid = Some(std::process::id());
-        let mut blocked = ps_lease("l-blocked", "STORY-2", tmp.path().join("b"));
-        blocked.active_pid = Some(std::process::id());
+        let mut long_call = ps_lease("l-long-call", "STORY-2", tmp.path().join("b"));
+        long_call.active_pid = Some(std::process::id());
+        let mut suspended = ps_lease("l-suspended", "STORY-4", tmp.path().join("s"));
+        suspended.active_pid = Some(std::process::id());
         let mut unknown = ps_lease("l-unknown", "STORY-3", tmp.path().join("u"));
         unknown.active_pid = Some(std::process::id());
 
@@ -1789,7 +1833,7 @@ mod bug_1553_seat_activity {
 
         let (rows, _) = build_running_work(
             &[],
-            &[working, blocked, unknown],
+            &[working, long_call, suspended, unknown],
             &live,
             chrono::Utc::now(),
             |_| dispatch_health_ps::WorktreeGitProbe::default(),
@@ -1800,29 +1844,32 @@ mod bug_1553_seat_activity {
             |_| MailIdentityStatus::Unknown,
             |l: &SessionLease, _pid: u32| match l.id.as_str() {
                 "l-working" => SeatActivity::Working,
-                "l-blocked" => SeatActivity::Blocked {
-                    pending_tool: Some("Bash".to_string()),
+                "l-long-call" => SeatActivity::LongToolCall {
+                    tool: Some("Bash".to_string()),
+                    secs: 300,
                 },
+                "l-suspended" => SeatActivity::Suspended,
                 _ => SeatActivity::Unknown,
             },
         );
 
-        assert_eq!(rows.len(), 3);
+        assert_eq!(rows.len(), 4);
         let get = |id: &str| rows.iter().find(|r| r.lease.id == id).unwrap();
         assert_eq!(get("l-working").activity, Some(SeatActivity::Working));
         assert_eq!(
-            get("l-blocked").activity,
-            Some(SeatActivity::Blocked {
-                pending_tool: Some("Bash".to_string())
+            get("l-long-call").activity,
+            Some(SeatActivity::LongToolCall {
+                tool: Some("Bash".to_string()),
+                secs: 300,
             })
         );
+        assert_eq!(get("l-suspended").activity, Some(SeatActivity::Suspended));
         assert_eq!(get("l-unknown").activity, Some(SeatActivity::Unknown));
 
-        // Three DISTINCT non-None values — the row-level state a human can
-        // fix (Blocked) must never collapse into the other two.
+        // Four DISTINCT non-None values — none collapses into another.
         let all: std::collections::HashSet<_> =
             rows.iter().map(|r| format!("{:?}", r.activity)).collect();
-        assert_eq!(all.len(), 3, "all three activity states must be distinct");
+        assert_eq!(all.len(), 4, "all four activity states must be distinct");
     }
 
     // trace:BUG-1553 | ai:claude
