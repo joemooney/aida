@@ -27,12 +27,12 @@ description: |
   5. Do not add an override that lets a seat merge its own work under time pressure. The failure this addresses is invisibility, not strictness, and an escape hatch would be used exactly when the rule matters most.
 
   Filed by the advisor after dispatching the three PRs above by hand. The rule was right every time; the routing did not exist.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:14:13.323242098Z
-modified_at: 2026-09-23T22:27:40.269851180Z
+modified_at: 2026-09-23T22:59:31.246835376Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -153,10 +153,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-21T23:16:15.167086363Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Conflicts with main (awaiting_you.rs, lib.rs); supervision holds vanish from awaiting; recusal clear unreachable for TTY human without AIDA_AGENT_ID
-  recovery_hint: address the review findings, move STORY-1397 back to In Progress, and clear the PR hold only after approval
-  shelved_at: 2026-09-23T21:42:38.021978844Z
