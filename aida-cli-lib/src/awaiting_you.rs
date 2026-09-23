@@ -87,6 +87,9 @@ pub(crate) struct AwaitingReport {
     /// from the operator's field of view after a drain dies before PR creation.
     // trace:STORY-1043 | ai:codex
     pub unshipped_work: Vec<UnshippedWorkItem>,
+    /// BUG-1288: whether the `unshipped_work` scan above ran to completion or
+    /// was time-boxed. See [`UnshippedScanStatus`].
+    pub unshipped_work_scan: Option<UnshippedScanStatus>,
     /// Latest scheduled cross-platform run is red. Full report only; the
     /// per-turn notice path skips the network-backed workflow probe.
     // trace:STORY-1043 | ai:codex
@@ -997,6 +1000,32 @@ pub(crate) struct UnshippedWorkItem {
     pub pr_state: String,
 }
 
+/// BUG-1288: honesty flag for the `unshipped_work` scan itself, distinct from
+/// the items it found. `aida awaiting --json` / `aida status --full` bound
+/// the underlying branch probe to a wall-clock budget (see
+/// `collect_unshipped_work_items_bounded` in `lib.rs`) so a repository with a
+/// large candidate-branch population cannot block a machine-readable poll for
+/// tens of seconds. `None` on the report means the scan never ran at all (the
+/// `--notice` fast path, which has always skipped this channel). `Some` means
+/// it ran; `complete: false` means the wall-clock budget was exhausted before
+/// every candidate branch was probed, so `unshipped_work` is a LOWER BOUND —
+/// real unshipped work cannot be missing from what IS reported, but more may
+/// exist among the unscanned candidates. Never collapse an incomplete scan
+/// into an empty/zero result (PRIN-5).
+// trace:BUG-1288 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct UnshippedScanStatus {
+    /// Every eligible candidate branch was probed before the budget expired.
+    pub complete: bool,
+    /// Candidate branches actually probed before finishing or timing out.
+    pub scanned: usize,
+    /// Total eligible candidate branches identified for this run — the same
+    /// width PR #1999 (STORY-1368) established (every branch belonging to a
+    /// non-terminal-status spec or a recorded lease); this scan never narrows
+    /// that set, only how much of it it had time to finish probing.
+    pub candidates: usize,
+}
+
 // TASK-1305: `recovery` is recorded once by the collector as the "no PR yet"
 // hint (`aida pr ship <branch>`), which is correct for `pr_state` "absent"
 // (and still reasonable for "merged"/"unknown", where shipping the remaining
@@ -1642,6 +1671,17 @@ impl AwaitingReport {
                 "pr_state": i.pr_state,
                 "recovery": i.recovery,
             })).collect::<Vec<_>>(),
+            // BUG-1288: `null` means the scan never ran (the `--notice` fast
+            // path); otherwise `complete` says whether every eligible
+            // candidate branch was probed before the wall-clock budget
+            // expired, so a consumer can tell "no unshipped work" apart from
+            // "ran out of time before finishing the check" instead of the
+            // two being silently indistinguishable zeros. trace:BUG-1288 | ai:claude
+            "unshipped_work_scan": self.unshipped_work_scan.map(|s| serde_json::json!({
+                "complete": s.complete,
+                "scanned": s.scanned,
+                "candidates": s.candidates,
+            })),
             "nightly_red": self.nightly_red.as_ref().map(|n| serde_json::json!({
                 "summary": n.summary,
                 "run_id": n.run_id,

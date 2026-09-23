@@ -473,6 +473,7 @@ mod tests {
                 recovery: "".into(),
                 pr_state: "".into(),
             }],
+            unshipped_work_scan: None,
             nightly_red: Some(NightlyRedItem {
                 summary: "".into(),
                 run_id: Some(1),
