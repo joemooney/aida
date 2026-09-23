@@ -9549,6 +9549,54 @@ mod tests {
         );
     }
 
+    /// BUG-1527 AC6: a phase-1 outcome whose ending branch differs from the
+    /// dispatched branch (`ShippedMismatch`) must never let the dispatched
+    /// spec's status change. `MockPhaseDriver` has no store of its own —
+    /// the only status-adjacent driver hooks are a later phase's success
+    /// path (`finish_success`, the only path resembling a Done-adjacent
+    /// write) and the escalation stamp — so "status stays unchanged" is
+    /// observed here as: no phase past Implementer ever runs, nothing gets
+    /// credited (`shipped_spec_id` stays `None`, so `finish_success` never
+    /// fires), and the escalation hook is never touched either. (BUG-1291's
+    /// `handoff_open_pr_after_shelve` is deliberately NOT asserted here: the
+    /// orchestrator calls it after every successful shelve regardless of
+    /// phase, and `MockPhaseDriver` records that call unconditionally too —
+    /// its real implementation is the one that gates on `pr_number`, and it
+    /// hands an ALREADY-OPEN PR to review, not a Done write, so it is
+    /// orthogonal to this spec's status either way.)
+    // trace:BUG-1527 trace:TASK-1457 | ai:claude
+    #[test]
+    fn shipped_mismatch_never_changes_the_dispatched_specs_status() {
+        let mut driver =
+            MockPhaseDriver::failing_at_with_kind(Phase::Implementer, FailureKind::ShippedMismatch);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1527-AC6",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::ShippedMismatch)
+        );
+        assert_eq!(
+            result.shipped_spec_id, None,
+            "nothing was credited — finish_success (the only Done-adjacent write) never ran"
+        );
+        assert_eq!(
+            driver.mark_escalated_calls, 0,
+            "no escalation stamp either — the dispatched spec was never touched"
+        );
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Implementer],
+            "no later phase — and so no later phase's status write — ever ran"
+        );
+    }
+
     /// BUG-1524 (control): a GENUINE launched-then-failed phase-1 failure
     /// (the default `FailureKind::Failed`, matching `run_implementer`'s
     /// non-`LaunchRefused` failures) must keep the existing BUG-1145

@@ -8564,6 +8564,12 @@ fn ensure_spec_done_after_pr(
     pr: u32,
     json: bool,
 ) {
+    // TASK-1457: this gate is intentionally coarse — a PR whose commits name
+    // a different spec AND a PR whose commits carry no spec-ID trailer at
+    // all both skip the Done write here (see the doc comment on
+    // `ensure_pr_open_spec_attribution` for why this caller keeps the two
+    // collapsed rather than adopting the finer three-way split the
+    // branch-swap seam uses).
     if let Err(e) = ensure_pr_open_spec_attribution(repo, branch, spec) {
         if !json {
             eprintln!(
@@ -78465,6 +78471,40 @@ fn run_pr_open_spec_guard(project_root: &std::path::Path, branch: &str, expected
     std::process::exit(1);
 }
 
+/// TASK-1457 (BUG-1527 follow-up): the same three-way classification
+/// `decide_shelve_attribution` (TASK-1444) gives a reviewer-verdict shelve,
+/// but for the branch-swap seam `RealPhaseDriver::run_implementer` gates on
+/// before it will accept a mid-phase branch change. `ensure_pr_open_spec_attribution`
+/// collapses "a trailer names a different spec" and "no commit carries any
+/// spec-ID trailer" into the same `Err` — which is why a same-spec rename
+/// (BUG-223) whose commits simply have not been trailered yet used to read
+/// as a confidently-worded "swap". PRIN-5 requires these stay distinct
+/// outcomes: `Reattributed` is a spec-ID trailer actively pointing somewhere
+/// else (the confident swap case); `Uncertain` is absent evidence, not
+/// contrary evidence, and must never be reported the same way. Fails open
+/// (`Confirmed`) exactly where `ensure_pr_open_spec_attribution` does — an
+/// unresolvable default branch, an unreadable range, or no commits at all —
+/// so a git hiccup here can't manufacture a false swap report either.
+// trace:BUG-1527 trace:TASK-1457 | ai:claude
+fn classify_branch_swap_attribution(
+    repo: &std::path::Path,
+    branch_ref: &str,
+    expected_spec: &str,
+) -> ShelveAttribution {
+    let Some(default_ref) = resolve_default_branch_ref(repo) else {
+        return ShelveAttribution::Confirmed(expected_spec.to_string());
+    };
+    let range = format!("{default_ref}..{branch_ref}");
+    let commits = match read_commits_in_range(repo, &range) {
+        Ok(c) => c,
+        Err(_) => return ShelveAttribution::Confirmed(expected_spec.to_string()),
+    };
+    if commits.is_empty() {
+        return ShelveAttribution::Confirmed(expected_spec.to_string());
+    }
+    decide_shelve_attribution(&commits, expected_spec)
+}
+
 /// TASK-1442 follow-up: the same PR-spec attribution check as
 /// `run_pr_open_spec_guard`, but as a `Result` instead of an exiting side
 /// effect. `run_pr_open_spec_guard` is only safe at `aida pr ship`'s own
@@ -78478,7 +78518,21 @@ fn run_pr_open_spec_guard(project_root: &std::path::Path, branch: &str, expected
 /// local branch name or `origin/<branch>`). A no-op when the default branch
 /// or commit range can't be resolved (soft — a git hiccup shouldn't block
 /// recovery) or when there are no commits to check.
-// trace:TASK-1442 | ai:claude
+///
+/// TASK-1457: this collapses `Reattributed` and `Uncertain` (see
+/// `classify_branch_swap_attribution` above) into the same `Err` — a
+/// deliberate, kept decision for THIS gate. `ensure_spec_done_after_pr`
+/// (its only status-writing caller) must not flip a spec to Done on
+/// EITHER absent or contrary trailer evidence; per PRIN-5, "cannot
+/// determine" is not license to proceed on a Done write any more than
+/// "determined otherwise" is. The two PR-open recovery callers
+/// (`open_orchestrator_pr_for_implementer_worktree`,
+/// `open_orchestrator_pr_for_pushed_branch`) inherit the same fail-safe
+/// for the same reason: opening a PR under an unconfirmed identity is a
+/// second write worth refusing on absent evidence too. Only the
+/// branch-swap seam needs the finer three-way split, because only it has
+/// to tell an operator whether to look for a swap or a missing trailer.
+// trace:TASK-1442 trace:TASK-1457 | ai:claude
 fn ensure_pr_open_spec_attribution(
     repo: &std::path::Path,
     branch_ref: &str,
@@ -95345,25 +95399,46 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // dispatched for. That alone is not new (BUG-223's merged-branch-name
         // guard legitimately renames the SAME spec's branch mid-phase) — the
         // defect is accepting the swap when the new branch's commits credit a
-        // DIFFERENT spec. Reuse the TASK-1442 PR-open attribution guard
-        // (no new trailer parsing) to tell the two apart: a rename that still
-        // credits `self.spec` proceeds exactly as before; a swap onto another
-        // spec's branch must fail this phase and shelve `self.spec` with the
-        // swap named, BEFORE any PR lookup or Done write ever runs — not
-        // after, which is how BUG-1527's contradictory log lines happened.
-        // trace:BUG-1527 | ai:claude
+        // DIFFERENT spec. Classify the branch with `decide_shelve_attribution`
+        // (TASK-1444) via `classify_branch_swap_attribution` (TASK-1457) to
+        // tell THREE cases apart, not two: `Confirmed` (a rename that still
+        // credits `self.spec`) proceeds exactly as before; `Reattributed` (a
+        // trailer confidently naming a DIFFERENT spec) is the genuine swap
+        // and fails this phase with the swap named; `Uncertain` (no commit on
+        // the new branch carries any spec-ID trailer yet) is absent evidence,
+        // not contrary evidence — PRIN-5 forbids reporting it as a confident
+        // "swap" — so it fails this phase too (the attribution cannot be
+        // confirmed, so the Done write below must not run either way) but
+        // with wording that says exactly that instead of asserting a swap
+        // that was never established. Either way this runs BEFORE any PR
+        // lookup or Done write, not after, which is how BUG-1527's
+        // contradictory log lines happened.
+        // trace:BUG-1527 trace:TASK-1457 | ai:claude
         if branch != recorded_branch {
-            if let Err(attribution) =
-                ensure_pr_open_spec_attribution(&worktree_path, &branch, &self.spec)
-            {
-                return Err(auto_complete::PhaseFailure::of(
-                    auto_complete::FailureKind::ShippedMismatch,
-                    format!(
-                        "the implementer's branch swapped mid-phase — dispatched on `{}`, ended \
-                         on `{}`: {}",
-                        recorded_branch, branch, attribution
-                    ),
-                ));
+            match classify_branch_swap_attribution(&worktree_path, &branch, &self.spec) {
+                ShelveAttribution::Confirmed(_) => {}
+                ShelveAttribution::Reattributed(other) => {
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::ShippedMismatch,
+                        format!(
+                            "the implementer's branch swapped mid-phase — dispatched on `{}`, \
+                             ended on `{}`, whose commits credit {} instead of {}",
+                            recorded_branch, branch, other, self.spec
+                        ),
+                    ));
+                }
+                ShelveAttribution::Uncertain(reason) => {
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::ShippedMismatch,
+                        format!(
+                            "the implementer's branch changed mid-phase — dispatched on `{}`, \
+                             ended on `{}` — attribution unknown ({reason}): this may be a \
+                             same-spec rename (BUG-223) whose commits simply have not been \
+                             trailered yet, not a confirmed swap onto another spec's work",
+                            recorded_branch, branch
+                        ),
+                    ));
+                }
             }
         }
 
