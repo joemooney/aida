@@ -915,6 +915,11 @@ pub fn record_verdict_at_path(
             .collect(),
     );
     archive_current_round(&mut obj, &incoming_key);
+    // BUG-1529 review fix: a close belongs to the round it closed. A new
+    // round of review must not inherit it, or a fresh refusal reads as
+    // resolved. trace:BUG-1529 | ai:claude
+    obj.remove("closed_by_merge");
+    obj.remove("closed_at");
     let mut set = |k: &str, v: Option<&str>| {
         if let Some(v) = v.map(str::trim).filter(|s| !s.is_empty()) {
             obj.insert(k.to_string(), serde_json::Value::String(v.to_string()));

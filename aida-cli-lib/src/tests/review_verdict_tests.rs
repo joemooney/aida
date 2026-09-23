@@ -1242,3 +1242,64 @@ fn a_closed_verdict_reads_resolved_regardless_of_tip_relation() {
         );
     }
 }
+
+// BUG-1529 review fix: a new round must not inherit the previous round's
+// close, and a closed refusal must not suppress a later PR.
+// trace:BUG-1529 | ai:claude
+#[test]
+fn a_fresh_refusal_after_a_close_is_not_closed() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let rc = |sha: &str| {
+        record_verdict(
+            root,
+            "STORY-9",
+            Some("request-changes"),
+            Some(sha),
+            None,
+            Some("blocking"),
+            &[],
+            "reviewer-a",
+        )
+        .unwrap();
+    };
+    rc("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    assert!(close_verdict_on_merge(root, "STORY-9", "cccccccccccc").unwrap());
+    assert!(read_recorded_verdict(root, "STORY-9").unwrap().is_closed());
+    rc("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    let v = read_recorded_verdict(root, "STORY-9").unwrap();
+    assert!(!v.is_closed(), "a new round must not inherit the old close");
+    assert_eq!(v.kind, VerdictKind::RequestChanges);
+}
+
+// trace:BUG-1529 | ai:claude
+#[test]
+fn a_closed_refusal_does_not_suppress_a_later_pr() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    // Sha-less refusal: were it live, it would be Unverifiable and suppress.
+    record_verdict(
+        root,
+        "STORY-8",
+        Some("request-changes"),
+        None,
+        None,
+        Some("blocking"),
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+    let live = read_recorded_verdict(root, "STORY-8").unwrap();
+    assert!(
+        crate::awaiting_you::classify_pr_review(std::slice::from_ref(&live), Some("dddddddd"))
+            .suppressed,
+        "control: a live sha-less refusal suppresses"
+    );
+    assert!(close_verdict_on_merge(root, "STORY-8", "cccccccccccc").unwrap());
+    let closed = read_recorded_verdict(root, "STORY-8").unwrap();
+    assert!(
+        !crate::awaiting_you::classify_pr_review(std::slice::from_ref(&closed), Some("dddddddd"))
+            .suppressed,
+        "a closed refusal must not suppress a later PR"
+    );
+}
