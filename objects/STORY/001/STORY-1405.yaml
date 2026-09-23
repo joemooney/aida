@@ -36,12 +36,12 @@ description: |-
   NOT IN SCOPE: preventing a human from deliberately overriding. The goal is that the merger KNOWS, not that they are forbidden.
 
   Raised by claude-reviewer-1 from instance 1, who declined to file it on the grounds that an in-flight marker is a design question rather than a defect. That is a fair reading of instance 1 alone. Instance 2 is what makes it a defect: the same gap has already cost a wasted review round and a ledger entry recording a broken independence rule.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T21:22:32.534380767Z
-modified_at: 2026-09-23T18:51:43.385573736Z
+modified_at: 2026-09-23T19:40:21.536162831Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -136,4 +136,22 @@ comments:
   created_at: 2026-09-23T18:51:38.723495391Z
   modified_at: 2026-09-23T18:51:38.723495391Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cfc8-8a92-7420-8fdd-7f2ff746953c
+  author: aida-auto-bump
+  timestamp: 2026-09-23T19:40:21.522666706Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cfc8-8aa0-7790-a90d-f70e5e2ef374
+  timestamp: 2026-09-23T19:40:21.536161148Z
+  agent: aida
+  commit_sha: 1dfb2a3ddc18ce43e700ba86428b4e331fc55647
+  summary: Completed via merge 1dfb2a3d
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T19:40:21.522352136Z
+  completion_sha: 1dfb2a3ddc18ce43e700ba86428b4e331fc55647
