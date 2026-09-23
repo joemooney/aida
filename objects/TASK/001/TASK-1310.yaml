@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:39:48.714673512Z
-modified_at: 2026-09-23T10:50:05.207467436Z
+modified_at: 2026-09-23T10:58:16.995185018Z
 req_type: Task
 tags:
 - parent:BUG-1470 review-verdict observability severity:operational
@@ -47,4 +47,10 @@ comments:
   content: 'Claude implementer result: claude/task-1310 @ c875ce0297 (awaiting_you.rs only). Blocked review rows carry recorded_at; ''refused Nd ago, no rework since'' with a 7-day overdue flag; JSON has recorded_at/age_secs/overdue; a missing recorded_at renders ''age unknown'' (PRIN-5). Reuses classify_pr_review; the notice path is unchanged. 5 tests. Awaiting review, then batch 9.'
   created_at: 2026-09-23T10:50:05.207467436Z
   modified_at: 2026-09-23T10:50:05.207467436Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdea-9123-7ca2-bd8f-faf56ccf2f28
+  author: joe
+  content: 'Review blocker fixed by the orchestrator: an Unverifiable Blocked row now reads ''refused Nd ago, rework since then unknown'', with JSON overdue null; only AtHead claims ''no rework since'' / overdue. Test added. Batch 9.'
+  created_at: 2026-09-23T10:58:16.995185018Z
+  modified_at: 2026-09-23T10:58:16.995185018Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
