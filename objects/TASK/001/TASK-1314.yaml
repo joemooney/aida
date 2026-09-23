@@ -38,7 +38,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:05:36.150787113Z
-modified_at: 2026-09-23T09:53:38.850155318Z
+modified_at: 2026-09-23T09:53:42.021380718Z
 req_type: Task
 tags:
 - store-integrity mojibake follow-up:task-1313 severity:cosmetic
@@ -59,4 +59,10 @@ comments:
   content: 'Dispatch retracted: the spec sequences this after TASK-1313''s detector lands. Not started.'
   created_at: 2026-09-23T07:53:32.120118498Z
   modified_at: 2026-09-23T07:53:32.120118498Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdaf-7085-75f1-91b4-2886ab4b4152
+  author: joe
+  content: 'Unblocked: TASK-1313''s detector merged in batch 6 (#2116). PROXY APPROVAL (Claude for the operator).'
+  created_at: 2026-09-23T09:53:42.021380718Z
+  modified_at: 2026-09-23T09:53:42.021380718Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
