@@ -1,0 +1,21 @@
+id: 01a0cec0-7c7f-7841-8bd2-dc77477ea578
+spec_id: TASK-1455
+agreed_id: TASK-1455
+title: Pin the forge repo (-R) on merge-hold label/verdict forge calls so a PR number can never act on a different repo
+description: |-
+  Split from BUG-1536 AC5 (2026-09-23). The review record path now has one explicit write root, but the forge calls in merge_hold.rs (label add/remove, PR lookups) still infer the repo from the cwd or ambient config, so a PR number can resolve against the wrong repo. Pin --repo/-R (from the resolved project root's origin) on every such call. merge_hold.rs was off-limits during STORY-1397's rework; do this after PR #2103 lands or is abandoned.
+
+  ## Acceptance
+  1. Every gh/glab call in the merge-hold and review-record paths passes an explicit repo derived from the resolved project root.
+  2. A test proves that a PR number with a mismatched repo is refused.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T14:51:56.415946563Z
+modified_at: 2026-09-23T14:51:56.415946563Z
+req_type: Task
+tags:
+- followup
+- merge-safety
+- parent:BUG-1536
