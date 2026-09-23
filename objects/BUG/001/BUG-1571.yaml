@@ -58,7 +58,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:42:35.206134427Z
-modified_at: 2026-09-23T12:20:30.498321624Z
+modified_at: 2026-09-23T12:20:32.517488871Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -119,4 +119,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 05:06 -> branch claude/bug-1571, no PR (overnight burn-down)
   created_at: 2026-09-23T12:06:36.143005724Z
   modified_at: 2026-09-23T12:06:36.143005724Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce35-e085-7742-a4ce-478103c50086
+  author: joe
+  content: 'Claude implementer result: claude/bug-1571 @ 700f72dbd3. Root cause: handle_review_record wrote the PR-keyed handshake twice with bare fs::write and no verification. Now there is a single write_verdict_atomic (temp + rename + read-back) used by record, close_verdict_on_merge and backfill; the mode/timestamp overlay is folded into one write; both print sites re-check that the file exists and bail naming the missing artefact. 2 unix tests. Awaiting review.'
+  created_at: 2026-09-23T12:20:32.517488871Z
+  modified_at: 2026-09-23T12:20:32.517488871Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
