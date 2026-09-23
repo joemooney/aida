@@ -3696,9 +3696,30 @@ pub(crate) fn orchestrate_with_resume(
         // (Err(f)-recovered, Punted->Proceed, PrOpened, AlreadyMerged,
         // Inconclusive, Held) now runs through, so the six call sites cannot
         // drift apart again. trace:BUG-1522 | ai:claude
+        //
+        // The optional `$hint_override` arm exists for exactly one caller:
+        // the Inconclusive arm below. `driver.rework_no_op_failure()` always
+        // resolves its own generic `FailureKind::ReworkNoOp` hint ("push a
+        // fixup commit or punt the finding") through `recovery_hint`, which
+        // is right for a genuine no-progress rework round but wrong when
+        // phase 1 ALSO reported Inconclusive (BUG-257/BUG-266 — a transient
+        // GH/Anthropic-API blip, not a stalled rework): that case's own
+        // `retry_hint` (the `--resume <session>` hint `finish_inconclusive`
+        // showed before this guard intercepted it) is what an operator needs
+        // to recover, and PhaseFailure::with_hint_override is the same BUG-
+        // 1299 mechanism that already carries a resolved-together hint
+        // through `resolve_phase_failure` instead of a kind-only re-
+        // derivation. trace:BUG-1522 | ai:claude
         macro_rules! fail_on_rework_no_op {
             () => {
+                fail_on_rework_no_op!(None::<String>);
+            };
+            ($hint_override:expr) => {
                 if let Some(f) = driver.rework_no_op_failure() {
+                    let f = match $hint_override {
+                        Some(hint) => f.with_hint_override(hint),
+                        None => f,
+                    };
                     return resolve_phase_failure(
                         driver,
                         Phase::Implementer,
@@ -3819,7 +3840,11 @@ pub(crate) fn orchestrate_with_resume(
                 Ok(ImplementerOutcome::Inconclusive { reason, retry_hint }) => {
                     driver.capture_phase_done_pr();
                     durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-                    fail_on_rework_no_op!();
+                    // BUG-1522: if the rework guard also shelves this round as a
+                    // no-op, keep the `--resume` hint this Inconclusive arm would
+                    // otherwise have shown (see the macro doc above) rather than
+                    // losing it to the generic ReworkNoOp hint.
+                    fail_on_rework_no_op!(retry_hint.clone());
                     // TASK-136: in a batch drain, shelve-and-advance instead of pausing
                     // the whole batch at this head; single-spec keeps the pause.
                     if batch {
@@ -6196,6 +6221,12 @@ mod tests {
         /// orchestrator's phase-1 PR lookup hit a transient GH-API blip and
         /// cannot tell whether a PR was opened. The drain pauses.
         inconclusive: Option<String>,
+        /// BUG-266/BUG-1522: the `retry_hint` carried alongside `inconclusive`
+        /// on the mocked `ImplementerOutcome::Inconclusive`. `None` (default)
+        /// matches the pre-existing mock behaviour (BUG-257's plain GH-blip
+        /// shape); `Some` simulates the Anthropic-API `--resume` hint so a
+        /// test can assert it survives the BUG-1522 rework-no-op guard.
+        inconclusive_retry_hint: Option<String>,
         /// BUG-250: when set, `run_implementer` returns
         /// [`ImplementerOutcome::Held`] — the implementer deliberately held the
         /// PR (branch pushed, PR withheld for a manual gate). The drain reports
@@ -6325,6 +6356,7 @@ mod tests {
                 advisor_calls: 0,
                 resume: None,
                 inconclusive: None,
+                inconclusive_retry_hint: None,
                 held: None,
                 mark_escalated_calls: 0,
                 shelve_succeeds: false,
@@ -6656,7 +6688,7 @@ mod tests {
             if let Some(reason) = &self.inconclusive {
                 return Ok(ImplementerOutcome::Inconclusive {
                     reason: reason.clone(),
-                    retry_hint: None,
+                    retry_hint: self.inconclusive_retry_hint.clone(),
                 });
             }
             if let Some(reason) = &self.held {
@@ -10278,6 +10310,48 @@ mod tests {
             Some(FailureKind::ReworkNoOp)
         );
         assert!(result.shelved_reason.is_some());
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+    }
+
+    /// BUG-1522: when the Inconclusive arm's rework-no-op guard shelves the
+    /// round, the shelved `FailureReason` must keep the leg-specific
+    /// `--resume` hint (BUG-266) `finish_inconclusive` would have shown had
+    /// the guard not intercepted it first — not the generic
+    /// `FailureKind::ReworkNoOp` "push a fixup commit or punt" hint, which is
+    /// actively misleading when the round was cut short by an API outage
+    /// rather than a stalled rework.
+    // trace:BUG-1522 | ai:claude
+    #[test]
+    fn inconclusive_rework_no_op_keeps_the_resume_hint() {
+        let mut driver = MockPhaseDriver::inconclusive_at_implementer(
+            "Anthropic API outage during the headless implementer: API Error: 529 Overloaded",
+        );
+        driver.inconclusive_retry_hint =
+            Some("aida queue work BUG-1522 --resume 019e2f423e7c".to_string());
+        driver.rework_no_op = true;
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1522",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::ReworkNoOp)
+        );
+        let shelved = result
+            .shelved_reason
+            .as_ref()
+            .expect("the no-op round must shelve");
+        assert_eq!(
+            shelved.recovery_hint.as_deref(),
+            Some("aida queue work BUG-1522 --resume 019e2f423e7c"),
+            "the shelved reason must carry the Inconclusive arm's --resume hint, \
+             not the generic ReworkNoOp hint"
+        );
         assert_eq!(driver.calls, vec![Phase::Implementer]);
     }
 
