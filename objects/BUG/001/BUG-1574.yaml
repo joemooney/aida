@@ -54,12 +54,12 @@ description: |-
 
   Filed by the driver-advisor seat. Related: the #2019 and #2061 rework lanes (both hit it),
   BUG-1567/BUG-1569 (the tests those lanes were fixing).
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:37:23.055506428Z
-modified_at: 2026-09-23T17:47:33.598577950Z
+modified_at: 2026-09-23T19:05:01.374370124Z
 req_type: Bug
 tags:
 - orchestrator drain safety
@@ -76,3 +76,21 @@ comments:
   created_at: 2026-09-23T17:47:33.598577950Z
   modified_at: 2026-09-23T17:47:33.598577950Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cfa8-30b2-7fa0-acda-351d87cf70ff
+  author: aida-auto-bump
+  timestamp: 2026-09-23T19:05:01.362587832Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0cfa8-30be-7992-8933-1eb7c95cd334
+  timestamp: 2026-09-23T19:05:01.374367289Z
+  agent: aida
+  commit_sha: c49fc02085af2f8bf1296890b6b9404eec919745
+  summary: Completed via merge c49fc020
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T19:05:01.362358327Z
+  completion_sha: c49fc02085af2f8bf1296890b6b9404eec919745
