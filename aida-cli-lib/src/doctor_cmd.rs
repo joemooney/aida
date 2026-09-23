@@ -3170,26 +3170,120 @@ pub(crate) fn branch_content_fully_landed(
     };
 
     let default_range = format!("{merge_base}..{default_ref}");
-    let Some(default_commits) = run(&["rev-list", &default_range]) else {
+
+    // BUG-1288: this fallback used to spawn a `git show | git patch-id` PAIR
+    // per default-side commit (`branch_unshipped_patch_count_default`'s
+    // sibling cost). On a long-lived repo an old branch's merge-base can sit
+    // thousands of commits behind the default branch, so that per-commit
+    // fan-out was the dominant cost of both `aida awaiting --json` and `aida
+    // status --full` (measured: one 2,496-commit range took 3m41s of wall
+    // clock for THIS SINGLE BRANCH's landed-check, serialized N times across
+    // every candidate branch in `collect_unshipped_work_items`). That is "the
+    // probe's setup" the BUG-1288 review flagged — not the candidate set,
+    // which stays exactly as wide as PR #1999 left it.
+    //
+    // Two changes, kept independent so each is auditable on its own:
+    //
+    // 1. Bound the walk. A default-side range wider than
+    //    `MAX_SQUASH_FALLBACK_COMMITS` is too expensive to exhaust patch-id
+    //    matching over, so it is skipped rather than paid for on every read.
+    //    The conservative branch is `false` ("not confirmed landed") — the
+    //    branch STAYS in the unshipped-work report rather than being
+    //    silently hidden on unproven equivalence (PRIN-5); at worst a
+    //    genuinely-landed old branch is reported once more than necessary,
+    //    never the reverse.
+    // 2. When under the bound, replace the N subprocess PAIRS with exactly
+    //    two processes total: one `git log -p` streaming every default-side
+    //    commit's diff (each preceded by its full hash, from `--format=%H`),
+    //    piped into one `git patch-id --stable`, which associates each
+    //    computed id with the commit-hash line that precedes it. This is the
+    //    same diff text `git show --format= --binary <commit>` produced per
+    //    commit — including the same "no diff" empty patch for a merge
+    //    commit `git log -p` doesn't expand by default — so the match result
+    //    is unchanged; only the process count drops from O(range) to O(1).
+    // trace:BUG-1288 | ai:claude
+    const MAX_SQUASH_FALLBACK_COMMITS: usize = 500;
+    let Some(count_out) = run(&["rev-list", "--count", &default_range]) else {
         return false;
     };
-    if !default_commits.status.success() {
+    if !count_out.status.success() {
         return false;
     }
-    for commit in String::from_utf8_lossy(&default_commits.stdout).lines() {
-        let Some(commit_diff) = run(&["show", "--format=", "--binary", commit]) else {
-            return false;
-        };
-        if !commit_diff.status.success() {
-            return false;
-        }
-        match patch_id(&commit_diff.stdout) {
-            Some(Some(id)) if id == branch_patch_id => return true,
-            Some(_) => {}
-            None => return false,
-        }
+    let Ok(commit_count) = String::from_utf8_lossy(&count_out.stdout)
+        .trim()
+        .parse::<usize>()
+    else {
+        return false;
+    };
+    if commit_count == 0 {
+        return false;
     }
-    false
+    if commit_count > MAX_SQUASH_FALLBACK_COMMITS {
+        return false;
+    }
+
+    let Some(log_out) = run(&["log", "--format=%H", "-p", "--binary", &default_range]) else {
+        return false;
+    };
+    if !log_out.status.success() {
+        return false;
+    }
+    let Some(default_side_ids) = patch_id_pairs(project_root, &log_out.stdout) else {
+        return false;
+    };
+    default_side_ids.iter().any(|id| id == &branch_patch_id)
+}
+
+/// BUG-1288: batched sibling of the per-commit `patch_id` closure in
+/// [`branch_content_fully_landed`] — feeds a whole `git log -p` stream (one
+/// commit hash line followed by that commit's diff, repeated) through a
+/// SINGLE `git patch-id --stable` process and returns every resulting patch
+/// id, instead of spawning one `git patch-id` per commit. `git patch-id`
+/// associates each id with the commit-hash line it saw immediately before
+/// that diff, so the id/commit pairing this repository doesn't currently need
+/// (only the id set is consulted) still falls out of the same single pass.
+// trace:BUG-1288 | ai:claude
+fn patch_id_pairs(project_root: &std::path::Path, log_p_output: &[u8]) -> Option<Vec<String>> {
+    use std::io::Write;
+    use std::process::{Command as PCmd, Stdio};
+
+    let mut child = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["patch-id", "--stable"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut stdin = child.stdin.take()?;
+    let input = log_p_output.to_vec();
+    // BUG-1288 fix-up: writing the WHOLE stream to stdin before reading any
+    // stdout deadlocks once the log is large enough to fill both the stdin
+    // and stdout OS pipe buffers at once (patch-id blocks writing output
+    // because we haven't read it yet; we block writing input because it
+    // hasn't read enough of it yet) — a real risk here, since the very point
+    // of this function is to hand it a big `git log -p` stream. Write on a
+    // separate thread so `wait_with_output` can drain stdout concurrently;
+    // the thread exits (dropping `stdin`, closing the pipe so patch-id sees
+    // EOF) whether or not the write fully succeeds.
+    // trace:BUG-1288 | ai:claude
+    let writer = std::thread::spawn(move || {
+        let _ = stdin.write_all(&input);
+    });
+    let output = child.wait_with_output().ok()?;
+    let _ = writer.join();
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    Some(
+        stdout
+            .lines()
+            .filter_map(|line| line.split_whitespace().next())
+            .map(str::to_string)
+            .collect(),
+    )
 }
 
 /// TASK-878: scan AIDA/Agent-tool managed worktrees and classify each under the
@@ -5150,6 +5244,118 @@ mod story_462_doctor_tests {
         assert!(
             !branch_content_fully_landed(&root, "main", "partial-work"),
             "a branch carrying a genuinely-unshipped file must never be reported fully landed"
+        );
+    }
+
+    // BUG-1288: `branch_content_fully_landed`'s squash-merge fallback used to
+    // spawn a `git show | git patch-id` subprocess PAIR per commit between a
+    // branch's merge-base and the default branch. On the aida repo itself,
+    // one call with a 2,496-commit range measured 3m41s of wall clock — the
+    // dominant cause of `aida awaiting --json` / `aida status --full`
+    // blocking for 70-90s. This fixture reproduces the same shape at a
+    // CI-affordable scale (500+ commits) and pins two things at once: the
+    // deep-history branch must not block the caller (the new
+    // `MAX_SQUASH_FALLBACK_COMMITS` bound bails out instead of walking the
+    // whole range), and bailing out must stay conservative — a genuinely
+    // unshipped branch still reads `false` ("not confirmed landed"), never a
+    // false `true`, so real unshipped work can never be hidden by this bound
+    // (PRIN-5 / BUG-1288 acceptance #6). The 30s budget is deliberately
+    // generous: this pins "does not regress back to unbounded", not a tight
+    // perf target — this bug's own history (the candidate population roughly
+    // 8x'd between when the spec was filed and when this fix landed) is the
+    // reason a tight wall-clock assertion would be the wrong thing to pin in
+    // CI. trace:BUG-1288 | ai:claude
+    #[test]
+    fn branch_content_fully_landed_bails_out_on_a_deep_history_range() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+
+        std::process::Command::new("git")
+            .arg("init")
+            .arg(&root)
+            .output()
+            .unwrap();
+        run(&["config", "user.name", "Test"]);
+        run(&["config", "user.email", "test@example.com"]);
+        std::fs::write(root.join("README.md"), "base\n").unwrap();
+        run(&["add", "README.md"]);
+        run(&["commit", "-m", "init"]);
+        run(&["branch", "-M", "main"]);
+
+        // Branch off right away — this commit is the merge-base the filler
+        // history below piles up past.
+        run(&["checkout", "-b", "deep-history-work"]);
+        std::fs::write(root.join("never-shipped.txt"), "genuinely unshipped\n").unwrap();
+        run(&["add", "never-shipped.txt"]);
+        run(&["commit", "-m", "add never-shipped.txt"]);
+        run(&["checkout", "main"]);
+
+        // Push main past MAX_SQUASH_FALLBACK_COMMITS (500) commits since the
+        // branch's merge-base — the shape that took 3m41s pre-fix on real
+        // history.
+        for i in 0..520 {
+            run(&["commit", "--allow-empty", "-m", &format!("filler {i}")]);
+        }
+
+        let merge_base_out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["merge-base", "main", "deep-history-work"])
+            .output()
+            .unwrap();
+        let merge_base = String::from_utf8_lossy(&merge_base_out.stdout)
+            .trim()
+            .to_string();
+        let count_out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["rev-list", "--count", &format!("{merge_base}..main")])
+            .output()
+            .unwrap();
+        let default_range_count: u32 = String::from_utf8_lossy(&count_out.stdout)
+            .trim()
+            .parse()
+            .unwrap();
+        assert!(
+            default_range_count > 500,
+            "fixture must exceed MAX_SQUASH_FALLBACK_COMMITS to exercise the bound, got {default_range_count}"
+        );
+
+        // Warm the fixture (git's loose-object access, this process's page
+        // cache, …) before the timed call, so the assertion below measures
+        // the bounded algorithm's own cost, not first-touch overhead.
+        let _ = branch_content_fully_landed(&root, "main", "deep-history-work");
+
+        let budget = std::time::Duration::from_secs(30);
+        let started = std::time::Instant::now();
+        let landed = branch_content_fully_landed(&root, "main", "deep-history-work");
+        let elapsed = started.elapsed();
+
+        assert!(
+            elapsed < budget,
+            "deep-history squash-fallback took {elapsed:?}, expected well under the \
+             {budget:?} regression budget (pre-fix this shape measured 3m41s on real history)"
+        );
+        assert!(
+            !landed,
+            "a genuinely-unshipped branch must stay reported as NOT landed even when the \
+             expensive proof is skipped for being too large — never silently true"
         );
     }
 

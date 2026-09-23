@@ -66,13 +66,13 @@ pub struct BranchInfo {
     pub name: String,
     #[serde(default)]
     pub dirty: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_zero")]
     pub ahead_main: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_zero")]
     pub behind_main: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_zero")]
     pub ahead_upstream: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_zero")]
     pub behind_upstream: i64,
     #[serde(default)]
     pub has_upstream: bool,
@@ -81,6 +81,18 @@ pub struct BranchInfo {
 /// PR / CI rollup (`status.pr`). The same key carries four shapes —
 /// `{skipped}`, `{error,reason}`, `{state:"none"}`, or the full PR — so
 /// every field is optional and [`pr_lines`] dispatches on which are set.
+/// `aida status --json` emits `null` for the upstream counts on a branch
+/// with no upstream (e.g. a local-only branch); read that as 0 rather than
+/// failing the whole overlay parse. Rendering is already gated on
+/// `has_upstream`, so a 0 here is never shown as a real count.
+// trace:BUG-1503 | ai:claude
+fn null_as_zero<'de, D>(d: D) -> std::result::Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Option::<i64>::deserialize(d)?.unwrap_or(0))
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct PrInfo {
     #[serde(default)]
@@ -742,5 +754,16 @@ mod tests {
             model.cache.is_some(),
             "expected the heavy report's `cache` section; got a shape that looks like the fast bare path"
         );
+    }
+
+    // trace:BUG-1503 | ai:claude
+    #[test]
+    fn parse_accepts_null_upstream_counts_on_a_local_only_branch() {
+        let json = br#"{"branch": {"ahead_main":2,"behind_main":0,"ahead_upstream":null,"behind_upstream":null,"dirty":false,"has_upstream":false,"name":"local-only"},"cache":{"fresh":true,"rows":1}}"#;
+        let m = parse(json).expect("null upstream counts must not fail the overlay parse");
+        let b = m.branch.expect("branch");
+        assert_eq!(b.ahead_upstream, 0);
+        assert_eq!(b.behind_upstream, 0);
+        assert!(!b.has_upstream);
     }
 }

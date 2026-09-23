@@ -632,6 +632,13 @@ pub struct MergeOptions {
     pub squash_subject: Option<String>,
     /// Delete the source branch after a successful merge (forge-side).
     pub delete_branch: bool,
+    /// Refuse the merge unless the change's head is still this commit — the
+    /// head the merge gate verified the approval covers. Closes the race
+    /// between the approval-covers-head check and the merge itself: gh passes
+    /// it as `--match-head-commit`, GitLab as the merge `sha`, pure-git
+    /// compares the local branch head. `None` = no pin (the prior behaviour).
+    // trace:TASK-1458 | ai:claude
+    pub match_head: Option<String>,
 }
 
 impl MergeOptions {
@@ -641,8 +648,57 @@ impl MergeOptions {
             method: MergeMethod::Squash,
             squash_subject: None,
             delete_branch: false,
+            match_head: None,
         }
     }
+}
+
+/// TASK-1458: does the change's `actual` head satisfy a `match_head` pin?
+/// Uses the same sha comparison the approval gate uses (prefix match, too
+/// short to compare = no), so a pin can only pass where the gate would.
+// trace:TASK-1458 | ai:claude
+pub(crate) fn head_matches_pin(pin: &str, actual: &str) -> bool {
+    crate::awaiting_you::review_relation(Some(pin), Some(actual))
+        == crate::awaiting_you::ReviewRelation::Same
+}
+
+/// TASK-1458: the `gh pr merge` argv for `opts`. Squash reuses the
+/// SPEC-410-pinned `pr_ship::merge_args`; a `match_head` pin appends
+/// `--match-head-commit <sha>` so GitHub itself refuses a head that moved
+/// after the merge gate checked it.
+// trace:TASK-1458 | ai:claude
+pub(crate) fn github_merge_argv(id: u64, opts: &MergeOptions) -> Vec<String> {
+    let mut a: Vec<String> = match opts.method {
+        MergeMethod::Squash => {
+            crate::pr_ship::merge_args(id, opts.delete_branch, opts.squash_subject.as_deref())
+        }
+        other => {
+            let mut a: Vec<String> = vec!["pr".into(), "merge".into(), id.to_string()];
+            a.push(
+                match other {
+                    MergeMethod::Merge => "--merge",
+                    MergeMethod::Rebase => "--rebase",
+                    MergeMethod::Squash => unreachable!("squash handled above"),
+                }
+                .to_string(),
+            );
+            if let Some(subject) = &opts.squash_subject {
+                a.push("--subject".into());
+                a.push(subject.clone());
+            }
+            if opts.delete_branch {
+                a.push("--delete-branch".into());
+            }
+            a
+        }
+    };
+    if let Some(sha) = opts.match_head.as_deref().map(str::trim) {
+        if !sha.is_empty() {
+            a.push("--match-head-commit".into());
+            a.push(sha.to_string());
+        }
+    }
+    a
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1592,30 +1648,7 @@ impl Forge for GitHubForge {
         if let Some(reason) = crate::merge_hold::read_hold(&self.project_root, c.id) {
             return Err(MergeHoldRefusal::new(c.id, &reason).into());
         }
-        let args: Vec<String> = match opts.method {
-            MergeMethod::Squash => {
-                crate::pr_ship::merge_args(c.id, opts.delete_branch, opts.squash_subject.as_deref())
-            }
-            other => {
-                let mut a: Vec<String> = vec!["pr".into(), "merge".into(), c.id.to_string()];
-                a.push(
-                    match other {
-                        MergeMethod::Merge => "--merge",
-                        MergeMethod::Rebase => "--rebase",
-                        MergeMethod::Squash => unreachable!("squash handled above"),
-                    }
-                    .to_string(),
-                );
-                if let Some(subject) = &opts.squash_subject {
-                    a.push("--subject".into());
-                    a.push(subject.clone());
-                }
-                if opts.delete_branch {
-                    a.push("--delete-branch".into());
-                }
-                a
-            }
-        };
+        let args: Vec<String> = github_merge_argv(c.id, opts);
         let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
         let project_root = self.project_root.clone();
         let out = crate::network_retry::run_with_retry(
@@ -2177,6 +2210,21 @@ impl Forge for GitLabForge {
                         "GitLab MR !{} did not report a head SHA; refusing an unpinned merge",
                         c.id
                     );
+                    // TASK-1458: the caller's approved head must still be the
+                    // MR head before AIDA asks GitLab to merge (the pinned
+                    // `sha` below is the head just read). A requested rebase
+                    // moves the head by design, so the pin is checked only
+                    // before it. trace:TASK-1458 | ai:claude
+                    if let Some(pin) = opts.match_head.as_deref() {
+                        if !rebase_requested && !head_matches_pin(pin, &snapshot.head_sha) {
+                            anyhow::bail!(
+                                "GitLab MR !{} head changed after review ({} is not the approved {}); re-review the new head before merging",
+                                c.id,
+                                crate::review_verdict::short_sha(&snapshot.head_sha),
+                                crate::review_verdict::short_sha(pin)
+                            );
+                        }
+                    }
                     // Rebase is a separate asynchronous GitLab transition.
                     // Complete it before the ordinary merge request rather
                     // than degrading Rebase into Merge. trace:BUG-1232 | ai:codex
@@ -2466,6 +2514,19 @@ impl Forge for PureGitForge {
                 .args(args)
                 .output()
         };
+        // TASK-1458: pure-git has no forge-side head check, so compare the
+        // local branch head with the approved pin before touching anything.
+        // trace:TASK-1458 | ai:claude
+        if let Some(pin) = opts.match_head.as_deref() {
+            let head = rev_parse(&self.project_root, &c.branch).unwrap_or_default();
+            anyhow::ensure!(
+                head_matches_pin(pin, &head),
+                "pure-git merge: branch {} head {} is not the approved {}; re-review the new head before merging",
+                c.branch,
+                if head.is_empty() { "unreadable" } else { crate::review_verdict::short_sha(&head) },
+                crate::review_verdict::short_sha(pin)
+            );
+        }
         // Checkout base, then land the branch onto it.
         anyhow::ensure!(
             git(&["checkout", &base])?.status.success(),
@@ -3723,6 +3784,7 @@ mod tests {
                     method: MergeMethod::Squash,
                     squash_subject: None,
                     delete_branch: true,
+                    match_head: None,
                 },
                 &mut sink,
             )
@@ -4390,6 +4452,128 @@ mod tests {
         // trace:STORY-516 | ai:claude
     }
 
+    // ── TASK-1458: match_head pin on every forge ────────────────────────────
+    // trace:TASK-1458 | ai:claude
+
+    const PIN: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    #[test]
+    fn github_merge_argv_unpinned_is_byte_identical_to_merge_args() {
+        let opts = MergeOptions {
+            method: MergeMethod::Squash,
+            squash_subject: Some("feat: x (TASK-1)".into()),
+            delete_branch: true,
+            match_head: None,
+        };
+        assert_eq!(
+            github_merge_argv(42, &opts),
+            crate::pr_ship::merge_args(42, true, Some("feat: x (TASK-1)"))
+        );
+    }
+
+    #[test]
+    fn github_merge_argv_pins_match_head_commit_for_every_method() {
+        for method in [MergeMethod::Squash, MergeMethod::Merge, MergeMethod::Rebase] {
+            let opts = MergeOptions {
+                method,
+                squash_subject: None,
+                delete_branch: true,
+                match_head: Some(PIN.into()),
+            };
+            let argv = github_merge_argv(42, &opts);
+            let at = argv
+                .iter()
+                .position(|a| a == "--match-head-commit")
+                .unwrap_or_else(|| panic!("{method:?}: no --match-head-commit in {argv:?}"));
+            assert_eq!(argv.get(at + 1).map(String::as_str), Some(PIN));
+        }
+        // A blank pin is no pin — never `--match-head-commit ""`.
+        let blank = MergeOptions {
+            match_head: Some("  ".into()),
+            ..MergeOptions::squash()
+        };
+        assert!(!github_merge_argv(1, &blank).contains(&"--match-head-commit".to_string()));
+    }
+
+    #[test]
+    fn head_matches_pin_uses_the_approval_gate_comparison() {
+        assert!(head_matches_pin(PIN, PIN));
+        assert!(head_matches_pin(&PIN[..12], PIN), "prefix of the head");
+        assert!(!head_matches_pin(
+            "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            PIN
+        ));
+        assert!(!head_matches_pin("1ac", PIN), "too short to compare");
+        assert!(!head_matches_pin(PIN, ""), "unreadable head never matches");
+    }
+
+    fn pure_git_repo_with_feature(root: &Path) -> String {
+        let g = |args: &[&str]| {
+            let out = Command::new("git")
+                .current_dir(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {args:?}");
+        };
+        g(&["init", "-q", "-b", "main"]);
+        g(&["config", "user.email", "t@t.t"]);
+        g(&["config", "user.name", "t"]);
+        std::fs::write(root.join("a"), "1").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "base"]);
+        g(&["checkout", "-q", "-b", "feature"]);
+        std::fs::write(root.join("b"), "2").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "feat: the thing (TASK-9)"]);
+        g(&["checkout", "-q", "main"]);
+        rev_parse(root, "feature").unwrap()
+    }
+
+    fn feature_ref() -> ChangeRef {
+        ChangeRef {
+            id: 0,
+            url: String::new(),
+            branch: "feature".into(),
+            base: "main".into(),
+            title: None,
+        }
+    }
+
+    #[test]
+    fn pure_git_merge_refuses_a_branch_head_that_moved_past_the_pin() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        pure_git_repo_with_feature(root);
+        let base_before = rev_parse(root, "main");
+        let opts = MergeOptions {
+            match_head: Some("08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb".into()),
+            ..MergeOptions::squash()
+        };
+        let err = PureGitForge::new(root)
+            .merge_change(&feature_ref(), &opts, &mut crate::network_retry::NoopSink)
+            .expect_err("a moved head must not merge")
+            .to_string();
+        assert!(err.contains("is not the approved"), "{err}");
+        assert_eq!(base_before, rev_parse(root, "main"), "base untouched");
+    }
+
+    #[test]
+    fn pure_git_merge_lands_when_the_branch_head_is_the_pin() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let head = pure_git_repo_with_feature(root);
+        let opts = MergeOptions {
+            match_head: Some(head),
+            ..MergeOptions::squash()
+        };
+        let res = PureGitForge::new(root)
+            .merge_change(&feature_ref(), &opts, &mut crate::network_retry::NoopSink)
+            .expect("the approved head merges");
+        assert!(res.merged);
+        assert!(root.join("b").exists(), "feature file landed on base");
+    }
+
     // ───────────────────── STORY-509: glab JSON mapping ─────────────────────
     //
     // `glab … --output json` emits the GitLab REST object verbatim, so these
@@ -4471,6 +4655,7 @@ mod tests {
             method,
             squash_subject: None,
             delete_branch: true,
+            match_head: None,
         };
         let path = "projects/:id/merge_requests/7";
 

@@ -985,11 +985,7 @@ pub(crate) fn approval_head_refusal(
     head: Option<&str>,
 ) -> Option<ApprovalHeadRefusal> {
     use crate::awaiting_you::{classify_pr_review, PrReviewRow};
-    let approvals: Vec<_> = candidates
-        .iter()
-        .filter(|v| v.kind == crate::review_verdict::VerdictKind::Approved)
-        .cloned()
-        .collect();
+    let approvals = open_approvals(candidates);
     let head_sha = head.map(str::trim).unwrap_or("").to_string();
     let row = classify_pr_review(&approvals, head).row?;
     let reviewed_sha = match &row {
@@ -1013,6 +1009,95 @@ pub(crate) fn approval_head_refusal(
             head_sha,
         },
     })
+}
+
+/// TASK-1458: the approvals a merge gate weighs — every APPROVED verdict not
+/// yet closed by a merge. A closed approval belongs to a PR that already
+/// landed (BUG-1529 treats closed refusals the same way), so it is history,
+/// not evidence about this PR's head.
+// trace:TASK-1458 | ai:claude
+fn open_approvals(
+    candidates: &[crate::review_verdict::RecordedVerdict],
+) -> Vec<crate::review_verdict::RecordedVerdict> {
+    candidates
+        .iter()
+        .filter(|v| v.kind == crate::review_verdict::VerdictKind::Approved && !v.is_closed())
+        .cloned()
+        .collect()
+}
+
+/// TASK-1458: the commit a merge must be pinned to (`MergeOptions.match_head`)
+/// once the approval gate has passed. `Some` only when an open approval
+/// exists AND the newest one covers `head` — then the pin is that approved
+/// commit, spelled as the longer of the reviewed and head shas (the forge
+/// wants a full sha). `None` when there is no approval to pin to, when the
+/// head is unknown, or when the gate would refuse.
+// trace:TASK-1458 | ai:claude
+pub(crate) fn approved_match_head(
+    candidates: &[crate::review_verdict::RecordedVerdict],
+    head: Option<&str>,
+) -> Option<String> {
+    let head = head.map(str::trim).filter(|h| !h.is_empty())?;
+    let approvals = open_approvals(candidates);
+    if approvals.is_empty() || approval_head_refusal(candidates, Some(head)).is_some() {
+        return None;
+    }
+    let reviewed = approvals
+        .iter()
+        .filter_map(|v| v.reviewed_sha.as_deref().map(str::trim))
+        .filter(|sha| crate::forge::head_matches_pin(sha, head))
+        .max_by_key(|sha| sha.len())
+        .unwrap_or(head);
+    Some(if reviewed.len() > head.len() {
+        reviewed.to_string()
+    } else {
+        head.to_string()
+    })
+}
+
+/// TASK-1458: the reviewed and head shas a refusal names, for the durable
+/// `--override-stale-approval` record. Empty string = that sha was missing.
+// trace:TASK-1458 | ai:claude
+pub(crate) fn approval_head_refusal_shas(refusal: &ApprovalHeadRefusal) -> (String, String) {
+    match refusal {
+        ApprovalHeadRefusal::Moved {
+            reviewed_sha,
+            head_sha,
+        }
+        | ApprovalHeadRefusal::Incomparable {
+            reviewed_sha,
+            head_sha,
+        } => (reviewed_sha.clone(), head_sha.clone()),
+        ApprovalHeadRefusal::NoReviewedSha { head_sha } => (String::new(), head_sha.clone()),
+        ApprovalHeadRefusal::HeadUnreadable { reviewed_sha } => {
+            (reviewed_sha.clone(), String::new())
+        }
+    }
+}
+
+/// TASK-1458: the `.aida/advisor-activity.jsonl` line that durably records an
+/// `aida pr ship --override-stale-approval` — which PR, the approval's
+/// reviewed sha, the head it was overridden onto, and why the gate refused.
+/// Written BEFORE the merge, so the override is on record even when the
+/// merge then fails.
+// trace:TASK-1458 | ai:claude
+pub(crate) fn format_stale_approval_override_event(
+    now_iso: &str,
+    pr_number: u64,
+    refusal: &ApprovalHeadRefusal,
+) -> String {
+    let (reviewed_sha, head_sha) = approval_head_refusal_shas(refusal);
+    serde_json::json!({
+        "ts": now_iso,
+        "command": "aida pr ship",
+        "step": "pr-merge-override-stale-approval",
+        "status": "overridden",
+        "pr": pr_number,
+        "reviewed_sha": reviewed_sha,
+        "head_sha": head_sha,
+        "detail": approval_head_refusal_message(pr_number, refusal),
+    })
+    .to_string()
 }
 
 /// TASK-1448: the refusal text both merge paths print. Names both shas (or
@@ -1241,6 +1326,100 @@ mod tests {
             verdict("approved", Some(OLD), Some("2026-09-21T05:00:00Z")),
         ];
         assert!(approval_head_refusal(&stale, Some(HEAD)).is_some());
+    }
+
+    // ── TASK-1458: closed approvals, merge pin, override audit ─────────────
+    // trace:TASK-1458 | ai:claude
+
+    fn closed(
+        mut v: crate::review_verdict::RecordedVerdict,
+    ) -> crate::review_verdict::RecordedVerdict {
+        v.closed_by_merge = Some("PR-9".into());
+        v
+    }
+
+    #[test]
+    fn task_1458_closed_stale_approval_does_not_refuse() {
+        // A stale approval closed by an earlier PR's merge is history.
+        let v = [closed(verdict(
+            "approved",
+            Some(OLD),
+            Some("2026-09-21T05:00:00Z"),
+        ))];
+        assert_eq!(approval_head_refusal(&v, Some(HEAD)), None);
+    }
+
+    #[test]
+    fn task_1458_closed_approval_cannot_shadow_or_cover() {
+        // A newer CLOSED approval at the head must not hide an open stale one…
+        let shadow = [
+            verdict("approved", Some(OLD), Some("2026-09-21T04:00:00Z")),
+            closed(verdict(
+                "approved",
+                Some(HEAD),
+                Some("2026-09-21T05:00:00Z"),
+            )),
+        ];
+        assert!(matches!(
+            approval_head_refusal(&shadow, Some(HEAD)),
+            Some(ApprovalHeadRefusal::Moved { .. })
+        ));
+        // …and a closed approval alone is not an approval to pin the merge to.
+        let only_closed = [closed(verdict(
+            "approved",
+            Some(HEAD),
+            Some("2026-09-21T05:00:00Z"),
+        ))];
+        assert_eq!(approved_match_head(&only_closed, Some(HEAD)), None);
+    }
+
+    #[test]
+    fn task_1458_match_head_is_the_approved_head() {
+        let v = [verdict(
+            "approved",
+            Some(HEAD),
+            Some("2026-09-21T04:00:00Z"),
+        )];
+        assert_eq!(approved_match_head(&v, Some(HEAD)).as_deref(), Some(HEAD));
+        // An abbreviated reviewed sha still pins the FULL head sha.
+        let short = [verdict(
+            "approved",
+            Some(&HEAD[..12]),
+            Some("2026-09-21T04:00:00Z"),
+        )];
+        assert_eq!(
+            approved_match_head(&short, Some(HEAD)).as_deref(),
+            Some(HEAD)
+        );
+    }
+
+    #[test]
+    fn task_1458_no_match_head_without_a_covering_approval() {
+        let stale = [verdict("approved", Some(OLD), Some("2026-09-21T04:00:00Z"))];
+        assert_eq!(approved_match_head(&stale, Some(HEAD)), None);
+        assert_eq!(approved_match_head(&[], Some(HEAD)), None);
+        let ok = [verdict(
+            "approved",
+            Some(HEAD),
+            Some("2026-09-21T04:00:00Z"),
+        )];
+        assert_eq!(approved_match_head(&ok, None), None);
+    }
+
+    #[test]
+    fn task_1458_override_event_names_both_shas() {
+        let refusal = ApprovalHeadRefusal::Moved {
+            reviewed_sha: OLD.into(),
+            head_sha: HEAD.into(),
+        };
+        let line = format_stale_approval_override_event("2026-09-23T00:00:00Z", 77, &refusal);
+        let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(v["step"], "pr-merge-override-stale-approval");
+        assert_eq!(v["status"], "overridden");
+        assert_eq!(v["pr"], 77);
+        assert_eq!(v["reviewed_sha"], OLD);
+        assert_eq!(v["head_sha"], HEAD);
+        assert!(!line.contains('\n'), "one JSONL line");
     }
 
     #[test]
