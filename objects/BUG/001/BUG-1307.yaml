@@ -40,12 +40,12 @@ description: |
   5. Nothing is deleted or force-pushed by this feature.
 
   Filed by the product seat as a draft proposal; disposition is the advisor's.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:43:40.953486135Z
-modified_at: 2026-09-23T06:20:02.710647134Z
+modified_at: 2026-09-23T06:20:04.673812602Z
 req_type: Bug
 tags:
 - dispatch
