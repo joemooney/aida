@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:30:26.030629266Z
-modified_at: 2026-09-23T03:50:39.178094099Z
+modified_at: 2026-09-23T04:08:41.857797930Z
 req_type: Bug
 tags:
 - batch:night-0920 visibility merge-safety drain-safe from:session-0920
@@ -54,4 +54,10 @@ comments:
   content: Claude implementer dispatched 2026-09-22 20:50 -> branch claude/bug-1514, no PR
   created_at: 2026-09-23T03:50:39.178094099Z
   modified_at: 2026-09-23T03:50:39.178094099Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cc73-9481-7430-823d-f9941f636c5a
+  author: joe
+  content: Commit 037d5b9714 references this requirement
+  created_at: 2026-09-23T04:08:41.857797930Z
+  modified_at: 2026-09-23T04:08:41.857797930Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
