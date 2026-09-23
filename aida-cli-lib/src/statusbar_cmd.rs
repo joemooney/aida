@@ -141,6 +141,10 @@ pub(crate) fn you_channels(report: &awaiting_you::AwaitingReport) -> Vec<(usize,
         v.push((cron, "cron".to_string()));
     }
     // trace:STORY-1043 | ai:codex
+    // TASK-1305: this meter only ever renders `unshipped_work.len()`, never a
+    // row's `pr_state`/`recovery` — a bare count carries no per-branch action
+    // hint to get wrong, so the no-PR-vs-open-PR distinction doesn't apply
+    // here. No change needed on this surface.
     let unshipped = report.unshipped_work.len();
     if unshipped > 0 {
         v.push((unshipped, "unshipped".to_string()));
