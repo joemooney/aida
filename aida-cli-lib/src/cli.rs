@@ -180,7 +180,9 @@ pub enum MergeHoldAction {
         json: bool,
         /// Re-sync the `aida:merge-hold` label on every live hold whose
         /// recorded label state is not `synced` (repairs a hold whose label
-        /// never landed, so the required merge-hold-gate check enforces it).
+        /// never landed, so the required merge-hold-gate check enforces it),
+        /// and re-route every recusal hold to a live independent reader at
+        /// the PR's current head.
         // trace:BUG-1236 | ai:claude
         #[clap(long)]
         fix: bool,
@@ -197,6 +199,22 @@ pub enum MergeHoldAction {
         // trace:BUG-1294 | ai:claude
         #[clap(long, allow_hyphen_values = true)]
         reason: Option<String>,
+        /// Typed reason: supervision, recusal, rework, or decision.
+        // trace:STORY-1397 | ai:codex
+        #[clap(long, default_value = "supervision")]
+        reason_kind: String,
+        /// Stable principal identity excluded from review/merge. Repeatable;
+        /// required for a recusal hold.
+        // trace:STORY-1397 | ai:codex
+        #[clap(long = "recused-principal")]
+        recused_principals: Vec<String>,
+        /// Stable independent reader identity already routed this exact hold.
+        // trace:STORY-1397 | ai:codex
+        #[clap(long = "route-to")]
+        routed_to: Vec<String>,
+        /// Exact PR head the recusal/review route applies to.
+        #[clap(long)]
+        head: Option<String>,
     },
     /// Clear a merge-hold: remove the marker file and drop the
     /// `aida:merge-hold` label, releasing the PR for merge. Give a PR number,
