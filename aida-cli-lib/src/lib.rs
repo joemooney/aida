@@ -35742,6 +35742,92 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
     CiProbe::Green { pr_number }
 }
 
+/// TASK-1453: at the CI wait's absolute ceiling, decide whether a stuck-forever
+/// pending check should still be reported as a known `Red` rather than the
+/// uninformative `NoSignal` the wait falls back to today. Parses the same
+/// `gh pr list --json number,statusCheckRollup,headRefOid` rollup shape
+/// `parse_ci_probe` consumes (it's the exact string `ci_progress_snapshot`
+/// already fetched this poll for the idle fingerprint — no extra probe).
+///
+/// Returns `Some(Red)`, naming the concluded failure(s) AND listing the
+/// still-pending check(s), only when at least one check has genuinely
+/// concluded a failure. A rollup with nothing but pending/queued checks (the
+/// honest "we truly don't know yet" case) returns `None` so the caller keeps
+/// reporting `NoSignal` — stuck-pending alone must never be read as Red.
+/// Pure + unit-tested; degrades to `None` on unparsable/foreign-shaped JSON
+/// (e.g. a non-GitHub forge's progress snapshot), which is the safe fallback.
+// trace:TASK-1453 | ai:claude
+pub(crate) fn ci_ceiling_verdict_from_rollup(rollup_json: &str) -> Option<CiProbe> {
+    let trimmed = rollup_json.trim();
+    if trimmed.is_empty() || trimmed == "[]" {
+        return None;
+    }
+    let parsed: serde_json::Value = serde_json::from_str(trimmed).ok()?;
+    let pr = parsed.get(0)?;
+    let pr_number = pr
+        .get("number")
+        .and_then(|n| n.as_u64())
+        .filter(|n| *n > 0)? as u32;
+    let rollup = pr.get("statusCheckRollup").and_then(|v| v.as_array())?;
+    let mut failed: Vec<String> = Vec::new();
+    let mut pending: Vec<String> = Vec::new();
+    for check in rollup {
+        if let Some(status) = check.get("status").and_then(|v| v.as_str()) {
+            let conclusion = check
+                .get("conclusion")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let name = check
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("check");
+            match status {
+                "IN_PROGRESS" | "QUEUED" | "PENDING" | "WAITING" => pending.push(name.to_string()),
+                "COMPLETED" => {
+                    if matches!(
+                        conclusion,
+                        "FAILURE" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED" | "STALE"
+                    ) {
+                        failed.push(name.to_string());
+                    }
+                }
+                _ => {}
+            }
+        } else if let Some(state) = check.get("state").and_then(|v| v.as_str()) {
+            let name = check
+                .get("context")
+                .and_then(|v| v.as_str())
+                .unwrap_or("status");
+            match state {
+                "PENDING" | "EXPECTED" => pending.push(name.to_string()),
+                "FAILURE" | "ERROR" => failed.push(name.to_string()),
+                _ => {}
+            }
+        }
+    }
+    // Review fix: the merge-hold gate fails BY CONSTRUCTION while a hold is
+    // active; it is never a real CI failure. At the ceiling it must not turn a
+    // held PR with a stuck check into ci-red. trace:TASK-1453 | ai:claude
+    failed.retain(|name| !name.eq_ignore_ascii_case(crate::ci_gate::HOLD_GATE_CHECK));
+    if failed.is_empty() {
+        return None;
+    }
+    let failed_summary = if failed.len() <= 3 {
+        failed.join(", ")
+    } else {
+        format!("{} and {} more", failed[..3].join(", "), failed.len() - 3)
+    };
+    let summary = if pending.is_empty() {
+        failed_summary
+    } else {
+        format!("{failed_summary} (still pending: {})", pending.join(", "))
+    };
+    Some(CiProbe::Red {
+        pr_number,
+        failed_summary: summary,
+    })
+}
+
 /// Block until the branch's CI run reaches a terminal state. Polls every 30s.
 ///
 /// TASK-968: the wait runs an IDLE timeout (re-arms on progress) with a SEPARATE
@@ -35866,6 +35952,21 @@ pub(crate) fn wait_for_ci_terminal(
                         ));
                     }
                     CiWaitVerdict::AbsoluteTimeout => {
+                        // TASK-1453: a check stuck pending forever must not
+                        // swallow a failure another check already concluded —
+                        // report the known Red (stuck check listed as still
+                        // pending) instead of the uninformative NoSignal.
+                        // Stuck-pending alone (no concluded failure) keeps the
+                        // honest NoSignal below.
+                        if let Some(red) = ci_ceiling_verdict_from_rollup(&rollup) {
+                            eprintln!(
+                                "  {} CI wait hit absolute ceiling ({}m) with a known failure — reporting Red",
+                                crate::glyph(crate::glyphs::Glyph::Cross).red(),
+                                absolute_ceiling / 60,
+                            );
+                            emit_ci_terminal(project_root, false);
+                            return red;
+                        }
                         return CiProbe::NoSignal(format!(
                             "CI wait hit absolute ceiling ({}m) — giving up",
                             absolute_ceiling / 60

@@ -348,6 +348,32 @@ Cross-references: `aida history events` reads from these arrays;
 substrate-grounded equivalent in code: `aida-core::object_store` walks
 the YAML files directly. trace:TASK-121
 
+### doctor exit-code contract
+
+`aida doctor` and `aida doctor check <category>` are **report-only by
+design**: exit code `0` means "the scan ran successfully," NOT "the scan
+found nothing." A category with thousands of findings and a category with
+zero findings both exit `0` — the findings print (text or `--json`)
+either way, but the process exit code does not encode them.
+
+This is a deliberate default, ruled by ADR-style precedent (BUG-1552,
+consistent with STORY-1422): a shared diagnostic surface should not
+silently change its exit-code contract underneath every existing caller
+just because one new caller wants a gate.
+
+A caller that needs pass/fail — a CI step, a scheduled job, a substrate
+gate — opts in explicitly:
+
+```bash
+aida doctor check <category> --fail-on-findings
+```
+
+This exits non-zero **only** when that one category has at least one
+finding; every other `aida doctor` / `aida doctor check` invocation stays
+reporting-only. Don't infer health from a bare `aida doctor`'s exit code —
+parse its output (`--json`) or add `--fail-on-findings` to the specific
+`check` you want to gate on.
+
 ## Adjacent terms (defined elsewhere)
 
 These show up in the same sentences but live in other pages:

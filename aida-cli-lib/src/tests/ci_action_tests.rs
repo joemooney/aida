@@ -373,3 +373,94 @@ fn hard_ci_probe_failure_is_immediately_unavailable() {
         CiProbeFailureAction::Unavailable
     );
 }
+
+// --- TASK-1453: absolute-ceiling verdict — Red-with-known-failure vs honest NoSignal ---
+//
+// `ci_ceiling_verdict_from_rollup` is the pure decision `wait_for_ci_terminal`
+// consults only once it has already hit its absolute ceiling. It must tell a
+// stuck-pending-forever check sitting next to an already-concluded failure
+// (report Red, name both) apart from stuck-pending alone (stay honest
+// NoSignal — the caller falls back to its existing message).
+
+/// A real check (`lint`) concluded FAILURE while `Build` never concludes. At
+/// the ceiling this must surface as Red with `lint` named and `Build` listed
+/// as still pending — not the uninformative "giving up" NoSignal.
+// trace:TASK-1453 | ai:claude
+#[test]
+fn ceiling_with_known_failure_and_stuck_pending_is_red_with_summary() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "lint",  "status": "COMPLETED",   "conclusion": "FAILURE"},
+            {"name": "Build", "status": "IN_PROGRESS", "conclusion": ""}
+        ]}]"#;
+    match ci_ceiling_verdict_from_rollup(json) {
+        Some(CiProbe::Red {
+            pr_number,
+            failed_summary,
+        }) => {
+            assert_eq!(pr_number, 2001);
+            assert!(failed_summary.contains("lint"), "summary: {failed_summary}");
+            assert!(
+                failed_summary.contains("Build"),
+                "stuck check should still be named as pending: {failed_summary}"
+            );
+        }
+        other => panic!("expected Some(Red), got {other:?}"),
+    }
+}
+
+/// Nothing concluded — every check is still pending/queued. This is the
+/// genuine "we truly don't know" case, so the ceiling must NOT invent a Red
+/// verdict; the caller keeps its existing NoSignal.
+// trace:TASK-1453 | ai:claude
+#[test]
+fn ceiling_with_stuck_pending_alone_stays_none() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "Build", "status": "IN_PROGRESS", "conclusion": ""}
+        ]}]"#;
+    assert_eq!(ci_ceiling_verdict_from_rollup(json), None);
+}
+
+/// A concluded failure with nothing else pending is still Red (no spurious
+/// "still pending" note appended).
+// trace:TASK-1453 | ai:claude
+#[test]
+fn ceiling_with_only_concluded_failure_is_red_without_pending_note() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "lint", "status": "COMPLETED", "conclusion": "FAILURE"}
+        ]}]"#;
+    match ci_ceiling_verdict_from_rollup(json) {
+        Some(CiProbe::Red { failed_summary, .. }) => {
+            assert!(
+                !failed_summary.contains("still pending"),
+                "summary: {failed_summary}"
+            );
+        }
+        other => panic!("expected Some(Red), got {other:?}"),
+    }
+}
+
+/// Malformed / empty / non-GitHub-shaped JSON degrades to `None` — the safe
+/// fallback that preserves today's NoSignal behavior.
+// trace:TASK-1453 | ai:claude
+#[test]
+fn ceiling_verdict_degrades_to_none_on_unparsable_json() {
+    assert_eq!(ci_ceiling_verdict_from_rollup(""), None);
+    assert_eq!(ci_ceiling_verdict_from_rollup("[]"), None);
+    assert_eq!(ci_ceiling_verdict_from_rollup("not json"), None);
+}
+
+/// Review fix: the merge-hold gate fails by construction while a hold is
+/// active. At the ceiling, a hold-gate failure plus a stuck check is NOT a
+/// real Red; it stays None (NoSignal) so a held PR is not marked ci-red.
+// trace:TASK-1453 | ai:claude
+#[test]
+fn ceiling_with_only_hold_gate_failure_is_not_red() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "merge-hold-gate", "status": "COMPLETED",   "conclusion": "FAILURE"},
+            {"name": "Build",           "status": "IN_PROGRESS", "conclusion": ""}
+        ]}]"#;
+    assert!(
+        ci_ceiling_verdict_from_rollup(json).is_none(),
+        "a hold-gate-only failure must not become a ceiling Red"
+    );
+}
