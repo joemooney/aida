@@ -5353,17 +5353,19 @@ pub enum QueueCommand {
     },
     /// Garbage-collect dead routed queue entries — remove every entry whose
     /// backing spec is archived, completed, or rejected (terminal corpses that
-    /// linger in the queue file after the work shipped). The default `aida
+    /// linger in the queue file after the work shipped), OR whose routed
+    /// review's own PR already merged (the review story's status alone can't
+    /// say whether the review it wraps is still needed). The default `aida
     /// queue list` view already hides them, but the underlying queue file
-    /// still carries them; this sweeps them and reports the count. Sibling of
-    /// the two `aida queue prune` predicates — `prune --orphaned` targets
-    /// DELETED specs and `prune --merged` targets shipped reviewer rows, while
-    /// `gc` targets specs that still exist but are done with (archived /
-    /// terminal). Use `--dry-run` to preview. Still-actionable entries
-    /// (Draft/Approved/Planned/InProgress/Done) always survive.
+    /// still carries them; this sweeps them and reports the count and why.
+    /// Sibling of `aida queue prune --orphaned`, which targets DELETED specs.
+    /// Use `--dry-run` to preview. Still-actionable entries
+    /// (Draft/Approved/Planned/InProgress/Done) survive unless their PR
+    /// already merged.
     // trace:TASK-1052 | ai:claude — plain `//` so the SPEC-ID doesn't leak
     // into user-facing --help output per the TASK-268 convention.
     // trace:TASK-1063 | ai:claude
+    // trace:BUG-1512 | ai:claude
     Gc {
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]

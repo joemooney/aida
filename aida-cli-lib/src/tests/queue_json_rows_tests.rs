@@ -198,3 +198,105 @@ fn dead_queue_entries_respects_role_filter() {
     assert_eq!(dead.len(), 1, "only the reviewer-routed corpse matches");
     assert_eq!(dead[0].requirement_id, dead_review);
 }
+
+// BUG-1512: a summary shaped like an auto-queued review row, still Draft (no
+// reviewer ever closed it) — the class the target-spec rule alone can never
+// collect, because Draft is never terminal.
+fn review_summary(id: Uuid, pr: u64) -> aida_core::RequirementSummary {
+    let mut s = summary_st(id, "draft", false);
+    s.title = format!("Review PR-{pr}: some shipped change");
+    s
+}
+
+// BUG-1512: the pure title-parsing half of the merged-PR sweep — extracts a
+// PR number from every "Review PR-N: ..." summary not already claimed by the
+// target-spec rule, and ignores everything else (non-review titles, and
+// review rows the target-spec rule already flagged dead).
+// trace:BUG-1512 | ai:claude
+#[test]
+fn review_summaries_pending_merge_check_parses_titles_and_skips_already_dead() {
+    let open_review = Uuid::new_v4();
+    let already_dead_review = Uuid::new_v4();
+    let non_review = Uuid::new_v4();
+
+    let summaries = vec![
+        review_summary(open_review, 1986),
+        review_summary(already_dead_review, 42),
+        summary_st(non_review, "approved", false),
+    ];
+    let mut already_dead = std::collections::HashSet::new();
+    already_dead.insert(already_dead_review);
+
+    let candidates = review_summaries_pending_merge_check(&summaries, &already_dead);
+    assert_eq!(
+        candidates.len(),
+        1,
+        "only the still-open review row qualifies"
+    );
+    assert_eq!(candidates[0].0.id, open_review);
+    assert_eq!(candidates[0].1, 1986);
+}
+
+// BUG-1512 AC1/AC5: a routed review entry becomes collectable once its PR is
+// confirmed merged, regardless of the review STORY's own status — here the
+// story is Draft (the pre-fix `dead_queue_entries` rule alone would never
+// flag it, since Draft is never terminal). AC2: additive to the target-spec
+// rule, not a replacement — a genuinely-dead entry from that rule is not
+// double-counted here even if it also happens to parse as a merged PR.
+// trace:BUG-1512 | ai:claude
+#[test]
+fn merged_pr_review_entries_collects_merged_pr_rows_regardless_of_story_status() {
+    let merged_draft_review = Uuid::new_v4(); // Draft + PR merged -> collectable
+    let open_pr_review = Uuid::new_v4(); // Draft + PR NOT merged -> survives
+    let already_dead_but_merged = Uuid::new_v4(); // caught by the other rule already
+
+    let entries = vec![
+        entry(merged_draft_review, Some("reviewer")),
+        entry(open_pr_review, Some("reviewer")),
+        entry(already_dead_but_merged, Some("reviewer")),
+    ];
+
+    let mut merged_pr_ids = std::collections::HashSet::new();
+    merged_pr_ids.insert(merged_draft_review);
+    merged_pr_ids.insert(already_dead_but_merged);
+
+    let mut already_dead = std::collections::HashSet::new();
+    already_dead.insert(already_dead_but_merged);
+
+    let collectable = merged_pr_review_entries(&entries, &merged_pr_ids, &already_dead, None);
+    assert_eq!(collectable.len(), 1, "only the not-already-dead merged row");
+    assert_eq!(collectable[0].requirement_id, merged_draft_review);
+    assert!(
+        !collectable
+            .iter()
+            .any(|e| e.requirement_id == open_pr_review),
+        "an entry whose PR has not merged must survive"
+    );
+    assert!(
+        !collectable
+            .iter()
+            .any(|e| e.requirement_id == already_dead_but_merged),
+        "already-dead entries are not double-counted by the merged-PR rule"
+    );
+}
+
+// BUG-1512: the role filter narrows the merged-PR sweep exactly like it
+// narrows `dead_queue_entries`.
+#[test]
+fn merged_pr_review_entries_respects_role_filter() {
+    let reviewer_row = Uuid::new_v4();
+    let implementer_row = Uuid::new_v4();
+    let entries = vec![
+        entry(reviewer_row, Some("reviewer")),
+        entry(implementer_row, Some("implementer")),
+    ];
+    let mut merged_pr_ids = std::collections::HashSet::new();
+    merged_pr_ids.insert(reviewer_row);
+    merged_pr_ids.insert(implementer_row);
+    let already_dead = std::collections::HashSet::new();
+
+    let collectable =
+        merged_pr_review_entries(&entries, &merged_pr_ids, &already_dead, Some("reviewer"));
+    assert_eq!(collectable.len(), 1);
+    assert_eq!(collectable[0].requirement_id, reviewer_row);
+}
