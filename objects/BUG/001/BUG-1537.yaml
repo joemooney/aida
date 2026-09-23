@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:16:00.684456364Z
-modified_at: 2026-09-23T14:01:56.307372264Z
+modified_at: 2026-09-23T14:12:59.834285978Z
 req_type: Bug
 tags:
 - aida:pr:ship
@@ -43,4 +43,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 07:01 -> branch claude/bug-1537, no PR (overnight burn-down)
   created_at: 2026-09-23T14:01:56.307372264Z
   modified_at: 2026-09-23T14:01:56.307372264Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce9c-d53a-7cf3-8174-7c1fe62d8f30
+  author: joe
+  content: Commit bbeab46c4a references this requirement
+  created_at: 2026-09-23T14:12:59.834285978Z
+  modified_at: 2026-09-23T14:12:59.834285978Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
