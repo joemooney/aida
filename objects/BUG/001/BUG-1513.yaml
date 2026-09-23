@@ -52,7 +52,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:17:02.797763307Z
-modified_at: 2026-09-23T03:45:45.868964086Z
+modified_at: 2026-09-23T03:45:47.334327909Z
 req_type: Bug
 tags:
 - batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
@@ -105,4 +105,10 @@ comments:
   content: Commit edeb661e55 references this requirement
   created_at: 2026-09-23T03:44:24.994830662Z
   modified_at: 2026-09-23T03:44:24.994830662Z
+  session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
+- id: 01a0cc5e-9b46-7e20-836d-da6728c3c904
+  author: joe
+  content: 'Implemented on branch claude/bug-1513 @ edeb661e55 (pushed, no PR, not merged). Agent/TOON path of queue list now applies resolve_queue_role_filter + entry_matches_role_filter (the human path already did), so --for <role> no longer passes the caller''s own other-role rows through; TOON prints count + for_user (AC6). AC3/AC5: own-passthrough is deliberate only for the no --for fallback view (BUG-774). E2E test aida-cli/tests/bug_1513_queue_list_for_role.rs; implementer verified it fails without the fix. OPEN: queue list --json --for is still unfiltered by role (TUI consumer, BUG-616 shape) - reviewer decide whether to file a follow-up.'
+  created_at: 2026-09-23T03:45:47.334327909Z
+  modified_at: 2026-09-23T03:45:47.334327909Z
   session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
