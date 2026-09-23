@@ -2566,6 +2566,8 @@ impl<'a> McpServer<'a> {
         // BUG-89 queue-key order.
         let explicit_from = args.get("from").and_then(|v| v.as_str());
         let (from, from_source) = crate::resolve_mail_sender_identity(explicit_from);
+        // trace:BUG-1592 | ai:claude
+        let from_role = crate::resolve_mail_sender_role();
         let id = uuid::Uuid::new_v4().to_string();
         // BUG-557: mirror the CLI fix — `in_reply_to` must attach the reply to
         // the target's thread, not open a new one. Precedence: explicit
@@ -2619,6 +2621,7 @@ impl<'a> McpServer<'a> {
             deleted: false,
             archived: false,
             from_source,
+            from_role,
         };
         crate::mailbox_store::write_message(&self.project_root, &msg).map_err(|e| e.to_string())?;
         Ok(format!("Message sent: {id} (thread {thread_id})"))
@@ -2696,6 +2699,12 @@ impl<'a> McpServer<'a> {
                 // subject is present, an unset one is omitted (not null).
                 if let Some(subject) = &m.subject {
                     entry["subject"] = json!(subject);
+                }
+                // trace:BUG-1592 | ai:claude — mirror `from_source`: the
+                // sender's role when it was known at send time, omitted (not
+                // null) when it wasn't.
+                if let Some(from_role) = &m.from_role {
+                    entry["from_role"] = json!(from_role);
                 }
                 entry
             })
