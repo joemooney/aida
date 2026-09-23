@@ -2,13 +2,37 @@ id: 01a0bcb3-beba-79d1-8449-8b286527c46f
 spec_id: BUG-1310
 agreed_id: BUG-1310
 title: Classifiers that read external tool prose can drift with no edit of ours and no test failing, and were scoped out of the exit-code sweep
-description: "BUG-1295 replaced prose-matching with exit codes for AIDA's own producers, and deliberately scoped out the classifiers that read EXTERNAL tool output â\x80\x94 CI rollup status, `gh pr merge` text, SQLite lock messages, OS out-of-memory and disk strings. That boundary is correct as a class distinction and should not be mistaken for the risk being absent.\n\nTHE DISTINCTION THAT JUSTIFIES THE SPLIT. For our own commands we can add an exit code and have the producer own the classification, which is what BUG-1295 did. We cannot give `gh` or SQLite an exit code. So the remedy genuinely differs, and folding these into that change would have made it larger and worse.\n\nTHE ARGUMENT THAT CUTS THE OTHER WAY. Not controlling a tool's wording is a reason to be MORE careful about matching its prose, not less. Our own text drifts only when one of us edits it, and BUG-1295's new test now fails when that happens. An upstream release can reword its output with no deprecation notice we would read, no changelog entry we track, and no test of ours failing â\x80\x94 so the external classifiers are the ones most likely to break silently and the least likely to be noticed when they do. The failure shape is identical to the one PRIN-4 names: the decision stays right while the diagnostic explaining it degrades, and nothing reports it.\n\nNOT URGENT. Nothing is known to be broken today. This is filed so the exclusion is a recorded decision with a follow-up rather than a gap that closed quietly.\n\nSCOPE\n1. Document the classifiers this change touches: the site, the tool, the matched string and what the classification drives. [NARROWED 2026-09-20 — the original criterion said \"enumerate EVERY classifier in the workspace\". It is withdrawn. Three review rounds refused this spec, each correctly, and each named a DIFFERENT set of missed sites (round 1 glab_stderr_is_transient; round 2 git_ops/forge/compete/overlay; round 3 remote_create, cache.rs, git_ops 'autostash'). Completeness over \"a string literal compared against external prose\" is not reachable by reading, so a reviewer holding the original bar refuses forever and is right each time. WE DID NOT MEET THE ORIGINAL BAR — this is a narrowing, not an achievement. The workspace-wide inventory does not exist and this spec will not produce it; TASK-1300 carries it as a mechanical enumerator, which is a form that can actually be discharged. Reviewers: hold this PR to items 2, 3 and 4, which are unchanged and still binding.]\n2. Per site, decide whether the tool offers a structured alternative. `gh` supports `--json` for most of what we shell out to, which is the obvious lever and probably closes the majority.\n3. For sites with no structured alternative, pin the matched strings as named constants in one place, with a comment naming the tool and the version observed, so a drift is findable by reading one file rather than by grep across the workspace.\n4. Where a match drives a safety decision rather than a cosmetic one, prefer failing closed on no-match over failing open. A classifier that silently permits when it stops matching is the shape that made BUG-1295 worth fixing.\n\nNOT IN SCOPE: changing what any classifier decides today, and adding a dependency to parse a tool's output where we currently shell out.\n\nFiled by the advisor while reviewing PR #1993, where the exclusion was argued explicitly and well. The reasoning there is worth reading alongside this.\n\"\nexecution_mode: drain\nrelationships[4]{rel,id,title}:\n  Related,BUG-1295,\"The orchestrator recovers typed rebase failure causes by substring-matching another AIDA command's prose, so any reword silently downgrades a conflict to an untyped failure and drops its recovery reci\"\n  Related,PRIN-4,A diagnostic must be unable to drift away from the decision it explains\n  Related,STORY-1384,\"Review PR-2016: [AI:codex] fix(classifiers): inventory external prose contracts (BUG-1310)\"\n  Related,BUG-1445,\"A rebase-only rework round is indistinguishable from a real failed attempt, so requeueing a shelved spec can loop forever while reporting progress"
+description: |-
+  BUG-1295 replaced prose-matching with exit codes for AIDA's own producers, and deliberately scoped out the classifiers that read EXTERNAL tool output — CI rollup status, `gh pr merge` text, SQLite lock messages, OS out-of-memory and disk strings. That boundary is correct as a class distinction and should not be mistaken for the risk being absent.
+
+  THE DISTINCTION THAT JUSTIFIES THE SPLIT. For our own commands we can add an exit code and have the producer own the classification, which is what BUG-1295 did. We cannot give `gh` or SQLite an exit code. So the remedy genuinely differs, and folding these into that change would have made it larger and worse.
+
+  THE ARGUMENT THAT CUTS THE OTHER WAY. Not controlling a tool's wording is a reason to be MORE careful about matching its prose, not less. Our own text drifts only when one of us edits it, and BUG-1295's new test now fails when that happens. An upstream release can reword its output with no deprecation notice we would read, no changelog entry we track, and no test of ours failing — so the external classifiers are the ones most likely to break silently and the least likely to be noticed when they do. The failure shape is identical to the one PRIN-4 names: the decision stays right while the diagnostic explaining it degrades, and nothing reports it.
+
+  NOT URGENT. Nothing is known to be broken today. This is filed so the exclusion is a recorded decision with a follow-up rather than a gap that closed quietly.
+
+  SCOPE
+  1. Document the classifiers this change touches: the site, the tool, the matched string and what the classification drives. [NARROWED 2026-09-20 — the original criterion said "enumerate EVERY classifier in the workspace". It is withdrawn. Three review rounds refused this spec, each correctly, and each named a DIFFERENT set of missed sites (round 1 glab_stderr_is_transient; round 2 git_ops/forge/compete/overlay; round 3 remote_create, cache.rs, git_ops 'autostash'). Completeness over "a string literal compared against external prose" is not reachable by reading, so a reviewer holding the original bar refuses forever and is right each time. WE DID NOT MEET THE ORIGINAL BAR — this is a narrowing, not an achievement. The workspace-wide inventory does not exist and this spec will not produce it; TASK-1300 carries it as a mechanical enumerator, which is a form that can actually be discharged. Reviewers: hold this PR to items 2, 3 and 4, which are unchanged and still binding.]
+  2. Per site, decide whether the tool offers a structured alternative. `gh` supports `--json` for most of what we shell out to, which is the obvious lever and probably closes the majority.
+  3. For sites with no structured alternative, pin the matched strings as named constants in one place, with a comment naming the tool and the version observed, so a drift is findable by reading one file rather than by grep across the workspace.
+  4. Where a match drives a safety decision rather than a cosmetic one, prefer failing closed on no-match over failing open. A classifier that silently permits when it stops matching is the shape that made BUG-1295 worth fixing.
+
+  NOT IN SCOPE: changing what any classifier decides today, and adding a dependency to parse a tool's output where we currently shell out.
+
+  Filed by the advisor while reviewing PR #1993, where the exclusion was argued explicitly and well. The reasoning there is worth reading alongside this.
+  "
+  execution_mode: drain
+  relationships[4]{rel,id,title}:
+    Related,BUG-1295,"The orchestrator recovers typed rebase failure causes by substring-matching another AIDA command's prose, so any reword silently downgrades a conflict to an untyped failure and drops its recovery reci"
+    Related,PRIN-4,A diagnostic must be unable to drift away from the decision it explains
+    Related,STORY-1384,"Review PR-2016: [AI:codex] fix(classifiers): inventory external prose contracts (BUG-1310)"
+    Related,BUG-1445,"A rebase-only rework round is indistinguishable from a real failed attempt, so requeueing a shelved spec can loop forever while reporting progress
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T02:44:51.514987040Z
-modified_at: 2026-09-20T14:44:49.123297353Z
+modified_at: 2026-09-23T10:01:24.714089197Z
 req_type: Bug
 tags:
 - diagnostic-decay
@@ -17,19 +41,23 @@ tags:
 - from:session-0919
 - orchestrator
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bba5-04e1-7530-9c2d-33b3d51dc915
   created_at: 2026-09-20T02:45:01.951980192Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bbf0-ada2-71c3-a890-2ed927426bb7
   created_at: 2026-09-20T02:45:02.891850041Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0beb6-0ccc-78d1-a7c4-344bb7401eff
   created_at: 2026-09-20T12:06:42.217475577Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bf06-8160-76c0-91d8-cd34f4779b04
   created_at: 2026-09-20T14:03:26.863956584Z
   created_by: joe
