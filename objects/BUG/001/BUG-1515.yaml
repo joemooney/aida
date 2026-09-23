@@ -100,7 +100,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:36:49.231874688Z
-modified_at: 2026-09-23T15:15:29.658942318Z
+modified_at: 2026-09-23T15:49:35.739090814Z
 req_type: Bug
 tags:
 - agent-surface
@@ -158,4 +158,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 08:15 -> branch claude/bug-1515, no PR (overnight burn-down)
   created_at: 2026-09-23T15:15:29.658942318Z
   modified_at: 2026-09-23T15:15:29.658942318Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cef5-457b-7280-98f3-fa1c1f25c722
+  author: joe
+  content: Commit f72cfc51c7 references this requirement
+  created_at: 2026-09-23T15:49:35.739090814Z
+  modified_at: 2026-09-23T15:49:35.739090814Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
