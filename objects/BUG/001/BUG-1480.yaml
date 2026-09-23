@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-21T20:53:59.654157100Z
+modified_at: 2026-09-23T06:24:09.540599248Z
 req_type: Bug
 tags:
 - agent-surface
@@ -531,6 +531,12 @@ comments:
   created_at: 2026-09-21T20:53:59.654157100Z
   modified_at: 2026-09-21T20:53:59.654157100Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ccef-9944-76b1-a729-627e1655c207
+  author: joe
+  content: 'PROXY DISPOSITION (Claude for the operator, overnight burn-down): ALREADY FIXED on main, verified. Evidence: Merged PR #2033 "[AI:codex] fix(show): use cache for single-spec reads (BUG-1480)" (mergedAt 2026-09-21T17:30:29Z). Verified directly: `aida show BUG-1480 --no-git` now completes in 0.42s (was 7.5s in the bug report). aida-cli-lib/src/lib.rs (aida show)'
+  created_at: 2026-09-23T06:24:09.540599248Z
+  modified_at: 2026-09-23T06:24:09.540599248Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
 implementation_info:
   implemented: true
