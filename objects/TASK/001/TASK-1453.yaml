@@ -1,0 +1,23 @@
+id: 01a0ce5d-c960-7fa1-85fa-ae0a48f8ca99
+spec_id: TASK-1453
+agreed_id: TASK-1453
+title: When the CI wait hits its ceiling with a known failure present, report Red with the failure summary, not NoSignal
+description: |-
+  Follow-up from the BUG-1455 strict review (2026-09-23). parse_ci_probe now returns InProgress while any check is running. If one check stays pending forever next to a concluded real failure, wait_for_ci_terminal hits its absolute ceiling (default 5400s) and returns NoSignal, parking the spec without the failure summary it already knew. Also: ci_absolute=0 now makes an unbounded wait a real hang risk.
+
+  ## Acceptance
+  1. At the ceiling, if any concluded failure is known, the verdict is Red with those failures named (the stuck check is listed as still pending).
+  2. ci_absolute=0 is clamped to a sane maximum or emits a warning.
+  3. Tests: stuck-pending plus real failure at the ceiling gives Red with a summary; stuck-pending alone gives NoSignal.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T13:04:08.032544690Z
+modified_at: 2026-09-23T13:04:08.032544690Z
+req_type: Task
+tags:
+- ci
+- drain
+- followup
+- parent:BUG-1455
