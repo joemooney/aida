@@ -33,7 +33,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T01:51:28.894424654Z
-modified_at: 2026-09-23T02:02:50.830265035Z
+modified_at: 2026-09-23T02:14:05.811028313Z
 req_type: Story
 tags:
 - cost token-economics watchdog observability scheduler parent:EPIC-71
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a0cbf9-14da-7182-9467-b91c99926461
+  created_at: 2026-09-23T02:14:05.811020317Z
+  created_by: joe
