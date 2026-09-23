@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:50:10.607837210Z
-modified_at: 2026-09-21T01:50:32.119586589Z
+modified_at: 2026-09-23T06:28:00.160435266Z
 req_type: Task
 tags:
 - batch:night-0920 seat-parity dogfood from:review-pr-1984
@@ -34,3 +34,6 @@ relationships:
   target_id: 01a0b5fe-5f73-78d3-8529-b9a0f585470e
   created_at: 2026-09-21T01:50:32.119582950Z
   created_by: joe
+deferred: true
+deferred_at: 2026-09-23T06:28:00.160435266Z
+deferred_until: 'operator/external action: Every acceptance criterion requires actually dispatching and observing a live multi-hour drain-mode wave behind the Codex advisor gate and recording its real event counts/output — not resolvable by writing code; docs/agents/seat-parity.md:14,18 still cite TASK-1308 for the two Codex Degraded cells with no dogfood evidence recorded; needs an operator to schedule/run the wave'
