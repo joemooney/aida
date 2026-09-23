@@ -1241,15 +1241,25 @@ exit 2
     /// The fake `gh` must tolerate probes with fewer than two arguments and
     /// reach its normal fallback under `set -u` instead of aborting while
     /// expanding an unset positional parameter.
+    //
+    // `fixture.gh` is a script this test suite just wrote to disk, so the
+    // spawn can race a concurrent fork that briefly still holds the file
+    // open for writing (ETXTBSY) — the same class fixed at forge.rs and
+    // pr_cmd.rs for production `gh` invocations. Production never hits this
+    // because it launches an already-installed `gh`, never a freshly
+    // written binary, so only the fixture side needs the retry. Route
+    // through the same process_retry helper those sites use rather than
+    // a bespoke loop.
+    // trace:BUG-1544 | ai:claude
     // trace:BUG-1460 | ai:codex
     #[test]
     fn fake_gh_short_argv_reaches_fallback() {
         let fixture = Fixture::new();
         for args in [&[][..], &["pr"][..]] {
-            let output = std::process::Command::new(&fixture.gh)
-                .args(args)
-                .output()
-                .unwrap();
+            let mut command = std::process::Command::new(&fixture.gh);
+            command.args(args);
+            let output =
+                crate::process_retry::command_output_retrying_etxtbsy(&mut command).unwrap();
             assert_eq!(output.status.code(), Some(2));
             let stderr = String::from_utf8_lossy(&output.stderr);
             assert!(stderr.contains("unexpected gh call:"), "stderr: {stderr}");
