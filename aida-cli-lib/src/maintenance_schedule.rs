@@ -2139,6 +2139,59 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // STORY-1367's three first jobs: named gated `doctor check` categories,
+        // same GATING shape as `doctor check performance --fail-on-findings`
+        // above — a plain `doctor check <category>` stays report-only, so
+        // `--fail-on-findings` is what turns a cadence check into a job the
+        // tick can actually route (non-zero exit → CronJobFailed → a due seat
+        // item). All three are silent on a clean run: `scan_remote_drift`
+        // returns nothing with fewer than two configured remotes,
+        // `scan_stale_remote_branches` produces no finding for an
+        // Excluded-verdict branch, and `scan_disk_headroom` returns nothing
+        // above its floor.
+        // trace:STORY-1367 | ai:claude
+        (
+            &["doctor check remote-drift --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check remote-drift --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "remote-drift",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
+        (
+            &["doctor check stale-remote-branches --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check stale-remote-branches --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "stale-remote-branches",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
+        (
+            &["doctor check disk-headroom --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check disk-headroom --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "disk-headroom",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
     ]
 }
 
@@ -3074,6 +3127,131 @@ enabled = true
             ),
             (0, 0, None)
         );
+    }
+
+    // STORY-1367: the three first substrate jobs the story registers
+    // (hub-drift, stranded-branches, disk-headroom) all ride the same
+    // GATING `doctor check <category> --fail-on-findings` shape as
+    // performance-guard, with no job-specific evidence parsing — a plain
+    // non-zero exit is enough for `failure_trip` to mint a trip_id and for
+    // the routing seat job to pick it up. Drives the tick against a fixture
+    // where the check trips (asserts each job reports, once, through the
+    // existing CronJobFailed → due-seat-job surface) and a clean fixture
+    // (asserts silence): acceptance criteria 2, 3 and 5.
+    // trace:STORY-1367 | ai:claude
+    #[test]
+    fn each_new_guard_job_trips_and_routes_on_failure_and_is_silent_when_clean() {
+        for command in [
+            "doctor check remote-drift --fail-on-findings",
+            "doctor check stale-remote-branches --fail-on-findings",
+            "doctor check disk-headroom --fail-on-findings",
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let job_name = "guard";
+            let guard = task(job_name, "6h", command);
+
+            // Clean fixture: the check finds nothing, exits 0. Silent — no
+            // CronJobFailed event, no failure trip.
+            let mut state = ScheduleState::default();
+            run_with_executor(
+                tmp.path(),
+                config(vec![guard.clone()]),
+                &mut state,
+                at(12),
+                Some(job_name),
+                |_root, _cmd| {
+                    Ok(TaskOutcome {
+                        status: 0,
+                        stdout: String::new(),
+                        stderr: String::new(),
+                    })
+                },
+            )
+            .unwrap();
+            assert!(
+                schedule_ledger::load(&store_root(tmp.path()), job_name)
+                    .unwrap()
+                    .failure_trips
+                    .is_empty(),
+                "{command}: clean run must not trip"
+            );
+            assert!(
+                events::read_all(tmp.path()).is_empty(),
+                "{command}: clean run must emit nothing"
+            );
+
+            // Failing fixture: the check finds something, exits non-zero.
+            // Reports exactly once, through CronJobFailed, and a routing seat
+            // job on that event becomes due carrying the trip evidence.
+            run_with_executor(
+                tmp.path(),
+                config(vec![guard]),
+                &mut state,
+                at(13),
+                Some(job_name),
+                |_root, _cmd| {
+                    Ok(TaskOutcome {
+                        status: 1,
+                        stdout: String::new(),
+                        stderr: "finding(s) detected".into(),
+                    })
+                },
+            )
+            .unwrap();
+            let ledger = schedule_ledger::load(&store_root(tmp.path()), job_name).unwrap();
+            let trip = ledger
+                .failure_trips
+                .last()
+                .unwrap_or_else(|| panic!("{command}: failing run must trip"));
+
+            let events = events::read_all(tmp.path());
+            let routed = events
+                .iter()
+                .find_map(|event| match &event.kind {
+                    EventKind::CronJobFailed { trip_id, .. } => trip_id.as_deref(),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{command}: failure must emit CronJobFailed"));
+            assert_eq!(routed, trip.trip_id, "{command}");
+
+            // A cold cursor (no prior tick) seeds itself to "now" and skips
+            // event replay on its first tick (see the STORY-1226 comment in
+            // `tick_core`), so seed a cursor before the failing run's
+            // timestamp — same setup `performance_failure_is_auditable_and_routed_by_trip`
+            // uses — or the routing job would never see the event it exists
+            // to route.
+            let mut route_state = ScheduleState::default();
+            route_state.tasks.insert(
+                "guard-route".into(),
+                TaskState {
+                    last_seen_event_ts: Some(at(12)),
+                    ..Default::default()
+                },
+            );
+            tick_core(
+                tmp.path(),
+                config(vec![seat_task(
+                    "guard-route",
+                    &["advisor"],
+                    None,
+                    &["CronJobFailed"],
+                )]),
+                &mut route_state,
+                at(14),
+                false,
+                |_root, _cmd| unreachable!(),
+                |_| Snapshot::default(),
+                &events,
+            )
+            .unwrap();
+            let route = schedule_ledger::load(&store_root(tmp.path()), "guard-route").unwrap();
+            assert!(route.due_since.is_some(), "{command}: routing job not due");
+            assert_eq!(
+                route.due_failure.as_ref().map(|f| f.trip_id.as_str()),
+                Some(trip.trip_id.as_str()),
+                "{command}"
+            );
+        }
     }
 
     // trace:BUG-1573 | ai:codex

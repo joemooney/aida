@@ -128,3 +128,71 @@ seats = ["advisor"]
 on = ["CronJobFailed"]
 prompt = "A performance budget was breached. Use the routed trip evidence and its matching entry at .aida-store/schedule/performance-guard.yaml to confirm the budget in force, then decide: real regression, or a budget that needs changing deliberately."
 enabled = true
+
+# STORY-1367's three first jobs. Nothing in `aida schedule` was registered
+# before this, so every recurring check ran only when a human happened to
+# remember it — the 2026-09-19 incident (32h of silent hub drift, missed
+# because nobody ran `aida remote status` or `aida doctor --category
+# remote-drift`, even though both report it accurately) is the fixture.
+#
+# Same GATING shape as performance-guard above: `--fail-on-findings` turns a
+# report into a job the tick can route, the non-zero exit emits
+# CronJobFailed, and the paired `*-route` seat job turns that event into a
+# due item in `aida awaiting`. Each substrate run is independently ledgered
+# at schedule/<job>.yaml (`aida-store` branch) so a trip is both durable and
+# noticed. All three are silent when clean — `scan_remote_drift` returns
+# nothing below two configured remotes, `scan_stale_remote_branches` reports
+# only Keep/SafeToDelete verdicts, `scan_disk_headroom` reports only below
+# its floor — so an enabled-and-quiet run trains nobody to ignore it.
+#
+# Registered ENABLED here (unlike the scaffold's commented default — see the
+# scaffold's own comment for the per-job reasoning) because this repo is the
+# population every one of them was measured against: it mirrors to a second
+# hub (`[store.sync] mirror_remotes` above, so hub-drift is meaningful, not
+# permanently silent), it is old enough to accumulate abandoned worktree
+# branches, and it is the repo that hit 100% disk with 16K free on
+# 2026-09-19. trace:STORY-1367 | ai:claude
+[[schedule.jobs]]
+name = "hub-drift-guard"
+command = "doctor check remote-drift --fail-on-findings"
+every = "6h"
+enabled = true
+
+[[schedule.jobs]]
+name = "hub-drift-guard-route"
+seats = ["advisor"]
+on = ["CronJobFailed"]
+prompt = "A tracked branch (main or aida-store) differs across hubs. Use the routed trip evidence and `aida remote status` to reconcile — never force-push a shared branch."
+enabled = true
+
+[[schedule.jobs]]
+name = "stranded-branches-guard"
+command = "doctor check stale-remote-branches --fail-on-findings"
+every = "24h"
+enabled = true
+
+[[schedule.jobs]]
+name = "stranded-branches-guard-route"
+seats = ["advisor"]
+on = ["CronJobFailed"]
+prompt = "One or more remote branches carry commits with no open PR. Review each: open a PR, or delete by hand — never auto-delete a Keep-flagged branch."
+enabled = true
+
+# 60 GiB matches the incident: root hit 100% with 16K free before this floor
+# existed. Raise/lower deliberately if this host's disk changes, not by
+# tuning until the gate goes green.
+[doctor.disk_headroom]
+min_free_gib = 60
+
+[[schedule.jobs]]
+name = "disk-headroom-guard"
+command = "doctor check disk-headroom --fail-on-findings"
+every = "30m"
+enabled = true
+
+[[schedule.jobs]]
+name = "disk-headroom-guard-route"
+seats = ["advisor"]
+on = ["CronJobFailed"]
+prompt = "Free disk space dropped below the configured floor. Reclaim space (stale worktrees via `aida session reap`, `cargo clean`) or raise [doctor.disk_headroom] min_free_gib deliberately."
+enabled = true

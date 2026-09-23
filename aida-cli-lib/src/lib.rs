@@ -22803,6 +22803,22 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "scheduler-driver",
     ),
+    // STORY-1367: free disk headroom on the filesystem holding the project
+    // root, checked against a configurable floor
+    // (`[doctor.disk_headroom] min_free_gib`, default 60). Zero-token,
+    // substrate-only — the first job STORY-1367 registers to catch the class
+    // of incident where a full disk silently kills a drain.
+    // trace:STORY-1367 | ai:claude
+    (
+        &[
+            "disk-headroom",
+            "disk-space",
+            "disk",
+            "headroom",
+            "free-space",
+        ],
+        "disk-headroom",
+    ),
 ];
 
 fn normalize_doctor_category(raw: &str) -> Result<String> {
