@@ -1,0 +1,22 @@
+id: 01a0cf30-0921-79e0-988c-8ab562ff837b
+spec_id: TASK-1457
+agreed_id: TASK-1457
+title: 'BUG-1527 follow-up tests: dispatched spec status unchanged on a swap, negative paths proceed, trailer-less rename classified separately'
+description: |-
+  From the BUG-1527 strict review (2026-09-23). Add: a MockPhaseDriver test asserting the dispatched spec's status stays unchanged when phase 1 fails ShippedMismatch (AC6); negative tests that a same-spec rename (BUG-223), a stacked branch and a both-ids branch still proceed; a test of the new ensure_spec_done_after_pr attribution gate. Also: a legitimate rename whose commits carry no trailers currently fails ShippedMismatch with a misleading 'swap' message, so classify it separately. And ensure_spec_done_after_pr now skips the Done write on the normal path when commits carry no trailer; decide whether that is intended and test it.
+
+  ## Acceptance
+  1. The tests above exist and pass.
+  2. A trailer-less rename yields a distinct, accurately worded outcome.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T16:53:46.913036798Z
+modified_at: 2026-09-23T16:53:46.913036798Z
+req_type: Task
+tags:
+- drain
+- followup
+- parent:BUG-1527
+- tests
