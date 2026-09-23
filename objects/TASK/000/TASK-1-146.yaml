@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T23:52:53.703891368Z
-modified_at: 2026-09-20T16:40:45.756042774Z
+modified_at: 2026-09-23T06:19:42.813774033Z
 req_type: Task
 tags:
 - credential
@@ -116,4 +116,7 @@ comments:
   created_at: 2026-09-20T16:40:45.756042774Z
   modified_at: 2026-09-20T16:40:45.756042774Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+deferred: true
+deferred_at: 2026-09-23T06:19:42.813774033Z
+deferred_until: 'operator/external action: Requires provisioning a real GitHub Actions secret (AIDA_GITLAB_TOKEN for gitlab.joemooney.com) - an operator credential action no agent can perform'
 execution_mode: operator
