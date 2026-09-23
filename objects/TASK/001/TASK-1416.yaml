@@ -40,7 +40,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:40:43.370422318Z
-modified_at: 2026-09-23T15:10:22.306561930Z
+modified_at: 2026-09-23T15:10:33.766261494Z
 req_type: Task
 tags:
 - adoption-gap
@@ -117,4 +117,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 07:52 -> branch claude/task-1416, no PR (overnight burn-down)
   created_at: 2026-09-23T14:52:42.933921945Z
   modified_at: 2026-09-23T14:52:42.933921945Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ced1-8926-7891-8b54-341a5a388e37
+  author: joe
+  content: 'Claude implementer result: claude/task-1416 @ 1257e8370b. run_human_finish_ceremony (aida ship/zen/integrate finish) hardcoded origin/main; it now uses resolve_finish_rebase_base: the PR''s baseRefName via gh, a visible note for a stacked base, and an explicit ''could not determine base'' fallback note. aida pr rebase and the drain were already correct. 5 new tests; rebase 106 pass. Awaiting review.'
+  created_at: 2026-09-23T15:10:33.766261494Z
+  modified_at: 2026-09-23T15:10:33.766261494Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
