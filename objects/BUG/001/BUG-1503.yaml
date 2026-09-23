@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:25:38.477338107Z
-modified_at: 2026-09-23T17:02:30.017387033Z
+modified_at: 2026-09-23T17:14:35.223754274Z
 req_type: Bug
 tags:
 - batch:night-0920 agent-surface cli-conformance drain-safe from:session-0920
@@ -89,4 +89,10 @@ comments:
   content: 'Orchestrator (overnight): PR #2110 (claude/bug-1503 @ 113c6b2579) has a real CI failure, aida-cli/tests/bug_1289_format_json.rs::status_bare_format_json_parses. Rework dispatched on the same branch.'
   created_at: 2026-09-23T17:02:30.017387033Z
   modified_at: 2026-09-23T17:02:30.017387033Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cf43-1557-74e1-b4e8-94b78117d787
+  author: joe
+  content: 'Fix 5cab841cdf pushed to claude/bug-1503 (PR #2110): print_fast_status_json dropped the ''requirements'' key the BUG-1289 contract test asserts; it is added from the already-computed counts (no extra cost), without reintroducing the heavy fields BUG-1503 forbids. bug_1289 7/7, bug_1503 3/3, status 521 pass.'
+  created_at: 2026-09-23T17:14:35.223754274Z
+  modified_at: 2026-09-23T17:14:35.223754274Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
