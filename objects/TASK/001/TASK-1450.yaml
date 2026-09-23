@@ -10,12 +10,12 @@ description: |-
   2. A disposition or execution_mode change emits a seat-tagged event with the before and after values.
   3. The monitor-contract doc, fixture and version are updated; verify.py passes.
   4. A test per emit site.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T08:30:39.352431588Z
-modified_at: 2026-09-23T12:06:23.398250495Z
+modified_at: 2026-09-23T13:02:44.675349861Z
 req_type: Task
 tags:
 - events
@@ -44,3 +44,21 @@ comments:
   created_at: 2026-09-23T12:06:23.398250495Z
   modified_at: 2026-09-23T12:06:23.398250495Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0ce5c-83bc-71a3-a02b-2ffed7eeff81
+  author: aida-auto-bump
+  timestamp: 2026-09-23T13:02:44.668343825Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0ce5c-83c3-7230-959d-d771ff890e5b
+  timestamp: 2026-09-23T13:02:44.675348647Z
+  agent: aida
+  commit_sha: 2aaa650d3133882d5b67e550e8917c34aaae083b
+  summary: Completed via merge 2aaa650d
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T13:02:43.305312178Z
+  completion_sha: 2aaa650d3133882d5b67e550e8917c34aaae083b
