@@ -1,14 +1,14 @@
 use super::{
     agent_gate_matches_req, branch_commits_ahead_main, build_auto_punt_args,
     build_integrate_rebase_args, build_phase3_auto_rebase_args, decide_shelve_attribution,
-    ensure_implementer_branch_pushed, find_orchestrated_lease, head_commit_message,
-    headless_log_is_zero_bytes, lease_path, list_leases, orchestrated_lease_receipt_path,
-    orchestrator_phase_child_env, orchestrator_pr_title_and_body, parse_agent_gates_from_config,
-    prepare_orchestrated_lease_receipt, publish_orchestrated_lease_receipt_from_env,
-    pushed_branch_commits_ahead_default, read_commits_in_range, resolve_shelve_gate_range,
-    try_open_orchestrator_pr_for_no_pr_worktree, watchdog_failure_with_committed_work,
-    AgentGateOnFail, RealPhaseDriver, SessionLease, ShelveAttribution,
-    ORCHESTRATED_LEASE_RECEIPT_ENV,
+    dispatched_branch_head_sha, ensure_implementer_branch_pushed, find_orchestrated_lease,
+    head_commit_message, headless_log_is_zero_bytes, lease_path, list_leases,
+    orchestrated_lease_receipt_path, orchestrator_phase_child_env, orchestrator_pr_title_and_body,
+    parse_agent_gates_from_config, prepare_orchestrated_lease_receipt,
+    publish_orchestrated_lease_receipt_from_env, pushed_branch_commits_ahead_default,
+    read_commits_in_range, resolve_shelve_gate_range, try_open_orchestrator_pr_for_no_pr_worktree,
+    watchdog_failure_with_committed_work, AgentGateOnFail, RealPhaseDriver, SessionLease,
+    ShelveAttribution, ORCHESTRATED_LEASE_RECEIPT_ENV,
 };
 use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure, PhaseReconcile};
 use aida_core::{
@@ -1622,4 +1622,456 @@ exit 0
     // branch's PR was never looked up or touched — `driver.pr_number` stays
     // unset, proving no Done write (which requires a PR) was ever attempted.
     assert_eq!(driver.pr_number, None);
+}
+
+// ============================================================================
+// TASK-1449: `RealPhaseDriver::rework_no_op_failure` refuses on unknowns and
+// compares against the blocking verdict's reviewed_sha on the DISPATCHED
+// branch, rather than failing open. Tests set `rework_guard` /
+// `phase_done_pr` directly — `begin_rework_guard`'s arming path is exercised
+// elsewhere; these cover the guard's own judgment once armed.
+//
+// TASK-1449 (post-review hardening): `dispatched_branch_head_sha` reads
+// ONLY `origin/<branch>` (fetched first, best effort) — no same-named local
+// branch fallback — so the fixture below gives every dispatched branch a
+// real bare-repo `origin` and PUSHES to it; a commit that never reaches
+// origin is invisible to the guard, exactly as in production (a dispatched
+// round's PR lives on origin by definition).
+// ============================================================================
+
+/// `main` with one commit, plus a DISPATCHED branch forked from it, both
+/// pushed to a real bare-repo `origin` — the shape `rework_no_op_failure`
+/// judges. Returns the worktree root.
+fn rework_fixture() -> (tempfile::TempDir, std::path::PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let bare = tmp.path().join("origin.git");
+    let root = tmp.path().join("work");
+    std::fs::create_dir_all(&root).unwrap();
+    git(tmp.path(), &["init", "--bare", "-q", "origin.git"]);
+    git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["config", "user.email", "aida@example.invalid"]);
+    git(&root, &["remote", "add", "origin", bare.to_str().unwrap()]);
+    git(&root, &["config", "user.name", "AIDA Test"]);
+    write_commit(&root, "README.md", "root\n", "chore: seed (TASK-0)");
+    git(&root, &["push", "-q", "origin", "main"]);
+    git(&root, &["checkout", "-q", "-b", "task-1449-work"]);
+    git(&root, &["push", "-q", "-u", "origin", "task-1449-work"]);
+    (tmp, root)
+}
+
+/// Push the dispatched branch's current local HEAD to `origin`, exactly as
+/// an implementer's round would — the guard reads only `origin/<branch>`.
+fn push_dispatched(root: &std::path::Path) {
+    git(root, &["push", "-q", "origin", "task-1449-work"]);
+}
+
+#[test]
+fn rework_no_op_failure_is_none_when_guard_is_not_armed() {
+    // A genuine first-round (non-rework) advance must never trip the guard —
+    // it is armed only when a blocking verdict exists.
+    let (_tmp, root) = rework_fixture();
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = None;
+    d.phase_done_pr = Some(1);
+    assert!(d.rework_no_op_failure().is_none());
+}
+
+#[test]
+fn rework_no_op_fires_when_dispatched_branch_head_equals_reviewed_sha() {
+    let (_tmp, root) = rework_fixture();
+    write_commit(&root, "impl.rs", "v1\n", "fix: attempt one (TASK-1449)");
+    push_dispatched(&root);
+    let head = git(&root, &["rev-parse", "HEAD"]);
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        Some(head),
+        None,
+        "outstanding review findings".to_string(),
+        3,
+    ));
+    d.phase_done_pr = Some(77);
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("an unmoved dispatched branch must refuse to advance");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+    assert!(failure.reason.contains("ROUND 3"), "{}", failure.reason);
+}
+
+#[test]
+fn rework_no_op_fires_when_some_other_head_moved_but_not_the_dispatched_branch() {
+    // BUG-1522 AC7 shape: a DIFFERENT branch gains a commit (simulating
+    // another PR's head moving) while the DISPATCHED branch sits untouched
+    // at the reviewed sha. The guard must still fire.
+    let (_tmp, root) = rework_fixture();
+    let reviewed_sha = git(&root, &["rev-parse", "HEAD"]);
+    git(&root, &["checkout", "-q", "-b", "unrelated-other-pr"]);
+    write_commit(&root, "other.rs", "v1\n", "fix: unrelated work (BUG-9998)");
+    git(&root, &["checkout", "-q", "task-1449-work"]);
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        Some(reviewed_sha),
+        None,
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("another branch moving must not excuse the dispatched branch's own no-op");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+}
+
+#[test]
+fn rework_no_op_passes_on_genuine_new_content_on_the_dispatched_branch() {
+    let (_tmp, root) = rework_fixture();
+    let reviewed_sha = git(&root, &["rev-parse", "HEAD"]);
+    write_commit(
+        &root,
+        "impl.rs",
+        "v2 — real fix\n",
+        "fix: address findings (TASK-1449)",
+    );
+    push_dispatched(&root);
+    let after = git(&root, &["rev-parse", "HEAD"]);
+    assert_ne!(reviewed_sha, after);
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        Some(reviewed_sha),
+        None,
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    assert!(
+        d.rework_no_op_failure().is_none(),
+        "genuine new patch-unique content must be allowed to proceed"
+    );
+}
+
+#[test]
+fn rework_no_op_passes_on_sha_less_verdict_with_a_new_commit() {
+    // TASK-1449 (rework, common-path regression): ~86% of verdicts carry no
+    // reviewed_sha. A missing sha must NOT itself refuse — the guard falls
+    // back to the dispatched branch's head captured at ARM TIME, and a real
+    // commit pushed since then must be allowed to proceed.
+    let (_tmp, root) = rework_fixture();
+    let arm_time_head = git(&root, &["rev-parse", "HEAD"]);
+    write_commit(
+        &root,
+        "impl.rs",
+        "v2 — real fix\n",
+        "fix: address findings (TASK-1449)",
+    );
+    push_dispatched(&root);
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        None, // no reviewed_sha on the blocking verdict
+        Some(arm_time_head),
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    assert!(
+        d.rework_no_op_failure().is_none(),
+        "a sha-less verdict with a genuine new commit must be allowed to proceed"
+    );
+}
+
+#[test]
+fn rework_no_op_fires_on_sha_less_verdict_with_an_unchanged_head() {
+    // TASK-1449 (rework, common-path regression): with no reviewed_sha, the
+    // arm-time dispatched-branch head is the fallback baseline. When the
+    // round produces no commits at all, that baseline still catches the
+    // no-op — falling back does not mean "always pass".
+    let (_tmp, root) = rework_fixture();
+    let arm_time_head = git(&root, &["rev-parse", "HEAD"]);
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        None, // no reviewed_sha on the blocking verdict
+        Some(arm_time_head),
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("a sha-less verdict with an unchanged head must still fire as a no-op");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+}
+
+#[test]
+fn rework_no_op_refuses_only_when_both_sha_and_arm_time_head_are_missing() {
+    // TASK-1449 AC3: refuse (UNKNOWN) ONLY when neither the verdict's
+    // reviewed_sha nor the arm-time head could be established — never
+    // merely because the sha is missing.
+    let (_tmp, root) = rework_fixture();
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        None,
+        None,
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("with no baseline at all, the guard must refuse rather than silently pass");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+    assert!(failure.reason.contains("neither"), "{}", failure.reason);
+}
+
+#[test]
+fn rework_no_op_refuses_when_dispatched_branch_head_is_unreadable() {
+    // TASK-1449 AC1: an unreadable head (here: the dispatched branch was
+    // never created) is UNKNOWN — refuse, never advance.
+    let (_tmp, root) = rework_fixture();
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "branch-that-does-not-exist".to_string(),
+        Some("deadbeef".repeat(5)),
+        None,
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("an unreadable dispatched-branch head must refuse rather than silently pass");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+    assert!(
+        failure.reason.contains("could not be read"),
+        "{}",
+        failure.reason
+    );
+}
+
+#[test]
+fn rework_no_op_fires_even_when_pr_number_is_none_this_round() {
+    // TASK-1449 AC4: the Held/Inconclusive `ImplementerOutcome` arms capture
+    // no PR (`phase_done_pr` stays `None`). The old `phase_done_pr !=
+    // Some(pr)` gate made the guard unreachable there; the dispatched-branch
+    // comparison must not depend on `phase_done_pr` at all.
+    let (_tmp, root) = rework_fixture();
+    let head = git(&root, &["rev-parse", "HEAD"]);
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        Some(head),
+        None,
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = None; // Held/Inconclusive: no PR captured this round.
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("a None phase_done_pr must not disarm the guard");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+}
+
+#[test]
+fn rework_no_op_catches_phase_done_pr_bound_to_another_specs_pr() {
+    // TASK-1449 AC3 / the BUG-1527 shape: this round's own `phase_done_pr`
+    // names a DIFFERENT, real PR whose commits credit another spec entirely.
+    // The old `phase_done_pr != Some(pr) => return None` exit treated that
+    // mismatch as license to advance. The attribution check must name it,
+    // and the dispatched-branch comparison (unaffected by `phase_done_pr`)
+    // must still fire regardless.
+    let (_tmp, root) = rework_fixture();
+    let reviewed_sha = git(&root, &["rev-parse", "HEAD"]);
+    // The fixture's `origin` is a local bare repo (for the other tests'
+    // real push/fetch); repoint it at a fake GitHub URL so the driver
+    // resolves `ForgeKind::GitHub` below.
+    git(
+        &root,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/acme/repo.git",
+        ],
+    );
+    git(&root, &["checkout", "-q", "-b", "other-spec-work"]);
+    write_commit(
+        &root,
+        "other.rs",
+        "v1\n",
+        "fix(x): unrelated fix (BUG-9999)",
+    );
+    git(&root, &["checkout", "-q", "task-1449-work"]);
+
+    let gh = fake_gh(
+        &root,
+        r#"#!/usr/bin/env bash
+if [[ "${1:-}" == "pr" && "${2:-}" == "view" && "${3:-}" == "999" ]]; then
+  cat <<'JSON'
+{
+  "state": "OPEN",
+  "title": "unrelated fix",
+  "mergedAt": null,
+  "baseRefName": "main",
+  "headRefName": "other-spec-work",
+  "headRefOid": "deadbeefcafe",
+  "isCrossRepository": false,
+  "headRepository": {"nameWithOwner": "acme/repo"},
+  "isDraft": false
+}
+JSON
+  exit 0
+fi
+exit 1
+"#,
+    );
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", gh.to_str().unwrap())]);
+
+    let mut d = driver(&root, "TASK-1449");
+    // The driver already cached its `ForgeKind::GitHub` at construction from
+    // the remote URL above (needed for `pr_head_ref_best_effort`'s
+    // `gh`-mocked `change_metadata` call); drop the (fake, unreachable)
+    // remote now so `rework_no_op_failure`'s best-effort `git fetch origin`
+    // fails instantly ("no such remote") instead of touching the network.
+    git(&root, &["remote", "remove", "origin"]);
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        Some(reviewed_sha),
+        None,
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(999);
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("a mismatched, misattributed PR must refuse rather than pass silently");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+    assert!(
+        failure.reason.contains("PR-999") && failure.reason.contains("not attributed"),
+        "expected the misattribution to be named explicitly, got: {}",
+        failure.reason
+    );
+}
+
+#[test]
+fn rework_no_op_fires_when_arm_time_local_ref_was_stale_before_fetch() {
+    // TASK-1449 (post-review hardening): reproduces the exact regression the
+    // reviewer flagged. `root`'s local `origin/task-1449-work` tracking ref
+    // is STALE at "arm time" — a SECOND clone of the same bare origin pushed
+    // a commit `root` never fetched. Without fetching at arm time, the
+    // baseline would be the stale local sha W; after the (genuinely no-op)
+    // round, the after-read (which DID fetch) sees the real origin head X —
+    // and X differs from W with real content, so a naive comparison reads
+    // that as "content changed" and wrongly lets a no-op round through, even
+    // though X was already on origin before this round ever started.
+    //
+    // This exercises the SAME low-level capture `begin_rework_guard` uses
+    // (`dispatched_branch_head_sha`) directly for the arm-time read, rather
+    // than driving `begin_rework_guard` end-to-end: that needs a real
+    // forge-side open PR + a recorded blocking verdict, and `PureGitForge`
+    // (the only forge a local bare-repo origin resolves to) never finds a
+    // change (`change_for_spec` always returns `NoChange`), so a pure-git
+    // fixture cannot arm the guard through the public entry point. The
+    // capture helper below is the exact function `begin_rework_guard` calls.
+    let (_tmp, root) = rework_fixture();
+
+    // A second clone of the SAME origin, simulating a different process /
+    // machine that pushed progress `root` hasn't fetched yet.
+    let bare = root
+        .parent()
+        .unwrap()
+        .join("origin.git")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let other_clone = root.parent().unwrap().join("other-clone");
+    git(
+        root.parent().unwrap(),
+        &["clone", "-q", &bare, "other-clone"],
+    );
+    git(
+        &other_clone,
+        &[
+            "checkout",
+            "-q",
+            "-b",
+            "task-1449-work",
+            "origin/task-1449-work",
+        ],
+    );
+    git(
+        &other_clone,
+        &["config", "user.email", "aida@example.invalid"],
+    );
+    git(&other_clone, &["config", "user.name", "AIDA Test"]);
+    write_commit(
+        &other_clone,
+        "impl.rs",
+        "v1 — already-reviewed content\n",
+        "fix: prior round's real work (TASK-1449)",
+    );
+    git(&other_clone, &["push", "-q", "origin", "task-1449-work"]);
+    let real_origin_head = git(&other_clone, &["rev-parse", "HEAD"]);
+
+    // `root` never re-fetched — its local `origin/task-1449-work` tracking
+    // ref is still the stale seed sha (confirm the staleness is real).
+    let stale_local_ref = git(&root, &["rev-parse", "origin/task-1449-work"]);
+    assert_ne!(
+        stale_local_ref, real_origin_head,
+        "the fixture must start genuinely stale for this test to mean anything"
+    );
+
+    // The fixed arm-time capture: fetches, so it reads the REAL origin head,
+    // not the stale cached ref.
+    let arm_time_head = dispatched_branch_head_sha(&root, "task-1449-work")
+        .expect("origin/task-1449-work must be readable after a fetch");
+    assert_eq!(
+        arm_time_head, real_origin_head,
+        "arm-time capture must fetch before reading, not trust a stale local ref"
+    );
+
+    // The round produces NO further commits — origin/task-1449-work stays at
+    // `real_origin_head` for the rest of this test.
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        None, // sha-less verdict — exercises the arm-time-head fallback too
+        Some(arm_time_head),
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    let failure = d.rework_no_op_failure().expect(
+        "a stale arm-time local ref must not manufacture a false 'content changed' — \
+             the round is a genuine no-op",
+    );
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
 }

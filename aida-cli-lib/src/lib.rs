@@ -8289,6 +8289,42 @@ fn pr_head_sha_best_effort(driver: &RealPhaseDriver, pr: u32) -> Option<String> 
         .filter(|s| !s.trim().is_empty())
 }
 
+/// TASK-1449: like [`pr_head_sha_best_effort`], but the PR's head branch
+/// name — used by the rework no-op guard to check whether a PR OTHER than
+/// the one it armed against (the BUG-1527 shape) is actually attributed to
+/// the spec before treating its existence as anything at all. `None` on any
+/// forge fault (e.g. pure-git, which has no PR metadata to read).
+// trace:TASK-1449 | ai:claude
+fn pr_head_ref_best_effort(driver: &RealPhaseDriver, pr: u32) -> Option<String> {
+    let mut sink = crate::network_retry::NoopSink;
+    driver
+        .lifecycle_forge()
+        .change_metadata(pr as u64, &mut sink)
+        .ok()
+        .map(|m| m.head_ref)
+        .filter(|s| !s.trim().is_empty())
+}
+
+/// TASK-1449 (BUG-1522 AC5/AC6; hardened on re-review): the DISPATCHED
+/// branch's head as ORIGIN reports it, read locally rather than via the
+/// forge. Fetches `origin/<branch>` first (best effort) so a stale
+/// remote-tracking ref is never read as truth — this fn is the ONLY reader
+/// for both the arm-time baseline and the post-round comparison, so a ref
+/// that was stale at arm time gets refreshed at arm time too, instead of
+/// only on the later read (which would manufacture a false "content
+/// changed": stale local W at arm time, freshly-fetched real X after —
+/// X looks new but was already the state on origin before this round ran).
+/// Deliberately does NOT fall back to a same-named local branch: a
+/// dispatched round's open PR lives on origin by definition, and a
+/// same-named local branch could be unrelated leftover state. `None` —
+/// UNKNOWN, fail-closed — when `origin/<branch>` cannot be read at all (no
+/// origin, branch never pushed, a git error).
+// trace:TASK-1449 | ai:claude
+fn dispatched_branch_head_sha(project_root: &std::path::Path, branch: &str) -> Option<String> {
+    let _ = fetch_branch(project_root, branch, true);
+    git_rev_parse_quiet(project_root, &format!("origin/{branch}"))
+}
+
 /// Add the orchestrator-owned review context to a reviewer-written PR verdict.
 ///
 /// The reviewer owns the verdict, summary, findings, and any future fields;
@@ -92471,11 +92507,19 @@ struct RealPhaseDriver {
     // trace:BUG-908 | ai:codex
     retry_implementer_worktree: Option<std::path::PathBuf>,
     retry_implementer_branch: Option<String>,
-    /// BUG-1213 / TASK-1265: `(PR, head, authoritative review delta, round)`
-    /// captured immediately before a rework implementer runs. `None` for
-    /// ordinary first-pass work.
-    // trace:BUG-1213 trace:TASK-1265 | ai:codex
-    rework_guard: Option<(u32, String, String, usize)>,
+    /// BUG-1213 / TASK-1265: `(PR, dispatched branch, blocking verdict's
+    /// reviewed_sha, the dispatched branch's head AT ARM TIME, authoritative
+    /// review delta, round)` captured immediately before a rework implementer
+    /// runs. `None` for ordinary first-pass work (no blocking verdict exists,
+    /// so the no-op guard must never fire).
+    /// TASK-1449 (rework, common-path regression): `reviewed_sha` is
+    /// `Option` because ~86% of the verdict corpus carries no sha. That is
+    /// UNKNOWN, not "no refusal", but it must not become an automatic
+    /// refusal either — `rework_no_op_failure` falls back to the arm-time
+    /// head as the comparison baseline and only refuses when NEITHER is
+    /// available.
+    // trace:BUG-1213 trace:TASK-1265 trace:TASK-1449 | ai:claude
+    rework_guard: Option<(u32, String, Option<String>, Option<String>, String, usize)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -94592,9 +94636,6 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let Some(verdict) = blocking_rework_verdict(&self.project_root, &self.spec, pr) else {
             return;
         };
-        let Some(head) = pr_head_sha_best_effort(self, pr) else {
-            return;
-        };
         let reason = review_verdict::rework_findings_comment(
             &self.spec,
             &format!("PR #{}", change.id),
@@ -94608,23 +94649,123 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     .map(|req| queue_cmd::rework_round_from_comments(&req.comments))
             })
             .unwrap_or(2);
-        self.rework_guard = Some((pr, head, reason, round));
+        // TASK-1449 (BUG-1522 AC5/AC6): arm on the blocking verdict's own
+        // `reviewed_sha` and the DISPATCHED branch — not the PR head sha at
+        // arm time, which is unreadable exactly when the guard matters most
+        // (a Held/Inconclusive round captures no PR at all) and can't tell
+        // "unchanged" from "moved, but not the dispatched branch". Arming no
+        // longer depends on reading the PR head, so a forge hiccup at arm
+        // time can't silently disarm the guard either.
+        //
+        // TASK-1449 (rework, common-path regression): ALSO capture the
+        // dispatched branch's head at arm time — before the implementer
+        // this round has touched anything. ~86% of verdicts record no
+        // `reviewed_sha`; when that's the case, this arm-time head is the
+        // fallback baseline `rework_no_op_failure` compares the post-round
+        // head against, so a sha-less verdict does not turn into an
+        // automatic refusal on every subsequent round.
+        let arm_time_head = dispatched_branch_head_sha(&self.project_root, &change.branch);
+        self.rework_guard = Some((
+            pr,
+            change.branch,
+            verdict.reviewed_sha,
+            arm_time_head,
+            reason,
+            round,
+        ));
     }
 
-    // trace:BUG-1213 trace:BUG-1445 | ai:codex
+    // trace:BUG-1213 trace:BUG-1445 trace:TASK-1449 | ai:claude
     fn rework_no_op_failure(&mut self) -> Option<auto_complete::PhaseFailure> {
-        let (pr, before, reason, round) = self.rework_guard.as_ref()?;
-        if self.phase_done_pr != Some(*pr) {
-            return None;
+        let (pr, branch, reviewed_sha, arm_time_head, reason, round) = self.rework_guard.clone()?;
+
+        // TASK-1449 AC3 (the BUG-1527 shape): this round's own PR capture may
+        // be bound to a DIFFERENT spec's PR rather than the PR this guard
+        // armed against. The old `phase_done_pr != Some(pr) => return None`
+        // exit treated any mismatch as license to advance — exactly BUG-1527's
+        // false Done. Name the misattribution via the TASK-1442 guard instead
+        // of silently trusting an unrelated PR's existence as progress; the
+        // dispatched-branch comparison below still runs regardless (it does
+        // not depend on `phase_done_pr` matching at all), so a resolvable
+        // forge miss here just falls through rather than masking anything.
+        if let Some(done_pr) = self.phase_done_pr {
+            if done_pr != pr {
+                if let Some(head_ref) = pr_head_ref_best_effort(self, done_pr) {
+                    if let Err(e) =
+                        ensure_pr_open_spec_attribution(&self.project_root, &head_ref, &self.spec)
+                    {
+                        return Some(auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::ReworkNoOp,
+                            format!(
+                                "ROUND {round} rework: this phase captured PR-{done_pr}, not \
+                                 PR-{pr} — the PR this guard armed against — and PR-{done_pr}'s \
+                                 commits are not attributed to {}: {e}. Refusing rather than \
+                                 crediting an unrelated PR toward this spec's rework. \
+                                 Authoritative open items:\n{reason}",
+                                self.spec,
+                            ),
+                        ));
+                    }
+                }
+            }
         }
-        let after = pr_head_sha_best_effort(self, *pr)?;
-        let change = classify_rework_head_change(&self.project_root, before, &after)?;
+
+        // TASK-1449 (rework, common-path regression fix): a missing
+        // `reviewed_sha` alone must NOT refuse — ~86% of the verdict corpus
+        // carries none, and refusing on that would shelve every rework round
+        // after a sha-less refusal even when real commits were pushed. Fall
+        // back to the DISPATCHED branch's head AT ARM TIME as the baseline;
+        // only refuse (UNKNOWN, PRIN-5) when neither is available.
+        let Some(baseline) = reviewed_sha.clone().or_else(|| arm_time_head.clone()) else {
+            return Some(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::ReworkNoOp,
+                format!(
+                    "ROUND {round} rework against PR-{pr} on `{branch}` cannot be verified — \
+                     neither the blocking review verdict's reviewed_sha nor the dispatched \
+                     branch's head at arm time could be established. Refusing rather than \
+                     advancing on an unknown. Authoritative open items:\n{reason}"
+                ),
+            ));
+        };
+
+        // TASK-1449 AC1/AC2/AC4: compare the baseline against the
+        // DISPATCHED branch's CURRENT head, read directly — never the PR
+        // head, so a Held/Inconclusive round with no `pr_number` this round
+        // still gets checked (AC4). `dispatched_branch_head_sha` fetches
+        // `origin/<branch>` first (best effort) before reading it, so a
+        // stale remote-tracking ref is refreshed here too, not only at arm
+        // time. An unreadable head is UNKNOWN and refuses.
+        let Some(after) = dispatched_branch_head_sha(&self.project_root, &branch) else {
+            return Some(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::ReworkNoOp,
+                format!(
+                    "ROUND {round} rework against PR-{pr}: the dispatched branch `{branch}`'s \
+                     head could not be read. Refusing rather than advancing on an unknown. \
+                     Authoritative open items:\n{reason}"
+                ),
+            ));
+        };
+
+        // AC1: an unclassifiable delta (no default branch ref, a git error)
+        // is UNKNOWN and refuses rather than advancing.
+        let Some(change) = classify_rework_head_change(&self.project_root, &baseline, &after)
+        else {
+            return Some(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::ReworkNoOp,
+                format!(
+                    "ROUND {round} rework against PR-{pr}: the change between the baseline \
+                     `{baseline}` and `{branch}`'s current head `{after}` could not be \
+                     classified (no default branch, or a git error). Refusing rather than \
+                     advancing on an unknown. Authoritative open items:\n{reason}"
+                ),
+            ));
+        };
         if change == ReworkHeadChange::ContentChanged {
             return None;
         }
         Some(auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::ReworkNoOp,
-            rework_no_op_message(*pr, before, &after, reason, *round, change),
+            rework_no_op_message(pr, &baseline, &after, &reason, round, change),
         ))
     }
 
