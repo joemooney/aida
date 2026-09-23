@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:25:38.477338107Z
-modified_at: 2026-09-23T05:20:57.705908597Z
+modified_at: 2026-09-23T05:21:00.741564048Z
 req_type: Bug
 tags:
 - batch:night-0920 agent-surface cli-conformance drain-safe from:session-0920
@@ -74,3 +74,13 @@ comments:
     Local gates: cargo test -p aida-cli --test bug_1503_status_json_fast_path (3 passed in 9.90s); cargo fmt --all -- --check; cargo clippy -p aida-cli-lib -- -W clippy::all -D clippy::correctness (exit 0; pre-existing warnings only); git diff --check.
   created_at: 2026-09-23T05:11:04.192963873Z
   modified_at: 2026-09-23T05:11:04.192963873Z
+- id: 01a0ccb5-c945-70c1-a899-7b016e8adaa5
+  author: joe
+  content: |-
+    [aida:independent-review] REQUEST_CHANGES at rebased head 113c6b25794c46dff39ec4f5b0c7f70658d32ab9.
+
+    Required CI is red in the full workspace test suite: aida-cli/tests/bug_1289_format_json.rs::status_bare_format_json_parses still expects the old project-wide/heavy status shape, but BUG-1503 intentionally changes bare JSON to the cache-backed FastStatusSnapshot. The new BUG-1503 tests pass, but the existing regression test must be updated (or the compatibility contract otherwise resolved) so the complete required CI suite is green. Do not merge over this red gate. Independent Codex review; Claude authored the branch.
+
+    Local targeted gates passed; this is a CI integration test contract failure, not a local fast-path failure.
+  created_at: 2026-09-23T05:21:00.741564048Z
+  modified_at: 2026-09-23T05:21:00.741564048Z
