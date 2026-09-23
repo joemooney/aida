@@ -245,6 +245,98 @@ fn parse_malformed_is_no_signal() {
     assert!(matches!(parse_ci_probe(""), CiProbe::NoSignal(_)));
 }
 
+// --- BUG-1455: a partial rollup must never read as a terminal verdict ---
+//
+// `gh`'s rollup carries no `isRequired` flag, so `parse_ci_probe` cannot
+// distinguish a required check from an optional one by name. What it CAN
+// always tell is concluded vs. still-running, so the table below is framed
+// on that axis: any check still in progress keeps the verdict open,
+// regardless of what has already concluded. `merge-hold-gate` (fails by
+// construction while a supervised hold is active) and `Build` (the
+// build/test check that actually decides code health) are the two real
+// check names from the observed incident, standing in for "a fast-failing
+// gate-style check" and "the code-health check" respectively.
+
+/// The exact rollup observed live on BUG-1291 / PR #2001: `merge-hold-gate`
+/// has already concluded FAILURE while `Build` is still IN_PROGRESS. Before
+/// the fix this returned `Red` — a terminal verdict — 32 seconds after the
+/// CI phase started, while the check that actually measures code health
+/// hadn't reported in yet.
+// trace:BUG-1455 | ai:claude
+#[test]
+fn optional_fail_with_required_pending_is_not_terminal() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "merge-hold-gate", "status": "COMPLETED",   "conclusion": "FAILURE"},
+            {"name": "Build",           "status": "IN_PROGRESS", "conclusion": ""}
+        ]}]"#;
+    assert_eq!(
+        parse_ci_probe(json),
+        CiProbe::InProgress { pr_number: 2001 },
+        "a concluded failure must not end the wait while another check is still running"
+    );
+}
+
+/// Once nothing is left running, a concluded failure is reported as it
+/// always was: the fast-fail case a required check going red with no other
+/// check pending.
+// trace:BUG-1455 | ai:claude
+#[test]
+fn required_fail_with_nothing_pending_is_red() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "merge-hold-gate", "status": "COMPLETED", "conclusion": "FAILURE"},
+            {"name": "Build",           "status": "COMPLETED", "conclusion": "SUCCESS"}
+        ]}]"#;
+    match parse_ci_probe(json) {
+        CiProbe::Red {
+            pr_number,
+            failed_summary,
+        } => {
+            assert_eq!(pr_number, 2001);
+            assert!(
+                failed_summary.contains("merge-hold-gate"),
+                "summary: {failed_summary}"
+            );
+        }
+        other => panic!("expected Red, got {other:?}"),
+    }
+}
+
+/// A check still queued/running with nothing concluded yet is the ordinary
+/// in-progress case, unaffected by the fix.
+// trace:BUG-1455 | ai:claude
+#[test]
+fn required_pending_with_nothing_concluded_is_in_progress() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "Build", "status": "QUEUED", "conclusion": ""}
+        ]}]"#;
+    assert_eq!(
+        parse_ci_probe(json),
+        CiProbe::InProgress { pr_number: 2001 }
+    );
+}
+
+/// Every check concluded successfully — Green, unaffected by the fix.
+// trace:BUG-1455 | ai:claude
+#[test]
+fn all_pass_is_green() {
+    let json = r#"[{"number": 2001, "statusCheckRollup": [
+            {"name": "merge-hold-gate", "status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"name": "Build",           "status": "COMPLETED", "conclusion": "SUCCESS"}
+        ]}]"#;
+    assert_eq!(parse_ci_probe(json), CiProbe::Green { pr_number: 2001 });
+}
+
+/// An unreadable/empty rollup is `NoSignal`, never a false Green or Red.
+// trace:BUG-1455 | ai:claude
+#[test]
+fn unknown_rollup_is_no_signal() {
+    assert!(matches!(parse_ci_probe("not json"), CiProbe::NoSignal(_)));
+    assert!(matches!(
+        parse_ci_probe(r#"[{"number": 2001}]"#),
+        CiProbe::PrNoChecks { pr_number: 2001 }
+    ));
+}
+
 // BUG-1250: the exact stderr emitted by `gh` for a connect failure must be
 // classified as retryable; exhaustion must close the gate, never proceed.
 // trace:BUG-1250 | ai:codex
