@@ -52,7 +52,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:25:14.620023337Z
-modified_at: 2026-09-23T12:47:23.300103538Z
+modified_at: 2026-09-23T12:47:25.045820228Z
 req_type: Bug
 tags:
 - drain-safe
@@ -210,3 +210,9 @@ comments:
   created_at: 2026-09-20T21:29:52.973311642Z
   modified_at: 2026-09-20T21:29:52.973311642Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0ce4e-7b75-7b31-a3eb-e81a292df2bf
+  author: joe
+  content: Claude implementer dispatched 2026-09-23 05:47 -> branch claude/bug-1455, no PR (overnight burn-down)
+  created_at: 2026-09-23T12:47:25.045820228Z
+  modified_at: 2026-09-23T12:47:25.045820228Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
