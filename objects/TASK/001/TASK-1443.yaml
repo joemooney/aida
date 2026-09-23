@@ -8,12 +8,12 @@ description: |
   Acceptance (BUG-1510 AC3, verbatim):
   1. The orchestrator does not open a PR for a head that already has an open PR. #2042 and #2043 share a head and were created 106 seconds apart.
   2. When an open PR already exists for the head, the orchestrator adopts or reports it rather than creating another; a test with an injected forge state covers this without real network calls.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T03:44:19.644493754Z
-modified_at: 2026-09-23T04:12:15.713594029Z
+modified_at: 2026-09-23T04:24:32.284099658Z
 req_type: Task
 tags:
 - parent:BUG-1510 orchestrator integrity attribution split-from:BUG-1510
