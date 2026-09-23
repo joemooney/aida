@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:37:23.055506428Z
-modified_at: 2026-09-23T17:17:13.580446246Z
+modified_at: 2026-09-23T17:47:33.598577950Z
 req_type: Bug
 tags:
 - orchestrator drain safety
@@ -69,4 +69,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 10:17 -> branch claude/bug-1574, no PR (overnight burn-down)
   created_at: 2026-09-23T17:17:13.580446246Z
   modified_at: 2026-09-23T17:17:13.580446246Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cf61-455e-7462-8800-38f4cfab773c
+  author: joe
+  content: 'PROXY DECISION (strict BLOCK on 9c7cc5e75d): revert the ls-remote-anchored lease (it is equivalent to --force). The refusal must fail closed on a store or drain-state error. Check the keyboard-only TAG, not only execution_mode. Refuse keyboard-only specs at --no-human dispatch. Guard the phase-3 auto-rebase (the incident''s real path). Scope --steal to the batch. Record a finding when a held branch is refused or moved.'
+  created_at: 2026-09-23T17:47:33.598577950Z
+  modified_at: 2026-09-23T17:47:33.598577950Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
