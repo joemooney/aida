@@ -31,12 +31,12 @@ description: |-
   EVIDENCE THIS NEEDS THAT #1998 CANNOT PRODUCE: which of the three write paths could be unified without changing their persistence semantics, and whether a core-level emission hook is acceptable given the layering. Both are architecture questions, which is why this is a split rather than another round.
 
   PROVENANCE. The no-seam finding is the reviewer seat's, produced by checking their own remedy before judging the implementer's departure from it. The 62-caller count and the in-memory nature of set_status_from_str were verified independently by the driver-advisor. The split disposition follows TASK-1279/TASK-1308 and BUG-1452/TASK-1307: the remaining work is a different shape needing evidence the current PR cannot produce.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T09:06:03.019291152Z
-modified_at: 2026-09-23T06:22:40.468019433Z
+modified_at: 2026-09-23T20:45:26.078395461Z
 req_type: Story
 comments:
 - id: 01a0c33a-5d4c-7ab0-81a6-4de8d53a6deb
