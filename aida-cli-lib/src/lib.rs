@@ -12569,6 +12569,208 @@ fn file_agent_gate_warning_finding(
     Ok(())
 }
 
+#[cfg(test)]
+#[path = "tests/story_1421_carry_forward_findings_tests.rs"]
+mod story_1421_carry_forward_findings_tests;
+
+/// Pure planner behind [`try_emit_nonblocking_findings_on_completion`]: which
+/// of `verdict`'s findings still need a successor filed, given the
+/// `finding-hash:<hex>` tags already on record for this spec (`already_filed`).
+///
+/// Empty when `verdict` is not APPROVED (a blocking verdict's findings are
+/// rework, not the "carried forward on an approval" case this spec covers)
+/// or carries no findings at all. De-dupes both against the caller's history
+/// AND within the verdict's own findings list (an accidental duplicate line),
+/// so a re-run over an already-completed spec — or a verdict repeating a
+/// finding — never yields the same text twice.
+///
+/// No I/O — takes an already-parsed [`review_verdict::RecordedVerdict`], so
+/// this is exercised directly by unit tests; the git-store-touching shell
+/// around it (`try_emit_nonblocking_findings_on_completion`) is not.
+// trace:STORY-1421 | ai:claude
+fn findings_needing_a_successor(
+    verdict: &review_verdict::RecordedVerdict,
+    already_filed: &std::collections::HashSet<String>,
+) -> Vec<(String, String)> {
+    if !matches!(verdict.kind, review_verdict::VerdictKind::Approved) {
+        return Vec::new();
+    }
+    let mut seen = std::collections::HashSet::new();
+    verdict
+        .findings
+        .iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .filter_map(|text| {
+            let hash_tag = format!("finding-hash:{}", &fnv1a_hex(text.as_bytes())[..8]);
+            if already_filed.contains(&hash_tag) || !seen.insert(hash_tag.clone()) {
+                None
+            } else {
+                Some((text, hash_tag))
+            }
+        })
+        .collect()
+}
+
+/// STORY-1421: a non-blocking finding recorded on an APPROVED review verdict
+/// has no successor once its spec reaches a terminal state — every surface
+/// that would have surfaced it (reviewer queue, `aida awaiting`, the open
+/// lens) stops looking, and the finding survives only inside a verdict record
+/// keyed to a spec nobody reads any more. Called from the same completion
+/// path `auto_bump_done_to_completed` / `close_verdict_on_merge` (BUG-1529)
+/// already use, this gives each such finding a home in `aida findings` — the
+/// existing triage surface — instead of a new child spec on the graph.
+///
+/// Best-effort: emission must never fail the pull/bump it rides along with.
+/// Any error is logged to stderr and swallowed.
+// trace:STORY-1421 | ai:claude
+fn emit_nonblocking_findings_on_completion(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    spec_id: &str,
+    sha: &str,
+    pr_hint: Option<u64>,
+) {
+    if let Err(e) =
+        try_emit_nonblocking_findings_on_completion(project_root, store_path, spec_id, sha, pr_hint)
+    {
+        eprintln!("warning: could not carry forward non-blocking findings for {spec_id}: {e:#}");
+    }
+}
+
+/// Idempotent worker for [`emit_nonblocking_findings_on_completion`]. Keyed on
+/// the source spec plus a hash of the finding text (`carried-from:<SPEC>` +
+/// `finding-hash:<hex>` tags), so a re-run of the auto-bump scan over an
+/// already-completed spec never files the same finding twice. Returns the
+/// number of NEW findings filed.
+///
+/// BUG-1506: every new finding is created through `DatabaseBackend::
+/// add_requirement` — the SAME targeted, single-object write `aida add`
+/// itself uses on the git-canonical store (`git_backend_cmd.rs`'s add
+/// handler). It only ever reads store METADATA (counters) to assign the new
+/// spec_id, then writes exactly the one new object + a targeted `add
+/// SPEC-ID` commit; it never loads or overwrites the full requirements list.
+/// The old `CachedGitBackend::update_atomically` path this replaced does a
+/// full-store load-then-save, which would silently drop any spec a
+/// concurrent `aida add` wrote in between — exactly the class of bug
+/// BUG-1506 was filed over, and live here because this runs inside `aida
+/// pull`'s auto-bump, right after drain merges, when concurrent `aida add`
+/// is common.
+// trace:STORY-1421 trace:BUG-1506 | ai:claude
+fn try_emit_nonblocking_findings_on_completion(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    spec_id: &str,
+    sha: &str,
+    pr_hint: Option<u64>,
+) -> anyhow::Result<usize> {
+    let verdict_file = review_verdict::verdict_path(project_root, spec_id);
+    let Ok(body) = std::fs::read_to_string(&verdict_file) else {
+        return Ok(0);
+    };
+    let Some(verdict) = review_verdict::parse_recorded_verdict(&body) else {
+        return Ok(0);
+    };
+    // Cheap pre-check against an empty history: if nothing would ever be filed
+    // regardless of what's already on record (not approved, or no findings),
+    // skip opening the store entirely.
+    if findings_needing_a_successor(&verdict, &std::collections::HashSet::new()).is_empty() {
+        return Ok(0);
+    }
+
+    use aida_core::db::DatabaseBackend;
+    let dispenser = load_dispenser(store_path)?;
+    let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+
+    let spec_upper = spec_id.trim().to_ascii_uppercase();
+    let carried_from_tag = format!("carried-from:{spec_upper}");
+
+    // Resolve the PR the review happened against, when not already known —
+    // same lookup `emit_spec_completed` uses (commit-subject trailer off the
+    // landing sha).
+    let pr_number = pr_hint.or_else(|| {
+        if sha.is_empty() {
+            return None;
+        }
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["show", "-s", "--format=%s", sha])
+            .output()
+            .ok()?;
+        output.status.success().then_some(())?;
+        extract_pr_number_from_commit_subject(String::from_utf8_lossy(&output.stdout).trim())
+    });
+    let review_tag = match pr_number {
+        Some(n) => format!("{}PR-{n}", findings::FROM_REVIEW_PREFIX),
+        None => format!("{}{}", findings::FROM_REVIEW_PREFIX, spec_upper),
+    };
+    let reviewed_sha = verdict.reviewed_sha.clone().unwrap_or_default();
+
+    // Idempotency: gather the hashes already on file for this spec (one cheap
+    // tag-filtered cache query), then let the pure planner in
+    // `findings_needing_a_successor` decide which of THIS verdict's findings
+    // are genuinely new. A re-run over an already-completed spec (the
+    // auto-bump scan can re-observe old history) then files nothing.
+    let already_filed: std::collections::HashSet<String> = backend
+        .list_summaries(&aida_core::ListFilter {
+            tags: vec![carried_from_tag.clone()],
+            archive: aida_core::ArchiveFilter::Both,
+            ..Default::default()
+        })?
+        .iter()
+        .flat_map(|r| r.tags.iter())
+        .filter(|t| t.starts_with("finding-hash:"))
+        .cloned()
+        .collect();
+    let to_file = findings_needing_a_successor(&verdict, &already_filed);
+
+    let mut filed = 0usize;
+    for (text, hash_tag) in to_file {
+        const TITLE_MAX: usize = 80;
+        let first_line = text.lines().next().unwrap_or(text.as_str()).trim();
+        let title = if first_line.chars().count() > TITLE_MAX {
+            let truncated: String = first_line.chars().take(TITLE_MAX - 1).collect();
+            format!("{truncated}…")
+        } else {
+            first_line.to_string()
+        };
+
+        let mut note = format!(
+            "Non-blocking finding carried forward from an APPROVED review verdict \
+             on {spec_upper}, which has since completed — recorded here so it keeps \
+             a queryable home once the verdict record stops being read.\n\n{text}"
+        );
+        if let Some(n) = pr_number {
+            note.push_str(&format!("\n\nPR: #{n}"));
+        }
+        if !reviewed_sha.is_empty() {
+            note.push_str(&format!("\nReviewed sha: {reviewed_sha}"));
+        }
+
+        let mut req = aida_core::Requirement::new(title, note);
+        req.req_type = aida_core::RequirementType::Task;
+        req.status = aida_core::RequirementStatus::Draft;
+        req.owner = get_default_author();
+        req.tags.insert(review_tag.clone());
+        req.tags.insert(carried_from_tag.clone());
+        req.tags.insert(hash_tag);
+        req.tags.insert("kind:carried-forward".to_string());
+        // `spec_id` left unset — the targeted `add_requirement` write below
+        // assigns it (reading only the store's small metadata/counters file,
+        // never the full requirements list).
+
+        let written = backend.add_requirement(req)?;
+
+        let display_id = written.spec_id.as_deref().unwrap_or("?");
+        record_role_activity(display_id, "findings-add");
+        filed += 1;
+    }
+    Ok(filed)
+}
+
 fn read_review_mode(project_root: &std::path::Path) -> String {
     let path = project_root.join(".aida").join("config.toml");
     let Ok(content) = std::fs::read_to_string(&path) else {
@@ -66437,6 +66639,41 @@ fn auto_bump_done_to_completed(
                 project_root,
                 &resolution.spec_id,
                 &format!("PR-{}", resolution.pr_n),
+            );
+        }
+    }
+
+    // STORY-1421: the same Done→Completed moment is where an outstanding
+    // non-blocking finding on an APPROVED verdict would otherwise lose its
+    // last reader — carry it into `aida findings` right here, alongside the
+    // BUG-1529 verdict-closing pass above.
+    // trace:STORY-1421 | ai:claude
+    for flip in &confirmed {
+        emit_nonblocking_findings_on_completion(
+            project_root,
+            store_path,
+            &flip.spec_id,
+            &flip.sha,
+            None,
+        );
+    }
+    for (spec_id, sha, pr_n, _) in &confirmed_stale {
+        emit_nonblocking_findings_on_completion(
+            project_root,
+            store_path,
+            spec_id,
+            sha,
+            Some(*pr_n),
+        );
+    }
+    for resolution in &confirmed_stranded {
+        if resolution.outcome == StrandedReviewPrOutcome::Merged {
+            emit_nonblocking_findings_on_completion(
+                project_root,
+                store_path,
+                &resolution.spec_id,
+                "",
+                Some(resolution.pr_n),
             );
         }
     }
