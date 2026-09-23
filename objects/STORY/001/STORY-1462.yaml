@@ -24,7 +24,7 @@ description: |
   2. Run against the 2026-09-21 transcripts (sessions 01a0bfde..., 01a0adee...), the job trips wake-rate, token-rate, repeated-prompt and idle-ratio on both sessions within the first simulated hour of the storm (fixture or replay test).
   3. A trip lands where a human already looks: an item in aida awaiting (and the per-turn --notice line), plus a desktop/terminal notification when available. Repeated trips for the same session dedupe.
   4. Optional enforcement, off by default: [watchdog] action = alert|stop - stop terminates the offending Claude/Codex process (by pid from the session/lease registry) after recording the trip; never touches a process it cannot attribute to the tripped session.
-  5. The tick is actually running: aida init / aida doctor detect that no scheduler drives aida schedule tick and offer an installable systemd user timer or crontab line (aida schedule emit-cron already prints one); aida doctor reports an overdue substrate job as a finding.
+  5. (Moved to STORY-1463: installing the scheduler tick from aida init, and aida doctor flagging an undriven or overdue scheduler.)
   6. The watchdog's own cost is bounded: incremental reads via per-file watermark, runtime under a few seconds on a 300MB transcript set, zero model calls - enforced by a test.
   7. docs/environment-variables.md / config docs updated for any new knobs.
 status: Approved
@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T01:51:28.894424654Z
-modified_at: 2026-09-23T01:51:28.894424654Z
+modified_at: 2026-09-23T01:55:19.807209419Z
 req_type: Story
 tags:
 - cost token-economics watchdog observability scheduler parent:EPIC-71
