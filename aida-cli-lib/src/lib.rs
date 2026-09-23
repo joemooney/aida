@@ -33622,6 +33622,251 @@ fn branch_behind_main(repo: &std::path::Path, branch: &str) -> Option<(u64, Vec<
     Some((count, sample))
 }
 
+/// BUG-1468: a PR branch's green check is evidence about the guards that
+/// existed WHEN IT RAN. Nothing re-evaluates that green when a new required
+/// guard lands on main, so a long-lived branch can present a green check
+/// that no longer means what a reader assumes (observed on PR #1979 —
+/// `aida-core/templates/.aida/discipline/session-discipline.md` grew a
+/// content check 15h after the branch's own CI ran, and the branch still
+/// showed green).
+///
+/// TWO TIERS (BUG-1468 follow-up — the single-tier version refused almost
+/// every ship in this repo, because nearly every commit on main touches
+/// `*/tests/` or `*_tests.rs`, making `--override-stale-check` routine):
+/// - `definition_files`: a `.github/workflows/*` file whose `on:` triggers
+///   include `pull_request` (a plain substring check on the file's content
+///   at `base_ref` — nightly/cron-only, release-only, and dispatch-only
+///   workflows don't gate a PR's own check, so they do NOT count), or a
+///   `scripts/` file one of THOSE PR-triggered workflows invokes directly —
+///   the check's own DEFINITION changed, so the green no longer means what
+///   it looks like. `aida pr ship` REFUSES on this tier (override-able); the
+///   drain's merge phase only WARNS and proceeds (BUG-1468 follow-up 2).
+/// - `test_files`: WARN-only, everywhere. An ordinary test file changed on
+///   base since divergence — the common, usually-harmless "base moved" case;
+///   still worth surfacing (a reader may want to re-run), never worth
+///   refusing.
+// trace:BUG-1468 | ai:claude
+pub(crate) struct StaleCheckWarning {
+    pub(crate) behind_commits: u64,
+    pub(crate) definition_files: Vec<String>,
+    pub(crate) test_files: Vec<String>,
+}
+
+/// Pure classifier for the two tiers above. `workflow_is_pr_triggered`
+/// decides whether a changed `.github/workflows/...` file's `on:` triggers
+/// include `pull_request` (a non-PR-triggered workflow — cron/nightly,
+/// release, manual dispatch — does NOT count as a definition change at
+/// all: it lands in neither tier). `script_is_pr_workflow_invoked` decides
+/// whether a `scripts/...` path is one a PR-triggered workflow calls
+/// directly. Callers resolve both via git on `base_ref` (tests fake them
+/// directly, no git needed).
+// trace:BUG-1468 | ai:claude
+pub(crate) fn classify_changed_files(
+    changed_files: &[String],
+    workflow_is_pr_triggered: &dyn Fn(&str) -> bool,
+    script_is_pr_workflow_invoked: &dyn Fn(&str) -> bool,
+) -> (Vec<String>, Vec<String>) {
+    let mut definition = Vec::new();
+    let mut test_only = Vec::new();
+    for f in changed_files {
+        if is_workflow_path(f) {
+            if workflow_is_pr_triggered(f) {
+                definition.push(f.clone());
+            }
+            // else: a nightly/cron/dispatch/release-only workflow — its
+            // green never covered this PR's check to begin with, so it
+            // doesn't count in either tier.
+        } else if is_script_path(f) && script_is_pr_workflow_invoked(f) {
+            definition.push(f.clone());
+        } else if is_test_path(f) {
+            test_only.push(f.clone());
+        }
+    }
+    (definition, test_only)
+}
+
+// trace:BUG-1468 | ai:claude
+fn is_workflow_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.starts_with(".github/workflows/") || lower.contains("/.github/workflows/")
+}
+
+// trace:BUG-1468 | ai:claude
+fn is_script_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.starts_with("scripts/") || lower.contains("/scripts/")
+}
+
+// trace:BUG-1468 | ai:claude
+fn is_test_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.starts_with("tests/")
+        || lower.contains("/tests/")
+        || lower.ends_with("_test.rs")
+        || lower.ends_with("_tests.rs")
+        || lower.ends_with("_test.py")
+        || lower.ends_with("_test.sh")
+}
+
+/// True when a `.github/workflows/...` file's content, AT `base_ref`,
+/// mentions `pull_request` — a plain substring check (no YAML parsing),
+/// standing in for "this workflow's `on:` triggers include `pull_request`"
+/// (BUG-1468 follow-up 2). A nightly/cron, release, or manual-dispatch-only
+/// workflow never gates a PR's own check, so it must not count as a
+/// definition change even though it lives under `.github/workflows/`.
+/// False on any git error (fail-open — a git hiccup demotes a definition
+/// change to "doesn't count" rather than blocking a ship on its own).
+// trace:BUG-1468 | ai:claude
+fn workflow_is_pr_triggered(repo: &std::path::Path, base_ref: &str, workflow_path: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["show", &format!("{base_ref}:{workflow_path}")])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("pull_request"))
+        .unwrap_or(false)
+}
+
+/// The `.github/workflows/*` files, AT `base_ref`, whose content mentions
+/// `pull_request` — the PR-triggered subset a `scripts/` change must be
+/// invoked by to count as a definition change. Empty on any git error
+/// (fail-open — see [`workflow_is_pr_triggered`]).
+// trace:BUG-1468 | ai:claude
+fn pr_triggered_workflow_files(repo: &std::path::Path, base_ref: &str) -> Vec<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args([
+            "grep",
+            "-l",
+            "-F",
+            "pull_request",
+            base_ref,
+            "--",
+            ".github/workflows",
+        ])
+        .output();
+    let Ok(out) = out else { return Vec::new() };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    // `git grep -l <rev> -- <pathspec>` prints "<rev>:<path>" per match.
+    let prefix = format!("{base_ref}:");
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| l.strip_prefix(prefix.as_str()).map(|p| p.to_string()))
+        .collect()
+}
+
+/// True when `script_path` (a `scripts/...` file that changed) is invoked
+/// directly by one of the PR-TRIGGERED workflows on `base_ref` — a literal
+/// substring match of the path inside those tracked `.github/workflows/*`
+/// blobs. A workflow that invokes the same script but isn't itself
+/// PR-triggered (nightly, release, dispatch-only) does not count (BUG-1468
+/// follow-up 2). False on any git error (fail-open).
+// trace:BUG-1468 | ai:claude
+fn script_referenced_by_pr_workflows(
+    repo: &std::path::Path,
+    base_ref: &str,
+    script_path: &str,
+) -> bool {
+    pr_triggered_workflow_files(repo, base_ref)
+        .iter()
+        .any(|wf| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(["show", &format!("{base_ref}:{wf}")])
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).contains(script_path))
+                .unwrap_or(false)
+        })
+}
+
+/// Resolve the ref to measure `branch`'s staleness FROM: `origin/<branch>`
+/// when that remote-tracking ref exists (what a PR's own CI actually ran
+/// against), else the local `branch` ref itself (BUG-1468 follow-up 3 — a
+/// local checkout can be ahead or behind what's actually pushed/reviewed).
+// trace:BUG-1468 | ai:claude
+fn stale_check_branch_ref(repo: &std::path::Path, branch: &str) -> String {
+    let remote_ref = format!("origin/{branch}");
+    let exists = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-parse", "--verify", "--quiet", &remote_ref])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if exists {
+        remote_ref
+    } else {
+        branch.to_string()
+    }
+}
+
+/// git-IO wrapper: how far `branch` is behind `base_ref`, and the two-tier
+/// classification (see [`StaleCheckWarning`]) of what changed on `base_ref`
+/// since divergence. Staleness is measured from `origin/<branch>` when that
+/// ref exists, else the local `branch` ref (see [`stale_check_branch_ref`]).
+/// `None` when the branch is not behind base (nothing to warn about) or on
+/// a git error — same fail-open convention as [`branch_behind_main`], so a
+/// git hiccup never blocks a ship.
+// trace:BUG-1468 | ai:claude
+pub(crate) fn pr_stale_check_warning(
+    repo: &std::path::Path,
+    branch: &str,
+    base_ref: &str,
+) -> Option<StaleCheckWarning> {
+    let branch_ref = stale_check_branch_ref(repo, branch);
+    let count_out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-list", "--count", &format!("{branch_ref}..{base_ref}")])
+        .output()
+        .ok()?;
+    if !count_out.status.success() {
+        return None;
+    }
+    let behind_commits: u64 = String::from_utf8_lossy(&count_out.stdout)
+        .trim()
+        .parse()
+        .ok()?;
+    if behind_commits == 0 {
+        return None;
+    }
+    let diff_out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["diff", "--name-only", &format!("{branch_ref}...{base_ref}")])
+        .output()
+        .ok()?;
+    if !diff_out.status.success() {
+        return None;
+    }
+    let changed: Vec<String> = String::from_utf8_lossy(&diff_out.stdout)
+        .lines()
+        .map(|l| l.to_string())
+        .collect();
+    let (definition_files, test_files) = classify_changed_files(
+        &changed,
+        &|workflow_path| workflow_is_pr_triggered(repo, base_ref, workflow_path),
+        &|script_path| script_referenced_by_pr_workflows(repo, base_ref, script_path),
+    );
+    Some(StaleCheckWarning {
+        behind_commits,
+        definition_files,
+        test_files,
+    })
+}
+
+#[cfg(test)]
+#[path = "tests/bug_1468_stale_check_tests.rs"]
+mod bug_1468_stale_check_tests;
+
 /// TASK-53: list distinct files touched by commits on `branch` since
 /// `since` (a git-friendly time string like "14 days ago"). Returns
 /// an empty vec on any git error or when the branch has no commits in
@@ -62207,6 +62452,116 @@ fn report_autostash_restore(project_root: &std::path::Path, pre_stash_top: Optio
 /// (via `git_ops::pull_rebase`, matching `aida db sync --pull`). Each
 /// leg skips cleanly when its remote isn't configured, so the command
 /// is safe to run in any project state. trace:TASK-43 | ai:claude
+// BUG-1500: `aida pull`'s store-leg failure message used to advise
+// `git rebase --abort` unconditionally, on every store-leg error —
+// including a transient network failure (e.g. a 502) where no rebase
+// is in progress and the abort is the wrong action. Check the actual
+// rebase state (a cheap filesystem stat via `git_ops::rebase_in_progress`)
+// before recommending it, so a transient failure doesn't read as a
+// broken/corrupted store.
+// trace:BUG-1500 | ai:claude
+fn store_pull_failure_hint(store_path: &std::path::Path, err_display: &str) -> String {
+    if aida_core::git_ops::rebase_in_progress(store_path) {
+        format!(
+            "{}\n  The orphan store is mid-rebase. To recover:\n    \
+                 cd {} && git rebase --abort\n  \
+             Then re-run `aida pull` or `aida db sync --pull`.",
+            err_display,
+            store_path.display()
+        )
+    } else {
+        format!(
+            "{}\n  This looks like a transient failure (e.g. network); \
+             the store is not mid-rebase. Re-run `aida pull` or `aida db sync --pull`.",
+            err_display
+        )
+    }
+}
+
+#[cfg(test)]
+mod bug_1500_store_pull_hint_tests {
+    use super::store_pull_failure_hint;
+
+    // trace:BUG-1500 | ai:claude
+    #[test]
+    fn no_rebase_in_progress_does_not_suggest_abort() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        // A plain non-repo directory: `rebase_in_progress` returns false
+        // for it (no `.git` at all), the same as a repo that is simply
+        // not mid-rebase — e.g. a transient network 502.
+        let hint = store_pull_failure_hint(tmp.path(), "connection reset (502)");
+        assert!(
+            !hint.contains("rebase --abort"),
+            "hint should not advise `git rebase --abort` when no rebase is in progress: {hint}"
+        );
+        assert!(hint.contains("transient failure"));
+        assert!(hint.contains("connection reset (502)"));
+    }
+
+    // trace:BUG-1500 | ai:claude
+    #[test]
+    fn rebase_in_progress_still_suggests_abort() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path();
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(repo)
+            .status()
+            .expect("git init")
+            .success());
+        // Simulate a rebase actually in progress: create the marker
+        // directory `rebase_in_progress` checks for.
+        std::fs::create_dir(repo.join(".git").join("rebase-merge")).expect("mkdir rebase-merge");
+
+        let hint = store_pull_failure_hint(repo, "some pull error");
+        assert!(
+            hint.contains("rebase --abort"),
+            "hint should advise `git rebase --abort` when a rebase IS in progress: {hint}"
+        );
+    }
+
+    // trace:BUG-1500 | ai:claude
+    // Covers the second emission site: `aida db sync --pull`'s
+    // `handle_git_backend_command` (aida-cli-lib/src/git_backend_cmd.rs)
+    // wraps the same `store_pull_failure_hint` output as
+    // `anyhow::bail!("Pull failed: {}", ...)`. This mirrors that exact
+    // format string so a regression there (e.g. reverting to the old
+    // unconditional "may be mid-rebase" text) is caught here too.
+    #[test]
+    fn db_sync_pull_bail_message_omits_abort_hint_without_rebase() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let hint = store_pull_failure_hint(tmp.path(), "connection reset (502)");
+        let bail_message = format!("Pull failed: {}", hint);
+        assert!(
+            !bail_message.contains("rebase --abort"),
+            "db sync --pull's bail message should not advise `git rebase --abort` \
+             when no rebase is in progress: {bail_message}"
+        );
+    }
+
+    // trace:BUG-1500 | ai:claude
+    #[test]
+    fn db_sync_pull_bail_message_includes_abort_hint_with_rebase() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path();
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(repo)
+            .status()
+            .expect("git init")
+            .success());
+        std::fs::create_dir(repo.join(".git").join("rebase-merge")).expect("mkdir rebase-merge");
+
+        let hint = store_pull_failure_hint(repo, "some pull error");
+        let bail_message = format!("Pull failed: {}", hint);
+        assert!(
+            bail_message.contains("rebase --abort"),
+            "db sync --pull's bail message should advise `git rebase --abort` \
+             when a rebase IS in progress: {bail_message}"
+        );
+    }
+}
+
 fn handle_pull_command(
     store_path: &std::path::Path,
     code_only: bool,
@@ -62631,12 +62986,9 @@ fn handle_pull_command(
             }
             Err(e) => {
                 eprintln!(
-                    "  {} {}\n  The orphan store may be mid-rebase. To recover:\n    \
-                         cd {} && git rebase --abort\n  \
-                     Then re-run `aida pull` or `aida db sync --pull`.",
+                    "  {} {}",
                     "Warning:".yellow().bold(),
-                    e,
-                    store_path.display()
+                    store_pull_failure_hint(store_path, &e.to_string())
                 );
                 store_failed = Some(format!("store leg pull_rebase failed: {}", e));
             }
@@ -70216,6 +70568,18 @@ fn collect_awaiting_report_inner(
         awaiting_you::rework_ready_rows(&candidates, seat.as_deref())
     };
 
+    // TASK-1445 (containment for BUG-1510 AC5): does a live drain's
+    // lease-based PR attribution agree with what the PR's own commits
+    // credit? Local-only (drain-state file + a git log per in-flight
+    // member) — no network — so it's skipped on the notice-fast path for
+    // the same latency reason as `unshipped_work` above.
+    // trace:TASK-1445 | ai:claude
+    let pr_attribution_disagreements = if notice_fast {
+        Vec::new()
+    } else {
+        collect_pr_attribution_disagreements(project_root)
+    };
+
     awaiting_you::AwaitingReport {
         mergeable_prs,
         unowned_failing_prs,
@@ -70230,6 +70594,7 @@ fn collect_awaiting_report_inner(
         shelved_total,
         unshipped_work,
         nightly_red,
+        pr_attribution_disagreements,
     }
 }
 
@@ -74722,6 +75087,44 @@ fn resolve_gate_range(project_root: &std::path::Path, range: Option<&str>) -> St
     "HEAD~20..HEAD".to_string()
 }
 
+/// TASK-1444: resolve the commit range for reviewer-verdict shelve
+/// attribution against the **PR's own branch**, not the drain's main
+/// checkout `HEAD`. `resolve_gate_range(.., None)` scans
+/// `<default>..HEAD`, which is the drain's own worktree/checkout — for the
+/// orchestrator's phase driver that is NOT necessarily the branch the PR
+/// under review is on. Prefers `origin/<branch>` (what CI and the reviewer
+/// actually saw) and falls back to the local `<branch>` ref when the origin
+/// ref hasn't been fetched; returns `None` when neither resolves (or the
+/// default branch itself can't be resolved) so the caller can treat
+/// attribution as `Uncertain` instead of silently reading the wrong range.
+// trace:TASK-1444 | ai:claude
+fn resolve_shelve_gate_range(
+    project_root: &std::path::Path,
+    branch: Option<&str>,
+) -> Option<String> {
+    let branch = branch?;
+    let default_ref = resolve_default_branch_ref(project_root)?;
+    use std::process::Command as PCmd;
+    let ref_exists = |r: &str| -> bool {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["rev-parse", "--verify", "--quiet", r])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    };
+    let origin_branch = format!("origin/{branch}");
+    let branch_ref = if ref_exists(&origin_branch) {
+        origin_branch
+    } else if ref_exists(branch) {
+        branch.to_string()
+    } else {
+        return None;
+    };
+    Some(format!("{default_ref}..{branch_ref}"))
+}
+
 /// Resolve a single SPEC-ID against a loaded store, mirroring the trace-gate
 /// resolver. When `store` is `None` (no requirement store reachable) every id
 /// resolves `Live` — failing every id would block legitimate ships on a
@@ -75168,6 +75571,133 @@ fn pr_open_spec_guard_violation(
         }
     }
     Some(other_ids)
+}
+
+// ============================================================================
+// TASK-1444 (containment for BUG-1510 AC4): reviewer-verdict shelve
+// attribution.
+//
+// The incident: STORY-1391's drain got a RequestChanges verdict whose
+// findings were about BUG-1420 (the PR's commits were all trailered
+// BUG-1420, per the TASK-1442 guard above), and the orchestrator shelved it
+// onto STORY-1391 — the lease's spec — silently. A shelve must record
+// against the spec the VERDICT is about, or say the attribution is
+// uncertain; it must never read as a confirmed attribution to the lease
+// when that was never checked.
+// ============================================================================
+
+/// Which spec a reviewer-verdict shelve should be recorded against.
+// trace:TASK-1444 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ShelveAttribution {
+    /// A commit trailer confirms the verdict is about the lease's own spec.
+    Confirmed(String),
+    /// Every non-plan commit trailer names exactly one spec, and it is NOT
+    /// the lease's — the shelve should target THAT spec, not the lease.
+    Reattributed(String),
+    /// The commits don't confirm a single spec (none named, or more than
+    /// one) — the attribution can't be safely resolved either way.
+    Uncertain(String),
+}
+
+/// Pure, testable core: decide which spec a reviewer-verdict shelve is
+/// actually about, from what the PR's own commits credit — never silently
+/// `lease_spec`. Reuses `pr_open_spec_guard_violation`'s trailer extraction
+/// (TASK-1442) so the two guards agree on what a trailer is: `None` there
+/// means some commit trailers `lease_spec` itself (`Confirmed`); `Some(ids)`
+/// means none does, and `ids` is what the non-plan commits DO name — exactly
+/// one other id means the verdict is confidently about that spec instead
+/// (`Reattributed`), while zero or several distinct ids means the commits
+/// don't settle it (`Uncertain`).
+// trace:TASK-1444 | ai:claude
+fn decide_shelve_attribution(commits: &[(String, String)], lease_spec: &str) -> ShelveAttribution {
+    match pr_open_spec_guard_violation(commits, lease_spec) {
+        None => ShelveAttribution::Confirmed(lease_spec.to_string()),
+        Some(other_ids) => match other_ids.as_slice() {
+            [only] => ShelveAttribution::Reattributed(only.clone()),
+            [] => ShelveAttribution::Uncertain(
+                "no commit on this PR carries a spec-ID trailer".to_string(),
+            ),
+            many => ShelveAttribution::Uncertain(format!(
+                "commits name multiple specs: {}",
+                many.join(", ")
+            )),
+        },
+    }
+}
+
+// ============================================================================
+// TASK-1445 (containment for BUG-1510 AC5): surface a PR attribution split
+// between `aida drain status` (attributes a PR by the lease it ran under)
+// and the trailer/title-based detectors (`awaiting_you.rs` unshipped-work
+// code) — instead of letting the two sources silently disagree, as happened
+// for 52 seconds in the BUG-1510 incident before a reviewer verdict landed
+// on the wrong spec.
+// ============================================================================
+
+/// Pure, testable core: given the spec a PR's lease attributes it to and
+/// that PR's own commits, decide whether the two attribution sources agree.
+/// Reuses `decide_shelve_attribution` (TASK-1444) so this and the
+/// reviewer-verdict shelve guard agree on what "trailer evidence" means:
+/// `Confirmed` (a trailer names the lease spec) and `Uncertain` (the
+/// trailers don't settle it — zero or several distinct ids) are both
+/// non-disagreements; only a confident `Reattributed` to a DIFFERENT spec is
+/// a disagreement worth surfacing. Never silently prefers one source over
+/// the other — both claimed owners are returned.
+// trace:TASK-1445 | ai:claude
+fn pr_attribution_disagreement(
+    pr: u64,
+    commits: &[(String, String)],
+    lease_spec: &str,
+) -> Option<awaiting_you::PrAttributionDisagreementItem> {
+    match decide_shelve_attribution(commits, lease_spec) {
+        ShelveAttribution::Reattributed(trailer_spec) => {
+            Some(awaiting_you::PrAttributionDisagreementItem {
+                pr,
+                lease_spec: lease_spec.to_string(),
+                trailer_spec,
+            })
+        }
+        ShelveAttribution::Confirmed(_) | ShelveAttribution::Uncertain(_) => None,
+    }
+}
+
+/// Collect every attribution split for the currently live drain's in-flight
+/// members. Local-only: a `.aida/drain-state.json` read, the local lease
+/// list, and one `git log` per in-flight member with a recorded PR — no
+/// network call. Returns nothing when no drain is active, a member has no
+/// PR yet, or its lease's branch can't be resolved/read (fails open — a git
+/// hiccup here must not manufacture a false disagreement).
+// trace:TASK-1445 | ai:claude
+fn collect_pr_attribution_disagreements(
+    project_root: &std::path::Path,
+) -> Vec<awaiting_you::PrAttributionDisagreementItem> {
+    let state = match drain_state::probe(project_root) {
+        drain_state::DrainStatus::Active(state) => state,
+        drain_state::DrainStatus::None | drain_state::DrainStatus::Stale(_) => return Vec::new(),
+    };
+    let Some(default_ref) = resolve_default_branch_ref(project_root) else {
+        return Vec::new();
+    };
+    let leases = list_leases(project_root);
+    let mut out = Vec::new();
+    for member in state.members.iter().filter(|m| m.is_running()) {
+        let Some(pr) = member.pr else { continue };
+        let Some(lease) = leases
+            .iter()
+            .find(|l| l.scope.eq_ignore_ascii_case(&member.spec))
+        else {
+            continue;
+        };
+        let range = format!("{default_ref}..{}", lease.branch);
+        let Ok(commits) = read_commits_in_range(project_root, &range) else {
+            continue;
+        };
+        if let Some(disagreement) = pr_attribution_disagreement(pr as u64, &commits, &member.spec) {
+            out.push(disagreement);
+        }
+    }
+    out
 }
 
 /// Refuse (exit 1) to open a PR when no commit the branch adds over the
@@ -93059,6 +93589,44 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "internal: PR number not resolved before the merge phase",
             )
         })?;
+        // AC1 follow-up (BUG-1468, then narrowed by the follow-up 2 proxy
+        // review): the drain's merge phase gets the same staleness *signal*
+        // as `aida pr ship`, but only ever WARNS and proceeds — it never
+        // shelves on this check. The spec asks the drain only to warn; only
+        // `aida pr ship` (an interactive/human-gated command) refuses. A
+        // definition-tier change (`.github/workflows/*` whose `on:`
+        // triggers include `pull_request`, or a script one of those
+        // workflows invokes directly) prints which files changed; an
+        // ordinary test-file change prints the lighter commits/test-count
+        // line. Never blocks the merge. trace:BUG-1468 | ai:claude
+        if let Some(branch) = self.branch.clone() {
+            let base_branch = crate::pr_cmd::pr_ship_target_branch(pr as u64);
+            let base_ref = format!("origin/{base_branch}");
+            if let Some(warning) = pr_stale_check_warning(&self.project_root, &branch, &base_ref) {
+                if !warning.definition_files.is_empty() {
+                    println!(
+                        "  {} PR-{pr}'s green check completed before {} changed on {base_branch}: \
+                         {} — its CI ran against an OLDER definition of that check. Proceeding \
+                         (the drain warns; only `aida pr ship` refuses).",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        if warning.definition_files.len() == 1 {
+                            "a CI definition file"
+                        } else {
+                            "CI definition files"
+                        },
+                        warning.definition_files.join(", "),
+                    );
+                } else if !warning.test_files.is_empty() {
+                    println!(
+                        "  {} {} commits behind; {} test files changed on main since this branch's base",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                        warning.behind_commits,
+                        warning.test_files.len(),
+                    );
+                }
+            }
+        }
+
         // STORY-516/TASK-669 + BUG-1037: keep the forge CLI-on-PATH guard as a
         // MissingTool (non-shelvable -> stop-the-drain) pre-check, but key it
         // to the run's resolved lifecycle forge. Pure-git has no CLI precheck.
@@ -93893,13 +94461,58 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         failure: &auto_complete::PhaseFailure,
         recovery_hint: &str,
     ) -> anyhow::Result<Option<aida_core::FailureReason>> {
+        // TASK-1444 / BUG-1510: a reviewer-verdict shelve must ALWAYS land
+        // on the lease's own spec — the drain only holds a lease on `spec`,
+        // and flipping some other spec's status because a commit trailer
+        // *mentions* it would be its own attribution error (that spec's
+        // owner never asked this drain to touch it). What changes on
+        // attribution is not the TARGET, only the NOTE: when the PR's
+        // commits confidently credit a different spec, or the attribution
+        // can't be confirmed either way, the lease spec's FailureReason
+        // detail says so explicitly instead of reading as a silent,
+        // unconditional "this spec failed review".
+        // trace:TASK-1444 | ai:claude
+        let detail: String = if matches!(
+            failure.kind,
+            auto_complete::FailureKind::VerdictRequestChanges
+                | auto_complete::FailureKind::VerdictReject
+        ) {
+            match resolve_shelve_gate_range(&self.project_root, self.branch.as_deref()) {
+                Some(range) => match read_commits_in_range(&self.project_root, &range) {
+                    Ok(commits) => match decide_shelve_attribution(&commits, spec) {
+                        ShelveAttribution::Confirmed(_) => failure.reason.clone(),
+                        ShelveAttribution::Reattributed(other) => format!(
+                            "{} (attribution: this verdict's commits carry {}'s trailer, not this spec's)",
+                            failure.reason, other
+                        ),
+                        ShelveAttribution::Uncertain(note) => format!(
+                            "{} (attribution uncertain: {})",
+                            failure.reason, note
+                        ),
+                    },
+                    // A git hiccup reading the commit range must not block
+                    // the shelve itself — fall back to no note, same as
+                    // pre-TASK-1444 behaviour.
+                    Err(_) => failure.reason.clone(),
+                },
+                // Couldn't resolve the PR's own branch (no `self.branch`,
+                // and no local/origin ref for it) — the attribution is
+                // Uncertain, never a guess dressed up as Reattributed.
+                None => format!(
+                    "{} (attribution uncertain: could not resolve the PR branch to read its commits)",
+                    failure.reason
+                ),
+            }
+        } else {
+            failure.reason.clone()
+        };
         shelve_spec_on_failure(
             &self.project_root,
             spec,
             phase.slug(),
             phase.index() as u8,
             failure.kind.cause_slug(),
-            &failure.reason,
+            &detail,
             recovery_hint,
         )
     }
@@ -95557,3 +96170,13 @@ mod bug_1510_lease_brief_dispatch_tests;
 #[cfg(test)]
 #[path = "tests/task_1442_pr_open_spec_guard_tests.rs"]
 mod task_1442_pr_open_spec_guard_tests;
+
+// trace:TASK-1444 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1444_shelve_attribution_tests.rs"]
+mod task_1444_shelve_attribution_tests;
+
+// trace:TASK-1445 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1445_pr_attribution_disagreement_tests.rs"]
+mod task_1445_pr_attribution_disagreement_tests;

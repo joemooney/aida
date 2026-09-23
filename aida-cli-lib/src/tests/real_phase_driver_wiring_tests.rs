@@ -1,12 +1,13 @@
 use super::{
     agent_gate_matches_req, branch_commits_ahead_main, build_auto_punt_args,
-    build_integrate_rebase_args, build_phase3_auto_rebase_args, ensure_implementer_branch_pushed,
-    find_orchestrated_lease, head_commit_message, headless_log_is_zero_bytes, lease_path,
-    list_leases, orchestrated_lease_receipt_path, orchestrator_phase_child_env,
-    orchestrator_pr_title_and_body, parse_agent_gates_from_config,
+    build_integrate_rebase_args, build_phase3_auto_rebase_args, decide_shelve_attribution,
+    ensure_implementer_branch_pushed, find_orchestrated_lease, head_commit_message,
+    headless_log_is_zero_bytes, lease_path, list_leases, orchestrated_lease_receipt_path,
+    orchestrator_phase_child_env, orchestrator_pr_title_and_body, parse_agent_gates_from_config,
     prepare_orchestrated_lease_receipt, publish_orchestrated_lease_receipt_from_env,
-    pushed_branch_commits_ahead_default, try_open_orchestrator_pr_for_no_pr_worktree,
-    watchdog_failure_with_committed_work, AgentGateOnFail, RealPhaseDriver, SessionLease,
+    pushed_branch_commits_ahead_default, read_commits_in_range, resolve_shelve_gate_range,
+    try_open_orchestrator_pr_for_no_pr_worktree, watchdog_failure_with_committed_work,
+    AgentGateOnFail, RealPhaseDriver, SessionLease, ShelveAttribution,
     ORCHESTRATED_LEASE_RECEIPT_ENV,
 };
 use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure, PhaseReconcile};
@@ -1352,5 +1353,152 @@ fn post_push_pr_recovery_refuses_when_commit_trailer_names_a_different_spec() {
         recovered.is_none(),
         "a branch whose only commit is trailered for a different spec must not get a PR \
          opened under the wrong spec's identity; got {recovered:?}"
+    );
+}
+
+/// TASK-1444 follow-up: `resolve_shelve_gate_range` must scan the PR's OWN
+/// branch, not the caller's current `HEAD`. Reuses the pushed-branch fixture
+/// (origin/HEAD set to `main`, branch `bug-878` pushed one commit ahead,
+/// trailered `(BUG-878)`), but checks the worktree back out to `main` first —
+/// so `HEAD` carries none of that commit. `resolve_gate_range(.., None)`
+/// (the pre-TASK-1444 range, `<default>..HEAD`) must come back empty; the
+/// branch-aware range must still find the commit on `origin/bug-878`.
+// trace:TASK-1444 | ai:claude
+#[test]
+fn resolve_shelve_gate_range_uses_the_branch_not_current_head() {
+    let (_tmp, work, _remote) = repo_with_pushed_branch_ahead_of_origin_default();
+    // The fixture leaves the worktree checked out on `bug-878`; move HEAD
+    // back to `main` so it no longer carries the fixture's commit.
+    git(&work, &["checkout", "-q", "main"]);
+
+    let head_range = super::resolve_gate_range(&work, None);
+    let head_commits = read_commits_in_range(&work, &head_range).unwrap();
+    assert!(
+        head_commits.is_empty(),
+        "HEAD is back on main; the HEAD-based range must not see the branch's commit, got {head_commits:?}"
+    );
+
+    let branch_range = resolve_shelve_gate_range(&work, Some("bug-878"))
+        .expect("origin/bug-878 was pushed by the fixture and must resolve");
+    let branch_commits = read_commits_in_range(&work, &branch_range).unwrap();
+    assert!(
+        branch_commits
+            .iter()
+            .any(|(_, subject)| subject.contains("BUG-878")),
+        "the branch-aware range must find the pushed branch's own commit, got {branch_commits:?}"
+    );
+
+    // No branch to resolve at all → Uncertain territory, never a guess.
+    assert!(resolve_shelve_gate_range(&work, None).is_none());
+    assert!(resolve_shelve_gate_range(&work, Some("no-such-branch")).is_none());
+}
+
+/// TASK-1444 / BUG-1510 end-to-end: when a reviewer verdict's commits are
+/// confidently trailered for a DIFFERENT spec than the lease, the shelve
+/// must still land on the LEASE spec (never silently flip the other one's
+/// status) — with a note on the lease's own `FailureReason` explaining the
+/// mismatch. Exercises the real wiring (`RealPhaseDriver::shelve_on_failure`
+/// → `resolve_shelve_gate_range` → `decide_shelve_attribution` →
+/// `shelve_spec_on_failure`), not just the pure decision function.
+// trace:TASK-1444 | ai:claude
+#[test]
+fn shelve_on_failure_always_shelves_the_lease_spec_with_an_attribution_note() {
+    let tmp = tempfile::tempdir().unwrap();
+    let remote = tmp.path().join("origin.git");
+    let work = tmp.path().join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    git(tmp.path(), &["init", "--bare", "-b", "main", "origin.git"]);
+    git(&work, &["init", "-q", "-b", "main"]);
+    git(&work, &["config", "user.email", "aida@example.invalid"]);
+    git(&work, &["config", "user.name", "AIDA Test"]);
+    git(
+        &work,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    write_commit(&work, "base.txt", "base\n", "chore: base");
+    git(&work, &["push", "-q", "-u", "origin", "main"]);
+    git(&work, &["remote", "set-head", "origin", "main"]);
+    git(&work, &["checkout", "-q", "-b", "story-1391"]);
+    // The PR's own commits are ALL trailered for a different spec — the
+    // BUG-1510 incident shape.
+    write_commit(
+        &work,
+        "fix.txt",
+        "fix\n",
+        "fix(orchestrator): address review findings (BUG-1420)",
+    );
+    git(&work, &["push", "-q", "-u", "origin", "story-1391"]);
+    // Move HEAD off the PR branch so a HEAD-based range (the pre-TASK-1444
+    // bug) could not possibly see the right commits by accident.
+    git(&work, &["checkout", "-q", "main"]);
+
+    std::fs::create_dir_all(work.join(".aida")).unwrap();
+    std::fs::write(
+        work.join(".aida").join("config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+
+    let mut req = Requirement::new("uses reviewer feedback".to_string(), String::new());
+    req.spec_id = Some("STORY-1391".to_string());
+    req.status = RequirementStatus::InProgress;
+    let mut store = RequirementsStore::default();
+    store.requirements.push(req);
+    aida_core::GitBackend::new(&work.join(".aida-store"))
+        .unwrap()
+        .save(&store)
+        .unwrap();
+
+    let mut phase_driver = driver(&work, "STORY-1391");
+    phase_driver.branch = Some("story-1391".to_string());
+
+    let failure = PhaseFailure::of(
+        FailureKind::VerdictRequestChanges,
+        "reviewer requested changes",
+    );
+    let fr = phase_driver
+        .shelve_on_failure(
+            "STORY-1391",
+            Phase::Reviewer,
+            &failure,
+            "resolve the reviewer's findings",
+        )
+        .unwrap()
+        .expect("a shelvable InProgress spec must produce a FailureReason");
+
+    assert!(
+        fr.detail.contains("BUG-1420") && fr.detail.contains("attribution"),
+        "expected the lease's own FailureReason to note the mismatched attribution, got: {}",
+        fr.detail
+    );
+
+    let reloaded = aida_core::GitBackend::new(&work.join(".aida-store"))
+        .unwrap()
+        .load()
+        .unwrap();
+    let lease_req = reloaded
+        .requirements
+        .iter()
+        .find(|r| r.spec_id.as_deref() == Some("STORY-1391"))
+        .expect("lease spec must still be in the store");
+    assert_eq!(
+        lease_req.status,
+        RequirementStatus::NeedsAttention,
+        "the shelve must always land on the LEASE spec, never silently skip it"
+    );
+    assert!(lease_req
+        .failure_reason
+        .as_ref()
+        .unwrap()
+        .detail
+        .contains("BUG-1420"));
+
+    // Sanity check against the pure decision function directly, confirming
+    // the wiring and the pure core agree on this shape.
+    let range = resolve_shelve_gate_range(&work, Some("story-1391")).unwrap();
+    let commits = read_commits_in_range(&work, &range).unwrap();
+    assert_eq!(
+        decide_shelve_attribution(&commits, "STORY-1391"),
+        ShelveAttribution::Reattributed("BUG-1420".to_string())
     );
 }
