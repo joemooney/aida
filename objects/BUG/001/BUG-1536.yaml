@@ -70,7 +70,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:51:52.124497966Z
-modified_at: 2026-09-23T14:51:53.056674115Z
+modified_at: 2026-09-23T14:51:54.996558411Z
 req_type: Bug
 tags:
 - parent:EPIC-62 test-isolation forge-safety severity:major
@@ -91,4 +91,10 @@ comments:
   content: Commit 58a7937fc8 references this requirement
   created_at: 2026-09-23T14:50:45.882937024Z
   modified_at: 2026-09-23T14:50:45.882937024Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cec0-76f4-7160-a548-f788560de77b
+  author: joe
+  content: 'Claude implementer result: claude/bug-1536 @ 58a7937fc8. handle_review_record_at(project_root, ...) takes the write root explicitly (the CLI resolves it once); a cfg(test) guard panics if a test writes outside the temp dir; the BUG-1452 test is rewritten plus a new decoy-ambient-root test. AC1-4 met; AC5 (a production PR-to-repo guard, e.g. pinning -R on the forge calls in merge_hold.rs) is split to a follow-up since merge_hold.rs is off-limits pending STORY-1397.'
+  created_at: 2026-09-23T14:51:54.996558411Z
+  modified_at: 2026-09-23T14:51:54.996558411Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
