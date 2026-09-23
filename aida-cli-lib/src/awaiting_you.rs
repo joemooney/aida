@@ -15,6 +15,7 @@
 use crate::review_verdict;
 use crate::status_cleanup::OpenPrItem;
 use colored::Colorize;
+use std::collections::HashSet;
 use std::io::Write;
 
 /// Default cap on rendered lines before `--verbose` lifts it.
@@ -1191,11 +1192,20 @@ fn pluralize(n: usize, singular: &str, plural: &str) -> String {
 ///   - `mergeable == "MERGEABLE"` (excludes CONFLICTING / UNKNOWN)
 ///   - CI is not failing or pending (pass / no-checks / `?` are fine)
 ///   - reviewer verdict is not `CHANGES_REQUESTED`
+///   - no AIDA-recorded blocking verdict at the PR's current head
 ///
 /// A `REVIEW_REQUIRED` PR still qualifies: if the operator is the only
 /// reviewer on a solo project, the human merge button is the only gate.
-/// trace:STORY-465 | ai:claude
-pub(crate) fn is_awaiting_you(pr: &OpenPrItem) -> bool {
+///
+/// `local_verdict_blocks` is a caller-supplied fact (see
+/// [`classify_open_prs`]) rather than a filesystem read here: this stays the
+/// same pure, git/forge-free classifier the module doc promises. BUG-1490:
+/// GitHub's `review_decision` is not the only place a refusal is recorded —
+/// `aida review record` writes straight to the AIDA substrate with no forge
+/// round trip, so a PR refused that way had `review_decision` empty and kept
+/// showing up here as awaiting-you.
+// trace:BUG-1490 | ai:claude
+pub(crate) fn is_awaiting_you(pr: &OpenPrItem, local_verdict_blocks: bool) -> bool {
     let mergeable = pr.mergeable.as_deref().unwrap_or("");
     if !mergeable.eq_ignore_ascii_case("MERGEABLE") {
         return false;
@@ -1212,14 +1222,26 @@ pub(crate) fn is_awaiting_you(pr: &OpenPrItem) -> bool {
     if verdict == "CHANGES_REQUESTED" {
         return false;
     }
+    if local_verdict_blocks {
+        return false;
+    }
     true
 }
 
 /// Filter a snapshot of open PRs down to the "Awaiting you" subset. Used
 /// by the renderer and exercised directly in tests.
-pub(crate) fn classify_open_prs(prs: &[OpenPrItem]) -> Vec<MergeablePrItem> {
+///
+/// `local_blocking` names the PRs (by number) for which the caller already
+/// resolved an AIDA-recorded RequestChanges/Rejected verdict at the PR's
+/// CURRENT head (see `pr_has_local_blocking_verdict_at_head` in lib.rs) — the
+/// two sources are unioned with GitHub's `review_decision`, never swapped.
+// trace:BUG-1490 | ai:claude
+pub(crate) fn classify_open_prs(
+    prs: &[OpenPrItem],
+    local_blocking: &HashSet<u64>,
+) -> Vec<MergeablePrItem> {
     prs.iter()
-        .filter(|pr| is_awaiting_you(pr))
+        .filter(|pr| is_awaiting_you(pr, local_blocking.contains(&pr.number)))
         .map(|pr| MergeablePrItem {
             number: pr.number,
             title: pr.title.clone(),
@@ -1931,7 +1953,7 @@ mod tests {
         let prs = (1..=5)
             .map(|n| pr(n, Some("MERGEABLE"), Some("pass"), None))
             .collect::<Vec<_>>();
-        let classified = classify_open_prs(&prs);
+        let classified = classify_open_prs(&prs, &HashSet::new());
         assert_eq!(classified.len(), 5);
         let r = AwaitingReport {
             mergeable_prs: classified,
@@ -1982,15 +2004,51 @@ mod tests {
             // Awaiting you — no CI checks set up at all (aida-chat case).
             pr(7, Some("MERGEABLE"), None, None),
         ];
-        let classified = classify_open_prs(&prs);
+        let classified = classify_open_prs(&prs, &HashSet::new());
         let nums: Vec<_> = classified.iter().map(|p| p.number).collect();
         assert_eq!(nums, vec![1, 5, 7], "only the awaiting-you PRs surface");
+    }
+
+    // BUG-1490: the exact shape observed live on PR #2030 — GitHub's
+    // review_decision is empty (the refusal was recorded straight to the
+    // AIDA substrate via `aida review record`, never posted as a GitHub
+    // review), so `review_decision` alone cannot suppress it. The caller
+    // resolves the AIDA-recorded verdict and hands the PR number in via
+    // `local_blocking`; classify_open_prs must honour it independently of
+    // GitHub's (empty) verdict.
+    // trace:BUG-1490 | ai:claude
+    #[test]
+    fn aida_recorded_verdict_suppresses_pr_with_empty_github_review_decision() {
+        let prs = vec![pr(2030, Some("MERGEABLE"), Some("pass"), None)];
+        let mut local_blocking = HashSet::new();
+        local_blocking.insert(2030);
+        let classified = classify_open_prs(&prs, &local_blocking);
+        assert!(
+            classified.is_empty(),
+            "a PR with a recorded AIDA RequestChanges verdict at head must not be awaiting-you: {classified:?}"
+        );
+    }
+
+    // The sibling case: the same PR with no locally recorded verdict stays
+    // awaiting-you, so the new parameter only ever narrows, never widens.
+    // trace:BUG-1490 | ai:claude
+    #[test]
+    fn pr_without_local_verdict_still_surfaces() {
+        let prs = vec![pr(2030, Some("MERGEABLE"), Some("pass"), None)];
+        let classified = classify_open_prs(&prs, &HashSet::new());
+        assert_eq!(
+            classified.iter().map(|p| p.number).collect::<Vec<_>>(),
+            vec![2030]
+        );
     }
 
     #[test]
     fn header_count_collapses_findings_to_one_line_regardless_of_total() {
         let r = AwaitingReport {
-            mergeable_prs: classify_open_prs(&[pr(1, Some("MERGEABLE"), Some("pass"), None)]),
+            mergeable_prs: classify_open_prs(
+                &[pr(1, Some("MERGEABLE"), Some("pass"), None)],
+                &HashSet::new(),
+            ),
             findings_total: 17,
             ..Default::default()
         };
@@ -2010,7 +2068,7 @@ mod tests {
             .map(|n| pr(n, Some("MERGEABLE"), Some("pass"), None))
             .collect::<Vec<_>>();
         let r = AwaitingReport {
-            mergeable_prs: classify_open_prs(&prs),
+            mergeable_prs: classify_open_prs(&prs, &HashSet::new()),
             ..Default::default()
         };
         let mut buf = Vec::new();

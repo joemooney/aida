@@ -58,6 +58,21 @@ Routing to advisor via `aida brief claude <SPEC> --note "..."` is a first-class 
 
 Substrate enforcement: punt-and-resolve cascade (STORY-306) makes "I cannot resolve this from substrate" a recoverable state. The advisor tier picks up; the implementer's session ends cleanly.
 
+## Falsification discipline: a green mutation is not evidence
+
+Mutation testing is the implementer's half of falsification — the reviewer falsifies claims, the implementer falsifies code, and defects live in the seam between them. A mutation harness that silently no-ops still reports full coverage: it fails in the safe-looking direction, corrupting the instrument itself rather than corrupting evidence a careful reader could catch.
+
+**The rule:** a mutation that comes back green is not evidence until you've confirmed it actually changed behaviour — both that the edit landed (the diff is non-empty) and that the output differs. A silent no-op edit and a successful edit look identical in a terminal; only checking the diff and the output tells them apart.
+
+Two concrete mechanisms observed 2026-09-21, each caught by a different check, so naming only one ships half the rule:
+
+- A swap applied *inside* the row-building loop caused three relationships to swap twice and cancel out — the edit landed but the emitter's output was byte-identical. Caught by diffing the **output**.
+- A retry missed its anchor (the closing brace was hand-counted at the wrong column) and the edit silently applied nowhere. Caught by diffing the **edit** itself — confirm the diff is non-empty before trusting the green.
+
+**Generalization:** a null result is only evidence if the instrument producing it was live. The same shape covers a grep whose pattern never matched anywhere, a guard that was never wired into the path it guards, or a test file outside the module tree. The check is always the same move — confirm the thing producing the null was actually exercised, not just that it returned null.
+
+<!-- trace:TASK-1418 | ai:claude -->
+
 ## The substrate-bouncer principle
 
 These rules are articulated here, but the substrate **enforces** them. That's the [substrate-as-bouncer principle](substrate-as-bouncer.md): when an invariant must hold against a confident LLM, ship a programmatic gate, not a rule in a doc. The doc tells you what's coming; the substrate makes sure you can't shortcut around it.

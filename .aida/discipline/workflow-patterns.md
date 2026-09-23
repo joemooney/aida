@@ -79,6 +79,28 @@ it's adopted (and commit it as part of that work). Never leave generated plans
 untracked in `docs/plans/` — they become a merge landmine for every later PR.
 trace:TASK-383 | ai:claude
 
+## Markdown hard line breaks in `docs/plans`: use `<br>`, not trailing spaces
+
+A repo-wide `git diff --check` treats trailing whitespace as an error,
+but two trailing spaces at end of line are also the documented markdown
+way to force a hard line break inside a paragraph — indistinguishable
+to the check from stray whitespace. This produced two review rounds
+with opposite correct answers (fix it vs leave a merged doc alone)
+because the convention had never been decided.
+
+**Rule: use an explicit `<br>` for a hard line break in `docs/plans`,
+never trailing spaces.** It survives `git diff --check`, renders
+identically, and keeps the check meaningful everywhere instead of
+carving out an exemption. A blank line inside a fenced code block is
+not a hard break and should just have its trailing whitespace
+stripped, not replaced with `<br>`.
+
+(The alternative — exempting `docs/plans` from the check — was
+rejected: it's simpler, but it makes the check meaningless for the one
+tree where whitespace hygiene is otherwise hard to police.)
+
+trace:TASK-1422 | ai:claude
+
 ## Recursive-failure-risk fixes use the keyboard, not the drain
 
 A fix to the **autonomy machinery itself** — the orchestrator, lease

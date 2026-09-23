@@ -125,6 +125,27 @@ aida findings dismiss TASK-1-087 \
             session-discipline.md and matches the stated design."
 ```
 
+## The instrument-trigger test — write time, not read time
+
+Before trusting a check's count, ask: **what must be true of an
+instance, beyond the defect itself, for this check to see it?** If the
+answer isn't "nothing," the check's trigger is a property of the
+instance rather than of the defect, and its count is a **lower bound** —
+report it as one, not as prose hedging.
+
+Apply this while *writing* the predicate, not after seeing results — a
+rule that needs a count in hand to apply arrives too late to help.
+
+**Worked contrast, same store, same night:** a mojibake detector that
+fired only if a non-ASCII character was present found 6; a
+flattened-scalar detector keyed on the producing path having run —
+which *is* the defect — found 78.
+
+The severity skew follows from the same mechanism: an incidental
+trigger (`[test]` in a title, a stray non-ASCII byte) is exactly what
+makes an instance easy to notice, so a property-of-the-instance check
+preferentially catches the easy cases and misses the hard ones.
+
 ## Why this exists
 
 The advisor seat captures friction the rest of the team doesn't see —
