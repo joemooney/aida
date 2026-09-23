@@ -2430,3 +2430,119 @@ fn fixture_repo_and_store_with_inprogress_spec(
 
     (tmp, work, store_dir)
 }
+
+// ── TASK-1458: the REAL drain merge() pins the forge merge to the approved head ──
+// trace:TASK-1458 | ai:claude
+
+#[cfg(unix)]
+const T1458_HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+/// A GitHub-origin repo, a fake `gh` that reports `T1458_HEAD` as PR-77's head
+/// and records every argv, and a PR-77 verdict approved at `reviewed_sha`.
+/// Returns (tempdir, root, fake-gh path, argv log path).
+#[cfg(unix)]
+fn t1458_fixture(
+    reviewed_sha: &str,
+) -> (
+    tempfile::TempDir,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    std::path::PathBuf,
+) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("repo");
+    std::fs::create_dir_all(&root).unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    git(
+        &root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/repo.git",
+        ],
+    );
+    let bin = tmp.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let calls = tmp.path().join("gh-calls");
+    let gh = fake_gh(
+        &bin,
+        &format!(
+            r#"#!/usr/bin/env bash
+printf '%s\n' "$*" >> '{calls}'
+if [[ "${{1:-}}" == "--version" ]]; then echo 'gh version test'; exit 0; fi
+if [[ "${{1:-}} ${{2:-}}" == "pr view" ]]; then
+  if [[ "$*" == *" -q "* ]]; then echo main; exit 0; fi
+  printf '%s\n' '{{"state":"OPEN","title":"t (TASK-1458)","baseRefName":"main","headRefName":"task-1458","headRefOid":"{head}","isCrossRepository":false,"isDraft":false}}'
+  exit 0
+fi
+if [[ "${{1:-}} ${{2:-}}" == "pr merge" ]]; then exit 0; fi
+echo "unexpected gh call: $*" >&2
+exit 2
+"#,
+            calls = calls.display(),
+            head = T1458_HEAD,
+        ),
+    );
+    crate::review_verdict::record_verdict(
+        &root,
+        "PR-77",
+        Some("approved"),
+        Some(reviewed_sha),
+        None,
+        None,
+        &[],
+        "test",
+    )
+    .unwrap();
+    (tmp, root, gh, calls)
+}
+
+#[cfg(unix)]
+fn t1458_run_merge(root: &std::path::Path, gh: &std::path::Path) -> Result<(), PhaseFailure> {
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(
+        std::iter::once(gh.parent().unwrap().to_path_buf())
+            .chain(std::env::split_paths(&inherited)),
+    )
+    .unwrap();
+    let path = path.to_string_lossy().into_owned();
+    let gh = gh.to_string_lossy().into_owned();
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_TEST_GH_BINARY", gh.as_str()),
+        ("PATH", path.as_str()),
+    ]);
+    let mut d = driver(root, "TASK-1458");
+    d.pr_number = Some(77);
+    d.merge()
+}
+
+#[cfg(unix)]
+fn t1458_merge_argv(calls: &std::path::Path) -> Option<String> {
+    std::fs::read_to_string(calls)
+        .unwrap_or_default()
+        .lines()
+        .find(|l| l.starts_with("pr merge"))
+        .map(str::to_string)
+}
+
+#[cfg(unix)]
+#[test]
+fn task_1458_drain_merge_passes_the_approved_head_as_match_head_commit() {
+    let (_tmp, root, gh, calls) = t1458_fixture(&T1458_HEAD[..12]);
+    t1458_run_merge(&root, &gh).expect("an approval at the head merges");
+    let argv = t1458_merge_argv(&calls).expect("gh pr merge was called");
+    assert!(
+        argv.contains(&format!("--match-head-commit {T1458_HEAD}")),
+        "the merge must be pinned to the full approved head: {argv}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn task_1458_drain_merge_with_a_stale_approval_never_calls_gh_merge() {
+    let (_tmp, root, gh, calls) = t1458_fixture("08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    let failure = t1458_run_merge(&root, &gh).expect_err("a stale approval shelves");
+    assert_eq!(failure.kind, FailureKind::StaleApproval);
+    assert_eq!(t1458_merge_argv(&calls), None, "no merge attempted");
+}

@@ -8347,6 +8347,18 @@ fn drain_merge_approval_gate(
     }
 }
 
+/// TASK-1458: the `MergeOptions.match_head` pin for the drain's phase-4
+/// merge — the approved commit once `drain_merge_approval_gate` has passed.
+/// Kept beside the gate so the wiring test drives the same pair of calls the
+/// real `merge()` makes.
+// trace:TASK-1458 | ai:claude
+fn drain_merge_match_head(
+    candidates: &[review_verdict::RecordedVerdict],
+    head_sha: Option<&str>,
+) -> Option<String> {
+    pr_ship::approved_match_head(candidates, head_sha)
+}
+
 /// Add the orchestrator-owned review context to a reviewer-written PR verdict.
 ///
 /// The reviewer owns the verdict, summary, findings, and any future fields;
@@ -52375,6 +52387,7 @@ fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> b
         method: forge::MergeMethod::Squash,
         squash_subject: None,
         delete_branch: false,
+        match_head: None,
     };
     match forge::forge_for(project_root).merge_change(&change_ref, &opts, &mut sink) {
         Ok(_) => {
@@ -62304,6 +62317,7 @@ fn handle_release(
             method: crate::forge::MergeMethod::Squash,
             squash_subject: None,
             delete_branch: true,
+            match_head: None,
         };
         let mut sink = crate::network_retry::StderrSink;
         if let Err(e) =
@@ -98342,10 +98356,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             base: String::new(),
             title: None,
         };
-        let opts = crate::forge::MergeOptions {
+        let mut opts = crate::forge::MergeOptions {
             method: crate::forge::MergeMethod::Squash,
             squash_subject: None,
             delete_branch: true,
+            match_head: None,
         };
         // TASK-1244 / ADR-41: serialize this merge against every other AIDA
         // merger (`aida pr ship`, the burndown wave) on the per-branch
@@ -98387,6 +98402,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             std::slice::from_ref(&self.spec),
         );
         drain_merge_approval_gate(&candidates, head_sha.as_deref(), pr as u64)?;
+        // TASK-1458: pin the merge to the approved head the gate just
+        // verified, so a push landing between this check and the merge is
+        // refused by the forge rather than merged unreviewed.
+        // trace:TASK-1458 | ai:claude
+        opts.match_head = drain_merge_match_head(&candidates, head_sha.as_deref());
         // STORY-1405: another seat's review in progress on this head stops
         // the drain's merge the same way it stops `aida pr ship`. The drain's
         // own phase-3 marker was released when `run_reviewer` returned.
