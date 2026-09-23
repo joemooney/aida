@@ -78570,20 +78570,41 @@ mod bug_1452_refusal_aftermath_tests {
 
 /// `aida review verdict <SPEC>` — read the recorded verdict back.
 // trace:BUG-775 | ai:claude
+// BUG-1508: this used to print the raw verdict with no answer to "does it
+// still cover the current head" -- forcing a human to compare shas by hand
+// (the exact defect measured against the reviewer queue: 4 of 5 routed
+// entries were already-refused-at-the-current-head, and nothing said so).
+// The branch checked out here is the ONLY head this process can resolve
+// without a forge call, so the actionability line is scoped to it; a
+// verdict recorded for a different worktree/branch still prints, just
+// without the head comparison. trace:BUG-1508 | ai:claude
 fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let path = review_verdict::verdict_path(&project_root, spec);
     match review_verdict::read_recorded_verdict(&project_root, spec) {
         Some(v) => {
+            let branch = current_branch_at(&project_root);
+            let relation =
+                verdict_tip_relation(&project_root, branch.as_deref(), v.reviewed_sha.as_deref());
+            let actionability = review_verdict::review_actionability(Some(&v), relation);
             if json {
                 let body = std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
-                println!("{}", body.trim());
+                let mut value: serde_json::Value =
+                    serde_json::from_str(body.trim()).unwrap_or(serde_json::Value::Null);
+                if let Some(obj) = value.as_object_mut() {
+                    obj.insert(
+                        "actionability".to_string(),
+                        serde_json::Value::String(actionability.as_str().to_string()),
+                    );
+                }
+                println!("{}", serde_json::to_string_pretty(&value)?);
             } else {
                 println!(
                     "{} {}",
                     format!("{}:", spec.to_ascii_uppercase()).bold(),
                     review_verdict::verdict_notice_line(&v)
                 );
+                println!("  {} {}", "actionability:".dimmed(), actionability.as_str());
                 println!(
                     "  {} {}",
                     "record:".dimmed(),
@@ -78593,13 +78614,21 @@ fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
             Ok(())
         }
         None => {
+            let actionability = review_verdict::ReviewActionability::NeedsReview;
             if json {
-                println!("null");
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "verdict": null,
+                        "actionability": actionability.as_str(),
+                    })
+                );
             } else {
                 println!(
-                    "{} no review verdict recorded for {}.",
+                    "{} no review verdict recorded for {} — actionability: {}.",
                     crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                    spec.to_ascii_uppercase()
+                    spec.to_ascii_uppercase(),
+                    actionability.as_str()
                 );
             }
             Ok(())

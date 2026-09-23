@@ -1012,3 +1012,70 @@ fn explicit_path_writer_preserves_displaced_reviewer_evidence() {
     assert_eq!(value["rounds"][0]["verdict"], "approved");
     assert!(verdict_conflict_for_current_sha(&body).is_some());
 }
+
+// trace:BUG-1508 | ai:claude
+#[test]
+fn no_verdict_needs_review() {
+    assert_eq!(
+        review_actionability(None, TipRelation::Unknown),
+        ReviewActionability::NeedsReview
+    );
+}
+
+// trace:BUG-1508 | ai:claude
+#[test]
+fn blocking_verdict_at_current_head_is_awaiting_rework() {
+    let v = rc("request-changes", Some("aaaa"));
+    assert_eq!(
+        review_actionability(Some(&v), TipRelation::AtReviewedSha),
+        ReviewActionability::AwaitingRework
+    );
+}
+
+// trace:BUG-1508 | ai:claude
+#[test]
+fn approving_verdict_at_current_head_is_resolved() {
+    let v = rc("approved", Some("aaaa"));
+    assert_eq!(
+        review_actionability(Some(&v), TipRelation::AtReviewedSha),
+        ReviewActionability::Resolved
+    );
+}
+
+// trace:BUG-1508 | ai:claude
+#[test]
+fn head_advanced_past_a_blocking_verdict_needs_review_again() {
+    // Criterion 3: once the head moves past what was reviewed, the entry is
+    // actionable again -- even though the last word was "changes requested".
+    let v = rc("request-changes", Some("aaaa"));
+    assert_eq!(
+        review_actionability(Some(&v), TipRelation::AdvancedPast),
+        ReviewActionability::NeedsReview
+    );
+}
+
+// trace:BUG-1508 | ai:claude
+#[test]
+fn rewritten_branch_needs_review_even_with_a_prior_approval() {
+    let v = rc("approved", Some("aaaa"));
+    assert_eq!(
+        review_actionability(Some(&v), TipRelation::Rewritten),
+        ReviewActionability::NeedsReview
+    );
+}
+
+// trace:BUG-1508 | ai:claude
+#[test]
+fn permanently_indeterminate_verdict_is_treated_as_absent() {
+    // Criterion 8: a verdict with no reviewed_sha can never be placed against
+    // a head. classify_tip_relation already reports this as Unknown, and
+    // Unknown must NOT be read as "covers the current head" -- the reassuring
+    // reading is exactly the PRIN-5 violation this spec exists to prevent.
+    let v = rc("request-changes", None);
+    let relation = classify_tip_relation(v.reviewed_sha.as_deref(), Some("bbbb"), None);
+    assert_eq!(relation, TipRelation::Unknown);
+    assert_eq!(
+        review_actionability(Some(&v), relation),
+        ReviewActionability::NeedsReview
+    );
+}
