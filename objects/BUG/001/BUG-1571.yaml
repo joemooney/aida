@@ -53,23 +53,26 @@ description: |
   Related: BUG-1539 (verdict keyed by PR number so a second round overwrites the first — the
   opposite polarity of the same handshake's fragility), BUG-1562 (a marker artefact persisting
   past its premise), BUG-1563 (the stale cache lock and the contention hypothesis).
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:42:35.206134427Z
-modified_at: 2026-09-21T20:56:34.546793028Z
+modified_at: 2026-09-23T12:06:34.596918054Z
 req_type: Bug
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c30b-e84e-73f0-af63-39f43c586e2a
   created_at: 2026-09-21T20:42:44.371863908Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c533-7fa0-72c3-b54c-46b33d7a095a
   created_at: 2026-09-21T20:42:47.577370790Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c547-d064-7531-9c74-d8f911c74b3a
   created_at: 2026-09-21T20:42:49.860997701Z
   created_by: joe
