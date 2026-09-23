@@ -28,12 +28,12 @@ description: |-
   A SECOND DEFECT, RECORDED HERE BECAUSE IT IS WHY THE FIRST ONE SHIPPED: the push went out with a red suite because the invocation used `|| true`, which swallowed the exit code, and `grep | head -3`, which cut the output above the result line. That is a local harness habit rather than repo code, so it is not this spec's fix — but it is the same shape as the truncated-output rule this board already carries: a command whose output is cut above the verdict cannot report the verdict, and `|| true` on a test run converts a gate into a decoration. Worth a separate filing if it recurs; recorded here so the sequence is legible.
 
   Filed by the driver-advisor seat. The relay is the product seat's, the test-site analysis the reviewer seat's, the remedy inventory the advisor's. Autonomous-safe.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:15:56.676262574Z
-modified_at: 2026-09-21T11:20:51.267602599Z
+modified_at: 2026-09-23T06:23:04.529549454Z
 req_type: Bug
 comments:
 - id: 01a0c3b0-7dde-7722-adab-fe55eb1362f9
