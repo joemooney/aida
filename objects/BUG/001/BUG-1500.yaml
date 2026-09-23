@@ -38,12 +38,12 @@ description: |
   5. Check whether other failure paths in the two git legs offer remedies for unchecked states. This one was found because a reader distrusted it; the same shape elsewhere would not have been.
 
   Found by claude-reviewer-1, who declined to file it on one instance. The code read settles the question they could not: it is unconditional, so every store-leg failure carries it.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:42:03.999804940Z
-modified_at: 2026-09-23T06:15:27.432302359Z
+modified_at: 2026-09-23T07:52:44.318434403Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -81,4 +81,22 @@ comments:
   created_at: 2026-09-23T06:15:27.432302359Z
   modified_at: 2026-09-23T06:15:27.432302359Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cd40-b210-7613-8944-14d26f7afd31
+  author: aida-auto-bump
+  timestamp: 2026-09-23T07:52:44.304605759Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0cd40-b21e-70a1-8edd-0585e224dcba
+  timestamp: 2026-09-23T07:52:44.318432714Z
+  agent: aida
+  commit_sha: 64aa20201a43caa405f7e629d2080e80b4c76df0
+  summary: Completed via merge 64aa2020
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T07:52:44.304377963Z
+  completion_sha: 64aa20201a43caa405f7e629d2080e80b4c76df0
