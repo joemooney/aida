@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:32:41.950727879Z
-modified_at: 2026-09-23T08:11:12.769982830Z
+modified_at: 2026-09-23T08:11:14.299880034Z
 req_type: Bug
 tags:
 - diagnostic-decay
@@ -66,3 +66,10 @@ relationships:
   target_id: 01a0b5fe-5f73-78d3-8529-b9a0f585470e
   created_at: 2026-09-20T06:32:53.897872313Z
   created_by: joe
+comments:
+- id: 01a0cd51-a1fb-7061-9eff-0247f4ca5cc0
+  author: joe
+  content: Claude implementer dispatched 2026-09-23 01:11 -> branch claude/bug-1423, no PR (overnight burn-down)
+  created_at: 2026-09-23T08:11:14.299880034Z
+  modified_at: 2026-09-23T08:11:14.299880034Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
