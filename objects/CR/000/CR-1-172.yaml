@@ -1,5 +1,6 @@
 id: 01a0cc94-cd72-7353-8ff8-c4db03f0cbd0
 spec_id: CR-1-172
+agreed_id: CR-7
 title: 'Cross-harness seat wake: idle agent seats resume on addressed work via held Stop hooks, with no model-side polling'
 description: |
   An agent seat (advisor, integrator, implementer) that ends its turn goes idle, and nothing wakes it when work addressed to it arrives. Incident 2026-09-22: a Codex advisor ended its turn at 19:19 while delegated lanes kept opening PRs; nothing was coordinated for ~90 min until the operator typed, and the seat then claimed it was "still working".
