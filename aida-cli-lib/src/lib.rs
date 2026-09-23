@@ -35805,6 +35805,10 @@ pub(crate) fn ci_ceiling_verdict_from_rollup(rollup_json: &str) -> Option<CiProb
             }
         }
     }
+    // Review fix: the merge-hold gate fails BY CONSTRUCTION while a hold is
+    // active; it is never a real CI failure. At the ceiling it must not turn a
+    // held PR with a stuck check into ci-red. trace:TASK-1453 | ai:claude
+    failed.retain(|name| !name.eq_ignore_ascii_case(crate::ci_gate::HOLD_GATE_CHECK));
     if failed.is_empty() {
         return None;
     }
