@@ -33439,37 +33439,63 @@ fn branch_behind_main(repo: &std::path::Path, branch: &str) -> Option<(u64, Vec<
 /// that no longer means what a reader assumes (observed on PR #1979 —
 /// `aida-core/templates/.aida/discipline/session-discipline.md` grew a
 /// content check 15h after the branch's own CI ran, and the branch still
-/// showed green). `behind_commits` distinguishes "base moved" (common,
-/// usually harmless) from the dangerous case captured in `guard_files`: a
-/// non-empty list means at least one of those commits touched a
-/// guard-DEFINING path (a CI workflow, or the test the guard runs) — the
-/// branch's green predates a change to what it was even testing.
+/// showed green).
+///
+/// TWO TIERS (BUG-1468 follow-up — the single-tier version refused almost
+/// every ship in this repo, because nearly every commit on main touches
+/// `*/tests/` or `*_tests.rs`, making `--override-stale-check` routine):
+/// - `definition_files`: REFUSE-worthy. A `.github/workflows/*` file, or a
+///   `scripts/` file a workflow invokes directly — the check's own
+///   DEFINITION changed, so the green no longer means what it looks like.
+/// - `test_files`: WARN-only. An ordinary test file changed on base since
+///   divergence — the common, usually-harmless "base moved" case; still
+///   worth surfacing (a reader may want to re-run), never worth refusing.
 // trace:BUG-1468 | ai:claude
 pub(crate) struct StaleCheckWarning {
     pub(crate) behind_commits: u64,
-    pub(crate) guard_files: Vec<String>,
+    pub(crate) definition_files: Vec<String>,
+    pub(crate) test_files: Vec<String>,
 }
 
-/// Pure classifier: which of `changed_files` are guard-DEFINING (a CI
-/// workflow file, or a test file whose pass/fail the "green" check reports)
-/// rather than ordinary source changes. Anything else changing on main is
-/// the common "base moved" case — usually harmless for a PR that hasn't
-/// rebased.
+/// Pure classifier for the two tiers above. `script_is_workflow_invoked`
+/// decides whether a `scripts/...` path is one a CI workflow calls directly;
+/// the caller resolves it via `git grep` over the workflow YAML on
+/// `base_ref` (tests fake it directly, no git needed).
 // trace:BUG-1468 | ai:claude
-pub(crate) fn guard_defining_files(changed_files: &[String]) -> Vec<String> {
-    changed_files
-        .iter()
-        .filter(|f| is_guard_defining_path(f))
-        .cloned()
-        .collect()
+pub(crate) fn classify_changed_files(
+    changed_files: &[String],
+    script_is_workflow_invoked: &dyn Fn(&str) -> bool,
+) -> (Vec<String>, Vec<String>) {
+    let mut definition = Vec::new();
+    let mut test_only = Vec::new();
+    for f in changed_files {
+        if is_workflow_path(f) {
+            definition.push(f.clone());
+        } else if is_script_path(f) && script_is_workflow_invoked(f) {
+            definition.push(f.clone());
+        } else if is_test_path(f) {
+            test_only.push(f.clone());
+        }
+    }
+    (definition, test_only)
 }
 
 // trace:BUG-1468 | ai:claude
-fn is_guard_defining_path(path: &str) -> bool {
+fn is_workflow_path(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
-    lower.starts_with(".github/workflows/")
-        || lower.contains("/.github/workflows/")
-        || lower.starts_with("tests/")
+    lower.starts_with(".github/workflows/") || lower.contains("/.github/workflows/")
+}
+
+// trace:BUG-1468 | ai:claude
+fn is_script_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.starts_with("scripts/") || lower.contains("/scripts/")
+}
+
+// trace:BUG-1468 | ai:claude
+fn is_test_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.starts_with("tests/")
         || lower.contains("/tests/")
         || lower.ends_with("_test.rs")
         || lower.ends_with("_tests.rs")
@@ -33477,11 +33503,40 @@ fn is_guard_defining_path(path: &str) -> bool {
         || lower.ends_with("_test.sh")
 }
 
-/// git-IO wrapper: how far `branch` is behind `base_ref`, and whether any of
-/// the files that changed on `base_ref` since divergence are guard-defining.
-/// `None` when the branch is not behind base (nothing to warn about) or on a
-/// git error — same fail-open convention as [`branch_behind_main`], so a
-/// git hiccup never blocks a ship.
+/// True when `script_path` (a `scripts/...` file that changed) is invoked
+/// directly by a CI workflow on `base_ref` — a literal substring match of
+/// the path inside the tracked `.github/workflows/*` blobs at that revision.
+/// Deliberately simple (no YAML parsing): `git grep -q` over the workflow
+/// pathspec at `base_ref`. False on any git error (fail-open — a git hiccup
+/// demotes a definition change to a warn, never blocks a ship on its own).
+// trace:BUG-1468 | ai:claude
+fn script_referenced_by_workflows(
+    repo: &std::path::Path,
+    base_ref: &str,
+    script_path: &str,
+) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args([
+            "grep",
+            "-q",
+            "-F",
+            script_path,
+            base_ref,
+            "--",
+            ".github/workflows",
+        ])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// git-IO wrapper: how far `branch` is behind `base_ref`, and the two-tier
+/// classification (see [`StaleCheckWarning`]) of what changed on `base_ref`
+/// since divergence. `None` when the branch is not behind base (nothing to
+/// warn about) or on a git error — same fail-open convention as
+/// [`branch_behind_main`], so a git hiccup never blocks a ship.
 // trace:BUG-1468 | ai:claude
 pub(crate) fn pr_stale_check_warning(
     repo: &std::path::Path,
@@ -33517,9 +33572,13 @@ pub(crate) fn pr_stale_check_warning(
         .lines()
         .map(|l| l.to_string())
         .collect();
+    let (definition_files, test_files) = classify_changed_files(&changed, &|script_path| {
+        script_referenced_by_workflows(repo, base_ref, script_path)
+    });
     Some(StaleCheckWarning {
         behind_commits,
-        guard_files: guard_defining_files(&changed),
+        definition_files,
+        test_files,
     })
 }
 
@@ -92285,6 +92344,41 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "internal: PR number not resolved before the merge phase",
             )
         })?;
+        // AC1 follow-up (BUG-1468): the drain's merge phase gets the same
+        // staleness check as `aida pr ship` — refuse (shelve, `Err`) when the
+        // PR's green predates a CI-DEFINITION change on the base branch
+        // (`.github/workflows/*` or a script a workflow invokes directly);
+        // only WARN, never shelve, on an ordinary test-file change, which is
+        // the common shape in this repo. Never exits the process — a typed
+        // shelvable `PhaseFailure` so the spec parks `NeedsAttention` and the
+        // batch continues. trace:BUG-1468 | ai:claude
+        if let Some(branch) = self.branch.clone() {
+            let base_branch = crate::pr_cmd::pr_ship_target_branch(pr as u64);
+            let base_ref = format!("origin/{base_branch}");
+            if let Some(warning) = pr_stale_check_warning(&self.project_root, &branch, &base_ref) {
+                if !warning.definition_files.is_empty() {
+                    return Err(auto_complete::PhaseFailure::new(format!(
+                        "PR-{pr}'s green check completed before {} changed on {base_branch}: \
+                         {} — its CI ran against an OLDER definition of that check, so the \
+                         green does not mean what it looks like it means. Re-run CI and retry.",
+                        if warning.definition_files.len() == 1 {
+                            "a CI definition file"
+                        } else {
+                            "CI definition files"
+                        },
+                        warning.definition_files.join(", "),
+                    )));
+                } else if !warning.test_files.is_empty() {
+                    println!(
+                        "  {} {} commits behind; {} test files changed on main since this branch's base",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                        warning.behind_commits,
+                        warning.test_files.len(),
+                    );
+                }
+            }
+        }
+
         // STORY-516/TASK-669 + BUG-1037: keep the forge CLI-on-PATH guard as a
         // MissingTool (non-shelvable -> stop-the-drain) pre-check, but key it
         // to the run's resolved lifecycle forge. Pure-git has no CLI precheck.

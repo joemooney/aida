@@ -1734,15 +1734,48 @@ pub(crate) fn pr_ship_handler(
     }
 
     // ---- BUG-1468: warn (or refuse) when the PR's green predates a
-    // guard-defining change on main. A green check is evidence about the
+    // CI-definition change on main. A green check is evidence about the
     // guards that existed WHEN IT RAN; nothing re-evaluates it when main
-    // gains a stricter workflow/test since. `!already_merged` because a
+    // gains a stricter workflow since. Two tiers (BUG-1468 follow-up):
+    // `definition_files` (a `.github/workflows/*` file, or a `scripts/`
+    // file a workflow invokes directly) REFUSE unless overridden — the
+    // check's own definition changed. `test_files` only WARN — an ordinary
+    // test file changing on main is the common, usually-harmless "base
+    // moved" case, and in this repo it's most commits, so refusing on it
+    // made `--override-stale-check` routine. `!already_merged` because a
     // merged PR has nothing left to refuse. trace:BUG-1468 | ai:claude
     if !already_merged {
         let base_branch = pr_ship_target_branch(pr_number);
         let base_ref = format!("origin/{base_branch}");
         if let Some(warning) = pr_stale_check_warning(&project_root, &ship_branch, &base_ref) {
-            if warning.guard_files.is_empty() {
+            if !warning.definition_files.is_empty() {
+                if override_stale_check {
+                    eprintln!(
+                        "  {} PR-{}'s green predates a CI-definition change on {} \
+                         ({}) — shipping anyway (override)",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                        pr_number,
+                        base_branch,
+                        warning.definition_files.join(", "),
+                    );
+                } else {
+                    anyhow::bail!(
+                        "PR-{pr_number}'s green check completed before {} changed on {base_branch}: {} \
+                         — its CI ran against an OLDER definition of that check, so the green does not \
+                         mean what it looks like it means. Re-run CI (push an empty commit or rebase), \
+                         or re-run with `--override-stale-check` to ship anyway.",
+                        if warning.definition_files.len() == 1 { "a CI definition file" } else { "CI definition files" },
+                        warning.definition_files.join(", "),
+                    );
+                }
+            } else if !warning.test_files.is_empty() {
+                eprintln!(
+                    "  {} {} commits behind; {} test files changed on main since this branch's base",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    warning.behind_commits,
+                    warning.test_files.len(),
+                );
+            } else {
                 eprintln!(
                     "  {} PR-{}'s green predates {} commit(s) now on {} (base moved — \
                      usually harmless)",
@@ -1750,24 +1783,6 @@ pub(crate) fn pr_ship_handler(
                     pr_number,
                     warning.behind_commits,
                     base_branch,
-                );
-            } else if override_stale_check {
-                eprintln!(
-                    "  {} PR-{}'s green predates a guard-defining change on {} \
-                     ({}) — shipping anyway (override)",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                    pr_number,
-                    base_branch,
-                    warning.guard_files.join(", "),
-                );
-            } else {
-                anyhow::bail!(
-                    "PR-{pr_number}'s green check completed before {} changed on {base_branch}: {} \
-                     — its CI ran against an OLDER definition of that guard, so the green does not \
-                     mean what it looks like it means. Re-run CI (push an empty commit or rebase), \
-                     or re-run with `--override-stale-check` to ship anyway.",
-                    if warning.guard_files.len() == 1 { "a required check" } else { "required checks" },
-                    warning.guard_files.join(", "),
                 );
             }
         }
