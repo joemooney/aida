@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:10:49.413002836Z
-modified_at: 2026-09-23T13:16:08.647146691Z
+modified_at: 2026-09-23T13:16:10.026477193Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -71,4 +71,10 @@ comments:
   content: 'Claude implementer result: claude/bug-1553 @ ffd31ac70f. SeatActivity Working/Blocked/Unknown in aida ps (a stopped process via /proc stat, or a transcript tail with an unresolved tool_use for 240s or more), with the pending tool named. AC1-3 and AC5 met; AC4 (aida awaiting surfaces blocked seats) NOT done, split to a follow-up. Awaiting strict review.'
   created_at: 2026-09-23T13:15:06.827548495Z
   modified_at: 2026-09-23T13:15:06.827548495Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce68-cdaa-7f02-bf4b-53b54648933e
+  author: joe
+  content: 'PROXY DECISION (Claude for the operator, 06:16) after a strict-review BLOCK: ship the SAFE half now. No red ''blocked'' from the time heuristic (a long Bash or Task call is working, not blocked); an unresolved tool call for 240s or more shows a NEUTRAL ''long tool call (Nm)''; a T-state process is labelled ''suspended'' (Ctrl-Z/debugger), not blocked. Fix read_transcript_tail''s UTF-8 boundary (read_to_end + from_utf8_lossy). True ''blocked on approval'' needs a recorded marker from Claude Code''s Notification hook (the permission_prompt type) and is split to a follow-up task, together with AC4 (awaiting surfacing).'
+  created_at: 2026-09-23T13:16:10.026477193Z
+  modified_at: 2026-09-23T13:16:10.026477193Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
