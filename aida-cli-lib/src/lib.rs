@@ -9996,6 +9996,7 @@ pub(crate) fn send_notification(
         // e.g. "web", "aida-session-reap"), not an ambiguous env fallback.
         // trace:BUG-1533 | ai:claude
         from_source: aida_core::mailbox::SenderSource::Explicit,
+        from_role: None,
     };
     if let Err(e) = mailbox_store::write_message(project_root, &msg) {
         eprintln!(
@@ -19597,8 +19598,25 @@ fn mailbox_line_body(m: &aida_core::mailbox::Message) -> String {
 /// so the two surfaces agree (STORY-585 acceptance #5). Deduped, role-aliases
 /// normalized (`dialog` → `advisor`). trace:STORY-585 | ai:claude
 // trace:TASK-818 | ai:claude
+// trace:BUG-1592 | ai:claude
 fn inbox_identities() -> Vec<String> {
     let mut ids = vec![current_user_id(None)];
+    // BUG-1592: `resolve_mail_sender_identity` puts `AIDA_AGENT_NAME` FIRST in
+    // the send-side precedence (ahead of `AIDA_USER`), but this read-side set
+    // never included it — a seat whose launcher sets `AIDA_AGENT_NAME` to
+    // something other than `AIDA_USER` sends mail under a name it never reads
+    // its own inbox for, so replies go unread. The launchers currently set
+    // `AIDA_USER = AIDA_AGENT_NAME`, which is why this was latent; any future
+    // override inside a launched agent splits send-identity from
+    // read-identity without this union.
+    if let Some(agent_name) = std::env::var("AIDA_AGENT_NAME")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+    {
+        if !ids.iter().any(|i| i == &agent_name) {
+            ids.push(agent_name);
+        }
+    }
     if let Some(raw) = std::env::var("AIDA_SESSION_ROLE")
         .ok()
         .filter(|s| !s.trim().is_empty())
@@ -42072,6 +42090,12 @@ mod task_957_claim_tests;
 #[path = "tests/story_696_ps_tests.rs"]
 mod story_696_ps_tests;
 
+// The orphaned-In-Progress detection → `aida awaiting` mapping.
+// trace:BUG-1523 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1523_orphaned_in_progress_mapping_tests.rs"]
+mod bug_1523_orphaned_in_progress_mapping_tests;
+
 /// trace:TASK-358 | ai:claude
 #[cfg(test)]
 #[path = "tests/task_358_escalation_cleanup_tests.rs"]
@@ -59552,6 +59576,34 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
     (rows, orphans)
 }
 
+/// BUG-1523 (AC3): the pure mapping from `aida ps`'s orphan-detection output
+/// ([`PsOrphan`], produced by [`build_running_work`] / [`gather_running_work`])
+/// to the `aida awaiting` surface item ([`awaiting_you::OrphanedInProgressItem`]).
+/// Extracted from `collect_awaiting_report_inner` so the "does a genuinely
+/// orphaned In-Progress spec reach the report" question is testable end to end
+/// from detection through emission, not just against a hand-built item (what
+/// the pre-existing rendering test covered). A fan-out-worked flag-only spec
+/// (TASK-1064) is filtered out here, same as `aida ps`'s own framing — it is
+/// informational, not a genuine anomaly. `since_label_for` is injected so this
+/// stays free of the cache/summary lookup and `Utc::now()` the real caller
+/// wires in.
+// trace:BUG-1523 | ai:claude
+fn orphaned_in_progress_items(
+    orphans: Vec<PsOrphan>,
+    since_label_for: impl Fn(&str) -> String,
+) -> Vec<awaiting_you::OrphanedInProgressItem> {
+    orphans
+        .into_iter()
+        .filter(|o| !o.likely_fanout)
+        .map(|o| awaiting_you::OrphanedInProgressItem {
+            since_label: since_label_for(&o.spec),
+            spec_id: o.spec,
+            title: o.title,
+            abandoned: o.stale_lease,
+        })
+        .collect()
+}
+
 /// TASK-1072: the pure core of [`gather_running_work`] — given the resolved spec
 /// index, the session leases, and the ONE already-computed live-session slice,
 /// build the row + orphan picture. Extracted from the store/proc/lease I/O so
@@ -65450,6 +65502,32 @@ fn auto_bump_done_to_completed(
         }
     }
 
+    // BUG-1529: a spec that just flipped Done → Completed here may carry a
+    // stale "changes requested" / "rejected" verdict from a round that was
+    // refused, reworked, and — since it just landed — evidently addressed.
+    // Nothing else ever recorded that the refusal was answered, so the
+    // verdict file would say REFUSED forever even though the work shipped.
+    // Close it out now, at the same moment the merge is detected, rather than
+    // leaving a permanent false positive for every reader of the verdict
+    // corpus. Best-effort like the `emit_spec_completed` calls above: a
+    // missing or unwritable verdict file must never fail the bump itself.
+    // trace:BUG-1529 | ai:claude
+    for flip in &confirmed {
+        let _ = review_verdict::close_verdict_on_merge(project_root, &flip.spec_id, &flip.sha);
+    }
+    for (spec_id, sha, _, _) in &confirmed_stale {
+        let _ = review_verdict::close_verdict_on_merge(project_root, spec_id, sha);
+    }
+    for resolution in &confirmed_stranded {
+        if resolution.outcome == StrandedReviewPrOutcome::Merged {
+            let _ = review_verdict::close_verdict_on_merge(
+                project_root,
+                &resolution.spec_id,
+                &format!("PR-{}", resolution.pr_n),
+            );
+        }
+    }
+
     // ── Step 6: activity log ──
     for flip in &confirmed {
         record_role_activity(&flip.spec_id, "auto-completed");
@@ -71119,35 +71197,22 @@ fn collect_awaiting_report_inner(
         Vec::new()
     } else {
         let (_rows, orphans) = gather_running_work(project_root);
-        orphans
-            .into_iter()
-            // TASK-1064: a fan-out-worked flag-only spec is informational on
-            // `aida ps` too — not a genuine anomaly, so it's excluded here.
-            .filter(|o| !o.likely_fanout)
-            .map(|o| {
-                let since_label = summaries
-                    .iter()
-                    .find(|s| {
-                        s.agreed_id.as_deref() == Some(o.spec.as_str())
-                            || s.spec_id.as_deref() == Some(o.spec.as_str())
-                    })
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s.modified_at).ok())
-                    .map(|t| {
-                        let secs = chrono::Utc::now()
-                            .signed_duration_since(t.with_timezone(&chrono::Utc))
-                            .num_seconds()
-                            .max(0) as u64;
-                        format!("last touched {} ago", humanize_duration_secs(secs))
-                    })
-                    .unwrap_or_else(|| "last-touched time unknown".to_string());
-                awaiting_you::OrphanedInProgressItem {
-                    spec_id: o.spec,
-                    title: o.title,
-                    abandoned: o.stale_lease,
-                    since_label,
-                }
-            })
-            .collect()
+        orphaned_in_progress_items(orphans, |spec| {
+            summaries
+                .iter()
+                .find(|s| {
+                    s.agreed_id.as_deref() == Some(spec) || s.spec_id.as_deref() == Some(spec)
+                })
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s.modified_at).ok())
+                .map(|t| {
+                    let secs = chrono::Utc::now()
+                        .signed_duration_since(t.with_timezone(&chrono::Utc))
+                        .num_seconds()
+                        .max(0) as u64;
+                    format!("last touched {} ago", humanize_duration_secs(secs))
+                })
+                .unwrap_or_else(|| "last-touched time unknown".to_string())
+        })
     };
 
     awaiting_you::AwaitingReport {
@@ -81301,6 +81366,24 @@ pub(crate) fn resolve_mail_sender_identity(
         std::env::var("AIDA_SESSION_ROLE").ok().as_deref(),
         shell_user.as_deref(),
     )
+}
+
+/// The sender's active session role at send time (BUG-1592, AC2): normalized
+/// `AIDA_SESSION_ROLE` when it is actually set, `None` when it isn't. This is
+/// deliberately NOT `resolve_effective_role`/`effective_role_resolved`, which
+/// force an "implementer" default when the env var is absent — a forced
+/// default would make every legacy-shaped send look like a resolved
+/// "implementer" seat instead of recording that the role was simply unknown.
+/// Called alongside [`resolve_mail_sender_identity`] so the envelope records
+/// the role next to the agent id when both are known, mirroring how
+/// BUG-1533 recorded the id half of "who sent this".
+// trace:BUG-1592 | ai:claude
+pub(crate) fn resolve_mail_sender_role() -> Option<String> {
+    std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(|raw| canonical_role_name(&raw))
 }
 
 /// The queue identity for DRAINABLE handoff work (`aida backlog groom`): the

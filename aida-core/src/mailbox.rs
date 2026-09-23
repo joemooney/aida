@@ -299,6 +299,18 @@ pub struct Message {
     // trace:BUG-1533 | ai:claude
     #[serde(default)]
     pub from_source: SenderSource,
+    /// The sender's active session role (`AIDA_SESSION_ROLE`, normalized),
+    /// recorded alongside `from` when a seat's role was actually known at
+    /// send time — not a forced default. `None` for messages sent with no
+    /// role set, and for every message written before this field existed
+    /// (`#[serde(default)]` makes those deserialize unchanged, append-only
+    /// and non-breaking, same pattern as `from_source`). BUG-1592's AC2:
+    /// BUG-1533 recorded the agent id via `from`/`from_source` but dropped
+    /// the role half of "who sent this" — a bare agent id (e.g. an
+    /// instance name) doesn't say which seat it was acting as.
+    // trace:BUG-1592 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_role: Option<String>,
 }
 
 impl Message {
@@ -969,6 +981,7 @@ mod tests {
             deleted: false,
             archived: false,
             from_source: SenderSource::Explicit,
+            from_role: None,
         }
     }
 
@@ -1757,5 +1770,35 @@ mod tests {
         let m: Message = serde_json::from_value(json).unwrap();
         assert_eq!(m.from_source, SenderSource::Legacy);
         assert!(!m.from_source.is_attributed());
+        // trace:BUG-1592 | ai:claude — `from_role` is append-only too: a
+        // pre-existing record with no such field must deserialize to `None`,
+        // not a guessed role.
+        assert_eq!(m.from_role, None);
+    }
+
+    // trace:BUG-1592 | ai:claude
+    #[test]
+    fn from_role_round_trips_and_is_omitted_when_absent() {
+        let mut m = msg(
+            "m1",
+            "m1",
+            "claude-impl-7",
+            Recipient::Agent("bob".into()),
+            10,
+        );
+        m.from_role = Some("advisor".to_string());
+        let json = serde_json::to_value(&m).unwrap();
+        assert_eq!(json["from_role"], serde_json::json!("advisor"));
+        let back: Message = serde_json::from_value(json).unwrap();
+        assert_eq!(back.from_role.as_deref(), Some("advisor"));
+
+        // `None` is omitted entirely (not serialized as `null`), matching
+        // `from_source`'s established append-only shape.
+        m.from_role = None;
+        let json = serde_json::to_value(&m).unwrap();
+        assert!(
+            json.get("from_role").is_none(),
+            "from_role must be OMITTED when absent, not written as null: {json:?}"
+        );
     }
 }

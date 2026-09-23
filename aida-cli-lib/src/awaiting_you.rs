@@ -372,7 +372,12 @@ pub(crate) fn classify_pr_review(
     let sha = |v: &review_verdict::RecordedVerdict| {
         v.reviewed_sha.as_deref().unwrap_or("").trim().to_string()
     };
-    let refusals: Vec<_> = candidates.iter().filter(|v| v.kind.blocks_done()).collect();
+    // BUG-1529: a refusal closed by its PR's merge is history, not a live
+    // obstruction for a later PR on the same spec. trace:BUG-1529 | ai:claude
+    let refusals: Vec<_> = candidates
+        .iter()
+        .filter(|v| v.kind.blocks_done() && !v.is_closed())
+        .collect();
     let approvals: Vec<_> = candidates
         .iter()
         .filter(|v| v.kind == review_verdict::VerdictKind::Approved)
@@ -2044,6 +2049,7 @@ mod tests {
             deleted: false,
             archived: false,
             from_source: aida_core::mailbox::SenderSource::Explicit,
+            from_role: None,
         }
     }
 

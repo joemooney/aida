@@ -165,6 +165,8 @@ pub(crate) fn handle_mailbox_command(
             // role), never the BUG-89 queue-key order, and record which
             // tier won so the envelope never looks silently attributed.
             let (sender, from_source) = crate::resolve_mail_sender_identity(from.as_deref());
+            // trace:BUG-1592 | ai:claude
+            let from_role = crate::resolve_mail_sender_role();
             let id = uuid::Uuid::new_v4().to_string();
             let body = read_send_body(body.as_deref(), body_file.as_deref(), *stdin)?;
             // BUG-557: a reply must attach to the ORIGINAL message's thread, not
@@ -224,6 +226,7 @@ pub(crate) fn handle_mailbox_command(
                 deleted: false,
                 archived: false,
                 from_source,
+                from_role,
             };
             mailbox_store::write_message(project_root, &msg)?;
             // STORY-1226: the event fast-path for `on = ["MailReceived"]`
@@ -884,6 +887,7 @@ mod tests {
             deleted: false,
             archived: false,
             from_source: aida_core::mailbox::SenderSource::Explicit,
+            from_role: None,
         }
     }
 
@@ -1537,5 +1541,125 @@ mod tests {
             product.from, reviewer.from,
             "two seats must not collapse to one indistinguishable envelope identity"
         );
+    }
+
+    // ── BUG-1592: AIDA_AGENT_NAME must be a read-side inbox identity too ──
+
+    // AC1: a seat whose AIDA_AGENT_NAME differs from AIDA_USER sends mail
+    // under AIDA_AGENT_NAME (BUG-1533 precedence) but, before this fix,
+    // never read that identity's inbox — replies addressed to its agent
+    // name went unread. trace:BUG-1592 | ai:claude
+    #[test]
+    fn inbox_identities_includes_agent_name_when_distinct_from_aida_user() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("claude-impl-7")),
+            ("AIDA_USER", Some("alice")),
+            ("AIDA_SESSION_ROLE", None),
+        ]);
+        let ids = inbox_identities();
+        assert!(
+            ids.iter().any(|i| i == "claude-impl-7"),
+            "AIDA_AGENT_NAME must be one of the inbox identities: {ids:?}"
+        );
+        assert!(
+            ids.iter().any(|i| i == "alice"),
+            "AIDA_USER (the queue/current-user identity) must still be included: {ids:?}"
+        );
+    }
+
+    // AC1 end-to-end: mail addressed to the agent name is actually visible
+    // (and marked read) through the default `aida mailbox inbox` — not just
+    // present in the identity list. trace:BUG-1592 | ai:claude
+    #[test]
+    fn seat_with_agent_name_distinct_from_aida_user_reads_mail_addressed_to_agent_name() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+
+        let mut to_agent_name = message("cccccccc-3333", "thread-c");
+        to_agent_name.to = aida_core::mailbox::Recipient::Agent("claude-impl-7".into());
+        to_agent_name.timestamp = 42;
+        mailbox_store::write_message(project.path(), &to_agent_name).unwrap();
+
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("claude-impl-7")),
+            ("AIDA_USER", Some("alice")),
+            ("AIDA_SESSION_ROLE", None),
+        ]);
+        handle_mailbox_command(
+            &MailboxCommand::Inbox {
+                agent: None,
+                all: false,
+                archived: false,
+                peek: false,
+                unread: false,
+                recent_read_tail: 5,
+            },
+            &store,
+        )
+        .unwrap();
+
+        assert_eq!(
+            mailbox_store::read_watermark(project.path(), "claude-impl-7"),
+            Some(42),
+            "the default (no --agent) inbox read must union AIDA_AGENT_NAME's inbox \
+             and mark its mail seen — before the fix, mail addressed to the agent \
+             name was invisible because inbox_identities() never included it"
+        );
+    }
+
+    // AC2: the envelope records the sender's role alongside the agent id
+    // when both are known. trace:BUG-1592 | ai:claude
+    #[test]
+    fn send_records_role_alongside_agent_name_when_both_are_known() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("claude-impl-7")),
+            ("AIDA_USER", None),
+            ("AIDA_SESSION_ROLE", Some("advisor")),
+        ]);
+
+        handle_mailbox_command(&send_command("role-and-agent"), &store).unwrap();
+
+        let sent = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "role-and-agent")
+            .unwrap();
+        assert_eq!(sent.from, "claude-impl-7");
+        assert_eq!(
+            sent.from_source,
+            aida_core::mailbox::SenderSource::AgentName
+        );
+        assert_eq!(
+            sent.from_role.as_deref(),
+            Some("advisor"),
+            "role must be recorded alongside the agent id when both are known"
+        );
+    }
+
+    // AC2 (negative): no role set at send time → `from_role` stays `None`
+    // rather than a guessed/forced default. trace:BUG-1592 | ai:claude
+    #[test]
+    fn send_leaves_from_role_none_when_no_session_role_is_set() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("claude-impl-7")),
+            ("AIDA_USER", None),
+            ("AIDA_SESSION_ROLE", None),
+        ]);
+
+        handle_mailbox_command(&send_command("no-role"), &store).unwrap();
+
+        let sent = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "no-role")
+            .unwrap();
+        assert_eq!(sent.from_role, None);
     }
 }
