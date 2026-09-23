@@ -31,12 +31,12 @@ description: |-
   EVIDENCE THIS NEEDS THAT #1998 CANNOT PRODUCE: which of the three write paths could be unified without changing their persistence semantics, and whether a core-level emission hook is acceptable given the layering. Both are architecture questions, which is why this is a split rather than another round.
 
   PROVENANCE. The no-seam finding is the reviewer seat's, produced by checking their own remedy before judging the implementer's departure from it. The 62-caller count and the in-memory nature of set_status_from_str were verified independently by the driver-advisor. The split disposition follows TASK-1279/TASK-1308 and BUG-1452/TASK-1307: the remaining work is a different shape needing evidence the current PR cannot produce.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T09:06:03.019291152Z
-modified_at: 2026-09-23T20:45:26.078395461Z
+modified_at: 2026-09-23T21:36:27.676075941Z
 req_type: Story
 comments:
 - id: 01a0c33a-5d4c-7ab0-81a6-4de8d53a6deb
@@ -109,3 +109,21 @@ comments:
   created_at: 2026-09-23T06:22:40.468019433Z
   modified_at: 2026-09-23T06:22:40.468019433Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d032-d612-7c92-b664-2c920a061558
+  author: aida-auto-bump
+  timestamp: 2026-09-23T21:36:27.666739915Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d032-d61c-7690-857f-ffed2761c54b
+  timestamp: 2026-09-23T21:36:27.676073414Z
+  agent: aida
+  commit_sha: 765ee16859bfa89fb189f3b176944d13ed6901dc
+  summary: Completed via merge 765ee168
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T21:36:27.666412037Z
+  completion_sha: 765ee16859bfa89fb189f3b176944d13ed6901dc
