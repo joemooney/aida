@@ -28,12 +28,12 @@ description: |
   NOT IN SCOPE: whether branches should be kept current. They will not always be, and the instrument must be correct when they are not.
 
   PROVENANCE: found by the reviewer seat while merging #2029, which reports nearly writing the revert finding before checking which files the commit contains. The advisor verified the merge independently - one file touched, retention work intact on main afterwards - before this was filed.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:23:03.243517526Z
-modified_at: 2026-09-23T04:10:17.521416405Z
+modified_at: 2026-09-23T04:10:47.483009091Z
 req_type: Bug
 tags:
 - batch:night-0920 review-method agent-surface drain-safe from:session-0920
