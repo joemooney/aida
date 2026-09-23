@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:30:38.833900428Z
-modified_at: 2026-09-23T10:58:18.608703550Z
+modified_at: 2026-09-23T10:58:20.546082643Z
 req_type: Bug
 tags:
 - aida:ps substrate-truth severity:operational papercut
@@ -54,4 +54,10 @@ comments:
   content: Commit 2e95483768 references this requirement
   created_at: 2026-09-23T10:56:01.158582609Z
   modified_at: 2026-09-23T10:56:01.158582609Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdea-9f02-7f30-9068-1380bc167c66
+  author: joe
+  content: 'Claude implementer result: claude/bug-1521 @ 2e95483768. build_running_work role priority is now lease_role > jsonl_role > manifest_role (the session''s own record wins; one fn shared by ps, ps --all and integrate); the agent-mode count line is ''running: N (M stale hidden; --all to show)''. The TASK-152/153 tests whose premise was derived-role-overrides-record were updated. Awaiting strict review.'
+  created_at: 2026-09-23T10:58:20.546082643Z
+  modified_at: 2026-09-23T10:58:20.546082643Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
