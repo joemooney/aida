@@ -52,7 +52,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:17:02.797763307Z
-modified_at: 2026-09-23T03:22:58.769851472Z
+modified_at: 2026-09-23T03:44:24.994830662Z
 req_type: Bug
 tags:
 - batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
@@ -99,4 +99,10 @@ comments:
   content: Claude implementer (sonnet subagent, worktree) dispatched 2026-09-22 20:25 local -> branch claude/bug-1513 off origin/main, pushed, no PR, not merged.
   created_at: 2026-09-23T03:22:58.769851472Z
   modified_at: 2026-09-23T03:22:58.769851472Z
+  session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
+- id: 01a0cc5d-59a2-77e3-bb6d-f76a3034887f
+  author: joe
+  content: Commit edeb661e55 references this requirement
+  created_at: 2026-09-23T03:44:24.994830662Z
+  modified_at: 2026-09-23T03:44:24.994830662Z
   session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
