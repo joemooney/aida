@@ -213,12 +213,12 @@ description: |
   AND THE PRODUCT'S BOUND IS STILL AN OPEN DESIGN QUESTION, not something the tests decide. BUG-1239 chose 1s deliberately because the notice is advisory and the path is per-turn. What the two tests establish is that THE TESTS CANNOT SHARE A VALUE — not what the product's value should be. Whoever takes this must state the product bound and its reasoning separately from the injected test values.
 
   STATUS OF THE FIX ITSELF: the dropped commit was restored to #2019 at 442a63243c. The reviewer re-recorded that PR as CHANGES REQUESTED. It is now RESOLVED-AND-FAILING rather than pending — the commit fixes its target and the pipeline is red for a NEW reason the commit caused.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:43:33.092866010Z
-modified_at: 2026-09-23T14:42:40.385721844Z
+modified_at: 2026-09-23T14:43:26.671576956Z
 req_type: Bug
 comments:
 - id: 01a0c556-7edc-7f02-820a-d12318982900
