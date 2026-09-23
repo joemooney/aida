@@ -34,3 +34,9 @@ Follow the workflow in `.claude/skills/aida-read-mail/SKILL.md`:
 
 Pairs with the per-turn `aida mailbox notice` hook (the passive surfacing) and
 `aida mailbox send` on the producer side.
+
+For unattended waiting, keep the model asleep behind a shell/event-driven wait
+(`Monitor` over `aida watch --emit-wakes`, a background wait around `aida
+awaiting --notice`, or `aida advisor watch`). Never use model-side
+`CronCreate`, `/loop`, or `ScheduleWakeup` for mailbox polling.
+<!-- trace:BUG-1589 | ai:codex -->

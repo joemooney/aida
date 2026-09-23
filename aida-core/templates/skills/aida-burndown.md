@@ -299,10 +299,11 @@ actionable verb — a PR shipped or merged, a CI verdict, a punt, a shelve, the
 queue drained — staying silent through the benign phase churn. The session burns
 **zero tokens while the wave runs** and wakes exactly when there is something to
 integrate, so supervision cost drops from O(time-elapsed) to O(actionable
-events). Keep a **long-interval** `ScheduleWakeup` (e.g. 30–60 min) as the
-documented degenerate fallback: if no event stream is live, or the watcher
-wedges, the timer still resurfaces the loop — correctness never depends on the
-event path.
+events). If the watcher is unavailable, fail visibly and restart that
+shell-side wait; never substitute model-side `CronCreate`, `/loop`, or
+`ScheduleWakeup`. Those mechanisms reload the full model context on every
+quiet tick. Correctness depends on the structural termination check after an
+actionable event, never on elapsed time. <!-- trace:BUG-1589 | ai:codex -->
 
 ### 6. Report
 

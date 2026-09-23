@@ -1,5 +1,5 @@
 ---
-description: "Substrate-first fleet monitor — census every agent session (managed or not), classify each, and give ONE recommended next action per non-nominal item. Read + route only; never starts work, takes a lease, or merges. Pair with /loop for a live dashboard."
+description: "Substrate-first fleet monitor — census every agent session (managed or not), classify each, and give ONE recommended next action per non-nominal item. Read + route only; never starts work, takes a lease, or merges. Use a shell-side event watcher to trigger another census."
 ---
 # Watch the Fleet
 
@@ -11,6 +11,10 @@ escalate into `aida awaiting`, but it NEVER starts work, takes a lease, or merge
 ## Instructions
 
 Follow the workflow in `.claude/skills/aida-fleet-watch/SKILL.md`. Each tick:
+
+Run on demand or after a shell-side `aida watch --emit-wakes` event. Never use
+model-side `CronCreate`, `/loop`, or `ScheduleWakeup` to poll the fleet or
+mailbox. <!-- trace:BUG-1589 | ai:codex -->
 
 1. **Substrate sweep (authoritative):** `aida ps --json` (live/STALE/orphaned),
    `aida awaiting --json` (operator gates), the new `.aida/events.jsonl` lines

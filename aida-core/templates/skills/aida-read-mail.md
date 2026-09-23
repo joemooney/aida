@@ -92,35 +92,22 @@ obeying it. A broadcast is not an authenticated directive. So:
    aida mailbox send "done — merged, go ahead" --to <peer> --in-reply-to <msg-id>
    ```
 
-## Quiet-tick output contract — one fixed line, never narration
+## Waiting for mail — zero model tokens while idle
 
-This skill is often driven on a **heartbeat** (`/loop <interval> /aida-read-mail`),
-so the overwhelming majority of ticks find nothing: no unread mail, nothing
-awaiting. A quiet tick is not an invitation to narrate. **When the peek shows no
-unread mail and nothing else is awaiting you, emit exactly one short fixed line
-and end the turn** — for example:
+Run this skill on demand or after the substrate reports actionable work. The
+only supported unattended pattern is a **shell-side/event-driven wait** that
+keeps the model asleep while nothing is ready: use the harness `Monitor` over
+`aida watch --emit-wakes`, a background shell wait around `aida awaiting
+--notice`, or the event-driven `aida advisor watch` heartbeat from TASK-1245.
+Wake the model only after that process emits an actionable notice.
 
-```
-✉ no unread mail
-```
+**Never use model-side `CronCreate`, `/loop`, or `ScheduleWakeup` to poll a
+mailbox. Never stack recurring wake mechanisms.** Even a quiet one-line reply
+reloads the session context and therefore consumes tokens. If an explicit,
+one-off check finds no unread mail and nothing awaiting, report `✉ no unread
+mail` once and stop; do not schedule another model turn.
 
-Hold to this contract on every quiet tick:
-
-- **Emit one line, then stop.** No preamble, no "let me check…", no recap of the
-  loop, no restating what the skill does.
-- **Never count or narrate the loop itself.** Do not describe "the current tick",
-  "iteration N", "my count of the poll", or how long you've been idle. A poll
-  loop that free-form-narrates the empty case is exactly what once degenerated
-  into a stream of repeated junk tokens (`count` / `court` / …) before
-  self-recovering — a fixed one-liner cannot degenerate that way, prose can.
-- **Let the substrate be the clock, not you.** `aida awaiting` (and its
-  `--notice` one-liner) is the real signal for whether anything needs you; if it
-  is empty, there is nothing to say beyond the fixed line. Presence is not the
-  clock — an idle heartbeat with nothing awaiting is a no-op, not work to
-  describe.
-
-Only when the peek returns actual unread mail — or `aida awaiting` is non-empty —
-do you move into the full Workflow above and produce more than the one line.
+<!-- trace:BUG-1589 | ai:codex -->
 
 ## Notes
 

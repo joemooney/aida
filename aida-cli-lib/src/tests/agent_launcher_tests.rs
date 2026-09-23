@@ -2065,14 +2065,18 @@ fn renders_agent_launch_context_with_role_guidance_and_briefs() {
     );
     // STORY-619: the snapshot is self-describing about the mailbox for any
     // vendor — section header, the empty-inbox line for this agent, and the
-    // vendor-neutral poll guidance naming the inbox command.
+    // vendor-neutral zero-token wait guidance naming the inbox command.
     assert!(context.contains("## Mailbox"), "{context}");
     assert!(
         context.contains("No unread mailbox messages for `codex-test`"),
         "{context}"
     );
     assert!(context.contains("aida mailbox inbox"), "{context}");
-    assert!(context.contains("re-check"), "{context}");
+    assert!(context.contains("aida watch --emit-wakes"), "{context}");
+    assert!(
+        context.contains("never create model-side CronCreate"),
+        "{context}"
+    );
 }
 
 /// STORY-718: the integrator is a first-class agent-wired role, so its
@@ -2189,8 +2193,8 @@ fn stakeholder_agent_launch_does_not_create_a_spec_lease() {
 #[test]
 fn agent_launch_context_always_includes_mailbox_guidance_when_caught_up() {
     // STORY-619: even with no unread mail, the launch context must name the
-    // inbox command + poll cadence so a non-Claude vendor (which has no
-    // auto-hook) learns the mailbox exists and to poll it.
+    // inbox command + zero-token wait so a non-Claude vendor (which has no
+    // auto-hook) learns the mailbox exists without recurring model turns.
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -2225,6 +2229,60 @@ fn agent_launch_context_always_includes_mailbox_guidance_when_caught_up() {
         context.contains("No unread mailbox messages for `antigravity-test`"),
         "{context}"
     );
+    assert!(context.contains("aida awaiting --notice"), "{context}");
+    assert!(
+        context.contains("never create model-side CronCreate"),
+        "{context}"
+    );
+}
+
+// trace:BUG-1589 | ai:codex
+#[test]
+fn generated_waiting_guidance_forbids_model_side_mail_polls() {
+    let read_mail = include_str!("../../../aida-core/templates/skills/aida-read-mail.md");
+    let drain = include_str!("../../../aida-core/templates/skills/aida-drain-queue.md");
+    let burndown = include_str!("../../../aida-core/templates/skills/aida-burndown.md");
+    let fleet = include_str!("../../../aida-core/templates/skills/aida-fleet-watch.md");
+    let advisor = include_str!("../../../aida-core/templates/.aida/discipline/advisor-role.md");
+
+    for (name, template) in [
+        ("read-mail", read_mail),
+        ("drain", drain),
+        ("burndown", burndown),
+        ("fleet", fleet),
+        ("advisor", advisor),
+    ] {
+        assert!(
+            template.contains("CronCreate")
+                && template.contains("/loop")
+                && template.contains("ScheduleWakeup"),
+            "{name} must name every forbidden model-side wake mechanism"
+        );
+        assert!(
+            template.contains("Never") || template.contains("never"),
+            "{name} must state the prohibition"
+        );
+    }
+
+    for dangerous in [
+        "often driven on a **heartbeat** (`/loop",
+        "may mirror these seat jobs as in-session cron entries",
+        "Keep a **long-interval** `ScheduleWakeup`",
+        "Pair with `/loop` for a live dashboard",
+    ] {
+        for (name, template) in [
+            ("read-mail", read_mail),
+            ("drain", drain),
+            ("burndown", burndown),
+            ("fleet", fleet),
+            ("advisor", advisor),
+        ] {
+            assert!(
+                !template.contains(dangerous),
+                "{name} still enables model-side recurring polling: {dangerous}"
+            );
+        }
+    }
 }
 
 #[test]

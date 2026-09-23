@@ -26,8 +26,9 @@ Follow the workflow in `.claude/skills/aida-drain-queue/SKILL.md`:
    Otherwise: invoke it as `/goal <text>` to start the drain.
 5. For an unattended / overnight loop, wait on the drain **event-driven**
    — `Monitor(command: "aida watch --emit-wakes", persistent: true)` —
-   with a long-interval `ScheduleWakeup` as the fallback. See the skill's
-   "Waiting between items" section.
+   and restart that shell-side watcher if it fails. Never use model-side
+   `CronCreate`, `/loop`, or `ScheduleWakeup` polling. See the skill's
+   "Waiting between items" section. <!-- trace:BUG-1589 | ai:codex -->
 
 Pairs with `/aida-pickup` (the per-item loop body) and `aida goal`
 (machine-checkable completion conditions).
