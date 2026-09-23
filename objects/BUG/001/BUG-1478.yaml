@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:04:25.370185412Z
-modified_at: 2026-09-20T19:04:25.370185412Z
+modified_at: 2026-09-23T06:19:35.950439923Z
 req_type: Bug
 tags:
 - auto-complete
@@ -48,3 +48,10 @@ tags:
 - failure-1
 - failure-kind:no-pr
 - implementer
+comments:
+- id: 01a0cceb-6c8e-78a0-8262-151fbeabd91c
+  author: joe
+  content: 'PROXY DISPOSITION (Claude for the operator): REJECTED. Auto-drafted single-occurrence "no-pr" report on BUG-1436, matching 5 identical sibling auto-drafts (BUG-689/461/803/456/729) all rejected; the general no-pr failure class was already fixed structurally by ADR-48+BUG-893+BUG-895+TASK-1442 (orchestrator opens the PR, not the implementer)'
+  created_at: 2026-09-23T06:19:35.950439923Z
+  modified_at: 2026-09-23T06:19:35.950439923Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
