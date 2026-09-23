@@ -70984,6 +70984,35 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
     println!();
 }
 
+/// The machine-readable twin of [`print_fast_status`]. Serializes the SAME
+/// [`FastStatusSnapshot`] the human bare `aida status` prints — no extra
+/// cache/git/`gh` reads — so `aida status --format json` (and `--json`)
+/// return in the same order of magnitude as the human form instead of
+/// silently falling through to the heavy `--full`-equivalent report. Emits
+/// ONLY the JSON document on stdout (no banners/text before it) so the
+/// output always parses.
+// trace:BUG-1503 | ai:claude
+fn print_fast_status_json(snap: &FastStatusSnapshot) -> Result<()> {
+    let out = serde_json::json!({
+        "role": snap.role,
+        "role_is_default": snap.role_is_default,
+        "branch": snap.branch,
+        "queue": {
+            "depth": snap.queue_depth,
+            "actionable": snap.queue_actionable,
+        },
+        "cache_present": snap.cache_present,
+        "counts": {
+            "open": snap.counts.open,
+            "in_progress": snap.counts.in_progress,
+            "draft": snap.counts.draft,
+            "total": snap.counts.total,
+        },
+    });
+    println!("{}", serde_json::to_string_pretty(&out)?);
+    Ok(())
+}
+
 /// Assemble the AGENT-MODE scalar head lines for `aida status` with a single,
 /// unambiguous "is there work for me?" signal. `queue_actionable` LEADS: it is
 /// the count that actually answers the question (live, workable, role-routed
