@@ -26401,6 +26401,29 @@ mod bug742_pickup_contract_tests {
     }
 }
 
+// BUG-1510: the dispatch-time integrity check. Only fires when exactly one
+// pending (unacked) brief exists for the agent — with zero pending briefs
+// there is nothing to compare against, and with more than one there is no
+// single "the brief" driving this dispatch (an agent's ordinary backlog of
+// future work is not a mismatch). This mirrors the one incident this spec
+// was filed from: one live brief, one live lease, disagreeing spec ids.
+// trace:BUG-1510 | ai:claude
+fn dispatch_lease_brief_conflict<'a>(
+    briefs: &'a [BriefListEntry],
+    dispatch_spec: &str,
+) -> Option<&'a BriefListEntry> {
+    let mut pending = briefs.iter().filter(|b| !b.acked);
+    let only = pending.next()?;
+    if pending.next().is_some() {
+        return None;
+    }
+    if only.spec_id.eq_ignore_ascii_case(dispatch_spec) {
+        None
+    } else {
+        Some(only)
+    }
+}
+
 fn prepare_agent_launch(
     project_root: &std::path::Path,
     role: Option<String>,
@@ -26449,6 +26472,31 @@ fn prepare_agent_launch(
                     existing.role.as_deref().unwrap_or("(unset role)"),
                     existing.worktree_path.display(),
                     existing.id
+                );
+            }
+
+            // BUG-1510: refuse to mint a lease whose scope disagrees with the
+            // one pending brief this agent is about to act on. Observed
+            // end-to-end 2026-09-20 — a session's lease named one spec, its
+            // brief named another, the session correctly did the brief's
+            // work, and every downstream artifact (status/PR/verdict/shelve)
+            // attached to the wrong spec. Checked here, before the lease is
+            // minted, so a mismatch never gets the chance to be recorded.
+            let pending_briefs =
+                collect_agent_briefs_inner(project_root, Some(agent_type), false, false)
+                    .unwrap_or_default();
+            if let Some(conflict) = dispatch_lease_brief_conflict(&pending_briefs, &spec) {
+                anyhow::bail!(
+                    "refusing to dispatch: the lease about to be taken names `{}`, but the one \
+                     pending brief for this agent names `{}` ({}).\n  \
+                     A session's lease and its brief must name the same spec, or work done \
+                     correctly against the brief gets recorded against the wrong one. \
+                     Re-run with `--spec {}`, or ack the stale brief first: `aida brief ack {}`.",
+                    spec,
+                    conflict.spec_id,
+                    conflict.path.display(),
+                    conflict.spec_id,
+                    conflict.path.display()
                 );
             }
 
@@ -94683,3 +94731,8 @@ mod story_1424_graded_review_tests;
 #[cfg(test)]
 #[path = "tests/bug_1418_drain_token_measurement_tests.rs"]
 mod bug_1418_drain_token_measurement_tests;
+
+// trace:BUG-1510 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1510_lease_brief_dispatch_tests.rs"]
+mod bug_1510_lease_brief_dispatch_tests;
