@@ -52,7 +52,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:25:14.620023337Z
-modified_at: 2026-09-23T13:03:23.422504964Z
+modified_at: 2026-09-23T13:04:06.460579090Z
 req_type: Bug
 tags:
 - drain-safe
@@ -227,4 +227,10 @@ comments:
   content: 'Claude implementer result: claude/bug-1455 @ 10bd790d96. parse_ci_probe checked in-progress AFTER concluded failures; reordered so any running check yields InProgress and only a settled rollup decides Red/Green. 5 table tests plus the drain_finish_ci regression. The other ACs were already met by ci_gate::refine_red/classify_red. Awaiting strict review.'
   created_at: 2026-09-23T13:03:23.422504964Z
   modified_at: 2026-09-23T13:03:23.422504964Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce5d-c33c-7082-bce6-173c157746b1
+  author: joe
+  content: Strict review MERGE. Ready for batch 12.
+  created_at: 2026-09-23T13:04:06.460579090Z
+  modified_at: 2026-09-23T13:04:06.460579090Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
