@@ -117,7 +117,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:06:55.400149929Z
-modified_at: 2026-09-23T11:26:25.848316883Z
+modified_at: 2026-09-23T11:38:09.877122622Z
 req_type: Bug
 tags:
 - parent:EPIC-62 awaiting unshipped-work alert-fatigue severity:operational
@@ -193,4 +193,10 @@ comments:
   content: 'PROXY DECISION (Claude for the operator, 04:27) after a review BLOCK (name-only exclusion hides a real branch named pr-123): exclude a pr-N/mr-N branch ONLY when the forge confirms PR/MR N exists and its head sha equals the branch tip. With no forge or a lookup failure, show the row labelled ''possible review snapshot, unverified'' (PRIN-5: never hide on name alone). Full report only; the notice path already skips this collector.'
   created_at: 2026-09-23T11:26:25.848316883Z
   modified_at: 2026-09-23T11:26:25.848316883Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce0f-1455-74b3-900e-9f1298f8efbb
+  author: joe
+  content: Commit 9327a2724d references this requirement
+  created_at: 2026-09-23T11:38:09.877122622Z
+  modified_at: 2026-09-23T11:38:09.877122622Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
