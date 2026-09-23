@@ -46167,9 +46167,21 @@ pub(crate) fn format_change_linkage(
             ));
         }
         ChangeLinkageState::BranchNotFound => {
+            // BUG-1528 (PRIN-5): a failed branch lookup must never silently
+            // suppress the PR line. Before this fix, `BranchNotFound` was
+            // the one arm of this enum that emitted no PR/MR line at all —
+            // every other "in-flight but uncertain" arm (CliMissing /
+            // CliFailed / Unreachable) already says "state unknown" instead
+            // of going quiet. Match that convention here too, distinctly
+            // from "no PR was ever opened" (`InFlightNoChange`).
+            // trace:BUG-1528 | ai:claude
             out.push((
                 "Branch".to_string(),
                 "work committed but branch not found locally".to_string(),
+            ));
+            out.push((
+                noun.to_string(),
+                format!("{noun} state unknown — branch not found locally"),
             ));
         }
     }
@@ -47061,6 +47073,13 @@ pub(crate) struct GitLinkage {
     pub(crate) shipped: bool,
     /// Feature branch holding the work (in-flight case only).
     pub(crate) branch: Option<String>,
+    /// BUG-1528: other branches (besides `branch`) whose name matches the
+    /// spec id and that also carry a referencing commit — a branch-crossing
+    /// signal (e.g. `bug-1420-work` + `bug-1420-round2` both open). Rendered
+    /// as a note so a reviewer sees the fan-out instead of one branch picked
+    /// silently. Empty in the common single-branch case.
+    // trace:BUG-1528 | ai:claude
+    pub(crate) other_branches: Vec<String>,
     /// Worktree path checked out at `branch`, if any.
     pub(crate) worktree: Option<String>,
     /// PR number parsed from a squash-merge subject (shipped case only).
@@ -47225,6 +47244,7 @@ pub(crate) fn collect_git_linkage_opts(
     // ---- Branch / worktree / shipped state (anchored on newest commit) ----
     let mut shipped = false;
     let mut branch: Option<String> = None;
+    let mut other_branches: Vec<String> = Vec::new();
     let mut worktree: Option<String> = None;
     let mut shipped_pr: Option<u64> = None;
     if let Some((full, _, _)) = commits.first() {
@@ -47243,45 +47263,66 @@ pub(crate) fn collect_git_linkage_opts(
                 .find_map(|(_, _, s)| parse_squash_pr_number(s));
         } else {
             // In flight: find the feature branch that holds the work.
-            let contains = git(&[
-                "branch",
-                "--all",
-                "--contains",
-                full,
-                "--format=%(refname:short)",
-            ])
-            .unwrap_or_default();
-            // BUG-553: a commit can be reachable from MULTIPLE branches when a
-            // later spec's branch was stacked on this one's unmerged commit
-            // (the BUG-554 anti-pattern). Picking the first arbitrarily then
-            // mis-attributes the spec to a sibling's branch (e.g. TASK-806
-            // shown on `task-805`). Prefer the branch whose name matches one of
-            // the spec ids being resolved (the spec's OWN branch, `TASK-806` →
-            // `task-806`); fall back to the first only when none matches.
-            // trace:BUG-553 | ai:claude
             //
-            // BUG-720: also exclude the orphan `aida-store` branch. A commit
-            // can be reachable ONLY from `aida-store` (its own bookkeeping
-            // commit, or a cross-node store-lineage merge that names the spec
-            // in parens) — never offer it as the spec's review branch, or
-            // `aida review`/`aida human review` prompts to PR the entire
-            // requirements store as a code change.
-            let candidates: Vec<String> = contains
-                .lines()
-                .map(|b| b.trim().trim_start_matches("origin/"))
-                .filter(|b| {
-                    !b.is_empty()
-                        && *b != "HEAD"
-                        && *b != "main"
-                        && *b != "master"
-                        && !is_orphan_store_branch(b)
-                })
-                .map(|b| b.to_string())
-                .collect();
+            // BUG-1528: don't anchor solely on the SINGLE newest referencing
+            // commit. When a spec has multiple branches in flight (a
+            // branch-crossing — e.g. `bug-1420-work` plus a later
+            // `bug-1420-round2`), the newest commit across ALL of them can
+            // live on a branch that gets filtered out below (main/master/
+            // orphan-store) or simply isn't the spec's own branch, leaving
+            // the spec's actual local branch entirely unreachable via
+            // `--contains <newest-sha>` even though `git branch --list`
+            // plainly shows it. Union the `--contains` result over EVERY
+            // referencing commit (still newest-first, so ties still prefer
+            // recency) so a branch holding an older-but-still-relevant
+            // commit is found too. trace:BUG-1528 | ai:claude
             let norm_id = |s: &str| s.to_ascii_lowercase().replace([' ', '_'], "-");
-            branch = candidates
+            let mut candidates: Vec<String> = Vec::new();
+            for (commit_full, _, _) in &commits {
+                let Some(contains) = git(&[
+                    "branch",
+                    "--all",
+                    "--contains",
+                    commit_full,
+                    "--format=%(refname:short)",
+                ]) else {
+                    continue;
+                };
+                // BUG-553: a commit can be reachable from MULTIPLE branches when a
+                // later spec's branch was stacked on this one's unmerged commit
+                // (the BUG-554 anti-pattern). Picking the first arbitrarily then
+                // mis-attributes the spec to a sibling's branch (e.g. TASK-806
+                // shown on `task-805`). Prefer the branch whose name matches one of
+                // the spec ids being resolved (the spec's OWN branch, `TASK-806` →
+                // `task-806`); fall back to the first only when none matches.
+                // trace:BUG-553 | ai:claude
+                //
+                // BUG-720: also exclude the orphan `aida-store` branch. A commit
+                // can be reachable ONLY from `aida-store` (its own bookkeeping
+                // commit, or a cross-node store-lineage merge that names the spec
+                // in parens) — never offer it as the spec's review branch, or
+                // `aida review`/`aida human review` prompts to PR the entire
+                // requirements store as a code change.
+                for b in contains.lines() {
+                    let b = b.trim().trim_start_matches("origin/");
+                    if !b.is_empty()
+                        && b != "HEAD"
+                        && b != "main"
+                        && b != "master"
+                        && !is_orphan_store_branch(b)
+                        && !candidates.iter().any(|c| c == b)
+                    {
+                        candidates.push(b.to_string());
+                    }
+                }
+            }
+            // BUG-1528: every candidate whose name matches the spec's own
+            // id, in first-seen (recency) order. The first becomes `branch`;
+            // any rest are a branch-crossing signal surfaced as
+            // `other_branches` rather than silently dropped. trace:BUG-1528
+            let mut id_matches: Vec<String> = candidates
                 .iter()
-                .find(|b| {
+                .filter(|b| {
                     let bl = b.to_ascii_lowercase();
                     ids.iter().any(|id| {
                         let nid = norm_id(id);
@@ -47289,7 +47330,15 @@ pub(crate) fn collect_git_linkage_opts(
                     })
                 })
                 .cloned()
-                .or_else(|| candidates.into_iter().next());
+                .collect();
+            if id_matches.is_empty() {
+                // No candidate matches the spec's own id by name — fall back
+                // to the first (newest) candidate found, as before.
+                branch = candidates.into_iter().next();
+            } else {
+                branch = Some(id_matches.remove(0));
+                other_branches = id_matches;
+            }
             if let (Some(b), Some(wt)) =
                 (branch.as_deref(), git(&["worktree", "list", "--porcelain"]))
             {
@@ -47312,6 +47361,7 @@ pub(crate) fn collect_git_linkage_opts(
         files,
         shipped,
         branch,
+        other_branches,
         worktree,
         shipped_pr,
         // trace:STORY-634 | ai:claude — the scanned repo's workspace slug.
@@ -47338,6 +47388,7 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
         files,
         shipped,
         branch,
+        other_branches,
         worktree,
         shipped_pr,
         // trace:STORY-634 | ai:claude
@@ -47470,6 +47521,42 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
                             }
                         };
                     render(format_change_linkage(forge, &state), url.as_deref());
+                    // BUG-1528 (AC3/AC4): more than one branch references
+                    // this spec — a branch-crossing. Say so, with each
+                    // sibling's own PR/MR state, rather than silently
+                    // picking `b` above and leaving the rest invisible.
+                    // trace:BUG-1528 | ai:claude
+                    for other in &other_branches {
+                        let (ostate, ourl): (ChangeLinkageState, Option<String>) =
+                            match change_lookup_for_branch(project_root, other) {
+                                crate::forge::ChangeLookup::Found(c) => (
+                                    ChangeLinkageState::InFlightFound {
+                                        number: c.id,
+                                        url: c.url.clone(),
+                                    },
+                                    Some(c.url),
+                                ),
+                                crate::forge::ChangeLookup::NoChange => {
+                                    (ChangeLinkageState::InFlightNoChange, None)
+                                }
+                                crate::forge::ChangeLookup::CliMissing => {
+                                    (ChangeLinkageState::CliMissing, None)
+                                }
+                                crate::forge::ChangeLookup::CliFailed(_) => {
+                                    (ChangeLinkageState::CliFailed, None)
+                                }
+                                crate::forge::ChangeLookup::Unreachable(_) => {
+                                    (ChangeLinkageState::Unreachable, None)
+                                }
+                            };
+                        println!(
+                            "  {}     {} {}",
+                            "Branch".bold(),
+                            other.cyan(),
+                            "also references this spec".yellow()
+                        );
+                        render(format_change_linkage(forge, &ostate), ourl.as_deref());
+                    }
                 }
                 None => render(
                     format_change_linkage(forge, &ChangeLinkageState::BranchNotFound),
