@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:49:24.771676840Z
-modified_at: 2026-09-20T21:08:06.861305308Z
+modified_at: 2026-09-23T06:21:21.067463112Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -221,4 +221,10 @@ comments:
   created_at: 2026-09-20T21:08:06.861305308Z
   modified_at: 2026-09-20T21:08:06.861305308Z
   session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+- id: 01a0cced-072b-71d0-be14-43c243330d47
+  author: joe
+  content: 'PROXY DISPOSITION (Claude for the operator, overnight burn-down): ALREADY FIXED on main, verified. Evidence: commit 0fa98034bd (BUG-1555) pinned .aida/discipline/** text eol=lf in .gitattributes and changed discipline_content_mismatches() to treat an unreadable file as mismatch, not pass aida-core/src/templates.rs:1223-1239, .gitattributes'
+  created_at: 2026-09-23T06:21:21.067463112Z
+  modified_at: 2026-09-23T06:21:21.067463112Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
