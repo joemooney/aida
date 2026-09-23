@@ -42090,6 +42090,12 @@ mod task_957_claim_tests;
 #[path = "tests/story_696_ps_tests.rs"]
 mod story_696_ps_tests;
 
+// The orphaned-In-Progress detection → `aida awaiting` mapping.
+// trace:BUG-1523 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1523_orphaned_in_progress_mapping_tests.rs"]
+mod bug_1523_orphaned_in_progress_mapping_tests;
+
 /// trace:TASK-358 | ai:claude
 #[cfg(test)]
 #[path = "tests/task_358_escalation_cleanup_tests.rs"]
@@ -59570,6 +59576,34 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
     (rows, orphans)
 }
 
+/// BUG-1523 (AC3): the pure mapping from `aida ps`'s orphan-detection output
+/// ([`PsOrphan`], produced by [`build_running_work`] / [`gather_running_work`])
+/// to the `aida awaiting` surface item ([`awaiting_you::OrphanedInProgressItem`]).
+/// Extracted from `collect_awaiting_report_inner` so the "does a genuinely
+/// orphaned In-Progress spec reach the report" question is testable end to end
+/// from detection through emission, not just against a hand-built item (what
+/// the pre-existing rendering test covered). A fan-out-worked flag-only spec
+/// (TASK-1064) is filtered out here, same as `aida ps`'s own framing — it is
+/// informational, not a genuine anomaly. `since_label_for` is injected so this
+/// stays free of the cache/summary lookup and `Utc::now()` the real caller
+/// wires in.
+// trace:BUG-1523 | ai:claude
+fn orphaned_in_progress_items(
+    orphans: Vec<PsOrphan>,
+    since_label_for: impl Fn(&str) -> String,
+) -> Vec<awaiting_you::OrphanedInProgressItem> {
+    orphans
+        .into_iter()
+        .filter(|o| !o.likely_fanout)
+        .map(|o| awaiting_you::OrphanedInProgressItem {
+            since_label: since_label_for(&o.spec),
+            spec_id: o.spec,
+            title: o.title,
+            abandoned: o.stale_lease,
+        })
+        .collect()
+}
+
 /// TASK-1072: the pure core of [`gather_running_work`] — given the resolved spec
 /// index, the session leases, and the ONE already-computed live-session slice,
 /// build the row + orphan picture. Extracted from the store/proc/lease I/O so
@@ -71137,35 +71171,22 @@ fn collect_awaiting_report_inner(
         Vec::new()
     } else {
         let (_rows, orphans) = gather_running_work(project_root);
-        orphans
-            .into_iter()
-            // TASK-1064: a fan-out-worked flag-only spec is informational on
-            // `aida ps` too — not a genuine anomaly, so it's excluded here.
-            .filter(|o| !o.likely_fanout)
-            .map(|o| {
-                let since_label = summaries
-                    .iter()
-                    .find(|s| {
-                        s.agreed_id.as_deref() == Some(o.spec.as_str())
-                            || s.spec_id.as_deref() == Some(o.spec.as_str())
-                    })
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s.modified_at).ok())
-                    .map(|t| {
-                        let secs = chrono::Utc::now()
-                            .signed_duration_since(t.with_timezone(&chrono::Utc))
-                            .num_seconds()
-                            .max(0) as u64;
-                        format!("last touched {} ago", humanize_duration_secs(secs))
-                    })
-                    .unwrap_or_else(|| "last-touched time unknown".to_string());
-                awaiting_you::OrphanedInProgressItem {
-                    spec_id: o.spec,
-                    title: o.title,
-                    abandoned: o.stale_lease,
-                    since_label,
-                }
-            })
-            .collect()
+        orphaned_in_progress_items(orphans, |spec| {
+            summaries
+                .iter()
+                .find(|s| {
+                    s.agreed_id.as_deref() == Some(spec) || s.spec_id.as_deref() == Some(spec)
+                })
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s.modified_at).ok())
+                .map(|t| {
+                    let secs = chrono::Utc::now()
+                        .signed_duration_since(t.with_timezone(&chrono::Utc))
+                        .num_seconds()
+                        .max(0) as u64;
+                    format!("last touched {} ago", humanize_duration_secs(secs))
+                })
+                .unwrap_or_else(|| "last-touched time unknown".to_string())
+        })
     };
 
     awaiting_you::AwaitingReport {
