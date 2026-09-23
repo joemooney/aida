@@ -35,12 +35,12 @@ description: |-
   SCOPE, measured rather than assumed: I enumerated every open PR's base at the time. Exactly one of roughly twenty was not targeting main, so this is rare -- which is precisely why a helper written against the common case survives review and then bites once.
 
   NOT URGENT. The instance that produced it was resolved by closing both PRs as superseded rounds for unrelated reasons, so no repair is outstanding. Filed because the tooling defect is real, cheap to fix, and will recur the next time anyone stacks a PR.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:40:43.370422318Z
-modified_at: 2026-09-23T14:52:42.933921945Z
+modified_at: 2026-09-23T15:10:22.306561930Z
 req_type: Task
 tags:
 - adoption-gap
