@@ -22129,6 +22129,19 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "worktree-container-gitdir",
     ),
+    // TASK-1313: round-trip artifacts in stored spec text — a swallowed TOON
+    // row header or a UTF-8-as-Latin-1 mojibake sequence left by a
+    // read-modify-write through rendered `aida show` output.
+    (
+        &[
+            "round-trip-artifacts",
+            "round-trip",
+            "round-trip-artifact",
+            "mojibake",
+            "toon-leak",
+        ],
+        "round-trip-artifacts",
+    ),
 ];
 
 fn normalize_doctor_category(raw: &str) -> Result<String> {
