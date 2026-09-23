@@ -370,21 +370,29 @@ pub(crate) fn handle_mailbox_command(
                 format!("{header} {who_label}").bold(),
                 format!("({})", inbox.len()).dimmed()
             );
-            for m in &inbox {
-                print_mailbox_line(m);
-            }
             // Reading marks each identity's inbox seen up to its newest message,
             // so the unread / urgent surfacing clears (STORY-539) — UNLESS
             // `--peek`, which surfaces without consuming (STORY-585 #1/#4). Each
             // mark advances to that identity's FULL inbox newest, not the
             // filtered view's. trace:BUG-555 | ai:claude
+            //
+            // This write happens BEFORE the print loop below, not after.
+            // BUG-1482: established mechanism — `install_sigpipe_handler`
+            // (BUG-99) restores SIGPIPE's default disposition at startup so
+            // `aida ... | head -N` exits with the classic "downstream closed,
+            // terminate quietly" semantics instead of Rust's default
+            // ignore-and-panic-on-EPIPE behavior. That means a write in the
+            // print loop below can end the process via the SIGPIPE signal
+            // itself, mid-loop, with no unwind — so any watermark write
+            // placed AFTER printing (the old order) never ran for a reader
+            // that closed early (`| head`). Doing the write first means every
+            // message this call is about to *display* is already recorded as
+            // seen before the first byte of it reaches a pipe that might
+            // close. trace:BUG-1482 | ai:claude
             if *archived {
                 // Read-only audit view.
             } else if *peek {
-                println!(
-                    "{}",
-                    "  (peek — not marked seen; `aida mailbox inbox` to read + ack)".dimmed()
-                );
+                // marked below, after printing (peek never marks seen).
             } else {
                 for who in &who_list {
                     let prior_watermark =
@@ -404,6 +412,15 @@ pub(crate) fn handle_mailbox_command(
                         mailbox_store::set_watermark(project_root, who, newest)?;
                     }
                 }
+            }
+            for m in &inbox {
+                print_mailbox_line(m);
+            }
+            if *peek {
+                println!(
+                    "{}",
+                    "  (peek — not marked seen; `aida mailbox inbox` to read + ack)".dimmed()
+                );
             }
             Ok(())
         }
@@ -1260,5 +1277,127 @@ mod tests {
             }
             other => panic!("expected mailbox send, got {other:?}"),
         }
+    }
+
+    // BUG-1482: a downstream reader that closes the pipe early (the reported
+    // case was `aida mailbox inbox | head`) must not leave the read-watermark
+    // stuck behind messages that were actually DISPLAYED. The established
+    // mechanism: `install_sigpipe_handler` (BUG-99) restores SIGPIPE's
+    // default disposition at binary startup so a write against a pipe whose
+    // reader is gone kills the process via the signal itself — mid-loop, with
+    // nothing placed AFTER the print loop ever running.
+    //
+    // That termination genuinely ends the process, so this cannot be a plain
+    // in-process unit test; it re-execs this same test binary as a "worker"
+    // that installs the same default SIGPIPE disposition and drives the real
+    // `handle_mailbox_command` print path, while this test plays `head`'s
+    // role: read exactly one line of the worker's stdout, then drop the pipe.
+    // The second message's giant body guarantees the worker is still writing
+    // (blocked on the OS pipe buffer, typically 64KiB) when that happens, so
+    // it is killed mid-print rather than finishing cleanly — reproducing the
+    // reported defect's actual failure shape, not a proxy for it.
+    // trace:BUG-1482 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn piped_inbox_read_advances_watermark_even_when_stdout_closes_early() {
+        if std::env::var("AIDA_BUG_1482_WORKER").is_ok() {
+            let project_root = std::path::PathBuf::from(
+                std::env::var("AIDA_BUG_1482_PROJECT").expect("worker needs a project dir"),
+            );
+            // Mirror the real `aida` binary's BUG-99 startup step so the
+            // worker dies the same way `aida` does: killed by SIGPIPE, not
+            // Rust's default ignore-and-panic-on-EPIPE behavior.
+            unsafe {
+                libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+            }
+            let store = project_root.join(".aida-store");
+            let _ = handle_mailbox_command(
+                &MailboxCommand::Inbox {
+                    agent: Some("bob".into()),
+                    all: false,
+                    archived: false,
+                    peek: false,
+                    unread: false,
+                    recent_read_tail: 5,
+                },
+                &store,
+            );
+            return;
+        }
+
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+
+        let mut small = message("aaaaaaaa-1111", "thread-a");
+        small.timestamp = 1;
+        mailbox_store::write_message(project.path(), &small).unwrap();
+        let mut huge = message("bbbbbbbb-2222", "thread-b");
+        huge.timestamp = 2;
+        // Newest-first sort means this one prints right after the header —
+        // large enough on its own to exceed the OS pipe buffer, so the
+        // worker blocks mid-write on this line once the parent stops
+        // reading.
+        huge.body = "x".repeat(200_000);
+        mailbox_store::write_message(project.path(), &huge).unwrap();
+
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut child = std::process::Command::new(exe)
+            // `--exact` matches on the FULLY QUALIFIED test name libtest
+            // prints, not the bare function name.
+            .arg("mailbox_cmd::tests::piped_inbox_read_advances_watermark_even_when_stdout_closes_early")
+            .arg("--exact")
+            .arg("--nocapture")
+            .env("AIDA_BUG_1482_WORKER", "1")
+            .env("AIDA_BUG_1482_PROJECT", project.path())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn worker");
+
+        // Act like `| head`: read lines up through the inbox header (skipping
+        // the test harness's own preamble, e.g. the blank line + "running 1
+        // test" that `--nocapture` also surfaces), then close our end — the
+        // worker's next big write hits the closed pipe.
+        {
+            let stdout = child.stdout.take().expect("worker stdout");
+            let mut reader = std::io::BufReader::new(stdout);
+            let mut found = false;
+            for _ in 0..20 {
+                let mut line = String::new();
+                let n = std::io::BufRead::read_line(&mut reader, &mut line)
+                    .expect("read worker stdout");
+                if n == 0 {
+                    break;
+                }
+                if line.contains("Inbox for") {
+                    found = true;
+                    break;
+                }
+            }
+            assert!(
+                found,
+                "never saw the inbox header line in the worker's output"
+            );
+            // Dropping `reader` here closes the read end.
+        }
+        let status = child.wait().expect("wait for worker");
+        assert!(
+            !status.success(),
+            "worker should have been killed by the closed pipe, not exited cleanly: {status:?}"
+        );
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(
+            status.signal(),
+            Some(libc::SIGPIPE),
+            "worker should die specifically from SIGPIPE (the BUG-99 mechanism), got: {status:?}"
+        );
+
+        let watermark = mailbox_store::read_watermark(project.path(), "bob");
+        assert_eq!(
+            watermark,
+            Some(2),
+            "watermark must advance to the newest DISPLAYED message even though \
+             the worker died mid-print from the closed pipe"
+        );
     }
 }
