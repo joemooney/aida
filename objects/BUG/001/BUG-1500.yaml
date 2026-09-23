@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:42:03.999804940Z
-modified_at: 2026-09-23T02:45:22.066589544Z
+modified_at: 2026-09-23T02:45:24.268021565Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -63,5 +63,11 @@ comments:
   content: 'Claude implementer (sonnet subagent, worktree) dispatched 2026-09-22 19:40 local. Output: branch claude/bug-1500 off origin/main, pushed, NO PR, NOT merged - left for later review+merge.'
   created_at: 2026-09-23T02:30:17.646308875Z
   modified_at: 2026-09-23T02:30:17.646308875Z
+  session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
+- id: 01a0cc27-52ac-7740-ae3f-526a8e56bcab
+  author: joe
+  content: 'Implemented on branch claude/bug-1500 @ 20ff2362a0 (pushed, no PR, not merged). New helper store_pull_failure_hint consults git_ops::rebase_in_progress(); abort advice only when a rebase is actually in progress, else transient-failure retry hint. Tests: bug_1500_store_pull_hint_tests (2) pass; fmt clean. Needs: PR + independent review + merge.'
+  created_at: 2026-09-23T02:45:24.268021565Z
+  modified_at: 2026-09-23T02:45:24.268021565Z
   session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
 execution_mode: drain
