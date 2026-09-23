@@ -2291,6 +2291,71 @@ enabled = true
 # prompt = "Groom the draft inbox: `aida groom` (propose), then `aida groom --apply`."
 # enabled = false
 #
+# STORY-1367's three first jobs: a job whose whole point is to catch a
+# recurring check nobody remembers to run. Same GATING shape as
+# performance-guard above — `--fail-on-findings` is what turns a report into a
+# job the tick can route; the routing job keys on CronJobFailed the same way.
+# All three are commented out here, deliberately, not enabled: unlike the
+# product/advisor handoff duties above, none of them is universally correct
+# for a downstream project on day one, and the scaffold's rule (see the
+# performance-guard comment) is that a gating job ships enabled only where
+# it has been demonstrated to trip on something real.
+#   - hub-drift is meaningless without a SECOND hub (`[store.sync]
+#     mirror_remotes`) — most projects have exactly one, where the check is
+#     permanently silent, correctly, but a permanently-silent enabled-by-
+#     default job is still noise in `aida schedule list`.
+#   - stranded-branches needs a project old enough to have accumulated
+#     abandoned worktree branches; noise on a fresh project.
+#   - disk-headroom IS universal (every project runs on a filesystem with a
+#     floor) and is the strongest default-on candidate of the three, but the
+#     floor (`min_free_gib`, default 60) is a per-host number this scaffold
+#     cannot know, so it ships commented for the same reason performance-guard
+#     does: enabling a threshold nobody has confirmed fits the host is how a
+#     guard trains people to ignore it.
+# trace:STORY-1367 | ai:claude
+#
+# [[schedule.jobs]]
+# name = "hub-drift-guard"
+# command = "doctor check remote-drift --fail-on-findings"
+# every = "6h"
+# enabled = false
+#
+# [[schedule.jobs]]
+# name = "hub-drift-guard-route"
+# seats = ["advisor"]
+# on = ["CronJobFailed"]
+# prompt = "A tracked branch (main or aida-store) differs across hubs. Use the routed trip evidence and `aida remote status` to reconcile — never force-push a shared branch."
+# enabled = false
+#
+# [[schedule.jobs]]
+# name = "stranded-branches-guard"
+# command = "doctor check stale-remote-branches --fail-on-findings"
+# every = "24h"
+# enabled = false
+#
+# [[schedule.jobs]]
+# name = "stranded-branches-guard-route"
+# seats = ["advisor"]
+# on = ["CronJobFailed"]
+# prompt = "One or more remote branches carry commits with no open PR. Review each: open a PR, or delete by hand — never auto-delete a Keep-flagged branch."
+# enabled = false
+#
+# [doctor.disk_headroom]
+# min_free_gib = 60
+#
+# [[schedule.jobs]]
+# name = "disk-headroom-guard"
+# command = "doctor check disk-headroom --fail-on-findings"
+# every = "30m"
+# enabled = false
+#
+# [[schedule.jobs]]
+# name = "disk-headroom-guard-route"
+# seats = ["advisor"]
+# on = ["CronJobFailed"]
+# prompt = "Free disk space dropped below the configured floor. Reclaim space (stale worktrees via `aida session reap`, `cargo clean`) or raise [doctor.disk_headroom] min_free_gib deliberately."
+# enabled = false
+#
 "#
 }
 
@@ -2313,6 +2378,12 @@ mod story_1226_init_schedule_section_tests {
             "product-wave-relaunch",
             "shelf-triage",
             "groom-drafts",
+            "hub-drift-guard",
+            "hub-drift-guard-route",
+            "stranded-branches-guard",
+            "stranded-branches-guard-route",
+            "disk-headroom-guard",
+            "disk-headroom-guard-route",
         ] {
             assert!(
                 section.contains(&format!("name = \"{job}\"")),

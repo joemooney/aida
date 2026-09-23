@@ -2144,6 +2144,59 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // STORY-1367's three first jobs: named gated `doctor check` categories,
+        // same GATING shape as `doctor check performance --fail-on-findings`
+        // above — a plain `doctor check <category>` stays report-only, so
+        // `--fail-on-findings` is what turns a cadence check into a job the
+        // tick can actually route (non-zero exit → CronJobFailed → a due seat
+        // item). All three are silent on a clean run: `scan_remote_drift`
+        // returns nothing with fewer than two configured remotes,
+        // `scan_stale_remote_branches` produces no finding for an
+        // Excluded-verdict branch, and `scan_disk_headroom` returns nothing
+        // above its floor.
+        // trace:STORY-1367 | ai:claude
+        (
+            &["doctor check remote-drift --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check remote-drift --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "remote-drift",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
+        (
+            &["doctor check stale-remote-branches --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check stale-remote-branches --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "stale-remote-branches",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
+        (
+            &["doctor check disk-headroom --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check disk-headroom --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "disk-headroom",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
     ]
 }
 
@@ -2168,19 +2221,65 @@ fn valid_commands() -> Vec<&'static str> {
         .collect()
 }
 
+/// Review follow-up: the wall-clock ceiling a single scheduled substrate
+/// child (`aida doctor check ...`, `aida fetch --code-only`, …) may run
+/// before [`crate::command_output_with_timeout`] gives up on it. `run_now`
+/// holds the tick lock (`try_tick_lock`) for the duration of the run, so an
+/// unbounded child — a stalled network call inside `doctor check
+/// remote-drift`, a hung `git fetch` — would wedge every other job behind it
+/// indefinitely. Generous rather than tight: these are periodic maintenance
+/// checks, not a latency-sensitive per-turn hook path (that path already
+/// skips network-touching jobs — see `tick`'s `hook` flag).
+const SCHEDULED_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
 fn run_aida_command(project_root: &Path, command: &ScheduledCommand) -> Result<TaskOutcome> {
-    let exe = crate::aida_exe_path();
-    let output = ProcessCommand::new(exe)
-        .current_dir(project_root)
+    let mut cmd = ProcessCommand::new(crate::aida_exe_path());
+    cmd.args(command.args);
+    Ok(run_with_kill_timeout(
+        cmd,
+        command.display,
+        project_root,
+        SCHEDULED_COMMAND_TIMEOUT,
+    ))
+}
+
+/// The timeout-wrapped child run, factored out of [`run_aida_command`] so a
+/// test can point `cmd` at a hanging fake binary (e.g. `sleep 30`) through
+/// the exact same path production uses, rather than only exercising
+/// [`crate::command_output_with_timeout`] in isolation.
+fn run_with_kill_timeout(
+    mut cmd: ProcessCommand,
+    display: &str,
+    project_root: &Path,
+    timeout: std::time::Duration,
+) -> TaskOutcome {
+    cmd.current_dir(project_root)
         .env("AIDA_SCHEDULE_CHILD", "1")
-        .args(command.args)
-        .output()
-        .with_context(|| format!("failed to run `aida {}`", command.display))?;
-    Ok(TaskOutcome {
-        status: output.status.code().unwrap_or(1),
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-    })
+        // Never let a scheduled child block on a credential prompt nobody is
+        // there to answer — same convention as the other unattended git legs
+        // (`fetch --code-only`).
+        .env("GIT_TERMINAL_PROMPT", "0");
+    // BUG-1288's `command_output_with_timeout`: a portable kill-on-timeout
+    // wait, reused rather than reimplemented. `None` (spawn failure OR
+    // timeout) maps to exit 124 (the conventional `timeout(1)` sentinel) —
+    // non-zero, so the existing tick machinery records it as a FAILURE
+    // (`record_outcome_local`/`failure_trip`), never as ok. PRIN-5: a result
+    // we could not observe must never be reported as the ok/success case.
+    match crate::command_output_with_timeout(cmd, timeout) {
+        Some(output) => TaskOutcome {
+            status: output.status.code().unwrap_or(1),
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        },
+        None => TaskOutcome {
+            status: 124,
+            stdout: String::new(),
+            stderr: format!(
+                "{display} did not complete within {}s (killed) or could not be spawned",
+                timeout.as_secs()
+            ),
+        },
+    }
 }
 
 fn quiet_now(task: &Task) -> bool {
@@ -2586,6 +2685,89 @@ mod tests {
             .to_string();
         assert!(err.contains("unknown scheduled task command"));
         assert!(err.contains("cache verify"));
+    }
+
+    // Review follow-up: a scheduled child that never exits (a stalled network
+    // call inside a `doctor check` substrate job) must be killed at the
+    // timeout ceiling rather than left to run `run_now`/`try_tick_lock`
+    // indefinitely, and the outcome it produces must read as a FAILURE
+    // (PRIN-5: an unobserved result is never reported as ok), never as a
+    // silent success. Drives a real hanging `sleep` child through
+    // `run_with_kill_timeout` — the exact function `run_aida_command` calls
+    // in production — with a timeout far shorter than the sleep duration.
+    //
+    // unix-only: `sleep`/`sh` as fixtures, and the process-group kill this
+    // pins is itself a unix-only mechanism (see `kill_process_group` in
+    // lib.rs) — Windows keeps the pre-existing direct-child-only kill.
+    #[cfg(unix)]
+    #[test]
+    fn hanging_command_is_killed_at_the_timeout_and_reported_as_a_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut cmd = ProcessCommand::new("sleep");
+        cmd.arg("30");
+        let started = std::time::Instant::now();
+        let outcome = run_with_kill_timeout(
+            cmd,
+            "sleep 30",
+            tmp.path(),
+            std::time::Duration::from_millis(300),
+        );
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < std::time::Duration::from_secs(10),
+            "the 30s sleep must be killed near the 300ms timeout, not waited out; took {elapsed:?}"
+        );
+        assert_ne!(outcome.status, 0, "a timed-out child must never read as ok");
+        assert_eq!(outcome.status, 124, "the conventional timeout(1) sentinel");
+        assert!(
+            outcome.stderr.contains("did not complete within"),
+            "{}",
+            outcome.stderr
+        );
+
+        // Wire the same outcome through `failure_trip` / `record_outcome_local`
+        // the way the real tick does, to pin that a timeout actually trips the
+        // job (non-zero status is all `failure_trip` requires) rather than
+        // merely LOOKING like a failure in isolation.
+        let task = task(
+            "hang-guard",
+            "1h",
+            "doctor check remote-drift --fail-on-findings",
+        );
+        let trip = failure_trip(&task, at(12), &outcome);
+        assert!(trip.is_some(), "a 124 exit must mint a failure trip");
+    }
+
+    // Review follow-up: the GRANDCHILD case — a direct child that
+    // backgrounds a long-running descendant and then waits on it (`sh -c
+    // 'sleep 30 & wait'`, the same shape a credential-manager helper or a
+    // backgrounded git op takes) inherits the pipe write ends too. Killing
+    // only the direct child (old `Child::kill`-only behavior) would leave
+    // that grandchild alive, still holding stdout/stderr open, and the
+    // reader threads' `read_to_end` blocked on them — this is exactly the
+    // gap `kill_process_group`'s `killpg` closes: `sh` and `sleep` share one
+    // process group (`process_group(0)` at spawn), so one SIGKILL reaps
+    // both. Must return within about the ceiling plus slack, not anywhere
+    // near the 30s the grandchild alone would otherwise run.
+    #[cfg(unix)]
+    #[test]
+    fn hanging_grandchild_is_reaped_via_process_group_kill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut cmd = ProcessCommand::new("sh");
+        cmd.arg("-c").arg("sleep 30 & wait");
+        let ceiling = std::time::Duration::from_secs(2);
+        let started = std::time::Instant::now();
+        let outcome = run_with_kill_timeout(cmd, "sh -c 'sleep 30 & wait'", tmp.path(), ceiling);
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < ceiling + std::time::Duration::from_secs(3),
+            "the backgrounded grandchild must be reaped with the parent via killpg, not \
+             outlive it and wedge the read; ceiling {ceiling:?}, took {elapsed:?}"
+        );
+        assert_eq!(
+            outcome.status, 124,
+            "killed-on-timeout must read as failed, never ok"
+        );
     }
 
     // BUG-1557: every `command = "..."` string the scaffolded config template
@@ -3079,6 +3261,131 @@ enabled = true
             ),
             (0, 0, None)
         );
+    }
+
+    // STORY-1367: the three first substrate jobs the story registers
+    // (hub-drift, stranded-branches, disk-headroom) all ride the same
+    // GATING `doctor check <category> --fail-on-findings` shape as
+    // performance-guard, with no job-specific evidence parsing — a plain
+    // non-zero exit is enough for `failure_trip` to mint a trip_id and for
+    // the routing seat job to pick it up. Drives the tick against a fixture
+    // where the check trips (asserts each job reports, once, through the
+    // existing CronJobFailed → due-seat-job surface) and a clean fixture
+    // (asserts silence): acceptance criteria 2, 3 and 5.
+    // trace:STORY-1367 | ai:claude
+    #[test]
+    fn each_new_guard_job_trips_and_routes_on_failure_and_is_silent_when_clean() {
+        for command in [
+            "doctor check remote-drift --fail-on-findings",
+            "doctor check stale-remote-branches --fail-on-findings",
+            "doctor check disk-headroom --fail-on-findings",
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let job_name = "guard";
+            let guard = task(job_name, "6h", command);
+
+            // Clean fixture: the check finds nothing, exits 0. Silent — no
+            // CronJobFailed event, no failure trip.
+            let mut state = ScheduleState::default();
+            run_with_executor(
+                tmp.path(),
+                config(vec![guard.clone()]),
+                &mut state,
+                at(12),
+                Some(job_name),
+                |_root, _cmd| {
+                    Ok(TaskOutcome {
+                        status: 0,
+                        stdout: String::new(),
+                        stderr: String::new(),
+                    })
+                },
+            )
+            .unwrap();
+            assert!(
+                schedule_ledger::load(&store_root(tmp.path()), job_name)
+                    .unwrap()
+                    .failure_trips
+                    .is_empty(),
+                "{command}: clean run must not trip"
+            );
+            assert!(
+                events::read_all(tmp.path()).is_empty(),
+                "{command}: clean run must emit nothing"
+            );
+
+            // Failing fixture: the check finds something, exits non-zero.
+            // Reports exactly once, through CronJobFailed, and a routing seat
+            // job on that event becomes due carrying the trip evidence.
+            run_with_executor(
+                tmp.path(),
+                config(vec![guard]),
+                &mut state,
+                at(13),
+                Some(job_name),
+                |_root, _cmd| {
+                    Ok(TaskOutcome {
+                        status: 1,
+                        stdout: String::new(),
+                        stderr: "finding(s) detected".into(),
+                    })
+                },
+            )
+            .unwrap();
+            let ledger = schedule_ledger::load(&store_root(tmp.path()), job_name).unwrap();
+            let trip = ledger
+                .failure_trips
+                .last()
+                .unwrap_or_else(|| panic!("{command}: failing run must trip"));
+
+            let events = events::read_all(tmp.path());
+            let routed = events
+                .iter()
+                .find_map(|event| match &event.kind {
+                    EventKind::CronJobFailed { trip_id, .. } => trip_id.as_deref(),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{command}: failure must emit CronJobFailed"));
+            assert_eq!(routed, trip.trip_id, "{command}");
+
+            // A cold cursor (no prior tick) seeds itself to "now" and skips
+            // event replay on its first tick (see the STORY-1226 comment in
+            // `tick_core`), so seed a cursor before the failing run's
+            // timestamp — same setup `performance_failure_is_auditable_and_routed_by_trip`
+            // uses — or the routing job would never see the event it exists
+            // to route.
+            let mut route_state = ScheduleState::default();
+            route_state.tasks.insert(
+                "guard-route".into(),
+                TaskState {
+                    last_seen_event_ts: Some(at(12)),
+                    ..Default::default()
+                },
+            );
+            tick_core(
+                tmp.path(),
+                config(vec![seat_task(
+                    "guard-route",
+                    &["advisor"],
+                    None,
+                    &["CronJobFailed"],
+                )]),
+                &mut route_state,
+                at(14),
+                false,
+                |_root, _cmd| unreachable!(),
+                |_| Snapshot::default(),
+                &events,
+            )
+            .unwrap();
+            let route = schedule_ledger::load(&store_root(tmp.path()), "guard-route").unwrap();
+            assert!(route.due_since.is_some(), "{command}: routing job not due");
+            assert_eq!(
+                route.due_failure.as_ref().map(|f| f.trip_id.as_str()),
+                Some(trip.trip_id.as_str()),
+                "{command}"
+            );
+        }
     }
 
     // trace:BUG-1573 | ai:codex
