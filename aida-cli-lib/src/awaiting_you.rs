@@ -119,21 +119,41 @@ pub(crate) struct AwaitingReport {
     pub pr_attribution_disagreements: Vec<PrAttributionDisagreementItem>,
 }
 
+/// BUG-1549: why a blocking verdict produced this row. Two distinct causes,
+/// the same "go look again" remedy — mirrors `StaleApprovalReason` below.
+// trace:BUG-1549 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReworkReadyReason {
+    /// The refusal was recorded against a sha the head has since moved past
+    /// (`ShaRelation::Moved`).
+    Moved,
+    /// No `reviewed_sha` was recorded — the refusal cannot be pinned to a
+    /// commit at all, so it can neither be confirmed nor cleared by a push.
+    Unverifiable,
+}
+
 /// STORY-1419: one PR whose rework has landed on a refusal you recorded.
 ///
-/// The signal is exactly `head != reviewed_sha` on a PR carrying a blocking
-/// verdict. Both shas are reported and NOTHING is classified: whether the move
-/// was a rebase or a real rework is the reviewer's call, and inferring it is
-/// precisely the judgement that proved unreliable when attempted elsewhere.
+/// The signal is `head != reviewed_sha` on a PR carrying a blocking verdict
+/// (`Moved`), or — BUG-1549 — a blocking verdict recorded with NO
+/// `reviewed_sha` at all (`Unverifiable`): the invariant that "suppressed"
+/// (`pr_has_stale_or_unverifiable_local_approval`) always has a row to point
+/// at requires a row here even when there is no sha to compare. Both shas are
+/// reported (empty when `Unverifiable`) and NOTHING is classified beyond
+/// `reason`: whether a `Moved` row was a rebase or a real rework is the
+/// reviewer's call.
 // trace:STORY-1419 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ReworkReadyItem {
     pub pr: u64,
     pub spec: Option<String>,
-    /// The sha the refusal was recorded against.
+    /// The sha the refusal was recorded against — empty when `reason` is
+    /// `Unverifiable`.
     pub reviewed_sha: String,
     /// Where the PR is now.
     pub head_sha: String,
+    /// Why this row fired.
+    pub reason: ReworkReadyReason,
 }
 
 /// One PR's inputs to the rework-ready test, assembled by the caller so the
@@ -190,19 +210,25 @@ pub(crate) fn rework_candidate_from_parts(
     }
 }
 
-/// Which PRs have moved past the refusal recorded against them.
+/// Which PRs have moved past the refusal recorded against them, or (BUG-1549)
+/// carry a refusal with no sha to compare at all.
 ///
 /// Scoped to `seat` when it is known, so the row reaches the reviewer who
 /// refused rather than everyone. When the seat is unknown every row is
 /// returned — the same choice `pending_briefs` makes for an unidentifiable
 /// agent, because a missed handoff costs more than a surplus line.
 ///
-/// DEGRADES TO SILENCE, NEVER TO A WRONG ROW. A verdict carrying no
-/// `reviewed_sha` yields nothing: there is no sha to compare, so the honest
-/// output is the same silence as before rather than a guess. That is BUG-1538's
-/// blast radius showing through here, and it is why this cannot claim full
-/// coverage until provenance is always written.
-// trace:STORY-1419 | ai:claude
+/// DEGRADES TO A ROW, NEVER TO SILENT SUPPRESSION. A verdict carrying no
+/// `reviewed_sha` used to yield nothing here (BUG-1538's blast radius): there
+/// was no sha to compare, so the old output was the same silence as "no
+/// refusal at all." BUG-1549 closed that gap because the suppression
+/// predicate (`pr_has_stale_or_unverifiable_local_approval`, lib.rs) DOES
+/// still suppress a sha-less blocking verdict that is the newest record —
+/// and a suppression with no row to explain it is worse than a silent one.
+/// So a sha-less blocking candidate now emits an `Unverifiable` row instead
+/// of nothing; only a genuinely COMPARABLE-but-unmoved sha (`Same` or
+/// `Incomparable`, both requiring a sha to have been recorded) stays silent.
+// trace:STORY-1419 trace:BUG-1549 | ai:claude
 pub(crate) fn rework_ready_rows(
     candidates: &[ReworkCandidate],
     seat: Option<&str>,
@@ -220,10 +246,22 @@ pub(crate) fn rework_ready_rows(
                 .reviewed_sha
                 .as_deref()
                 .map(str::trim)
-                .filter(|s| !s.is_empty())?;
+                .filter(|s| !s.is_empty());
             let head = c.head_sha.trim();
+            let Some(reviewed) = reviewed else {
+                // BUG-1549: no sha recorded at all — cannot be pinned to a
+                // commit, but the row must still exist so a suppression
+                // this refusal causes is never unexplained.
+                return Some(ReworkReadyItem {
+                    pr: c.pr,
+                    spec: c.spec.clone(),
+                    reviewed_sha: String::new(),
+                    head_sha: head.to_string(),
+                    reason: ReworkReadyReason::Unverifiable,
+                });
+            };
             // DECISION, recorded rather than inherited: only a POSITIVE Moved
-            // emits a row. Same and Incomparable are both silence here, and
+            // emits a row here. Same and Incomparable are both silence, and
             // that is deliberate even though they are different states.
             //
             // A ROW SURFACE CANNOT CARRY A DISTINCTION IN THE ABSENCE OF A ROW.
@@ -252,6 +290,7 @@ pub(crate) fn rework_ready_rows(
                 spec: c.spec.clone(),
                 reviewed_sha: reviewed.to_string(),
                 head_sha: head.to_string(),
+                reason: ReworkReadyReason::Moved,
             })
         })
         .collect()
@@ -837,15 +876,26 @@ impl AwaitingReport {
                 .as_deref()
                 .map(|s| format!(" ({s})"))
                 .unwrap_or_default();
-            writeln!(
-                w,
-                "  {} PR-{}{} moved past your refusal — reviewed {}, now {}",
-                "🔄".cyan(),
-                item.pr.to_string().bold(),
-                spec,
-                short_sha_for_row(&item.reviewed_sha).dimmed(),
-                short_sha_for_row(&item.head_sha).bold(),
-            )?;
+            match item.reason {
+                ReworkReadyReason::Moved => writeln!(
+                    w,
+                    "  {} PR-{}{} moved past your refusal — reviewed {}, now {}",
+                    "🔄".cyan(),
+                    item.pr.to_string().bold(),
+                    spec,
+                    short_sha_for_row(&item.reviewed_sha).dimmed(),
+                    short_sha_for_row(&item.head_sha).bold(),
+                )?,
+                // trace:BUG-1549 | ai:claude
+                ReworkReadyReason::Unverifiable => writeln!(
+                    w,
+                    "  {} PR-{}{} blocked — reviewed sha unknown, cannot confirm it covers {}",
+                    "🔄".cyan(),
+                    item.pr.to_string().bold(),
+                    spec,
+                    short_sha_for_row(&item.head_sha).bold(),
+                )?,
+            }
             budget -= 1;
         }
 
@@ -1405,14 +1455,13 @@ pub(crate) fn is_awaiting_you(pr: &OpenPrItem, local_verdict_blocks: bool) -> bo
 /// Filter a snapshot of open PRs down to the "Awaiting you" subset. Used
 /// by the renderer and exercised directly in tests.
 ///
-/// `local_blocking` names the PRs (by number) for which the caller already
-/// resolved an AIDA-recorded RequestChanges/Rejected verdict at the PR's
-/// CURRENT head (see `pr_has_local_blocking_verdict_at_head` in lib.rs) OR an
-/// AIDA-recorded APPROVED verdict that does not provably cover that head —
-/// stale, sha-less, or Incomparable (see
-/// `pr_has_stale_or_unverifiable_local_approval` in lib.rs, BUG-1549) — the
-/// caller unions both into this one set. The two sources are unioned with
-/// GitHub's `review_decision`, never swapped.
+/// `local_blocking` names the PRs (by number) the single resolver-backed
+/// predicate `pr_has_stale_or_unverifiable_local_approval` (lib.rs, BUG-1549)
+/// suppresses — a RequestChanges/Rejected verdict that is not confirmed
+/// moved past the current head and not superseded by a newer non-blocking
+/// record, OR an APPROVED verdict that does not provably cover that head:
+/// stale, sha-less, or Incomparable. This set is unioned with GitHub's
+/// `review_decision`, never swapped.
 // trace:BUG-1490 | ai:claude
 // trace:BUG-1549 | ai:claude
 pub(crate) fn classify_open_prs(
@@ -1762,17 +1811,25 @@ mod tests {
         );
     }
 
-    // BUG-1538's blast radius: no reviewed_sha means nothing to compare, so the
-    // honest output is silence. Asserted explicitly so a later change that
-    // starts GUESSING here fails loudly.
-    // trace:STORY-1419 | ai:claude
+    // BUG-1538's blast radius, updated by BUG-1549: no reviewed_sha means
+    // nothing to COMPARE, but the suppression predicate still suppresses a
+    // sha-less blocking verdict when it is the newest record — so this can no
+    // longer degrade all the way to silence, only to an `Unverifiable` row
+    // that names the gap instead of guessing a sha comparison.
+    // trace:STORY-1419 trace:BUG-1549 | ai:claude
     #[test]
-    fn a_verdict_without_provenance_degrades_to_silence_not_a_guess() {
-        assert!(rework_ready_rows(&[candidate(2009, "065f3df8aa", None, None)], None).is_empty());
-        assert!(
-            rework_ready_rows(&[candidate(2009, "065f3df8aa", Some("   "), None)], None).is_empty(),
-            "a blank reviewed_sha is absent provenance, not a sha"
+    fn a_verdict_without_provenance_degrades_to_an_unverifiable_row_not_a_guess() {
+        let rows = rework_ready_rows(&[candidate(2009, "065f3df8aa", None, None)], None);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].reason, ReworkReadyReason::Unverifiable);
+        assert_eq!(rows[0].reviewed_sha, "");
+        let rows = rework_ready_rows(&[candidate(2009, "065f3df8aa", Some("   "), None)], None);
+        assert_eq!(
+            rows.len(),
+            1,
+            "a blank reviewed_sha is absent provenance, not a sha — same as None"
         );
+        assert_eq!(rows[0].reason, ReworkReadyReason::Unverifiable);
     }
 
     // A non-blocking verdict is not a refusal, so its head moving is ordinary
@@ -2198,6 +2255,7 @@ mod tests {
                 spec: Some("TASK-1298".into()),
                 reviewed_sha: "3310400503".into(),
                 head_sha: "f95b30853e".into(),
+                reason: ReworkReadyReason::Moved,
             }],
             ..Default::default()
         };

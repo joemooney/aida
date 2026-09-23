@@ -52689,104 +52689,72 @@ fn pr_has_local_verdict(project_root: &std::path::Path, pr_number: u64) -> bool 
     )
 }
 
-/// BUG-1490: true when AIDA holds a recorded BLOCKING verdict (RequestChanges
-/// / Rejected) for `pr`'s spec, taken against `pr`'s CURRENT head. This is the
-/// missing half of `is_awaiting_you` — `queue_cmd::evaluate_review_verdict_gate`
-/// already gates `aida queue done` on exactly this substrate record, but the
-/// readiness surface only ever looked at GitHub's `review_decision`, so a
-/// refusal recorded straight through `aida review record` (no forge round
-/// trip) never suppressed the PR here.
-///
-/// Reuses `review_verdict::read_recorded_verdict_any`, the same reader the
-/// queue-done gate uses, keyed off the spec ids parsed from the PR title
-/// (the `(SPEC-ID)` commit-trailer convention `extract_spec_ids_from_text`
-/// already extracts for PR/commit provenance elsewhere).
-///
-/// Per PRIN-5 an indeterminate verdict must not count as approval; the
-/// mirror image applies here too — a verdict with no `reviewed_sha`, or one
-/// recorded against a commit that is not `pr.head_sha`, must NOT suppress the
-/// PR. Requiring an exact (prefix-tolerant) sha match is deliberately
-/// conservative rather than encoding "no sha means still blocking" — that
-/// stronger guarantee is BUG-1466's job once every writer stamps
-/// `reviewed_sha`. Local-only: no forge/network call, `pr.head_sha` is
-/// already part of the snapshot the caller fetched.
-// trace:BUG-1490 | ai:claude
-fn pr_has_local_blocking_verdict_at_head(
-    project_root: &std::path::Path,
-    pr: &status_cleanup::OpenPrItem,
-) -> bool {
-    let Some(head_sha) = pr.head_sha.as_deref().filter(|s| !s.trim().is_empty()) else {
-        return false;
-    };
-    pr_ship::extract_spec_ids_from_text(&pr.title)
-        .iter()
-        .any(|spec_id| {
-            review_verdict::read_recorded_verdict_any(project_root, &[spec_id.as_str()])
-                .is_some_and(|verdict| {
-                    verdict.kind.blocks_done()
-                        && verdict
-                            .reviewed_sha
-                            .as_deref()
-                            .is_some_and(|sha| review_verdict::same_reviewed_sha(sha, head_sha))
-                })
-        })
-}
-
-/// BUG-1549: resolve the ONE recorded verdict that governs `pr` — the
-/// single source both the mergeable-suppression decision and the
-/// explanatory row it produces must agree on.
-///
-/// Before this function existed, two call sites answered "is `pr` approved,
-/// and does that approval cover its head" from two DIFFERENT files and
-/// disagreed: `pr_has_stale_or_unverifiable_local_approval` (feeding the
-/// mergeable suppression set, below) read the SPEC-keyed verdict via
-/// `review_verdict::read_recorded_verdict_any`, keyed off the spec ids
-/// parsed from the PR title — the same reader
-/// `pr_has_local_blocking_verdict_at_head` above uses. The candidate build
-/// that fed `awaiting_you::stale_approval_rows` (`lib.rs`,
-/// `collect_awaiting_report_inner`) instead read the PR-keyed verdict via
-/// `review_verdict::read_recorded_verdict(.., "PR-{n}")`. PR-keyed
-/// approvals are frequently sha-less on disk, so a PR could be suppressed
-/// with no row to explain why, or carry a "cannot be verified" row while
-/// still reading mergeable.
-///
-/// Candidates: every spec id parsed from the PR title (ALL of them, in
-/// title order — `read_recorded_verdict_any` only ever returned the FIRST
-/// spec id with a file on disk, so a stale approval recorded under a LATER
-/// spec id in a multi-spec title was invisible; this reads every id's file
-/// directly instead), plus the PR-keyed record.
-///
-/// Resolution rule (PRIN-5): BLOCKING WINS. If any candidate — spec-keyed
-/// for any id in the title, or PR-keyed — is `RequestChanges` or `Rejected`,
-/// that is the resolved verdict, full stop. Sha-comparability never enters
-/// into deciding *whether* a blocking verdict counts; a human "no" recorded
-/// against no sha (or a stale one) is still a "no". The comparable-sha
-/// tie-break below applies ONLY once every candidate is non-blocking: prefer
-/// whichever carries a `reviewed_sha` that is COMPARABLE to `pr`'s current
-/// head (`awaiting_you::compare_shas` != `Incomparable`) — a sha we can
-/// actually check is stronger evidence than one we can't, regardless of
-/// which file it came from. When none is comparable, the first candidate
-/// (spec-keyed, in title order, ahead of the PR-keyed record) wins, matching
-/// the old "spec-keyed is primary" default.
+/// BUG-1549: gather every locally-recorded verdict candidate for `pr` — every
+/// spec id parsed from the PR title (ALL of them, in title order, each read
+/// directly rather than stopping at the first file on disk the way the old
+/// `review_verdict::read_recorded_verdict_any` did), plus the PR-keyed
+/// record. Extracted so `resolve_pr_review_verdict` (which picks the ONE
+/// representative verdict) and the suppression check below (which also
+/// needs to compare the OTHER candidates' `recorded_at`) read the identical
+/// set of files rather than risk two independent reads disagreeing.
 // trace:BUG-1549 | ai:claude
-fn resolve_pr_review_verdict(
+fn verdict_candidates_for_pr(
     project_root: &std::path::Path,
     pr: &status_cleanup::OpenPrItem,
-) -> Option<review_verdict::RecordedVerdict> {
-    let head_sha = pr.head_sha.as_deref().filter(|s| !s.trim().is_empty());
-    let spec_ids = pr_ship::extract_spec_ids_from_text(&pr.title);
-
-    let mut candidates: Vec<review_verdict::RecordedVerdict> = spec_ids
-        .iter()
-        .filter(|id| !id.trim().is_empty())
-        .filter_map(|id| review_verdict::read_recorded_verdict(project_root, id))
-        .collect();
+) -> Vec<review_verdict::RecordedVerdict> {
+    let mut candidates: Vec<review_verdict::RecordedVerdict> =
+        pr_ship::extract_spec_ids_from_text(&pr.title)
+            .iter()
+            .filter(|id| !id.trim().is_empty())
+            .filter_map(|id| review_verdict::read_recorded_verdict(project_root, id))
+            .collect();
     if let Some(pr_verdict) =
         review_verdict::read_recorded_verdict(project_root, &format!("PR-{}", pr.number))
     {
         candidates.push(pr_verdict);
     }
+    candidates
+}
 
+/// BUG-1549: resolve the ONE recorded verdict that REPRESENTS `pr` for
+/// candidate-building purposes — the single source both `rework_ready_rows`
+/// and `stale_approval_rows` render through (via `rework_candidate_for_pr`),
+/// so the row a PR shows and the verdict record behind it can never name two
+/// different files.
+///
+/// Resolution rule (PRIN-5): BLOCKING WINS as the representative record. If
+/// any candidate — spec-keyed for any id in the title, or PR-keyed — is
+/// `RequestChanges` or `Rejected`, that is the resolved verdict, full stop;
+/// sha-comparability never enters into deciding *whether* a blocking
+/// candidate is the one worth showing. **This function alone does not decide
+/// whether the blocking verdict actually suppresses mergeability** — that is
+/// `pr_has_stale_or_unverifiable_local_approval`'s job, and it applies the
+/// head-sha / recency conditions BUG-1549's rework adds on top of this
+/// representative pick. Keeping the two questions separate is what lets a
+/// stale (moved-past) refusal still produce a `rework_ready` row (telling the
+/// reviewer to look again) without also blocking the merge.
+///
+/// The comparable-sha tie-break below applies ONLY once every candidate is
+/// non-blocking: prefer whichever carries a `reviewed_sha` that is
+/// COMPARABLE to `pr`'s current head (`awaiting_you::compare_shas` !=
+/// `Incomparable`) — a sha we can actually check is stronger evidence than
+/// one we can't, regardless of which file it came from. When none is
+/// comparable, the first candidate (spec-keyed, in title order, ahead of the
+/// PR-keyed record) wins, matching the old "spec-keyed is primary" default.
+// trace:BUG-1549 | ai:claude
+fn resolve_pr_review_verdict(
+    project_root: &std::path::Path,
+    pr: &status_cleanup::OpenPrItem,
+) -> Option<review_verdict::RecordedVerdict> {
+    let candidates = verdict_candidates_for_pr(project_root, pr);
+    resolve_verdict_from_candidates(&candidates, pr.head_sha.as_deref())
+}
+
+fn resolve_verdict_from_candidates(
+    candidates: &[review_verdict::RecordedVerdict],
+    head_sha: Option<&str>,
+) -> Option<review_verdict::RecordedVerdict> {
+    let head_sha = head_sha.filter(|s| !s.trim().is_empty());
     if let Some(blocking) = candidates.iter().find(|v| v.kind.blocks_done()) {
         return Some(blocking.clone());
     }
@@ -52812,50 +52780,111 @@ fn resolve_pr_review_verdict(
     if let Some(comparable) = candidates.iter().find(|v| is_comparable(v)) {
         return Some(comparable.clone());
     }
-    candidates.into_iter().next()
+    candidates.first().cloned()
 }
 
-/// BUG-1549: true when the ONE verdict `resolve_pr_review_verdict` resolves
-/// for `pr` means the PR must NOT read as mergeable — either because it IS a
-/// blocking verdict (`RequestChanges` / `Rejected`, PRIN-5: blocking wins
-/// unconditionally, regardless of sha) or because it is an APPROVED verdict
-/// that does NOT provably cover `pr`'s CURRENT head — stale (the recorded
-/// sha is behind head), sha-less (the writer recorded no `reviewed_sha`), or
-/// Incomparable (a recorded sha too short to compare). Mirror image of
-/// `pr_has_local_blocking_verdict_at_head` above: that function suppresses
-/// only on a spec-keyed blocking verdict CONFIRMED against the current head
-/// by sha; this one suppresses on the resolved verdict wherever it is
-/// blocking regardless of sha, or on an approval whose coverage of the head
-/// cannot be confirmed, because an unverified approval is not evidence a PR
-/// is safe to merge either.
+/// BUG-1549 rework: RFC-3339 `recorded_at` parsed to a comparable instant.
+/// `None` when absent or unparseable — an unknown time never counts as
+/// "later" than anything (see `blocking_verdict_superseded_by_newer_non_blocking`).
+// trace:BUG-1549 | ai:claude
+fn recorded_at_instant(
+    verdict: &review_verdict::RecordedVerdict,
+) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    verdict
+        .recorded_at
+        .as_deref()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+}
+
+/// BUG-1549 condition (i): true only when `verdict`'s `reviewed_sha` is
+/// CONFIRMED to have moved past `head_sha` (`awaiting_you::ShaRelation::Moved`).
+/// A sha-less verdict, an incomparable (too-short) sha, or a missing head are
+/// all "unverifiable" and therefore NOT moved — per the required semantics,
+/// "at head, or unverifiable" both leave a blocking verdict eligible to
+/// suppress; only a demonstrable move disqualifies it. A moved head is the
+/// re-review case `rework_ready_rows` already surfaces as its own row, not a
+/// reason to keep suppressing.
+// trace:BUG-1549 | ai:claude
+fn blocking_verdict_is_moved(
+    head_sha: Option<&str>,
+    verdict: &review_verdict::RecordedVerdict,
+) -> bool {
+    let Some(head) = head_sha.map(str::trim).filter(|s| !s.is_empty()) else {
+        return false;
+    };
+    let Some(reviewed) = verdict
+        .reviewed_sha
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    else {
+        return false;
+    };
+    matches!(
+        awaiting_you::compare_shas(head, reviewed),
+        awaiting_you::ShaRelation::Moved
+    )
+}
+
+/// BUG-1549 condition (ii): true when some NON-blocking candidate (an
+/// approval) carries a `recorded_at` strictly later than `verdict`'s own —
+/// fresher evidence than an older refusal. A round-1 `RequestChanges`
+/// followed by a round-2 `Approved` must not suppress forever just because
+/// the refusal is still on disk. Unknown timestamps (on either side) never
+/// disqualify the blocking verdict — PRIN-5 fail-closed: when recency can't
+/// be established, keep blocking rather than guess it is safe to drop.
+// trace:BUG-1549 | ai:claude
+fn blocking_verdict_superseded_by_newer_non_blocking(
+    verdict: &review_verdict::RecordedVerdict,
+    candidates: &[review_verdict::RecordedVerdict],
+) -> bool {
+    let Some(this) = recorded_at_instant(verdict) else {
+        return false;
+    };
+    candidates
+        .iter()
+        .filter(|c| !c.kind.blocks_done())
+        .filter_map(recorded_at_instant)
+        .any(|newer| newer > this)
+}
+
+/// BUG-1549 rework: true when the LOCAL verdict record(s) for `pr` mean the
+/// PR must NOT read as mergeable. One resolver, one path — this is now the
+/// ONLY local-verdict suppression predicate (the formerly-separate
+/// `pr_has_local_blocking_verdict_at_head` read the same files a second way
+/// and is folded in here).
 ///
-/// Reads through `resolve_pr_review_verdict` — the single source shared
-/// with the `stale_approval_rows` / `rework_ready_rows` row build in
-/// `collect_awaiting_report_inner` — so this predicate and the row it
-/// explains can never disagree about which verdict record governs the PR
-/// (the BUG-1549 invariant tested by
-/// `stale_approval_suppression_matches_row_invariant`).
-/// `same_reviewed_sha` already folds both "moved" and "too short to
-/// compare" into a single `false`, which is exactly the union this
-/// suppression predicate needs — the caller-facing `stale_approval_rows`
-/// (awaiting_you.rs) still distinguishes the two for the row's wording.
+/// A resolved BLOCKING verdict (`RequestChanges` / `Rejected`) suppresses
+/// only when BOTH: (i) it is not confirmed `Moved` past the current head —
+/// at-head or unverifiable both count, and (ii) no non-blocking candidate
+/// carries a strictly later `recorded_at`. Either failing means the refusal
+/// no longer governs — a moved head is the re-review case `rework_ready_rows`
+/// surfaces instead, and a superseded refusal has been overtaken by a fresher
+/// approval (`rework_candidate_for_pr` still builds a row-worthy candidate
+/// either way — the `verdict_blocks` flag it carries is `resolve_pr_review_verdict`'s
+/// REPRESENTATIVE pick, independent of whether THIS predicate suppresses).
+///
+/// A resolved APPROVED verdict suppresses when it does NOT provably cover
+/// `pr`'s CURRENT head — stale (the recorded sha is behind head), sha-less
+/// (the writer recorded no `reviewed_sha`), or Incomparable (a recorded sha
+/// too short to compare).
 // trace:BUG-1549 | ai:claude
 fn pr_has_stale_or_unverifiable_local_approval(
     project_root: &std::path::Path,
     pr: &status_cleanup::OpenPrItem,
 ) -> bool {
-    let Some(verdict) = resolve_pr_review_verdict(project_root, pr) else {
+    let candidates = verdict_candidates_for_pr(project_root, pr);
+    let Some(verdict) = resolve_verdict_from_candidates(&candidates, pr.head_sha.as_deref()) else {
         return false;
     };
+    let head_sha = pr.head_sha.as_deref().filter(|s| !s.trim().is_empty());
     if verdict.kind.blocks_done() {
-        // PRIN-5: blocking wins outright — sha comparability never excuses a
-        // recorded refusal from suppressing the PR.
-        return true;
+        return !blocking_verdict_is_moved(head_sha, &verdict)
+            && !blocking_verdict_superseded_by_newer_non_blocking(&verdict, &candidates);
     }
     if verdict.kind != review_verdict::VerdictKind::Approved {
         return false;
     }
-    let head_sha = pr.head_sha.as_deref().filter(|s| !s.trim().is_empty());
     match (verdict.reviewed_sha.as_deref(), head_sha) {
         (None, _) => true,
         (Some(_), None) => true,
@@ -52864,40 +52893,17 @@ fn pr_has_stale_or_unverifiable_local_approval(
 }
 
 /// BUG-1549: the set of PR numbers a LOCAL (no-network) verdict record
-/// removes from the mergeable set — `pr_has_local_blocking_verdict_at_head`
-/// union `pr_has_stale_or_unverifiable_local_approval`. Extracted so the
-/// PRODUCTION union `collect_awaiting_report_inner` classifies PRs through is
-/// the exact same union a test exercises — a test that hand-built this
-/// HashSet could drift from what the real report computes without either
-/// side noticing.
+/// removes from the mergeable set. Now a straight map over the single
+/// resolver-backed predicate — see its doc for why the formerly-separate
+/// blocking-at-head union is gone.
 // trace:BUG-1549 | ai:claude
 fn local_suppressed_prs(
     project_root: &std::path::Path,
     prs: &[status_cleanup::OpenPrItem],
 ) -> std::collections::HashSet<u64> {
-    // BUG-1490: a refusal recorded straight to the AIDA substrate (no
-    // GitHub review posted) must suppress just like a GitHub
-    // CHANGES_REQUESTED does — local + cache/file reads only, no extra
-    // network call.
-    let local_blocking: std::collections::HashSet<u64> = prs
-        .iter()
-        .filter(|pr| pr_has_local_blocking_verdict_at_head(project_root, pr))
-        .map(|pr| pr.number)
-        .collect();
-    // BUG-1549: a blocking OR unverifiably-approved local verdict must leave
-    // the mergeable set exactly like a confirmed blocking verdict does —
-    // built alongside local_blocking from the same verdict reader, same
-    // no-network constraint, then unioned into one suppression set. See
-    // `stale_approval_rows` (awaiting_you.rs) for the distinct "stale" vs
-    // "cannot be verified" row this produces.
-    let unverifiable_local_approvals: std::collections::HashSet<u64> = prs
-        .iter()
+    prs.iter()
         .filter(|pr| pr_has_stale_or_unverifiable_local_approval(project_root, pr))
         .map(|pr| pr.number)
-        .collect();
-    local_blocking
-        .union(&unverifiable_local_approvals)
-        .copied()
         .collect()
 }
 
@@ -68595,21 +68601,31 @@ mod bug_1291_orphan_sweep_tests {
         .unwrap();
     }
 
+    // BUG-1549: `pr_has_local_blocking_verdict_at_head` was folded into the
+    // single resolver-backed predicate — these four keep exercising the
+    // BUG-1490 shapes, retargeted at the one path that now covers them.
     #[test]
     fn request_changes_at_current_head_blocks() {
         let root = tempfile::tempdir().unwrap();
         write_spec_verdict(root.path(), "BUG-1485", "request-changes", "deadbeef01");
         let pr = pr_for_blocking_verdict_test("deadbeef01");
-        assert!(pr_has_local_blocking_verdict_at_head(root.path(), &pr));
+        assert!(pr_has_stale_or_unverifiable_local_approval(
+            root.path(),
+            &pr
+        ));
     }
 
     #[test]
     fn request_changes_at_older_sha_does_not_block_a_pushed_pr() {
         let root = tempfile::tempdir().unwrap();
         write_spec_verdict(root.path(), "BUG-1485", "request-changes", "deadbeef01");
-        // BUG-1490 acceptance: the PR moved on (new head) since the refusal.
+        // BUG-1490/BUG-1549 acceptance: the PR moved on (new head) since the
+        // refusal — a moved head does not suppress; it is the re-review case.
         let pr = pr_for_blocking_verdict_test("cafef00d02");
-        assert!(!pr_has_local_blocking_verdict_at_head(root.path(), &pr));
+        assert!(!pr_has_stale_or_unverifiable_local_approval(
+            root.path(),
+            &pr
+        ));
     }
 
     #[test]
@@ -68617,14 +68633,20 @@ mod bug_1291_orphan_sweep_tests {
         let root = tempfile::tempdir().unwrap();
         write_spec_verdict(root.path(), "BUG-1485", "approved", "deadbeef01");
         let pr = pr_for_blocking_verdict_test("deadbeef01");
-        assert!(!pr_has_local_blocking_verdict_at_head(root.path(), &pr));
+        assert!(!pr_has_stale_or_unverifiable_local_approval(
+            root.path(),
+            &pr
+        ));
     }
 
     #[test]
     fn no_verdict_file_does_not_block() {
         let root = tempfile::tempdir().unwrap();
         let pr = pr_for_blocking_verdict_test("deadbeef01");
-        assert!(!pr_has_local_blocking_verdict_at_head(root.path(), &pr));
+        assert!(!pr_has_stale_or_unverifiable_local_approval(
+            root.path(),
+            &pr
+        ));
     }
 
     // BUG-1549: the single-source resolver fix. `pr_item_for` and
@@ -68863,6 +68885,150 @@ mod bug_1291_orphan_sweep_tests {
             !rows.is_empty(),
             "suppressed must hold if and only if a row exists to explain it"
         );
+    }
+
+    /// BUG-1549 rework: like `write_spec_verdict`, but stamps an explicit
+    /// `recorded_at` so tests can construct an "older refusal, newer
+    /// approval" shape deterministically instead of racing `chrono::Utc::now()`.
+    fn write_verdict_at(
+        root: &std::path::Path,
+        key: &str,
+        verdict: &str,
+        reviewed_sha: &str,
+        recorded_at: &str,
+    ) {
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{key}.json")),
+            format!(
+                r#"{{"verdict":"{verdict}","reviewed_sha":"{reviewed_sha}","recorded_at":"{recorded_at}"}}"#
+            ),
+        )
+        .unwrap();
+    }
+
+    /// BUG-1549 rework AC(a): a `RequestChanges` recorded against a sha the
+    /// PR has since moved past must NOT suppress — that is the re-review
+    /// case, not a standing refusal — and `rework_ready_rows` must still
+    /// carry a row so the moved head is not silently dropped.
+    #[test]
+    fn moved_head_blocking_verdict_is_not_suppressed_and_has_a_rework_row() {
+        let root = tempfile::tempdir().unwrap();
+        write_spec_verdict(root.path(), "BUG-4001", "requestchanges", "deadbeef40");
+        let pr = pr_item_for(4001, "BUG-4001", "cafef00d40"); // moved head
+
+        let local_suppressed = local_suppressed_prs(root.path(), std::slice::from_ref(&pr));
+        assert!(
+            !local_suppressed.contains(&pr.number),
+            "a blocking verdict on a MOVED head must not suppress the PR"
+        );
+
+        let candidate = rework_candidate_for_pr(root.path(), &pr)
+            .expect("a candidate builds for the moved-head blocking verdict");
+        let rows = awaiting_you::rework_ready_rows(std::slice::from_ref(&candidate), None);
+        assert_eq!(
+            rows.len(),
+            1,
+            "a moved head on a refusal must still produce a rework-ready row"
+        );
+    }
+
+    /// BUG-1549 rework AC(b): an OLDER spec-keyed `RequestChanges` must not
+    /// out-rank a NEWER PR-keyed `Approved` — the drain's re-review writes
+    /// Approved to PR-N.json and that fresher verdict must win.
+    #[test]
+    fn newer_approval_supersedes_an_older_blocking_verdict() {
+        let root = tempfile::tempdir().unwrap();
+        write_verdict_at(
+            root.path(),
+            "BUG-4002",
+            "requestchanges",
+            "deadbeef40",
+            "2026-01-01T00:00:00+00:00",
+        );
+        write_verdict_at(
+            root.path(),
+            "PR-4002",
+            "approved",
+            "cafef00d42",
+            "2026-06-01T00:00:00+00:00",
+        );
+        let pr = pr_item_for(4002, "BUG-4002", "cafef00d42");
+
+        assert!(
+            !pr_has_stale_or_unverifiable_local_approval(root.path(), &pr),
+            "the newer approval must clear the older refusal"
+        );
+        let local_suppressed = local_suppressed_prs(root.path(), std::slice::from_ref(&pr));
+        assert!(!local_suppressed.contains(&pr.number));
+        let mergeable = awaiting_you::classify_open_prs(&[pr], &local_suppressed);
+        assert!(
+            !mergeable.is_empty(),
+            "the PR must read mergeable once the newer approval supersedes the stale refusal"
+        );
+    }
+
+    /// BUG-1549 rework AC(c): a sha-less blocking verdict that is the NEWEST
+    /// record still suppresses — and the suppression must produce a row
+    /// (`rework_ready_rows`, `Unverifiable` reason) rather than a silent drop.
+    #[test]
+    fn newest_sha_less_blocking_verdict_suppresses_and_has_a_row() {
+        let root = tempfile::tempdir().unwrap();
+        write_verdict_at(
+            root.path(),
+            "BUG-4003",
+            "requestchanges",
+            "",
+            "2026-06-01T00:00:00+00:00",
+        );
+        let pr = pr_item_for(4003, "BUG-4003", "cafef00d43");
+
+        assert!(pr_has_stale_or_unverifiable_local_approval(
+            root.path(),
+            &pr
+        ));
+        let local_suppressed = local_suppressed_prs(root.path(), std::slice::from_ref(&pr));
+        assert!(local_suppressed.contains(&pr.number));
+
+        let candidate = rework_candidate_for_pr(root.path(), &pr)
+            .expect("a candidate builds for a sha-less blocking verdict");
+        let rows = awaiting_you::rework_ready_rows(std::slice::from_ref(&candidate), None);
+        assert_eq!(
+            rows.len(),
+            1,
+            "suppressed must hold if and only if a row exists to explain it"
+        );
+        assert_eq!(
+            rows[0].reason,
+            awaiting_you::ReworkReadyReason::Unverifiable
+        );
+    }
+
+    /// BUG-1549 rework AC(d): the original blocking-wins behavior still holds
+    /// when the blocking verdict is recorded AT the current head and is the
+    /// newest record on file — the common case must keep working exactly as
+    /// before.
+    #[test]
+    fn blocking_verdict_at_head_and_newest_still_suppresses() {
+        let root = tempfile::tempdir().unwrap();
+        write_verdict_at(
+            root.path(),
+            "BUG-4004",
+            "requestchanges",
+            "cafef00d44",
+            "2026-06-01T00:00:00+00:00",
+        );
+        let pr = pr_item_for(4004, "BUG-4004", "cafef00d44"); // at head
+
+        assert!(pr_has_stale_or_unverifiable_local_approval(
+            root.path(),
+            &pr
+        ));
+        let local_suppressed = local_suppressed_prs(root.path(), std::slice::from_ref(&pr));
+        assert!(local_suppressed.contains(&pr.number));
+        let mergeable = awaiting_you::classify_open_prs(&[pr], &local_suppressed);
+        assert!(mergeable.is_empty());
     }
 
     #[cfg(unix)]
