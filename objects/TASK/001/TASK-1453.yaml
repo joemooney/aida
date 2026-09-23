@@ -9,12 +9,12 @@ description: |-
   1. At the ceiling, if any concluded failure is known, the verdict is Red with those failures named (the stuck check is listed as still pending).
   2. ci_absolute=0 is clamped to a sane maximum or emits a warning.
   3. Tests: stuck-pending plus real failure at the ceiling gives Red with a summary; stuck-pending alone gives NoSignal.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T13:04:08.032544690Z
-modified_at: 2026-09-23T14:46:20.013077862Z
+modified_at: 2026-09-23T14:46:58.642849221Z
 req_type: Task
 tags:
 - ci
@@ -56,3 +56,21 @@ comments:
   created_at: 2026-09-23T14:46:20.013077862Z
   modified_at: 2026-09-23T14:46:20.013077862Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cebb-f14b-7f60-b462-2c50924093bb
+  author: aida-auto-bump
+  timestamp: 2026-09-23T14:46:58.635936028Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cebb-f152-70e0-afec-e83550e4c8fc
+  timestamp: 2026-09-23T14:46:58.642848199Z
+  agent: aida
+  commit_sha: e82de0ec0467f6c96fde8ec393986597b287d7ff
+  summary: Completed via merge e82de0ec
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T14:46:55.618500737Z
+  completion_sha: e82de0ec0467f6c96fde8ec393986597b287d7ff
