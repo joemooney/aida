@@ -13653,30 +13653,49 @@ pub(crate) fn recover_action_label(action: queue_recover::RecoverAction) -> &'st
 }
 
 /// BUG-1515: whether a `Done` spec's most recently recorded review verdict is
-/// an OUTSTANDING refusal — a `RequestChanges`/`Rejected` verdict never
-/// closed by a later merge (`review_verdict::is_outstanding_refusal`; a
-/// `Done` spec is never `Completed`, so that half of the predicate is always
-/// `false` here). Reads the verdict the same way `evaluate_review_verdict_gate`
-/// does (either id form, primary-worktree fallback for a reviewer verdict
-/// recorded outside an implementer worktree) — no new verdict reader, per
-/// BUG-1515's acceptance. Returns the outstanding verdict so a caller can
-/// build a richer message from it.
+/// an OUTSTANDING refusal that is STILL LIVE at the branch tip — a
+/// `RequestChanges`/`Rejected` verdict never closed by a later merge
+/// (`review_verdict::is_outstanding_refusal`; a `Done` spec is never
+/// `Completed`, so that half of the predicate is always `false` here) AND
+/// whose reviewed sha is still the tip (`verdict_tip_relation` ==
+/// `AtReviewedSha`). A refusal recorded against an OLD head (new commits
+/// pushed since, or the branch rewritten) is history, not a live blocker —
+/// after a normal rework round (refusal, new commits, `queue done` again)
+/// that old refusal must not keep reading as "REWORK NEEDED" when what it
+/// actually needs is RE-REVIEW; `queue_fresh_pickup_policy` falls back to
+/// `AwaitingMerge` in that case. Reads the verdict the same way
+/// `evaluate_review_verdict_gate` does (either id form, primary-worktree
+/// fallback for a reviewer verdict recorded outside an implementer
+/// worktree) — no new verdict reader, per BUG-1515's acceptance. The
+/// primary-worktree fallback (a `git worktree list` spawn) is resolved only
+/// when the local checkout itself has no recorded verdict, since most Done
+/// rows have none — this keeps `queue list`/`queue next` from shelling out
+/// once per Done row. Returns the outstanding verdict so a caller can build
+/// a richer message from it.
 // trace:BUG-1515 | ai:claude
 pub(crate) fn done_spec_outstanding_refusal(
     project_root: &std::path::Path,
     display_id: &str,
     spec_id: &str,
 ) -> Option<review_verdict::RecordedVerdict> {
-    let primary_root = main_worktree_root_from(project_root);
     let verdict = review_verdict::read_recorded_verdict_any(project_root, &[display_id, spec_id])
         .or_else(|| {
+        let primary_root = main_worktree_root_from(project_root);
         (primary_root != project_root)
             .then(|| {
                 review_verdict::read_recorded_verdict_any(&primary_root, &[display_id, spec_id])
             })
             .flatten()
     })?;
-    review_verdict::is_outstanding_refusal(&verdict, /* spec_completed */ false).then_some(verdict)
+    if !review_verdict::is_outstanding_refusal(&verdict, /* spec_completed */ false) {
+        return None;
+    }
+    let relation = verdict_tip_relation(
+        project_root,
+        verdict.reviewed_branch.as_deref(),
+        verdict.reviewed_sha.as_deref(),
+    );
+    matches!(relation, review_verdict::TipRelation::AtReviewedSha).then_some(verdict)
 }
 
 /// Resolve the review-verdict gate for a spec about to be marked done.

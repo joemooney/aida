@@ -8,6 +8,40 @@ use super::*;
 use aida_core::{QueueEntry, Relationship, Requirement, RequirementType};
 use uuid::Uuid;
 
+/// Minimal real-git helper for the BUG-1515 tip-relation tests below —
+/// `done_spec_outstanding_refusal` now shells out to `git` to place the
+/// verdict's reviewed sha against the branch tip, so a fake sha in a
+/// non-repo tempdir no longer exercises the real decision.
+// trace:BUG-1515 | ai:claude
+fn git(repo: &std::path::Path, args: &[&str]) {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .env("GIT_AUTHOR_NAME", "t")
+        .env("GIT_AUTHOR_EMAIL", "t@t")
+        .env("GIT_COMMITTER_NAME", "t")
+        .env("GIT_COMMITTER_EMAIL", "t@t")
+        .output()
+        .expect("git runs");
+    assert!(
+        out.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+// trace:BUG-1515 | ai:claude
+fn git_head(repo: &std::path::Path) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .expect("git runs");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
 /// BUG-1213 (round 2): the loop guard fires only when the IMMEDIATELY previous
 /// findings block equals the new one. Two consecutive identical rounds (A, A)
 /// recur; A → B → A does not — the last recorded block is B, so a third round
@@ -3131,6 +3165,12 @@ fn a_child_that_reported_a_real_ci_failure_still_travels_the_shelvable_path() {
 fn done_spec_with_outstanding_refusal_is_awaiting_rework_not_awaiting_merge() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
+    git(
+        root,
+        &["init", "--initial-branch=claude/bug-1515", "--quiet"],
+    );
+    git(root, &["commit", "--allow-empty", "-m", "root", "--quiet"]);
+    let head = git_head(root);
 
     let mut store = aida_core::RequirementsStore::default();
     let mut r = Requirement::new("refused round".to_string(), String::new());
@@ -3145,12 +3185,13 @@ fn done_spec_with_outstanding_refusal_is_awaiting_rework_not_awaiting_merge() {
         "a Done spec with no recorded verdict is still plain awaiting-merge"
     );
 
-    // A LIVE refusal (never closed by a merge) flips the classification.
+    // A LIVE refusal (never closed by a merge), still pinned to the current
+    // branch tip, flips the classification.
     crate::review_verdict::record_verdict(
         root,
         "BUG-1515",
         Some("request-changes"),
-        Some("deadbeef"),
+        Some(&head),
         Some("claude/bug-1515"),
         Some("needs another round"),
         &["fix the thing".to_string()],
@@ -3161,7 +3202,7 @@ fn done_spec_with_outstanding_refusal_is_awaiting_rework_not_awaiting_merge() {
     assert_eq!(
         policy,
         crate::queue_cmd::QueueFreshPickup::AwaitingRework,
-        "an outstanding refusal must read as rework, not merge-ready"
+        "an outstanding refusal still at the tip must read as rework, not merge-ready"
     );
     let reason = crate::queue_cmd::queue_fresh_pickup_reason_label(&policy).unwrap();
     assert!(
@@ -3179,11 +3220,16 @@ fn done_spec_with_outstanding_refusal_is_awaiting_rework_not_awaiting_merge() {
 
     // An APPROVED verdict recorded on top (a later round that passed) is not
     // a refusal at all — back to plain awaiting-merge.
+    git(
+        root,
+        &["commit", "--allow-empty", "-m", "approved round", "--quiet"],
+    );
+    let approved_head = git_head(root);
     crate::review_verdict::record_verdict(
         root,
         "BUG-1515",
         Some("approved"),
-        Some("cafef00d"),
+        Some(&approved_head),
         Some("claude/bug-1515"),
         Some("looks good"),
         &[],
@@ -3194,6 +3240,57 @@ fn done_spec_with_outstanding_refusal_is_awaiting_rework_not_awaiting_merge() {
         crate::queue_cmd::queue_fresh_pickup_policy(&r, &store, false, Some(root)),
         crate::queue_cmd::QueueFreshPickup::AwaitingMerge,
         "an approval overwriting the refusal must read as plain awaiting-merge again"
+    );
+}
+
+/// BUG-1515 (blocker 1): a refusal recorded against an OLD head — the normal
+/// shape after a rework round (refusal, new commits pushed, `queue done`
+/// again) — must NOT keep reading as `AwaitingRework` just because it was
+/// never explicitly closed. Its reviewed sha is no longer the branch tip, so
+/// `awaiting_you::classify_pr_review` already treats it as re-review-ready
+/// (a `Moved` refusal); `queue_fresh_pickup_policy` must agree and fall back
+/// to `AwaitingMerge` rather than telling the operator "REWORK NEEDED" for
+/// work that was, in fact, already reworked.
+// trace:BUG-1515 | ai:claude
+#[test]
+fn stale_refusal_on_an_old_head_is_not_classified_awaiting_rework() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    git(
+        root,
+        &["init", "--initial-branch=claude/bug-1515", "--quiet"],
+    );
+    git(root, &["commit", "--allow-empty", "-m", "root", "--quiet"]);
+    let old_head = git_head(root);
+
+    crate::review_verdict::record_verdict(
+        root,
+        "BUG-1515",
+        Some("request-changes"),
+        Some(&old_head),
+        Some("claude/bug-1515"),
+        Some("needs another round"),
+        &["fix the thing".to_string()],
+        "reviewer",
+    )
+    .unwrap();
+
+    // Rework happened: new commits landed past the reviewed sha, but the
+    // refusal file was never explicitly closed.
+    git(root, &["commit", "--allow-empty", "-m", "fix", "--quiet"]);
+
+    let mut store = aida_core::RequirementsStore::default();
+    let mut r = Requirement::new("reworked round".to_string(), String::new());
+    r.spec_id = Some("BUG-1515".to_string());
+    r.status = RequirementStatus::Done;
+    store.requirements.push(r.clone());
+
+    let policy = crate::queue_cmd::queue_fresh_pickup_policy(&r, &store, false, Some(root));
+    assert_eq!(
+        policy,
+        crate::queue_cmd::QueueFreshPickup::AwaitingMerge,
+        "a refusal pinned to an OLD head, with new commits since, needs \
+         re-review — not another REWORK NEEDED round: {policy:?}"
     );
 }
 
