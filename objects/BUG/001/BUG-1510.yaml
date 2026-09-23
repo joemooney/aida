@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:55:50.224652863Z
-modified_at: 2026-09-23T03:42:06.621719363Z
+modified_at: 2026-09-23T03:42:07.974160596Z
 req_type: Bug
 tags:
 - batch:night-0920 orchestrator integrity drain-safe from:session-0920
@@ -136,4 +136,10 @@ comments:
   content: Commit 0d3597cb2b references this requirement
   created_at: 2026-09-23T03:41:20.696769498Z
   modified_at: 2026-09-23T03:41:20.696769498Z
+  session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
+- id: 01a0cc5b-4266-73d1-8a91-4aafb34e5d43
+  author: joe
+  content: 'PARTIAL on branch claude/bug-1510 @ 0d3597cb2b (pushed, no PR, not merged): AC1 + AC6-for-AC1 only. New dispatch_lease_brief_conflict() in prepare_agent_launch refuses BEFORE minting a lease when exactly one pending brief exists for the agent and names a different spec (zero or multiple pending briefs are deliberately not compared). 6 tests. NOT DONE: AC2 trailer-vs-PR-spec check before PR open; AC3 orchestrator dedup for a head with an already-open PR; AC4 shelve attribution to the verdict''s spec or explicit ''uncertain''; AC5 drain status vs unshipped-work agreement. Status returned to Approved (work remains). Suggest: merge the AC1 branch as its own slice, then split AC2-AC5 into child tasks.'
+  created_at: 2026-09-23T03:42:07.974160596Z
+  modified_at: 2026-09-23T03:42:07.974160596Z
   session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
