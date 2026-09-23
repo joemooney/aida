@@ -147,7 +147,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-23T04:39:37.667010497Z
+modified_at: 2026-09-23T04:54:36.462996335Z
 req_type: Bug
 tags:
 - batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
@@ -354,4 +354,10 @@ comments:
   content: Claude implementer dispatched 2026-09-22 21:39 -> branch claude/bug-1507, no PR
   created_at: 2026-09-23T04:39:37.667010497Z
   modified_at: 2026-09-23T04:39:37.667010497Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cc9d-9caf-7572-b741-41a6936db653
+  author: joe
+  content: Commit f88c0b4aec references this requirement
+  created_at: 2026-09-23T04:54:36.462996335Z
+  modified_at: 2026-09-23T04:54:36.462996335Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
