@@ -13581,7 +13581,6 @@ fn render_agent_brief(
         "- Agent setup convention: docs/agents/{agent}-mcp-setup.md if present.\n\n"
     ));
 
-    let branch = spec_id.to_ascii_lowercase();
     // BUG-583: the Setup block must reference the TARGET PROJECT's location
     // (resolved at runtime from the invocation's project root), never the AIDA
     // binary's compiled-in source-repo path. A cold vendor agent following these
@@ -13593,32 +13592,221 @@ fn render_agent_brief(
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("project");
-    let worktree_dir = project_root
-        .parent()
-        .map(|parent| parent.join(format!("{project_name}-{branch}")))
-        .unwrap_or_else(|| project_root.join(format!("../{project_name}-{branch}")));
     let project_root_display = project_root.display();
-    let worktree_display = worktree_dir.display();
+    let worktree_path_for = |branch: &str| -> std::path::PathBuf {
+        project_root
+            .parent()
+            .map(|parent| parent.join(format!("{project_name}-{branch}")))
+            .unwrap_or_else(|| project_root.join(format!("../{project_name}-{branch}")))
+    };
+
+    // BUG-1525: never emit a fresh-start `git worktree add -b <new> origin/main`
+    // when the spec already has a branch (local or `origin/<branch>`) carrying
+    // its work — that starts a second lineage with none of the reviewed
+    // commits, silently, because the fresh branch name doesn't collide with
+    // anything. Resolve what's actually there first. trace:BUG-1525 | ai:claude
+    let target = resolve_brief_branch_target(project_root, spec_id);
     out.push_str("## Setup\n\n");
-    out.push_str("```bash\n");
-    out.push_str(&format!("cd {project_root_display}\n"));
-    out.push_str("git fetch origin main\n");
-    out.push_str(&format!(
-        "git worktree add {worktree_display} -b {branch} origin/main\n"
-    ));
-    out.push_str(&format!("cd {worktree_display}\n"));
-    // BUG-331: no `.aida-store` symlink needed — sibling worktrees now resolve
-    // the canonical store at the main worktree via git-common-dir. trace:BUG-331
-    out.push_str(&format!(
-        "aida session start --owns {spec_id} --branch {branch} --path {worktree_display} --reuse-branch\n"
-    ));
-    out.push_str("```\n\n");
+    match &target {
+        BriefBranchTarget::Ambiguous { candidates } => {
+            out.push_str(&format!(
+                "_Cannot determine this spec's branch automatically — {} branches reference {spec_id} ({}). \
+                 Check `aida show {spec_id}` for the branch its open PR (if any) actually points at, then \
+                 `cd` into that branch's existing worktree, or `git worktree add <path> <branch>` to attach \
+                 one — do NOT create a new branch off `origin/main`._\n\n",
+                candidates.len(),
+                candidates.join(", ")
+            ));
+            out.push_str("```bash\n");
+            out.push_str(&format!("cd {project_root_display}\n"));
+            out.push_str("git fetch origin main\n");
+            out.push_str("# resolve the branch above by hand before attaching a worktree\n");
+            out.push_str("```\n\n");
+        }
+        BriefBranchTarget::ExistingWorktree { branch, worktree } => {
+            let worktree_display = worktree.display();
+            out.push_str(&format!(
+                "This spec already has branch `{branch}` checked out in an existing worktree — \
+                 continue it, don't start a second lineage.\n\n"
+            ));
+            out.push_str("```bash\n");
+            out.push_str(&format!("cd {worktree_display}\n"));
+            out.push_str("git fetch origin main\n");
+            out.push_str(
+                "# realign if diverged from main before continuing:\n\
+                 #   git rebase origin/main   (or: git merge origin/main)\n",
+            );
+            out.push_str(&format!(
+                "aida session start --owns {spec_id} --branch {branch} --path {worktree_display} --reuse-branch\n"
+            ));
+            out.push_str("```\n\n");
+        }
+        BriefBranchTarget::ExistingBranch {
+            branch,
+            remote_only,
+        } => {
+            let worktree_dir = worktree_path_for(branch);
+            let worktree_display = worktree_dir.display();
+            out.push_str(&format!(
+                "This spec already has branch `{branch}` with commits ahead of the default branch — \
+                 continue it, don't start a fresh one.\n\n"
+            ));
+            out.push_str("```bash\n");
+            out.push_str(&format!("cd {project_root_display}\n"));
+            out.push_str("git fetch origin main\n");
+            if *remote_only {
+                out.push_str(&format!(
+                    "git worktree add {worktree_display} -B {branch} origin/{branch}\n"
+                ));
+            } else {
+                out.push_str(&format!("git worktree add {worktree_display} {branch}\n"));
+            }
+            out.push_str(&format!("cd {worktree_display}\n"));
+            out.push_str(
+                "# realign if diverged from main before continuing:\n\
+                 #   git rebase origin/main   (or: git merge origin/main)\n",
+            );
+            out.push_str(&format!(
+                "aida session start --owns {spec_id} --branch {branch} --path {worktree_display} --reuse-branch\n"
+            ));
+            out.push_str("```\n\n");
+        }
+        BriefBranchTarget::Fresh { branch } => {
+            let worktree_dir = worktree_path_for(branch);
+            let worktree_display = worktree_dir.display();
+            out.push_str("```bash\n");
+            out.push_str(&format!("cd {project_root_display}\n"));
+            out.push_str("git fetch origin main\n");
+            out.push_str(&format!(
+                "git worktree add {worktree_display} -b {branch} origin/main\n"
+            ));
+            out.push_str(&format!("cd {worktree_display}\n"));
+            // BUG-331: no `.aida-store` symlink needed — sibling worktrees now
+            // resolve the canonical store at the main worktree via
+            // git-common-dir. trace:BUG-331
+            out.push_str(&format!(
+                "aida session start --owns {spec_id} --branch {branch} --path {worktree_display} --reuse-branch\n"
+            ));
+            out.push_str("```\n\n");
+        }
+    }
 
     out.push_str("## Trailer reminder\n\n");
     out.push_str(&format!(
         "Use a trailing-parens spec trailer in the commit subject: `({spec_id})` for a single-spec ship, or include every shipped spec in the same trailing parens.\n"
     ));
     out
+}
+
+/// BUG-1525: what the brief's Setup block should tell the implementer to do
+/// about branches, derived from what already exists rather than assumed
+/// fresh.
+// trace:BUG-1525 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum BriefBranchTarget {
+    /// No branch anywhere references this spec — safe to start fresh off the
+    /// default branch, using AIDA's `<spec>-work` naming convention (the
+    /// shape the drain itself creates, per BUG-1525).
+    Fresh { branch: String },
+    /// Exactly one existing branch was found, and it's already checked out
+    /// in an existing worktree — `cd` into it, don't create a second one.
+    ExistingWorktree {
+        branch: String,
+        worktree: std::path::PathBuf,
+    },
+    /// Exactly one existing branch was found but no worktree currently has
+    /// it checked out — attach a worktree to that branch (`remote_only`
+    /// picks `-B <branch> origin/<branch>` over a plain local checkout).
+    ExistingBranch { branch: String, remote_only: bool },
+    /// More than one branch plausibly belongs to this spec — refuse to
+    /// guess which one is live; say so explicitly rather than emit a
+    /// confident fresh-start recipe.
+    Ambiguous { candidates: Vec<String> },
+}
+
+/// Git-only scan (no `gh`/forge call — matches the pattern in
+/// `collect_git_linkage_opts`) for a branch that already carries this spec's
+/// work: any local or `origin/<branch>` ref whose name references the spec
+/// id (`branch_name_references_spec`), excluding the `aida-store` orphan
+/// branch. Used to decide whether the brief's Setup block should reuse an
+/// existing lineage instead of starting a fresh one off `origin/main`.
+// trace:BUG-1525 | ai:claude
+fn resolve_brief_branch_target(project_root: &std::path::Path, spec_id: &str) -> BriefBranchTarget {
+    let fresh_branch = format!("{}-work", spec_id.trim().to_ascii_lowercase());
+
+    let git = |args: &[&str]| -> Option<String> {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+    };
+
+    let mut candidates: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    if let Some(out) = git(&["for-each-ref", "--format=%(refname:short)", "refs/heads/"]) {
+        for line in out.lines() {
+            let name = line.trim();
+            if !name.is_empty()
+                && branch_name_references_spec(name, spec_id)
+                && !is_orphan_store_branch(name)
+            {
+                candidates.insert(name.to_string());
+            }
+        }
+    }
+    if let Some(out) = git(&[
+        "for-each-ref",
+        "--format=%(refname:short)",
+        "refs/remotes/origin/",
+    ]) {
+        for line in out.lines() {
+            let Some(short) = line.trim().strip_prefix("origin/") else {
+                continue;
+            };
+            if short.is_empty() || short == "HEAD" {
+                continue;
+            }
+            if branch_name_references_spec(short, spec_id) && !is_orphan_store_branch(short) {
+                candidates.insert(short.to_string());
+            }
+        }
+    }
+
+    if candidates.is_empty() {
+        return BriefBranchTarget::Fresh {
+            branch: fresh_branch,
+        };
+    }
+    if candidates.len() > 1 {
+        return BriefBranchTarget::Ambiguous {
+            candidates: candidates.into_iter().collect(),
+        };
+    }
+    let branch = candidates.into_iter().next().unwrap();
+
+    for wt in list_worktrees(project_root) {
+        if wt.branch.as_deref() == Some(branch.as_str()) {
+            return BriefBranchTarget::ExistingWorktree {
+                branch,
+                worktree: wt.path,
+            };
+        }
+    }
+
+    let local_exists = git(&[
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        &format!("refs/heads/{branch}"),
+    ])
+    .is_some();
+    BriefBranchTarget::ExistingBranch {
+        branch,
+        remote_only: !local_exists,
+    }
 }
 
 fn brief_generated_by() -> String {
@@ -35450,7 +35638,22 @@ pub(crate) fn probe_ci_state_for_branch_github(branch: &str) -> CiProbe {
 /// Pure JSON-to-CiProbe parser. Extracted so we can unit-test it without
 /// running gh. The input shape is `[{"number": N, "statusCheckRollup": [...]}]`
 /// (a JSON array of PR objects from gh; we only ever look at the first).
-/// trace:TASK-111 | ai:claude
+///
+/// BUG-1455: a concluded failure is reported as terminal `Red` only once
+/// every other check on the rollup has also concluded. `gh`'s rollup carries
+/// no `isRequired` flag, so this function cannot tell a required check from
+/// an optional one — but it can always tell "concluded" from "still
+/// running", and a check still `IN_PROGRESS`/`QUEUED` might be the one that
+/// actually decides code health (e.g. the build), even while a fast-failing
+/// gate check (e.g. a supervised merge-hold marker check, which fails by
+/// construction) has already concluded. Ending the wait on the gate's
+/// conclusion alone let a caller declare CI red — and emit a terminal wake —
+/// before the real build had even reported in. Waiting for every check to
+/// settle before returning Red or Green is the conservative, always-safe
+/// reading: it never reports a verdict while something is still pending or
+/// unknown (PRIN-5), at the cost of not fast-failing on an unrelated
+/// optional check while something else is still running.
+// trace:BUG-1455 | ai:claude
 pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
     let trimmed = stdout.trim();
     if trimmed.is_empty() || trimmed == "[]" {
@@ -35518,6 +35721,13 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
             }
         }
     }
+    // BUG-1455: a check still running always keeps the verdict open, even
+    // when another check has already concluded a failure — a partial
+    // rollup must never be read as terminal. Only once nothing is left
+    // running do concluded failures decide Red vs Green.
+    if any_in_progress {
+        return CiProbe::InProgress { pr_number };
+    }
     if !failed.is_empty() {
         let summary = if failed.len() <= 3 {
             failed.join(", ")
@@ -35528,9 +35738,6 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
             pr_number,
             failed_summary: summary,
         };
-    }
-    if any_in_progress {
-        return CiProbe::InProgress { pr_number };
     }
     CiProbe::Green { pr_number }
 }
@@ -38535,7 +38742,37 @@ fn branch_name_references_spec(branch: &str, spec: &str) -> bool {
         .trim()
         .trim_start_matches("origin/")
         .to_ascii_lowercase();
-    !slug.is_empty() && (branch == slug || branch.contains(&slug))
+    if slug.is_empty() {
+        return false;
+    }
+    // BUG-1525 review fix: the slug must be a whole segment of the branch
+    // name. A raw substring let BUG-15 match `bug-150-work` and BUG-152
+    // match `claude/bug-1525`. A boundary is start/end or one of `/-._`,
+    // and the character after the slug must not be a digit or letter.
+    // trace:BUG-1525 | ai:claude
+    let is_sep = |c: char| matches!(c, '/' | '-' | '.' | '_');
+    branch.match_indices(&slug).any(|(at, m)| {
+        let before_ok = branch[..at].chars().next_back().is_none_or(is_sep);
+        let after_ok = branch[at + m.len()..].chars().next().is_none_or(is_sep);
+        before_ok && after_ok
+    })
+}
+
+#[cfg(test)]
+mod bug_1525_branch_match_tests {
+    use super::branch_name_references_spec as m;
+
+    // trace:BUG-1525 | ai:claude
+    #[test]
+    fn branch_match_is_whole_segment_only() {
+        assert!(m("bug-15-work", "BUG-15"));
+        assert!(m("claude/bug-15", "BUG-15"));
+        assert!(m("origin/bug-15", "BUG-15"));
+        assert!(m("bug-15", "BUG-15"));
+        assert!(!m("bug-150-work", "BUG-15"));
+        assert!(!m("claude/bug-1525", "BUG-152"));
+        assert!(!m("xbug-15", "BUG-15"));
+    }
 }
 
 fn open_pr_commit_headlines_reference_spec(
@@ -58503,6 +58740,12 @@ struct PsRow {
     /// `None` when there is no live pid backing this row (nothing to probe).
     // trace:TASK-1451 | ai:claude
     mail_identity: Option<MailIdentityStatus>,
+    /// BUG-1553: is this LIVE seat actively working, blocked on a human
+    /// approval gate, or in a state the probe cannot resolve? `None` when
+    /// the row has no live pid at all (Dormant/Stale rows — already
+    /// unambiguous; nothing to inspect).
+    // trace:BUG-1553 | ai:claude
+    activity: Option<SeatActivity>,
 }
 
 /// The TASK-1090 dispatch-health payload for one [`PsRow`].
@@ -58609,6 +58852,230 @@ fn probe_mail_identity(pid: u32) -> MailIdentityStatus {
 #[cfg(not(target_os = "linux"))]
 fn probe_mail_identity(_pid: u32) -> MailIdentityStatus {
     MailIdentityStatus::Unknown
+}
+
+/// BUG-1553: is a LIVE seat (a lease whose pid exists) actively working, on
+/// a long-running tool call, suspended (a stopped process), or in a state
+/// this probe cannot resolve? `LeaseState::Live` alone only answers "does a
+/// process exist" — the 2026-09-21 incident (see BUG-1553) showed that
+/// answer collapses several different situations into one row. PRIN-5:
+/// `Working` is returned only when the transcript positively supports it —
+/// anything the probe can't read renders `Unknown`, never silently
+/// `Working`. **None of these states asserts "blocked on your approval"** —
+/// per the 2026-09-23 strict-review PROXY DECISION, a purely time-based or
+/// process-state heuristic cannot distinguish a long-running tool call (or a
+/// deliberately paused process) from a genuine unanswered permission prompt,
+/// so both render neutral/warning, never red, and never claim to know a
+/// human is needed. A true "blocked on approval" verdict needs a recorded
+/// marker from Claude Code's Notification hook (the `permission_prompt`
+/// type) and is a follow-up task.
+// trace:BUG-1553 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum SeatActivity {
+    /// Recent transcript activity, or the last turn completed cleanly (no
+    /// tool call left unresolved past the stall threshold).
+    Working,
+    /// The transcript's last assistant turn called a tool that has had no
+    /// resolving result for longer than [`LONG_TOOL_CALL_THRESHOLD_SECS`].
+    /// This is NOT evidence of a blocked approval prompt — a long Bash or
+    /// Task call is working, not blocked — so it renders as a neutral
+    /// informational note. `tool` names the pending tool when the
+    /// transcript names one; `secs` is how long it has been outstanding.
+    LongToolCall { tool: Option<String>, secs: i64 },
+    /// The process itself is job-control-stopped (`T`/`t` state in
+    /// `/proc/<pid>/stat`) — e.g. Ctrl-Z'd or paused under a debugger.
+    /// Neutral-to-warning, not "blocked on approval".
+    Suspended,
+    /// No session transcript could be resolved/read for this pid at all —
+    /// honestly "don't know", never guessed as Working.
+    Unknown,
+}
+
+impl SeatActivity {
+    fn label(&self) -> &'static str {
+        match self {
+            SeatActivity::Working => "working",
+            SeatActivity::LongToolCall { .. } => "long_tool_call",
+            SeatActivity::Suspended => "suspended",
+            SeatActivity::Unknown => "unknown",
+        }
+    }
+}
+
+/// BUG-1553: how long a pending tool call (an assistant turn's tool_use with
+/// no resolving tool_result yet, per the transcript tail) must sit unresolved
+/// before this reads as a [`SeatActivity::LongToolCall`] rather than "still
+/// executing". Wide enough that an ordinary slow tool call rarely trips it on
+/// its own; the row frames the verdict as an informational note ("long tool
+/// call"), never an alarm, because a handful of legitimately long-running
+/// tools (a full test suite) routinely cross it.
+// trace:BUG-1553 | ai:claude
+const LONG_TOOL_CALL_THRESHOLD_SECS: i64 = 240;
+
+/// BUG-1553: pure scan of a session transcript's TAIL lines (most-recent
+/// last, as a JSONL tail naturally reads) for a pending tool call — the last
+/// assistant-turn tool_use block(s) with no later matching tool_result.
+/// Returns the pending tool's name (when the transcript names one) and the
+/// age of that assistant message in seconds. `None` means the tail parsed
+/// cleanly and nothing is pending (the last turn resolved, or no tool was
+/// called) — distinct from "the tail could not be read/parsed at all",
+/// which this function cannot express (see `classify_seat_activity`, which
+/// takes `tail: Option<&[String]>` precisely to keep that distinction).
+// trace:BUG-1553 | ai:claude
+fn pending_tool_from_tail(
+    tail_lines: &[String],
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<(Option<String>, i64)> {
+    // (tool name, tool_use id, assistant message timestamp)
+    let mut pending: Option<(Option<String>, String, chrono::DateTime<chrono::Utc>)> = None;
+    for line in tail_lines {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        let msg_type = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
+        let content = v
+            .get("message")
+            .and_then(|m| m.get("content"))
+            .and_then(|c| c.as_array());
+        let Some(content) = content else { continue };
+        if msg_type == "assistant" {
+            let mut turn_pending: Option<(Option<String>, String)> = None;
+            for block in content {
+                if block.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
+                    let id = block
+                        .get("id")
+                        .and_then(|i| i.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let name = block
+                        .get("name")
+                        .and_then(|n| n.as_str())
+                        .map(|s| s.to_string());
+                    turn_pending = Some((name, id));
+                }
+            }
+            if let Some((name, id)) = turn_pending {
+                let ts = v
+                    .get("timestamp")
+                    .and_then(|t| t.as_str())
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|t| t.with_timezone(&chrono::Utc));
+                if let Some(ts) = ts {
+                    pending = Some((name, id, ts));
+                }
+            }
+        } else if msg_type == "user" {
+            for block in content {
+                if block.get("type").and_then(|t| t.as_str()) == Some("tool_result") {
+                    let result_id = block.get("tool_use_id").and_then(|i| i.as_str());
+                    match (result_id, pending.as_ref()) {
+                        // Matches the outstanding call by id — resolved.
+                        (Some(rid), Some((_, pid, _))) if rid == pid => pending = None,
+                        // No id on either side to compare — conservatively
+                        // treat any tool_result as resolving the outstanding
+                        // call, since we can't match ids.
+                        // trace:BUG-1553 | ai:claude
+                        (None, _) => pending = None,
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    let (name, _id, ts) = pending?;
+    let age = now.signed_duration_since(ts).num_seconds().max(0);
+    Some((name, age))
+}
+
+/// BUG-1553: the pure verdict — given (optionally) a transcript tail and
+/// whether the process is job-control-stopped, classify seat activity.
+/// `tail: None` means "could not be read at all" (no jsonl resolved, or the
+/// read failed) → `Unknown`, never guessed as `Working`. Per the
+/// 2026-09-23 strict-review PROXY DECISION, neither branch below asserts
+/// "blocked on approval" — a job-control-stopped process reads `Suspended`
+/// and a long-outstanding tool call reads `LongToolCall`, both neutral.
+// trace:BUG-1553 | ai:claude
+fn classify_seat_activity(
+    tail: Option<&[String]>,
+    proc_stopped: bool,
+    now: chrono::DateTime<chrono::Utc>,
+) -> SeatActivity {
+    if proc_stopped {
+        return SeatActivity::Suspended;
+    }
+    let Some(lines) = tail else {
+        return SeatActivity::Unknown;
+    };
+    match pending_tool_from_tail(lines, now) {
+        Some((name, age)) if age >= LONG_TOOL_CALL_THRESHOLD_SECS => SeatActivity::LongToolCall {
+            tool: name,
+            secs: age,
+        },
+        _ => SeatActivity::Working,
+    }
+}
+
+/// BUG-1553: read only the TAIL of a transcript file — never the whole
+/// file — capped at `max_bytes` from the end. Keeps `aida ps` fast even
+/// against a long-running session's multi-MB transcript, per the surface's
+/// own speed constraint (STORY-707's "cache-fast, no full scan" discipline
+/// applied to this probe too). Returns whole lines only (a partial first
+/// line from the seek point is dropped). `None` when the file can't be
+/// opened/read at all. Reads to the end of the file and decodes lossily
+/// (`from_utf8_lossy`) rather than `read_to_string`, because the seek point
+/// (`max_bytes` from the end) can land mid multi-byte UTF-8 character —
+/// `read_to_string` would hard-error on that instead of tolerating it.
+// trace:BUG-1553 | ai:claude
+fn read_transcript_tail(path: &std::path::Path, max_bytes: u64) -> Option<Vec<String>> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path).ok()?;
+    let len = file.metadata().ok()?.len();
+    let start = len.saturating_sub(max_bytes);
+    file.seek(SeekFrom::Start(start)).ok()?;
+    let mut raw = Vec::new();
+    file.read_to_end(&mut raw).ok()?;
+    let buf = String::from_utf8_lossy(&raw);
+    let mut lines: Vec<String> = buf.lines().map(|l| l.to_string()).collect();
+    // Drop a partial first line when we didn't start at byte 0.
+    if start > 0 && !lines.is_empty() {
+        lines.remove(0);
+    }
+    Some(lines)
+}
+
+/// BUG-1553: bytes read from the tail of a transcript — generous enough to
+/// span several recent turns (a pending tool call plus the assistant text
+/// leading up to it) without ever reading a whole multi-MB file.
+// trace:BUG-1553 | ai:claude
+const TRANSCRIPT_TAIL_BYTES: u64 = 64 * 1024;
+
+/// BUG-1553: is `pid` currently job-control-stopped (`T`/`t` in
+/// `/proc/<pid>/stat` field 3)? A process parked at a blocking read is
+/// normally `S` (sleeping) — the SAME state as idle-between-turns — so this
+/// is a narrow, unambiguous supplementary signal, not the primary one (the
+/// transcript tail is); it costs one small file read. Non-Linux hosts have
+/// no `/proc` to read — always `false`, folding into the transcript-only
+/// verdict rather than a platform-specific guess.
+// trace:BUG-1553 | ai:claude
+#[cfg(target_os = "linux")]
+fn proc_is_stopped(pid: u32) -> bool {
+    let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
+        return false;
+    };
+    // Field 3 (process state) follows the `(comm)` field, which may itself
+    // contain spaces/parens — split on the LAST ')' to find it reliably.
+    stat.rsplit_once(')')
+        .and_then(|(_, rest)| rest.split_whitespace().next())
+        .is_some_and(|state| state == "T" || state == "t")
+}
+
+#[cfg(not(target_os = "linux"))]
+fn proc_is_stopped(_pid: u32) -> bool {
+    false
 }
 
 /// An In-Progress spec with NO live spec-scoped session backing it — the
@@ -59622,17 +60089,40 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
     // per lease. trace:TASK-1072 | ai:claude
     let live = process_probe::probe_live_claude_sessions();
     let leases = list_leases(project_root);
-    let manifest_roles: std::collections::HashMap<String, String> =
-        session_manifest::list_all(project_root)
-            .into_iter()
-            .filter_map(|m| {
-                let role = m
-                    .claude_session_id
-                    .as_deref()
-                    .and_then(session::role_from_claude_session_id)?;
-                Some((m.session_id, role))
-            })
-            .collect();
+    let manifests = session_manifest::list_all(project_root);
+    let manifest_roles: std::collections::HashMap<String, String> = manifests
+        .iter()
+        .filter_map(|m| {
+            let role = m
+                .claude_session_id
+                .as_deref()
+                .and_then(session::role_from_claude_session_id)?;
+            Some((m.session_id.clone(), role))
+        })
+        .collect();
+    // BUG-1553: lease id -> the `claude` conversation's own session id
+    // (STORY-153's join, reused here) — lets the activity probe resolve
+    // this session's transcript path even long after `probe_live_claude_sessions`'s
+    // own recent-jsonl window (60s) has lapsed, which a 20-minute permission
+    // block always exceeds. trace:BUG-1553 | ai:claude
+    let manifest_claude_session_ids: std::collections::HashMap<String, String> = manifests
+        .into_iter()
+        .filter_map(|m| m.claude_session_id.map(|csid| (m.session_id, csid)))
+        .collect();
+    // BUG-1553: the real (transcript-tail + /proc-reading) seat-activity
+    // probe — injected into `build_running_work` the same way every other
+    // real I/O source here is, so the row-building logic stays testable on
+    // fixtures. Reads only the TAIL of the resolved transcript
+    // (`read_transcript_tail`, capped at `TRANSCRIPT_TAIL_BYTES`), never the
+    // whole file. trace:BUG-1553 | ai:claude
+    let seat_activity_probe = |l: &SessionLease, pid: u32| -> SeatActivity {
+        let tail = manifest_claude_session_ids.get(&l.id).and_then(|csid| {
+            aida_core::liveness::claude_projects_dir_for_cwd(&l.worktree_path)
+                .map(|dir| dir.join(format!("{csid}.jsonl")))
+        });
+        let tail_lines = tail.and_then(|path| read_transcript_tail(&path, TRANSCRIPT_TAIL_BYTES));
+        classify_seat_activity(tail_lines.as_deref(), proc_is_stopped(pid), now)
+    };
 
     // The store gives us (a) the set of known spec ids (so a lease scope can be
     // resolved to a spec vs. a generic harness scope) and (b) the In-Progress
@@ -59663,6 +60153,7 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
         |jsonl| session::role_from_jsonl(jsonl, "claude").ok().flatten(),
         |lease_id| manifest_roles.get(lease_id).cloned(),
         probe_mail_identity,
+        seat_activity_probe,
     );
     // TASK-163: a dead phase child does not make its lease stale while the
     // drain orchestrator owns that spec. Overlay the authoritative drain PID
@@ -59681,6 +60172,11 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
             // (possibly stale/absent) pid this row resolved before the
             // overlay.
             row.mail_identity = Some(probe_mail_identity(drain.pid));
+            // BUG-1553: a drain phase is orchestrator-driven, not a human
+            // sitting at a permission prompt, and the overlay pid isn't the
+            // one the lease's own transcript join resolves — leave activity
+            // unclassified rather than risk a misattributed tail read.
+            row.activity = None;
         }
     }
     orphans.retain(|orphan| drain_state::live_drain_spec(project_root, &orphan.spec).is_none());
@@ -59756,6 +60252,11 @@ fn build_running_work(
     role_probe: impl Fn(&std::path::Path) -> Option<String>,
     manifest_role_probe: impl Fn(&str) -> Option<String>,
     mail_identity_probe: impl Fn(u32) -> MailIdentityStatus,
+    // BUG-1553: given the lease and its live pid, classify Working /
+    // LongToolCall / Suspended / Unknown. Only called for a row with a
+    // resolved live pid — a Dormant/Stale row has no process to inspect and
+    // stays `None`.
+    seat_activity_probe: impl Fn(&SessionLease, u32) -> SeatActivity,
 ) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let rows: Vec<PsRow> = leases
         .iter()
@@ -59880,6 +60381,9 @@ fn build_running_work(
             // TASK-1451: only probe a pid that actually backs this row — no
             // live process, nothing to read an environment from.
             let mail_identity = pid.map(&mail_identity_probe);
+            // BUG-1553: same gate as mail_identity — only a row with a live
+            // pid has a process worth classifying at all.
+            let activity = pid.map(|p| seat_activity_probe(l, p));
             PsRow {
                 lease: l.clone(),
                 state,
@@ -59892,6 +60396,7 @@ fn build_running_work(
                 dispatch,
                 locked_by,
                 mail_identity,
+                activity,
             }
         })
         .collect();
@@ -60003,6 +60508,18 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     // to probe); otherwise "attributed" / "unattributed" /
                     // "unknown" — never collapsed to a boolean "fine".
                     "mail_identity": row.mail_identity.map(MailIdentityStatus::as_str),
+                    // BUG-1553: "working" / "long_tool_call" / "suspended" /
+                    // "unknown", null when no live pid backs the row
+                    // (nothing to classify).
+                    "activity": row.activity.as_ref().map(SeatActivity::label),
+                    "activity_pending_tool": match &row.activity {
+                        Some(SeatActivity::LongToolCall { tool, .. }) => tool.clone(),
+                        _ => None,
+                    },
+                    "activity_secs": match &row.activity {
+                        Some(SeatActivity::LongToolCall { secs, .. }) => Some(*secs),
+                        _ => None,
+                    },
                 })
             })
             .collect();
@@ -60017,6 +60534,14 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     // likely being built by it, not genuinely orphaned.
                     "likely_fanout": o.likely_fanout,
                     "live": false,
+                    // BUG-1553: an orphan has no lease/worktree to probe a
+                    // process against at all, so whether it's blocked or
+                    // truly exited is never determinable here — say so
+                    // explicitly rather than let "flag-only" imply "just
+                    // not started". A stale (crashed) lease IS unambiguous
+                    // (the process is confirmed gone), so it keeps its own
+                    // "exited" reading instead of "unknown".
+                    "activity": if o.stale_lease { "exited" } else { "unknown" },
                 })
             })
             .collect();
@@ -60136,6 +60661,14 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         .map(MailIdentityStatus::as_str)
                         .unwrap_or_default()
                         .to_string(),
+                    // BUG-1553: blank when no live pid backs the row;
+                    // otherwise "working" / "long_tool_call" / "suspended" /
+                    // "unknown".
+                    r.activity
+                        .as_ref()
+                        .map(SeatActivity::label)
+                        .unwrap_or_default()
+                        .to_string(),
                 ]
             })
             .collect();
@@ -60153,7 +60686,8 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "locked_by",
                     "dispatch_state",
                     "dispatch_hint",
-                    "mail_identity"
+                    "mail_identity",
+                    "activity"
                 ],
                 &run
             )
@@ -60303,6 +60837,13 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                 now.with_timezone(&chrono::Local).date_naive(),
             );
             let live_label = format!("{} {}", row.state.glyph(), row.state.label());
+            // BUG-1553 (2026-09-23 PROXY DECISION): neither `LongToolCall`
+            // nor `Suspended` overrides this cell's color/text — a purely
+            // time-based or process-state heuristic cannot assert "blocked
+            // on your approval", so the `live` cell always keeps its
+            // ordinary Live/Dormant/Stale coloring; the neutral/warning
+            // activity note prints as an extra line below instead.
+            // trace:BUG-1553 | ai:claude
             let live_col = match row.state {
                 LeaseState::Live => live_label.green(),
                 LeaseState::Dormant => live_label.cyan(),
@@ -60384,6 +60925,43 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         hint.dimmed()
                     );
                 }
+            }
+            // BUG-1553 (2026-09-23 PROXY DECISION): a neutral informational
+            // note for a long-outstanding tool call — a long Bash or Task
+            // call is working, not blocked, so this is dim/neutral, never
+            // red and never framed as "waiting on your approval". A
+            // job-control-stopped process gets its own neutral-to-warning
+            // "suspended" note. `Unknown` gets its own honest, quieter note
+            // (say so rather than guess); silent for `Working` (nothing to
+            // flag) and `None` (no live pid to probe at all).
+            match &row.activity {
+                Some(SeatActivity::LongToolCall { tool, secs }) => {
+                    let what = tool.as_deref().unwrap_or("a tool call");
+                    println!(
+                        "{}{} {}: {what} ({})",
+                        " ".repeat(11),
+                        crate::glyph(crate::glyphs::Glyph::Neutral),
+                        "long tool call".dimmed(),
+                        humanize_duration_secs(*secs as u64),
+                    );
+                }
+                Some(SeatActivity::Suspended) => {
+                    println!(
+                        "{}{} {}",
+                        " ".repeat(11),
+                        crate::glyph(crate::glyphs::Glyph::Warning),
+                        "suspended (stopped process)".yellow(),
+                    );
+                }
+                Some(SeatActivity::Unknown) => {
+                    println!(
+                        "{}{} {}: could not read this session's transcript — activity unknown",
+                        " ".repeat(11),
+                        crate::glyph(crate::glyphs::Glyph::Neutral),
+                        "activity".dimmed()
+                    );
+                }
+                Some(SeatActivity::Working) | None => {}
             }
             // TASK-1451: flag a live seat whose mail identity would fall
             // back to the shell user — visible BEFORE it sends unattributable
@@ -60501,10 +61079,17 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                 .yellow()
         );
         for o in &genuine {
+            // BUG-1553 (acceptance #3): a stale lease is unambiguous (the
+            // process is confirmed gone). A pure flag-only spec has no
+            // lease/worktree to probe a process against at all — whether
+            // the (possibly still-working, possibly gone) seat behind it is
+            // blocked or exited is genuinely undeterminable from here, so
+            // say that plainly instead of a bare "flag-only" that reads as
+            // "nothing has started". trace:BUG-1553 | ai:claude
             let why = if o.stale_lease {
                 "stale lease — process dead"
             } else {
-                "flag-only — no session linked"
+                "flag-only — cannot determine whether this seat is blocked or exited"
             };
             println!(
                 "  {} {}  {}  {}",
