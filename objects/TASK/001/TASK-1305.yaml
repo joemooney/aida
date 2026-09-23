@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:28:25.670255220Z
-modified_at: 2026-09-23T03:01:16.547861139Z
+modified_at: 2026-09-23T03:01:18.359394865Z
 req_type: Task
 tags:
 - awaiting
@@ -54,5 +54,11 @@ comments:
   content: Commit 61a34e207a references this requirement
   created_at: 2026-09-23T03:00:33.707032146Z
   modified_at: 2026-09-23T03:00:33.707032146Z
+  session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
+- id: 01a0cc35-e197-7090-9263-2d998114bb5c
+  author: joe
+  content: 'Implemented on branch claude/task-1305 @ 61a34e207a (pushed, no PR, not merged). New unshipped_work_recovery_hint(): open-PR rows get a ''PR already open, needs a merge decision'' hint instead of ''aida pr ship''; session_reap renderer routed through it; statusbar (count only) and watch (no recovery text) documented as not needing it (AC3). Test unshipped_work_no_pr_and_open_pr_render_differently. REVIEWER NOTES: (a) AC5 (CI-failing third state) not addressed in the report - reviewer must confirm whether the data was to hand; (b) implementer reports collect_unshipped_work_items already excludes branches whose head is a confirmed open PR, so the open-PR row is reachable only via a forge-detection gap - the fix guards the renderer; the reviewer should decide whether that satisfies AC1 in practice. Needs: PR + independent review + merge.'
+  created_at: 2026-09-23T03:01:18.359394865Z
+  modified_at: 2026-09-23T03:01:18.359394865Z
   session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
 execution_mode: drain
