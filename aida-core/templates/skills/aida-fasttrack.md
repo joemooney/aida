@@ -1,6 +1,6 @@
 ---
 name: aida-fasttrack
-description: "The low-ceremony lane for genuinely trivial work: cosmetic, documentation-only, or one obvious line.
+description: "The low-ceremony lane for genuinely trivial work: cosmetic, documentation-only, or one obvious line."
 ---
 # Fasttrack a trivial change
 
