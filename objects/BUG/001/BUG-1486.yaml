@@ -15,12 +15,12 @@ description: |-
   - `aida db block status`, `list` and `verify` succeed under the requester role.
   - `aida db block claim` stays gated (it writes and pushes).
   - The refusal message for a genuinely-gated read, if any remain, names the verb rather than asserting "database writes" for a read.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:59:00.522521946Z
-modified_at: 2026-09-23T06:30:46.454557767Z
+modified_at: 2026-09-23T08:10:19.115448490Z
 req_type: Bug
 tags:
 - aida:db
@@ -45,3 +45,21 @@ comments:
   created_at: 2026-09-23T06:30:46.454557767Z
   modified_at: 2026-09-23T06:30:46.454557767Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cd50-ca64-7373-9ea7-b78cbdc3eb57
+  author: aida-auto-bump
+  timestamp: 2026-09-23T08:10:19.108733946Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cd50-ca6b-7d22-bc85-8511d2209dd1
+  timestamp: 2026-09-23T08:10:19.115447741Z
+  agent: aida
+  commit_sha: 91155561e725f90389e9ddcad8cf0c6209892635
+  summary: Completed via merge 91155561
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T08:10:18.535908585Z
+  completion_sha: 91155561e725f90389e9ddcad8cf0c6209892635
