@@ -67,7 +67,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:06:23.460943032Z
-modified_at: 2026-09-23T09:43:01.917380520Z
+modified_at: 2026-09-23T09:51:37.782138670Z
 req_type: Bug
 tags:
 - parent:EPIC-62 awaiting coordination-surface alert-fatigue severity:operational
@@ -83,4 +83,10 @@ comments:
   content: 'Claude implementer result: claude/bug-1530 @ 0ddfe9edf8. AwaitingReport.role plus an AwaitingSeat classifier (reviewer/advisor/implementer; dialog is normalized to advisor) gates the seat-owned channels in render() and compact_line(); items hidden for other seats are summarized as a named count, never dropped; unshipped work is labelled project-wide. No role means identical behavior. 9 new tests; the implementer reports all 5 AC met. Awaiting review, then batch 7.'
   created_at: 2026-09-23T09:43:01.917380520Z
   modified_at: 2026-09-23T09:43:01.917380520Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdad-8b36-70b3-baf7-f4e1a9fecc8c
+  author: joe
+  content: 'Strict-review blockers fixed by the orchestrator: an unrecognised seat (integrator/product/human) now sees every owned channel, and role matching is case-insensitive; 2 tests added (awaiting_you 54 pass).'
+  created_at: 2026-09-23T09:51:37.782138670Z
+  modified_at: 2026-09-23T09:51:37.782138670Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
