@@ -8404,8 +8404,38 @@ fn reviewer_wrote_message(pr: u32, pre: &str, post: &str) -> Option<String> {
 /// seat swap BUG-1186 reproduced. The orchestrator asserts Done itself rather
 /// than relying on the agent remembering. Best-effort: a store fault prints a
 /// note and the drive continues (the review envelope is the second guard).
-// trace:BUG-1186 | ai:claude
-fn ensure_spec_done_after_pr(project_root: &std::path::Path, spec: &str, pr: u32, json: bool) {
+///
+/// BUG-1527: this write is itself a swap-acceptance hazard — `pr` may have
+/// been found on a branch the implementer swapped to mid-phase (BUG-1485's
+/// failure mode), which can be a DIFFERENT spec's PR entirely. Gate the flip
+/// on the same TASK-1442 trailer-attribution check the PR-open recovery
+/// paths already use (`ensure_pr_open_spec_attribution`) so a PR that
+/// credits some other spec never marks THIS spec Done. The check runs
+/// BEFORE the write, not after, so it can never contradict the BUG-245
+/// `shipped_spec_id` mismatch report that follows phase 1 (that report is
+/// what surfaces the swap as an anomaly; this function just goes quiet on a
+/// mismatch instead of writing a false Done).
+// trace:BUG-1186 trace:BUG-1527 | ai:claude
+fn ensure_spec_done_after_pr(
+    project_root: &std::path::Path,
+    repo: &std::path::Path,
+    branch: &str,
+    spec: &str,
+    pr: u32,
+    json: bool,
+) {
+    if let Err(e) = ensure_pr_open_spec_attribution(repo, branch, spec) {
+        if !json {
+            eprintln!(
+                "  {} PR-{} on `{}` does not credit {} — not marking it Done ({e})",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                pr,
+                branch,
+                spec,
+            );
+        }
+        return;
+    }
     let flipped = (|| -> anyhow::Result<bool> {
         let Some(store_path) = detect_distributed_store_from(project_root) else {
             return Ok(false);
@@ -92959,7 +92989,16 @@ impl RealPhaseDriver {
             .ok_or_else(|| {
                 let candidates = lease_ids_in(&self.sessions_dir());
                 if candidates.is_empty() {
-                    auto_complete::PhaseFailure::new(
+                    // BUG-1524: no lease, no receipt, no other candidate in
+                    // flight — the child never got far enough to mint
+                    // anything, i.e. it never launched an implementer
+                    // session at all (a preflight/lease refusal or an
+                    // agent-binary launch failure). Typed as
+                    // `LaunchRefused` so the orchestrator never treats an
+                    // already-open PR from a previous round as evidence
+                    // this round did anything. trace:BUG-1524 | ai:claude
+                    auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::LaunchRefused,
                         "no session lease appeared — `aida queue work` did not start a session",
                     )
                 } else if let Some(conflict_failure) =
@@ -92974,18 +93013,31 @@ impl RealPhaseDriver {
                     // through `FailureKind::LeaseConflict`, which is NOT a
                     // transient-retry cause, so a refusal that IS correct
                     // (the holder is still live) does not burn the drain's
-                    // retry budget rediscovering the same conflict.
+                    // retry budget rediscovering the same conflict. This is
+                    // also a launch refusal (the claim gate blocked the
+                    // child before it started). It keeps its own kind; the
+                    // orchestrator skips open-PR recovery for it exactly as
+                    // for `LaunchRefused` (BUG-1524).
                     // trace:BUG-1285 | ai:claude
                     conflict_failure
                 } else {
-                    // trace:BUG-1485 | ai:codex
-                    auto_complete::PhaseFailure::new(format!(
-                        "the child session {} neither retained its session lease nor wrote its \
-                         orchestrator handoff receipt. Resume the recorded child with \
-                         `aida queue work {} --resume`; unrelated active leases were ignored.",
-                        &claude_session_id[..claude_session_id.len().min(8)],
-                        self.spec,
-                    ))
+                    // BUG-1524: candidates exist (other leases are live),
+                    // but none of them is THIS session's — and no BUG-1485
+                    // handoff receipt exists either, so this session did
+                    // not even reach the point of completing genuine work
+                    // and releasing its lease cleanly. Typed the same way
+                    // as the empty-candidates case above.
+                    // trace:BUG-1485 | ai:codex trace:BUG-1524 | ai:claude
+                    auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::LaunchRefused,
+                        format!(
+                            "the child session {} neither retained its session lease nor wrote its \
+                             orchestrator handoff receipt. Resume the recorded child with \
+                             `aida queue work {} --resume`; unrelated active leases were ignored.",
+                            &claude_session_id[..claude_session_id.len().min(8)],
+                            self.spec,
+                        ),
+                    )
                 }
             })
     }
@@ -95043,6 +95095,33 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         );
         self.branch = Some(branch.clone());
 
+        // BUG-1527: the worktree-HEAD reconciliation above just proved the
+        // implementer ended on a DIFFERENT branch than this phase was
+        // dispatched for. That alone is not new (BUG-223's merged-branch-name
+        // guard legitimately renames the SAME spec's branch mid-phase) — the
+        // defect is accepting the swap when the new branch's commits credit a
+        // DIFFERENT spec. Reuse the TASK-1442 PR-open attribution guard
+        // (no new trailer parsing) to tell the two apart: a rename that still
+        // credits `self.spec` proceeds exactly as before; a swap onto another
+        // spec's branch must fail this phase and shelve `self.spec` with the
+        // swap named, BEFORE any PR lookup or Done write ever runs — not
+        // after, which is how BUG-1527's contradictory log lines happened.
+        // trace:BUG-1527 | ai:claude
+        if branch != recorded_branch {
+            if let Err(attribution) =
+                ensure_pr_open_spec_attribution(&worktree_path, &branch, &self.spec)
+            {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::ShippedMismatch,
+                    format!(
+                        "the implementer's branch swapped mid-phase — dispatched on `{}`, ended \
+                         on `{}`: {}",
+                        recorded_branch, branch, attribution
+                    ),
+                ));
+            }
+        }
+
         // TASK-1289: the orchestrator owns the publication boundary. Run the
         // configured commands exactly as CI defines them, in the implementer
         // worktree, before either accepting an agent-opened PR or exercising
@@ -95253,8 +95332,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         match pr {
             Some(pr) => {
                 self.set_pr_number(pr.number as u32);
+                // BUG-1527: the PR just resolved may be on a branch the
+                // implementer swapped to mid-phase — prefer the PR's own
+                // head branch (ground truth for what it actually contains)
+                // over the pre-loop-captured `branch`, so the attribution
+                // check inside `ensure_spec_done_after_pr` reads the right
+                // commits. trace:BUG-1527 | ai:claude
+                let credited_branch = pr.head_branch.clone().unwrap_or_else(|| branch.clone());
                 ensure_spec_done_after_pr(
                     &self.project_root,
+                    &worktree_path,
+                    &credited_branch,
                     &self.spec,
                     pr.number as u32,
                     self.json,
@@ -95287,7 +95375,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         );
                     }
                     self.set_pr_number(pr as u32);
-                    ensure_spec_done_after_pr(&self.project_root, &self.spec, pr as u32, self.json);
+                    ensure_spec_done_after_pr(
+                        &self.project_root,
+                        &worktree_path,
+                        &branch,
+                        &self.spec,
+                        pr as u32,
+                        self.json,
+                    );
                     return Ok(auto_complete::ImplementerOutcome::PrOpened);
                 }
                 if let Some(reason) = self.auto_punt_text_question(&worktree_path, &session_uuid) {
