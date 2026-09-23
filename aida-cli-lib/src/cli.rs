@@ -1858,6 +1858,14 @@ pub enum PrCommand {
         // trace:BUG-1468 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         override_stale_check: bool,
+
+        /// Ship even when the PR's newest recorded approval does not cover
+        /// its current head — the head moved past the approved commit, the
+        /// approval names no commit, or the head could not be read. Without
+        /// this, ship refuses: re-review the current head instead.
+        // trace:TASK-1448 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        override_stale_approval: bool,
     },
 
     /// Deliberately HOLD the PR on the current session — push the branch but

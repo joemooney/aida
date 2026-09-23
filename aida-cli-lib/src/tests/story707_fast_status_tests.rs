@@ -97,12 +97,23 @@ fn fast_status_counts_from_cache_reads_only_the_cache() {
     .unwrap();
     drop(conn);
 
-    let c = fast_status_counts_from_cache(&cache_path);
+    let (c, by_status) = fast_status_counts_from_cache(&cache_path);
     // Counted: a, b, c, g. d archived, e META, f/h deferred.
     assert_eq!(c.total, 4);
     assert_eq!(c.open, 2); // a + b (c is terminal)
     assert_eq!(c.in_progress, 1); // b
     assert_eq!(c.draft, 1); // a
+                            // BUG-1503: the by_status breakdown sums to the same total, over the
+                            // same row set (d/e/f/h excluded), keyed by the raw cache status string.
+    assert_eq!(
+        by_status,
+        std::collections::BTreeMap::from([
+            ("Draft".to_string(), 1),
+            ("InProgress".to_string(), 1),
+            ("Completed".to_string(), 1),
+            ("Done".to_string(), 1),
+        ])
+    );
 }
 
 // A missing cache yields zeroed counts (no panic) — the fresh-`aida init`
@@ -110,8 +121,9 @@ fn fast_status_counts_from_cache_reads_only_the_cache() {
 #[test]
 fn fast_status_counts_from_cache_absent_is_zeroed() {
     let dir = tempfile::tempdir().unwrap();
-    let c = fast_status_counts_from_cache(&dir.path().join("nope.db"));
+    let (c, by_status) = fast_status_counts_from_cache(&dir.path().join("nope.db"));
     assert_eq!(c, FastStatusCounts::default());
+    assert!(by_status.is_empty());
 }
 
 // The fast snapshot's collector takes ONLY a project_root — it has no

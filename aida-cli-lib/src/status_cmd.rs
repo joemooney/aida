@@ -355,25 +355,33 @@ pub(crate) fn handle_status_command_distributed(
 
     // STORY-707: the BARE `aida status` (no flags) takes the FAST cache-backed
     // path — sub-second, NO `backend.load()`, NO `gh`/network, NO live-session
-    // probe. Every focus/rich flag (`--short`, `--json`, `--queue`, `--ci`,
-    // `--cleanup`, `--activity`, `--awaiting`, `--full`, `--all`, `--stale`)
-    // routes to the heavy path below, so the opt-in rich view and the existing
-    // focus-mode semantics are fully preserved. The heavy diagnostics (PR/CI,
-    // liveness, worktrees, roster, coordination, hygiene) moved to `aida doctor`.
-    // The `spec` form is dispatched even earlier (before storage init).
-    // trace:STORY-707 | ai:claude
-    let any_flag = short
-        || json
-        || queue_only
-        || ci_only
-        || cleanup
-        || activity
-        || awaiting
-        || full
-        || all
-        || stale;
-    if !any_flag {
+    // probe. Every focus/rich flag (`--short`, `--queue`, `--ci`, `--cleanup`,
+    // `--activity`, `--awaiting`, `--full`, `--all`, `--stale`) routes to the
+    // heavy path below, so the opt-in rich view and the existing focus-mode
+    // semantics are fully preserved. The heavy diagnostics (PR/CI, liveness,
+    // worktrees, roster, coordination, hygiene) moved to `aida doctor`. The
+    // `spec` form is dispatched even earlier (before storage init).
+    //
+    // BUG-1503: `--json` / `--format json` is deliberately EXCLUDED from this
+    // gate. It used to be lumped in with the heavy-path flags, so asking the
+    // cheapest command for its machine-readable form silently bought every
+    // heavy-path cost instead (network `gh` probes via `warm_status_network_probes`,
+    // `collect_user_context`, and a full `collect_awaiting_report` — the same
+    // unbounded unshipped-work/PR scanning BUG-1288 is separately hardening)
+    // even though bare `--json` requests none of `--full`'s extra sections.
+    // A bare `--json` (no other rich flag) now takes the SAME fast, cache-only
+    // snapshot as the human default and serializes it — no stdout text before
+    // it, so the output parses as JSON. `--json` combined with any other flag
+    // (e.g. `--full --json`) still explicitly asks for the heavy report and is
+    // unaffected. trace:BUG-1503 | ai:claude
+    let heavy_flag =
+        short || queue_only || ci_only || cleanup || activity || awaiting || full || all || stale;
+    if !heavy_flag {
         let project_root = std::env::current_dir()?;
+        if json {
+            let snap = collect_fast_status_snapshot(&project_root);
+            return print_fast_status_json(&snap);
+        }
         // trace:BUG-1044 | ai:codex
         if let Some(line) = roleless_recovery_line(&project_root) {
             println!("{}", line.yellow().bold());

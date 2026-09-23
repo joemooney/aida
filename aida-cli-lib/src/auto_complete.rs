@@ -542,6 +542,13 @@ pub(crate) enum FailureKind {
     /// stable gate, so preserve it as a typed, non-transient shelve cause.
     // trace:BUG-1316 | ai:codex
     MergeHold,
+    /// TASK-1448: the merge phase refused because the PR's newest recorded
+    /// APPROVAL does not cover its current head — the head moved past the
+    /// approved commit, the approval names no commit, or the head could not
+    /// be read (PRIN-5: fail closed). A retry cannot change it; only a fresh
+    /// review of the current head can, so this shelves and never retries.
+    // trace:TASK-1448 | ai:claude
+    StaleApproval,
     /// BUG-1527: the implementer's worktree ended on a branch other than the
     /// one this phase was dispatched for, AND that branch's commits credit a
     /// DIFFERENT spec — the drain accepted a branch swap and nearly marked
@@ -612,6 +619,8 @@ impl FailureKind {
                 | Self::StaleBaseRefused
                 | Self::StaleBaseConflict
                 | Self::MergeHold
+                // trace:TASK-1448 | ai:claude
+                | Self::StaleApproval
                 // trace:BUG-1524 | ai:claude
                 | Self::LaunchRefused
                 | Self::Failed
@@ -645,6 +654,8 @@ impl FailureKind {
             Self::StaleBaseRefused => "stale-base-refused",
             Self::StaleBaseConflict => "stale-base-conflict",
             Self::MergeHold => "merge-hold",
+            // trace:TASK-1448 | ai:claude
+            Self::StaleApproval => "stale-approval",
             // trace:BUG-1524 | ai:claude
             Self::LaunchRefused => "launch-refused",
             Self::Failed => "tool-exit",
@@ -1953,6 +1964,13 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
             return format!(
                 "A human/advisor merge-hold is open on PR-{pr}. Read the hold reason in the \
                  failure detail, then clear it after review with `aida merge-hold clear {pr}`."
+            );
+        }
+        // trace:TASK-1448 | ai:claude
+        FailureKind::StaleApproval => {
+            return format!(
+                "PR-{pr}'s recorded approval does not cover its current head. Re-review the \
+                 current head (`aida queue work PR-{pr} --role reviewer`), then merge it."
             );
         }
         // BUG-1524: no implementer session ever launched — the failure
@@ -6359,6 +6377,8 @@ mod tests {
         conflict_rebase_calls: usize,
         /// BUG-1447: forge-side branch-policy refusals before merge succeeds.
         merge_policy_refusals: usize,
+        /// TASK-1448: the merge phase's approval-covers-head gate refuses.
+        merge_stale_approval: bool,
         /// BUG-727: when `Some`, `merge_supervision_hold` reports the spec's
         /// execution mode as holding the merge — the substrate supervised-merge
         /// gate fires before phase 4. `None` (default) keeps every
@@ -6452,6 +6472,7 @@ mod tests {
                 conflict_rebase_ok: false,
                 conflict_rebase_calls: 0,
                 merge_policy_refusals: 0,
+                merge_stale_approval: false,
                 merge_hold: None,
                 recorded_merge_holds: Vec::new(),
                 pr_number: Some(46),
@@ -6862,6 +6883,14 @@ mod tests {
         }
         fn merge(&mut self) -> Result<(), PhaseFailure> {
             self.record(Phase::Merge)?;
+            // trace:TASK-1448 | ai:claude
+            if self.merge_stale_approval {
+                return Err(PhaseFailure::of(
+                    FailureKind::StaleApproval,
+                    "PR-46 was not merged: its approval was recorded at 08834c6045a9 but the PR \
+                     head is now 1aca4e3e9251. Re-review the current head, then merge again.",
+                ));
+            }
             if self.merge_policy_refusals > 0 {
                 self.merge_policy_refusals -= 1;
                 return Err(PhaseFailure::of(
@@ -7879,6 +7908,51 @@ mod tests {
             driver.calls.iter().filter(|p| **p == Phase::Merge).count(),
             1,
             "policy refusal is attempted once"
+        );
+    }
+
+    /// TASK-1448: a stale approval at the merge phase SHELVES the spec — the
+    /// drain parks it and continues; it never stops the batch, never rebases,
+    /// never spends a transient retry, and never reaches pull.
+    // trace:TASK-1448 | ai:claude
+    #[test]
+    fn orchestrate_stale_approval_at_merge_shelves_never_exits() {
+        let mut driver = MockPhaseDriver {
+            merge_stale_approval: true,
+            ci_fix_budget: 2,
+            transient_retry_budget: 2,
+            ..MockPhaseDriver::base()
+        };
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1448",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Merge));
+        let shelved = result
+            .shelved_reason
+            .as_ref()
+            .expect("stale approval must shelve");
+        assert_eq!(shelved.kind, "stale-approval");
+        let failure = result.failure.as_ref().expect("failure recorded");
+        assert_eq!(failure.kind, FailureKind::StaleApproval);
+        assert!(
+            failure.reason.contains("Re-review the current head"),
+            "{}",
+            failure.reason
+        );
+        assert_eq!(driver.conflict_rebase_calls, 0);
+        assert!(driver.transient_retry_events.is_empty());
+        assert_eq!(
+            driver.calls.iter().filter(|p| **p == Phase::Merge).count(),
+            1
+        );
+        assert!(
+            !driver.calls.contains(&Phase::Pull),
+            "must never pull a refused merge"
         );
     }
 
@@ -9472,6 +9546,54 @@ mod tests {
             driver.calls,
             vec![Phase::Implementer],
             "a swap must never advance to Ci/Reviewer via open-PR recovery"
+        );
+    }
+
+    /// BUG-1527 AC6: a phase-1 outcome whose ending branch differs from the
+    /// dispatched branch (`ShippedMismatch`) must never let the dispatched
+    /// spec's status change. `MockPhaseDriver` has no store of its own —
+    /// the only status-adjacent driver hooks are a later phase's success
+    /// path (`finish_success`, the only path resembling a Done-adjacent
+    /// write) and the escalation stamp — so "status stays unchanged" is
+    /// observed here as: no phase past Implementer ever runs, nothing gets
+    /// credited (`shipped_spec_id` stays `None`, so `finish_success` never
+    /// fires), and the escalation hook is never touched either. (BUG-1291's
+    /// `handoff_open_pr_after_shelve` is deliberately NOT asserted here: the
+    /// orchestrator calls it after every successful shelve regardless of
+    /// phase, and `MockPhaseDriver` records that call unconditionally too —
+    /// its real implementation is the one that gates on `pr_number`, and it
+    /// hands an ALREADY-OPEN PR to review, not a Done write, so it is
+    /// orthogonal to this spec's status either way.)
+    // trace:BUG-1527 trace:TASK-1457 | ai:claude
+    #[test]
+    fn shipped_mismatch_never_changes_the_dispatched_specs_status() {
+        let mut driver =
+            MockPhaseDriver::failing_at_with_kind(Phase::Implementer, FailureKind::ShippedMismatch);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1527-AC6",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::ShippedMismatch)
+        );
+        assert_eq!(
+            result.shipped_spec_id, None,
+            "nothing was credited — finish_success (the only Done-adjacent write) never ran"
+        );
+        assert_eq!(
+            driver.mark_escalated_calls, 0,
+            "no escalation stamp either — the dispatched spec was never touched"
+        );
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Implementer],
+            "no later phase — and so no later phase's status write — ever ran"
         );
     }
 

@@ -8289,6 +8289,62 @@ fn pr_head_sha_best_effort(driver: &RealPhaseDriver, pr: u32) -> Option<String> 
         .filter(|s| !s.trim().is_empty())
 }
 
+/// TASK-1449: like [`pr_head_sha_best_effort`], but the PR's head branch
+/// name — used by the rework no-op guard to check whether a PR OTHER than
+/// the one it armed against (the BUG-1527 shape) is actually attributed to
+/// the spec before treating its existence as anything at all. `None` on any
+/// forge fault (e.g. pure-git, which has no PR metadata to read).
+// trace:TASK-1449 | ai:claude
+fn pr_head_ref_best_effort(driver: &RealPhaseDriver, pr: u32) -> Option<String> {
+    let mut sink = crate::network_retry::NoopSink;
+    driver
+        .lifecycle_forge()
+        .change_metadata(pr as u64, &mut sink)
+        .ok()
+        .map(|m| m.head_ref)
+        .filter(|s| !s.trim().is_empty())
+}
+
+/// TASK-1449 (BUG-1522 AC5/AC6; hardened on re-review): the DISPATCHED
+/// branch's head as ORIGIN reports it, read locally rather than via the
+/// forge. Fetches `origin/<branch>` first (best effort) so a stale
+/// remote-tracking ref is never read as truth — this fn is the ONLY reader
+/// for both the arm-time baseline and the post-round comparison, so a ref
+/// that was stale at arm time gets refreshed at arm time too, instead of
+/// only on the later read (which would manufacture a false "content
+/// changed": stale local W at arm time, freshly-fetched real X after —
+/// X looks new but was already the state on origin before this round ran).
+/// Deliberately does NOT fall back to a same-named local branch: a
+/// dispatched round's open PR lives on origin by definition, and a
+/// same-named local branch could be unrelated leftover state. `None` —
+/// UNKNOWN, fail-closed — when `origin/<branch>` cannot be read at all (no
+/// origin, branch never pushed, a git error).
+// trace:TASK-1449 | ai:claude
+fn dispatched_branch_head_sha(project_root: &std::path::Path, branch: &str) -> Option<String> {
+    let _ = fetch_branch(project_root, branch, true);
+    git_rev_parse_quiet(project_root, &format!("origin/{branch}"))
+}
+
+/// TASK-1448: the drain merge phase's approval-covers-head gate. `Err` is a
+/// shelvable, never-retried `StaleApproval` failure carrying the same
+/// refusal text `aida pr ship` prints — the drain parks the spec and moves
+/// on rather than exiting. Pure over the verdicts + head so every branch is
+/// testable without a forge.
+// trace:TASK-1448 | ai:claude
+fn drain_merge_approval_gate(
+    candidates: &[review_verdict::RecordedVerdict],
+    head_sha: Option<&str>,
+    pr: u64,
+) -> Result<(), auto_complete::PhaseFailure> {
+    match pr_ship::approval_head_refusal(candidates, head_sha) {
+        None => Ok(()),
+        Some(refusal) => Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::StaleApproval,
+            pr_ship::approval_head_refusal_message(pr, &refusal),
+        )),
+    }
+}
+
 /// Add the orchestrator-owned review context to a reviewer-written PR verdict.
 ///
 /// The reviewer owns the verdict, summary, findings, and any future fields;
@@ -8335,6 +8391,90 @@ fn stamp_pr_review_verdict(
         std::fs::write(&path, serde_json::to_vec_pretty(&value)?)?;
     }
     Ok(path)
+}
+
+#[cfg(test)]
+mod task_1448_drain_merge_approval_gate_tests {
+    // trace:TASK-1448 | ai:claude
+    use super::*;
+
+    const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const OLD: &str = "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    fn approval(sha: Option<&str>) -> review_verdict::RecordedVerdict {
+        review_verdict::RecordedVerdict {
+            kind: review_verdict::VerdictKind::Approved,
+            raw: "approved".into(),
+            reviewed_sha: sha.map(str::to_string),
+            ..Default::default()
+        }
+    }
+
+    fn assert_shelves(result: Result<(), auto_complete::PhaseFailure>) -> String {
+        let failure = result.expect_err("the merge phase must refuse");
+        assert_eq!(failure.kind, auto_complete::FailureKind::StaleApproval);
+        // Shelve-and-continue, never stop the drain; never a transient retry.
+        assert!(failure.kind.is_shelvable());
+        assert!(!auto_complete::should_retry_transient_failure(
+            failure.kind,
+            0,
+            3
+        ));
+        assert!(
+            failure.reason.contains("Re-review the current head"),
+            "{}",
+            failure.reason
+        );
+        failure.reason
+    }
+
+    #[test]
+    fn approval_at_head_lets_the_drain_merge() {
+        assert!(drain_merge_approval_gate(&[approval(Some(HEAD))], Some(HEAD), 5).is_ok());
+    }
+
+    #[test]
+    fn approval_behind_head_shelves() {
+        let reason = assert_shelves(drain_merge_approval_gate(
+            &[approval(Some(OLD))],
+            Some(HEAD),
+            5,
+        ));
+        assert!(
+            reason.contains(&OLD[..12]) && reason.contains(&HEAD[..12]),
+            "{reason}"
+        );
+    }
+
+    #[test]
+    fn approval_without_sha_shelves() {
+        assert_shelves(drain_merge_approval_gate(&[approval(None)], Some(HEAD), 5));
+    }
+
+    #[test]
+    fn unreadable_head_shelves() {
+        assert_shelves(drain_merge_approval_gate(&[approval(Some(HEAD))], None, 5));
+    }
+
+    #[test]
+    fn stale_approval_recovery_hint_names_the_re_review() {
+        let ctx = auto_complete::HintContext {
+            spec: "TASK-1448".into(),
+            pr_number: Some(5),
+            ..Default::default()
+        };
+        let hint = auto_complete::recovery_hint(
+            auto_complete::Phase::Merge,
+            auto_complete::FailureKind::StaleApproval,
+            &ctx,
+        );
+        assert!(hint.contains("Re-review the"), "{hint}");
+        assert!(hint.contains("PR-5"), "{hint}");
+        assert_eq!(
+            auto_complete::FailureKind::StaleApproval.cause_slug(),
+            "stale-approval"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -8424,6 +8564,12 @@ fn ensure_spec_done_after_pr(
     pr: u32,
     json: bool,
 ) {
+    // TASK-1457: this gate is intentionally coarse — a PR whose commits name
+    // a different spec AND a PR whose commits carry no spec-ID trailer at
+    // all both skip the Done write here (see the doc comment on
+    // `ensure_pr_open_spec_attribution` for why this caller keeps the two
+    // collapsed rather than adopting the finer three-way split the
+    // branch-swap seam uses).
     if let Err(e) = ensure_pr_open_spec_attribution(repo, branch, spec) {
         if !json {
             eprintln!(
@@ -73979,6 +74125,9 @@ struct FastStatusSnapshot {
     /// with archived/completed/deferred corpses; this is the reconcilable count.
     queue_actionable: usize,
     counts: FastStatusCounts,
+    /// Per-status breakdown of the same row set `counts` is tallied from —
+    /// the monitor-contract `requirements.by_status` field (BUG-1503).
+    by_status: std::collections::BTreeMap<String, usize>,
     cache_present: bool,
 }
 
@@ -74056,22 +74205,54 @@ fn fast_status_counts_with_defer<'a>(
     c
 }
 
+/// The BUG-1503 monitor-contract companion to [`fast_status_counts_with_defer`]:
+/// the SAME row set, the SAME real/standing-artifact/deferred exclusions (so
+/// the values sum to exactly `counts.total`), grouped by the raw cache
+/// `status` string instead of tallied into the fixed scalar buckets. Keys use
+/// the cache's stored Debug-form casing (e.g. "InProgress", "Draft") — the
+/// same strings the heavy text panel's `by_status` breakdown groups on
+/// (`status_cmd.rs`'s `s.status.clone()`), so a monitor consumer sees
+/// identical keys regardless of which status surface it polls.
+// trace:BUG-1503 | ai:claude
+fn fast_status_by_status_with_defer<'a>(
+    rows: impl IntoIterator<Item = (&'a str, &'a str, bool, &'a str)>,
+) -> std::collections::BTreeMap<String, usize> {
+    let mut by_status: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
+    for (status, req_type, deferred, tags_json) in rows {
+        if !is_real_requirement_summary(req_type) || is_standing_artifact_type(req_type) {
+            continue;
+        }
+        if deferred || tags_json.contains("\"deferred:") {
+            continue;
+        }
+        *by_status.entry(status.to_string()).or_insert(0) += 1;
+    }
+    by_status
+}
+
 /// Read `(status, req_type)` for every non-archived row straight from the cache
 /// DB (read-only sqlite), then count via [`fast_status_counts`]. This is the
 /// same read-only cache `read_draft_backlog_depth` uses — NO `backend.load()`, no
-/// git spawn. Returns zeroed counts when the cache is absent/unreadable (a fresh
-/// `aida init` with no reads yet).
-// trace:STORY-707 | ai:claude
-fn fast_status_counts_from_cache(cache_path: &std::path::Path) -> FastStatusCounts {
+/// git spawn. Returns zeroed counts (and an empty `by_status`) when the cache is
+/// absent/unreadable (a fresh `aida init` with no reads yet). A single `SELECT`
+/// of `requirements_cache` (grouped in Rust rather than SQL, so it can share
+/// the exact real/standing-artifact/deferred exclusions the scalar counts
+/// already apply) feeds both the scalar counts and the per-status
+/// breakdown — one query against the cache, not two.
+// trace:STORY-707 trace:BUG-1503 | ai:claude
+fn fast_status_counts_from_cache(
+    cache_path: &std::path::Path,
+) -> (FastStatusCounts, std::collections::BTreeMap<String, usize>) {
     if !cache_path.exists() {
-        return FastStatusCounts::default();
+        return (FastStatusCounts::default(), Default::default());
     }
     let conn = match rusqlite::Connection::open_with_flags(
         cache_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     ) {
         Ok(c) => c,
-        Err(_) => return FastStatusCounts::default(),
+        Err(_) => return (FastStatusCounts::default(), Default::default()),
     };
     let has_deferred_column = conn
         .prepare("SELECT deferred FROM requirements_cache LIMIT 0")
@@ -74095,7 +74276,7 @@ fn fast_status_counts_from_cache(cache_path: &std::path::Path) -> FastStatusCoun
     };
     let mut stmt = match conn.prepare(sql) {
         Ok(s) => s,
-        Err(_) => return FastStatusCounts::default(),
+        Err(_) => return (FastStatusCounts::default(), Default::default()),
     };
     let rows = stmt.query_map([], |row| {
         Ok((
@@ -74106,14 +74287,20 @@ fn fast_status_counts_from_cache(cache_path: &std::path::Path) -> FastStatusCoun
         ))
     });
     let Ok(rows) = rows else {
-        return FastStatusCounts::default();
+        return (FastStatusCounts::default(), Default::default());
     };
     let collected: Vec<(String, String, bool, String)> = rows.flatten().collect();
-    fast_status_counts_with_defer(
+    let counts = fast_status_counts_with_defer(
         collected
             .iter()
             .map(|(s, t, d, tags)| (s.as_str(), t.as_str(), *d, tags.as_str())),
-    )
+    );
+    let by_status = fast_status_by_status_with_defer(
+        collected
+            .iter()
+            .map(|(s, t, d, tags)| (s.as_str(), t.as_str(), *d, tags.as_str())),
+    );
+    (counts, by_status)
 }
 
 /// Assemble the fast snapshot from cache-cheap inputs: role from
@@ -74132,7 +74319,7 @@ fn collect_fast_status_snapshot(project_root: &std::path::Path) -> FastStatusSna
     let mcp_authority_lines = agent_registry::mcp_authority_status_lines_for_project(project_root);
     let cache_path = project_root.join(".aida/cache.db");
     let cache_present = cache_path.exists();
-    let counts = fast_status_counts_from_cache(&cache_path);
+    let (counts, by_status) = fast_status_counts_from_cache(&cache_path);
     FastStatusSnapshot {
         role,
         role_is_default,
@@ -74141,6 +74328,7 @@ fn collect_fast_status_snapshot(project_root: &std::path::Path) -> FastStatusSna
         queue_depth,
         queue_actionable,
         counts,
+        by_status,
         cache_present,
     }
 }
@@ -74250,6 +74438,56 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
             .dimmed()
     );
     println!();
+}
+
+/// The machine-readable twin of [`print_fast_status`]. Serializes the SAME
+/// [`FastStatusSnapshot`] the human bare `aida status` prints — no extra
+/// cache/git/`gh` reads — so `aida status --format json` (and `--json`)
+/// return in the same order of magnitude as the human form instead of
+/// silently falling through to the heavy `--full`-equivalent report. Emits
+/// ONLY the JSON document on stdout (no banners/text before it) so the
+/// output always parses.
+//
+// Fix note: the pre-existing bug_1289_format_json.rs contract
+// (status_bare_format_json_parses) asserts the document carries either a
+// `requirements` or an `agents` key — the shape the heavy
+// print_status_json path produced when bare `--format json` used to fall
+// through to it. The fast path has no live-agent roster to report (that
+// moved to `aida doctor`), so it keeps the contract via `requirements`: the
+// SAME cache-sourced `counts` already computed for the human view, at no
+// extra cost. Plain `//` keeps the marker out of any doc/help.
+// trace:BUG-1503 | ai:claude
+//
+// The monitor contract (`monitor_contract.rs` / `docs/monitor-contract-
+// fixtures/status.json`) promises `requirements.total` (an integer) AND
+// `requirements.by_status` (an object) from `aida status --json`. `counts`
+// (the internal/duplicate scalar key) stays as-is; `requirements` gets the
+// `by_status` breakdown alongside it so the contract holds on the fast path
+// too, not just when it used to fall through to the heavy report.
+// trace:BUG-1503 | ai:claude
+fn print_fast_status_json(snap: &FastStatusSnapshot) -> Result<()> {
+    let counts = serde_json::json!({
+        "open": snap.counts.open,
+        "in_progress": snap.counts.in_progress,
+        "draft": snap.counts.draft,
+        "total": snap.counts.total,
+    });
+    let mut requirements = counts.clone();
+    requirements["by_status"] = serde_json::json!(snap.by_status);
+    let out = serde_json::json!({
+        "role": snap.role,
+        "role_is_default": snap.role_is_default,
+        "branch": snap.branch,
+        "queue": {
+            "depth": snap.queue_depth,
+            "actionable": snap.queue_actionable,
+        },
+        "cache_present": snap.cache_present,
+        "counts": counts,
+        "requirements": requirements,
+    });
+    println!("{}", serde_json::to_string_pretty(&out)?);
+    Ok(())
 }
 
 /// Assemble the AGENT-MODE scalar head lines for `aida status` with a single,
@@ -78325,6 +78563,40 @@ fn run_pr_open_spec_guard(project_root: &std::path::Path, branch: &str, expected
     std::process::exit(1);
 }
 
+/// TASK-1457 (BUG-1527 follow-up): the same three-way classification
+/// `decide_shelve_attribution` (TASK-1444) gives a reviewer-verdict shelve,
+/// but for the branch-swap seam `RealPhaseDriver::run_implementer` gates on
+/// before it will accept a mid-phase branch change. `ensure_pr_open_spec_attribution`
+/// collapses "a trailer names a different spec" and "no commit carries any
+/// spec-ID trailer" into the same `Err` — which is why a same-spec rename
+/// (BUG-223) whose commits simply have not been trailered yet used to read
+/// as a confidently-worded "swap". PRIN-5 requires these stay distinct
+/// outcomes: `Reattributed` is a spec-ID trailer actively pointing somewhere
+/// else (the confident swap case); `Uncertain` is absent evidence, not
+/// contrary evidence, and must never be reported the same way. Fails open
+/// (`Confirmed`) exactly where `ensure_pr_open_spec_attribution` does — an
+/// unresolvable default branch, an unreadable range, or no commits at all —
+/// so a git hiccup here can't manufacture a false swap report either.
+// trace:BUG-1527 trace:TASK-1457 | ai:claude
+fn classify_branch_swap_attribution(
+    repo: &std::path::Path,
+    branch_ref: &str,
+    expected_spec: &str,
+) -> ShelveAttribution {
+    let Some(default_ref) = resolve_default_branch_ref(repo) else {
+        return ShelveAttribution::Confirmed(expected_spec.to_string());
+    };
+    let range = format!("{default_ref}..{branch_ref}");
+    let commits = match read_commits_in_range(repo, &range) {
+        Ok(c) => c,
+        Err(_) => return ShelveAttribution::Confirmed(expected_spec.to_string()),
+    };
+    if commits.is_empty() {
+        return ShelveAttribution::Confirmed(expected_spec.to_string());
+    }
+    decide_shelve_attribution(&commits, expected_spec)
+}
+
 /// TASK-1442 follow-up: the same PR-spec attribution check as
 /// `run_pr_open_spec_guard`, but as a `Result` instead of an exiting side
 /// effect. `run_pr_open_spec_guard` is only safe at `aida pr ship`'s own
@@ -78338,7 +78610,21 @@ fn run_pr_open_spec_guard(project_root: &std::path::Path, branch: &str, expected
 /// local branch name or `origin/<branch>`). A no-op when the default branch
 /// or commit range can't be resolved (soft — a git hiccup shouldn't block
 /// recovery) or when there are no commits to check.
-// trace:TASK-1442 | ai:claude
+///
+/// TASK-1457: this collapses `Reattributed` and `Uncertain` (see
+/// `classify_branch_swap_attribution` above) into the same `Err` — a
+/// deliberate, kept decision for THIS gate. `ensure_spec_done_after_pr`
+/// (its only status-writing caller) must not flip a spec to Done on
+/// EITHER absent or contrary trailer evidence; per PRIN-5, "cannot
+/// determine" is not license to proceed on a Done write any more than
+/// "determined otherwise" is. The two PR-open recovery callers
+/// (`open_orchestrator_pr_for_implementer_worktree`,
+/// `open_orchestrator_pr_for_pushed_branch`) inherit the same fail-safe
+/// for the same reason: opening a PR under an unconfirmed identity is a
+/// second write worth refusing on absent evidence too. Only the
+/// branch-swap seam needs the finer three-way split, because only it has
+/// to tell an operator whether to look for a swap or a missing trailer.
+// trace:TASK-1442 trace:TASK-1457 | ai:claude
 fn ensure_pr_open_spec_attribution(
     repo: &std::path::Path,
     branch_ref: &str,
@@ -92471,11 +92757,19 @@ struct RealPhaseDriver {
     // trace:BUG-908 | ai:codex
     retry_implementer_worktree: Option<std::path::PathBuf>,
     retry_implementer_branch: Option<String>,
-    /// BUG-1213 / TASK-1265: `(PR, head, authoritative review delta, round)`
-    /// captured immediately before a rework implementer runs. `None` for
-    /// ordinary first-pass work.
-    // trace:BUG-1213 trace:TASK-1265 | ai:codex
-    rework_guard: Option<(u32, String, String, usize)>,
+    /// BUG-1213 / TASK-1265: `(PR, dispatched branch, blocking verdict's
+    /// reviewed_sha, the dispatched branch's head AT ARM TIME, authoritative
+    /// review delta, round)` captured immediately before a rework implementer
+    /// runs. `None` for ordinary first-pass work (no blocking verdict exists,
+    /// so the no-op guard must never fire).
+    /// TASK-1449 (rework, common-path regression): `reviewed_sha` is
+    /// `Option` because ~86% of the verdict corpus carries no sha. That is
+    /// UNKNOWN, not "no refusal", but it must not become an automatic
+    /// refusal either — `rework_no_op_failure` falls back to the arm-time
+    /// head as the comparison baseline and only refuses when NEITHER is
+    /// available.
+    // trace:BUG-1213 trace:TASK-1265 trace:TASK-1449 | ai:claude
+    rework_guard: Option<(u32, String, Option<String>, Option<String>, String, usize)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -94592,9 +94886,6 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let Some(verdict) = blocking_rework_verdict(&self.project_root, &self.spec, pr) else {
             return;
         };
-        let Some(head) = pr_head_sha_best_effort(self, pr) else {
-            return;
-        };
         let reason = review_verdict::rework_findings_comment(
             &self.spec,
             &format!("PR #{}", change.id),
@@ -94608,23 +94899,123 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     .map(|req| queue_cmd::rework_round_from_comments(&req.comments))
             })
             .unwrap_or(2);
-        self.rework_guard = Some((pr, head, reason, round));
+        // TASK-1449 (BUG-1522 AC5/AC6): arm on the blocking verdict's own
+        // `reviewed_sha` and the DISPATCHED branch — not the PR head sha at
+        // arm time, which is unreadable exactly when the guard matters most
+        // (a Held/Inconclusive round captures no PR at all) and can't tell
+        // "unchanged" from "moved, but not the dispatched branch". Arming no
+        // longer depends on reading the PR head, so a forge hiccup at arm
+        // time can't silently disarm the guard either.
+        //
+        // TASK-1449 (rework, common-path regression): ALSO capture the
+        // dispatched branch's head at arm time — before the implementer
+        // this round has touched anything. ~86% of verdicts record no
+        // `reviewed_sha`; when that's the case, this arm-time head is the
+        // fallback baseline `rework_no_op_failure` compares the post-round
+        // head against, so a sha-less verdict does not turn into an
+        // automatic refusal on every subsequent round.
+        let arm_time_head = dispatched_branch_head_sha(&self.project_root, &change.branch);
+        self.rework_guard = Some((
+            pr,
+            change.branch,
+            verdict.reviewed_sha,
+            arm_time_head,
+            reason,
+            round,
+        ));
     }
 
-    // trace:BUG-1213 trace:BUG-1445 | ai:codex
+    // trace:BUG-1213 trace:BUG-1445 trace:TASK-1449 | ai:claude
     fn rework_no_op_failure(&mut self) -> Option<auto_complete::PhaseFailure> {
-        let (pr, before, reason, round) = self.rework_guard.as_ref()?;
-        if self.phase_done_pr != Some(*pr) {
-            return None;
+        let (pr, branch, reviewed_sha, arm_time_head, reason, round) = self.rework_guard.clone()?;
+
+        // TASK-1449 AC3 (the BUG-1527 shape): this round's own PR capture may
+        // be bound to a DIFFERENT spec's PR rather than the PR this guard
+        // armed against. The old `phase_done_pr != Some(pr) => return None`
+        // exit treated any mismatch as license to advance — exactly BUG-1527's
+        // false Done. Name the misattribution via the TASK-1442 guard instead
+        // of silently trusting an unrelated PR's existence as progress; the
+        // dispatched-branch comparison below still runs regardless (it does
+        // not depend on `phase_done_pr` matching at all), so a resolvable
+        // forge miss here just falls through rather than masking anything.
+        if let Some(done_pr) = self.phase_done_pr {
+            if done_pr != pr {
+                if let Some(head_ref) = pr_head_ref_best_effort(self, done_pr) {
+                    if let Err(e) =
+                        ensure_pr_open_spec_attribution(&self.project_root, &head_ref, &self.spec)
+                    {
+                        return Some(auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::ReworkNoOp,
+                            format!(
+                                "ROUND {round} rework: this phase captured PR-{done_pr}, not \
+                                 PR-{pr} — the PR this guard armed against — and PR-{done_pr}'s \
+                                 commits are not attributed to {}: {e}. Refusing rather than \
+                                 crediting an unrelated PR toward this spec's rework. \
+                                 Authoritative open items:\n{reason}",
+                                self.spec,
+                            ),
+                        ));
+                    }
+                }
+            }
         }
-        let after = pr_head_sha_best_effort(self, *pr)?;
-        let change = classify_rework_head_change(&self.project_root, before, &after)?;
+
+        // TASK-1449 (rework, common-path regression fix): a missing
+        // `reviewed_sha` alone must NOT refuse — ~86% of the verdict corpus
+        // carries none, and refusing on that would shelve every rework round
+        // after a sha-less refusal even when real commits were pushed. Fall
+        // back to the DISPATCHED branch's head AT ARM TIME as the baseline;
+        // only refuse (UNKNOWN, PRIN-5) when neither is available.
+        let Some(baseline) = reviewed_sha.clone().or_else(|| arm_time_head.clone()) else {
+            return Some(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::ReworkNoOp,
+                format!(
+                    "ROUND {round} rework against PR-{pr} on `{branch}` cannot be verified — \
+                     neither the blocking review verdict's reviewed_sha nor the dispatched \
+                     branch's head at arm time could be established. Refusing rather than \
+                     advancing on an unknown. Authoritative open items:\n{reason}"
+                ),
+            ));
+        };
+
+        // TASK-1449 AC1/AC2/AC4: compare the baseline against the
+        // DISPATCHED branch's CURRENT head, read directly — never the PR
+        // head, so a Held/Inconclusive round with no `pr_number` this round
+        // still gets checked (AC4). `dispatched_branch_head_sha` fetches
+        // `origin/<branch>` first (best effort) before reading it, so a
+        // stale remote-tracking ref is refreshed here too, not only at arm
+        // time. An unreadable head is UNKNOWN and refuses.
+        let Some(after) = dispatched_branch_head_sha(&self.project_root, &branch) else {
+            return Some(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::ReworkNoOp,
+                format!(
+                    "ROUND {round} rework against PR-{pr}: the dispatched branch `{branch}`'s \
+                     head could not be read. Refusing rather than advancing on an unknown. \
+                     Authoritative open items:\n{reason}"
+                ),
+            ));
+        };
+
+        // AC1: an unclassifiable delta (no default branch ref, a git error)
+        // is UNKNOWN and refuses rather than advancing.
+        let Some(change) = classify_rework_head_change(&self.project_root, &baseline, &after)
+        else {
+            return Some(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::ReworkNoOp,
+                format!(
+                    "ROUND {round} rework against PR-{pr}: the change between the baseline \
+                     `{baseline}` and `{branch}`'s current head `{after}` could not be \
+                     classified (no default branch, or a git error). Refusing rather than \
+                     advancing on an unknown. Authoritative open items:\n{reason}"
+                ),
+            ));
+        };
         if change == ReworkHeadChange::ContentChanged {
             return None;
         }
         Some(auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::ReworkNoOp,
-            rework_no_op_message(*pr, before, &after, reason, *round, change),
+            rework_no_op_message(pr, &baseline, &after, &reason, round, change),
         ))
     }
 
@@ -95100,25 +95491,46 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // dispatched for. That alone is not new (BUG-223's merged-branch-name
         // guard legitimately renames the SAME spec's branch mid-phase) — the
         // defect is accepting the swap when the new branch's commits credit a
-        // DIFFERENT spec. Reuse the TASK-1442 PR-open attribution guard
-        // (no new trailer parsing) to tell the two apart: a rename that still
-        // credits `self.spec` proceeds exactly as before; a swap onto another
-        // spec's branch must fail this phase and shelve `self.spec` with the
-        // swap named, BEFORE any PR lookup or Done write ever runs — not
-        // after, which is how BUG-1527's contradictory log lines happened.
-        // trace:BUG-1527 | ai:claude
+        // DIFFERENT spec. Classify the branch with `decide_shelve_attribution`
+        // (TASK-1444) via `classify_branch_swap_attribution` (TASK-1457) to
+        // tell THREE cases apart, not two: `Confirmed` (a rename that still
+        // credits `self.spec`) proceeds exactly as before; `Reattributed` (a
+        // trailer confidently naming a DIFFERENT spec) is the genuine swap
+        // and fails this phase with the swap named; `Uncertain` (no commit on
+        // the new branch carries any spec-ID trailer yet) is absent evidence,
+        // not contrary evidence — PRIN-5 forbids reporting it as a confident
+        // "swap" — so it fails this phase too (the attribution cannot be
+        // confirmed, so the Done write below must not run either way) but
+        // with wording that says exactly that instead of asserting a swap
+        // that was never established. Either way this runs BEFORE any PR
+        // lookup or Done write, not after, which is how BUG-1527's
+        // contradictory log lines happened.
+        // trace:BUG-1527 trace:TASK-1457 | ai:claude
         if branch != recorded_branch {
-            if let Err(attribution) =
-                ensure_pr_open_spec_attribution(&worktree_path, &branch, &self.spec)
-            {
-                return Err(auto_complete::PhaseFailure::of(
-                    auto_complete::FailureKind::ShippedMismatch,
-                    format!(
-                        "the implementer's branch swapped mid-phase — dispatched on `{}`, ended \
-                         on `{}`: {}",
-                        recorded_branch, branch, attribution
-                    ),
-                ));
+            match classify_branch_swap_attribution(&worktree_path, &branch, &self.spec) {
+                ShelveAttribution::Confirmed(_) => {}
+                ShelveAttribution::Reattributed(other) => {
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::ShippedMismatch,
+                        format!(
+                            "the implementer's branch swapped mid-phase — dispatched on `{}`, \
+                             ended on `{}`, whose commits credit {} instead of {}",
+                            recorded_branch, branch, other, self.spec
+                        ),
+                    ));
+                }
+                ShelveAttribution::Uncertain(reason) => {
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::ShippedMismatch,
+                        format!(
+                            "the implementer's branch changed mid-phase — dispatched on `{}`, \
+                             ended on `{}` — attribution unknown ({reason}): this may be a \
+                             same-spec rename (BUG-223) whose commits simply have not been \
+                             trailered yet, not a confirmed swap onto another spec's work",
+                            recorded_branch, branch
+                        ),
+                    ));
+                }
             }
         }
 
@@ -96679,6 +97091,30 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             crate::merge_lock::DEFAULT_WAIT,
         )
         .map_err(|e| drain_merge_lease_failure(&e, &lease_target, pr))?;
+        // TASK-1448: refuse (shelve, never exit) when the newest recorded
+        // approval does not cover the PR's current head. Checked under the
+        // merge lease, immediately before the merge. trace:TASK-1448 | ai:claude
+        let head_sha = pr_head_sha_best_effort(self, pr).or_else(|| {
+            let branch = self.branch.clone().unwrap_or_default();
+            let status_ref = crate::forge::ChangeRef {
+                id: pr as u64,
+                url: String::new(),
+                branch,
+                base: String::new(),
+                title: None,
+            };
+            self.lifecycle_forge()
+                .change_status(&status_ref)
+                .ok()
+                .map(|status| status.head_sha.trim().to_string())
+                .filter(|sha| !sha.is_empty())
+        });
+        let candidates = pr_ship::merge_gate_verdict_candidates(
+            &[self.project_root.as_path(), lease_root.as_path()],
+            pr as u64,
+            std::slice::from_ref(&self.spec),
+        );
+        drain_merge_approval_gate(&candidates, head_sha.as_deref(), pr as u64)?;
         self.lifecycle_forge()
             .merge_change(&change_ref, &opts, &mut sink)
             .map_err(|e| classify_drain_merge_failure(self.lifecycle_forge, pr, &e))?;

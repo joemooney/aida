@@ -35,6 +35,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             effort,
             no_trailer_check,
             override_stale_check,
+            override_stale_approval,
         } => pr_ship_handler(
             *n,
             *no_pull,
@@ -45,6 +46,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             *effort,
             *no_trailer_check,
             *override_stale_check,
+            *override_stale_approval,
         ),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
         PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
@@ -1388,6 +1390,7 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
                 None,                  // effort
                 opts.no_trailer_check, // no_trailer_check
                 false,                 // override_stale_check — not exposed on `aida ship` yet
+                false, // override_stale_approval — not exposed on `aida ship` (TASK-1448)
             )
         }
     }
@@ -1471,6 +1474,30 @@ fn emit_ship_pr_merged(main_worktree: &std::path::Path, pr: u32, spec_ids: &[Str
     }
 }
 
+/// TASK-1448: the PR's CURRENT head sha for the approval-covers-head gate,
+/// read from the forge (gh `headRefOid`; pure-git resolves `branch`).
+/// `None` when it cannot be read — which the gate treats as "cannot show
+/// the approval covers the head", i.e. refuse (PRIN-5).
+// trace:TASK-1448 | ai:claude
+fn pr_head_sha_for_merge_gate(
+    project_root: &std::path::Path,
+    pr_number: u64,
+    branch: &str,
+) -> Option<String> {
+    let change = crate::forge::ChangeRef {
+        id: pr_number,
+        url: String::new(),
+        branch: branch.to_string(),
+        base: String::new(),
+        title: None,
+    };
+    crate::forge::forge_for(project_root)
+        .change_status(&change)
+        .ok()
+        .map(|status| status.head_sha.trim().to_string())
+        .filter(|sha| !sha.is_empty())
+}
+
 pub(crate) fn pr_ship_handler(
     n: Option<u64>,
     no_pull: bool,
@@ -1481,6 +1508,7 @@ pub(crate) fn pr_ship_handler(
     effort: Option<effort_calibration::EffortBucket>,
     no_trailer_check: bool,
     override_stale_check: bool,
+    override_stale_approval: bool,
 ) -> Result<()> {
     use pr_ship::{
         branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan,
@@ -2148,6 +2176,43 @@ pub(crate) fn pr_ship_handler(
     // trace:STORY-1171 | ai:claude
     let _merge_lease = acquire_merge_lease(&main_worktree, pr_number)?;
     if !already_merged {
+        // ---- TASK-1448: approval-covers-head gate. Checked under the merge
+        // lease, immediately before the merge (and before any merge-hold is
+        // released), so the head it compares is the one about to land. ----
+        // trace:TASK-1448 | ai:claude
+        let mut gate_spec_ids: Vec<String> = ship_gate_spec_records(&project_root)
+            .into_iter()
+            .map(|(id, _, _)| id)
+            .collect();
+        gate_spec_ids.extend(pr_ship::extract_spec_ids_from_text(&ship_branch));
+        if let Some(title) = target_change.as_ref().and_then(|c| c.title.as_deref()) {
+            gate_spec_ids.extend(pr_ship::extract_spec_ids_from_text(title));
+        }
+        let head_sha = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch);
+        let candidates = pr_ship::merge_gate_verdict_candidates(
+            &[project_root.as_path(), main_worktree.as_path()],
+            pr_number,
+            &gate_spec_ids,
+        );
+        if let Some(refusal) = pr_ship::approval_head_refusal(&candidates, head_sha.as_deref()) {
+            let message = pr_ship::approval_head_refusal_message(pr_number, &refusal);
+            if override_stale_approval {
+                eprintln!(
+                    "  {} {message} — shipping anyway (--override-stale-approval)",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                );
+            } else {
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::Merge { delete_branch },
+                    &StepOutcome::Failed(message.clone()),
+                );
+                anyhow::bail!(
+                    "{message} (To merge anyway, re-run with `--override-stale-approval`.)"
+                );
+            }
+        }
         if branch_in_sibling {
             eprintln!(
                 "  step 3: branch {} is checked out in a sibling worktree — \
