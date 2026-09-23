@@ -67,7 +67,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:29:06.068323940Z
-modified_at: 2026-09-21T02:37:35.508391414Z
+modified_at: 2026-09-23T06:28:24.551618077Z
 req_type: Story
 tags:
 - drain-safe
@@ -83,4 +83,11 @@ relationships:
   target_id: 01a0bffa-514d-7752-8f2f-cf3d58fe7647
   created_at: 2026-09-21T02:29:31.874456188Z
   created_by: joe
+comments:
+- id: 01a0ccf3-7d67-74e3-85e4-f3215670230c
+  author: joe
+  content: 'PROXY DECISION (Claude for the operator, overnight burn-down): when the pre-launch build-to-HEAD fails, the wave REFUSES to launch (PRIN-5; a drain on unknown-vintage orchestration is the incident class this spec cites), with a clear message and an explicit --allow-stale override for deliberate bisecting. Behind a flag (--require-head) first, per the spec. Now IMPLEMENT-ready; HIGH risk (drain self-modification), so give it a strict review.'
+  created_at: 2026-09-23T06:28:24.551618077Z
+  modified_at: 2026-09-23T06:28:24.551618077Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
