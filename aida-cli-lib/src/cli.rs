@@ -1878,6 +1878,31 @@ pub enum PrCommand {
         #[clap(long, value_name = "REASON", allow_hyphen_values = true)]
         reason: Option<String>,
     },
+
+    /// Sweep local review-snapshot branches (`pr-N` / `mr-N`, created by
+    /// `aida session start --owns PR-N` / `aida pr rebase` when they fetch a
+    /// change's head ref for headless review) whose change has reached a
+    /// terminal state (merged or closed). Nothing removes these today, so a
+    /// long-running project's local branch namespace accumulates one per
+    /// review, forever.
+    ///
+    /// A candidate is deleted only when: the change is merged/closed (an
+    /// open change is left alone — the review may still need it), the
+    /// branch isn't checked out in any worktree, and the branch's tip still
+    /// matches the change's last known head SHA (a branch that gained local
+    /// commits since the fetch is left alone rather than guessed at). Every
+    /// skip is reported with its reason. Scoped to the exact `pr-<digits>` /
+    /// `mr-<digits>` name shape `aida session start --owns PR-N` creates —
+    /// never touches an authored spec branch.
+    ///
+    /// Opt-in: this command is never run automatically. Use `--dry-run` to
+    /// preview before deleting.
+    // trace:TASK-1312 | ai:claude
+    Gc {
+        /// Report what would be deleted without deleting anything.
+        #[clap(long)]
+        dry_run: bool,
+    },
 }
 
 /// activity, optional purpose, and acts as a label in the statusline.
