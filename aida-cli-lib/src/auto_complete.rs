@@ -3776,7 +3776,14 @@ pub(crate) fn orchestrate_with_resume(
                     // manufacture a CI/review round against a head this
                     // failure never touched. Fall straight through to the
                     // normal shelve path below. trace:BUG-1524 | ai:claude
-                    if f.kind != FailureKind::LaunchRefused {
+                    // Review fix: a LeaseConflict is also a pre-launch
+                    // refusal (the claim gate blocked the child), so it must
+                    // not be "recovered" through a previous round's open PR
+                    // either. trace:BUG-1524 | ai:claude
+                    if !matches!(
+                        f.kind,
+                        FailureKind::LaunchRefused | FailureKind::LeaseConflict
+                    ) {
                         if let Some(reentry_phase) = driver.recover_phase1_failure_with_open_pr(&f)
                         {
                             driver.capture_phase_done_pr();
@@ -9388,6 +9395,30 @@ mod tests {
             vec![Phase::Implementer],
             "a launch refusal must never advance to Ci/Reviewer, even when an \
              already-open PR from a previous round would otherwise redeem it"
+        );
+    }
+
+    /// BUG-1524 review fix: a lease conflict is a pre-launch refusal too and
+    /// must never advance to Ci/Reviewer through a previous round's open PR.
+    // trace:BUG-1524 | ai:claude
+    #[test]
+    fn lease_conflict_never_recovers_through_an_open_pr() {
+        let mut driver =
+            MockPhaseDriver::failing_at_with_kind(Phase::Implementer, FailureKind::LeaseConflict)
+                .recovering_phase1_failure_from_pr(Phase::Ci);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1524",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Implementer],
+            "a lease conflict must never advance to Ci/Reviewer via open-PR recovery"
         );
     }
 

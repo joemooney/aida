@@ -92462,9 +92462,9 @@ impl RealPhaseDriver {
                     // (the holder is still live) does not burn the drain's
                     // retry budget rediscovering the same conflict. This is
                     // also a launch refusal (the claim gate blocked the
-                    // child before it started), but `LeaseConflict` already
-                    // carries its own non-transient, non-open-PR-recovered
-                    // handling, so it keeps its existing kind.
+                    // child before it started). It keeps its own kind; the
+                    // orchestrator skips open-PR recovery for it exactly as
+                    // for `LaunchRefused` (BUG-1524).
                     // trace:BUG-1285 | ai:claude
                     conflict_failure
                 } else {
