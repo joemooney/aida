@@ -65753,6 +65753,72 @@ fn reconcile_no_flip_message(
     }
 }
 
+/// TASK-1446 (BUG-1506 AC3): the "direction B" diagnostic — how many of
+/// `candidate_ids` (specs already `Completed` that a commit in the scan
+/// window still names) are ALSO named by a currently-open PR's title or
+/// body. Deliberately ONE `gh pr list` call regardless of candidate count
+/// (unlike `specs_with_open_prs`, which is one call PER candidate — fine for
+/// that function's small `flips` domain, but this direction can hold every
+/// Completed spec a wide scan touches). Best-effort: any forge/lookup
+/// failure reads as 0 — this is a pure diagnostic, never a write guard, so
+/// there is no "ambiguous, so preserve" case to get right here.
+// trace:TASK-1446 | ai:claude
+fn count_completed_specs_with_open_prs(
+    project_root: &std::path::Path,
+    candidate_ids: &[String],
+) -> usize {
+    if !matches!(
+        forge::resolve_forge_kind(project_root),
+        forge::ForgeKind::GitHub
+    ) {
+        return 0;
+    }
+    let Some(gh) = resolve_gh_binary() else {
+        return 0;
+    };
+    let out = std::process::Command::new(&gh)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "200",
+            "--json",
+            "title,body",
+        ])
+        .output();
+    let Ok(out) = out else {
+        return 0;
+    };
+    if !out.status.success() {
+        return 0;
+    }
+    let Ok(rows) = serde_json::from_slice::<serde_json::Value>(&out.stdout) else {
+        return 0;
+    };
+    let Some(items) = rows.as_array() else {
+        return 0;
+    };
+    let haystack: String = items
+        .iter()
+        .map(|item| {
+            format!(
+                "{} {}",
+                item.get("title").and_then(|v| v.as_str()).unwrap_or(""),
+                item.get("body").and_then(|v| v.as_str()).unwrap_or("")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        .to_lowercase();
+    candidate_ids
+        .iter()
+        .filter(|id| haystack.contains(&id.to_lowercase()))
+        .count()
+}
+
 /// TASK-1446 (BUG-1506 AC3): pure arithmetic for the reconcile-status sweep's
 /// "direction A" summary count — how many candidates in the scanned window
 /// are pre-Done (Draft, or one of Approved/Planned/InProgress about to flip
@@ -66072,9 +66138,14 @@ fn handle_db_reconcile_status(
     let completed_with_open_pr_count = if completed_candidate_ids.is_empty() {
         0
     } else {
-        specs_with_open_prs(project_root, completed_candidate_ids)
-            .map(|open| open.len())
-            .unwrap_or(0)
+        // TASK-1446: ONE `gh pr list` call for every open PR, not one
+        // `specs_with_open_prs`-style search per candidate — `specs_with_open_prs`
+        // is right-sized for `flips` (already small: only would-flip
+        // candidates), but this direction can hold every already-Completed
+        // spec a wide `--since`-less (200-commit) scan touches, and a
+        // network round trip per candidate was measured to blow well past
+        // an operator's `timeout 120` on this repo's own history.
+        count_completed_specs_with_open_prs(project_root, &completed_candidate_ids)
     };
     println!(
         "{} sweep: {} pre-Done spec{} with a merged trailer, {} Completed spec{} still \
