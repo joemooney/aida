@@ -27,7 +27,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:46:51.339793043Z
-modified_at: 2026-09-21T02:28:47.703149068Z
+modified_at: 2026-09-23T06:27:40.637949935Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -35,4 +35,11 @@ tags:
 - from:session-0920
 - hygiene
 - public-repo
+comments:
+- id: 01a0ccf2-d1dd-7ce0-9cef-317a7e64c1d9
+  author: joe
+  content: 'PROXY DISPOSITION (Claude for the operator, overnight burn-down): ALREADY FIXED on main, verified. Evidence: Confirmed via commit 979cb524bf "[AI:claude] fix(gitignore): ignore root personal dotfiles by name on a public repo (BUG-1511)" plus 8af4a8e2ea deciding .codex/hooks: all 6 dotfiles (.bashrc,.bash_profile,.profile,.zshrc,.zprofile,.gitconfig) + .ripgreprc now gitignored at repo root (.gitignore:148-156), .codex/ decided per CLAUDE.md''s tracked-config-vs-ignored-hooks split, .vscode and .gitmodules no longer present (nothing to decide) .gitignore'
+  created_at: 2026-09-23T06:27:40.637949935Z
+  modified_at: 2026-09-23T06:27:40.637949935Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
