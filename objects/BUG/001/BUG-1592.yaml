@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T09:26:18.848468860Z
-modified_at: 2026-09-23T11:07:16.325948510Z
+modified_at: 2026-09-23T11:07:18.472487389Z
 req_type: Bug
 tags:
 - identity
@@ -35,4 +35,10 @@ comments:
   content: 'Claude implementer result: claude/bug-1592 @ 5677292c34. inbox_identities now unions AIDA_AGENT_NAME; Message gains an optional from_role (serde default, omitted when none), recorded on every send path and mirrored in MCP read_inbox. The whole workspace compiles, including aida-tui/aida-server literals. 6 tests. Awaiting review, then batch.'
   created_at: 2026-09-23T10:12:25.090607561Z
   modified_at: 2026-09-23T10:12:25.090607561Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cdf2-d448-7e03-a2a1-fdd6fd8b8608
+  author: joe
+  content: 'Merged via integration batch 8, PR #2118 (2026-09-23 04:07).'
+  created_at: 2026-09-23T11:07:18.472487389Z
+  modified_at: 2026-09-23T11:07:18.472487389Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
