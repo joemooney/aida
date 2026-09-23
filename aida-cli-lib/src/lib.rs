@@ -33622,6 +33622,251 @@ fn branch_behind_main(repo: &std::path::Path, branch: &str) -> Option<(u64, Vec<
     Some((count, sample))
 }
 
+/// BUG-1468: a PR branch's green check is evidence about the guards that
+/// existed WHEN IT RAN. Nothing re-evaluates that green when a new required
+/// guard lands on main, so a long-lived branch can present a green check
+/// that no longer means what a reader assumes (observed on PR #1979 —
+/// `aida-core/templates/.aida/discipline/session-discipline.md` grew a
+/// content check 15h after the branch's own CI ran, and the branch still
+/// showed green).
+///
+/// TWO TIERS (BUG-1468 follow-up — the single-tier version refused almost
+/// every ship in this repo, because nearly every commit on main touches
+/// `*/tests/` or `*_tests.rs`, making `--override-stale-check` routine):
+/// - `definition_files`: a `.github/workflows/*` file whose `on:` triggers
+///   include `pull_request` (a plain substring check on the file's content
+///   at `base_ref` — nightly/cron-only, release-only, and dispatch-only
+///   workflows don't gate a PR's own check, so they do NOT count), or a
+///   `scripts/` file one of THOSE PR-triggered workflows invokes directly —
+///   the check's own DEFINITION changed, so the green no longer means what
+///   it looks like. `aida pr ship` REFUSES on this tier (override-able); the
+///   drain's merge phase only WARNS and proceeds (BUG-1468 follow-up 2).
+/// - `test_files`: WARN-only, everywhere. An ordinary test file changed on
+///   base since divergence — the common, usually-harmless "base moved" case;
+///   still worth surfacing (a reader may want to re-run), never worth
+///   refusing.
+// trace:BUG-1468 | ai:claude
+pub(crate) struct StaleCheckWarning {
+    pub(crate) behind_commits: u64,
+    pub(crate) definition_files: Vec<String>,
+    pub(crate) test_files: Vec<String>,
+}
+
+/// Pure classifier for the two tiers above. `workflow_is_pr_triggered`
+/// decides whether a changed `.github/workflows/...` file's `on:` triggers
+/// include `pull_request` (a non-PR-triggered workflow — cron/nightly,
+/// release, manual dispatch — does NOT count as a definition change at
+/// all: it lands in neither tier). `script_is_pr_workflow_invoked` decides
+/// whether a `scripts/...` path is one a PR-triggered workflow calls
+/// directly. Callers resolve both via git on `base_ref` (tests fake them
+/// directly, no git needed).
+// trace:BUG-1468 | ai:claude
+pub(crate) fn classify_changed_files(
+    changed_files: &[String],
+    workflow_is_pr_triggered: &dyn Fn(&str) -> bool,
+    script_is_pr_workflow_invoked: &dyn Fn(&str) -> bool,
+) -> (Vec<String>, Vec<String>) {
+    let mut definition = Vec::new();
+    let mut test_only = Vec::new();
+    for f in changed_files {
+        if is_workflow_path(f) {
+            if workflow_is_pr_triggered(f) {
+                definition.push(f.clone());
+            }
+            // else: a nightly/cron/dispatch/release-only workflow — its
+            // green never covered this PR's check to begin with, so it
+            // doesn't count in either tier.
+        } else if is_script_path(f) && script_is_pr_workflow_invoked(f) {
+            definition.push(f.clone());
+        } else if is_test_path(f) {
+            test_only.push(f.clone());
+        }
+    }
+    (definition, test_only)
+}
+
+// trace:BUG-1468 | ai:claude
+fn is_workflow_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.starts_with(".github/workflows/") || lower.contains("/.github/workflows/")
+}
+
+// trace:BUG-1468 | ai:claude
+fn is_script_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.starts_with("scripts/") || lower.contains("/scripts/")
+}
+
+// trace:BUG-1468 | ai:claude
+fn is_test_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.starts_with("tests/")
+        || lower.contains("/tests/")
+        || lower.ends_with("_test.rs")
+        || lower.ends_with("_tests.rs")
+        || lower.ends_with("_test.py")
+        || lower.ends_with("_test.sh")
+}
+
+/// True when a `.github/workflows/...` file's content, AT `base_ref`,
+/// mentions `pull_request` — a plain substring check (no YAML parsing),
+/// standing in for "this workflow's `on:` triggers include `pull_request`"
+/// (BUG-1468 follow-up 2). A nightly/cron, release, or manual-dispatch-only
+/// workflow never gates a PR's own check, so it must not count as a
+/// definition change even though it lives under `.github/workflows/`.
+/// False on any git error (fail-open — a git hiccup demotes a definition
+/// change to "doesn't count" rather than blocking a ship on its own).
+// trace:BUG-1468 | ai:claude
+fn workflow_is_pr_triggered(repo: &std::path::Path, base_ref: &str, workflow_path: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["show", &format!("{base_ref}:{workflow_path}")])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("pull_request"))
+        .unwrap_or(false)
+}
+
+/// The `.github/workflows/*` files, AT `base_ref`, whose content mentions
+/// `pull_request` — the PR-triggered subset a `scripts/` change must be
+/// invoked by to count as a definition change. Empty on any git error
+/// (fail-open — see [`workflow_is_pr_triggered`]).
+// trace:BUG-1468 | ai:claude
+fn pr_triggered_workflow_files(repo: &std::path::Path, base_ref: &str) -> Vec<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args([
+            "grep",
+            "-l",
+            "-F",
+            "pull_request",
+            base_ref,
+            "--",
+            ".github/workflows",
+        ])
+        .output();
+    let Ok(out) = out else { return Vec::new() };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    // `git grep -l <rev> -- <pathspec>` prints "<rev>:<path>" per match.
+    let prefix = format!("{base_ref}:");
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| l.strip_prefix(prefix.as_str()).map(|p| p.to_string()))
+        .collect()
+}
+
+/// True when `script_path` (a `scripts/...` file that changed) is invoked
+/// directly by one of the PR-TRIGGERED workflows on `base_ref` — a literal
+/// substring match of the path inside those tracked `.github/workflows/*`
+/// blobs. A workflow that invokes the same script but isn't itself
+/// PR-triggered (nightly, release, dispatch-only) does not count (BUG-1468
+/// follow-up 2). False on any git error (fail-open).
+// trace:BUG-1468 | ai:claude
+fn script_referenced_by_pr_workflows(
+    repo: &std::path::Path,
+    base_ref: &str,
+    script_path: &str,
+) -> bool {
+    pr_triggered_workflow_files(repo, base_ref)
+        .iter()
+        .any(|wf| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(["show", &format!("{base_ref}:{wf}")])
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).contains(script_path))
+                .unwrap_or(false)
+        })
+}
+
+/// Resolve the ref to measure `branch`'s staleness FROM: `origin/<branch>`
+/// when that remote-tracking ref exists (what a PR's own CI actually ran
+/// against), else the local `branch` ref itself (BUG-1468 follow-up 3 — a
+/// local checkout can be ahead or behind what's actually pushed/reviewed).
+// trace:BUG-1468 | ai:claude
+fn stale_check_branch_ref(repo: &std::path::Path, branch: &str) -> String {
+    let remote_ref = format!("origin/{branch}");
+    let exists = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-parse", "--verify", "--quiet", &remote_ref])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if exists {
+        remote_ref
+    } else {
+        branch.to_string()
+    }
+}
+
+/// git-IO wrapper: how far `branch` is behind `base_ref`, and the two-tier
+/// classification (see [`StaleCheckWarning`]) of what changed on `base_ref`
+/// since divergence. Staleness is measured from `origin/<branch>` when that
+/// ref exists, else the local `branch` ref (see [`stale_check_branch_ref`]).
+/// `None` when the branch is not behind base (nothing to warn about) or on
+/// a git error — same fail-open convention as [`branch_behind_main`], so a
+/// git hiccup never blocks a ship.
+// trace:BUG-1468 | ai:claude
+pub(crate) fn pr_stale_check_warning(
+    repo: &std::path::Path,
+    branch: &str,
+    base_ref: &str,
+) -> Option<StaleCheckWarning> {
+    let branch_ref = stale_check_branch_ref(repo, branch);
+    let count_out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-list", "--count", &format!("{branch_ref}..{base_ref}")])
+        .output()
+        .ok()?;
+    if !count_out.status.success() {
+        return None;
+    }
+    let behind_commits: u64 = String::from_utf8_lossy(&count_out.stdout)
+        .trim()
+        .parse()
+        .ok()?;
+    if behind_commits == 0 {
+        return None;
+    }
+    let diff_out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["diff", "--name-only", &format!("{branch_ref}...{base_ref}")])
+        .output()
+        .ok()?;
+    if !diff_out.status.success() {
+        return None;
+    }
+    let changed: Vec<String> = String::from_utf8_lossy(&diff_out.stdout)
+        .lines()
+        .map(|l| l.to_string())
+        .collect();
+    let (definition_files, test_files) = classify_changed_files(
+        &changed,
+        &|workflow_path| workflow_is_pr_triggered(repo, base_ref, workflow_path),
+        &|script_path| script_referenced_by_pr_workflows(repo, base_ref, script_path),
+    );
+    Some(StaleCheckWarning {
+        behind_commits,
+        definition_files,
+        test_files,
+    })
+}
+
+#[cfg(test)]
+#[path = "tests/bug_1468_stale_check_tests.rs"]
+mod bug_1468_stale_check_tests;
+
 /// TASK-53: list distinct files touched by commits on `branch` since
 /// `since` (a git-friendly time string like "14 days ago"). Returns
 /// an empty vec on any git error or when the branch has no commits in
@@ -93237,6 +93482,44 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "internal: PR number not resolved before the merge phase",
             )
         })?;
+        // AC1 follow-up (BUG-1468, then narrowed by the follow-up 2 proxy
+        // review): the drain's merge phase gets the same staleness *signal*
+        // as `aida pr ship`, but only ever WARNS and proceeds — it never
+        // shelves on this check. The spec asks the drain only to warn; only
+        // `aida pr ship` (an interactive/human-gated command) refuses. A
+        // definition-tier change (`.github/workflows/*` whose `on:`
+        // triggers include `pull_request`, or a script one of those
+        // workflows invokes directly) prints which files changed; an
+        // ordinary test-file change prints the lighter commits/test-count
+        // line. Never blocks the merge. trace:BUG-1468 | ai:claude
+        if let Some(branch) = self.branch.clone() {
+            let base_branch = crate::pr_cmd::pr_ship_target_branch(pr as u64);
+            let base_ref = format!("origin/{base_branch}");
+            if let Some(warning) = pr_stale_check_warning(&self.project_root, &branch, &base_ref) {
+                if !warning.definition_files.is_empty() {
+                    println!(
+                        "  {} PR-{pr}'s green check completed before {} changed on {base_branch}: \
+                         {} — its CI ran against an OLDER definition of that check. Proceeding \
+                         (the drain warns; only `aida pr ship` refuses).",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        if warning.definition_files.len() == 1 {
+                            "a CI definition file"
+                        } else {
+                            "CI definition files"
+                        },
+                        warning.definition_files.join(", "),
+                    );
+                } else if !warning.test_files.is_empty() {
+                    println!(
+                        "  {} {} commits behind; {} test files changed on main since this branch's base",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                        warning.behind_commits,
+                        warning.test_files.len(),
+                    );
+                }
+            }
+        }
+
         // STORY-516/TASK-669 + BUG-1037: keep the forge CLI-on-PATH guard as a
         // MissingTool (non-shelvable -> stop-the-drain) pre-check, but key it
         // to the run's resolved lifecycle forge. Pure-git has no CLI precheck.

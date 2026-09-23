@@ -1848,6 +1848,16 @@ pub enum PrCommand {
         // trace:STORY-469 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         no_trailer_check: bool,
+
+        /// Ship even when the PR's green check completed before a
+        /// CI-definition file (a workflow, or a script it invokes directly)
+        /// changed on the base branch. Without this, ship refuses so a
+        /// green that no longer means what it looks like doesn't merge
+        /// unnoticed. A plain test-file change on the base branch only
+        /// warns and never needs this flag.
+        // trace:BUG-1468 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        override_stale_check: bool,
     },
 
     /// Deliberately HOLD the PR on the current session — push the branch but
