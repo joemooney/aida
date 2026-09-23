@@ -76,7 +76,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:55:27.247068049Z
-modified_at: 2026-09-23T16:49:17.113763702Z
+modified_at: 2026-09-23T16:53:44.711425896Z
 req_type: Bug
 tags:
 - parent:EPIC-62 drain orchestrator substrate-truth severity:major
@@ -141,5 +141,11 @@ comments:
   content: 'Claude implementer result: claude/bug-1527 @ f778ce6abb. After the BUG-223 worktree-HEAD reconciliation, run_implementer now runs ensure_pr_open_spec_attribution; a swap onto another spec''s commits fails phase 1 with a shelvable FailureKind::ShippedMismatch before any Done write; both ensure_spec_done_after_pr sites re-check attribution against the PR head. RealPhaseDriver test reproduces the incident. Awaiting strict review.'
   created_at: 2026-09-23T16:49:17.113763702Z
   modified_at: 2026-09-23T16:49:17.113763702Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cf30-0087-7030-b34a-a706441580e3
+  author: joe
+  content: 'Strict review: no false refusals on stacked or dual-trailer branches. Blocker fixed by the orchestrator: ShippedMismatch joins BUG-1524''s open-PR-recovery exclusion (branch now contains BUG-1524), with a mock test that it shelves and never reaches Ci. 307 targeted tests pass. The AC6 status-unchanged and negative-path tests are split to a follow-up. Batch 18 (together with BUG-1524).'
+  created_at: 2026-09-23T16:53:44.711425896Z
+  modified_at: 2026-09-23T16:53:44.711425896Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
