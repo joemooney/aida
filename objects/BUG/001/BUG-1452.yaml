@@ -42,23 +42,12 @@ description: |-
   7. The requirement is that a refusal implies protection REGARDLESS OF WHO RECORDS IT. The drain path is the common case, not the whole case: a verdict recorded by hand through `aida review record`, with no drain phase in the loop, must produce the same protection. Verified 2026-09-20 — of eight specs found in this state, seven were drain-issued and one (BUG-1485 / PR #2030) was hand-recorded, and the hand-recorded one is the case a drain-scoped fix would miss entirely. Delimit against BUG-1490 so neither spec assumes the other covers the hand-recorded path.
 
   Found by the advisor across four consecutive mail ticks. Each instance was initially read as a one-off; the fourth is what established it as the default outcome of a refusal rather than an accident.
-  execution_mode: drain
-  relationships[5]{rel,id,title}:
-    Parent,EPIC-28,"Dependency-aware autonomous drain: shelve failures, skip dependents, continue independents (full --auto-complete batch)"
-    Related,BUG-1435,"The merge-hold classifier matches the refusal's own sentence, so a reword silently returns a supervised gate to burning both retries"
-    Related,BUG-1445,"A rebase-only rework round is indistinguishable from a real failed attempt, so requeueing a shelved spec can loop forever while reporting progress"
-    Related,BUG-1435,"The merge-hold classifier matches the refusal's own sentence, so a reword silently returns a supervised gate to burning both retries"
-    Related,BUG-1445,"A rebase-only rework round is indistinguishable from a real failed attempt, so requeueing a shelved spec can loop forever while reporting progress
-
-  8. A refusing verdict now HARD-FAILS without --pr: "a refusing verdict must name --pr <N> so AIDA can protect the pull request". Previously a spec-only RequestChanges recorded fine. This is a new hard requirement on the reviewer surface and it was not in the acceptance - it arrived with the implementation. It is the right direction, since a refusal that names no PR cannot protect anything, so it is ADOPTED here rather than reverted. But it ships deliberately: the error text must say what to do, and any caller that records a spec-only refusal today must be found and updated, or it breaks at the moment a reviewer most needs it to work.
-
-  9. The protection logic carries test coverage of its own behaviour, not of the state-machine edge it uses. The Done-to-NeedsAttention transition test asserts the edge is permitted; it does not assert that recording a refusal writes the hold, syncs the label, moves the spec, or leaves it queued or surfaced. Those four are the spec. Criterion 5 already required this and the first implementation attempt satisfied it with one line in an existing test, so it is restated here in terms of what must be asserted rather than what must be covered.
 status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T16:02:39.454765774Z
-modified_at: 2026-09-23T10:01:28.462001961Z
+modified_at: 2026-09-23T11:26:57.099900439Z
 req_type: Bug
 tags:
 - batch:night-0920
