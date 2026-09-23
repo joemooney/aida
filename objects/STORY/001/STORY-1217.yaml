@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-09-19T21:00:49.305303726Z
+modified_at: 2026-09-23T06:22:50.628320905Z
 req_type: Story
 tags:
 - audit
@@ -115,4 +115,10 @@ comments:
   created_at: 2026-09-19T21:00:49.305303726Z
   modified_at: 2026-09-19T21:00:49.305303726Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0ccee-6504-7c42-949b-3b7dc1529a8b
+  author: joe
+  content: 'PROXY DECISION (Claude for the operator, overnight burn-down; design calls delegated). Question and ruling (recommended option adopted): Blocker STORY-1353 is now Completed (42b7147bf0) so this is unblocked, but the spec itself flags open design forks before implementation can start; primary question: who may ISSUE a grant - human only, or may an advisor delegate one? Per PRIN-5 fail-closed, recommend human-only issuance, time-boxed-only scope (no batch/epic) for v1, and immediate refusal (no grace window) on expiry. Now IMPLEMENT-ready.'
+  created_at: 2026-09-23T06:22:50.628320905Z
+  modified_at: 2026-09-23T06:22:50.628320905Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
