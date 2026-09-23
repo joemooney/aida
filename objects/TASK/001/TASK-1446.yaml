@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T06:45:05.301647405Z
-modified_at: 2026-09-23T12:06:33.105045374Z
+modified_at: 2026-09-23T12:27:50.906144775Z
 req_type: Task
 tags:
 - drain-safe
@@ -30,4 +30,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 05:06 -> branch claude/task-1446, no PR (overnight burn-down)
   created_at: 2026-09-23T12:06:33.105045374Z
   modified_at: 2026-09-23T12:06:33.105045374Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce3c-90fa-7e33-bc71-b2143708c7e8
+  author: joe
+  content: Commit 1f8ecc458f references this requirement
+  created_at: 2026-09-23T12:27:50.906144775Z
+  modified_at: 2026-09-23T12:27:50.906144775Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
