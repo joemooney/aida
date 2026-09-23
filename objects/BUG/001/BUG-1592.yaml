@@ -1,0 +1,21 @@
+id: 01a0cd96-5de0-7ed2-aa1d-3d0e348e4433
+spec_id: BUG-1592
+agreed_id: BUG-1592
+title: inbox_identities ignores AIDA_AGENT_NAME, so a seat whose agent name differs from AIDA_USER sends mail under a name whose inbox it never reads
+description: |-
+  Found in review of BUG-1533 (2026-09-23). The sender precedence puts AIDA_AGENT_NAME first, but inbox_identities (lib.rs) never includes AIDA_AGENT_NAME. The launchers set AIDA_USER = AIDA_AGENT_NAME, so it's latent today, but any override inside a launched agent splits send-identity from read-identity and replies go unread. Also: BUG-1533 AC1 asked for both an agent id AND a role in the envelope; only from + source tier is recorded.
+
+  ## Acceptance
+  1. inbox_identities includes AIDA_AGENT_NAME, or a test asserts that send and read identity always coincide.
+  2. The envelope records the role alongside the agent id when both are known.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T09:26:18.848468860Z
+modified_at: 2026-09-23T09:26:18.848468860Z
+req_type: Bug
+tags:
+- identity
+- mailbox
+- parent:BUG-1533
