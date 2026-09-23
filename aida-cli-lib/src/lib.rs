@@ -3219,6 +3219,7 @@ fn run() -> Result<()> {
         no_post_hooks,
         no_roles,
         no_agent_config,
+        no_schedule,
         force,
         footprint,
         distributed: _,
@@ -3387,6 +3388,15 @@ fn run() -> Result<()> {
                     e
                 );
             }
+        }
+        // STORY-1463: a registered `[schedule]` job only ever runs when
+        // something invokes `aida schedule tick`; nothing does that by
+        // default. At a TTY, offer to install the crontab entry that drives
+        // it (default: no — writing to the operator's crontab is a real
+        // side effect). Non-interactive init and --no-schedule never prompt
+        // and never install anything. trace:STORY-1463 | ai:claude
+        if !*no_schedule && init_footprint == cli::InitFootprint::Full {
+            maintenance_schedule::maybe_offer_tick_install(&statusline_project_root());
         }
         // STORY-831: minimal-footprint projects intentionally do not commit
         // agent instruction files, so the machine-global awareness snippet is
@@ -22465,6 +22475,22 @@ fn collect_doctor_findings(
         });
     }
 
+    // STORY-1463: a registered `[schedule]` job only ever runs when
+    // something invokes `aida schedule tick`; nothing does that by default.
+    // Gated on the category filter (like the network-touching `ci` check
+    // above) so an unrelated `--category` selection never pays for the
+    // crontab probe; `scheduler_driver_doctor_findings` itself gates the
+    // shell-out on evidence existing (a repo with no enabled substrate jobs
+    // never calls `crontab`). trace:STORY-1463 | ai:claude
+    if filter
+        .as_deref()
+        .is_none_or(|want| want == "scheduler-driver")
+    {
+        for finding in maintenance_schedule::scheduler_driver_doctor_findings(project_root)? {
+            push(finding);
+        }
+    }
+
     out.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     Ok(out)
 }
@@ -22740,6 +22766,19 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "round-trip-artifacts",
     ),
+    // STORY-1463: a registered `[schedule]` job that nothing ever ticks —
+    // no crontab driver installed, or an installed one that isn't actually
+    // firing (a substrate job overdue by more than 2x its interval).
+    (
+        &[
+            "scheduler-driver",
+            "scheduler",
+            "schedule-driver",
+            "schedule-tick",
+            "cron",
+        ],
+        "scheduler-driver",
+    ),
 ];
 
 fn normalize_doctor_category(raw: &str) -> Result<String> {
@@ -22756,6 +22795,10 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         .join(", ");
     anyhow::bail!("unknown doctor category `{}` (valid: {})", s, valid);
 }
+
+#[cfg(test)]
+#[path = "tests/story_1463_scheduler_tick_cron_tests.rs"]
+mod story_1463_scheduler_tick_cron_tests;
 
 /// TASK-1089 (criterion 2): an explicit opt-out. A Completed spec tagged
 /// `doctor:no-code` legitimately produces no code commit — an ops/cleanup task
