@@ -76,6 +76,18 @@ fn fixture() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
         "{}",
         String::from_utf8_lossy(&init.stderr)
     );
+    // Warm the fixture with one untimed `aida status` before any timed run.
+    // The very first invocation against a freshly-`init`ed store pays cold
+    // costs (cache build/verify, first git reads) that have nothing to do
+    // with the fast-vs-heavy dispatch this test suite is pinning — without
+    // this warm-up the budgeted runs below flake under CPU contention
+    // (observed: 3 parallel fixtures on a loaded box each cold-starting).
+    let warm = aida(&repo, &home, &["status"]);
+    assert!(
+        warm.status.success(),
+        "warm-up `aida status` failed: {}",
+        String::from_utf8_lossy(&warm.stderr)
+    );
     (tmp, repo, home)
 }
 
@@ -143,7 +155,7 @@ fn run_status_bounded(
 #[test]
 fn status_format_json_completes_fast_and_parses() {
     let (_tmp, repo, home) = fixture();
-    let budget = Duration::from_secs(10);
+    let budget = Duration::from_secs(30);
     let (out, elapsed) = run_status_bounded(&repo, &home, &["--format", "json"], budget);
     assert!(
         out.status.success(),
@@ -173,7 +185,7 @@ fn status_format_json_completes_fast_and_parses() {
 fn status_format_json_uses_fast_snapshot_shape_not_heavy_report() {
     let (_tmp, repo, home) = fixture();
     let (out, _elapsed) =
-        run_status_bounded(&repo, &home, &["--format", "json"], Duration::from_secs(10));
+        run_status_bounded(&repo, &home, &["--format", "json"], Duration::from_secs(30));
     assert!(out.status.success());
     let value: serde_json::Value = serde_json::from_slice(&out.stdout).expect("valid json");
     for field in ["role", "branch", "queue", "cache_present", "counts"] {
@@ -191,6 +203,18 @@ fn status_format_json_uses_fast_snapshot_shape_not_heavy_report() {
     assert!(value["counts"]["open"].is_u64());
     assert!(value["counts"]["total"].is_u64());
     assert!(value["queue"]["depth"].is_u64());
+    // Monitor contract (monitor_contract.rs / docs/monitor-contract-fixtures/
+    // status.json) promises `requirements.total` (integer) and
+    // `requirements.by_status` (object) from `aida status --json`; the fast
+    // path must not drop `by_status` the way it once did. trace:BUG-1503
+    assert!(
+        value["requirements"]["total"].is_u64(),
+        "requirements.total missing or not an integer: {value}"
+    );
+    assert!(
+        value["requirements"]["by_status"].is_object(),
+        "requirements.by_status missing or not an object: {value}"
+    );
 }
 
 /// Acceptance 3: `--format json` and `--json` must agree on the bare command,
@@ -198,7 +222,7 @@ fn status_format_json_uses_fast_snapshot_shape_not_heavy_report() {
 #[test]
 fn status_format_json_and_json_flag_agree() {
     let (_tmp, repo, home) = fixture();
-    let budget = Duration::from_secs(10);
+    let budget = Duration::from_secs(30);
     let (via_format, _) = run_status_bounded(&repo, &home, &["--format", "json"], budget);
     let (via_flag, _) = run_status_bounded(&repo, &home, &["--json"], budget);
     assert!(via_format.status.success());

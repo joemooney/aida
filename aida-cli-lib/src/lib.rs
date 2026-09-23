@@ -73712,6 +73712,9 @@ struct FastStatusSnapshot {
     /// with archived/completed/deferred corpses; this is the reconcilable count.
     queue_actionable: usize,
     counts: FastStatusCounts,
+    /// Per-status breakdown of the same row set `counts` is tallied from —
+    /// the monitor-contract `requirements.by_status` field (BUG-1503).
+    by_status: std::collections::BTreeMap<String, usize>,
     cache_present: bool,
 }
 
@@ -73789,22 +73792,54 @@ fn fast_status_counts_with_defer<'a>(
     c
 }
 
+/// The BUG-1503 monitor-contract companion to [`fast_status_counts_with_defer`]:
+/// the SAME row set, the SAME real/standing-artifact/deferred exclusions (so
+/// the values sum to exactly `counts.total`), grouped by the raw cache
+/// `status` string instead of tallied into the fixed scalar buckets. Keys use
+/// the cache's stored Debug-form casing (e.g. "InProgress", "Draft") — the
+/// same strings the heavy text panel's `by_status` breakdown groups on
+/// (`status_cmd.rs`'s `s.status.clone()`), so a monitor consumer sees
+/// identical keys regardless of which status surface it polls.
+// trace:BUG-1503 | ai:claude
+fn fast_status_by_status_with_defer<'a>(
+    rows: impl IntoIterator<Item = (&'a str, &'a str, bool, &'a str)>,
+) -> std::collections::BTreeMap<String, usize> {
+    let mut by_status: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
+    for (status, req_type, deferred, tags_json) in rows {
+        if !is_real_requirement_summary(req_type) || is_standing_artifact_type(req_type) {
+            continue;
+        }
+        if deferred || tags_json.contains("\"deferred:") {
+            continue;
+        }
+        *by_status.entry(status.to_string()).or_insert(0) += 1;
+    }
+    by_status
+}
+
 /// Read `(status, req_type)` for every non-archived row straight from the cache
 /// DB (read-only sqlite), then count via [`fast_status_counts`]. This is the
 /// same read-only cache `read_draft_backlog_depth` uses — NO `backend.load()`, no
-/// git spawn. Returns zeroed counts when the cache is absent/unreadable (a fresh
-/// `aida init` with no reads yet).
-// trace:STORY-707 | ai:claude
-fn fast_status_counts_from_cache(cache_path: &std::path::Path) -> FastStatusCounts {
+/// git spawn. Returns zeroed counts (and an empty `by_status`) when the cache is
+/// absent/unreadable (a fresh `aida init` with no reads yet). A single `SELECT`
+/// of `requirements_cache` (grouped in Rust rather than SQL, so it can share
+/// the exact real/standing-artifact/deferred exclusions the scalar counts
+/// already apply) feeds both the scalar counts and the per-status
+/// breakdown — one query against the cache, not two.
+// trace:STORY-707 trace:BUG-1503 | ai:claude
+fn fast_status_counts_from_cache(
+    cache_path: &std::path::Path,
+) -> (FastStatusCounts, std::collections::BTreeMap<String, usize>) {
     if !cache_path.exists() {
-        return FastStatusCounts::default();
+        return (FastStatusCounts::default(), Default::default());
     }
     let conn = match rusqlite::Connection::open_with_flags(
         cache_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     ) {
         Ok(c) => c,
-        Err(_) => return FastStatusCounts::default(),
+        Err(_) => return (FastStatusCounts::default(), Default::default()),
     };
     let has_deferred_column = conn
         .prepare("SELECT deferred FROM requirements_cache LIMIT 0")
@@ -73828,7 +73863,7 @@ fn fast_status_counts_from_cache(cache_path: &std::path::Path) -> FastStatusCoun
     };
     let mut stmt = match conn.prepare(sql) {
         Ok(s) => s,
-        Err(_) => return FastStatusCounts::default(),
+        Err(_) => return (FastStatusCounts::default(), Default::default()),
     };
     let rows = stmt.query_map([], |row| {
         Ok((
@@ -73839,14 +73874,20 @@ fn fast_status_counts_from_cache(cache_path: &std::path::Path) -> FastStatusCoun
         ))
     });
     let Ok(rows) = rows else {
-        return FastStatusCounts::default();
+        return (FastStatusCounts::default(), Default::default());
     };
     let collected: Vec<(String, String, bool, String)> = rows.flatten().collect();
-    fast_status_counts_with_defer(
+    let counts = fast_status_counts_with_defer(
         collected
             .iter()
             .map(|(s, t, d, tags)| (s.as_str(), t.as_str(), *d, tags.as_str())),
-    )
+    );
+    let by_status = fast_status_by_status_with_defer(
+        collected
+            .iter()
+            .map(|(s, t, d, tags)| (s.as_str(), t.as_str(), *d, tags.as_str())),
+    );
+    (counts, by_status)
 }
 
 /// Assemble the fast snapshot from cache-cheap inputs: role from
@@ -73865,7 +73906,7 @@ fn collect_fast_status_snapshot(project_root: &std::path::Path) -> FastStatusSna
     let mcp_authority_lines = agent_registry::mcp_authority_status_lines_for_project(project_root);
     let cache_path = project_root.join(".aida/cache.db");
     let cache_present = cache_path.exists();
-    let counts = fast_status_counts_from_cache(&cache_path);
+    let (counts, by_status) = fast_status_counts_from_cache(&cache_path);
     FastStatusSnapshot {
         role,
         role_is_default,
@@ -73874,6 +73915,7 @@ fn collect_fast_status_snapshot(project_root: &std::path::Path) -> FastStatusSna
         queue_depth,
         queue_actionable,
         counts,
+        by_status,
         cache_present,
     }
 }
@@ -74002,6 +74044,14 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
 // SAME cache-sourced `counts` already computed for the human view, at no
 // extra cost. Plain `//` keeps the marker out of any doc/help.
 // trace:BUG-1503 | ai:claude
+//
+// The monitor contract (`monitor_contract.rs` / `docs/monitor-contract-
+// fixtures/status.json`) promises `requirements.total` (an integer) AND
+// `requirements.by_status` (an object) from `aida status --json`. `counts`
+// (the internal/duplicate scalar key) stays as-is; `requirements` gets the
+// `by_status` breakdown alongside it so the contract holds on the fast path
+// too, not just when it used to fall through to the heavy report.
+// trace:BUG-1503 | ai:claude
 fn print_fast_status_json(snap: &FastStatusSnapshot) -> Result<()> {
     let counts = serde_json::json!({
         "open": snap.counts.open,
@@ -74009,6 +74059,8 @@ fn print_fast_status_json(snap: &FastStatusSnapshot) -> Result<()> {
         "draft": snap.counts.draft,
         "total": snap.counts.total,
     });
+    let mut requirements = counts.clone();
+    requirements["by_status"] = serde_json::json!(snap.by_status);
     let out = serde_json::json!({
         "role": snap.role,
         "role_is_default": snap.role_is_default,
@@ -74019,7 +74071,7 @@ fn print_fast_status_json(snap: &FastStatusSnapshot) -> Result<()> {
         },
         "cache_present": snap.cache_present,
         "counts": counts,
-        "requirements": counts,
+        "requirements": requirements,
     });
     println!("{}", serde_json::to_string_pretty(&out)?);
     Ok(())
