@@ -74837,6 +74837,59 @@ fn pr_open_spec_guard_violation(
     Some(other_ids)
 }
 
+// ============================================================================
+// TASK-1444 (containment for BUG-1510 AC4): reviewer-verdict shelve
+// attribution.
+//
+// The incident: STORY-1391's drain got a RequestChanges verdict whose
+// findings were about BUG-1420 (the PR's commits were all trailered
+// BUG-1420, per the TASK-1442 guard above), and the orchestrator shelved it
+// onto STORY-1391 — the lease's spec — silently. A shelve must record
+// against the spec the VERDICT is about, or say the attribution is
+// uncertain; it must never read as a confirmed attribution to the lease
+// when that was never checked.
+// ============================================================================
+
+/// Which spec a reviewer-verdict shelve should be recorded against.
+// trace:TASK-1444 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ShelveAttribution {
+    /// A commit trailer confirms the verdict is about the lease's own spec.
+    Confirmed(String),
+    /// Every non-plan commit trailer names exactly one spec, and it is NOT
+    /// the lease's — the shelve should target THAT spec, not the lease.
+    Reattributed(String),
+    /// The commits don't confirm a single spec (none named, or more than
+    /// one) — the attribution can't be safely resolved either way.
+    Uncertain(String),
+}
+
+/// Pure, testable core: decide which spec a reviewer-verdict shelve is
+/// actually about, from what the PR's own commits credit — never silently
+/// `lease_spec`. Reuses `pr_open_spec_guard_violation`'s trailer extraction
+/// (TASK-1442) so the two guards agree on what a trailer is: `None` there
+/// means some commit trailers `lease_spec` itself (`Confirmed`); `Some(ids)`
+/// means none does, and `ids` is what the non-plan commits DO name — exactly
+/// one other id means the verdict is confidently about that spec instead
+/// (`Reattributed`), while zero or several distinct ids means the commits
+/// don't settle it (`Uncertain`).
+// trace:TASK-1444 | ai:claude
+fn decide_shelve_attribution(commits: &[(String, String)], lease_spec: &str) -> ShelveAttribution {
+    match pr_open_spec_guard_violation(commits, lease_spec) {
+        None => ShelveAttribution::Confirmed(lease_spec.to_string()),
+        Some(other_ids) => match other_ids.as_slice() {
+            [only] => ShelveAttribution::Reattributed(only.clone()),
+            [] => ShelveAttribution::Uncertain(
+                "no commit on this PR carries a spec-ID trailer".to_string(),
+            ),
+            many => ShelveAttribution::Uncertain(format!(
+                "commits name multiple specs: {}",
+                many.join(", ")
+            )),
+        },
+    }
+}
+
 /// Refuse (exit 1) to open a PR when no commit the branch adds over the
 /// default branch carries a `(SPEC-ID)` trailer naming `expected_spec`. A
 /// no-op when the commit range can't be read (soft warning — a git hiccup
@@ -93234,13 +93287,50 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         failure: &auto_complete::PhaseFailure,
         recovery_hint: &str,
     ) -> anyhow::Result<Option<aida_core::FailureReason>> {
+        // TASK-1444 / BUG-1510: a reviewer-verdict shelve must not silently
+        // land on the lease's spec — check what the PR's own commits credit
+        // and shelve against THAT spec when it's confidently a different
+        // one, or say so explicitly when the commits don't settle it.
+        // trace:TASK-1444 | ai:claude
+        let (target_spec, detail): (String, String) = if matches!(
+            failure.kind,
+            auto_complete::FailureKind::VerdictRequestChanges
+                | auto_complete::FailureKind::VerdictReject
+        ) {
+            let range = resolve_gate_range(&self.project_root, None);
+            match read_commits_in_range(&self.project_root, &range) {
+                Ok(commits) => match decide_shelve_attribution(&commits, spec) {
+                    ShelveAttribution::Confirmed(_) => (spec.to_string(), failure.reason.clone()),
+                    ShelveAttribution::Reattributed(other) => (
+                        other.clone(),
+                        format!(
+                            "{} (reattributed: the PR's commits are trailered {}, not the lease {})",
+                            failure.reason, other, spec
+                        ),
+                    ),
+                    ShelveAttribution::Uncertain(note) => (
+                        spec.to_string(),
+                        format!(
+                            "{} (attribution uncertain: {} — shelved against the lease {} unconfirmed)",
+                            failure.reason, note, spec
+                        ),
+                    ),
+                },
+                // A git hiccup reading the commit range must not block the
+                // shelve itself — fall back to the lease with no note, same
+                // as pre-TASK-1444 behaviour.
+                Err(_) => (spec.to_string(), failure.reason.clone()),
+            }
+        } else {
+            (spec.to_string(), failure.reason.clone())
+        };
         shelve_spec_on_failure(
             &self.project_root,
-            spec,
+            &target_spec,
             phase.slug(),
             phase.index() as u8,
             failure.kind.cause_slug(),
-            &failure.reason,
+            &detail,
             recovery_hint,
         )
     }
@@ -94894,3 +94984,8 @@ mod bug_1418_drain_token_measurement_tests;
 #[cfg(test)]
 #[path = "tests/task_1442_pr_open_spec_guard_tests.rs"]
 mod task_1442_pr_open_spec_guard_tests;
+
+// trace:TASK-1444 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1444_shelve_attribution_tests.rs"]
+mod task_1444_shelve_attribution_tests;
