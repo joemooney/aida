@@ -1,0 +1,23 @@
+id: 01a0cf06-058b-7bc2-b21a-6f1cee1aa5bf
+spec_id: TASK-1456
+agreed_id: TASK-1456
+title: A Done spec with an outstanding refusal at its tip is invisible in aida list's open lens, and an all-refused wave idles
+description: |-
+  Split from BUG-1515 (2026-09-23). BUG-1515 made queue list/next/work say 'rework needed' (not 'awaiting merge') for a Done spec whose refusal is at the branch tip. Two criteria remain: (1) aida list's default open lens drops Done specs, so these rework-needed specs vanish from the main work list; (2) a drain wave whose every candidate is rework-needed idles (zero-eligible) without saying why.
+
+  ## Acceptance
+  1. aida list (default lens) shows a Done spec with an outstanding tip refusal, labelled rework-needed.
+  2. A zero-eligible wave caused by rework-needed specs names them and the rework command.
+  3. Tests for both.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T16:07:53.483645394Z
+modified_at: 2026-09-23T16:07:53.483645394Z
+req_type: Task
+tags:
+- followup
+- parent:BUG-1515
+- queue
+- review
