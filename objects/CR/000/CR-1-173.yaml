@@ -1,0 +1,52 @@
+id: 01a0cea3-12fb-7253-b63d-c450eac7fa45
+spec_id: CR-1-173
+title: 'Stamp filing provenance on every spec: code HEAD SHA, branch, dirty flag, aida version and build SHA, filing agent/session'
+description: |
+  ## Problem
+  A spec records `created_at` and `created_by` (the shell user) but nothing about the code state or tooling it was filed against. So:
+  - "Is this bug still present?" has no starting point (no SHA to diff or bisect from).
+  - A spec filed by a stale dev binary cannot be told apart from one filed against current code. In this repo the active binary is often built from a different commit than HEAD (`aida dev status` reports DIVERGED).
+  - In a multi-agent fleet, "which agent/session filed this" is lost; `created_by` is just `joe`.
+  - Downstream bug reports against aida do not carry the aida version that was in use.
+
+  The existing `origin` field (STORY-634) names only a repo and component in multi-repo workspaces.
+
+  ## Proposal
+  Add one optional, write-once struct on `Requirement`, stamped automatically at filing, for example:
+
+  ```yaml
+  filed_at:
+    code_sha: abc1234...      # HEAD of the code repo (not the aida-store branch)
+    branch: feat/x
+    dirty: true               # working tree had uncommitted changes
+    aida_version: 0.9.3
+    aida_build_sha: def5678   # SHA the running binary was built from
+    vendor: codex             # filing agent, when known (AIDA_SESSION_ROLE / hook env / MCP client)
+    session: 01a0...          # filing session id, when known
+  ```
+
+  ## Acceptance
+  1. `aida add` and the MCP `add_requirement` stamp `filed_at` automatically. No flag is required.
+  2. Best-effort: each field is left out when it cannot be detected (no git repo, detached state, unknown agent). Detection failure never fails or slows the add noticeably (no network).
+  3. Write-once: `aida edit` / `update_requirement` never modify `filed_at`. Existing stores without the field round-trip unchanged (serde default, skip if none).
+  4. Public-repo hygiene: no hostname, absolute path, or email is recorded. Record the branch-name decision (include / hash / omit) as an ADR or in the acceptance notes.
+  5. `aida show` renders one line, e.g. `filed at abc1234 (feat/x, dirty) · aida 0.9.3 (def5678) · codex`. Also shown in JSON/TOON output.
+  6. A drift hint: `aida show` (or `aida why`) reports how many commits since `code_sha` touched files this spec's `trace:` comments or linked commits point at. A cheap version, or a follow-up if too heavy.
+  7. In the aida repo, when `aida_build_sha` differs from `code_sha`, show it plainly: the spec was filed by a binary that did not match the checked-out code.
+
+  ## Notes
+  - Scaffold version is a PROJECT fact, not a per-spec one. Each scaffolded file carries its own `AIDA Generated: vX | checksum` marker, so a project can be at mixed versions. Do not stamp it on specs. Instead surface a project scaffold summary (versions present, count of stale/edited files) in `aida report` (STORY-1004) and `aida doctor`, where it matters when reporting an aida bug downstream.
+  - The finishing SHA is already captured by the `(SPEC-ID)` commit trailer. Filing SHA → finishing SHA gives a spec's full code range.
+  - `vendor`/`session` connect to the seat identity proposed in CR-1-172.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T14:19:48.859651743Z
+modified_at: 2026-09-23T14:19:48.859651743Z
+req_type: ChangeRequest
+tags:
+- intake:requester
+- provenance
+- spec-model
+- traceability
