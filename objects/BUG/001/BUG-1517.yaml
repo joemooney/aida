@@ -13,12 +13,12 @@ description: |-
   1. --resume-dry-run succeeds regardless of seat role, for both --from-pr and --resume-drain.
   2. The same invocation WITHOUT --resume-dry-run still refuses for a non-advisor seat, unchanged.
   3. A test covers both halves, so a fix that drops the gate entirely fails.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:07:21.857249644Z
-modified_at: 2026-09-23T07:46:42.709010895Z
+modified_at: 2026-09-23T08:10:20.639411513Z
 req_type: Bug
 tags:
 - papercut authority-gate aida:queue:work
@@ -41,3 +41,21 @@ comments:
   created_at: 2026-09-23T07:46:42.709010895Z
   modified_at: 2026-09-23T07:46:42.709010895Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cd50-d053-7c23-90c1-baa7c35f213a
+  author: aida-auto-bump
+  timestamp: 2026-09-23T08:10:20.627914346Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cd50-d05f-7233-a057-007e1c06460a
+  timestamp: 2026-09-23T08:10:20.639409717Z
+  agent: aida
+  commit_sha: 91155561e725f90389e9ddcad8cf0c6209892635
+  summary: Completed via merge 91155561
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T08:10:18.535908585Z
+  completion_sha: 91155561e725f90389e9ddcad8cf0c6209892635
