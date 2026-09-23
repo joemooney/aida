@@ -123,6 +123,104 @@ pub(crate) struct AwaitingReport {
     /// (which must stay local and fast, no full-store load) leaves it empty.
     // trace:BUG-1564 | ai:claude
     pub orphaned_in_progress: Vec<OrphanedInProgressItem>,
+    /// BUG-1530: the reading seat's session role (`AIDA_SESSION_ROLE` / the
+    /// role file), as the caller already resolves it for every other
+    /// role-scoped surface. Drives which channels the headline (`render`)
+    /// and the per-turn `compact_line` lead with — a reviewer's headline
+    /// must not lead with advisor-owned findings or implementer-owned
+    /// rework, and vice versa. `None` (no role known) keeps every channel
+    /// unscoped, exactly like before this field existed.
+    // trace:BUG-1530 | ai:claude
+    pub role: Option<String>,
+}
+
+/// BUG-1530: coarse seat classification for headline scoping. Only three
+/// channels have a single, specific-seat owner today (findings triage is
+/// advisor authority; a shelved/rework item is implementer work; a
+/// reviewer-queue row is routed to the reviewer seat specifically) — every
+/// other channel (a PR to merge, a brief filed for you, mail, an
+/// escalation, …) is "your own gate" regardless of which seat you sit in,
+/// so it stays universal and is never hidden by this classification.
+// trace:BUG-1530 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AwaitingSeat {
+    Reviewer,
+    Advisor,
+    Implementer,
+    Other,
+}
+
+/// Resolve the reading seat from a raw role string, normalizing aliases
+/// (`dialog` -> `advisor`) the same way every other role-scoped surface
+/// does. `None` when no role is known at all.
+// trace:BUG-1530 | ai:claude
+fn classify_seat(role: Option<&str>) -> Option<AwaitingSeat> {
+    let role = role?;
+    let role = role.trim();
+    if role.is_empty() {
+        return None;
+    }
+    // Review fix: role names are matched case-insensitively (`Reviewer` must
+    // not fall through to `Other` and hide the seat's own rows).
+    let canonical = crate::canonical_role_name(&role.to_ascii_lowercase());
+    Some(match canonical.as_str() {
+        "reviewer" => AwaitingSeat::Reviewer,
+        "advisor" => AwaitingSeat::Advisor,
+        "implementer" => AwaitingSeat::Implementer,
+        _ => AwaitingSeat::Other,
+    })
+}
+
+/// True when a channel owned by `owner` should be shown to `seat` — either
+/// because `seat` IS that owner, or because no seat is known at all (today's
+/// unscoped behavior, preserved exactly when `AIDA_SESSION_ROLE` is unset).
+// trace:BUG-1530 | ai:claude
+fn owned_channel_visible(seat: Option<AwaitingSeat>, owner: AwaitingSeat) -> bool {
+    match seat {
+        None => true,
+        // Review fix: an unrecognised seat (integrator, product, human, …) is
+        // not scoped at all — it sees every channel, never nothing (PRIN-5:
+        // an unknown seat must not hide actionable work). trace:BUG-1530
+        Some(AwaitingSeat::Other) => true,
+        Some(s) => s == owner,
+    }
+}
+
+#[cfg(test)]
+mod bug_1530_review_fix_tests {
+    use super::*;
+
+    // trace:BUG-1530 | ai:claude
+    #[test]
+    fn unrecognised_seat_sees_every_owned_channel() {
+        for role in ["integrator", "product", "human", "some-new-seat"] {
+            let seat = classify_seat(Some(role));
+            for owner in [
+                AwaitingSeat::Reviewer,
+                AwaitingSeat::Advisor,
+                AwaitingSeat::Implementer,
+            ] {
+                assert!(
+                    owned_channel_visible(seat, owner),
+                    "role {role} must see {owner:?}"
+                );
+            }
+        }
+    }
+
+    // trace:BUG-1530 | ai:claude
+    #[test]
+    fn role_matching_is_case_insensitive() {
+        assert_eq!(
+            classify_seat(Some("Reviewer")),
+            Some(AwaitingSeat::Reviewer)
+        );
+        assert_eq!(classify_seat(Some("ADVISOR")), Some(AwaitingSeat::Advisor));
+        assert!(owned_channel_visible(
+            classify_seat(Some("Reviewer")),
+            AwaitingSeat::Reviewer
+        ));
+    }
 }
 
 /// BUG-1564: one In-Progress spec with no live session/lease/process behind
@@ -693,6 +791,15 @@ impl AwaitingReport {
 
         let mut budget = cap;
         let mut overflow = 0usize;
+        // BUG-1530: scope the seat-owned channels (findings/shelved/reviewer)
+        // to the reading seat. `hidden_other_seat` accumulates the count of
+        // items folded away this way so the report says what it hid instead
+        // of silently dropping it (PRIN-5).
+        let seat = classify_seat(self.role.as_deref());
+        let show_findings = owned_channel_visible(seat, AwaitingSeat::Advisor);
+        let show_shelved = owned_channel_visible(seat, AwaitingSeat::Implementer);
+        let show_reviewer = owned_channel_visible(seat, AwaitingSeat::Reviewer);
+        let mut hidden_other_seat = 0usize;
 
         // Order: PRs first (most actionable — the unblocked-merge case),
         // then briefs (handoffs you owe), then findings line (a triage
@@ -803,7 +910,10 @@ impl AwaitingReport {
             )?;
             budget -= 1;
         }
-        if self.findings_total > 0 {
+        // trace:BUG-1530 | ai:claude — findings triage is advisor authority.
+        if self.findings_total > 0 && !show_findings {
+            hidden_other_seat += self.findings_total;
+        } else if self.findings_total > 0 {
             if budget == 0 {
                 overflow += 1;
             } else {
@@ -911,9 +1021,18 @@ impl AwaitingReport {
             }
             // trace:TASK-1305 | ai:claude — route through the shared hint so a
             // branch with an open PR is never told to open one.
+            // BUG-1530: unshipped work isn't scoped to any one seat — label
+            // it as such once a seat is known, rather than implying it's
+            // this seat's own gate.
+            let scope_note = if seat.is_some() {
+                " (project-wide)"
+            } else {
+                ""
+            };
             writeln!(
                 w,
-                "  🧭 unshipped work: {} on `{}` — {} commit{} ahead, age {}, PR {} — `{}`",
+                "  🧭 unshipped work{}: {} on `{}` — {} commit{} ahead, age {}, PR {} — `{}`",
+                scope_note,
                 item.spec_id.bold(),
                 item.branch,
                 item.commits_ahead,
@@ -942,7 +1061,12 @@ impl AwaitingReport {
         // the signal (a queue that reads five-deep on review when four are
         // really awaiting rework misdirects capacity at the wrong seat).
         // trace:BUG-1508 | ai:claude
-        if !self.reviewer_queue_items.is_empty() {
+        // trace:BUG-1530 | ai:claude — reviewer-queue rows are routed to the
+        // reviewer seat specifically; fold them into the hidden count for
+        // every other seat instead of itemizing.
+        if !self.reviewer_queue_items.is_empty() && !show_reviewer {
+            hidden_other_seat += self.reviewer_queue_items.len();
+        } else if !self.reviewer_queue_items.is_empty() {
             if budget == 0 {
                 overflow += 1;
             } else {
@@ -959,31 +1083,37 @@ impl AwaitingReport {
                 )?;
                 budget -= 1;
             }
-        }
-        // BUG-1508 AC2: every routed row still renders -- an
-        // already-reviewed row is never dropped, only annotated, so it
-        // reads as rework/resolved rather than silently disappearing.
-        for q in &self.reviewer_queue_items {
-            if budget == 0 {
-                overflow += 1;
-                continue;
+            // BUG-1508 AC2: every routed row still renders -- an
+            // already-reviewed row is never dropped, only annotated, so it
+            // reads as rework/resolved rather than silently disappearing.
+            for q in &self.reviewer_queue_items {
+                if budget == 0 {
+                    overflow += 1;
+                    continue;
+                }
+                let (glyph, label) = match q.state {
+                    review_verdict::ReviewActionability::NeedsReview => ("👀", "needs-review"),
+                    review_verdict::ReviewActionability::AwaitingRework => {
+                        ("🔧", "awaiting-rework")
+                    }
+                    review_verdict::ReviewActionability::Resolved => ("✅", "resolved"),
+                };
+                writeln!(
+                    w,
+                    "  {} {}: {} — {}",
+                    glyph,
+                    label,
+                    q.spec_id.bold(),
+                    q.title,
+                )?;
+                budget -= 1;
             }
-            let (glyph, label) = match q.state {
-                review_verdict::ReviewActionability::NeedsReview => ("👀", "needs-review"),
-                review_verdict::ReviewActionability::AwaitingRework => ("🔧", "awaiting-rework"),
-                review_verdict::ReviewActionability::Resolved => ("✅", "resolved"),
-            };
-            writeln!(
-                w,
-                "  {} {}: {} — {}",
-                glyph,
-                label,
-                q.spec_id.bold(),
-                q.title,
-            )?;
-            budget -= 1;
         }
-        if self.shelved_total > 0 {
+        // trace:BUG-1530 | ai:claude — a shelved/rework item is implementer
+        // work ("queue rework --work"); fold it away for other seats.
+        if self.shelved_total > 0 && !show_shelved {
+            hidden_other_seat += self.shelved_total;
+        } else if self.shelved_total > 0 {
             if budget == 0 {
                 overflow += 1;
             } else {
@@ -1036,6 +1166,18 @@ impl AwaitingReport {
                 "…".dimmed(),
                 overflow,
                 "aida status --awaiting --verbose".cyan(),
+            )?;
+        }
+        // trace:BUG-1530 | ai:claude — PRIN-5: say what is hidden. Never
+        // silently drop the advisor/implementer/reviewer-owned items folded
+        // out of this seat's headline; name the count instead.
+        if hidden_other_seat > 0 {
+            writeln!(
+                w,
+                "  {} {} item{} routed to other seats (not shown here)",
+                "·".dimmed(),
+                hidden_other_seat,
+                if hidden_other_seat == 1 { "" } else { "s" },
             )?;
         }
         writeln!(w)?;
@@ -1144,6 +1286,14 @@ impl AwaitingReport {
         if self.is_empty() {
             return None;
         }
+        // BUG-1530: scope the seat-owned channels (findings/shelved/reviewer)
+        // to the reading seat, same as `render`. `hidden_other_seat` says
+        // what was folded away instead of silently dropping it (PRIN-5).
+        let seat = classify_seat(self.role.as_deref());
+        let show_findings = owned_channel_visible(seat, AwaitingSeat::Advisor);
+        let show_shelved = owned_channel_visible(seat, AwaitingSeat::Implementer);
+        let show_reviewer = owned_channel_visible(seat, AwaitingSeat::Reviewer);
+        let mut hidden_other_seat = 0usize;
         let mut parts: Vec<String> = Vec::new();
         if !self.mergeable_prs.is_empty() {
             parts.push(pluralize(self.mergeable_prs.len(), "PR", "PRs"));
@@ -1154,8 +1304,13 @@ impl AwaitingReport {
         if !self.pending_briefs.is_empty() {
             parts.push(pluralize(self.pending_briefs.len(), "brief", "briefs"));
         }
+        // trace:BUG-1530 | ai:claude — findings triage is advisor authority.
         if self.findings_total > 0 {
-            parts.push(pluralize(self.findings_total, "finding", "findings"));
+            if show_findings {
+                parts.push(pluralize(self.findings_total, "finding", "findings"));
+            } else {
+                hidden_other_seat += self.findings_total;
+            }
         }
         if self.mail.unread > 0 {
             let urgent = if self.mail.urgent > 0 {
@@ -1191,27 +1346,48 @@ impl AwaitingReport {
         }
         // trace:STORY-1043 | ai:codex
         if !self.unshipped_work.is_empty() {
-            parts.push(format!("unshipped:{}", self.unshipped_work.len()));
+            // BUG-1530: unshipped work isn't scoped to any one seat — label
+            // it as project-wide once a seat is known, rather than implying
+            // it's this seat's own gate.
+            let label = if seat.is_some() {
+                "unshipped (project-wide)"
+            } else {
+                "unshipped"
+            };
+            parts.push(format!("{}:{}", label, self.unshipped_work.len()));
         }
         if self.nightly_red.is_some() {
             parts.push("nightly-red".to_string());
         }
+        // trace:BUG-1530 | ai:claude — reviewer-queue rows are routed to the
+        // reviewer seat specifically.
         if !self.reviewer_queue_items.is_empty() {
-            // BUG-1508 AC4/AC7: "actionable N of M routed" everywhere this
-            // depth figure is printed, including the compact per-turn line.
-            let actionable = self
-                .reviewer_queue_items
-                .iter()
-                .filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview)
-                .count();
-            parts.push(format!(
-                "actionable {} of {} routed",
-                actionable,
-                self.reviewer_queue_items.len()
-            ));
+            if show_reviewer {
+                // BUG-1508 AC4/AC7: "actionable N of M routed" everywhere
+                // this depth figure is printed, including the compact
+                // per-turn line.
+                let actionable = self
+                    .reviewer_queue_items
+                    .iter()
+                    .filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview)
+                    .count();
+                parts.push(format!(
+                    "actionable {} of {} routed",
+                    actionable,
+                    self.reviewer_queue_items.len()
+                ));
+            } else {
+                hidden_other_seat += self.reviewer_queue_items.len();
+            }
         }
+        // trace:BUG-1530 | ai:claude — a shelved/rework item is implementer
+        // work ("queue rework --work").
         if self.shelved_total > 0 {
-            parts.push(format!("{} in rework", self.shelved_total));
+            if show_shelved {
+                parts.push(format!("{} in rework", self.shelved_total));
+            } else {
+                hidden_other_seat += self.shelved_total;
+            }
         }
         if !self.escalations.is_empty() {
             parts.push(pluralize(
@@ -1234,6 +1410,12 @@ impl AwaitingReport {
                 "orphaned in-progress",
                 "orphaned in-progress",
             ));
+        }
+        // trace:BUG-1530 | ai:claude — PRIN-5: say what is hidden. Never
+        // silently drop the advisor/implementer/reviewer-owned items folded
+        // out of this seat's headline; name the count instead.
+        if hidden_other_seat > 0 {
+            parts.push(format!("{hidden_other_seat} for other seats"));
         }
         if parts.is_empty() {
             return None;
@@ -2575,5 +2757,158 @@ mod tests {
         assert_eq!(v["reviewer_queue_items"][0]["state"], "awaiting-rework");
         assert_eq!(v["reviewer_actionable_of_routed"]["actionable"], 0);
         assert_eq!(v["reviewer_actionable_of_routed"]["routed"], 1);
+    }
+
+    // BUG-1530: the reproduction from the bug report — a reviewer seat with
+    // advisor-owned findings, implementer-owned shelved/rework, and its own
+    // routed reviewer-queue row all populated at once. The reviewer's
+    // headline must lead with its own routed section and fold the other two
+    // away into a named "for other seats" count rather than leading with
+    // them or silently dropping them.
+    fn mixed_seat_report(role: &str) -> AwaitingReport {
+        AwaitingReport {
+            findings_total: 11,
+            shelved_total: 8,
+            reviewer_queue_items: vec![reviewer_item(
+                "BUG-9",
+                review_verdict::ReviewActionability::NeedsReview,
+            )],
+            role: Some(role.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn bug_1530_reviewer_headline_leads_with_own_routed_work_not_findings_or_rework() {
+        let r = mixed_seat_report("reviewer");
+
+        let compact = r.compact_line().expect("populated report must have a line");
+        assert!(compact.contains("actionable 1 of 1 routed"), "{compact}");
+        assert!(!compact.contains("finding"), "{compact}");
+        assert!(!compact.contains("in rework"), "{compact}");
+        // 11 findings + 8 shelved = 19 items folded away for other seats.
+        assert!(compact.contains("19 for other seats"), "{compact}");
+
+        let mut buf = Vec::new();
+        assert!(r.render(true, &mut buf).unwrap());
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(out.contains("reviewer: actionable 1 of 1 routed"), "{out}");
+        assert!(out.contains("needs-review: BUG-9"), "{out}");
+        assert!(!out.contains("finding"), "{out}");
+        assert!(!out.contains("shelved item"), "{out}");
+        assert!(out.contains("19 items routed to other seats"), "{out}");
+    }
+
+    #[test]
+    fn bug_1530_advisor_headline_leads_with_findings_not_reviewer_or_rework() {
+        let r = mixed_seat_report("advisor");
+
+        let compact = r.compact_line().expect("populated report must have a line");
+        assert!(compact.contains("11 findings"), "{compact}");
+        assert!(!compact.contains("actionable"), "{compact}");
+        assert!(!compact.contains("in rework"), "{compact}");
+        // 8 shelved + 1 reviewer row = 9 items folded away for other seats.
+        assert!(compact.contains("9 for other seats"), "{compact}");
+
+        let mut buf = Vec::new();
+        assert!(r.render(true, &mut buf).unwrap());
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(out.contains("finding"), "{out}");
+        assert!(!out.contains("needs-review: BUG-9"), "{out}");
+        assert!(!out.contains("shelved item"), "{out}");
+        assert!(out.contains("9 items routed to other seats"), "{out}");
+    }
+
+    #[test]
+    fn bug_1530_implementer_headline_leads_with_rework_not_findings_or_reviewer() {
+        let r = mixed_seat_report("implementer");
+
+        let compact = r.compact_line().expect("populated report must have a line");
+        assert!(compact.contains("8 in rework"), "{compact}");
+        assert!(!compact.contains("finding"), "{compact}");
+        assert!(!compact.contains("actionable"), "{compact}");
+        // 11 findings + 1 reviewer row = 12 items folded away for other seats.
+        assert!(compact.contains("12 for other seats"), "{compact}");
+    }
+
+    // Acceptance #5: the reviewer and advisor headlines differ, and each
+    // names its own routed section — a test that only checked one seat would
+    // pass vacuously.
+    #[test]
+    fn bug_1530_reviewer_and_advisor_headlines_differ_and_each_names_its_own_section() {
+        let reviewer_line = mixed_seat_report("reviewer").compact_line().unwrap();
+        let advisor_line = mixed_seat_report("advisor").compact_line().unwrap();
+        assert_ne!(reviewer_line, advisor_line);
+        assert!(reviewer_line.contains("routed"), "{reviewer_line}");
+        assert!(advisor_line.contains("findings"), "{advisor_line}");
+    }
+
+    // Acceptance: with no role set, today's unscoped behavior is unchanged —
+    // every channel appears, nothing is folded into a hidden count.
+    #[test]
+    fn bug_1530_no_role_keeps_todays_unscoped_behavior() {
+        let mut r = mixed_seat_report("reviewer");
+        r.role = None;
+
+        let compact = r.compact_line().expect("populated report must have a line");
+        assert!(compact.contains("11 findings"), "{compact}");
+        assert!(compact.contains("8 in rework"), "{compact}");
+        assert!(compact.contains("actionable 1 of 1 routed"), "{compact}");
+        assert!(!compact.contains("for other seats"), "{compact}");
+
+        let mut buf = Vec::new();
+        assert!(r.render(true, &mut buf).unwrap());
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(out.contains("finding"), "{out}");
+        assert!(out.contains("shelved item"), "{out}");
+        assert!(out.contains("needs-review: BUG-9"), "{out}");
+        assert!(!out.contains("routed to other seats"), "{out}");
+    }
+
+    // Acceptance #4: unshipped work isn't scoped to any seat — once a seat
+    // is known it is labelled project-wide rather than implied to be this
+    // seat's own gate; with no role it renders exactly as before.
+    #[test]
+    fn bug_1530_unshipped_work_labelled_project_wide_once_a_seat_is_known() {
+        let item = UnshippedWorkItem {
+            spec_id: "STORY-1".to_string(),
+            branch: "story-1".to_string(),
+            commits_ahead: 1,
+            age: "1h".to_string(),
+            recovery: "aida pr ship story-1".to_string(),
+            pr_state: "absent".to_string(),
+        };
+        let scoped = AwaitingReport {
+            unshipped_work: vec![item.clone()],
+            role: Some("reviewer".to_string()),
+            ..Default::default()
+        };
+        let unscoped = AwaitingReport {
+            unshipped_work: vec![item],
+            ..Default::default()
+        };
+        assert!(
+            scoped
+                .compact_line()
+                .unwrap()
+                .contains("unshipped (project-wide):1"),
+            "{}",
+            scoped.compact_line().unwrap()
+        );
+        assert!(
+            unscoped.compact_line().unwrap().contains("unshipped:1"),
+            "{}",
+            unscoped.compact_line().unwrap()
+        );
+    }
+
+    // The `dialog` alias normalizes to `advisor` at this boundary too, same
+    // as every other role-scoped surface.
+    #[test]
+    fn bug_1530_dialog_alias_normalizes_to_advisor_seat() {
+        assert_eq!(classify_seat(Some("dialog")), Some(AwaitingSeat::Advisor));
+        assert_eq!(classify_seat(Some("advisor")), Some(AwaitingSeat::Advisor));
+        assert_eq!(classify_seat(Some("")), None);
+        assert_eq!(classify_seat(None), None);
     }
 }
