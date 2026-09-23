@@ -47,12 +47,12 @@ description: |-
       REQUIRED: say what happens to a verdict that can never be placed. Treating it as ABSENT is the PRIN-5 answer and costs a re-review. Treating it as CURRENT is the reassuring answer and is precisely how work merges behind a stale verdict. Pick the first, or justify the second in writing. Three of the six were recorded tonight by the reviewer seat on a stale binary, so this population is still growing until the rebuild lands.
 
   9. A MERGED PR LEAVES A QUEUE ENTRY GC CANNOT COLLECT - split to BUG-1512, filed and queued. Verified instance: STORY-1362 routed to reviewer, status draft, for PR #1986 merged at 17:54:33Z. `queue gc` keys off the review STORY's status, which never moves, so the entry is permanently un-collectable. It compounds with this spec: depth is overstated by stale-verdict entries AND by merged-PR entries at the same time.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:51:11.600098076Z
-modified_at: 2026-09-23T04:39:24.333128042Z
+modified_at: 2026-09-23T07:16:46.907013403Z
 req_type: Bug
 tags:
 - batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
