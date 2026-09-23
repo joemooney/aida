@@ -117,7 +117,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:06:55.400149929Z
-modified_at: 2026-09-23T11:26:24.218079986Z
+modified_at: 2026-09-23T11:26:25.848316883Z
 req_type: Bug
 tags:
 - parent:EPIC-62 awaiting unshipped-work alert-fatigue severity:operational
@@ -187,4 +187,10 @@ comments:
   content: 'Claude implementer result: claude/bug-1531 @ 9081ca88ca. collect_unshipped_work_items skips pr-N/mr-N review snapshots and branches whose tip equals an open PR head; a commit carrying an outstanding review verdict gets a ''do not ship'' hint instead of ''aida pr ship''. Squash-equivalence was already covered. 2 tests; 70 unshipped/awaiting tests pass. Awaiting review.'
   created_at: 2026-09-23T11:24:36.528160369Z
   modified_at: 2026-09-23T11:24:36.528160369Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce04-5638-7242-b259-cbc675ae7829
+  author: joe
+  content: 'PROXY DECISION (Claude for the operator, 04:27) after a review BLOCK (name-only exclusion hides a real branch named pr-123): exclude a pr-N/mr-N branch ONLY when the forge confirms PR/MR N exists and its head sha equals the branch tip. With no forge or a lookup failure, show the row labelled ''possible review snapshot, unverified'' (PRIN-5: never hide on name alone). Full report only; the notice path already skips this collector.'
+  created_at: 2026-09-23T11:26:25.848316883Z
+  modified_at: 2026-09-23T11:26:25.848316883Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
