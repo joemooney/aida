@@ -33,12 +33,12 @@ description: |-
     - the general form is the MCP self-respawn rule applied to the CLI, which is an existing mechanism rather than a new one
 
   I have NOT rebuilt. A live wave pins its launcher binary and I do not know the current drain state from the reviewer seat, so that is the operator's call, not mine to take unilaterally.
-status: Approved
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T01:36:35.887655718Z
-modified_at: 2026-09-23T06:25:07.970218415Z
+modified_at: 2026-09-23T21:49:33.358692964Z
 req_type: Task
 tags:
 - from-advisor:general
