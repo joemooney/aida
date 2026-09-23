@@ -62,6 +62,7 @@ mod doctor_cmd;
 mod drain_caps;
 mod drain_cmd;
 mod drain_lock;
+mod freshness_gate;
 mod git_backend_cmd;
 mod machine_readiness;
 mod mcp_cmd;
@@ -3712,6 +3713,14 @@ fn run() -> Result<()> {
     {
         // trace:BUG-1289 | ai:claude
         return handle_status_spec(spec, *idle_minutes, *json || output_format_is_json());
+    }
+
+    // TASK-188: make dev-binary staleness visible at the point of use. One
+    // stderr line, local git only (no network), silent outside the AIDA
+    // workspace or when the running build matches the default branch.
+    // trace:TASK-188 | ai:claude
+    if let Command::Status { spec: None, .. } = &cli.command {
+        crate::freshness_gate::warn_if_running_binary_stale();
     }
 
     // STORY-769: the `aida awaiting --notice` per-turn hook ALWAYS leads with a
@@ -51340,6 +51349,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             force,
             vendor,
             panes,
+            require_head,
         } => {
             install_burndown_order_override(order.as_ref())?;
             handle_burndown_run(
@@ -51355,6 +51365,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
                 *force,
                 vendor.as_deref(),
                 panes.as_deref(),
+                *require_head,
             )
         }
         crate::cli::BurndownCommand::Status { json } => handle_burndown_status(*json),
@@ -51554,6 +51565,8 @@ fn handle_burndown_run(
     // `aida queue work --auto-complete` it spawns then hosts its implementer in
     // a titled tmux window. Faithful-launcher: `None` leaves the env untouched.
     panes: Option<&str>,
+    // STORY-1414: refuse (not just warn) when the dev binary is stale.
+    require_head: bool,
 ) -> Result<()> {
     // TASK-1120: export the requested pane host so the headless drain (and any
     // per-spec auto-complete orchestration under it) inherits it. Absent → env
@@ -51724,6 +51737,10 @@ fn handle_burndown_run(
         burndown::selector_summary(status, tag, batch)
     );
     let project_root = find_main_worktree_root()?;
+    // STORY-1414: a wave pins its launching binary — warn about a stale dev
+    // build (refuse under --require-head) before the lock is taken.
+    // trace:STORY-1414 | ai:claude
+    crate::freshness_gate::enforce_wave_launch_gate(&project_root, require_head)?;
     // BUG-759: record the blessed spec set in the lock so `aida drain status`
     // can name what this launcher-held drain is working (pid + started +
     // specs) for its entire wall-clock — the launcher writes no per-phase
@@ -94183,7 +94200,7 @@ fn git_capture(worktree: &std::path::Path, args: &[&str]) -> Option<String> {
 
 /// The `[drain]` config values, all optional. trace:TASK-136 BUG-420 | ai:claude
 #[derive(Debug, Default, Clone, Copy)]
-struct DrainConfigToml {
+pub(crate) struct DrainConfigToml {
     gh_verify_retries: Option<usize>,
     no_progress_minutes: Option<u64>,
     phase_ceiling_minutes: Option<u64>,
@@ -94207,13 +94224,17 @@ struct DrainConfigToml {
     /// BUG-1275: tracked CI wait bounds. Durations accept seconds, `s`, or `m`.
     ci_idle: Option<u64>,
     ci_absolute: Option<u64>,
+    /// STORY-1414: `[drain] require_head = true` — refuse a drain launch on a
+    /// stale dev binary instead of warning.
+    // trace:STORY-1414 | ai:claude
+    require_head: Option<bool>,
 }
 
 /// Hand-rolled `[drain]`-section scanner for `.aida/config.toml`, mirroring the
 /// other section readers (e.g. `read_behavior_permission_mode`) so the crate
 /// stays serde-free for one small optional section. Unknown keys are ignored.
 /// trace:TASK-136 BUG-420 | ai:claude
-fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
+pub(crate) fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
     let mut out = DrainConfigToml::default();
     let config_path = project_dir.join(".aida").join("config.toml");
     let Ok(content) = std::fs::read_to_string(&config_path) else {
@@ -94250,6 +94271,7 @@ fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
                 "pipeline_depth" => out.pipeline_depth = val.parse().ok(),
                 "ci_idle" => out.ci_idle = parse_duration_seconds(val),
                 "ci_absolute" => out.ci_absolute = parse_duration_seconds(val),
+                "require_head" => out.require_head = parse_boolish(val),
                 _ => {}
             }
         }

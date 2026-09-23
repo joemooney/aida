@@ -5360,6 +5360,7 @@ pub(crate) fn handle_queue_command(
             resume_drain,
             drain_id,
             resume_dry_run,
+            require_head,
             from_pr,
             no_human,
             escalate_blocks,
@@ -5956,6 +5957,10 @@ pub(crate) fn handle_queue_command(
                         c
                     };
                     let project_root = find_main_worktree_root()?;
+                    // STORY-1414: warn about (or, with --require-head, refuse)
+                    // a stale dev binary. Before the lock so it records it.
+                    // trace:STORY-1414 | ai:claude
+                    crate::freshness_gate::enforce_wave_launch_gate(&project_root, *require_head)?;
                     drain_cmd::install_stop_request_env(&project_root);
                     drain_cmd::clear_stop_request(&project_root);
                     Some(drain_lock::acquire_drain_lock(
