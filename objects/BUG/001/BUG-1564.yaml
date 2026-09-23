@@ -15,12 +15,12 @@ description: |-
   - Deciding NOT to add a new surface is an acceptable outcome IF an existing one is made to carry it - aida awaiting, aida status and aida doctor are all candidates, and BUG-1556 notes that adding surfaces nobody reads is its own failure mode.
 
   NOT IN SCOPE: automatically recovering the spec. Surfacing first; an owner for the transition is the sibling spec split from criterion 4.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:48:31.641418092Z
-modified_at: 2026-09-23T08:11:29.406265819Z
+modified_at: 2026-09-23T08:11:31.416423801Z
 req_type: Bug
 tags:
 - aida:status
