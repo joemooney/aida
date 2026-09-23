@@ -36,7 +36,7 @@ fn normalized_lowercase(s: &str) -> String {
 fn banner_emits_all_load_bearing_substrate_signals() {
     colored::control::set_override(false);
     let mut buf = Vec::new();
-    write_implementer_complete_banner(&mut buf, 296).unwrap();
+    write_implementer_complete_banner(&mut buf, 296, true).unwrap();
     colored::control::unset_override();
     let out = strip_ansi(&String::from_utf8(buf).unwrap());
 
@@ -72,6 +72,39 @@ fn banner_emits_all_load_bearing_substrate_signals() {
     assert!(
         out.contains("orchestrator") && out.contains("next-phase") && out.contains("agent"),
         "hand-off naming missing: {out}"
+    );
+}
+
+/// BUG-1537: a PR this run did NOT merge (the BUG-574 already-merged
+/// no-op path) must NOT get the first-person "IMPLEMENTER COMPLETE"
+/// banner — that banner claims an act ("PR-N is merged... ran in steps
+/// 2-5 above") this run did not perform. It must instead get a short,
+/// honest "observed merged" line that names neither the loud headline
+/// nor a false first-person claim, while still telling the session
+/// there's nothing left to do.
+#[test]
+fn already_merged_gets_observed_line_not_implementer_complete_banner() {
+    colored::control::set_override(false);
+    let mut buf = Vec::new();
+    write_implementer_complete_banner(&mut buf, 296, false).unwrap();
+    colored::control::unset_override();
+    let out = strip_ansi(&String::from_utf8(buf).unwrap());
+
+    assert!(
+        !out.contains("IMPLEMENTER COMPLETE"),
+        "already-merged path must not print the acted-on-it banner: {out}"
+    );
+    assert!(
+        out.contains("PR-296"),
+        "PR number must still be named: {out}"
+    );
+    assert!(
+        out.contains("already merged") && out.contains("this run"),
+        "must state the PR was already merged and name 'this run' explicitly: {out}"
+    );
+    assert!(
+        out.contains("observed") || out.contains("Nothing was merged by this session"),
+        "must be honest that this run only observed the merge, not performed it: {out}"
     );
 }
 

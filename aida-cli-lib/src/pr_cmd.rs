@@ -2544,11 +2544,26 @@ pub(crate) fn pr_ship_handler(
         }
     }
 
-    eprintln!(
-        "{} aida pr ship — PR-{} shipped",
-        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
-        pr_number
-    );
+    // BUG-1537: `merged_this_run` (set only where THIS invocation performed
+    // the merge, never in the `already_merged` no-op path) is the one signal
+    // that distinguishes an act this run performed from one it merely
+    // observed already done. Report the two cases in first person only when
+    // true — PRIN-5: a coordination surface must not render an absent act
+    // identically to a performed one. trace:BUG-1537 | ai:claude
+    if merged_this_run {
+        eprintln!(
+            "{} aida pr ship — PR-{} shipped",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+            pr_number
+        );
+    } else {
+        eprintln!(
+            "{} aida pr ship — PR-{} was already merged (not by this run); \
+             ran post-merge sync + cleanup only",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+            pr_number
+        );
+    }
 
     // BUG-376: substrate-as-bouncer signal. The implementer's job ends
     // here — CI was gated in step 2, the merge ran in step 3, pull +
@@ -2559,9 +2574,12 @@ pub(crate) fn pr_ship_handler(
     // Paired with the `aida-implement.md` Step 7 skill directive. The
     // banner is the *substrate* half of the pairing — even an agent
     // that has not read or has misremembered the skill template sees
-    // this on the way out. trace:BUG-376 | ai:claude
+    // this on the way out. Printed only for a merge THIS run performed
+    // (BUG-1537) — an already-merged PR gets the shorter honest
+    // "observed merged" line instead, from the same function.
+    // trace:BUG-376 trace:BUG-1537 | ai:claude
     let mut stderr = std::io::stderr();
-    let _ = write_implementer_complete_banner(&mut stderr, pr_number);
+    let _ = write_implementer_complete_banner(&mut stderr, pr_number, merged_this_run);
 
     // Keep the activity-event formatter referenced so the warning-as-
     // unused-import doesn't fire if a future refactor narrows usage.
@@ -2591,11 +2609,35 @@ pub(crate) fn pr_ship_hold_root(project_root: &std::path::Path) -> std::path::Pa
 /// Takes `&mut impl Write` so the rendering is unit-testable without
 /// spawning a subprocess — mirrors the `status_cleanup::render` pattern.
 ///
-/// trace:BUG-376 | ai:claude
+/// `merged_this_run` (BUG-1537) distinguishes a merge THIS invocation
+/// performed from one it found already done (BUG-574's `already_merged`
+/// no-op path, e.g. a sibling seat merged first). Rendering the two cases
+/// identically is exactly the PRIN-5 defect BUG-1537 records: the loud
+/// first-person "IMPLEMENTER COMPLETE" banner claims an act ("PR-N is
+/// merged... ran in steps 2-5 above") that this run did not perform when
+/// `false`. In that case we print a short, honest "observed merged" line
+/// instead — still telling the session there is nothing left to do, without
+/// claiming credit for the merge.
+// trace:BUG-376 trace:BUG-1537 | ai:claude
 pub(crate) fn write_implementer_complete_banner(
     w: &mut impl std::io::Write,
     pr_number: u64,
+    merged_this_run: bool,
 ) -> std::io::Result<()> {
+    if !merged_this_run {
+        writeln!(w)?;
+        writeln!(
+            w,
+            "  {} PR-{} was already merged by another run before this `aida pr \
+             ship` started — this run only observed it and ran the idempotent \
+             post-merge steps (pull / auto-bump, lease release). Nothing was \
+             merged by this session; nothing left to watch or re-merge.",
+            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            pr_number,
+        )?;
+        writeln!(w)?;
+        return Ok(());
+    }
     let bar = "═".repeat(64);
     writeln!(w)?;
     writeln!(w, "{}", bar.bold())?;
