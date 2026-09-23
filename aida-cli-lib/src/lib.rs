@@ -84756,6 +84756,377 @@ fn guarded_execution_mode_drain_message(spec: &str, mode: aida_core::ExecutionMo
     )
 }
 
+// trace:BUG-1574 | ai:claude
+/// Whether `req` requires a human at the keyboard and must never be driven,
+/// stolen, rebased, or force-pushed by a headless/unattended drain. True
+/// when EITHER the literal `keyboard-only` tag is present OR the groomed
+/// `execution_mode` is one of the supervised/interactive modes
+/// (Guided/Operator/Decide). Both signals are checked — independently —
+/// because a spec can be tagged `keyboard-only` while still carrying
+/// `execution_mode: drain` (the BUG-1574 incident spec, TASK-1274, was
+/// exactly this shape: `execution_mode: drain` + the `keyboard-only` tag).
+/// The tag is the human's explicit override and must win regardless of the
+/// groomed mode.
+pub(crate) fn spec_is_keyboard_only(req: &aida_core::Requirement) -> bool {
+    req.tags
+        .iter()
+        .any(|t| t.eq_ignore_ascii_case("keyboard-only"))
+        || matches!(
+            req.execution_mode,
+            Some(aida_core::ExecutionMode::Guided)
+                | Some(aida_core::ExecutionMode::Operator)
+                | Some(aida_core::ExecutionMode::Decide)
+        )
+}
+
+// trace:BUG-1574 | ai:claude
+/// AC2: dispatch-time refusal for `aida queue work ... --no-human` — a spec
+/// that is keyboard-only ([`spec_is_keyboard_only`]) must never be handed to
+/// a headless implementer, even when it groomed to `execution_mode: drain`.
+/// Fail-closed: a store that won't load or a spec that can't be resolved
+/// also refuses (never treated as "nothing to refuse on").
+pub(crate) fn keyboard_only_dispatch_refusal(storage: &Storage, spec: &str) -> Option<String> {
+    let Some(store) = storage.load().ok() else {
+        return Some(format!(
+            "skipped {spec} — could not load the store to verify it is safe for a headless \
+             (--no-human) drain; refusing (fail closed)"
+        ));
+    };
+    let Some(req) = store.get_requirement_by_spec_id(spec) else {
+        return Some(format!(
+            "skipped {spec} — could not be resolved in the store; refusing a headless \
+             (--no-human) drain (fail closed)"
+        ));
+    };
+    if spec_is_keyboard_only(req) {
+        return Some(format!(
+            "skipped {spec} — keyboard-only spec refused for a headless (--no-human) drain; \
+             use `aida queue work {spec} --guided` or `aida do {spec}`"
+        ));
+    }
+    None
+}
+
+// trace:BUG-1574 | ai:claude
+/// A parsed snapshot of `.aida/drain-state.json`'s batch-scoping facts —
+/// distinguishes "no drain running" from "a drain IS running with no batch"
+/// from "the file exists but didn't parse" (which must fail closed, never
+/// collapse to "no batch active" the way `DrainState::read`'s `Option`
+/// return does).
+pub(crate) enum DrainStateProbe {
+    NoActiveDrain,
+    Malformed,
+    Active {
+        batch: Option<String>,
+        members: Vec<String>,
+    },
+}
+
+// trace:BUG-1574 | ai:claude
+pub(crate) fn probe_drain_state(project_root: &std::path::Path) -> DrainStateProbe {
+    let path = drain_state::drain_state_path(project_root);
+    match std::fs::read_to_string(&path) {
+        Err(_) => DrainStateProbe::NoActiveDrain,
+        Ok(body) => match serde_json::from_str::<drain_state::DrainState>(&body) {
+            Err(_) => DrainStateProbe::Malformed,
+            Ok(state) => DrainStateProbe::Active {
+                batch: state.batch,
+                members: state.members.into_iter().map(|m| m.spec).collect(),
+            },
+        },
+    }
+}
+
+// trace:BUG-1574 | ai:claude
+/// Pure fail-closed decision core for any unattended git-mutating action
+/// (steal, rebase, force-push) against `spec`'s branch:
+///   - `req: None` (store unreadable OR spec unresolved) → refuse. Both
+///     collapse to the same outcome because neither is distinguishable
+///     as "safe" from the caller's point of view.
+///   - `spec` is keyboard-only ([`spec_is_keyboard_only`]) → refuse.
+///   - [`DrainStateProbe::Malformed`] → refuse (a torn/corrupt
+///     `drain-state.json` must never read as "no batch active").
+///   - a batch IS active and `spec` is not a declared member → refuse.
+/// `None` (no refusal) only when the spec resolves, is not keyboard-only,
+/// and either no batch is active or `spec` is one of its members.
+pub(crate) fn unattended_git_mutation_refusal_for(
+    spec: &str,
+    req: Option<&aida_core::Requirement>,
+    drain: &DrainStateProbe,
+) -> Option<String> {
+    let Some(req) = req else {
+        return Some(format!(
+            "{spec} could not be resolved (store unreadable or spec unknown) — refusing an \
+             unattended rebase/force-push/steal (fail closed)"
+        ));
+    };
+    if spec_is_keyboard_only(req) {
+        return Some(format!(
+            "{spec} is keyboard-only (tag or execution_mode) — refusing an unattended \
+             rebase/force-push/steal"
+        ));
+    }
+    match drain {
+        DrainStateProbe::NoActiveDrain => None,
+        DrainStateProbe::Malformed => Some(format!(
+            "drain-state.json exists but could not be parsed — refusing to touch {spec} \
+             outside a known batch scope (fail closed)"
+        )),
+        DrainStateProbe::Active { batch: None, .. } => None,
+        DrainStateProbe::Active {
+            batch: Some(b),
+            members,
+        } => {
+            if members.iter().any(|m| m == spec) {
+                None
+            } else {
+                Some(format!(
+                    "{spec} is not a member of the active batch `{b}` — refusing to touch a \
+                     branch outside its declared scope"
+                ))
+            }
+        }
+    }
+}
+
+// trace:BUG-1574 | ai:claude
+/// AC3: best-effort — file a finding (the existing `aida findings` tag
+/// convention: a Draft Task tagged `from-implementer:<spec>`) recording that
+/// a headless action was refused, so the refusal is visible on
+/// `aida findings list` / `aida awaiting` — not just eprintln'd where only
+/// the refusing process's own log carries it. This is what lets the OTHER
+/// session (whose branch almost got moved) find out what nearly happened.
+/// A failure to file is swallowed — filing must never crash the caller.
+fn record_headless_refusal_finding(
+    project_root: &std::path::Path,
+    spec: &str,
+    action: &str,
+    reason: &str,
+) {
+    let title = format!("Headless {action} refused for {spec}");
+    let tags = format!("from-implementer:{spec},severity:notice,kind:headless-refusal");
+    let _ = std::process::Command::new(aida_exe_path())
+        .current_dir(project_root)
+        .args([
+            "add",
+            "--title",
+            &title,
+            "--description",
+            reason,
+            "--type",
+            "task",
+            "--status",
+            "draft",
+            "--tags",
+            &tags,
+        ])
+        .output();
+}
+
+// trace:BUG-1574 | ai:claude
+/// Impure wrapper: loads the store + probes `.aida/drain-state.json`, then
+/// delegates to the pure [`unattended_git_mutation_refusal_for`] core. This
+/// is what call sites (the `--steal` scope-conflict loop, the stack-aware
+/// promotion rebase/force-push, the phase-3 auto-rebase) use. `action` is a
+/// short human phrase ("steal", "rebase/force-push") used in the finding
+/// filed on refusal.
+///
+/// No distributed store detectable at `project_root` at all → this isn't an
+/// AIDA-managed project root (a legacy layout, or a bare git fixture in a
+/// unit test) — there is nothing to scope/tag-check against, so this is a
+/// clean no-op (`None`), the SAME convention `shelve_spec_on_failure` already
+/// uses for "no distributed store here". A distributed store that IS
+/// detected but fails to load, or a spec that cannot be resolved within it,
+/// still fails closed (refuses) — that is the real BUG-1574 failure mode
+/// (a corrupted/unreadable store, or a since-deleted spec), not a bare-repo
+/// fixture. Deliberately bypasses [`load_store_for_lookup`]'s legacy-YAML
+/// fallback (which resolves off the process CWD, not `project_root`) so this
+/// check is pure w.r.t. its `project_root` argument.
+pub(crate) fn unattended_git_mutation_refusal(
+    project_root: &std::path::Path,
+    spec: &str,
+    action: &str,
+) -> Option<String> {
+    let store_path = detect_distributed_store_from(project_root)?;
+    let req: Option<aida_core::Requirement> = aida_core::GitBackend::new(&store_path)
+        .ok()
+        .and_then(|backend| aida_core::DatabaseBackend::load(&backend).ok())
+        .and_then(|store| store.get_requirement_by_spec_id(spec).cloned());
+    let drain = probe_drain_state(project_root);
+    let reason = unattended_git_mutation_refusal_for(spec, req.as_ref(), &drain)?;
+    record_headless_refusal_finding(project_root, spec, action, &reason);
+    Some(reason)
+}
+
+#[cfg(test)]
+mod bug_1574_unattended_git_mutation_tests {
+    use super::*;
+
+    fn req_with(tags: &[&str], mode: Option<aida_core::ExecutionMode>) -> aida_core::Requirement {
+        let mut r = aida_core::Requirement::new("t".into(), "d".into());
+        for t in tags {
+            r.tags.insert(t.to_string());
+        }
+        r.execution_mode = mode;
+        r
+    }
+
+    fn active(batch: Option<&str>, members: &[&str]) -> DrainStateProbe {
+        DrainStateProbe::Active {
+            batch: batch.map(|s| s.to_string()),
+            members: members.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    // ── fail-closed: missing req (store load failure OR unresolved spec) ────
+
+    #[test]
+    fn refuses_when_req_is_none() {
+        let reason =
+            unattended_git_mutation_refusal_for("TASK-1", None, &DrainStateProbe::NoActiveDrain);
+        assert!(reason.is_some());
+        assert!(reason.unwrap().contains("fail closed"));
+    }
+
+    // ── keyboard-only: tag wins even when execution_mode is drain ──────────
+
+    #[test]
+    fn refuses_on_keyboard_only_tag_even_with_drain_mode() {
+        let req = req_with(&["keyboard-only"], Some(aida_core::ExecutionMode::Drain));
+        let reason = unattended_git_mutation_refusal_for(
+            "TASK-1274",
+            Some(&req),
+            &DrainStateProbe::NoActiveDrain,
+        );
+        assert!(
+            reason.is_some(),
+            "the tag alone must refuse, mode notwithstanding"
+        );
+        assert!(reason.unwrap().contains("keyboard-only"));
+    }
+
+    #[test]
+    fn refuses_on_guided_mode_without_the_tag() {
+        let req = req_with(&[], Some(aida_core::ExecutionMode::Guided));
+        assert!(unattended_git_mutation_refusal_for(
+            "TASK-2",
+            Some(&req),
+            &DrainStateProbe::NoActiveDrain
+        )
+        .is_some());
+    }
+
+    // ── malformed drain-state.json: fail closed, never "no batch" ──────────
+
+    #[test]
+    fn refuses_on_malformed_drain_state() {
+        let req = req_with(&[], Some(aida_core::ExecutionMode::Drain));
+        let reason =
+            unattended_git_mutation_refusal_for("TASK-3", Some(&req), &DrainStateProbe::Malformed);
+        assert!(reason.is_some());
+        assert!(reason.unwrap().contains("fail closed"));
+    }
+
+    // ── batch membership ─────────────────────────────────────────────────
+
+    #[test]
+    fn refuses_spec_outside_active_batch() {
+        let req = req_with(&[], Some(aida_core::ExecutionMode::Drain));
+        let drain = active(Some("night-0920"), &["STORY-1", "STORY-2"]);
+        let reason = unattended_git_mutation_refusal_for("TASK-1274", Some(&req), &drain);
+        assert!(reason.is_some());
+        assert!(reason.unwrap().contains("night-0920"));
+    }
+
+    // ── controls: the allowed path ──────────────────────────────────────
+
+    #[test]
+    fn allows_drain_mode_member_of_active_batch() {
+        let req = req_with(&[], Some(aida_core::ExecutionMode::Drain));
+        let drain = active(Some("night-0920"), &["TASK-1274", "STORY-2"]);
+        assert!(unattended_git_mutation_refusal_for("TASK-1274", Some(&req), &drain).is_none());
+    }
+
+    #[test]
+    fn allows_no_execution_mode_no_tag_when_no_batch_active() {
+        let req = req_with(&[], None);
+        assert!(unattended_git_mutation_refusal_for(
+            "TASK-1274",
+            Some(&req),
+            &DrainStateProbe::NoActiveDrain
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn allows_unlisted_spec_when_active_drain_has_no_batch() {
+        // A single-spec / next-n drain writes drain-state.json with
+        // `batch: None` — never refuse on membership in that case.
+        let req = req_with(&[], Some(aida_core::ExecutionMode::Drain));
+        let drain = active(None, &[]);
+        assert!(unattended_git_mutation_refusal_for("TASK-1274", Some(&req), &drain).is_none());
+    }
+
+    // ── probe_drain_state: distinguishes absent vs malformed on disk ──────
+
+    #[test]
+    fn probe_distinguishes_absent_from_malformed_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(matches!(
+            probe_drain_state(dir.path()),
+            DrainStateProbe::NoActiveDrain
+        ));
+        let path = drain_state::drain_state_path(dir.path());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "{ this is not valid json").unwrap();
+        assert!(matches!(
+            probe_drain_state(dir.path()),
+            DrainStateProbe::Malformed
+        ));
+    }
+
+    // ── AC2: keyboard_only_dispatch_refusal (the --no-human dispatch gate) ──
+
+    fn storage_with(
+        spec: &str,
+        tags: &[&str],
+        mode: Option<aida_core::ExecutionMode>,
+    ) -> (tempfile::TempDir, Storage) {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::new(dir.path().join("requirements.yaml"));
+        let mut store = aida_core::RequirementsStore::new();
+        let mut req = req_with(tags, mode);
+        req.spec_id = Some(spec.to_string());
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+        (dir, storage)
+    }
+
+    #[test]
+    fn dispatch_refuses_keyboard_only_tag() {
+        let (_dir, storage) = storage_with(
+            "TASK-1274",
+            &["keyboard-only"],
+            Some(aida_core::ExecutionMode::Drain),
+        );
+        let reason = keyboard_only_dispatch_refusal(&storage, "TASK-1274");
+        assert!(reason.is_some());
+        assert!(reason.unwrap().contains("keyboard-only"));
+    }
+
+    #[test]
+    fn dispatch_refuses_guided_mode() {
+        let (_dir, storage) = storage_with("TASK-2", &[], Some(aida_core::ExecutionMode::Guided));
+        assert!(keyboard_only_dispatch_refusal(&storage, "TASK-2").is_some());
+    }
+
+    #[test]
+    fn dispatch_allows_plain_drain_spec() {
+        let (_dir, storage) = storage_with("TASK-3", &[], Some(aida_core::ExecutionMode::Drain));
+        assert!(keyboard_only_dispatch_refusal(&storage, "TASK-3").is_none());
+    }
+}
+
 /// STORY-265 slice 3: execute the `--with-plan` PLAN PRELUDE for one spec —
 /// the plan phase that runs before the auto-complete drain's phase 1. Reuses
 /// slice 2's `aida queue work <spec> --plan-only` planning session (headless
@@ -84886,6 +85257,20 @@ fn run_auto_complete(
         if let Some(mode) = guarded_execution_mode_for_drain(storage, spec) {
             eprintln!("{}", guarded_execution_mode_drain_message(spec, mode));
             return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
+        }
+        // BUG-1574 AC2: a spec tagged keyboard-only must be refused at
+        // dispatch under a headless (`--no-human`) drain even when it
+        // groomed to `execution_mode: drain` — the tag above wins. This is
+        // in addition to the execution_mode-only check above, which already
+        // covers Guided/Operator/Decide unconditionally; this one covers the
+        // tag specifically for the headless path. trace:BUG-1574 | ai:claude
+        if no_human.is_some() {
+            if let Some(reason) = keyboard_only_dispatch_refusal(storage, spec) {
+                eprintln!("{reason}");
+                return auto_complete::OrchestrationResult::failed(
+                    auto_complete::Phase::Implementer,
+                );
+            }
         }
         if let Ok(root) = find_main_worktree_root() {
             let terminal = match spec_status(&root, spec) {
@@ -92803,6 +93188,26 @@ impl RealPhaseDriver {
         &mut self,
         pr_number: u64,
     ) -> Result<(), auto_complete::PhaseFailure> {
+        // BUG-1574: this is the concrete force-push path an unattended drain
+        // takes on the spec's OWN branch (`aida pr rebase` → BUG-640's
+        // anchored-lease push). Refuse BEFORE spawning it — never crash,
+        // fall through to the existing (already shelvable) STORY-281
+        // refusal path — when the spec is keyboard-only or outside the
+        // currently active batch's declared member set. Fail-closed: a
+        // store-load failure or malformed drain-state.json also refuses.
+        // trace:BUG-1574 | ai:claude
+        if let Some(reason) =
+            unattended_git_mutation_refusal(&self.project_root, &self.spec, "rebase/force-push")
+        {
+            if !self.json {
+                eprintln!(
+                    "  {} auto-rebase of PR-{pr_number} refused: {reason}",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
+                );
+            }
+            self.record_auto_rebase(pr_number, "refused-bug-1574");
+            return Err(auto_complete::PhaseFailure::new(reason));
+        }
         // (classification helper `classify_rebase_subprocess_exit` lives at
         // crate scope — see below — so it's unit-testable without spawning
         // a subprocess. trace:BUG-1295 | ai:claude)
