@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T22:50:46.533446065Z
-modified_at: 2026-09-23T03:06:10.316564165Z
+modified_at: 2026-09-23T03:21:26.882975093Z
 req_type: Bug
 tags:
 - agent-surface
@@ -80,5 +80,11 @@ comments:
   content: Claude implementer (sonnet subagent, worktree) dispatched 2026-09-22 20:07 local -> branch claude/bug-1494 off origin/main, pushed, no PR, not merged.
   created_at: 2026-09-23T03:06:10.316564165Z
   modified_at: 2026-09-23T03:06:10.316564165Z
+  session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
+- id: 01a0cc48-5262-7a42-b198-90d23ca24dd3
+  author: joe
+  content: Commit 6037184b7b references this requirement
+  created_at: 2026-09-23T03:21:26.882975093Z
+  modified_at: 2026-09-23T03:21:26.882975093Z
   session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
 execution_mode: drain
