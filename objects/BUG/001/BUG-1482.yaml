@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:39:52.294000659Z
-modified_at: 2026-09-23T06:40:32.926631982Z
+modified_at: 2026-09-23T06:40:38.727388895Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -113,5 +113,11 @@ comments:
   content: Claude implementer dispatched 2026-09-22 23:22 -> branch claude/bug-1482, no PR (overnight burn-down)
   created_at: 2026-09-23T06:23:00.327935698Z
   modified_at: 2026-09-23T06:23:00.327935698Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ccfe-b147-7220-bc46-f8453ea13a35
+  author: joe
+  content: 'Claude implementer result: claude/bug-1482 @ f056c196f5. Mechanism: install_sigpipe_handler (BUG-99) restores the default SIGPIPE disposition, so ''aida mailbox inbox | head'' dies mid-print before the post-loop watermark write. Fix: the watermark/seen-receipt write now runs BEFORE the print loop (--peek and --archived are still non-marking). The other surfaces were checked: mailbox notice is non-marking, MCP read_inbox already marks first, awaiting never writes watermarks. The subprocess test piped_inbox_read_advances_watermark_even_when_stdout_closes_early fails before the fix and passes after. Awaiting review, then batch.'
+  created_at: 2026-09-23T06:40:38.727388895Z
+  modified_at: 2026-09-23T06:40:38.727388895Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
