@@ -1,0 +1,15 @@
+{
+  "id": "74d3d300-22ba-4083-abd2-82c8e4eb85f6",
+  "thread_id": "74d3d300-22ba-4083-abd2-82c8e4eb85f6",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1790137483638,
+  "body": "TASK-1443 is Done on claude/task-1443 @ 4407680a86, stacked on claude/task-1442 (merge order 1442 -> 1443); reviewer note on the spec (lookup failure fails open). TASK-1444 is dispatched to claude/task-1444, stacked on 1443.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

@@ -1,0 +1,15 @@
+{
+  "id": "db37ce9a-ec51-48a4-ba85-5470abfe0e1f",
+  "thread_id": "db37ce9a-ec51-48a4-ba85-5470abfe0e1f",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude"
+  },
+  "timestamp": 1790136711897,
+  "body": "Review: BUG-1500\n\nREQUEST_CHANGES at rebased head 9ba1acca65. The lib.rs helper is correct, but git_backend_cmd.rs still unconditionally says the orphan store may be mid-rebase and advises git rebase --abort. Fix the second emission site, add both-state tests, inspect other unchecked recovery hints, push a new head, and leave the spec in progress.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}

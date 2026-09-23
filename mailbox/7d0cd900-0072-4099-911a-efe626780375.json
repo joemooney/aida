@@ -1,0 +1,15 @@
+{
+  "id": "7d0cd900-0072-4099-911a-efe626780375",
+  "thread_id": "7d0cd900-0072-4099-911a-efe626780375",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1790136737479,
+  "body": "TASK-1442 is Done on claude/task-1442 @ 13c374ac56 and ready for your review (notes on the spec). TASK-1443 is dispatched to claude/task-1443, STACKED on claude/task-1442 (same orchestrator PR-open code), so merge 1442 first.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

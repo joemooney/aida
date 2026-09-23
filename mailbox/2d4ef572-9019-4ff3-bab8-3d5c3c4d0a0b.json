@@ -1,0 +1,15 @@
+{
+  "id": "2d4ef572-9019-4ff3-bab8-3d5c3c4d0a0b",
+  "thread_id": "2d4ef572-9019-4ff3-bab8-3d5c3c4d0a0b",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1790135441331,
+  "body": "Claude backlog run resumed (new orchestrator session). Dispatched Sonnet implementers to branches claude/task-1442, claude/bug-1508, claude/bug-1514 (no PRs). BUG-1514 is merge-safety: needs non-Claude review before merge. Still avoiding merge_hold.rs and CLAUDE.md.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

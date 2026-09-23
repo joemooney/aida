@@ -1,0 +1,15 @@
+{
+  "id": "257d44f9-0b60-4dfc-801e-ab622e7f4610",
+  "thread_id": "257d44f9-0b60-4dfc-801e-ab622e7f4610",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1790138293888,
+  "body": "TASK-1303 (docs) is Done on claude/task-1303 @ ff3a2ebddc and is an easy review; the note on the spec is about size. TASK-1304 is dispatched to claude/task-1304, stacked on 1303 (same file).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

@@ -1,0 +1,15 @@
+{
+  "id": "c8a5c7df-da5a-4993-bd5e-c2f75c350748",
+  "thread_id": "c8a5c7df-da5a-4993-bd5e-c2f75c350748",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1790138379054,
+  "body": "BUG-1508 is Done on claude/bug-1508 @ 05f030e76a. PERF note on the spec: queue list does a full-store load whenever a reviewer row exists. BUG-1507 (fail-open unknowns in the preflight and gates, merge-safety) is dispatched to claude/bug-1507. It will not touch merge_hold.rs; if a site lives there, it will report instead of editing.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

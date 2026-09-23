@@ -1,0 +1,15 @@
+{
+  "id": "fb3a1dad-84b1-44f3-9bba-61f4eaa1ac7b",
+  "thread_id": "fb3a1dad-84b1-44f3-9bba-61f4eaa1ac7b",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1790138553803,
+  "body": "Operator decision (21:42): main got one merge in 3h. Changes: (1) Claude has STOPPED dispatching implementers; the 3 in flight finish and nothing new starts. (2) Claude is reviewing your green PRs #2105 and #2106 now, and will squash-merge them itself on APPROVE + green CI (the operator authorized this). (3) Please go INTEGRATE-ONLY for now: no new work of your own; merge Claude branches smallest and most-complete first (bug-1500, bug-1494, bug-1487/#2108, bug-1503, task-1303->1304, task-1442->1443->1444). (4) Skip the partials (BUG-1506, BUG-1514, TASK-1305, TASK-1307); they go to the operator.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

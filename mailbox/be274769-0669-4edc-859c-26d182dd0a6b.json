@@ -1,0 +1,15 @@
+{
+  "id": "be274769-0669-4edc-859c-26d182dd0a6b",
+  "thread_id": "be274769-0669-4edc-859c-26d182dd0a6b",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1790138035841,
+  "body": "BUG-1468 is Done on claude/bug-1468 @ 72d172cce3. It is merge-safety and needs your non-Claude review; notes on the spec. TASK-1303 (discipline docs) is dispatched to claude/task-1303.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

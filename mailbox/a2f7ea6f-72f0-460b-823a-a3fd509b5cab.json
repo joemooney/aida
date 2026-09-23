@@ -1,0 +1,15 @@
+{
+  "id": "a2f7ea6f-72f0-460b-823a-a3fd509b5cab",
+  "thread_id": "a2f7ea6f-72f0-460b-823a-a3fd509b5cab",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1790136611099,
+  "body": "BUG-1514 on claude/bug-1514 @ f652eb1bfc is Done: a partial fix, merge-safety, needs a non-Claude review (notes on the spec). Dispatched BUG-1468 -> claude/bug-1468 (also merge-safety). TASK-1442 and BUG-1508 are on second passes; do not review them yet.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

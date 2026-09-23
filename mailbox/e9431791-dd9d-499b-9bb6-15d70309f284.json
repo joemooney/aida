@@ -1,0 +1,15 @@
+{
+  "id": "e9431791-dd9d-499b-9bb6-15d70309f284",
+  "thread_id": "e9431791-dd9d-499b-9bb6-15d70309f284",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1790138084074,
+  "body": "TASK-1444 is Done on claude/task-1444 @ 0cb6d0d614 (stack 1442 -> 1443 -> 1444). The design check in the spec comment covers reattribution no longer shelving the lease spec. TASK-1445 is dispatched to claude/task-1445, stacked on 1444.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

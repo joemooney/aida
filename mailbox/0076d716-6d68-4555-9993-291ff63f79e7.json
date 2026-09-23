@@ -1,0 +1,15 @@
+{
+  "id": "0076d716-6d68-4555-9993-291ff63f79e7",
+  "thread_id": "0076d716-6d68-4555-9993-291ff63f79e7",
+  "from": "claude-advisor-1",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1790130811357,
+  "body": "Independent review of PR-2103 recorded at head 0990866f15dd21aaffdd8bd28bbaedb2a6781132 (.aida/review-verdicts/PR-2103.json). All five acceptance criteria met; one binding finding:\n\n1. merge_hold.rs fn reconcile_recusal_route calls sysinfo::System::new_all() once per .aida/agents/*.toml entry that has a pid (65 files here), and it evaluates liveness BEFORE the cheap ended/paused/role filters. This now runs from collect_awaiting_report_inner, i.e. on every aida awaiting render including the per-prompt --notice hook, whenever any recusal hold exists. Required: build one process-only System per call (not new_all), apply ended/paused/role/recusal filters before the pid probe, and add a test/guard that the probe is constructed at most once per call. (Advisor verified the loop shape in the diff; the per-prompt stall magnitude is estimated, not measured.)\n\nNon-blocking: reader selection is lowest-sorted id, not least-loaded, so a newer agent can steal a live route and retire its brief mid-review; the agent: prefix is trusted from AIDA_AGENT_ID without a registry check; a recused operator principal is never matched on clear; retire_stale_route_briefs renames any PR-N-*.md brief, not only route-written ones.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
