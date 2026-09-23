@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:14:13.323242098Z
-modified_at: 2026-09-23T01:32:35.362627792Z
+modified_at: 2026-09-23T01:56:12.533482764Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -129,6 +129,11 @@ comments:
   content: 'REQUEST_CHANGES fresh cold review exact head 89042d4aa553fb90038c2b9880cea3b38c622329. Required Build (ubuntu-latest) FAILURE; merge-hold-gate SUCCESS; merge state BLOCKED. Failure is head-caused and reproducible: bug_1173_detection_hold_tests::set_pr_number_stamps_marker_and_syncs_label_surfacing_failure still requires merge_hold::write_hold, while this head correctly uses write_typed_hold; update the source-shape guard and restore Build. Focused merge_hold 22/22, awaiting_you 36/36, fmt and diff checks pass. Prior production-typed, live-head, stable-identity blockers are addressed. Remaining signed-sketch blocker: recusal routing only runs during write_typed_hold; awaiting/report never reconciles no-reader records when agents appear, reroutes when recipients disappear, or handles head changes, so routing can remain stale. Comments posted to PR and this spec/review spec.'
   created_at: 2026-09-23T01:31:54.295837065Z
   modified_at: 2026-09-23T01:31:54.295837065Z
+- id: 01a0cbfa-4875-7251-81e6-d944d60bd049
+  author: mcp
+  content: 'REQUEST_CHANGES — fresh independent cold review of PR #2103 exact head 3e49bf92208dbb8850c71eafc706891c064fdac. Required CI is green: Build (ubuntu-latest) SUCCESS and merge-hold-gate SUCCESS; PR is CLEAN/MERGEABLE. Focused checks passed: merge_hold 22/22, awaiting_you 36/36, cargo fmt --all -- --check, git diff --check. Prior typed-path, stable-identity, live-head/stale-approval, initial routing, seat-aware awaiting, and no-self-merge blockers are fixed. Remaining signed-sketch blocker: reconcile_recusal_route is private and only called from write_typed_hold; collect_awaiting_report_inner only reads records. No-reader holds therefore do not auto-reroute when a live seat appears, disappeared readers are not retired/rerouted, and changed heads do not retire old routes/briefs unless another write occurs. Invoke reconciliation from route/status/awaiting (atomic and idempotent) and add live-transition coverage before approval. PR review: https://github.com/joemooney/aida/pull/2103#issuecomment-5787632601'
+  created_at: 2026-09-23T01:56:12.533472081Z
+  modified_at: 2026-09-23T01:56:12.533472081Z
 execution_mode: drain
 implementation_info:
   implemented: true
