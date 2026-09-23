@@ -79560,7 +79560,12 @@ pub(crate) fn classify_review_story_lookup(
         if !review_title_matches(&req.title, forge, n) {
             continue;
         }
-        let policy = queue_cmd::queue_fresh_pickup_policy(req, store, false);
+        // trace:BUG-1515 | ai:claude
+        // No filesystem access here — this classifier stays PURE (BUG-1195),
+        // so the Done/AwaitingRework distinction (which reads a verdict file)
+        // is unavailable; it degrades to the pre-BUG-1515 AwaitingMerge
+        // reading rather than doing I/O from a pure function.
+        let policy = queue_cmd::queue_fresh_pickup_policy(req, store, false, None);
         if matches!(policy, queue_cmd::QueueFreshPickup::Pickable) {
             return ReviewStoryLookup::Found(req.display_id());
         }
@@ -84739,7 +84744,7 @@ fn resolve_batch_ineligible_members(
             continue;
         }
         if let Some(reason) = queue_cmd::queue_fresh_pickup_reason_label(
-            &queue_cmd::queue_drain_pickup_policy(&req, &store, false),
+            &queue_cmd::queue_drain_pickup_policy(&req, &store, false, storage.path().parent()),
         ) {
             ineligible.push(events::IneligibleBatchMember {
                 spec: req.display_id(),
@@ -84833,7 +84838,7 @@ fn resolve_batch_members_with_context(
         // headless drains also skip guided/operator/decide members; those
         // modes require the keyboard path.
         if let Some(reason_label) = queue_cmd::queue_fresh_pickup_reason_label(
-            &queue_cmd::queue_drain_pickup_policy(&req, &store, false),
+            &queue_cmd::queue_drain_pickup_policy(&req, &store, false, project_root),
         ) {
             eprintln!(
                 "  {} batch:{} — skipping un-pickable member {} ({})",
