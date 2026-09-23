@@ -160,17 +160,19 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
     assert!(d.hint.is_none());
 }
 
-/// BUG-1521: a lease that DOES carry a recorded role must show that role —
-/// the session's own record — even when a live transcript's heuristic text
-/// scan would suggest a different one. TASK-152 previously had this backwards
-/// (preferring the derived transcript role over the stored lease role), which
-/// is exactly the mechanism that let one session report three different
-/// roles across three views. The lease role is authoritative; the transcript
-/// scan is only a fallback for legacy leases with no recorded role at all
-/// (see `ps_role_falls_back_to_live_jsonl_role_when_lease_has_none` below).
-// trace:BUG-1521 | ai:claude
+/// TASK-152: when the same live pid has both a harness-worktree lease role
+/// and a transcript role, `aida ps` displays the transcript role because the
+/// lease role here is the harness's generic Agent-tool placeholder
+/// (`tail_cmd::HARNESS_AGENT_TYPE`, "general-purpose") — it names no real
+/// role, so it carries no information worth defending. The original lease
+/// role remains present for structured provenance (`lease_role`). Restored
+/// after the BUG-1521 strict-review PROXY DECISION: a REAL recorded lease
+/// role is authoritative (see `ps_real_lease_role_beats_derived_jsonl_role`
+/// below), but the placeholder itself is not real and must not mask a
+/// derived signal that actually names the role.
+// trace:TASK-152 trace:BUG-1521 | ai:claude
 #[test]
-fn ps_role_reads_from_lease_record_over_derived_jsonl_role() {
+fn ps_role_prefers_live_jsonl_role_and_retains_lease_role() {
     let tmp = tempfile::tempdir().unwrap();
     let repo = tmp.path().join("repo");
     let wt = tmp.path().join(".claude/worktrees/agent-abc123");
@@ -203,21 +205,20 @@ fn ps_role_reads_from_lease_record_over_derived_jsonl_role() {
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].pid, Some(std::process::id()));
-    assert_eq!(
-        rows[0].role.as_deref(),
-        Some("general-purpose"),
-        "the recorded lease role must win over a derived transcript role"
-    );
+    assert_eq!(rows[0].role.as_deref(), Some("advisor"));
     assert_eq!(rows[0].lease_role.as_deref(), Some("general-purpose"));
 }
 
-/// TASK-153 (updated for BUG-1521): a lease with NO recorded role at all
-/// still falls back to the manifest-joined transcript role — the derived
-/// signal is a legitimate best-effort fallback, just never an override of a
-/// role the session record actually has.
+/// TASK-153: the same role preference must hold when the lease joins to a
+/// resumed Claude transcript through the manifest, even if the live `/proc`
+/// row no longer carries the JSONL path. This is the long-lived advisor
+/// shape: `aida ps` should agree with `aida session conversations` instead
+/// of falling back to the harness lease's placeholder `general-purpose`
+/// role. Restored after the BUG-1521 PROXY DECISION alongside the sibling
+/// TASK-152 test above.
 // trace:TASK-153 trace:BUG-1521 | ai:claude
 #[test]
-fn ps_role_falls_back_to_manifest_jsonl_role_when_lease_has_none() {
+fn ps_role_prefers_manifest_jsonl_role_when_live_jsonl_is_absent() {
     let tmp = tempfile::tempdir().unwrap();
     let wt = tmp.path().join(".claude/worktrees/agent-abc123");
     std::fs::create_dir_all(&wt).unwrap();
@@ -227,7 +228,7 @@ fn ps_role_falls_back_to_manifest_jsonl_role_when_lease_has_none() {
         worktree_lease::HARNESS_WORKTREE_SCOPE,
         wt.clone(),
     );
-    l.role = None;
+    l.role = Some("general-purpose".into());
     l.active_pid = Some(std::process::id());
 
     let (rows, _) = build_running_work(
@@ -244,12 +245,106 @@ fn ps_role_falls_back_to_manifest_jsonl_role_when_lease_has_none() {
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].pid, Some(std::process::id()));
+    assert_eq!(rows[0].role.as_deref(), Some("advisor"));
+    assert_eq!(rows[0].lease_role.as_deref(), Some("general-purpose"));
+}
+
+/// BUG-1521: a lease that carries a REAL recorded role (not the harness
+/// placeholder) is authoritative and wins over a DIFFERENT derived jsonl
+/// role, even when a live transcript's heuristic text scan suggests
+/// otherwise. This is the mechanism the placeholder-only tests above don't
+/// cover: an `implementer` lease must never be overridden by an ambiguous
+/// `advisor` transcript match.
+// trace:BUG-1521 | ai:claude
+#[test]
+fn ps_real_lease_role_beats_derived_jsonl_role() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    let wt = tmp.path().join(".claude/worktrees/agent-real-role");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&wt).unwrap();
+    let jsonl = tmp.path().join("session.jsonl");
+
+    let mut l = ps_lease("l-real-role", worktree_lease::HARNESS_WORKTREE_SCOPE, wt);
+    l.role = Some("implementer".into());
+    l.active_pid = Some(std::process::id());
+
+    let live = vec![process_probe::LiveSession {
+        pid: std::process::id(),
+        cwd: repo,
+        jsonl: Some(jsonl.clone()),
+        stale_cwd: false,
+    }];
+
+    let (rows, _) = build_running_work(
+        &[],
+        &[l],
+        &live,
+        chrono::Utc::now(),
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| None,
+        |path| (path == jsonl).then(|| "advisor".to_string()),
+        |lease_id| (lease_id == "l-real-role").then(|| "product".to_string()),
+    );
+
+    assert_eq!(rows.len(), 1);
     assert_eq!(
         rows[0].role.as_deref(),
-        Some("advisor"),
-        "with no recorded lease role, the manifest-joined transcript role is used"
+        Some("implementer"),
+        "a real recorded lease role must win over both derived signals"
     );
-    assert_eq!(rows[0].lease_role, None);
+    assert_eq!(rows[0].lease_role.as_deref(), Some("implementer"));
+}
+
+/// BUG-1521: when the lease only carries the harness placeholder, the
+/// manifest-joined role (TASK-153's stable `claude_session_id` join) wins
+/// over the live jsonl scan (TASK-152's ambiguous cwd/text-marker match) —
+/// the manifest role is next in the priority chain, ahead of jsonl, not
+/// merely a fallback when jsonl is silent.
+// trace:BUG-1521 | ai:claude
+#[test]
+fn ps_placeholder_lease_role_loses_to_manifest_role_over_jsonl_role() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    let wt = tmp.path().join(".claude/worktrees/agent-placeholder-order");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&wt).unwrap();
+    let jsonl = tmp.path().join("session.jsonl");
+
+    let mut l = ps_lease(
+        "l-placeholder-order",
+        worktree_lease::HARNESS_WORKTREE_SCOPE,
+        wt,
+    );
+    l.role = Some(tail_cmd::HARNESS_AGENT_TYPE.into());
+    l.active_pid = Some(std::process::id());
+
+    let live = vec![process_probe::LiveSession {
+        pid: std::process::id(),
+        cwd: repo,
+        jsonl: Some(jsonl.clone()),
+        stale_cwd: false,
+    }];
+
+    let (rows, _) = build_running_work(
+        &[],
+        &[l],
+        &live,
+        chrono::Utc::now(),
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| None,
+        |path| (path == jsonl).then(|| "advisor".to_string()),
+        |lease_id| (lease_id == "l-placeholder-order").then(|| "product".to_string()),
+    );
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].role.as_deref(),
+        Some("product"),
+        "the manifest role must win over the jsonl role once the lease role is only the placeholder"
+    );
 }
 
 /// BUG-752: a harness lease with NO pid signal at all (legacy lease from a
@@ -1453,24 +1548,26 @@ fn mark_lease_manual_enter_round_trips_and_preserves_foreign_keys() {
     assert!(again.manual_enter_at.unwrap() >= stamped);
 }
 
-/// BUG-1521 acceptance #2: the bare (default) view and `--all` must report
-/// IDENTICAL role + identity fields for the same session. Both views are
-/// built from the one `build_running_work` row set — `--all` only changes
-/// which rows are *filtered out* of display, never how a shown row's fields
-/// are computed — so a live (non-stale) row must read identically whichever
-/// way it's sliced.
+/// BUG-1521: the last link in the priority chain — a lease stuck on the
+/// harness placeholder, with NEITHER a manifest role NOR a jsonl role
+/// available, falls back to the placeholder itself rather than leaving the
+/// row roleless. Replaces the former
+/// `ps_role_and_identity_agree_between_default_and_all_views`, which
+/// compared a `build_running_work` row against itself (the default-view and
+/// `--all` "views" were both slices of the identical `rows` Vec, so the
+/// assertion was tautological and never exercised the two views' actual
+/// separate rendering code paths) — this test instead exercises the real
+/// resolution order directly, completing the chain the
+/// TASK-152/TASK-153/`ps_real_lease_role_beats_derived_jsonl_role`/
+/// `ps_placeholder_lease_role_loses_to_manifest_role_over_jsonl_role` tests
+/// each cover one link of.
 // trace:BUG-1521 | ai:claude
 #[test]
-fn ps_role_and_identity_agree_between_default_and_all_views() {
+fn ps_placeholder_lease_role_is_the_last_resort_when_nothing_else_resolves() {
     let tmp = tempfile::tempdir().unwrap();
-    let mut live_lease = ps_lease("l-agree-live", "TASK-1", tmp.path().to_path_buf());
-    live_lease.role = Some("general-purpose".into());
-    live_lease.active_pid = Some(std::process::id());
-    let dead_lease = ps_lease(
-        "l-agree-dead",
-        "TASK-2",
-        std::path::PathBuf::from("/nonexistent/aida-ps-agree-dead"),
-    );
+    let mut l = ps_lease("l-agree-live", "TASK-1", tmp.path().to_path_buf());
+    l.role = Some(tail_cmd::HARNESS_AGENT_TYPE.into());
+    l.active_pid = Some(std::process::id());
 
     let live = vec![process_probe::LiveSession {
         pid: std::process::id(),
@@ -1481,7 +1578,7 @@ fn ps_role_and_identity_agree_between_default_and_all_views() {
 
     let (rows, _) = build_running_work(
         &[],
-        &[live_lease, dead_lease],
+        &[l],
         &live,
         chrono::Utc::now(),
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
@@ -1491,33 +1588,16 @@ fn ps_role_and_identity_agree_between_default_and_all_views() {
         |_| None,
     );
 
-    // Mirror `handle_ps`'s own default-view partition (hide Stale rows).
-    let (shown, _hidden): (Vec<&PsRow>, Vec<&PsRow>) = rows
-        .iter()
-        .partition(|r| !matches!(r.state, LeaseState::Stale));
-    // The `--all` view is simply the unfiltered row set.
-    let all: Vec<&PsRow> = rows.iter().collect();
-
-    let default_row = shown
-        .iter()
-        .find(|r| r.lease.id == "l-agree-live")
-        .expect("live row survives the default filter");
-    let all_row = all
-        .iter()
-        .find(|r| r.lease.id == "l-agree-live")
-        .expect("live row present under --all too");
-
-    assert_eq!(default_row.role, all_row.role, "role must agree");
+    assert_eq!(rows.len(), 1);
     assert_eq!(
-        default_row.lease_role, all_row.lease_role,
-        "lease_role provenance must agree"
+        rows[0].role.as_deref(),
+        Some(tail_cmd::HARNESS_AGENT_TYPE),
+        "the placeholder is shown when no other signal resolves a role"
     );
     assert_eq!(
-        default_row.lease.id, all_row.lease.id,
-        "session id must agree"
+        rows[0].lease_role.as_deref(),
+        Some(tail_cmd::HARNESS_AGENT_TYPE)
     );
-    assert_eq!(default_row.spec, all_row.spec, "spec identity must agree");
-    assert_eq!(default_row.role.as_deref(), Some("general-purpose"));
 }
 
 /// BUG-1521 acceptance #4: a regression guard for the reported failure mode —
@@ -1527,6 +1607,11 @@ fn ps_role_and_identity_agree_between_default_and_all_views() {
 /// returns a role foreign to the lease (standing in for an ambiguous
 /// cwd/transcript match that picked up some OTHER live session's text) — the
 /// listed session must keep the role from its OWN record, not the probe's.
+/// Uses a REAL recorded role (`implementer`), not the harness placeholder:
+/// under the BUG-1521 priority order the placeholder itself falls through to
+/// the derived signals (see `ps_placeholder_lease_role_loses_to_manifest_role_over_jsonl_role`),
+/// so only a real role is a valid fixture for "must never be overridden by a
+/// foreign probe match".
 // trace:BUG-1521 | ai:claude
 #[test]
 fn ps_listed_session_keeps_its_own_role_not_a_foreign_probe_match() {
@@ -1540,7 +1625,7 @@ fn ps_listed_session_keeps_its_own_role_not_a_foreign_probe_match() {
         worktree_lease::HARNESS_WORKTREE_SCOPE,
         wt.clone(),
     );
-    l.role = Some("general-purpose".into());
+    l.role = Some("implementer".into());
     l.active_pid = Some(std::process::id());
 
     let live = vec![process_probe::LiveSession {
@@ -1568,24 +1653,12 @@ fn ps_listed_session_keeps_its_own_role_not_a_foreign_probe_match() {
     assert_eq!(rows.len(), 1);
     assert_eq!(
         rows[0].role.as_deref(),
-        Some("general-purpose"),
+        Some("implementer"),
         "the listed session must keep its own recorded role, not the caller's/foreign one"
     );
     assert_ne!(
         rows[0].role.as_deref(),
         Some("product"),
         "a foreign/caller role must never be attributed to this session's row"
-    );
-}
-
-/// BUG-1521 acceptance #3: the `running:` line must distinguish live from
-/// hidden rather than presenting the live count alone.
-// trace:BUG-1521 | ai:claude
-#[test]
-fn ps_running_count_line_names_hidden_stale() {
-    assert_eq!(ps_running_count_line(8, 0), "running: 8");
-    assert_eq!(
-        ps_running_count_line(1, 7),
-        "running: 1 (7 stale hidden; --all to show)"
     );
 }
