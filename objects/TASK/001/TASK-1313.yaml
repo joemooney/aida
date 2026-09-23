@@ -332,7 +332,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-09-23T09:08:34.967398189Z
+modified_at: 2026-09-23T09:08:36.861343886Z
 req_type: Task
 tags:
 - parent:EPIC-62 doctor substrate-integrity severity:operational
@@ -488,4 +488,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 01:51 -> branch claude/task-1313, no PR (overnight burn-down)
   created_at: 2026-09-23T08:51:26.908039388Z
   modified_at: 2026-09-23T08:51:26.908039388Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd86-297d-7231-84b2-cf4390e18cd3
+  author: joe
+  content: 'Claude implementer result: claude/task-1313 @ 8386c971aa. New ''aida doctor --category round-trip-artifacts'': line-anchored TOON-header predicate plus a mojibake predicate over title/description/comments; report-only. 8 tests. AC1-6 and 7a-7e met; 7f (mid-line append) deferred, as the spec sanctions. Real store: 9 specs, 38 findings (BUG-1106/1111/1310/1450/1452, STORY-1217/1405, TASK-1273/1289). Unblocks TASK-1314.'
+  created_at: 2026-09-23T09:08:36.861343886Z
+  modified_at: 2026-09-23T09:08:36.861343886Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
