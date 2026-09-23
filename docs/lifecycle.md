@@ -108,6 +108,21 @@ branch." You rarely set `completed` by hand — `aida pull` and
 the spec lands on `main`. If the auto-bump ever misses, replay it with
 `aida db reconcile-status`.
 
+<!-- trace:BUG-1551 | ai:claude -->
+
+**`BlockedBy` gates closure as well as pickup.** If a spec's code merges while
+one of its `BlockedBy` blockers is still unresolved, the auto-bump does not
+complete it. A blocker counts as resolved when it is Completed, Rejected or
+Superseded, when it is an accepted ADR, or, for an epic, when its child rollup
+says so. The spec stays at **Done** (a spec still earlier in the lifecycle
+moves up to Done, because its code is on `main`). A note on the spec names the
+merge commit and the open blocker, and `aida why <SPEC>` reports the hold. Each
+`aida pull` re-checks held specs and completes any whose blockers have all
+resolved. To replay by hand, run
+`aida db reconcile-status --spec <SPEC> --since <merge-sha>^`. If the blockers
+form a cycle, or a human decides to ship without them, run
+`aida edit <SPEC> --status completed`.
+
 ## Status vs. "workable" — pickability and the queue
 
 <!-- trace:STORY-565 | ai:claude -->
