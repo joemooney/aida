@@ -73,7 +73,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:02:30.985302118Z
-modified_at: 2026-09-23T10:13:18.681626676Z
+modified_at: 2026-09-23T10:13:20.630376861Z
 req_type: Bug
 tags:
 - parent:EPIC-62
@@ -84,3 +84,10 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-21T05:02:37.197330680Z
+comments:
+- id: 01a0cdc1-6c76-74d1-856a-fa14f842d11a
+  author: joe
+  content: 'PROXY APPROVAL (Claude for the operator): measured evidence is credible; the fix closes the verdict record when a refused spec''s reworked PR merges.'
+  created_at: 2026-09-23T10:13:20.630376861Z
+  modified_at: 2026-09-23T10:13:20.630376861Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
