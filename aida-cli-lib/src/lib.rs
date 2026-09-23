@@ -81632,6 +81632,50 @@ mod task_1450_review_verdict_event_tests {
     }
 }
 
+/// BUG-1536 acceptance criteria 2 + 3 + 5: a test-only, construction-time
+/// refusal to let [`handle_review_record_at`] write outside a tempdir. Every
+/// filesystem write the recording path makes (the review verdict, the
+/// merge-hold marker, the phase-3 handshake) and the one forge call it can
+/// make (`merge_hold::sync_label`, which shells out with the SAME root as its
+/// cwd — see `run_forge_cli`) are scoped to this one `project_root`. So
+/// refusing here, in test builds only, to operate on a root that is not
+/// under the process's temp directory is the belt-and-braces net for the
+/// whole call: it holds regardless of which ambient env var a test did or
+/// didn't set, because it does not consult any env var at all — it only
+/// looks at the resolved root the call was actually given. Compiled out
+/// entirely in a non-test build (`cfg(test)`), so it costs nothing and
+/// changes no production behavior.
+// trace:BUG-1536 | ai:claude
+#[cfg(test)]
+fn assert_review_write_root_is_isolated(project_root: &std::path::Path) {
+    let tmp = std::env::temp_dir();
+    let canon_tmp = tmp.canonicalize().unwrap_or(tmp);
+    let canon_root = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
+    assert!(
+        canon_root.starts_with(&canon_tmp),
+        "BUG-1536: handle_review_record_at was about to write a review \
+         verdict / merge-hold / forge label outside a tempdir (root = {}, \
+         temp dir = {}). This looks like a test resolved its write root \
+         ambiently instead of pinning an explicit tempdir — pass a tempdir \
+         path in, not an env var.",
+        canon_root.display(),
+        canon_tmp.display(),
+    );
+}
+
+/// `aida review record`'s CLI entry point. Resolves the write root exactly
+/// ONCE (drive root, falling back to the found project root) and hands it to
+/// [`handle_review_record_at`] — the ambient env is read here and nowhere
+/// else in the recording path. BUG-1536: the previous shape resolved this
+/// root here AND separately, deeper in the call, at the merge-hold write
+/// site (preferring `AIDA_PROJECT_ROOT`) — two independent ambient reads that
+/// could and did disagree (a seat shell has `AIDA_PROJECT_ROOT` set to the
+/// real repo; pointing only `AIDA_DRIVE_ROOT` at a tempdir left the merge
+/// hold + forge label call resolving against the real repo). A single
+/// resolved root threaded explicitly through the whole call cannot diverge.
+// trace:BUG-1536 | ai:claude
 fn handle_review_record(
     spec: &str,
     verdict: &str,
@@ -81642,6 +81686,36 @@ fn handle_review_record(
     pr: Option<u64>,
 ) -> Result<()> {
     let project_root = drive_root_or_project_root()?;
+    handle_review_record_at(
+        project_root,
+        spec,
+        verdict,
+        sha,
+        branch,
+        summary,
+        findings,
+        pr,
+    )
+}
+
+/// The core of `aida review record`, taking its write root as an explicit
+/// parameter rather than resolving it ambiently. Used directly by tests so a
+/// test can pin the root to a tempdir and know — by construction, not by
+/// convention — that nothing the call does can escape it. `handle_review_record`
+/// is the only caller that resolves `project_root` from the environment.
+// trace:BUG-1536 | ai:claude
+fn handle_review_record_at(
+    project_root: std::path::PathBuf,
+    spec: &str,
+    verdict: &str,
+    sha: Option<&str>,
+    branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    pr: Option<u64>,
+) -> Result<()> {
+    #[cfg(test)]
+    assert_review_write_root_is_isolated(&project_root);
     let kind = review_verdict::VerdictKind::parse(verdict);
     if kind == review_verdict::VerdictKind::Other {
         anyhow::bail!(
@@ -81712,15 +81786,17 @@ fn handle_review_record(
                 .map(review_verdict::short_sha)
                 .unwrap_or("unknown")
         );
-        // The reviewer may run in a disposable review worktree. The merge
-        // process reads holds at the orchestrator-visible project root.
-        let protection_root = std::env::var_os("AIDA_PROJECT_ROOT")
-            .map(std::path::PathBuf::from)
-            .filter(|p| p.is_dir())
-            .unwrap_or_else(|| project_root.clone());
-        merge_hold::write_hold(&protection_root, n, &reason)
+        // BUG-1536: this used to re-resolve a SEPARATE "protection root" here
+        // (preferring `AIDA_PROJECT_ROOT`, ambiently) rather than reusing the
+        // one root this whole call was given. That second ambient read is
+        // exactly what let a test's `AIDA_DRIVE_ROOT`-only tempdir pin leave
+        // the hold, verdict and forge label call resolving against a seat
+        // shell's real `AIDA_PROJECT_ROOT`. There is now exactly one root for
+        // the whole call — `project_root`, the parameter — so a hold and its
+        // label can never target a different tree than the verdict itself.
+        merge_hold::write_hold(&project_root, n, &reason)
             .with_context(|| format!("could not protect PR-{n} with a merge hold"))?;
-        if let Err(err) = merge_hold::sync_label(&protection_root, n, true) {
+        if let Err(err) = merge_hold::sync_label(&project_root, n, true) {
             eprintln!(
                 "  {} merge-hold label not applied on PR-{n}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
@@ -81970,29 +82046,17 @@ mod bug_1452_refusal_aftermath_tests {
         backend.add_requirement(req).unwrap();
         drop(backend);
 
-        // BOTH roots must point at the tempdir, and this is not belt-and-braces.
-        // The hold is written to `protection_root`, which prefers
-        // AIDA_PROJECT_ROOT and only falls back to the resolved project root.
-        // A seat shell has AIDA_PROJECT_ROOT set to the REAL repository, so
-        // setting AIDA_DRIVE_ROOT alone sends the hold, the verdict and a
-        // `gh` label call into the live repo and a live PR. Verified the hard
-        // way: an earlier version of this test wrote .aida/merge-holds/PR-1452
-        // and labelled the real merged PR #1452.
-        //
-        // Pointing AIDA_PROJECT_ROOT at the tempdir also disarms the forge
-        // call for free — `sync_label` resolves the forge from that root, finds
-        // none in a bare temp directory, and returns Ok without shelling out.
-        //
-        // EnvVarsGuard, not two EnvVarGuards: each holds the process-global
-        // ENV_LOCK for its lifetime and the lock is not reentrant, so a second
-        // one deadlocks. The multi-key guard takes the lock once.
-        let root_str = root.path().to_str().expect("tempdir path is utf-8");
-        let _roots = crate::test_env::EnvVarsGuard::set(&[
-            ("AIDA_DRIVE_ROOT", root_str),
-            ("AIDA_PROJECT_ROOT", root_str),
-        ]);
-
-        handle_review_record(
+        // BUG-1536: no env var pinning needed any more, double or otherwise.
+        // `handle_review_record_at` takes its write root as an explicit
+        // parameter and uses it everywhere — the hold, the verdict, and the
+        // forge label call all resolve against exactly this tempdir, by
+        // construction, with no ambient `AIDA_DRIVE_ROOT`/`AIDA_PROJECT_ROOT`
+        // read anywhere in the call. (The earlier version of this test had to
+        // pin BOTH env vars, documented at length, because the merge-hold
+        // write resolved a SEPARATE root that preferred `AIDA_PROJECT_ROOT` —
+        // that second ambient read is gone; see BUG-1536.)
+        handle_review_record_at(
+            root.path().to_path_buf(),
             "BUG-14520",
             "request-changes",
             Some("abc123"),
@@ -82037,6 +82101,93 @@ mod bug_1452_refusal_aftermath_tests {
         assert!(
             parked.failure_reason.is_some(),
             "failure_reason-backed NeedsAttention is what `aida awaiting` counts as shelved work"
+        );
+    }
+
+    /// BUG-1536 acceptance criterion 2: driving the recording path with a
+    /// pinned tempdir root CANNOT write the merge-hold protection (the exact
+    /// artifact the incident leaked) outside that root — even with a bogus PR
+    /// number and even with the ambient env set exactly the way the incident
+    /// had it: a stand-in "real repo" named by BOTH `AIDA_DRIVE_ROOT` and
+    /// `AIDA_PROJECT_ROOT`. Before BUG-1536, `protection_root` preferred
+    /// `AIDA_PROJECT_ROOT` over the resolved root passed in here, so this
+    /// exact setup sent the hold and the (would-be) forge label call into
+    /// `real_root`. Now there is one root for the whole call, so the hold and
+    /// the spec-keyed verdict land only in `explicit_root`.
+    ///
+    /// Deliberately NOT asserted here: the PR-keyed *handshake* file
+    /// (`review_pr_handshake_path`) legitimately follows `AIDA_PROJECT_ROOT`
+    /// when set — that is a separate, pre-existing, intentional orchestrator
+    /// anchor (BUG-912, covered by its own test
+    /// `review_record_pr_handshake_honors_explicit_verdict_file`), not part
+    /// of the BUG-1536 defect. Asserting `real_root` gets no `.aida/` at all
+    /// would be wrong: the handshake write puts one there by design.
+    // trace:BUG-1536 | ai:claude
+    #[test]
+    fn recording_never_escapes_the_explicit_root_even_when_ambient_env_points_elsewhere() {
+        let explicit_root = tempfile::tempdir().unwrap();
+        let store = explicit_root.path().join(".aida-store");
+        std::fs::create_dir_all(explicit_root.path().join(".aida")).unwrap();
+        std::fs::create_dir_all(&store).unwrap();
+        std::fs::write(
+            explicit_root.path().join(".aida/config.toml"),
+            "mode = \"distributed\"\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let backend = aida_core::CachedGitBackend::open(
+            &store,
+            &aida_core::CachedGitBackend::default_cache_path(&store),
+        )
+        .unwrap();
+        let mut req = aida_core::Requirement::new("Explicit-root work".into(), "desc".into());
+        req.spec_id = Some("BUG-99999".into());
+        req.status = aida_core::RequirementStatus::Done;
+        backend.add_requirement(req).unwrap();
+        drop(backend);
+
+        // A stand-in "real repo": set BOTH ambient env vars the way the
+        // incident's seat shell had them, to prove the explicit parameter —
+        // not fallback ordering between the two — is what decides the
+        // protection root.
+        let real_root = tempfile::tempdir().unwrap();
+        let real_str = real_root.path().to_str().expect("tempdir path is utf-8");
+        let _ambient = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_DRIVE_ROOT", real_str),
+            ("AIDA_PROJECT_ROOT", real_str),
+        ]);
+
+        // A bogus, unlikely-to-collide-with-anything-real PR number — the
+        // exact shape of the incident, where the number happened to match a
+        // real merged PR purely by chance.
+        handle_review_record_at(
+            explicit_root.path().to_path_buf(),
+            "BUG-99999",
+            "request-changes",
+            Some("deadbeef"),
+            Some("bug-99999-work"),
+            Some("isolation check"),
+            &["nothing real".to_string()],
+            Some(9_999_999),
+        )
+        .expect("recording against the explicit root must succeed regardless of ambient env");
+
+        assert!(
+            merge_hold::read_hold(explicit_root.path(), 9_999_999).is_some(),
+            "the hold must land in the explicit root"
+        );
+        assert!(
+            review_verdict::read_recorded_verdict(explicit_root.path(), "BUG-99999").is_some(),
+            "the spec-keyed verdict must land in the explicit root"
+        );
+
+        assert!(
+            merge_hold::read_hold(real_root.path(), 9_999_999).is_none(),
+            "no hold may be written to the ambient-pointed root — this is the exact \
+             artifact BUG-1536's `protection_root` used to leak there"
+        );
+        assert!(
+            !real_root.path().join(".aida/merge-holds").exists(),
+            "the ambient-pointed root must not even gain a `.aida/merge-holds/` directory"
         );
     }
 }
