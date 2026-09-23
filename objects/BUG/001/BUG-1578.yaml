@@ -3,12 +3,12 @@ spec_id: BUG-1578
 agreed_id: BUG-1578
 title: Docs-only CI optimization suppresses documentation drift guards on documentation-only PRs
 description: 'The Build job computes full_ci=false when a PR changes only docs/** or Markdown, then conditions the external-prose classifier inventory, CLI-manual drift guard, monitor-contract drift guard, doc-intent gate, and trace/doc-header gate on full_ci == true. Therefore a PR can directly corrupt generated or contract documentation and receive a green required Build without any documentation verifier running. This is the self-referential failure class from SPIKE-85: the optimization intended to skip code work classifies the documentation checks themselves as code work.\n\nEvidence: .github/workflows/ci.yml lines 47-61 defines the docs-only exclusion; lines 147-151, 266-305, and 374-378 gate documentation checks on full_ci.\n\nAcceptance:\n1. Docs-only PRs still run all guards whose inputs include documentation or generated documentation.\n2. The expensive Rust build/test path remains skipped when no guard needs a binary.\n3. A regression test or workflow-level fixture proves that changing each guarded documentation category schedules its corresponding guard.'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:40:29.563667164Z
-modified_at: 2026-09-23T07:39:28.668920952Z
+modified_at: 2026-09-23T07:40:35.533402294Z
 req_type: Bug
 tags:
 - ci
