@@ -71062,6 +71062,10 @@ fn collect_awaiting_report_inner(
         nightly_red,
         pr_attribution_disagreements,
         orphaned_in_progress,
+        // trace:BUG-1530 | ai:claude — the seat this session reads as, so the
+        // headline (render) and per-turn compact line can scope themselves
+        // to channels this seat can act on.
+        role: ctx.role.clone(),
     }
 }
 
