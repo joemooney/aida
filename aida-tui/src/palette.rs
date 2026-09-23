@@ -110,7 +110,10 @@ impl PaletteAction {
         let s = |v: &str| v.to_string();
         match self {
             PaletteAction::Queue => vec![s(aida_exe), s("queue"), s("list"), s("--json")],
-            PaletteAction::Status => vec![s(aida_exe), s("status"), s("--json")],
+            // BUG-1503: bare `status --json` is now the fast agent-shaped
+            // snapshot; `--full` keeps this action's output the pre-BUG-1503
+            // heavy report the palette's activity panel has always shown.
+            PaletteAction::Status => vec![s(aida_exe), s("status"), s("--json"), s("--full")],
             PaletteAction::List => vec![s(aida_exe), s("list"), s("--json")],
             PaletteAction::Punts => vec![s(aida_exe), s("punts"), s("list")],
             PaletteAction::Findings => vec![s(aida_exe), s("findings"), s("list")],
@@ -689,7 +692,7 @@ mod tests {
         // The `--json`-supporting commands request it…
         assert_eq!(
             PaletteAction::Status.dispatch("aida"),
-            vec!["aida", "status", "--json"]
+            vec!["aida", "status", "--json", "--full"]
         );
         assert_eq!(
             PaletteAction::List.dispatch("aida"),
