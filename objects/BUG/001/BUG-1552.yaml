@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T13:05:16.129070411Z
-modified_at: 2026-09-23T14:01:58.031098883Z
+modified_at: 2026-09-23T14:01:59.777941164Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -72,4 +72,10 @@ comments:
   content: 'PROXY DECISION (Claude for the operator, 2026-09-22 overnight burn-down; the operator delegated design calls: ''make decisions on my behalf''). The question and the ruling (the recommended option is adopted): Q: should `aida doctor check` default-fail on findings, or stay reporting-only with an opt-in flag? Recommended: reporting-only (consistent with the sibling STORY-1422 precedent already ruled --fail-on-findings, and avoids silently breaking undiscovered existing callers) — document that exit 0 means "ran successfully" not "found nothing", name the --fail-on-findings flag in --help and the glossary. Now IMPLEMENT-ready; overrule by commenting.'
   created_at: 2026-09-23T06:22:35.000717511Z
   modified_at: 2026-09-23T06:22:35.000717511Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce92-c2e1-7cf1-8232-73833ac4e954
+  author: joe
+  content: Claude implementer dispatched 2026-09-23 07:01 -> branch claude/bug-1552, no PR (overnight burn-down)
+  created_at: 2026-09-23T14:01:59.777941164Z
+  modified_at: 2026-09-23T14:01:59.777941164Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
