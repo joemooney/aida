@@ -9,12 +9,12 @@ description: |-
   1. aida db reconcile-status (or the sweep) prints both directional counts.
   2. The one-time count is recorded in a spec comment with date and population.
   3. A test: a spec reopened to Draft after its trailered commit landed stays Draft on the next pull.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T06:45:05.301647405Z
-modified_at: 2026-09-23T12:43:43.547369418Z
+modified_at: 2026-09-23T13:02:43.907387437Z
 req_type: Task
 tags:
 - drain-safe
@@ -55,3 +55,21 @@ comments:
   created_at: 2026-09-23T12:43:43.547369418Z
   modified_at: 2026-09-23T12:43:43.547369418Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0ce5c-80ad-7e23-b32e-fff138f23805
+  author: aida-auto-bump
+  timestamp: 2026-09-23T13:02:43.885588189Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0ce5c-80c3-7193-9322-3cd84f1a3535
+  timestamp: 2026-09-23T13:02:43.907385824Z
+  agent: aida
+  commit_sha: 2aaa650d3133882d5b67e550e8917c34aaae083b
+  summary: Completed via merge 2aaa650d
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T13:02:43.305312178Z
+  completion_sha: 2aaa650d3133882d5b67e550e8917c34aaae083b
