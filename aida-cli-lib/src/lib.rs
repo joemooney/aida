@@ -42090,6 +42090,12 @@ mod task_957_claim_tests;
 #[path = "tests/story_696_ps_tests.rs"]
 mod story_696_ps_tests;
 
+// `aida ps` flags a live seat whose mail identity would fall back to the
+// shell user. trace:TASK-1451 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1451_mail_identity_ps_tests.rs"]
+mod task_1451_mail_identity_ps_tests;
+
 // The orphaned-In-Progress detection → `aida awaiting` mapping.
 // trace:BUG-1523 | ai:claude
 #[cfg(test)]
@@ -58493,6 +58499,10 @@ struct PsRow {
     /// opt-in — so the locked-by column stays blank until a lock exists.
     // trace:TASK-1143 | ai:claude
     locked_by: Option<String>,
+    /// TASK-1451: the live seat's resolved mail-sender identity source —
+    /// `None` when there is no live pid backing this row (nothing to probe).
+    // trace:TASK-1451 | ai:claude
+    mail_identity: Option<MailIdentityStatus>,
 }
 
 /// The TASK-1090 dispatch-health payload for one [`PsRow`].
@@ -58503,6 +58513,102 @@ struct PsDispatch {
     hint: Option<String>,
     dirty: bool,
     ahead_of_main: u32,
+}
+
+/// TASK-1451: whether a live seat's resolved mail identity is a stable seat
+/// value or the ambiguous shell-user fallback BUG-1533 flagged in the
+/// envelope — surfaced here BEFORE that seat sends any mail, so the gap is
+/// visible up front instead of discovered 200 messages later.
+// trace:TASK-1451 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MailIdentityStatus {
+    /// `AIDA_AGENT_NAME` / `AIDA_USER` / `AIDA_SESSION_ROLE` resolves a
+    /// stable seat identity — mail sent from this process is attributable.
+    Attributed,
+    /// None of those three are set in the process environment — mail sent
+    /// from this seat would collapse to the shell-user fallback.
+    Unattributed,
+    /// The process environment could not be read — another user's process,
+    /// the process already exited, or a non-Linux host. Reported as
+    /// "identity unknown" (PRIN-5) — never silently treated as fine.
+    Unknown,
+}
+
+impl MailIdentityStatus {
+    fn as_str(self) -> &'static str {
+        match self {
+            MailIdentityStatus::Attributed => "attributed",
+            MailIdentityStatus::Unattributed => "unattributed",
+            MailIdentityStatus::Unknown => "unknown",
+        }
+    }
+}
+
+/// Pure classification given an already-read environment snapshot — the
+/// TASK-1451 test seam. Reuses the BUG-1533 `resolve_sender` precedence
+/// wholesale rather than a second, drifting copy of it. `explicit` has no
+/// meaning here (`aida ps` is not sending a message), so it is always
+/// absent.
+// trace:TASK-1451 | ai:claude
+fn mail_identity_status_from_env(
+    env: &std::collections::HashMap<String, String>,
+) -> MailIdentityStatus {
+    let get = |k: &str| env.get(k).map(String::as_str);
+    let (_, source) = aida_core::mailbox::resolve_sender(
+        None,
+        get("AIDA_AGENT_NAME"),
+        get("AIDA_USER"),
+        get("AIDA_SESSION_ROLE"),
+        get("USER"),
+    );
+    if source.is_attributed() {
+        MailIdentityStatus::Attributed
+    } else {
+        MailIdentityStatus::Unattributed
+    }
+}
+
+/// Parse `/proc/<pid>/environ` (NUL-separated `KEY=VALUE` records) into a
+/// map. `None` when the file can't be read — permission denied (another
+/// user's process) or the process has already exited. Linux-only: that file
+/// has no equivalent on other platforms.
+// trace:TASK-1451 | ai:claude
+#[cfg(target_os = "linux")]
+fn read_pid_environ_vars(pid: u32) -> Option<std::collections::HashMap<String, String>> {
+    let raw = std::fs::read(format!("/proc/{pid}/environ")).ok()?;
+    let mut map = std::collections::HashMap::new();
+    for entry in raw.split(|&b| b == 0) {
+        if entry.is_empty() {
+            continue;
+        }
+        if let Ok(s) = std::str::from_utf8(entry) {
+            if let Some((k, v)) = s.split_once('=') {
+                map.insert(k.to_string(), v.to_string());
+            }
+        }
+    }
+    Some(map)
+}
+
+/// The real `/proc/<pid>/environ` probe — the same "one seam per real I/O
+/// source" pattern as `pid_start_time`, injected into `build_running_work`
+/// so the row-building logic stays filesystem-free and unit-testable with
+/// an injected environment map instead of a real `/proc` read.
+// trace:TASK-1451 | ai:claude
+#[cfg(target_os = "linux")]
+fn probe_mail_identity(pid: u32) -> MailIdentityStatus {
+    match read_pid_environ_vars(pid) {
+        Some(env) => mail_identity_status_from_env(&env),
+        None => MailIdentityStatus::Unknown,
+    }
+}
+
+/// Non-Linux hosts have no `/proc/<pid>/environ` to read — always "unknown",
+/// never guessed as fine.
+// trace:TASK-1451 | ai:claude
+#[cfg(not(target_os = "linux"))]
+fn probe_mail_identity(_pid: u32) -> MailIdentityStatus {
+    MailIdentityStatus::Unknown
 }
 
 /// An In-Progress spec with NO live spec-scoped session backing it — the
@@ -59556,6 +59662,7 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
         pid_start_time,
         |jsonl| session::role_from_jsonl(jsonl, "claude").ok().flatten(),
         |lease_id| manifest_roles.get(lease_id).cloned(),
+        probe_mail_identity,
     );
     // TASK-163: a dead phase child does not make its lease stale while the
     // drain orchestrator owns that spec. Overlay the authoritative drain PID
@@ -59570,6 +59677,10 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
             row.pid_started_at = pid_start_time(drain.pid);
             row.role = Some(format!("drain {}", drain.phase));
             row.dispatch = None;
+            // TASK-1451: re-probe under the authoritative drain pid, not the
+            // (possibly stale/absent) pid this row resolved before the
+            // overlay.
+            row.mail_identity = Some(probe_mail_identity(drain.pid));
         }
     }
     orphans.retain(|orphan| drain_state::live_drain_spec(project_root, &orphan.spec).is_none());
@@ -59644,6 +59755,7 @@ fn build_running_work(
     pid_start_probe: impl Fn(u32) -> Option<chrono::DateTime<chrono::Utc>>,
     role_probe: impl Fn(&std::path::Path) -> Option<String>,
     manifest_role_probe: impl Fn(&str) -> Option<String>,
+    mail_identity_probe: impl Fn(u32) -> MailIdentityStatus,
 ) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let rows: Vec<PsRow> = leases
         .iter()
@@ -59765,6 +59877,9 @@ fn build_running_work(
             // advisory lease (review/claim) has an empty path that matches no
             // lease → `None`.
             let locked_by = lock_probe(&l.worktree_path).filter(|s| !s.is_empty());
+            // TASK-1451: only probe a pid that actually backs this row — no
+            // live process, nothing to read an environment from.
+            let mail_identity = pid.map(&mail_identity_probe);
             PsRow {
                 lease: l.clone(),
                 state,
@@ -59776,6 +59891,7 @@ fn build_running_work(
                 spec,
                 dispatch,
                 locked_by,
+                mail_identity,
             }
         })
         .collect();
@@ -59883,6 +59999,10 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     // on this row's worktree — null when unlocked (the common
                     // case; `[locking]` is opt-in).
                     "locked_by": row.locked_by,
+                    // TASK-1451: null when no live pid backs the row (nothing
+                    // to probe); otherwise "attributed" / "unattributed" /
+                    // "unknown" — never collapsed to a boolean "fine".
+                    "mail_identity": row.mail_identity.map(MailIdentityStatus::as_str),
                 })
             })
             .collect();
@@ -60010,6 +60130,12 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         .as_ref()
                         .and_then(|d| d.hint.clone())
                         .unwrap_or_default(),
+                    // TASK-1451: blank when no live pid backs the row;
+                    // otherwise "attributed" / "unattributed" / "unknown".
+                    r.mail_identity
+                        .map(MailIdentityStatus::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
                 ]
             })
             .collect();
@@ -60026,7 +60152,8 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "live",
                     "locked_by",
                     "dispatch_state",
-                    "dispatch_hint"
+                    "dispatch_hint",
+                    "mail_identity"
                 ],
                 &run
             )
@@ -60257,6 +60384,30 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         hint.dimmed()
                     );
                 }
+            }
+            // TASK-1451: flag a live seat whose mail identity would fall
+            // back to the shell user — visible BEFORE it sends unattributable
+            // mail, not discovered after the fact in the envelope. Silent
+            // for `Attributed` (nothing to flag) and for `None` (no live pid
+            // to probe).
+            match row.mail_identity {
+                Some(MailIdentityStatus::Unattributed) => {
+                    println!(
+                        "{}{} {}: no AIDA_AGENT_NAME / AIDA_USER / AIDA_SESSION_ROLE in this process's environment — mail would go out unattributed",
+                        " ".repeat(11),
+                        crate::glyph(crate::glyphs::Glyph::Warning),
+                        "mail identity".yellow().bold()
+                    );
+                }
+                Some(MailIdentityStatus::Unknown) => {
+                    println!(
+                        "{}{} {}: could not read this process's environment — identity unknown",
+                        " ".repeat(11),
+                        crate::glyph(crate::glyphs::Glyph::Neutral),
+                        "mail identity".dimmed()
+                    );
+                }
+                Some(MailIdentityStatus::Attributed) | None => {}
             }
         }
         if !hidden_stale.is_empty() {
@@ -69296,6 +69447,20 @@ struct UnshippedBranchCandidate {
     commits_ahead: u32,
     age: String,
     has_local: bool,
+    // BUG-1531: the candidate's tip commit, used to bind a "do not ship"
+    // refusal to the exact commit a reviewer looked at rather than to a PR
+    // number or a branch-naming convention. `None` only when `git rev-parse`
+    // itself fails, in which case the sha-bound checks are skipped rather
+    // than guessed.
+    // trace:BUG-1531 | ai:claude
+    tip_sha: Option<String>,
+    // BUG-1531: the branch's name has the `pr-N`/`mr-N` review-snapshot
+    // shape, but the forge did NOT confirm it (no forge, lookup failure, or
+    // a head sha that doesn't match this branch's tip) — so it is kept in
+    // the report rather than silently excluded (PRIN-5: never hide on name
+    // alone), labelled as unverified with no ship hint.
+    // trace:BUG-1531 | ai:claude
+    possible_review_snapshot: bool,
 }
 
 // BUG-1288: a bounded candidate gate for the unshipped-work detector. Kept
@@ -69458,6 +69623,40 @@ fn collect_unshipped_work_items(
         ) {
             continue;
         }
+        // BUG-1531 criterion 1: a branch fetched from refs/pull/N/head (or its
+        // GitLab mr-N twin) is the one shape `ReviewForge::local_branch_for`
+        // creates, per TASK-1312's `parse_review_snapshot_branch` — but the
+        // NAME alone is not proof (a real unpushed feature branch can happen
+        // to be named `pr-123`). Only exclude it once the forge CONFIRMS
+        // PR/MR N exists and its head sha equals this branch's tip, reusing
+        // the same forge lookup TASK-1312's `aida pr gc` uses
+        // (`change_metadata`). With no forge (`no_forge`), a lookup failure,
+        // or a head sha that doesn't match, the row is kept and labelled
+        // unverified below rather than hidden on name alone (PRIN-5).
+        // trace:BUG-1531 | ai:claude
+        let mut possible_review_snapshot = false;
+        if let Some((kind, n)) = pr_cmd::parse_review_snapshot_branch(&short_branch) {
+            if no_forge {
+                possible_review_snapshot = true;
+            } else {
+                match forge::forge_for_kind(project_root, kind)
+                    .change_metadata(n, &mut network_retry::NoopSink)
+                {
+                    Ok(meta) if !meta.head_sha.is_empty() => {
+                        let tip_matches =
+                            git_output_checked(project_root, &["rev-parse", &refname])
+                                .is_ok_and(|tip| tip.trim() == meta.head_sha);
+                        if tip_matches {
+                            continue;
+                        }
+                        possible_review_snapshot = true;
+                    }
+                    _ => {
+                        possible_review_snapshot = true;
+                    }
+                }
+            }
+        }
         let pr_evidence = pr_head_states
             .as_ref()
             .and_then(|s| s.by_branch.get(&short_branch));
@@ -69531,6 +69730,24 @@ fn collect_unshipped_work_items(
         if !seen.insert(display_branch.clone()) {
             continue;
         }
+        let tip_sha = git_output_checked(project_root, &["rev-parse", &refname])
+            .ok()
+            .map(|s| s.trim().to_string());
+        // BUG-1531 criterion 2 (the safety floor, independent of criterion 1):
+        // never suggest shipping a commit that is ALREADY the head of an open
+        // PR, even when this branch's own name doesn't match that PR's
+        // headRefName (a rework ref, a hand-fetched investigation branch,
+        // …). Matched by sha across every open PR the snapshot knows about,
+        // not just the by-name lookup above.
+        // trace:BUG-1531 | ai:claude
+        if let (Some(sha), Some(states)) = (tip_sha.as_deref(), pr_head_states.as_ref()) {
+            let already_open_elsewhere = states.by_branch.values().any(|evidence| {
+                evidence.state == "open" && evidence.head_sha.as_deref() == Some(sha)
+            });
+            if already_open_elsewhere {
+                continue;
+            }
+        }
         let age = branch_tip_age(project_root, &refname);
         candidates.push(UnshippedBranchCandidate {
             branch: display_branch,
@@ -69540,6 +69757,8 @@ fn collect_unshipped_work_items(
             commits_ahead,
             age,
             has_local,
+            tip_sha,
+            possible_review_snapshot,
         });
     }
 
@@ -69568,7 +69787,38 @@ fn collect_unshipped_work_items(
                 }
                 .to_string()
             };
-            let recovery = if c.has_local {
+            // BUG-1531 criterion 3 (the general form of the hole, independent
+            // of both branch shape and PR number): a refusal binds to a
+            // COMMIT. If this branch's tip is the exact sha an outstanding
+            // (unclosed, not superseded by a Completed spec) RequestChanges
+            // or Rejected verdict names, no surface may recommend shipping
+            // it — regardless of which ref happens to reach that commit.
+            // trace:BUG-1531 | ai:claude
+            let outstanding_verdict = c.tip_sha.as_deref().and_then(|sha| {
+                let verdict = review_verdict::read_recorded_verdict(project_root, &c.spec_id)?;
+                let sha_matches = verdict
+                    .reviewed_sha
+                    .as_deref()
+                    .is_some_and(|reviewed| review_verdict::same_reviewed_sha(reviewed, sha));
+                let spec_completed = status_by_spec
+                    .get(&c.spec_id.to_ascii_uppercase())
+                    .is_some_and(|status| status.as_str() == "completed");
+                (sha_matches && review_verdict::is_outstanding_refusal(&verdict, spec_completed))
+                    .then_some(verdict)
+            });
+            let recovery = if let Some(verdict) = &outstanding_verdict {
+                format!(
+                    "do not ship — this commit carries an unresolved reviewer verdict ({}); resolve the review first",
+                    verdict.raw
+                )
+            } else if c.possible_review_snapshot {
+                // BUG-1531: name-shaped like a review snapshot but the forge
+                // never confirmed it — kept visible, no ship hint (PRIN-5).
+                format!(
+                    "possible review snapshot ({}), unverified",
+                    c.local_branch
+                )
+            } else if c.has_local {
                 format!("aida pr ship {}", c.branch)
             } else {
                 format!(
@@ -70025,6 +70275,210 @@ exit 1
         assert!(
             rows.iter().all(|row| row.branch != "story-1187-squash"),
             "patch-equivalent branches must not be reported as unshipped: {rows:?}"
+        );
+    }
+
+    // BUG-1531 criterion 1 + 4: a local `pr-<digits>` review-snapshot branch
+    // (the one shape `ReviewForge::local_branch_for` creates, per TASK-1312's
+    // parser) is a PUBLISHED snapshot and must never be reported as unshipped
+    // work — regardless of naming collisions with other branches. A
+    // genuinely unshipped, non-snapshot branch for a different spec must
+    // still report, so the fix does not suppress the whole channel. The
+    // "PR-2035" summary/branch is a self-contained fixture (no real PR
+    // needed) matching the advisor's note that this shape should be
+    // constructed, not depended on an accidental branch.
+    // trace:BUG-1531 | ai:claude
+    #[cfg_attr(
+        windows,
+        ignore = "fake-gh harness is a bash script; gh cannot be stubbed via shebang on Windows"
+    )]
+    #[test]
+    fn detector_excludes_review_snapshot_branch_but_still_reports_genuine_unshipped_work() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+
+        // The snapshot: a spec whose own id happens to be "PR-2035" so the
+        // branch `pr-2035` clears the active-work candidate gate on its own,
+        // exactly the way a real snapshot's spec id clears it via commit
+        // trailers.
+        branch_with_commit(root, "pr-2035", "PR-2035");
+        // A genuinely unshipped, unrelated branch that must keep reporting.
+        branch_with_commit(root, "story-1531-unshipped", "STORY-1531");
+        let pr_2035_tip = git_output_checked(root, &["rev-parse", "pr-2035"]).unwrap();
+
+        // The forge CONFIRMS PR 2035 exists and its head sha equals the
+        // branch tip — the only condition BUG-1531's rework allows the
+        // name-shaped `pr-2035` branch to be excluded on.
+        let fake_gh = executable_fake_gh(
+            root,
+            &format!(
+                r#"#!/usr/bin/env bash
+if [[ "$*" == *"pr list"* ]]; then
+  printf '[]'
+  exit 0
+fi
+if [[ "$*" == *"pr view 2035"* ]]; then
+  printf '{{"state":"MERGED","title":"t","mergedAt":null,"baseRefName":"main","headRefName":"pr-2035","headRefOid":"{}","isCrossRepository":false,"headRepository":null,"isDraft":false}}'
+  exit 0
+fi
+exit 1
+"#,
+                pr_2035_tip.trim()
+            ),
+        );
+        let _env = crate::test_env::EnvVarsGuard::set(&[(
+            "AIDA_TEST_GH_BINARY",
+            fake_gh.to_str().unwrap(),
+        )]);
+        let rows = collect_unshipped_work_items(
+            root,
+            &[
+                summary("PR-2035", "InProgress"),
+                summary("STORY-1531", "InProgress"),
+            ],
+            false,
+            false,
+        );
+
+        assert!(
+            rows.iter().all(|row| row.branch != "pr-2035"),
+            "a forge-confirmed review snapshot (matching head sha) must never be reported as unshipped: {rows:?}"
+        );
+        let genuine = rows
+            .iter()
+            .find(|row| row.branch == "story-1531-unshipped")
+            .expect("a genuinely unshipped branch must still report");
+        assert_eq!(genuine.spec_id, "STORY-1531");
+        assert_eq!(genuine.recovery, "aida pr ship story-1531-unshipped");
+    }
+
+    // BUG-1531 PROXY DECISION: with NO forge available (`no_forge = true`),
+    // a name-shaped `pr-N` branch cannot be confirmed, so it must be KEPT —
+    // never hidden on name alone (PRIN-5) — and labelled unverified with no
+    // "aida pr ship" hint.
+    // trace:BUG-1531 | ai:claude
+    #[test]
+    fn detector_keeps_review_snapshot_named_branch_unverified_with_no_forge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+
+        branch_with_commit(root, "pr-2036", "PR-2036");
+
+        let rows = collect_unshipped_work_items(
+            root,
+            &[summary("PR-2036", "InProgress")],
+            true, // no_forge
+            false,
+        );
+
+        let row = rows
+            .iter()
+            .find(|row| row.branch == "pr-2036")
+            .expect("with no forge, a name-shaped pr-N branch must be kept, not hidden");
+        assert_eq!(row.spec_id, "PR-2036");
+        assert_eq!(
+            row.recovery,
+            "possible review snapshot (pr-2036), unverified"
+        );
+        assert!(
+            !row.recovery.contains("aida pr ship"),
+            "an unverified row must carry no ship hint: {row:?}"
+        );
+    }
+
+    // BUG-1531 PROXY DECISION: the forge resolves PR 2037, but its recorded
+    // head sha does NOT match this branch's tip (e.g. the change moved since
+    // the fetch, or the name is a coincidence). The branch must be KEPT and
+    // labelled unverified rather than excluded.
+    // trace:BUG-1531 | ai:claude
+    #[cfg_attr(
+        windows,
+        ignore = "fake-gh harness is a bash script; gh cannot be stubbed via shebang on Windows"
+    )]
+    #[test]
+    fn detector_keeps_review_snapshot_named_branch_unverified_when_forge_head_differs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+
+        branch_with_commit(root, "pr-2037", "PR-2037");
+
+        let fake_gh = executable_fake_gh(
+            root,
+            r#"#!/usr/bin/env bash
+if [[ "$*" == *"pr list"* ]]; then
+  printf '[]'
+  exit 0
+fi
+if [[ "$*" == *"pr view 2037"* ]]; then
+  printf '{"state":"OPEN","title":"t","mergedAt":null,"baseRefName":"main","headRefName":"pr-2037","headRefOid":"0000000000000000000000000000000000dead","isCrossRepository":false,"headRepository":null,"isDraft":false}'
+  exit 0
+fi
+exit 1
+"#,
+        );
+        let _env = crate::test_env::EnvVarsGuard::set(&[(
+            "AIDA_TEST_GH_BINARY",
+            fake_gh.to_str().unwrap(),
+        )]);
+        let rows =
+            collect_unshipped_work_items(root, &[summary("PR-2037", "InProgress")], false, false);
+
+        let row = rows.iter().find(|row| row.branch == "pr-2037").expect(
+            "a forge-resolved PR whose head sha differs from the branch tip must be kept, not excluded",
+        );
+        assert_eq!(row.spec_id, "PR-2037");
+        assert_eq!(
+            row.recovery,
+            "possible review snapshot (pr-2037), unverified"
+        );
+        assert!(
+            !row.recovery.contains("aida pr ship"),
+            "an unverified row must carry no ship hint: {row:?}"
+        );
+    }
+
+    // BUG-1531 criterion 3 + 6: a refusal binds to a COMMIT, not to a PR
+    // number or a branch-naming convention. A branch whose tip is the exact
+    // sha an outstanding (unclosed) RequestChanges verdict names must never
+    // carry a "ship it" recommendation — driven from a verdict fixture
+    // rather than from any particular PR number, so the check generalizes
+    // past the specific pr2035-review incident that surfaced it.
+    // trace:BUG-1531 | ai:claude
+    #[test]
+    fn detector_omits_ship_hint_for_commit_carrying_unresolved_review_verdict() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+
+        branch_with_commit(root, "bug-1470-work", "BUG-1470");
+        let tip = git_output_checked(root, &["rev-parse", "bug-1470-work"]).unwrap();
+
+        let verdict_dir = root.join(".aida").join("review-verdicts");
+        std::fs::create_dir_all(&verdict_dir).unwrap();
+        std::fs::write(
+            verdict_dir.join("BUG-1470.json"),
+            format!(
+                r#"{{"verdict":"request-changes","reviewed_sha":"{}","reviewed_branch":"bug-1470-work","recorded_at":"2026-09-21T05:00:00Z","summary":"blocking defects found"}}"#,
+                tip.trim()
+            ),
+        )
+        .unwrap();
+
+        let rows =
+            collect_unshipped_work_items(root, &[summary("BUG-1470", "InProgress")], true, false);
+
+        for row in &rows {
+            assert!(
+                !row.recovery.contains("aida pr ship"),
+                "a commit carrying an unresolved review verdict must never get a ship hint: {row:?}"
+            );
+        }
+        assert!(
+            rows.iter().any(|row| row.branch == "bug-1470-work"),
+            "the refused branch should still surface as unshipped, just without a ship hint: {rows:?}"
         );
     }
 
@@ -77788,14 +78242,34 @@ fn parse_review_story_pr_number(title: &str) -> Option<u64> {
 /// inside them aren't mined as bogus "referenced" specs. Conservative: only the
 /// markers that strongly imply code and don't appear in genuine reference lines
 /// (`trace:SPEC-ID`, `(SPEC-ID)` in prose, `- (SPEC-ID) …` bullets).
-/// trace:BUG-412 | ai:claude
+///
+/// BUG-1590: a bare `t.contains(';')` was WAY too broad — AIDA's own
+/// integration-batch commit convention writes each folded spec as
+/// `- SPEC-ID: <clause>; <clause> (SPEC-ID)`, a prose sentence with a
+/// mid-line semicolon joining two clauses, terminated by the completion
+/// trailer. That line contains a `;` but is not code, and the old check
+/// silently discarded it from the squash-body scan — most lines of a
+/// multi-spec squash body were dropped, exactly the shape the integration
+/// workflow produces (observed: only 1-2 of 6-7 trailers survived per
+/// batch). Real pasted-code semicolons are STATEMENT TERMINATORS — the
+/// line ends in `;` (e.g. `let x = compute(CODE-42);`) — so the signal is
+/// narrowed to that shape: `ends_with(';')`, not `contains(';')`. A line
+/// that merely mentions a semicolon mid-sentence before its trailing
+/// `(SPEC-ID)` still counts as a trailer.
+// trace:BUG-1590 | ai:claude
 fn body_line_is_code_like(line: &str) -> bool {
     let t = line.trim();
     if t.is_empty() {
         return false;
     }
-    // Structural code punctuation that prose references don't use.
-    if t.contains('{') || t.contains('}') || t.contains(';') || t.contains("=>") || t.contains("::")
+    // Structural code punctuation that prose references don't use. `;` only
+    // counts when it TERMINATES the line (a real code statement), not when
+    // it merely appears mid-sentence ahead of a trailing `(SPEC-ID)`.
+    if t.contains('{')
+        || t.contains('}')
+        || t.ends_with(';')
+        || t.contains("=>")
+        || t.contains("::")
     {
         return true;
     }
@@ -77846,6 +78320,20 @@ pub(crate) fn extract_trace_line_spec_ids(message: &str) -> Vec<String> {
     out
 }
 
+/// Which commit-body SHAPES count as a completion trailer:
+/// every non-blank, non-subject body line whose TRAILING paren group
+/// starts with a spec-id-shaped token — `- SPEC-ID: <prose>; <more prose>
+/// (SPEC-ID)`, `* [AI:tool] fix(scope): thing (SPEC-ID)`, or bare
+/// `<prose> (SPEC-ID)` — counts, one trailer per line, regardless of
+/// interior punctuation (a mid-sentence `;` does NOT disqualify a line;
+/// only a line that structurally looks like pasted code does — see
+/// `body_line_is_code_like`). A line whose trailing group does not START
+/// with a spec-id (release-note prose like `(scope)`, `(1.2.3)`) or a
+/// code-like line (`{`/`}`/line-terminating `;`/`=>`/`::`/assignment `=`)
+/// contributes nothing. Ids already delivered by the commit's SUBJECT
+/// trailer are excluded (BUG-85) so a lead spec named in both places is
+/// not double-reported.
+// trace:BUG-1590 | ai:claude
 pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<String> {
     let delivered = extract_spec_ids_from_commit(message);
     let mut lines = message.lines();
