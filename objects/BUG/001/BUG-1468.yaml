@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:01:14.943970052Z
-modified_at: 2026-09-23T07:52:55.777103740Z
+modified_at: 2026-09-23T07:52:58.575435411Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -72,5 +72,11 @@ comments:
   content: Commit 6b39aa1eb8 references this requirement
   created_at: 2026-09-23T06:20:45.863882404Z
   modified_at: 2026-09-23T06:20:45.863882404Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd40-e9cf-7473-9db7-83d5ff161713
+  author: joe
+  content: 'Merged to main via integration batch 3, PR #2113 squash 64aa20201a (2026-09-23 00:52). Completed by hand where aida pull''s auto-bump missed the multi-spec squash trailer (BUG-1590).'
+  created_at: 2026-09-23T07:52:58.575435411Z
+  modified_at: 2026-09-23T07:52:58.575435411Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
