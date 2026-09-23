@@ -1535,6 +1535,28 @@ fn queue_move_force_flag_parses() {
     ));
 }
 
+/// BUG-1487: `queue move` is now the last queue verb to accept `--user`,
+/// matching `add`/`remove`/`list`/`clear` — the documented way to reorder
+/// another identity's queue actually reaches the command instead of
+/// silently falling back to the caller's own resolved identity.
+// trace:BUG-1487 | ai:claude
+#[test]
+fn queue_move_user_flag_parses() {
+    let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--top"]).unwrap();
+    assert!(matches!(
+        cli.command,
+        Command::Queue(QueueCommand::Move { user: None, .. })
+    ));
+    let cli = Cli::try_parse_from([
+        "aida", "queue", "move", "TASK-1", "--top", "--user", "alice",
+    ])
+    .unwrap();
+    assert!(matches!(
+        cli.command,
+        Command::Queue(QueueCommand::Move { user: Some(ref u), .. }) if u == "alice"
+    ));
+}
+
 /// BUG-249: pre-fix, `aida queue move <id>` printed a `Moved` check line even
 /// when `<id>` wasn't in the queue at all — queue_reorder's update
 /// loop simply didn't match anything and the write completed with
