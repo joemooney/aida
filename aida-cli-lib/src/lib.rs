@@ -12626,11 +12626,13 @@ fn findings_needing_a_successor(
 // trace:STORY-1421 | ai:claude
 fn emit_nonblocking_findings_on_completion(
     project_root: &std::path::Path,
+    store_path: &std::path::Path,
     spec_id: &str,
     sha: &str,
     pr_hint: Option<u64>,
 ) {
-    if let Err(e) = try_emit_nonblocking_findings_on_completion(project_root, spec_id, sha, pr_hint)
+    if let Err(e) =
+        try_emit_nonblocking_findings_on_completion(project_root, store_path, spec_id, sha, pr_hint)
     {
         eprintln!("warning: could not carry forward non-blocking findings for {spec_id}: {e:#}");
     }
@@ -12641,9 +12643,23 @@ fn emit_nonblocking_findings_on_completion(
 /// `finding-hash:<hex>` tags), so a re-run of the auto-bump scan over an
 /// already-completed spec never files the same finding twice. Returns the
 /// number of NEW findings filed.
-// trace:STORY-1421 | ai:claude
+///
+/// BUG-1506: every new finding is created through `DatabaseBackend::
+/// add_requirement` — the SAME targeted, single-object write `aida add`
+/// itself uses on the git-canonical store (`git_backend_cmd.rs`'s add
+/// handler). It only ever reads store METADATA (counters) to assign the new
+/// spec_id, then writes exactly the one new object + a targeted `add
+/// SPEC-ID` commit; it never loads or overwrites the full requirements list.
+/// The old `CachedGitBackend::update_atomically` path this replaced does a
+/// full-store load-then-save, which would silently drop any spec a
+/// concurrent `aida add` wrote in between — exactly the class of bug
+/// BUG-1506 was filed over, and live here because this runs inside `aida
+/// pull`'s auto-bump, right after drain merges, when concurrent `aida add`
+/// is common.
+// trace:STORY-1421 trace:BUG-1506 | ai:claude
 fn try_emit_nonblocking_findings_on_completion(
     project_root: &std::path::Path,
+    store_path: &std::path::Path,
     spec_id: &str,
     sha: &str,
     pr_hint: Option<u64>,
@@ -12662,12 +12678,10 @@ fn try_emit_nonblocking_findings_on_completion(
         return Ok(0);
     }
 
-    let Some(store_path) = detect_distributed_store_from(project_root) else {
-        anyhow::bail!("no distributed store found");
-    };
-    let dispenser = load_dispenser(&store_path)?;
-    let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
-    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    use aida_core::db::DatabaseBackend;
+    let dispenser = load_dispenser(store_path)?;
+    let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
     let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
 
     let spec_upper = spec_id.trim().to_ascii_uppercase();
@@ -12744,16 +12758,11 @@ fn try_emit_nonblocking_findings_on_completion(
         req.tags.insert(carried_from_tag.clone());
         req.tags.insert(hash_tag);
         req.tags.insert("kind:carried-forward".to_string());
+        // `spec_id` left unset — the targeted `add_requirement` write below
+        // assigns it (reading only the store's small metadata/counters file,
+        // never the full requirements list).
 
-        let store = backend.update_atomically(|store| {
-            let type_prefix = store.get_type_prefix(&req.req_type);
-            store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
-        })?;
-        let written =
-            store.requirements.last().cloned().ok_or_else(|| {
-                anyhow::anyhow!("add_requirement_with_id produced no requirement")
-            })?;
-        aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
+        let written = backend.add_requirement(req)?;
 
         let display_id = written.spec_id.as_deref().unwrap_or("?");
         record_role_activity(display_id, "findings-add");
@@ -66639,15 +66648,28 @@ fn auto_bump_done_to_completed(
     // BUG-1529 verdict-closing pass above.
     // trace:STORY-1421 | ai:claude
     for flip in &confirmed {
-        emit_nonblocking_findings_on_completion(project_root, &flip.spec_id, &flip.sha, None);
+        emit_nonblocking_findings_on_completion(
+            project_root,
+            store_path,
+            &flip.spec_id,
+            &flip.sha,
+            None,
+        );
     }
     for (spec_id, sha, pr_n, _) in &confirmed_stale {
-        emit_nonblocking_findings_on_completion(project_root, spec_id, sha, Some(*pr_n));
+        emit_nonblocking_findings_on_completion(
+            project_root,
+            store_path,
+            spec_id,
+            sha,
+            Some(*pr_n),
+        );
     }
     for resolution in &confirmed_stranded {
         if resolution.outcome == StrandedReviewPrOutcome::Merged {
             emit_nonblocking_findings_on_completion(
                 project_root,
+                store_path,
                 &resolution.spec_id,
                 "",
                 Some(resolution.pr_n),
