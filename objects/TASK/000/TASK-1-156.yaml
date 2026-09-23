@@ -12,12 +12,12 @@ description: |-
   Findings:
   1. BUG-1297 AC1/AC2: aida mailbox send accepts --thread and --in-reply-to together, but mailbox_cmd.rs takes the --thread branch first and never resolves in_reply_to. An unknown or ambiguous reply id is therefore written instead of refused, and a unique prefix is stored non-canonically. Resolve/validate --in-reply-to even when --thread is present, or make the flags conflict, and add a regression test for the combined invocation.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T22:48:46.389478664Z
-modified_at: 2026-09-23T06:27:44.650605337Z
+modified_at: 2026-09-23T06:27:46.370963875Z
 req_type: Task
 tags:
 - from-advisor:BUG-1297
