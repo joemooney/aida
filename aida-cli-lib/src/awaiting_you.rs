@@ -410,6 +410,23 @@ pub(crate) fn blocked_age_label(
     }
 }
 
+/// Age suffix for an `Unverifiable` Blocked row: the refusal cannot be placed
+/// against the head, so whether rework landed since is UNKNOWN — never claim
+/// "no rework since" (PRIN-5), and never flag it overdue.
+// trace:TASK-1310 | ai:claude
+pub(crate) fn blocked_age_label_unverifiable(
+    recorded_at: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    match blocked_age(recorded_at, now) {
+        Some(age) => format!(
+            "refused {}, rework since then unknown",
+            crate::last_drain::format_age(age.secs)
+        ),
+        None => "age unknown".to_string(),
+    }
+}
+
 /// BUG-1549: the single PR review classifier. BOTH the mergeable suppression
 /// set (`local_suppressed_prs`, lib.rs) and every review row in the report
 /// (`PrReviewRows::add`) derive from this one pure function, so they cannot
@@ -1113,7 +1130,14 @@ impl AwaitingReport {
             // with no subsequent rework, reused from the same verdict data
             // classify_pr_review already read; "age unknown" (PRIN-5) when
             // recorded_at was never captured.
-            let age = blocked_age_label(item.recorded_at.as_deref(), chrono::Utc::now());
+            let age = match item.reason {
+                BlockedReason::AtHead => {
+                    blocked_age_label(item.recorded_at.as_deref(), chrono::Utc::now())
+                }
+                BlockedReason::Unverifiable => {
+                    blocked_age_label_unverifiable(item.recorded_at.as_deref(), chrono::Utc::now())
+                }
+            };
             match item.reason {
                 BlockedReason::AtHead => writeln!(
                     w,
@@ -1636,7 +1660,11 @@ impl AwaitingReport {
                     },
                     "recorded_at": i.recorded_at,
                     "age_secs": age.map(|a| a.secs),
-                    "overdue": age.map(|a| a.overdue),
+                    // Unverifiable: rework-since is unknown, so no overdue claim.
+                    "overdue": match i.reason {
+                        BlockedReason::AtHead => age.map(|a| a.overdue),
+                        BlockedReason::Unverifiable => None,
+                    },
                 })
             }).collect::<Vec<_>>(),
             "stale_approvals": self.stale_approvals.iter().map(|i| serde_json::json!({
@@ -2549,6 +2577,16 @@ mod tests {
     }
 
     // trace:TASK-1310 | ai:claude
+    // trace:TASK-1310 | ai:claude
+    #[test]
+    fn unverifiable_blocked_age_never_claims_no_rework() {
+        let now: chrono::DateTime<chrono::Utc> = "2026-09-23T00:00:00Z".parse().unwrap();
+        let label = blocked_age_label_unverifiable(Some("2026-09-01T00:00:00+00:00"), now);
+        assert!(label.contains("rework since then unknown"), "{label}");
+        assert!(!label.contains("no rework"), "{label}");
+        assert!(!label.contains("overdue"), "{label}");
+    }
+
     #[test]
     fn blocked_age_flags_long_standing_refusals_as_overdue() {
         let now: chrono::DateTime<chrono::Utc> = "2026-09-23T00:00:00Z".parse().unwrap();
