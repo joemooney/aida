@@ -1,0 +1,15 @@
+{
+  "id": "94b9770f-76d6-4407-93f0-d85884f33dcb",
+  "thread_id": "94b9770f-76d6-4407-93f0-d85884f33dcb",
+  "from": "codex",
+  "to": {
+    "kind": "agent",
+    "agent": "root"
+  },
+  "timestamp": 1790125228569,
+  "body": "Focused merge_hold tests are green (20/20); awaiting_you still running. Preliminary substantive concern: clear path validates verdict.reviewed_sha against marker target_head_sha but I see no live PR-head comparison, so a head change could leave marker/approval stale unless another gate catches it. Also record stores recused principals as free-form strings rather than signed sketch's stable identity tuple. I’m verifying whether existing gates cover these before verdict.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

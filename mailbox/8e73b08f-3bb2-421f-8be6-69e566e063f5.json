@@ -1,0 +1,15 @@
+{
+  "id": "8e73b08f-3bb2-421f-8be6-69e566e063f5",
+  "thread_id": "8e73b08f-3bb2-421f-8be6-69e566e063f5",
+  "from": "codex",
+  "to": {
+    "kind": "agent",
+    "agent": "root"
+  },
+  "timestamp": 1790125381685,
+  "body": "Exact-head cold review complete for 983e249ad47e4368b6c3248bc03b8b097e65a8dd. REQUEST_CHANGES posted to PR: https://github.com/joemooney/aida/pull/2103#issuecomment-5787172128 and to STORY-1397/STORY-1460. CI Build + merge-hold-gate SUCCESS, MERGEABLE/CLEAN. Tests: merge_hold 20/20, awaiting_you 36/36, fmt and diff checks pass. Blockers: production hold creation still writes plaintext via write_hold at lib.rs 50937/78394/88522/92418 (typed v2 not end-to-end); --route-to is manual metadata with no live-seat/brief/reconciliation routing; clear compares approval only to stored target_head_sha, not current PR head (stale approval can clear); principals are free-form strings with shell-user fallback, no stable tuple/unknown fail-closed identity.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
