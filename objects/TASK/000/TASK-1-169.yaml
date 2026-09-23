@@ -66,7 +66,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-21T02:53:52.696962750Z
-modified_at: 2026-09-23T06:42:08.579497121Z
+modified_at: 2026-09-23T06:43:44.715712918Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -170,4 +170,10 @@ comments:
   content: Claude implementer dispatched 2026-09-22 23:41 -> branch claude/task-191, no PR (overnight burn-down)
   created_at: 2026-09-23T06:42:08.579497121Z
   modified_at: 2026-09-23T06:42:08.579497121Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd01-87cb-70c1-bd3a-ca27718cd807
+  author: joe
+  content: Commit 29c5a18858 references this requirement
+  created_at: 2026-09-23T06:43:44.715712918Z
+  modified_at: 2026-09-23T06:43:44.715712918Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
