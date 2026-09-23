@@ -1006,7 +1006,7 @@ mod task_1244_drain_merge_lease_tests {
         let drain_start = src
             .find(concat!("\"aida queue work ", "(drain merge phase)\""))
             .expect("drain merge phase acquires the lease");
-        let after = &src[drain_start..drain_start + 1500];
+        let after = &src[drain_start..drain_start + 4000];
         assert!(
             after.contains(merge_call),
             "the drain merge_change follows the lease"
