@@ -31,19 +31,12 @@ description: |-
   NOT ABOUT THE CEILING ITSELF. Whether 45 minutes is the right ceiling is a separate question and not in scope. A phase that is stopped correctly should still not lose what it produced.
 
   Found by the advisor after TASK-1274 appeared in `unshipped_work` on roughly a dozen consecutive mail ticks without any surface treating it as actionable. PR #2019 opened manually to make the ten commits reviewable; held, pending review.
-  "
-  execution_mode: drain
-  relationships[4]{rel,id,title}:
-    Parent,EPIC-28,"Dependency-aware autonomous drain: shelve failures, skip dependents, continue independents (full --auto-complete batch)"
-    Related,BUG-1422,"A batch whose remaining members are all ineligible relaunches forever, because a drain that touched nothing is indistinguishable from a drain that finished"
-    Related,BUG-1422,"A batch whose remaining members are all ineligible relaunches forever, because a drain that touched nothing is indistinguishable from a drain that finished"
-    Related,STORY-1409,"Review PR-2038: [AI:codex] fix(orchestrator): surface watchdog-stopped work (BUG-1450)
 status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:12:42.984173284Z
-modified_at: 2026-09-23T10:01:26.504063285Z
+modified_at: 2026-09-23T11:26:55.124082076Z
 req_type: Bug
 tags:
 - batch:night-0920
