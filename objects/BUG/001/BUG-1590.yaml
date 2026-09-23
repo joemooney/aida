@@ -1,0 +1,23 @@
+id: 01a0cd33-f68e-7613-83be-e9003e2d4011
+spec_id: BUG-1590
+agreed_id: BUG-1590
+title: aida pull auto-bumps only some specs named in a multi-spec squash-commit body, so batch merges leave most specs at Done
+description: |-
+  Observed 2026-09-23 on the overnight integration batches. PR #2111 (squash 48dac64a77) body listed seven '- ...: ... (SPEC-ID)' lines; aida pull auto-bumped 5 of 7 (BUG-1508 and BUG-1514 stayed Done). PR #2112 (squash bc61c0a04a) listed six; aida pull bumped only BUG-1512. The subject line carries all ids space-separated, and each body line ends with one (ID) trailer. Whatever the scanner accepts (see the squash-body scan, subject ends '(#N)'), it silently drops most of a multi-spec squash, which is exactly the shape the integration-batch workflow produces. PRIN-5: a spec whose commit IS on main reads as not merged.
+
+  ## Acceptance
+  1. Given a squash commit on main whose body has N lines each ending in a (SPEC-ID) trailer, aida pull (and aida db reconcile-status) bumps all N eligible specs.
+  2. A test reproduces the #2112 body shape exactly and asserts all six are bumped.
+  3. State in the code which body shapes count as trailers, so a batch author can write a conforming body.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T07:38:49.870619781Z
+modified_at: 2026-09-23T07:38:49.870619781Z
+req_type: Bug
+tags:
+- auto-bump
+- drain-safe
+- integration
+- lifecycle
