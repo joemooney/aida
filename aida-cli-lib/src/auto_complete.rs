@@ -542,6 +542,20 @@ pub(crate) enum FailureKind {
     /// stable gate, so preserve it as a typed, non-transient shelve cause.
     // trace:BUG-1316 | ai:codex
     MergeHold,
+    /// Phase 1 never launched an implementer session at all — a
+    /// preflight refusal (e.g. a diverged PR branch), a lease/claim refusal,
+    /// or an agent-binary launch failure, all caught before any child
+    /// process could have committed anything. This is distinct from
+    /// `Failed`-like kinds where a session ran and then failed: a
+    /// launch refusal means the branch head is provably unchanged, so it
+    /// must never be treated as "phase 1 failed but an already-open PR from
+    /// a PREVIOUS round proves the work happened" — that conflation is what
+    /// manufactured a phantom CI/review round against a head no implementer
+    /// this round ever touched. Shelvable (so the refusal is visible where
+    /// findings are read), but never routed through
+    /// `recover_phase1_failure_with_open_pr`.
+    // trace:BUG-1524 | ai:claude
+    LaunchRefused,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -590,6 +604,8 @@ impl FailureKind {
                 | Self::StaleBaseRefused
                 | Self::StaleBaseConflict
                 | Self::MergeHold
+                // trace:BUG-1524 | ai:claude
+                | Self::LaunchRefused
                 | Self::Failed
         )
     }
@@ -619,6 +635,8 @@ impl FailureKind {
             Self::StaleBaseRefused => "stale-base-refused",
             Self::StaleBaseConflict => "stale-base-conflict",
             Self::MergeHold => "merge-hold",
+            // trace:BUG-1524 | ai:claude
+            Self::LaunchRefused => "launch-refused",
             Self::Failed => "tool-exit",
         }
     }
@@ -1923,6 +1941,17 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
             return format!(
                 "A human/advisor merge-hold is open on PR-{pr}. Read the hold reason in the \
                  failure detail, then clear it after review with `aida merge-hold clear {pr}`."
+            );
+        }
+        // BUG-1524: no implementer session ever launched — the failure
+        // detail above names the specific refusal (e.g. a diverged PR
+        // branch, with the exact realign command). Resolve that, then
+        // retry from scratch; there is no session to resume.
+        FailureKind::LaunchRefused => {
+            return format!(
+                "The implementer never launched — see the failure detail above for the \
+                 preflight/lease refusal it hit. Resolve that, then retry: \
+                 `aida queue work {spec}`."
             );
         }
         _ => {}
@@ -3737,13 +3766,26 @@ pub(crate) fn orchestrate_with_resume(
         loop {
             match driver.run_implementer() {
                 Err(f) => {
-                    if let Some(reentry_phase) = driver.recover_phase1_failure_with_open_pr(&f) {
-                        driver.capture_phase_done_pr();
-                        durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-                        fail_on_rework_no_op!();
-                        emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
-                        start_phase = reentry_phase;
-                        break;
+                    // BUG-1524: a launch refusal (preflight/lease refusal,
+                    // agent-binary launch failure) means no implementer ran
+                    // this round, so the branch head is provably unchanged.
+                    // An already-open PR from a PREVIOUS round is not
+                    // evidence this round did anything — never route a
+                    // launch refusal through the "phase 1 failed, but an
+                    // open PR already exists" recovery, which would
+                    // manufacture a CI/review round against a head this
+                    // failure never touched. Fall straight through to the
+                    // normal shelve path below. trace:BUG-1524 | ai:claude
+                    if f.kind != FailureKind::LaunchRefused {
+                        if let Some(reentry_phase) = driver.recover_phase1_failure_with_open_pr(&f)
+                        {
+                            driver.capture_phase_done_pr();
+                            durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                            fail_on_rework_no_op!();
+                            emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+                            start_phase = reentry_phase;
+                            break;
+                        }
                     }
                     match maybe_retry_transient_failure(
                         driver,
@@ -6190,6 +6232,12 @@ mod tests {
     struct MockPhaseDriver {
         calls: Vec<Phase>,
         fail_at: Option<Phase>,
+        /// BUG-1524: the [`FailureKind`] `record` uses when `fail_at`
+        /// matches — `None` (default) keeps the pre-existing generic
+        /// `FailureKind::Failed` mock failure. Set via `failing_at_with_kind`
+        /// to drive a specific typed failure (e.g. `LaunchRefused`) through
+        /// the orchestrator without inventing a bespoke mock method per kind.
+        fail_kind: Option<FailureKind>,
         verdict: Verdict,
         /// BUG-241: what [`PhaseDriver::reconcile_failure`] returns. Defaults
         /// to `GenuineFailure` so every pre-BUG-241 failure test is unchanged.
@@ -6347,6 +6395,7 @@ mod tests {
             Self {
                 calls: Vec::new(),
                 fail_at: None,
+                fail_kind: None,
                 verdict: Verdict::Approved,
                 reconcile: PhaseReconcile::GenuineFailure,
                 punt: None,
@@ -6473,6 +6522,16 @@ mod tests {
         fn failing_at(phase: Phase) -> Self {
             Self {
                 fail_at: Some(phase),
+                ..Self::base()
+            }
+        }
+
+        /// BUG-1524: like `failing_at`, but the mock failure carries `kind`
+        /// instead of the generic `FailureKind::Failed` default.
+        fn failing_at_with_kind(phase: Phase, kind: FailureKind) -> Self {
+            Self {
+                fail_at: Some(phase),
+                fail_kind: Some(kind),
                 ..Self::base()
             }
         }
@@ -6641,7 +6700,11 @@ mod tests {
         fn record(&mut self, phase: Phase) -> Result<(), PhaseFailure> {
             self.calls.push(phase);
             if self.fail_at == Some(phase) {
-                Err(PhaseFailure::new(format!("mock failure at {phase:?}")))
+                // trace:BUG-1524 | ai:claude
+                match self.fail_kind {
+                    Some(kind) => Err(PhaseFailure::of(kind, format!("mock failure at {phase:?}"))),
+                    None => Err(PhaseFailure::new(format!("mock failure at {phase:?}"))),
+                }
             } else {
                 Ok(())
             }
@@ -9289,6 +9352,69 @@ mod tests {
                 Phase::Build,
             ]
         );
+    }
+
+    /// BUG-1524: a phase-1 LAUNCH REFUSAL (no implementer session ever
+    /// started — a preflight/lease refusal or an agent-binary launch
+    /// failure) must never be conflated with the BUG-1145 "launched, then
+    /// failed after opening/advancing a PR" case above. Even when an open
+    /// PR from a PREVIOUS round exists and the mock is configured to
+    /// "recover" through it, a `LaunchRefused` failure must shelve
+    /// immediately and never reach Ci or Reviewer — continuing would
+    /// manufacture CI/review activity against a head this round never
+    /// touched.
+    // trace:BUG-1524 | ai:claude
+    #[test]
+    fn launch_refusal_shelves_and_never_reaches_ci_or_reviewer() {
+        let mut driver =
+            MockPhaseDriver::failing_at_with_kind(Phase::Implementer, FailureKind::LaunchRefused)
+                .recovering_phase1_failure_from_pr(Phase::Ci);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1524",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::LaunchRefused)
+        );
+        assert!(result.shelved_reason.is_some());
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Implementer],
+            "a launch refusal must never advance to Ci/Reviewer, even when an \
+             already-open PR from a previous round would otherwise redeem it"
+        );
+    }
+
+    /// BUG-1524 (control): a GENUINE launched-then-failed phase-1 failure
+    /// (the default `FailureKind::Failed`, matching `run_implementer`'s
+    /// non-`LaunchRefused` failures) must keep the existing BUG-1145
+    /// recovery behaviour — this is the same scenario as
+    /// `orchestrate_phase1_failure_with_verified_pr_proceeds_from_ci` above,
+    /// pinned again here under the BUG-1524 trace so a future change to the
+    /// launch-refusal guard cannot silently widen to swallow this case too.
+    // trace:BUG-1524 | ai:claude
+    #[test]
+    fn genuine_launched_failure_still_recovers_through_open_pr() {
+        let mut driver =
+            MockPhaseDriver::failing_at_with_kind(Phase::Implementer, FailureKind::Failed)
+                .recovering_phase1_failure_from_pr(Phase::Ci);
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1524-control",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert!(result.failed_phase.is_none());
+        assert!(result.shelved_reason.is_none());
+        assert!(driver.calls.contains(&Phase::Ci));
     }
 
     /// Instance A — phase 3 ends with no verdict file because the reviewer

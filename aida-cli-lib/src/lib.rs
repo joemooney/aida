@@ -92436,7 +92436,16 @@ impl RealPhaseDriver {
             .ok_or_else(|| {
                 let candidates = lease_ids_in(&self.sessions_dir());
                 if candidates.is_empty() {
-                    auto_complete::PhaseFailure::new(
+                    // BUG-1524: no lease, no receipt, no other candidate in
+                    // flight — the child never got far enough to mint
+                    // anything, i.e. it never launched an implementer
+                    // session at all (a preflight/lease refusal or an
+                    // agent-binary launch failure). Typed as
+                    // `LaunchRefused` so the orchestrator never treats an
+                    // already-open PR from a previous round as evidence
+                    // this round did anything. trace:BUG-1524 | ai:claude
+                    auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::LaunchRefused,
                         "no session lease appeared — `aida queue work` did not start a session",
                     )
                 } else if let Some(conflict_failure) =
@@ -92451,18 +92460,31 @@ impl RealPhaseDriver {
                     // through `FailureKind::LeaseConflict`, which is NOT a
                     // transient-retry cause, so a refusal that IS correct
                     // (the holder is still live) does not burn the drain's
-                    // retry budget rediscovering the same conflict.
+                    // retry budget rediscovering the same conflict. This is
+                    // also a launch refusal (the claim gate blocked the
+                    // child before it started), but `LeaseConflict` already
+                    // carries its own non-transient, non-open-PR-recovered
+                    // handling, so it keeps its existing kind.
                     // trace:BUG-1285 | ai:claude
                     conflict_failure
                 } else {
-                    // trace:BUG-1485 | ai:codex
-                    auto_complete::PhaseFailure::new(format!(
-                        "the child session {} neither retained its session lease nor wrote its \
-                         orchestrator handoff receipt. Resume the recorded child with \
-                         `aida queue work {} --resume`; unrelated active leases were ignored.",
-                        &claude_session_id[..claude_session_id.len().min(8)],
-                        self.spec,
-                    ))
+                    // BUG-1524: candidates exist (other leases are live),
+                    // but none of them is THIS session's — and no BUG-1485
+                    // handoff receipt exists either, so this session did
+                    // not even reach the point of completing genuine work
+                    // and releasing its lease cleanly. Typed the same way
+                    // as the empty-candidates case above.
+                    // trace:BUG-1485 | ai:codex trace:BUG-1524 | ai:claude
+                    auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::LaunchRefused,
+                        format!(
+                            "the child session {} neither retained its session lease nor wrote its \
+                             orchestrator handoff receipt. Resume the recorded child with \
+                             `aida queue work {} --resume`; unrelated active leases were ignored.",
+                            &claude_session_id[..claude_session_id.len().min(8)],
+                            self.spec,
+                        ),
+                    )
                 }
             })
     }
