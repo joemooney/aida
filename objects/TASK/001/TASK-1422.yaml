@@ -33,10 +33,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:08:04.119482952Z
-modified_at: 2026-09-21T18:08:23.658009304Z
+modified_at: 2026-09-23T06:22:27.254922806Z
 req_type: Task
 relationships:
 - rel_type: !Custom related
   target_id: 01a0bb84-f45e-7502-a8d3-5fc93152a275
   created_at: 2026-09-21T18:08:23.658003044Z
   created_by: joe
+comments:
+- id: 01a0ccee-09b6-7c62-861b-d363e3cf2534
+  author: joe
+  content: 'PROXY DECISION (Claude for the operator, 2026-09-22 overnight burn-down; the operator delegated design calls: ''make decisions on my behalf''). The question and the ruling (the recommended option is adopted): Q: markdown hard-line-breaks vs git diff --check — (a) standardize on `<br>` in docs/plans, or (b) exempt docs/plans from the check? Recommended: (a) — keeps the check meaningful everywhere (fail-closed default), ADR-47 fix already demonstrated it works; record convention in .aida/discipline/. Now IMPLEMENT-ready; overrule by commenting.'
+  created_at: 2026-09-23T06:22:27.254922806Z
+  modified_at: 2026-09-23T06:22:27.254922806Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
