@@ -34,12 +34,12 @@ description: |
   9. Orchestrator-internal skills (headless-only, e.g. aida-advise, aida-assess) are not scaffolded into the interactive catalogue by default, or are marked so the harness does not list them.
   10. The regrowth guard (criterion 6) also covers the scaffold: a test fails when the generated CLAUDE.md + its @-imports + the summed skill/command description bytes exceed a configured budget, so a new template cannot silently raise every downstream project's baseline.
   11. Delivery to existing projects rides aida scaffold refresh (edit-preserving), so projects already scaffolded get the slimmer templates without --force.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T02:03:24.869760515Z
-modified_at: 2026-09-23T02:07:13.038460478Z
+modified_at: 2026-09-23T02:14:12.031857242Z
 req_type: Task
 tags:
 - cost token-economics context-economy claude-md memory-hygiene parent:EPIC-71
