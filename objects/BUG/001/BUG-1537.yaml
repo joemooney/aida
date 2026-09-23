@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:16:00.684456364Z
-modified_at: 2026-09-23T14:45:46.103373387Z
+modified_at: 2026-09-23T14:45:48.941560459Z
 req_type: Bug
 tags:
 - aida:pr:ship
@@ -55,4 +55,10 @@ comments:
   content: 'Claude implementer result plus orchestrator fix: claude/bug-1537. ''shipped'' and the IMPLEMENTER COMPLETE banner only when this run merged; otherwise an honest ''already merged, not by this run'' line. The orchestrator kept BUG-376''s EXIT NOW directive on the observed path (test added). bug_376+pr_ship pass. Batch 14.'
   created_at: 2026-09-23T14:16:53.511746378Z
   modified_at: 2026-09-23T14:16:53.511746378Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ceba-e10d-76c2-8807-74b22336aa0d
+  author: joe
+  content: 'Merged via integration batch 13, PR #2124 (2026-09-23 07:45).'
+  created_at: 2026-09-23T14:45:48.941560459Z
+  modified_at: 2026-09-23T14:45:48.941560459Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
