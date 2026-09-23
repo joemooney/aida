@@ -1947,6 +1947,25 @@ fn round_trip_toon_header_regex() -> regex::Regex {
         .expect("valid TOON round-trip header regex")
 }
 
+fn round_trip_toon_header_regex_unanchored() -> regex::Regex {
+    // Same alternation as `round_trip_toon_header_regex`, minus the `(?m)^`
+    // anchor. Criterion 7f: a capture path that strips (or never had) the
+    // trailing newline before the header lands it MID-LINE, a shape the
+    // anchored regex cannot see by construction — the six observed real
+    // leaks all happen to be line-anchored (one producer), which proves that
+    // producer's behaviour, not the next one's. This unanchored form is kept
+    // as a SEPARATE, lower-confidence pass rather than folded into the
+    // primary predicate: unanchored also matches ordinary inline prose that
+    // merely discusses the convention (four known false positives measured
+    // against this store, including this very spec's own text), so
+    // `scan_round_trip_artifacts` only reports an unanchored match when it
+    // is NOT also an anchored one (i.e. genuinely mid-line), and tags it with
+    // a distinct category/summary so it never dilutes the high-confidence
+    // anchored findings.
+    regex::Regex::new(r"(?:(?:relationships|next)\[\d+\]\{|execution_mode:)")
+        .expect("valid TOON round-trip header regex (unanchored)")
+}
+
 fn round_trip_mojibake_regex() -> regex::Regex {
     // A lead character in {Â U+00C2, Ã U+00C3, â U+00E2} immediately followed
     // by EITHER a Latin-1 Supplement code point (U+0080-U+00FF — this is what
@@ -1963,13 +1982,70 @@ fn round_trip_mojibake_regex() -> regex::Regex {
         .expect("valid mojibake regex")
 }
 
+/// Recursively collects `(field-label, content)` pairs for a comment list and
+/// every nested reply beneath it (`Comment.replies` is itself
+/// `Vec<Comment>` — a reply can carry its own replies). Criterion 6 requires
+/// coverage of every text field, and a reply's content is exactly as capable
+/// of carrying a swallowed TOON block or mojibake as a top-level comment's —
+/// the round-trip producer captures rendered output regardless of comment
+/// nesting depth. `prefix` is the field label of the comment list's parent
+/// ("" for the requirement's own top-level `comments`, or a comment's own
+/// field label when descending into its `replies`), so a reply's label reads
+/// `comment[0]/reply[0]`, a reply-of-a-reply `comment[0]/reply[0]/reply[0]`,
+/// and so on.
+// trace:TASK-1313 | ai:claude
+fn push_comment_fields<'a>(
+    comments: &'a [aida_core::models::Comment],
+    prefix: &str,
+    out: &mut Vec<(String, &'a str)>,
+) {
+    for (i, c) in comments.iter().enumerate() {
+        let field = if prefix.is_empty() {
+            format!("comment[{i}]")
+        } else {
+            format!("{prefix}/reply[{i}]")
+        };
+        out.push((field.clone(), c.content.as_str()));
+        push_comment_fields(&c.replies, &field, out);
+    }
+}
+
+/// Whether the byte at `start` in `bytes` sits at the start of a line,
+/// ALLOWING leading indentation (spaces/tabs) between the preceding newline
+/// (or start of text) and `start`. Used only to decide what the unanchored
+/// mid-line pass should SKIP as a duplicate of the anchored primary check's
+/// intent: an indented code block quoting a TOON sample (own test:
+/// `indented_toon_sample_is_not_flagged`) is a leading-INDENT case, not the
+/// mid-line CONCATENATION case criterion 7f targets — the spec text is
+/// explicit that the trade-off the column-0 anchor makes is against
+/// concatenation, not indentation, so the low-confidence pass should not
+/// re-flag indentation either.
+// trace:TASK-1313 | ai:claude
+fn is_indent_anchored(bytes: &[u8], start: usize) -> bool {
+    let mut i = start;
+    loop {
+        if i == 0 {
+            return true;
+        }
+        match bytes[i - 1] {
+            b'\n' => return true,
+            b' ' | b'\t' => i -= 1,
+            _ => return false,
+        }
+    }
+}
+
 /// Scan every text field of every requirement in the store — title,
-/// description, and every comment body — for round-trip artifacts. Coverage
-/// is the whole object store, not just descriptions. Report only: never
-/// mutates `store`.
+/// description, and every comment body, walked recursively into nested
+/// replies — for round-trip artifacts. Coverage is the whole object store,
+/// not just descriptions. Report only: never mutates `store`. All reported
+/// offsets are BYTE offsets into the field's UTF-8 text (`str::find`/regex
+/// match positions, not character counts), matching what a byte-oriented
+/// editor or `sed`/`grep -b` would report.
 // trace:TASK-1313 | ai:claude
 fn scan_round_trip_artifacts(store: &aida_core::models::RequirementsStore) -> Vec<DoctorFinding> {
     let toon_re = round_trip_toon_header_regex();
+    let toon_re_unanchored = round_trip_toon_header_regex_unanchored();
     let mojibake_re = round_trip_mojibake_regex();
     let mut out = Vec::new();
 
@@ -1979,21 +2055,45 @@ fn scan_round_trip_artifacts(store: &aida_core::models::RequirementsStore) -> Ve
             ("title".to_string(), req.title.as_str()),
             ("description".to_string(), req.description.as_str()),
         ];
-        for (i, c) in req.comments.iter().enumerate() {
-            fields.push((format!("comment[{i}]"), c.content.as_str()));
-        }
+        push_comment_fields(&req.comments, "", &mut fields);
 
         for (field, text) in fields {
+            let bytes = text.as_bytes();
             for m in toon_re.find_iter(text) {
                 out.push(DoctorFinding {
                     category: "round-trip-artifacts".to_string(),
                     id: format!("{spec_id}/{field}/{}", m.start()),
                     summary: format!(
-                        "{spec_id} field `{field}` offset {}: swallowed TOON row header (`{}`) — a read-modify-write through rendered `aida show` output",
+                        "{spec_id} field `{field}` byte offset {}: swallowed TOON row header (`{}`) — a read-modify-write through rendered `aida show` output",
                         m.start(),
                         m.as_str()
                     ),
                     action: "reconstruct the field from the orphan branch's git history (this check reports, it does not repair)".to_string(),
+                    safe_heal: false,
+                });
+            }
+            // Criterion 7f: a second, unanchored pass for a header that was
+            // appended MID-LINE — a shape the column-0-anchored primary
+            // predicate cannot see. Only reported when NOT also an anchored
+            // hit (start of text or immediately after a newline), so this
+            // never duplicates the high-confidence findings above; kept in a
+            // distinct category/summary ("possible, mid-line") because
+            // unanchored also matches ordinary inline prose discussing the
+            // convention — noisier by design, eyeballed by a human, not
+            // folded into the primary signal.
+            for m in toon_re_unanchored.find_iter(text) {
+                let start = m.start();
+                if is_indent_anchored(bytes, start) {
+                    continue;
+                }
+                out.push(DoctorFinding {
+                    category: "round-trip-artifacts-possible".to_string(),
+                    id: format!("{spec_id}/{field}/{start}"),
+                    summary: format!(
+                        "{spec_id} field `{field}` byte offset {start}: possible, mid-line TOON row header (`{}`) — not at the start of a line, so lower confidence than the anchored check; may be a swallowed block appended without a leading newline, or ordinary prose mentioning the convention",
+                        m.as_str()
+                    ),
+                    action: "eyeball the surrounding text; if it is a genuine swallowed block, reconstruct the field from the orphan branch's git history (this check reports, it does not repair)".to_string(),
                     safe_heal: false,
                 });
             }
@@ -2002,7 +2102,7 @@ fn scan_round_trip_artifacts(store: &aida_core::models::RequirementsStore) -> Ve
                     category: "round-trip-artifacts".to_string(),
                     id: format!("{spec_id}/{field}/{}", m.start()),
                     summary: format!(
-                        "{spec_id} field `{field}` offset {}: UTF-8-decoded-as-Latin-1 mojibake sequence (`{}`)",
+                        "{spec_id} field `{field}` byte offset {}: UTF-8-decoded-as-Latin-1 mojibake sequence (`{}`)",
                         m.start(),
                         m.as_str()
                     ),
@@ -2085,22 +2185,72 @@ mod task_1313_round_trip_artifact_tests {
     }
 
     // 7b (inline mention, negative case 1): prose that discusses the
-    // convention mid-line — never at column 0 — must not match. This is
-    // TASK-1313's own defining case: its spec text contains the phrase
-    // `execution_mode:` and the literal pattern `next[1]{` inline, never at
-    // the start of a line.
+    // convention mid-line — never at column 0 — must not fire the
+    // high-confidence anchored check. This is TASK-1313's own defining
+    // case: its spec text contains the phrase `execution_mode:` and the
+    // literal pattern `next[1]{` inline, never at the start of a line. An
+    // ordinary inline mention like this IS expected to surface in the
+    // separately-labelled, lower-confidence mid-line pass (criterion 7f) —
+    // that pass is deliberately noisier — so the negative assertion here is
+    // scoped to the high-confidence category, not to zero findings overall.
     #[test]
-    fn inline_mention_of_execution_mode_is_not_flagged() {
+    fn inline_mention_of_execution_mode_is_not_flagged_high_confidence() {
         let text = "It proposes a new execution_mode: value for the advisor to groom.";
         let store = store_with(text);
-        assert!(scan_round_trip_artifacts(&store).is_empty());
+        let findings = scan_round_trip_artifacts(&store);
+        assert!(
+            findings
+                .iter()
+                .all(|f| f.category != "round-trip-artifacts"),
+            "an inline mention must never fire the high-confidence anchored check: {findings:?}"
+        );
     }
 
     #[test]
-    fn inline_mention_of_toon_header_is_not_flagged() {
+    fn inline_mention_of_toon_header_is_not_flagged_high_confidence() {
         let text = "aida status already uses the `next[1]{cmd,to}:` row header today.";
         let store = store_with(text);
-        assert!(scan_round_trip_artifacts(&store).is_empty());
+        let findings = scan_round_trip_artifacts(&store);
+        assert!(
+            findings
+                .iter()
+                .all(|f| f.category != "round-trip-artifacts"),
+            "an inline mention must never fire the high-confidence anchored check: {findings:?}"
+        );
+    }
+
+    // Criterion 7f: a swallowed TOON row header appended MID-LINE — no
+    // newline before it, because the capture path stripped (or never had)
+    // the trailing newline — is still found, just at lower confidence and
+    // in a separately-labelled category so it does not dilute the
+    // high-confidence anchored findings. Both anchored forms (column-0 and
+    // indent-allowing) miss this shape by construction.
+    #[test]
+    fn mid_line_toon_header_is_found_as_possible() {
+        let text = "Closing the description here.\"execution_mode: drain";
+        let store = store_with(text);
+        let findings = scan_round_trip_artifacts(&store);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].category, "round-trip-artifacts-possible");
+        assert!(findings[0].summary.contains("possible, mid-line"));
+        assert!(findings[0].summary.contains("byte offset"));
+    }
+
+    // Follow-up (criterion 7b): TASK-1313's own defining sentence and the
+    // raw regex source line, verbatim, as a fixture. The spec argues this is
+    // the strongest negative case: the `^execution_mode:` clause of the
+    // regex's own SOURCE TEXT matches the pattern mid-line (never at column
+    // 0), so a fix that special-cased this spec by id would still have to
+    // reckon with the pattern re-appearing in its own defining prose.
+    #[test]
+    fn task_1313_own_defining_text_is_not_flagged_high_confidence() {
+        let text = "THE PRIMARY PREDICATE IS THE CAUSE, NOT THE SYMPTOM, AND IT IS LINE-ANCHORED AT COLUMN 0. A description containing a TOON row header AT THE START OF A LINE is a round-trip artifact:\n\n       ^(?:relationships|next)\\[\\d+\\]\\{      or      ^execution_mode:\n";
+        let store = store_with(text);
+        let findings = scan_round_trip_artifacts(&store);
+        assert!(
+            findings.iter().all(|f| f.category != "round-trip-artifacts"),
+            "TASK-1313's own defining text must never fire the high-confidence anchored check: {findings:?}"
+        );
     }
 
     // 7b (negative case 2): an INDENTED code block quoting a TOON sample —
@@ -2131,6 +2281,46 @@ mod task_1313_round_trip_artifact_tests {
         let findings = scan_round_trip_artifacts(&store);
         assert!(findings.iter().any(|f| f.id.contains("/title/")));
         assert!(findings.iter().any(|f| f.id.contains("/comment[0]/")));
+    }
+
+    // Criterion 6: coverage is every text field, including a NESTED reply
+    // (`Comment.replies: Vec<Comment>`), not just top-level comment bodies.
+    // Mojibake buried two levels deep (a reply's reply) must still surface.
+    #[test]
+    fn mojibake_in_nested_reply_is_found() {
+        let mut req = Requirement::new("Sample".to_string(), "clean description".to_string());
+        req.spec_id = Some("TASK-9003".to_string());
+        let top = aida_core::models::Comment::new(
+            "joe".to_string(),
+            "clean top-level comment".to_string(),
+        );
+        let top_id = top.id;
+        let mut reply = aida_core::models::Comment::new_reply(
+            "advisor".to_string(),
+            "clean first-level reply".to_string(),
+            top_id,
+        );
+        let reply_id = reply.id;
+        let nested_reply = aida_core::models::Comment::new_reply(
+            "advisor".to_string(),
+            "the em-dash reads as \u{00E2}\u{0080}\u{0094} here, two levels deep".to_string(),
+            reply_id,
+        );
+        reply.replies.push(nested_reply);
+        let mut top = top;
+        top.replies.push(reply);
+        req.comments.push(top);
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(req);
+        let findings = scan_round_trip_artifacts(&store);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(findings[0].summary.contains("mojibake"));
+        assert!(
+            findings[0].id.contains("/comment[0]/reply[0]/reply[0]/"),
+            "expected a doubly-nested reply field label, got {}",
+            findings[0].id
+        );
     }
 }
 
