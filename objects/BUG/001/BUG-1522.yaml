@@ -125,7 +125,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:38:43.142590781Z
-modified_at: 2026-09-23T08:11:09.897327037Z
+modified_at: 2026-09-23T08:13:31.011179702Z
 req_type: Bug
 tags:
 - orchestrator drain rework-loop severity:operational parent:EPIC-62
@@ -224,5 +224,11 @@ comments:
   content: 'Claude implementer result: claude/bug-1522 @ aeba1e09e6, pushed, no PR; the implementer reports acceptance met. Queued for strict review, then batch 5.'
   created_at: 2026-09-23T08:11:09.897327037Z
   modified_at: 2026-09-23T08:11:09.897327037Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd53-b803-7791-ab65-ee90e76869d9
+  author: joe
+  content: 'PROXY DECISION (Claude for the operator, 01:15) after a strict-review BLOCK: land the six-arm fail_on_rework_no_op! wiring as a PARTIAL (the reviewer confirmed it is safe and strictly better than main), after one small fix: an Inconclusive-arm shelve must keep the --resume hint. AC #5/#6/#7/#9 (the predicate still fails open on an unreadable head, a non-matching phase_done_pr, or no default ref; no compare against the verdict''s reviewed_sha on the dispatched branch; the Held/Inconclusive pr_number None case) are split to a follow-up task.'
+  created_at: 2026-09-23T08:13:31.011179702Z
+  modified_at: 2026-09-23T08:13:31.011179702Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
