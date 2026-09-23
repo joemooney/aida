@@ -445,6 +445,7 @@ mod tests {
                 },
             ],
             pr_attribution_disagreements: Vec::new(),
+            orphaned_in_progress: Vec::new(),
         };
         let channels = you_channels(&report);
         let rendered: Vec<String> = channels.iter().map(|(n, l)| format!("{n} {l}")).collect();
