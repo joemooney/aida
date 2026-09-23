@@ -607,3 +607,37 @@ different surfaces in one day — a menu with no recommendation or advise
 escape (STORY-306 finish), and a closing summary that listed what shipped
 but never named the next user-action (BUG-245 finish). Two surfaces, same
 rubric, same fix.
+
+## After you gate something, check that every surface agrees
+
+Most of the time you are asking surfaces what is true and have nothing better
+to compare them against. The exception is a gate you just applied yourself —
+you refused the PR, you placed the hold, you moved the status. For a few
+minutes afterward you hold the answer independently of every surface that is
+supposed to reflect it, so a surface still showing the old answer is not
+suspect, it is wrong, and you can say so without further investigation.
+
+Spend the check there. Having gated something, look at the surfaces that
+route work — the coordination inbox, the readiness view, the queue, the
+record you just wrote — and confirm each one now agrees with what you did.
+Disagreement is a defect with a reproduction already in hand.
+
+This is not auditing. An audit asks "is this surface correct in general,"
+which needs ground truth you rarely have. This asks "does this surface agree
+with the one thing I currently know," which needs nothing but the act you
+just performed. It is a narrower case of "Verify against the artifact that
+ships, not the step's own report" above: there the ground truth has to be
+derived (the commit, the pushed head); here it doesn't, because you are the
+one who just produced it.
+
+Worked example, one gate, three defects. A reviewer recorded a refusal on a
+pull request, then spent a few minutes checking what the surfaces said about
+it. The coordination inbox still listed the PR as awaiting-you, because it
+read the forge's review decision rather than the refusal just recorded in
+the substrate. The same classifier treated an unknown CI rollup as
+acceptable, so a required build that never ran looked indistinguishable from
+a passing one. And the recorded verdict itself had already been overwritten,
+forty-one seconds later, by a second reviewer writing to the same file —
+caught only because someone went back to read what they had just written.
+None of the three was reachable by reading code first; each was visible only
+because the observer already knew the answer independently.
