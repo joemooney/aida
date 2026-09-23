@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:50:22.817831771Z
-modified_at: 2026-09-23T08:36:29.202060411Z
+modified_at: 2026-09-23T08:48:00.096051233Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -82,4 +82,10 @@ comments:
   content: 'Strict re-review BLOCK (01:35): pr_has_stale_or_unverifiable_local_approval (the mergeable suppression) reads the SPEC-keyed verdict via read_recorded_verdict_any, while stale_approval_rows (the explanatory row) reads the PR-keyed verdict (PR-{n}). On disk these disagree (PR-keyed approvals are often sha-less; spec-keyed ones carry a sha), so one PR can show ''cannot be verified - do not merge'' AND stay mergeable, or be suppressed with no row. Also there is no test of the suppression or the union. Dropped from batch 5; a rework is dispatched to make both use ONE verdict source.'
   created_at: 2026-09-23T08:36:29.202060411Z
   modified_at: 2026-09-23T08:36:29.202060411Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd73-4a60-7162-adee-fd4e759b452e
+  author: joe
+  content: Commit 16310c8b67 references this requirement
+  created_at: 2026-09-23T08:48:00.096051233Z
+  modified_at: 2026-09-23T08:48:00.096051233Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
