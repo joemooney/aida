@@ -34,12 +34,12 @@ description: |
   - BUG-1480 does not close until this spec does. Its in-spec closure criterion is repointed from STORY-1422 to this spec in the same change that files it, because STORY-1422 will auto-complete on merge and would otherwise satisfy that gate falsely.
 
   Related: STORY-1422 (the mechanism, shipped), BUG-1480 (the regression this gate watches), BUG-1551 (the general form of a merge closing a spec past its own criteria), BUG-1557 (the scaffold/allowlist parity gap found by demonstrating STORY-1422's criterion 4).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-23T23:02:15.343566802Z
+modified_at: 2026-09-23T23:17:49.561949966Z
 req_type: Story
 relationships:
 - rel_type:
@@ -253,3 +253,22 @@ comments:
   created_at: 2026-09-23T22:28:47.804708452Z
   modified_at: 2026-09-23T22:28:47.804708452Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d08f-a355-7422-b04b-a11b42f298cc
+  author: aida-auto-bump
+  timestamp: 2026-09-23T23:17:49.525914662Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0d08f-a379-75d3-b72e-6c82aeef257e
+  timestamp: 2026-09-23T23:17:49.561947801Z
+  agent: aida
+  commit_sha: c882eb2320cc4c5bd8cd080241c4a71e7e71ce8d
+  summary: 'CLEAN, AND THE TRAILER REASONING IS THE BEST-ARGUED I HAVE SEEN ON THIS BOARD. Config-only, 40 lines, no code. I VERIFIED THE BEFORE-STATE RATHER THAN TAKING IT: `aida schedule list` against main''s config reports "No scheduled jobs configured", so STORY-1422''s performance gate genuinely had no trigger anywhere - a commented example in a template is a trigger for nobody, which is the substrate-first gap this board has recorded repeatedly (a working detector and a working heal with no cadence invoking either, on BUG-1563). BOTH REGISTERED JOBS ARE VALID AND I CHECKED THE ONE THAT COULD SILENTLY FAIL: performance-guard runs `doctor check performance --fail-on-findings`, which IS in parse_scheduled_command''s allowlist at main - so it will not error at every tick, which is BUG-1557''s defect and the one that would bite hardest here since this config is not covered by #2053''s scaffold-parity test. The second job, performance-guard-route, carries `on = ["CronJobFailed"]` and a prompt with no `command`, so the allowlist does not apply to it. THE TOLERANCE CLAIM HOLDS AND I CHECKED IT PROPERLY: my first grep matched twice, but both hits are COMMENTS - one pre-existing line containing "Windows" (my pattern matching "window"), and one explaining that the tolerance deliberately stays in PerformancePolicy::default(). No tolerance setting is added. A number in two places is a number that can be tuned in one of them, and they avoided that. THE TRAILER IS CORRECTLY ABSENT FROM BOTH ARTEFACTS: no (STORY-1423) in the commit subject, and the branch is a SINGLE commit, so the commit subject IS GitHub''s default squash subject - the PR title is identical and also clean. Both fields covered, which matters because a multi-commit branch would have defaulted to the PR title instead. THE REASONING FOR OMITTING IT IS CORRECT AND UNUSUALLY PRECISE: this satisfies criterion 3 only; criteria 2 and 7 remain open because n=26 with zero over budget is consistent by the rule of three with a true rate up to ~11.5%, which is ABOVE the 10% budget - so the data cannot yet distinguish "fixed" from "sitting exactly at budget". A trailer would close the spec past its own unsatisfied criteria, which is the BUG-1551 defect this spec was carved out to avoid.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T23:17:49.525296575Z
+  completion_sha: c882eb2320cc4c5bd8cd080241c4a71e7e71ce8d
