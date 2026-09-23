@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T03:44:12.194839496Z
-modified_at: 2026-09-23T07:36:06.531919922Z
+modified_at: 2026-09-23T07:36:10.012892505Z
 req_type: Task
 tags:
 - parent:BUG-1510 orchestrator integrity attribution split-from:BUG-1510
@@ -39,4 +39,10 @@ comments:
   content: 'Claude implementer result: branch claude/task-1442 @ 13c374ac56 (2 commits, pushed, no PR). The guard pr_open_spec_guard_violation (pure core) refuses to open a PR when no commit in main..branch carries the expected spec''s trailer, and the refusal names the expected id plus the ids the trailers carry instead. It is wired into (a) aida pr ship (the leased-branch create arm) and the human finish ceremony, where it exits 1; and (b) the drain''s own PR-open paths open_orchestrator_pr_for_implementer_worktree / open_orchestrator_pr_for_pushed_branch plus their try_open_* wrappers and 3 RealPhaseDriver sites, via the non-exiting ensure_pr_open_spec_attribution, which returns Err so the phase shelves instead of killing the drain. AC1 met; AC2 met by pure tests (BUG-1420-trailered branch leased to STORY-1391) plus an orchestrator-seam test with a fake gh stub in real_phase_driver_wiring_tests.rs (28 pass). REVIEWER NOTES: open_cluster_pr is deliberately unguarded (--single-branch batches legitimately carry several specs); an unleased ''aida pr ship'' skips the check.'
   created_at: 2026-09-23T04:12:11.698573020Z
   modified_at: 2026-09-23T04:12:11.698573020Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd31-861c-7a90-881d-80218eacfb3a
+  author: joe
+  content: 'Merged to main via integration batch 2, PR #2112 squash bc61c0a04a (2026-09-23 00:34). Completed by hand because aida pull''s auto-bump missed this trailer in the multi-spec squash body.'
+  created_at: 2026-09-23T07:36:10.012892505Z
+  modified_at: 2026-09-23T07:36:10.012892505Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
