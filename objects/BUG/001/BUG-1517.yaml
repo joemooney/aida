@@ -18,7 +18,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:07:21.857249644Z
-modified_at: 2026-09-23T07:39:09.371888121Z
+modified_at: 2026-09-23T07:39:11.118006870Z
 req_type: Bug
 tags:
 - papercut authority-gate aida:queue:work
+comments:
+- id: 01a0cd34-498e-7020-89c8-38deb818e9e3
+  author: joe
+  content: Claude implementer dispatched 2026-09-23 00:39 -> branch claude/bug-1517, no PR (overnight burn-down)
+  created_at: 2026-09-23T07:39:11.118006870Z
+  modified_at: 2026-09-23T07:39:11.118006870Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
