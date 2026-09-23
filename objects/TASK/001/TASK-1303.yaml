@@ -66,7 +66,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:28.168866180Z
-modified_at: 2026-09-23T04:37:43.383670647Z
+modified_at: 2026-09-23T04:37:53.965216592Z
 req_type: Task
 tags:
 - batch:night-0920
@@ -183,5 +183,11 @@ comments:
   content: Commit ff3a2ebddc references this requirement
   created_at: 2026-09-23T04:37:26.136159104Z
   modified_at: 2026-09-23T04:37:26.136159104Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cc8e-50ad-79e2-b141-fe0e9af5a6e7
+  author: joe
+  content: 'Claude implementer result: branch claude/task-1303 @ ff3a2ebddc (pushed, no PR). It edits session-discipline.md (the master plus a byte-identical tracked copy; project_discipline_pack_matches_master passes). It adds the pinning rule tied to the HEAD row, the space/time/source narrowing clauses with both filter tests, the CI-row generalization plus the narrow-mutation form, the severity/urgency clause, and the closing-authority paragraph. It fixes the exit-status inversion (now a count comparison) and notes the setext false positive; both command caveats were verified empirically. The implementer reports every acceptance item met. REVIEWER NOTE: +136 lines to one discipline entry. Check it still reads as discipline rather than an essay, and consider trimming. TASK-1304 is stacked on this branch (same file).'
+  created_at: 2026-09-23T04:37:53.965216592Z
+  modified_at: 2026-09-23T04:37:53.965216592Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
