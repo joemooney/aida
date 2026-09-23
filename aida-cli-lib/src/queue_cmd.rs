@@ -12307,11 +12307,19 @@ pub(crate) fn probe_pr_integration_state(
     // The forge row for this PR (keyed by head branch).
     let item = branch.and_then(|b| snapshot.by_branch.get(b));
 
-    // CI: prefer the snapshot rollup ("pass"/"fail"/"pending"/"?"), normalized.
+    // CI: prefer the snapshot rollup ("pass"/"fail"/"pending"/"missing"/
+    // "unknown"/"?"), normalized. "missing" (a required check's row never
+    // showed up on this head) and "unknown" (the required-check set itself
+    // couldn't be read) are BOTH absent-evidence states, not passes — mapping
+    // either into the catch-all `None` arm is the exact PR-2009 false-green
+    // shape through `aida integrate` (`classify_integration_action` merges on
+    // `None`). trace:BUG-1481 | ai:claude
     let ci = match item.and_then(|i| i.ci_rollup.as_deref()) {
         Some("pass") => integrate::CiState::Passing,
         Some("fail") => integrate::CiState::Failing,
         Some("pending") => integrate::CiState::Running,
+        Some("missing") => integrate::CiState::RequiredCheckMissing,
+        Some("unknown") => integrate::CiState::Indeterminate,
         _ => integrate::CiState::None,
     };
 
@@ -12556,6 +12564,53 @@ mod bug_1581_integration_probe_tests {
             crate::integrate::classify_integration_action(&state),
             crate::integrate::IntegrationAction::Park(
                 crate::integrate::ParkReason::ReviewIntegrity
+            )
+        ));
+    }
+
+    // BUG-1481: a `ci_rollup` of "missing" (a required check's row never
+    // showed up on this head) must never be probed into `CiState::None` and
+    // never classify as Merge — that is the exact PR-2009 false-green shape
+    // through `aida integrate`.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn integrate_probe_never_merges_on_missing_required_check() {
+        let root = tempfile::tempdir().unwrap();
+        let mut snap = snapshot();
+        snap.by_branch.get_mut("bug-1581").unwrap().ci_rollup = Some("missing".into());
+        let state = probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snap);
+        assert_eq!(state.ci, crate::integrate::CiState::RequiredCheckMissing);
+        assert!(!matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Merge
+        ));
+        assert!(matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Park(
+                crate::integrate::ParkReason::RequiredCheckMissing
+            )
+        ));
+    }
+
+    // BUG-1481: a `ci_rollup` of "unknown" (the required-check set itself
+    // couldn't be read — branch protection unreadable) must never be probed
+    // into `CiState::None` and never classify as Merge.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn integrate_probe_never_merges_on_unknown_required_checks() {
+        let root = tempfile::tempdir().unwrap();
+        let mut snap = snapshot();
+        snap.by_branch.get_mut("bug-1581").unwrap().ci_rollup = Some("unknown".into());
+        let state = probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snap);
+        assert_eq!(state.ci, crate::integrate::CiState::Indeterminate);
+        assert!(!matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Merge
+        ));
+        assert!(matches!(
+            crate::integrate::classify_integration_action(&state),
+            crate::integrate::IntegrationAction::Park(
+                crate::integrate::ParkReason::RequiredCheckMissing
             )
         ));
     }

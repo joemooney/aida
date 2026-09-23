@@ -69534,18 +69534,8 @@ fn required_status_checks_uncached(project_root: &std::path::Path) -> Option<Vec
         .output()
         .ok()?;
     if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr).to_ascii_lowercase();
-        if stderr.contains("404")
-            || stderr.contains("not found")
-            || stderr.contains("not protected")
-        {
-            // No branch protection configured at all: a real, positive
-            // "nothing is required" answer, not an unreadable one.
-            return Some(Vec::new());
-        }
-        // Permission denied, network failure, or anything else: genuinely
-        // unknown — never assume nothing is required.
-        return None;
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return required_status_checks_outcome_from_stderr(&stderr);
     }
     let stdout = String::from_utf8_lossy(&out.stdout);
     let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).ok()?;
@@ -69557,6 +69547,27 @@ fn required_status_checks_uncached(project_root: &std::path::Path) -> Option<Vec
             .map(str::to_string)
             .collect(),
     )
+}
+
+/// BUG-1481: classify a failed `gh api .../protection` call's stderr into
+/// "nothing is required" vs "unknown". GitHub returns HTTP 404 for BOTH a
+/// genuinely unprotected branch (body `{"message":"Branch not protected",...}`)
+/// AND a protected branch the caller lacks permission to read protection on
+/// (body `{"message":"Not Found",...}`) — so a bare "404"/"not found"
+/// substring match conflates the two and can silently report a protected
+/// branch as having no required checks (the exact PR-2009 false-green shape).
+/// Only the literal "Branch not protected" message is a real, positive
+/// "nothing required" answer; everything else (permission denied, network
+/// failure, the ambiguous plain "not found") is genuinely unknown and must
+/// never be treated as "nothing required" (PRIN-5: absent evidence is not
+/// good evidence).
+// trace:BUG-1481 | ai:claude
+fn required_status_checks_outcome_from_stderr(stderr: &str) -> Option<Vec<String>> {
+    let stderr = stderr.to_ascii_lowercase();
+    if stderr.contains("branch not protected") {
+        return Some(Vec::new());
+    }
+    None
 }
 
 /// BUG-1291: bounded safety net for runs killed before their normal reviewer
@@ -70353,6 +70364,47 @@ mod bug_1481_ci_rollup_required_checks_tests {
         assert_eq!(
             summarize_status_check_rollup_with_required(&pending, None),
             "pending"
+        );
+    }
+
+    /// The literal "Branch not protected" message is the ONLY real, positive
+    /// "nothing required" answer.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn branch_not_protected_message_is_nothing_required() {
+        assert_eq!(
+            required_status_checks_outcome_from_stderr(
+                "gh: Branch not protected (HTTP 404)\n{\"message\":\"Branch not protected\"}"
+            ),
+            Some(Vec::new())
+        );
+    }
+
+    /// A bare 404 with a DIFFERENT message (e.g. a protected branch the
+    /// caller lacks permission to read protection on) must NOT be read as
+    /// "nothing required" — that is the exact PR-2009 false-green shape via
+    /// the "404"/"not found" substring match this replaces.
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn bare_404_with_other_message_is_unknown() {
+        assert_eq!(
+            required_status_checks_outcome_from_stderr(
+                "gh: Not Found (HTTP 404)\n{\"message\":\"Not Found\"}"
+            ),
+            None
+        );
+    }
+
+    /// Permission-denied / network failure: unknown, never "nothing
+    /// required".
+    // trace:BUG-1481 | ai:claude
+    #[test]
+    fn permission_denied_is_unknown() {
+        assert_eq!(
+            required_status_checks_outcome_from_stderr(
+                "gh: Must have admin rights to Repository. (HTTP 403)"
+            ),
+            None
         );
     }
 }
