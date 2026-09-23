@@ -1,7 +1,7 @@
 id: 01a0cbf5-9bcf-7581-9afe-6f0767ab39a2
 spec_id: BUG-1589
 agreed_id: BUG-1589
-title: 'Two seats spent ~9.8B tokens in one day answering their own mail-tick crons: a model-side recurring poll re-fired ~0.2s after every turn instead of on schedule, and the shipped event-driven heartbeat '
+title: Two seats burned ~9.8B tokens in one day answering their own mail-tick crons, which re-fired ~0.2s after every turn - the shipped event-driven heartbeat (TASK-1245) went unused
 description: |
   ## What happened (measured from ~/.claude/projects transcripts, deduped by requestId)
   UTC day 2026-09-21: 11.6B tokens across Claude seats; 99.8% cache reads, ~8M output total.
@@ -33,7 +33,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T01:51:06.191825231Z
-modified_at: 2026-09-23T01:51:06.191825231Z
+modified_at: 2026-09-23T01:51:27.473337732Z
 req_type: Bug
 tags:
 - cost token-economics seat-discipline heartbeat incident:2026-09-21 parent:EPIC-71
