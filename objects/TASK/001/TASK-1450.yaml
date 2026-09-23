@@ -1,0 +1,23 @@
+id: 01a0cd63-68f8-79d1-b3b2-713da84d45aa
+spec_id: TASK-1450
+agreed_id: TASK-1450
+title: Emit seat-tagged coordination events for review-verdict-recorded and disposition/mode changes
+description: |-
+  Split from BUG-1423 (2026-09-23). BUG-1423 added the seat field, PrMerged parity for aida pr ship, and MergeHoldChanged. Still missing (BUG-1423 AC2): an event when a review verdict is recorded (aida review record) and when a spec's disposition or execution_mode changes (aida edit --mode, groom/approve/reject). Reuse events::emit and the seat field; bump the monitor contract minor version and its fixture.
+
+  ## Acceptance
+  1. aida review record emits a seat-tagged event naming spec, PR, verdict and reviewed_sha.
+  2. A disposition or execution_mode change emits a seat-tagged event with the before and after values.
+  3. The monitor-contract doc, fixture and version are updated; verify.py passes.
+  4. A test per emit site.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T08:30:39.352431588Z
+modified_at: 2026-09-23T08:30:39.352431588Z
+req_type: Task
+tags:
+- events
+- followup
+- parent:BUG-1423
