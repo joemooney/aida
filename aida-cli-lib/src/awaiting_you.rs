@@ -801,9 +801,9 @@ impl PrReviewRows {
 
 /// STORY-1420: who sees a rework-ready row whose recorder has exited. With an
 /// owner/implementer on the spec, it is theirs — plus the advisor (the
-/// standing disposition gate) and any seat not scoped at all (no role, or an
-/// unrecognised one: BUG-1530's PRIN-5 rule). A reviewer seat that is not the
-/// owner does not inherit another reviewer's dead refusal. With NO owner, the
+/// standing disposition gate), the reviewer seat (a moved-past refusal needs
+/// a re-review) and any seat not scoped at all (no role, or an unrecognised
+/// one: BUG-1530's PRIN-5 rule). With NO owner, the
 /// row lands in the unowned advisor/human bucket shown to everyone.
 // trace:STORY-1420 | ai:claude
 fn exited_rework_visible(reader: ReworkReader<'_>, owner: Option<&str>) -> bool {
@@ -817,8 +817,11 @@ fn exited_rework_visible(reader: ReworkReader<'_>, owner: Option<&str>) -> bool 
         return true;
     }
     let seat = classify_seat(reader.role);
+    // Review fix: "moved past a refusal" is a re-review — the reviewer
+    // seat's job — so it sees the row too.
     owned_channel_visible(seat, AwaitingSeat::Implementer)
         || owned_channel_visible(seat, AwaitingSeat::Advisor)
+        || owned_channel_visible(seat, AwaitingSeat::Reviewer)
 }
 
 /// How a recorded sha relates to the current head.
@@ -1421,7 +1424,7 @@ impl AwaitingReport {
             // trace:STORY-1420 | ai:claude — an inherited row names the
             // exited recorder instead of claiming the refusal was yours.
             let whose = match item.inherited_from.as_deref() {
-                Some(who) => format!("a refusal by {who} (recorder exited, now yours)"),
+                Some(who) => format!("a refusal by {who} (recorder exited)"),
                 None => "your refusal".to_string(),
             };
             writeln!(
@@ -2830,12 +2833,16 @@ mod tests {
         // The advisor (standing disposition gate) sees the exited rows too.
         assert_eq!(prs(&route("advisor-1", "advisor")), vec![2200, 2202, 2203]);
 
-        // The live refusing seat keeps its own row; a reviewer that is not
-        // the owner does not inherit the owned exited row, but still sees the
-        // unowned bucket and the unknown-liveness row.
+        // The live refusing seat keeps its own row, and — a moved-past
+        // refusal being a re-review — also sees the exited rows.
         assert_eq!(
             prs(&route("claude-reviewer-1", "reviewer")),
-            vec![2201, 2202, 2203]
+            vec![2200, 2201, 2202, 2203]
+        );
+        // A different reviewer does not get the live seat's own row.
+        assert_eq!(
+            prs(&route("claude-reviewer-2", "reviewer")),
+            vec![2200, 2202, 2203]
         );
 
         let mut buf = Vec::new();
@@ -2847,8 +2854,64 @@ mod tests {
         .unwrap();
         let out = String::from_utf8(buf).unwrap();
         assert!(
-            out.contains("a refusal by aida drain reviewer (recorder exited"),
+            out.contains("a refusal by aida drain reviewer (recorder exited)"),
             "{out}"
+        );
+        assert!(!out.contains("now yours"), "{out}");
+    }
+
+    // STORY-1420 review: an OWNED exited row reaches readers with no role and
+    // with an unrecognised role (PRIN-5), the reviewer seat, and the owner by
+    // identity regardless of case.
+    // trace:STORY-1420 | ai:claude
+    #[test]
+    fn owned_exited_row_reaches_unscoped_reviewer_and_case_folded_owner() {
+        let owner = Some("Impl-Alice");
+        let reader = |identity: Option<&'static str>, role: Option<&'static str>| ReworkReader {
+            identity,
+            role,
+        };
+        assert!(exited_rework_visible(reader(Some("x"), None), owner));
+        assert!(exited_rework_visible(reader(None, None), owner));
+        assert!(exited_rework_visible(
+            reader(Some("x"), Some("integrator")),
+            owner
+        ));
+        assert!(exited_rework_visible(
+            reader(Some("x"), Some("reviewer")),
+            owner
+        ));
+        assert!(exited_rework_visible(
+            reader(Some("x"), Some("Reviewer")),
+            owner
+        ));
+        assert!(exited_rework_visible(
+            reader(Some("impl-alice"), Some("reviewer")),
+            owner
+        ));
+        assert!(exited_rework_visible(
+            reader(Some("IMPL-ALICE"), Some("implementer")),
+            owner
+        ));
+
+        // End to end through add_routed: the owner match is case-insensitive.
+        let mut r = refusal(Some(OLD), Some(T1));
+        r.recorded_by = Some("aida drain reviewer".to_string());
+        let d = classify_pr_review(&[r], Some(HEAD));
+        let mut rows = PrReviewRows::default();
+        rows.add_routed(
+            2300,
+            Some(HEAD),
+            "claude/bug-2300",
+            &d,
+            reader(Some("IMPL-alice"), None),
+            |who| classify_recorder(who, |_| None),
+            |_| Some("impl-ALICE".to_string()),
+        );
+        assert_eq!(rows.rework_ready.len(), 1);
+        assert_eq!(
+            rows.rework_ready[0].inherited_from.as_deref(),
+            Some("aida drain reviewer")
         );
     }
 

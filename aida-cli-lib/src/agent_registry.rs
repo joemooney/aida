@@ -2122,6 +2122,44 @@ mod tests {
         }
     }
 
+    // STORY-1420: a named seat is live only while an un-ended entry with a
+    // live pid carries its name; a dead pid or an `ended_at` reads as exited;
+    // a name the registry never saw is unknown.
+    // trace:STORY-1420 | ai:claude
+    #[test]
+    fn named_agent_liveness_reads_dead_pid_and_ended_at_as_exited() {
+        let tmp = TempDir::new().unwrap();
+        let mut live = entry_with(std::process::id(), Utc::now());
+        live.id = "live".to_string();
+        live.name = Some("Reviewer-Live".to_string());
+        write_entry(tmp.path(), &live).unwrap();
+
+        let mut dead = entry_with(u32::MAX - 1, Utc::now());
+        dead.id = "dead".to_string();
+        dead.name = Some("reviewer-dead".to_string());
+        write_entry(tmp.path(), &dead).unwrap();
+
+        let mut ended = entry_with(std::process::id(), Utc::now());
+        ended.id = "ended".to_string();
+        ended.name = Some("reviewer-ended".to_string());
+        ended.ended_at = Some(Utc::now());
+        write_entry(tmp.path(), &ended).unwrap();
+
+        assert_eq!(
+            named_agent_liveness(tmp.path(), "reviewer-live"),
+            Some(true)
+        );
+        assert_eq!(
+            named_agent_liveness(tmp.path(), "reviewer-dead"),
+            Some(false)
+        );
+        assert_eq!(
+            named_agent_liveness(tmp.path(), "reviewer-ended"),
+            Some(false)
+        );
+        assert_eq!(named_agent_liveness(tmp.path(), "never-registered"), None);
+    }
+
     #[test]
     fn terminal_identity_captures_known_emulator_env() {
         let terminator = terminal_identity_from_env(
