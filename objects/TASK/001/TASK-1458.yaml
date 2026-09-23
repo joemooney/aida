@@ -1,0 +1,22 @@
+id: 01a0cf65-f115-7583-b3c2-664e64812060
+spec_id: TASK-1458
+agreed_id: TASK-1458
+title: 'TASK-1448 follow-ups: match-head-commit on merge, ignore closed approvals, durable override audit, conflict-retry rebase path'
+description: |-
+  From the strict review of TASK-1448 (APPROVE at 6902e6659e).
+  (1) Pass the approved reviewed_sha as gh pr merge --match-head-commit (MergeOptions.match_head), from both merge() and pr ship, to close the race between the check and the merge.
+  (2) pr_ship.rs ~990: skip closed approvals (!v.is_closed()), as BUG-1529 does for refusals.
+  (3) Record --override-stale-approval durably via log_ship_activity or an event naming both shas.
+  (4) The TASK-975 conflict-retry rebase (auto_complete.rs ~4348, ci_auto_fix>0) now always shelves. Either accept an approval whose rebased patch-id is unchanged, or re-request review, and fix the mock-only test orchestrate_merge_conflict_rebased_in_drain_ships.
+  (5) Add wiring tests for pr_ship_handler, the override path and the real merge() call site.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T17:52:39.701830561Z
+modified_at: 2026-09-23T17:52:39.701830561Z
+req_type: Task
+tags:
+- followup
+- merge-safety
+- parent:TASK-1448
