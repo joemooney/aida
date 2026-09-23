@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:50:20.038947417Z
-modified_at: 2026-09-21T19:10:57.180504193Z
+modified_at: 2026-09-23T06:22:24.721543939Z
 req_type: Story
 tags:
 - aida:queue
@@ -39,3 +39,10 @@ relationships:
   target_id: 01a0c001-1e2d-76b2-95a1-a46f86e24287
   created_at: 2026-09-21T19:10:57.180499073Z
   created_by: joe
+comments:
+- id: 01a0cced-ffd1-7990-9b38-030a957f57fe
+  author: joe
+  content: 'PROXY DECISION (Claude for the operator, 2026-09-22 overnight burn-down; the operator delegated design calls: ''make decisions on my behalf''). The question and the ruling (the recommended option is adopted): Q: should NeedsAttention→re-drive be (a) drain auto-resumes triaged specs, or (b) surface offers one-keystroke human requeue? Recommended: (b), per PRIN-5 fail-closed — keeps resume authority with a human who can see the findings, and PR 2035 already built the claimable-Approved mechanism it needs. Now IMPLEMENT-ready; overrule by commenting.'
+  created_at: 2026-09-23T06:22:24.721543939Z
+  modified_at: 2026-09-23T06:22:24.721543939Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
