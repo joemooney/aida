@@ -74402,6 +74402,44 @@ fn resolve_gate_range(project_root: &std::path::Path, range: Option<&str>) -> St
     "HEAD~20..HEAD".to_string()
 }
 
+/// TASK-1444: resolve the commit range for reviewer-verdict shelve
+/// attribution against the **PR's own branch**, not the drain's main
+/// checkout `HEAD`. `resolve_gate_range(.., None)` scans
+/// `<default>..HEAD`, which is the drain's own worktree/checkout — for the
+/// orchestrator's phase driver that is NOT necessarily the branch the PR
+/// under review is on. Prefers `origin/<branch>` (what CI and the reviewer
+/// actually saw) and falls back to the local `<branch>` ref when the origin
+/// ref hasn't been fetched; returns `None` when neither resolves (or the
+/// default branch itself can't be resolved) so the caller can treat
+/// attribution as `Uncertain` instead of silently reading the wrong range.
+// trace:TASK-1444 | ai:claude
+fn resolve_shelve_gate_range(
+    project_root: &std::path::Path,
+    branch: Option<&str>,
+) -> Option<String> {
+    let branch = branch?;
+    let default_ref = resolve_default_branch_ref(project_root)?;
+    use std::process::Command as PCmd;
+    let ref_exists = |r: &str| -> bool {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["rev-parse", "--verify", "--quiet", r])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    };
+    let origin_branch = format!("origin/{branch}");
+    let branch_ref = if ref_exists(&origin_branch) {
+        origin_branch
+    } else if ref_exists(branch) {
+        branch.to_string()
+    } else {
+        return None;
+    };
+    Some(format!("{default_ref}..{branch_ref}"))
+}
+
 /// Resolve a single SPEC-ID against a loaded store, mirroring the trace-gate
 /// resolver. When `store` is `None` (no requirement store reachable) every id
 /// resolves `Live` — failing every id would block legitimate ships on a
@@ -93374,46 +93412,54 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         failure: &auto_complete::PhaseFailure,
         recovery_hint: &str,
     ) -> anyhow::Result<Option<aida_core::FailureReason>> {
-        // TASK-1444 / BUG-1510: a reviewer-verdict shelve must not silently
-        // land on the lease's spec — check what the PR's own commits credit
-        // and shelve against THAT spec when it's confidently a different
-        // one, or say so explicitly when the commits don't settle it.
+        // TASK-1444 / BUG-1510: a reviewer-verdict shelve must ALWAYS land
+        // on the lease's own spec — the drain only holds a lease on `spec`,
+        // and flipping some other spec's status because a commit trailer
+        // *mentions* it would be its own attribution error (that spec's
+        // owner never asked this drain to touch it). What changes on
+        // attribution is not the TARGET, only the NOTE: when the PR's
+        // commits confidently credit a different spec, or the attribution
+        // can't be confirmed either way, the lease spec's FailureReason
+        // detail says so explicitly instead of reading as a silent,
+        // unconditional "this spec failed review".
         // trace:TASK-1444 | ai:claude
-        let (target_spec, detail): (String, String) = if matches!(
+        let detail: String = if matches!(
             failure.kind,
             auto_complete::FailureKind::VerdictRequestChanges
                 | auto_complete::FailureKind::VerdictReject
         ) {
-            let range = resolve_gate_range(&self.project_root, None);
-            match read_commits_in_range(&self.project_root, &range) {
-                Ok(commits) => match decide_shelve_attribution(&commits, spec) {
-                    ShelveAttribution::Confirmed(_) => (spec.to_string(), failure.reason.clone()),
-                    ShelveAttribution::Reattributed(other) => (
-                        other.clone(),
-                        format!(
-                            "{} (reattributed: the PR's commits are trailered {}, not the lease {})",
-                            failure.reason, other, spec
+            match resolve_shelve_gate_range(&self.project_root, self.branch.as_deref()) {
+                Some(range) => match read_commits_in_range(&self.project_root, &range) {
+                    Ok(commits) => match decide_shelve_attribution(&commits, spec) {
+                        ShelveAttribution::Confirmed(_) => failure.reason.clone(),
+                        ShelveAttribution::Reattributed(other) => format!(
+                            "{} (attribution: this verdict's commits carry {}'s trailer, not this spec's)",
+                            failure.reason, other
                         ),
-                    ),
-                    ShelveAttribution::Uncertain(note) => (
-                        spec.to_string(),
-                        format!(
-                            "{} (attribution uncertain: {} — shelved against the lease {} unconfirmed)",
-                            failure.reason, note, spec
+                        ShelveAttribution::Uncertain(note) => format!(
+                            "{} (attribution uncertain: {})",
+                            failure.reason, note
                         ),
-                    ),
+                    },
+                    // A git hiccup reading the commit range must not block
+                    // the shelve itself — fall back to no note, same as
+                    // pre-TASK-1444 behaviour.
+                    Err(_) => failure.reason.clone(),
                 },
-                // A git hiccup reading the commit range must not block the
-                // shelve itself — fall back to the lease with no note, same
-                // as pre-TASK-1444 behaviour.
-                Err(_) => (spec.to_string(), failure.reason.clone()),
+                // Couldn't resolve the PR's own branch (no `self.branch`,
+                // and no local/origin ref for it) — the attribution is
+                // Uncertain, never a guess dressed up as Reattributed.
+                None => format!(
+                    "{} (attribution uncertain: could not resolve the PR branch to read its commits)",
+                    failure.reason
+                ),
             }
         } else {
-            (spec.to_string(), failure.reason.clone())
+            failure.reason.clone()
         };
         shelve_spec_on_failure(
             &self.project_root,
-            &target_spec,
+            spec,
             phase.slug(),
             phase.index() as u8,
             failure.kind.cause_slug(),
