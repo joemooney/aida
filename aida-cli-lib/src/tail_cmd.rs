@@ -413,7 +413,7 @@ fn no_log_for_session(index: &TailIndex, session: &SessionRef) -> Resolution {
 /// The harness's fallback `agent_type` for an Agent-tool subagent, which the
 /// SubagentStart lease writer records in the lease's role slot.
 // trace:BUG-782 | ai:claude
-const HARNESS_AGENT_TYPE: &str = "general-purpose";
+pub(crate) const HARNESS_AGENT_TYPE: &str = "general-purpose";
 
 /// Branch-name prefix the Agent-tool harness gives its isolation worktrees.
 // trace:BUG-782 | ai:claude
