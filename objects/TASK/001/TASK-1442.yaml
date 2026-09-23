@@ -1,0 +1,19 @@
+id: 01a0cc5d-27a2-73c1-bbeb-020c7ccfb8c0
+spec_id: TASK-1442
+agreed_id: TASK-1442
+title: Refuse to open a PR for a spec when no commit on the branch carries that spec's trailer
+description: |
+  Split from BUG-1510 (2026-09-22) at the operator's request. BUG-1510 AC1 (dispatch-time lease-vs-brief compare) is on branch claude/bug-1510 @ 0d3597cb2b; this task is containment for when that check fails anyway. Incident: STORY-1391's drain drove PR #2043, whose commits were trailered BUG-1420; the RequestChanges verdict (TASK-1289/BUG-1420 findings) was shelved onto STORY-1391. Read BUG-1510 for the full timeline. Not in scope: BUG-1507 (fail-open preflight decide), BUG-1505 (verdict-store full replace).
+
+  Acceptance (BUG-1510 AC2, verbatim):
+  1. Before a PR is opened for a spec, the commit trailers on the branch are checked against that spec id. A branch carrying no commit trailered for the spec does not get a PR opened under it. This alone would have prevented PR #2043.
+  2. A test drives a branch whose commits are trailered for a different spec and asserts no PR is opened and the refusal names both ids.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T03:44:12.194839496Z
+modified_at: 2026-09-23T03:44:12.194839496Z
+req_type: Task
+tags:
+- parent:BUG-1510 orchestrator integrity attribution split-from:BUG-1510
