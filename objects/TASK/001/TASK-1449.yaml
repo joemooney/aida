@@ -1,0 +1,24 @@
+id: 01a0cd53-bcc4-7ac1-b68a-759b81316304
+spec_id: TASK-1449
+agreed_id: TASK-1449
+title: rework_no_op_failure must refuse on indeterminate input and compare against the verdict's reviewed_sha on the dispatched branch
+description: |-
+  Split from BUG-1522 (proxy decision 2026-09-23; strict review). RealPhaseDriver::rework_no_op_failure fails open when phase_done_pr != Some(pr), when the head is unreadable, or when classify_rework_head_change returns None; it never compares against the blocking verdict's reviewed_sha on the dispatched branch; and on the Held/Inconclusive arms pr_number may be None, so the guard never fires. BUG-1522 AC #5/#6/#7/#9.
+
+  ## Acceptance
+  1. Unknown (unreadable head, no default ref, git error) means refuse or escalate, never advance (PRIN-5).
+  2. The comparison is against the blocking verdict's reviewed_sha on the DISPATCHED branch; a test covers 'some head moved, but not the dispatched branch'.
+  3. The BUG-1527 shape (the phase bound to another spec's PR) is caught, not silently passed.
+  4. The Held/Inconclusive arms with pr_number None are either guarded or explicitly documented as unguardable.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T08:13:32.228974840Z
+modified_at: 2026-09-23T08:13:32.228974840Z
+req_type: Task
+tags:
+- drain
+- followup
+- orchestrator
+- parent:BUG-1522
