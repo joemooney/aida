@@ -33841,6 +33841,30 @@ fn resolve_commit_sha(repo: &std::path::Path, rev: &str) -> Option<String> {
     }
 }
 
+/// TASK-1459: the head `aida review <SPEC>` marks its review-in-progress
+/// marker at. Prefers the forge's live PR head — the local `origin/<branch>`
+/// tracking ref used before this can be stale (nothing here fetches it), so a
+/// marker written against it could under-cover a head that already moved.
+/// Falls back to that local ref when the forge can't be reached (pure-git,
+/// offline, forge fault) rather than leaving the marker head unrecorded,
+/// which is the same best-effort shape as [`pr_head_sha_best_effort`].
+// trace:TASK-1459 | ai:claude
+fn review_marker_head_best_effort(
+    project_root: &std::path::Path,
+    pr: u64,
+    branch: &str,
+) -> Option<String> {
+    pr_cmd::fetch_change_info_via_resolved_forge(
+        project_root,
+        pr,
+        crate::forge::resolve_open_change_forge_kind(project_root),
+    )
+    .ok()
+    .map(|info| info.head_oid)
+    .filter(|s| !s.trim().is_empty())
+    .or_else(|| resolve_commit_sha(project_root, &format!("origin/{branch}")))
+}
+
 /// `git merge-base --is-ancestor <ancestor> <descendant>` as a tri-state:
 /// `Some(true)` / `Some(false)` for the two clean answers, `None` when the
 /// probe itself could not run.
@@ -81531,7 +81555,7 @@ fn handle_review_spec(
             &main_worktree_root_from(project_root),
             review_marker::Marker::for_this_process(
                 n,
-                resolve_commit_sha(project_root, &format!("origin/{surface_branch}")).as_deref(),
+                review_marker_head_best_effort(project_root, n, &surface_branch).as_deref(),
                 Some(&spec_id),
                 &format!("`aida review {spec_id}`"),
             ),
@@ -82610,6 +82634,18 @@ fn handle_review_claim(
         return Ok(());
     }
     anyhow::ensure!(ttl_mins > 0, "`--ttl-mins` must be at least 1");
+    // TASK-1459: an explicit claim has no process to watch, so cap it — an
+    // unbounded/mistyped TTL could otherwise hold a PR "under review" for
+    // days. Clamp with a note rather than refuse, so a generous-but-honest
+    // value (or a scripted default) never hard-fails the claim.
+    let (ttl_mins, clamped) = review_marker::clamp_claim_ttl_mins(ttl_mins);
+    if clamped {
+        eprintln!(
+            "  {} `--ttl-mins` is capped at {}m (24h) for an explicit claim — clamped",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            review_marker::MAX_CLAIM_TTL_MINS,
+        );
+    }
     let head = sha
         .map(str::to_string)
         .or_else(|| std::env::var("AIDA_FROM_PR_HEAD_SHA").ok())
@@ -83020,6 +83056,58 @@ mod story_1405_review_marker_tests {
         let cleared = clear_review_markers_for_verdict(root.path(), "task-1", None);
         assert_eq!(cleared, vec![1]);
         assert!(review_marker::read(root.path(), 2).is_some());
+    }
+
+    // TASK-1459: `aida review <SPEC>` prefers the forge's live PR head over
+    // the local `origin/<branch>` tracking ref, falling back to that ref
+    // when the forge can't be reached. A repo with no recognized forge
+    // remote resolves to `ForgeKind::None` (`PureGitForge`, which errors
+    // immediately with no subprocess — see `forge.rs`), so this exercises
+    // the fallback deterministically with no `gh`/network dependency.
+    #[test]
+    fn marker_head_best_effort_falls_back_to_local_ref_without_a_forge() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        let git = |args: &[&str]| {
+            assert!(std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(args)
+                .status()
+                .expect("git")
+                .success());
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "test@example.test"]);
+        git(&["config", "user.name", "Test"]);
+        std::fs::write(repo.join("f"), "x").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "init"]);
+        let head = resolve_commit_sha(repo, "HEAD").expect("HEAD resolves");
+        // A local remote-tracking ref, as if fetched, but no `origin` remote
+        // URL is configured — `resolve_open_change_forge_kind` degrades to
+        // `ForgeKind::None`.
+        git(&["update-ref", "refs/remotes/origin/some-branch", "HEAD"]);
+
+        let got = review_marker_head_best_effort(repo, 999, "some-branch");
+        assert_eq!(got.as_deref(), Some(head.as_str()));
+    }
+
+    #[test]
+    fn marker_head_best_effort_is_none_with_no_forge_and_no_local_ref() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["init", "-q"])
+            .status()
+            .expect("git init")
+            .success());
+        assert_eq!(
+            review_marker_head_best_effort(repo, 999, "no-such-branch"),
+            None
+        );
     }
 
     #[test]
@@ -98112,8 +98200,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             pr_head_sha_best_effort(self, pr)
         });
         if let crate::review_marker::MergeGate::UnderReview(m) = &review_gate {
+            // TASK-1459: this is a live REVIEW, not a merge-LEASE conflict —
+            // FailureKind::LeaseConflict previously mislabeled it, so the
+            // recovery hint wrongly pointed at `aida merge-lock`.
             return Err(auto_complete::PhaseFailure::of(
-                auto_complete::FailureKind::LeaseConflict,
+                auto_complete::FailureKind::ReviewInProgress,
                 crate::review_marker::refusal_message(m),
             ));
         }

@@ -549,6 +549,17 @@ pub(crate) enum FailureKind {
     /// review of the current head can, so this shelves and never retries.
     // trace:TASK-1448 | ai:claude
     StaleApproval,
+    /// TASK-1459: the merge phase refused because a review-in-progress
+    /// marker (STORY-1405) is live on this PR's head — another seat (or an
+    /// explicit `aida review claim`) is actively reviewing it. Distinct from
+    /// [`Self::LeaseConflict`] (a merge-LEASE contention, i.e. two mergers
+    /// racing the same PR): this is a REVIEW still running, so the right
+    /// hint names the marker's own clearing verbs, not `aida merge-lock`.
+    /// Shelvable (a human should see it), never auto-retried — a retry
+    /// would just hit the same live marker again until it expires or the
+    /// review records a verdict.
+    // trace:TASK-1459 | ai:claude
+    ReviewInProgress,
     /// BUG-1527: the implementer's worktree ended on a branch other than the
     /// one this phase was dispatched for, AND that branch's commits credit a
     /// DIFFERENT spec — the drain accepted a branch swap and nearly marked
@@ -626,6 +637,8 @@ impl FailureKind {
                 | Self::Failed
                 // trace:BUG-1527 | ai:claude
                 | Self::ShippedMismatch
+                // trace:TASK-1459 | ai:claude
+                | Self::ReviewInProgress
         )
     }
 
@@ -661,6 +674,8 @@ impl FailureKind {
             Self::Failed => "tool-exit",
             // trace:BUG-1527 | ai:claude
             Self::ShippedMismatch => "shipped-mismatch",
+            // trace:TASK-1459 | ai:claude
+            Self::ReviewInProgress => "review-in-progress",
         }
     }
 }
@@ -2107,6 +2122,15 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
         (Phase::Merge, FailureKind::LeaseConflict) => format!(
             "Another merger holds the merge-lease — see who with `aida merge-lock`; once it is \
              released, finish the merge: `aida pr ship {pr}`"
+        ),
+        // TASK-1459: a live review-in-progress marker (STORY-1405), not a
+        // merge-lease conflict — no other merger is racing this PR, a
+        // review is actively running on it.
+        (Phase::Merge, FailureKind::ReviewInProgress) => format!(
+            "PR-{pr} is under review — see who and since when with `aida review verdict {spec}` \
+             or `aida awaiting`. Wait for the verdict (`aida review record … --pr {pr}` clears \
+             this marker), or, if that review was abandoned, release it with \
+             `aida review claim --pr {pr} --release` and retry."
         ),
         (Phase::Merge, FailureKind::MissingTool) => {
             forge_cli_missing_hint(ctx.forge, "merge the PR", "merge the PR manually")
@@ -7392,6 +7416,8 @@ mod tests {
             "merge-hold",
             "environmental",
             "internal",
+            // trace:TASK-1459 | ai:claude
+            "review-in-progress",
         ] {
             assert!(!is_transient_retry_cause(cause), "{cause}");
         }
@@ -9852,6 +9878,40 @@ mod tests {
     fn recovery_hint_merge_failed_names_pr_view() {
         let hint = recovery_hint(Phase::Merge, FailureKind::Failed, &ctx());
         assert!(hint.contains("gh pr view 46"));
+    }
+
+    /// TASK-1459: a live review marker (STORY-1405) is not a merge-lease
+    /// conflict — the drain merge refusal must carry its own kind with an
+    /// accurate hint, not point the user at `aida merge-lock` (which names a
+    /// different seat entirely: another MERGER, not a review still running).
+    #[test]
+    fn review_in_progress_is_distinct_from_lease_conflict() {
+        assert!(FailureKind::ReviewInProgress.is_shelvable());
+        assert_eq!(
+            FailureKind::ReviewInProgress.cause_slug(),
+            "review-in-progress"
+        );
+        assert_ne!(FailureKind::ReviewInProgress, FailureKind::LeaseConflict);
+        assert_ne!(
+            FailureKind::ReviewInProgress.cause_slug(),
+            FailureKind::LeaseConflict.cause_slug()
+        );
+
+        let hint = recovery_hint(Phase::Merge, FailureKind::ReviewInProgress, &ctx());
+        assert!(
+            hint.contains("under review") && hint.contains("aida review record"),
+            "hint: {hint}"
+        );
+        assert!(
+            !hint.contains("merge-lease") && !hint.contains("aida merge-lock"),
+            "must not reuse the merge-lease-conflict hint: {hint}"
+        );
+
+        let lease_hint = recovery_hint(Phase::Merge, FailureKind::LeaseConflict, &ctx());
+        assert!(
+            lease_hint.contains("merge-lease"),
+            "the true lease-conflict hint must be unchanged: {lease_hint}"
+        );
     }
 
     /// STORY-508/TASK-651: recovery hints are forge-aware — a GitLab project's

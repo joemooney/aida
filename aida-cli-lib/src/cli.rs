@@ -915,7 +915,8 @@ pub enum ReviewCommand {
         #[clap(long, value_name = "SPEC")]
         spec: Option<String>,
 
-        /// Minutes until the claim expires on its own.
+        /// Minutes until the claim expires on its own. Capped at 1440 (24h);
+        /// a larger value is clamped, not refused.
         #[clap(long, value_name = "MINUTES", default_value_t = 30)]
         ttl_mins: u64,
 
