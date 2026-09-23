@@ -80287,6 +80287,16 @@ fn handle_review_record(
         &recorded_by,
     )
     .with_context(|| "could not write the review verdict")?;
+    // PRIN-5 / BUG-1571: `record_verdict` already writes atomically and
+    // verifies the bytes landed, but never print a path this process has
+    // not itself just confirmed exists on disk.
+    // trace:BUG-1571 | ai:claude
+    if !path.is_file() {
+        anyhow::bail!(
+            "the review verdict at {} disappeared immediately after being written — not reporting it as recorded",
+            path.display()
+        );
+    }
     println!(
         "{} recorded {} for {}{}",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
@@ -80345,9 +80355,6 @@ fn handle_review_record(
     // canonical label so `auto_complete::Verdict::parse` accepts it byte-for-byte.
     if let Some(n) = pr {
         let handshake = review_pr_handshake_path(&project_root, n);
-        if let Some(dir) = handshake.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
         // Read back the canonical record rather than rebuilding provenance.
         // Besides keeping the timestamp byte-identical, this carries the
         // full SHA produced by record_verdict's write-boundary normalization
@@ -80356,7 +80363,18 @@ fn handle_review_record(
         // trace:BUG-1516 | ai:codex
         let recorded = review_verdict::read_recorded_verdict(&project_root, spec)
             .ok_or_else(|| anyhow::anyhow!("the verdict was written but could not be read back"))?;
-        review_verdict::record_verdict_at_path(
+        // BUG-1571: build the full handshake object (base fields + the
+        // orchestrator's `mode`/`recorded_at` overlay) in memory and commit
+        // it with exactly ONE durable, verified write. The previous code
+        // wrote the base record, read it back, patched two fields, and wrote
+        // AGAIN — two separate `fs::write`s to the same path, each a window
+        // where the artefact could fail to land while the command still
+        // walked forward as if it had. `write_verdict_object` verifies the
+        // bytes are actually readable back before this function is allowed
+        // to claim the handshake exists.
+        // trace:BUG-1581 | ai:codex
+        // trace:BUG-1571 | ai:claude
+        let mut handshake_obj = review_verdict::build_verdict_object(
             &project_root,
             &handshake,
             Some(kind.label()),
@@ -80366,21 +80384,38 @@ fn handle_review_record(
             findings,
             recorded.recorded_by.as_deref().unwrap_or(&recorded_by),
         )
-        .with_context(|| format!("could not write {}", handshake.display()))?;
+        .with_context(|| format!("could not prepare {}", handshake.display()))?;
         // The two artifacts describe the same act of review, so retain the
         // spec record's timestamp byte-for-byte while preserving any displaced
         // PR-keyed round through the shared writer above.
-        // trace:BUG-1581 | ai:codex
-        let mut body: serde_json::Value = serde_json::from_str(
-            &std::fs::read_to_string(&handshake)
-                .with_context(|| format!("could not read {}", handshake.display()))?,
-        )?;
-        body["mode"] = serde_json::json!("orchestrator-phase-3");
+        handshake_obj.insert(
+            "mode".to_string(),
+            serde_json::Value::String("orchestrator-phase-3".to_string()),
+        );
         if let Some(recorded_at) = recorded.recorded_at.as_deref() {
-            body["recorded_at"] = serde_json::json!(recorded_at);
+            handshake_obj.insert(
+                "recorded_at".to_string(),
+                serde_json::Value::String(recorded_at.to_string()),
+            );
         }
-        std::fs::write(&handshake, format!("{}\n", serde_json::to_string(&body)?))
-            .with_context(|| format!("could not write {}", handshake.display()))?;
+        review_verdict::write_verdict_object(&handshake, &handshake_obj).with_context(|| {
+            format!(
+                "the phase-3 handshake was NOT written to {} — the orchestrator will not see this verdict; re-run `aida review record`",
+                handshake.display()
+            )
+        })?;
+        // Belt-and-suspenders: only ever print a path this process has just
+        // confirmed exists. `write_verdict_object` already verified the
+        // content by reading it back, but a missing/unreadable file at this
+        // point must still block the success line rather than merely being
+        // ignored. PRIN-5: never print a path that wasn't written.
+        // trace:BUG-1571 | ai:claude
+        if !handshake.is_file() {
+            anyhow::bail!(
+                "the phase-3 handshake at {} disappeared immediately after being written — not reporting it as recorded",
+                handshake.display()
+            );
+        }
         println!(
             "  {} {} (phase-3 handshake — the orchestrator reads this to proceed)",
             "handshake:".dimmed(),
