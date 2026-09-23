@@ -84890,21 +84890,87 @@ pub(crate) fn unattended_git_mutation_refusal_for(
 }
 
 // trace:BUG-1574 | ai:claude
+/// Walk up from `project_root` and report whether `.aida/config.toml` exists
+/// anywhere in the ancestor chain — WITHOUT caring whether it parses or
+/// declares a resolvable store (that is [`detect_distributed_store_from`]'s
+/// job). This is the narrow signal the fail-open carve-out needs: "is this
+/// even an AIDA-managed project root at all" — a bare git fixture (a unit
+/// test, a non-AIDA repo) has no `.aida/` anywhere and is a clean no-op; a
+/// real AIDA project always has one, so from there on a failure to resolve
+/// the store/spec is a genuine problem, not an absence, and must fail
+/// closed (refuse), never silently read as "nothing to check".
+pub(crate) fn config_toml_exists_upward(project_root: &std::path::Path) -> bool {
+    let mut current = project_root;
+    loop {
+        if current.join(".aida").join("config.toml").is_file() {
+            return true;
+        }
+        match current.parent() {
+            Some(p) => current = p,
+            None => return false,
+        }
+    }
+}
+
+// trace:BUG-1574 | ai:claude
+/// Pure: does `store` already carry an OPEN (not Completed/Rejected) finding
+/// for this exact `(spec, branch)` pair? Matches on the tag triple a filed
+/// refusal carries: `kind:headless-refusal` + `from-implementer:<spec>` +
+/// (`branch:<branch>` when `branch` is known). Factored out so "must never
+/// file duplicates" is testable against an in-memory store, without a real
+/// `aida add`/`aida list` round trip.
+pub(crate) fn has_open_refusal_finding(
+    store: &aida_core::RequirementsStore,
+    spec: &str,
+    branch: Option<&str>,
+) -> bool {
+    let from_tag = format!("from-implementer:{spec}");
+    let branch_tag = branch.map(|b| format!("branch:{b}"));
+    store.requirements.iter().any(|r| {
+        !matches!(
+            r.status,
+            aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
+        ) && r.tags.contains("kind:headless-refusal")
+            && r.tags.contains(&from_tag)
+            && branch_tag.as_ref().is_none_or(|bt| r.tags.contains(bt))
+    })
+}
+
+// trace:BUG-1574 | ai:claude
 /// AC3: best-effort — file a finding (the existing `aida findings` tag
 /// convention: a Draft Task tagged `from-implementer:<spec>`) recording that
 /// a headless action was refused, so the refusal is visible on
 /// `aida findings list` / `aida awaiting` — not just eprintln'd where only
 /// the refusing process's own log carries it. This is what lets the OTHER
 /// session (whose branch almost got moved) find out what nearly happened.
-/// A failure to file is swallowed — filing must never crash the caller.
+/// Dedupes via [`has_open_refusal_finding`] first — a drain or `--watch`
+/// loop that keeps hitting the same guard (the common case: a stacked child
+/// stays outside the batch on every pass until someone acts) must file ONE
+/// finding, not one per pass. `branch` — when known — lands in both the
+/// title and a `branch:<name>` tag, so which physical branch nearly moved is
+/// visible without opening the description. A failure to file (or to check
+/// for dupes) is swallowed — filing must never crash the caller.
 fn record_headless_refusal_finding(
     project_root: &std::path::Path,
+    store: Option<&aida_core::RequirementsStore>,
     spec: &str,
     action: &str,
+    branch: Option<&str>,
     reason: &str,
 ) {
-    let title = format!("Headless {action} refused for {spec}");
-    let tags = format!("from-implementer:{spec},severity:notice,kind:headless-refusal");
+    if let Some(store) = store {
+        if has_open_refusal_finding(store, spec, branch) {
+            return;
+        }
+    }
+    let title = match branch {
+        Some(b) => format!("Headless {action} refused for {spec} (branch {b})"),
+        None => format!("Headless {action} refused for {spec}"),
+    };
+    let mut tags = format!("from-implementer:{spec},severity:notice,kind:headless-refusal");
+    if let Some(b) = branch {
+        tags.push_str(&format!(",branch:{b}"));
+    }
     let _ = std::process::Command::new(aida_exe_path())
         .current_dir(project_root)
         .args([
@@ -84928,33 +84994,40 @@ fn record_headless_refusal_finding(
 /// delegates to the pure [`unattended_git_mutation_refusal_for`] core. This
 /// is what call sites (the `--steal` scope-conflict loop, the stack-aware
 /// promotion rebase/force-push, the phase-3 auto-rebase) use. `action` is a
-/// short human phrase ("steal", "rebase/force-push") used in the finding
-/// filed on refusal.
+/// short human phrase ("steal", "rebase/force-push") and `branch` — when
+/// known — is the specific branch about to be touched; both land in the
+/// finding filed on refusal.
 ///
-/// No distributed store detectable at `project_root` at all → this isn't an
-/// AIDA-managed project root (a legacy layout, or a bare git fixture in a
-/// unit test) — there is nothing to scope/tag-check against, so this is a
-/// clean no-op (`None`), the SAME convention `shelve_spec_on_failure` already
-/// uses for "no distributed store here". A distributed store that IS
-/// detected but fails to load, or a spec that cannot be resolved within it,
-/// still fails closed (refuses) — that is the real BUG-1574 failure mode
-/// (a corrupted/unreadable store, or a since-deleted spec), not a bare-repo
-/// fixture. Deliberately bypasses [`load_store_for_lookup`]'s legacy-YAML
-/// fallback (which resolves off the process CWD, not `project_root`) so this
-/// check is pure w.r.t. its `project_root` argument.
+/// The ONLY fail-open carve-out: no `.aida/config.toml` anywhere upward from
+/// `project_root` ([`config_toml_exists_upward`]) — not an AIDA-managed
+/// project root at all (a bare git fixture in a unit test, a legacy repo),
+/// so there is nothing to scope/tag-check against. From the moment a config
+/// IS found, this fails closed on everything else: a store the config
+/// declares but that can't be resolved/loaded, or a spec that can't be
+/// found within it, both refuse — that is the real BUG-1574 failure mode (a
+/// corrupted/unreadable store, or a since-deleted spec), and must never
+/// silently read as "nothing to check". Deliberately bypasses
+/// [`load_store_for_lookup`]'s legacy-YAML fallback (which resolves off the
+/// process CWD, not `project_root`) so this check is pure w.r.t. its
+/// `project_root` argument.
 pub(crate) fn unattended_git_mutation_refusal(
     project_root: &std::path::Path,
     spec: &str,
     action: &str,
+    branch: Option<&str>,
 ) -> Option<String> {
-    let store_path = detect_distributed_store_from(project_root)?;
-    let req: Option<aida_core::Requirement> = aida_core::GitBackend::new(&store_path)
-        .ok()
-        .and_then(|backend| aida_core::DatabaseBackend::load(&backend).ok())
-        .and_then(|store| store.get_requirement_by_spec_id(spec).cloned());
+    if !config_toml_exists_upward(project_root) {
+        return None;
+    }
+    let store: Option<aida_core::RequirementsStore> = detect_distributed_store_from(project_root)
+        .and_then(|store_path| aida_core::GitBackend::new(&store_path).ok())
+        .and_then(|backend| aida_core::DatabaseBackend::load(&backend).ok());
+    let req = store
+        .as_ref()
+        .and_then(|s| s.get_requirement_by_spec_id(spec));
     let drain = probe_drain_state(project_root);
-    let reason = unattended_git_mutation_refusal_for(spec, req.as_ref(), &drain)?;
-    record_headless_refusal_finding(project_root, spec, action, &reason);
+    let reason = unattended_git_mutation_refusal_for(spec, req, &drain)?;
+    record_headless_refusal_finding(project_root, store.as_ref(), spec, action, branch, &reason);
     Some(reason)
 }
 
@@ -85124,6 +85197,132 @@ mod bug_1574_unattended_git_mutation_tests {
     fn dispatch_allows_plain_drain_spec() {
         let (_dir, storage) = storage_with("TASK-3", &[], Some(aida_core::ExecutionMode::Drain));
         assert!(keyboard_only_dispatch_refusal(&storage, "TASK-3").is_none());
+    }
+
+    // ── AC2, end-to-end through the real dispatch fn (not just the helper) ──
+
+    #[test]
+    fn ac2_run_auto_complete_refuses_keyboard_only_tag_under_no_human() {
+        // The tag-under-drain-mode shape TASK-1274 actually had — must be
+        // refused at dispatch under `--no-human`, before any queueing/I-O
+        // past the guard.
+        let (_dir, storage) = storage_with(
+            "TASK-1274",
+            &["keyboard-only"],
+            Some(aida_core::ExecutionMode::Drain),
+        );
+        let result = run_auto_complete(
+            &storage,
+            "test-user",
+            "TASK-1274",
+            auto_complete::AutoCompleteVariant::Full,
+            false,
+            None,
+            Some(auto_complete::NoHumanMode::Both),
+            auto_complete::EscalateMode::Blocks,
+            true,
+            false,
+            false,
+            false,
+            false,
+            None,
+        );
+        assert_eq!(result.failed_phase, Some(auto_complete::Phase::Implementer));
+    }
+
+    // ── the wrapper's two carve-out cases ────────────────────────────────
+
+    #[test]
+    fn wrapper_allows_when_no_config_toml_exists_upward() {
+        // A bare fixture with no `.aida/` anywhere — not an AIDA-managed
+        // project root at all, so there is nothing to scope/tag-check
+        // against. The ONLY fail-open case.
+        let dir = tempfile::tempdir().unwrap();
+        assert!(unattended_git_mutation_refusal(dir.path(), "TASK-1274", "test", None).is_none());
+    }
+
+    #[test]
+    fn wrapper_refuses_when_config_declares_an_unresolvable_store() {
+        // A REAL AIDA project root (config.toml present) whose declared
+        // store can't be resolved (deleted, corrupted, wrong path) must
+        // fail closed — never silently read as "nothing to check".
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida").join("config.toml"),
+            "store_path = \"nonexistent-store\"\n",
+        )
+        .unwrap();
+        let reason = unattended_git_mutation_refusal(dir.path(), "TASK-1274", "test", None);
+        assert!(
+            reason.is_some(),
+            "a declared-but-unresolvable store must refuse"
+        );
+        assert!(reason.unwrap().contains("fail closed"));
+    }
+
+    // ── dedupe: a second refusal for the same (spec, branch) is a no-op ────
+
+    #[test]
+    fn dedupe_second_refusal_sees_the_first_findings_open_dupe() {
+        let mut store = aida_core::RequirementsStore::new();
+        // Nothing filed yet — the first refusal would file.
+        assert!(!has_open_refusal_finding(
+            &store,
+            "TASK-1274",
+            Some("task-1274-work")
+        ));
+
+        // Simulate the FIRST refusal's finding landing in the store.
+        let mut finding = aida_core::Requirement::new(
+            "Headless rebase/force-push refused for TASK-1274 (branch task-1274-work)".to_string(),
+            "reason".to_string(),
+        );
+        finding.status = aida_core::RequirementStatus::Draft;
+        finding
+            .tags
+            .insert("from-implementer:TASK-1274".to_string());
+        finding.tags.insert("kind:headless-refusal".to_string());
+        finding.tags.insert("branch:task-1274-work".to_string());
+        store.requirements.push(finding);
+
+        // A SECOND refusal for the same (spec, branch) must see it and
+        // skip — never file a duplicate.
+        assert!(has_open_refusal_finding(
+            &store,
+            "TASK-1274",
+            Some("task-1274-work")
+        ));
+    }
+
+    #[test]
+    fn dedupe_ignores_closed_findings_and_other_branches() {
+        let mut store = aida_core::RequirementsStore::new();
+        let mut closed = aida_core::Requirement::new("t".to_string(), "d".to_string());
+        closed.status = aida_core::RequirementStatus::Completed;
+        closed.tags.insert("from-implementer:TASK-1274".to_string());
+        closed.tags.insert("kind:headless-refusal".to_string());
+        closed.tags.insert("branch:task-1274-work".to_string());
+        store.requirements.push(closed);
+        assert!(
+            !has_open_refusal_finding(&store, "TASK-1274", Some("task-1274-work")),
+            "a Completed/Rejected finding must not suppress a new refusal"
+        );
+
+        let mut other_branch = aida_core::Requirement::new("t".to_string(), "d".to_string());
+        other_branch.status = aida_core::RequirementStatus::Draft;
+        other_branch
+            .tags
+            .insert("from-implementer:TASK-1274".to_string());
+        other_branch
+            .tags
+            .insert("kind:headless-refusal".to_string());
+        other_branch.tags.insert("branch:other-branch".to_string());
+        store.requirements.push(other_branch);
+        assert!(
+            !has_open_refusal_finding(&store, "TASK-1274", Some("task-1274-work")),
+            "a finding for a DIFFERENT branch must not suppress this one"
+        );
     }
 }
 
@@ -93190,23 +93389,34 @@ impl RealPhaseDriver {
     ) -> Result<(), auto_complete::PhaseFailure> {
         // BUG-1574: this is the concrete force-push path an unattended drain
         // takes on the spec's OWN branch (`aida pr rebase` → BUG-640's
-        // anchored-lease push). Refuse BEFORE spawning it — never crash,
-        // fall through to the existing (already shelvable) STORY-281
-        // refusal path — when the spec is keyboard-only or outside the
-        // currently active batch's declared member set. Fail-closed: a
-        // store-load failure or malformed drain-state.json also refuses.
-        // trace:BUG-1574 | ai:claude
-        if let Some(reason) =
-            unattended_git_mutation_refusal(&self.project_root, &self.spec, "rebase/force-push")
-        {
+        // anchored-lease push). Refuse BEFORE spawning it — never crash —
+        // when the spec is keyboard-only or outside the currently active
+        // batch's declared member set. Fail-closed: a declared-but-broken
+        // store or malformed drain-state.json also refuses. Typed
+        // `StaleBaseRefused` (not a generic `Failed`) because this refusal
+        // has the exact same shape and handling contract as the OTHER
+        // force-push refusal below (BUG-1218: a non-transient, operator-
+        // reconciliation shelve — never worth a retry, which would
+        // deterministically hit the same guard again); the caller's
+        // shelve-and-continue path (resilient-drain / STORY-281) reads that
+        // typed kind, not this prose. trace:BUG-1574 | ai:claude
+        if let Some(reason) = unattended_git_mutation_refusal(
+            &self.project_root,
+            &self.spec,
+            "rebase/force-push",
+            self.branch.as_deref(),
+        ) {
             if !self.json {
                 eprintln!(
                     "  {} auto-rebase of PR-{pr_number} refused: {reason}",
                     crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
                 );
             }
-            self.record_auto_rebase(pr_number, "refused-bug-1574");
-            return Err(auto_complete::PhaseFailure::new(reason));
+            self.record_auto_rebase(pr_number, "refused-scope-guard");
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::StaleBaseRefused,
+                reason,
+            ));
         }
         // (classification helper `classify_rebase_subprocess_exit` lives at
         // crate scope — see below — so it's unit-testable without spawning

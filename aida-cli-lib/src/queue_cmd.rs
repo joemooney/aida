@@ -10455,9 +10455,12 @@ pub(crate) fn handle_queue_work(
             // execution_mode), headless or not. Fail-closed on a
             // store-load failure or malformed drain-state.json too.
             // trace:BUG-1574 | ai:claude
-            if let Some(reason) =
-                unattended_git_mutation_refusal(&project_root_for_conflict, &plan.scope, "steal")
-            {
+            if let Some(reason) = unattended_git_mutation_refusal(
+                &project_root_for_conflict,
+                &plan.scope,
+                "steal",
+                Some(conflict.branch.as_str()),
+            ) {
                 anyhow::bail!("`--steal` refused for scope `{}`: {}", plan.scope, reason);
             }
 
@@ -13077,6 +13080,7 @@ pub(crate) fn handle_queue_integrate(
                     &project_root,
                     &d.id,
                     "rebase/force-push",
+                    child_branch.as_deref(),
                 ) {
                     println!("  {} {} — {}", "⏸".yellow(), d.id, reason);
                     if !dry_run {
