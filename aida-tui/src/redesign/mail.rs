@@ -207,6 +207,7 @@ mod tests {
             retracted: false,
             deleted: false,
             archived: false,
+            from_source: aida_core::mailbox::SenderSource::Legacy,
         }
     }
 

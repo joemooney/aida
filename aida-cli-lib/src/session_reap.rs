@@ -687,6 +687,9 @@ fn notify_finished_live_sessions(project_root: &std::path::Path, rows: &mut [Not
             retracted: false,
             deleted: false,
             archived: false,
+            // A fixed system identity, not an ambiguous env fallback.
+            // trace:BUG-1533 | ai:claude
+            from_source: aida_core::mailbox::SenderSource::Explicit,
         };
         if let Err(e) = mailbox_store::write_message(project_root, &msg) {
             row.outcome = Some(format!("notify failed — {e}"));

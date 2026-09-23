@@ -560,11 +560,13 @@ fn send_mail_notice(project_root: &Path, view: &AgentRegistryView, text: &str) -
         .clone()
         .or_else(|| view.role.clone())
         .unwrap_or_else(|| view.agent_type.clone());
+    // trace:BUG-1533 | ai:claude
+    let (from, from_source) = crate::resolve_mail_sender_identity(None);
     let msg = aida_core::mailbox::Message {
         subject: None,
         id: uuid::Uuid::new_v4().to_string(),
         thread_id: uuid::Uuid::new_v4().to_string(),
-        from: crate::current_user_id(None),
+        from,
         to: aida_core::mailbox::Recipient::Agent(recipient),
         timestamp: chrono::Utc::now().timestamp_millis(),
         in_reply_to: None,
@@ -574,6 +576,7 @@ fn send_mail_notice(project_root: &Path, view: &AgentRegistryView, text: &str) -
         retracted: false,
         deleted: false,
         archived: false,
+        from_source,
     };
     crate::mailbox_store::write_message(project_root, &msg)
 }
