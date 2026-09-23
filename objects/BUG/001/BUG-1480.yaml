@@ -61,12 +61,12 @@ description: |
   - THE IN-SPEC CLOSURE CRITERION IS REPOINTED FROM STORY-1422 TO STORY-1423, and the reason is the very defect this spec already records. Ruled by the advisor 2026-09-21 on merging STORY-1422's PR #2049. STORY-1422 SHIPPED THE MECHANISM AND ITS PR CARRIES THE `(STORY-1422)` TRAILER, SO THE MERGE AUTO-BUMPS IT TO COMPLETED - with three of its criteria still open, because `auto_bump_done_to_completed` reads neither the graph nor the description. If this spec's gate still named STORY-1422, that gate would be SATISFIED BY A MERGE rather than by the work, which is exactly the silent false-closure this spec's own text warns about two bullets up. The three criteria that cannot be satisfied until the fix is in a running binary - criterion 2's zero half, criterion 7's post-fix re-measurement, and the no-trigger-in-this-repo criterion - now live on STORY-1423, which has no PR and therefore nothing that can close it by accident.
     THIS SPEC DOES NOT CLOSE UNTIL STORY-1423 IS DONE. A reviewer refuses against this line at done-time. A `BlockedBy` edge to STORY-1423 is recorded IN ADDITION, for the same reason the pair was kept before: BlockedBy is enforced at PICKUP and not at CLOSURE, so it keeps the two visibly coupled and stops STORY-1423 being picked out of order, while the criterion is what a human refuses against. They fail differently.
     THE CARVE IS NOT A SCOPE TRIM AND THE BOUNDARY IS REAL: everything in STORY-1422 is buildable with the regression LIVE, everything in STORY-1423 requires the FIXED binary. That is a before/after line in the world, not a convenience.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:11.046832864Z
-modified_at: 2026-09-23T06:24:09.540599248Z
+modified_at: 2026-09-23T06:27:34.920798407Z
 req_type: Bug
 tags:
 - agent-surface
@@ -542,11 +542,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-20T21:40:57.331996221Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1480 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-20T22:02:22.830267114Z
