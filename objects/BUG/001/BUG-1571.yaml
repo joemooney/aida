@@ -58,7 +58,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:42:35.206134427Z
-modified_at: 2026-09-23T12:20:32.517488871Z
+modified_at: 2026-09-23T12:25:03.509018957Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -125,4 +125,10 @@ comments:
   content: 'Claude implementer result: claude/bug-1571 @ 700f72dbd3. Root cause: handle_review_record wrote the PR-keyed handshake twice with bare fs::write and no verification. Now there is a single write_verdict_atomic (temp + rename + read-back) used by record, close_verdict_on_merge and backfill; the mode/timestamp overlay is folded into one write; both print sites re-check that the file exists and bail naming the missing artefact. 2 unix tests. Awaiting review.'
   created_at: 2026-09-23T12:20:32.517488871Z
   modified_at: 2026-09-23T12:20:32.517488871Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ce3a-0315-7492-afa2-cc2f82d326a9
+  author: joe
+  content: 'Review blocker fixed by the orchestrator: both read-only-directory tests skip when euid==0 (root bypasses directory perms). review_verdict 53 pass. Going into batch 11.'
+  created_at: 2026-09-23T12:25:03.509018957Z
+  modified_at: 2026-09-23T12:25:03.509018957Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
