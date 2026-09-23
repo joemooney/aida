@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T13:05:16.129070411Z
-modified_at: 2026-09-23T14:22:42.603175481Z
+modified_at: 2026-09-23T14:22:45.295922070Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -84,4 +84,10 @@ comments:
   content: Commit 2c0cd37926 references this requirement
   created_at: 2026-09-23T14:22:04.418601541Z
   modified_at: 2026-09-23T14:22:04.418601541Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cea5-c42f-7342-9c53-7853d560d229
+  author: joe
+  content: 'Claude implementer result: claude/bug-1552 @ 2c0cd37926. The doctor --help states the report-only exit-code contract and names ''doctor check <category> --fail-on-findings'' (the existing STORY-1422 flag); glossary entry (master and copy identical); CLI manual updated; help test added; verify-manual OK. Orchestrator-verified no SPEC-ID in the help text. Batch 14.'
+  created_at: 2026-09-23T14:22:45.295922070Z
+  modified_at: 2026-09-23T14:22:45.295922070Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
