@@ -33,7 +33,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T01:51:06.191825231Z
-modified_at: 2026-09-23T03:46:06.226878880Z
+modified_at: 2026-09-23T03:51:18.618155511Z
 req_type: Bug
 tags:
 - cost token-economics seat-discipline heartbeat incident:2026-09-21 parent:EPIC-71
@@ -48,6 +48,11 @@ comments:
   content: 'Upstream Claude Code harness issue reported with the measured session/version/cadence evidence: https://github.com/anthropics/claude-code/issues/96215. Outcome is pending upstream triage. Local mitigation remains mandatory because model-side recurring mailbox polls are unnecessary even if the harness defect is fixed.'
   created_at: 2026-09-23T02:18:57.352838514Z
   modified_at: 2026-09-23T02:18:57.352838514Z
+- id: 01a0cc63-a95a-79b1-81bf-5ff3e770cdbb
+  author: mcp
+  content: 'PASS — fresh independent cold review of PR #2106 exact head 8a09686ce5ec652b1d73658517d7908c3814cb4f. Build (ubuntu-latest) and merge-hold-gate are SUCCESS; PR is CLEAN/MERGEABLE. BUG-1589 acceptance passes: advisor/read-mail/drain/fleet/burndown guidance and generated launch context prescribe shell/event-driven zero-token waits and forbid model-side CronCreate, /loop, and ScheduleWakeup mailbox polling; scaffold/template guard rejects prior positive polling snippets; zero-token cost model is documented in docs/agents/zero-token-waiting.md and its template; incident evidence and unresolved harness question link upstream issue https://github.com/anthropics/claude-code/issues/96215. Focused tests: agent_launcher_tests 68/68, role_identity_tests 17/17, cargo fmt --all -- --check, git diff --check. No blocker. PR verdict: https://github.com/joemooney/aida/pull/2106#issuecomment-5788656188'
+  created_at: 2026-09-23T03:51:18.618149531Z
+  modified_at: 2026-09-23T03:51:18.618149531Z
 implementation_info:
   implemented: true
   implemented_at: 2026-09-23T02:28:44.492858802Z
