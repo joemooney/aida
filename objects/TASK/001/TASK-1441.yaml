@@ -1,7 +1,7 @@
 id: 01a0cc00-e145-7541-b275-189d3cbfaa6b
 spec_id: TASK-1441
 agreed_id: TASK-1441
-title: 'Cut this repo''s per-call baseline context from ~80k to ~45k: slim CLAUDE.md and MEMORY.md to pointers, trim always-listed skills and unused connectors, and add a size budget so it cannot regrow'
+title: 'Cut the per-call baseline context in this repo (~80k to ~45k) and in every aida-scaffolded project (~45k to floor+10k): slim CLAUDE.md, imports, MEMORY.md and the skill catalogue, with a size budget so it cannot regrow'
 description: |
   ## Why (measured 2026-09-22 from ~/.claude/projects first-call usage)
   Every API call in a Claude session re-reads the baseline context. BUG-1589's mail-tick storm paid it ~16.7k times in one day, and every quiet tick is at least the baseline.
@@ -22,12 +22,24 @@ description: |
   4. Connectors: document how to disable claude.ai connectors that this repo does not use for sessions in this project (settings or per-project config), and apply it here if it is a project-level setting.
   5. A measured before/after: first-call context of a fresh session in this repo, same Claude Code version, reported in the PR. Target <= 45k.
   6. Regrowth guard: a CI check (or aida doctor finding) that fails when CLAUDE.md exceeds its byte budget, so the budget is a gate and not a norm. The budget is a config value, not a magic number in the script.
+
+  ## Scaffolded projects (every aida init / scaffold refresh consumer), measured on aida-hub 2026-09-22
+  A scaffolded project's first call was ~45k against the ~22k harness floor, so AIDA adds ~23k per call to every project it scaffolds - this matters more than this repo, because it multiplies across every downstream user. Known contributors:
+  - CLAUDE.md @-imports .claude/AIDA.md (7.3k chars ~1.8k tok) and docs/aida/discipline/README.md (4.7k chars ~1.2k tok)
+  - 57 skill masters, description frontmatter totalling ~15.2k chars (~3.8k tok), plus 57 command twins with ~7.3k chars (~1.8k tok) of descriptions - the skill and its command twin are both listed, so most of the catalogue is paid twice
+  - SessionStart / UserPromptSubmit hook output (role context, awaiting notice) on every session
+
+  7. The scaffold templates (aida-core/templates: generate_claude_md, AIDA.md, discipline README, skill and command frontmatter, hook output) meet a per-call budget: a fresh aida init project's first-call context is at most floor + 10k, measured in the PR against a scratch project on the same Claude Code version.
+  8. Each skill/command pair is listed once: either the command twin is dropped where the skill form covers it, or the twin's description is minimal, whichever the harness honours - verified in the listing, not assumed.
+  9. Orchestrator-internal skills (headless-only, e.g. aida-advise, aida-assess) are not scaffolded into the interactive catalogue by default, or are marked so the harness does not list them.
+  10. The regrowth guard (criterion 6) also covers the scaffold: a test fails when the generated CLAUDE.md + its @-imports + the summed skill/command description bytes exceed a configured budget, so a new template cannot silently raise every downstream project's baseline.
+  11. Delivery to existing projects rides aida scaffold refresh (edit-preserving), so projects already scaffolded get the slimmer templates without --force.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T02:03:24.869760515Z
-modified_at: 2026-09-23T02:03:24.869760515Z
+modified_at: 2026-09-23T02:07:13.038460478Z
 req_type: Task
 tags:
 - cost token-economics context-economy claude-md memory-hygiene parent:EPIC-71
