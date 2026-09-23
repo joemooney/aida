@@ -27,12 +27,12 @@ description: |-
   2. A test asserts the two views report identical role and identity fields for the same session.
   3. The default view's count line distinguishes live from hidden rather than presenting the live count alone as running -- e.g. running: 1 (7 stale hidden; --all to show).
   4. A regression test covers the case where the caller's own AIDA_SESSION_ROLE differs from the role of a session being listed, asserting the listed session keeps its own role.
-status: Done
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:30:38.833900428Z
-modified_at: 2026-09-23T10:58:20.546082643Z
+modified_at: 2026-09-23T10:59:26.876015887Z
 req_type: Bug
 tags:
 - aida:ps substrate-truth severity:operational papercut
