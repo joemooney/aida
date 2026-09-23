@@ -100,7 +100,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:36:49.231874688Z
-modified_at: 2026-09-23T15:51:46.109011379Z
+modified_at: 2026-09-23T16:07:07.222662176Z
 req_type: Bug
 tags:
 - agent-surface
@@ -170,4 +170,10 @@ comments:
   content: 'Claude implementer result: claude/bug-1515 @ f72cfc51c7. queue_fresh_pickup_policy: a Done spec with an outstanding (unclosed) refusal is AwaitingRework, with a hint naming aida queue rework, not AwaitingMerge. 2 tests. Unmet: the aida list open-lens visibility and the idle-spin criterion, which go to a follow-up. Awaiting review.'
   created_at: 2026-09-23T15:51:46.109011379Z
   modified_at: 2026-09-23T15:51:46.109011379Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cf05-50d6-7411-9ab4-298cf1a11f52
+  author: joe
+  content: Commit db9ee40625 references this requirement
+  created_at: 2026-09-23T16:07:07.222662176Z
+  modified_at: 2026-09-23T16:07:07.222662176Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
