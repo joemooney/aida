@@ -57,3 +57,20 @@ file with `--write`.
   `## Tests`, `## Test cases`, or `## Verification` section in every STORY / BUG
   description so the review prompt has something concrete to lift.
   `aida doctor convention-check` lints for the gap.
+
+### The diff instrument, when the branch is behind main — trace:BUG-1518
+
+A review answers *"what will this merge change?"*, not *"how do these two
+trees currently differ?"*. Diff by merge-base — `git diff origin/main...<branch>`,
+`gh pr diff <N>` / `glab mr diff <N>`, or a name-only listing of the commits'
+own files (`git log --name-only origin/main...<branch>`) — never a two-dot or
+bare tree diff against `main`'s current tip (`git diff origin/main <branch>`
+and `git diff origin/main..<branch>` are the same operation). A behind
+branch's tree diff shows every file `main` gained since the fork as a
+deletion the merge will never make — it never hides a real change, it
+manufactures alarming ones. Label how far behind the branch is
+(`git rev-list --count <branch>..origin/main`) wherever a diff is presented,
+and never let a test or check decide something from a tree comparison with a
+moving base — read the commits' own contents instead. Full rationale and the
+worked 661-line false-alarm instance: the `aida-review` skill's diff-instrument
+step.
