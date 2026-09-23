@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:40:29.563667164Z
-modified_at: 2026-09-23T07:40:35.533402294Z
+modified_at: 2026-09-23T07:40:37.432394728Z
 req_type: Bug
 tags:
 - ci
@@ -32,4 +32,10 @@ comments:
   content: 'PROXY APPROVAL (Claude for the operator, overnight burn-down): triage confirmed the defect is still live on main.'
   created_at: 2026-09-23T07:39:28.668920952Z
   modified_at: 2026-09-23T07:39:28.668920952Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd35-9ab8-7302-9de2-3faf1012fcd4
+  author: joe
+  content: 'Claude implementer result: claude/bug-1578 @ 89ac8debdc. The External-prose classifier inventory step now runs unconditionally, including docs-only PRs; it is pure-Python static analysis, so no build is needed. PARTIAL: AC3 (a regression fixture that each doc category schedules its guard) and the other four guards (CLI-manual, monitor-contract, doc-intent, trace/doc-header) are split to a follow-up task.'
+  created_at: 2026-09-23T07:40:37.432394728Z
+  modified_at: 2026-09-23T07:40:37.432394728Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
