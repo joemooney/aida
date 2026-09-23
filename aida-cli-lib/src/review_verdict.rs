@@ -235,7 +235,10 @@ fn recording_key(m: &JsonObj) -> RecordingKey {
     )
 }
 
-fn same_reviewed_sha(a: &str, b: &str) -> bool {
+// trace:BUG-1490 | ai:claude — widened from private so awaiting_you's
+// caller (lib.rs) can apply the same prefix-tolerant sha match a recorded
+// verdict already uses elsewhere, instead of re-deriving comparison rules.
+pub(crate) fn same_reviewed_sha(a: &str, b: &str) -> bool {
     let a = a.trim();
     let b = b.trim();
     let common = a.len().min(b.len());

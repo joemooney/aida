@@ -52145,6 +52145,49 @@ fn pr_has_local_verdict(project_root: &std::path::Path, pr_number: u64) -> bool 
     )
 }
 
+/// BUG-1490: true when AIDA holds a recorded BLOCKING verdict (RequestChanges
+/// / Rejected) for `pr`'s spec, taken against `pr`'s CURRENT head. This is the
+/// missing half of `is_awaiting_you` — `queue_cmd::evaluate_review_verdict_gate`
+/// already gates `aida queue done` on exactly this substrate record, but the
+/// readiness surface only ever looked at GitHub's `review_decision`, so a
+/// refusal recorded straight through `aida review record` (no forge round
+/// trip) never suppressed the PR here.
+///
+/// Reuses `review_verdict::read_recorded_verdict_any`, the same reader the
+/// queue-done gate uses, keyed off the spec ids parsed from the PR title
+/// (the `(SPEC-ID)` commit-trailer convention `extract_spec_ids_from_text`
+/// already extracts for PR/commit provenance elsewhere).
+///
+/// Per PRIN-5 an indeterminate verdict must not count as approval; the
+/// mirror image applies here too — a verdict with no `reviewed_sha`, or one
+/// recorded against a commit that is not `pr.head_sha`, must NOT suppress the
+/// PR. Requiring an exact (prefix-tolerant) sha match is deliberately
+/// conservative rather than encoding "no sha means still blocking" — that
+/// stronger guarantee is BUG-1466's job once every writer stamps
+/// `reviewed_sha`. Local-only: no forge/network call, `pr.head_sha` is
+/// already part of the snapshot the caller fetched.
+// trace:BUG-1490 | ai:claude
+fn pr_has_local_blocking_verdict_at_head(
+    project_root: &std::path::Path,
+    pr: &status_cleanup::OpenPrItem,
+) -> bool {
+    let Some(head_sha) = pr.head_sha.as_deref().filter(|s| !s.trim().is_empty()) else {
+        return false;
+    };
+    pr_ship::extract_spec_ids_from_text(&pr.title)
+        .iter()
+        .any(|spec_id| {
+            review_verdict::read_recorded_verdict_any(project_root, &[spec_id.as_str()])
+                .is_some_and(|verdict| {
+                    verdict.kind.blocks_done()
+                        && verdict
+                            .reviewed_sha
+                            .as_deref()
+                            .is_some_and(|sha| review_verdict::same_reviewed_sha(sha, head_sha))
+                })
+        })
+}
+
 /// BUG-550: the set of SPEC-IDs referenced by commits that exist on some ref
 /// but are NOT yet reachable from the default branch — i.e. specs with an
 /// in-flight (unmerged) review surface. This is the cheap prefilter that lets
@@ -67400,6 +67443,67 @@ mod bug_1291_orphan_sweep_tests {
         assert!(!pr_has_local_verdict(root.path(), 1970));
     }
 
+    // BUG-1490: pr_has_local_blocking_verdict_at_head is the fact `aida
+    // awaiting` now feeds into is_awaiting_you. Covers the PR-2030 shape from
+    // the spec (AIDA RequestChanges verdict, no GitHub review posted at all)
+    // plus the sha-provenance guard the acceptance criteria calls out.
+    // trace:BUG-1490 | ai:claude
+    fn pr_for_blocking_verdict_test(head_sha: &str) -> status_cleanup::OpenPrItem {
+        status_cleanup::OpenPrItem {
+            number: 2030,
+            title: "[AI:codex] fix(orchestrator): preserve child lease handoff (BUG-1485)"
+                .to_string(),
+            head_branch: "codex/bug-1485".to_string(),
+            ci_rollup: Some("pass".to_string()),
+            mergeable: Some("MERGEABLE".to_string()),
+            review_decision: None,
+            head_sha: Some(head_sha.to_string()),
+            labels: Vec::new(),
+        }
+    }
+
+    fn write_spec_verdict(root: &std::path::Path, spec: &str, verdict: &str, reviewed_sha: &str) {
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{spec}.json")),
+            format!(r#"{{"verdict":"{verdict}","reviewed_sha":"{reviewed_sha}"}}"#),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn request_changes_at_current_head_blocks() {
+        let root = tempfile::tempdir().unwrap();
+        write_spec_verdict(root.path(), "BUG-1485", "request-changes", "deadbeef01");
+        let pr = pr_for_blocking_verdict_test("deadbeef01");
+        assert!(pr_has_local_blocking_verdict_at_head(root.path(), &pr));
+    }
+
+    #[test]
+    fn request_changes_at_older_sha_does_not_block_a_pushed_pr() {
+        let root = tempfile::tempdir().unwrap();
+        write_spec_verdict(root.path(), "BUG-1485", "request-changes", "deadbeef01");
+        // BUG-1490 acceptance: the PR moved on (new head) since the refusal.
+        let pr = pr_for_blocking_verdict_test("cafef00d02");
+        assert!(!pr_has_local_blocking_verdict_at_head(root.path(), &pr));
+    }
+
+    #[test]
+    fn approved_verdict_does_not_block() {
+        let root = tempfile::tempdir().unwrap();
+        write_spec_verdict(root.path(), "BUG-1485", "approved", "deadbeef01");
+        let pr = pr_for_blocking_verdict_test("deadbeef01");
+        assert!(!pr_has_local_blocking_verdict_at_head(root.path(), &pr));
+    }
+
+    #[test]
+    fn no_verdict_file_does_not_block() {
+        let root = tempfile::tempdir().unwrap();
+        let pr = pr_for_blocking_verdict_test("deadbeef01");
+        assert!(!pr_has_local_blocking_verdict_at_head(root.path(), &pr));
+    }
+
     #[cfg(unix)]
     #[test]
     fn real_phase_driver_shelve_handoff_makes_story_1354_claimable() {
@@ -69625,7 +69729,16 @@ fn collect_awaiting_report_inner(
     } else {
         let snapshot = collect_open_prs(project_root);
         let prs: Vec<_> = snapshot.by_branch.into_values().collect();
-        awaiting_you::classify_open_prs(&prs)
+        // BUG-1490: a refusal recorded straight to the AIDA substrate (no
+        // GitHub review posted) must suppress just like a GitHub
+        // CHANGES_REQUESTED does — local + cache/file reads only, no extra
+        // network call.
+        let local_blocking: std::collections::HashSet<u64> = prs
+            .iter()
+            .filter(|pr| pr_has_local_blocking_verdict_at_head(project_root, pr))
+            .map(|pr| pr.number)
+            .collect();
+        awaiting_you::classify_open_prs(&prs, &local_blocking)
     };
 
     // Pending briefs — prefer narrowing to the running agent so we
