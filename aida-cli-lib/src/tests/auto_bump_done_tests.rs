@@ -480,6 +480,26 @@ fn seed_done_spec(store_path: &std::path::Path, spec_id: &str) -> String {
     seed_spec_at(store_path, spec_id, "Done")
 }
 
+/// TASK-1446: seed a Draft spec carrying a `reopened_at_sha` marker — the
+/// same shape a deliberate Done → Draft reopen leaves via the `aida edit`
+/// path (see `Command::Edit` in `git_backend_cmd.rs`), set directly so the
+/// test doesn't need to drive the full CLI dispatch to produce it.
+// trace:TASK-1446 | ai:claude
+fn seed_draft_reopened_at(store_path: &std::path::Path, spec_id: &str, reopen_sha: &str) -> String {
+    let storage = Storage::new(store_path);
+    let mut store = storage.load().unwrap_or_default();
+    let mut req = aida_core::Requirement::new(format!("test-{}", spec_id), String::new());
+    req.spec_id = Some(spec_id.to_string());
+    req.set_status_from_str("Draft");
+    req.implementation_info = Some(aida_core::ImplementationInfo {
+        reopened_at_sha: Some(reopen_sha.to_string()),
+        ..Default::default()
+    });
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+    spec_id.to_string()
+}
+
 fn seed_auto_complete_failure_bug(
     store_path: &std::path::Path,
     bug_id: &str,
@@ -2340,6 +2360,139 @@ fn reconcile_status_draft_landing_excludes_non_work_types() {
     );
 }
 
+/// TASK-1446: a spec deliberately reopened to Draft after its trailered
+/// commit already landed must NOT be flipped right back to Done by a later
+/// reconcile/pull replay that still sees the SAME old commit in its scan
+/// window (`pre_sha=None`'s `--max-count=N HEAD` can't form an exclusive
+/// range, so a wide replay does too). A genuinely NEW commit landing AFTER
+/// the reopen is fresh evidence and still lands the spec at Done.
+// trace:TASK-1446 | ai:claude
+#[test]
+fn reconcile_status_reopen_guard_blocks_same_commit_but_not_a_new_one() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    let stale = "STORY-9720";
+    let fresh = "STORY-9721";
+
+    // `stale`: one trailered commit lands, then the spec is reopened to
+    // Draft with the reopen marker pinned at that SAME commit.
+    std::fs::write(project_root.join("stale.txt"), "x\n").unwrap();
+    run_git(&project_root, &["add", "stale.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", &format!("feat: ship ({})", stale)],
+    );
+    let stale_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+    seed_draft_reopened_at(&store_path, stale, &stale_sha);
+
+    // `fresh`: landed and reopened the same way, but a SECOND, NEWER commit
+    // referencing it lands after the reopen.
+    std::fs::write(project_root.join("fresh1.txt"), "x\n").unwrap();
+    run_git(&project_root, &["add", "fresh1.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", &format!("feat: ship ({})", fresh)],
+    );
+    let fresh_reopen_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+    seed_draft_reopened_at(&store_path, fresh, &fresh_reopen_sha);
+    std::fs::write(project_root.join("fresh2.txt"), "x\n").unwrap();
+    run_git(&project_root, &["add", "fresh2.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", &format!("fix: follow-up ({})", fresh)],
+    );
+
+    let r = handle_db_reconcile_status(&store_path, None, None, false);
+    assert!(r.is_ok(), "reconcile-status failed: {:?}", r.err());
+
+    let storage = Storage::new(store_path.clone());
+    let after = storage.load().unwrap();
+
+    let stale_req = after.get_requirement_by_spec_id(stale).unwrap();
+    assert!(
+        matches!(stale_req.status, RequirementStatus::Draft),
+        "{} (reopened, same commit re-scanned) must stay Draft, was {:?}",
+        stale,
+        stale_req.status
+    );
+
+    let fresh_req = after.get_requirement_by_spec_id(fresh).unwrap();
+    assert!(
+        matches!(fresh_req.status, RequirementStatus::Done),
+        "{} (a genuinely NEW commit landed after the reopen) should land at Done, was {:?}",
+        fresh,
+        fresh_req.status
+    );
+}
+
+/// TASK-1446: same reopen guard, exercised through the live pull-time
+/// scanner (`auto_bump_done_to_completed`, `pre_sha=None` fallback window)
+/// rather than the manual `reconcile-status` replay — the guard lives in the
+/// shared `collect_draft_landed_candidates` helper both call, so it must
+/// hold on both call sites.
+// trace:TASK-1446 | ai:claude
+#[test]
+fn auto_bump_reopen_guard_holds_with_none_pre_sha() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    let spec = "STORY-9722";
+
+    std::fs::write(project_root.join("landed.txt"), "x\n").unwrap();
+    run_git(&project_root, &["add", "landed.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", &format!("feat: ship ({})", spec)],
+    );
+    let reopen_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+    seed_draft_reopened_at(&store_path, spec, &reopen_sha);
+
+    let storage = Storage::new(&store_path);
+    let flips = auto_bump_done_to_completed(&project_root, &store_path, None, &storage).unwrap();
+    assert!(
+        flips.is_empty(),
+        "a reopened Draft must not produce a Completed flip candidate: {flips:?}"
+    );
+    let req = storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id(spec)
+        .unwrap()
+        .clone();
+    assert_eq!(
+        req.status,
+        RequirementStatus::Draft,
+        "the reopened spec must stay Draft on a pre_sha=None replay of the same commit"
+    );
+}
+
+/// TASK-1446 (BUG-1506 AC3): pure arithmetic for the reconcile-status
+/// sweep's "pre-Done specs with a merged trailer" summary count. Draft +
+/// stale-review-story flips always count; eligible `flips` only count when
+/// their prior status was strictly before Done (Approved/Planned/InProgress)
+/// — `Done`/`NeedsAttention` priors are excluded because they aren't
+/// "pre-Done".
+// trace:TASK-1446 | ai:claude
+#[test]
+fn count_pre_done_merged_counts_only_strictly_pre_done_priors() {
+    let priors = vec![
+        RequirementStatus::Approved,
+        RequirementStatus::Planned,
+        RequirementStatus::InProgress,
+        RequirementStatus::Done,
+        RequirementStatus::NeedsAttention,
+    ];
+    // 2 draft_landed + 1 stale_review_flip + 3 pre-Done priors (Done and
+    // NeedsAttention excluded) = 6.
+    assert_eq!(
+        count_pre_done_merged(2, 1, priors.into_iter()),
+        6,
+        "Done/NeedsAttention priors must not count as pre-Done"
+    );
+    assert_eq!(
+        count_pre_done_merged(0, 0, std::iter::empty()),
+        0,
+        "nothing pre-Done in the window sums to zero"
+    );
+}
+
 /// TASK-226: --dry-run reports the planned flips without writing.
 // trace:TASK-226 | ai:claude
 #[test]
@@ -3058,4 +3211,15 @@ fn queue_close_is_tty_gated_so_the_emission_is_unreachable_headlessly() {
         crate::events::read_all(&project_root).is_empty(),
         "and with no transition there must be no ship record"
     );
+}
+
+// Review fix: whole-id matching for the open-PR diagnostic.
+// trace:TASK-1446 | ai:claude
+#[test]
+fn open_pr_id_matching_is_whole_id_only() {
+    let ids = vec!["BUG-1".to_string(), "TASK-7".to_string()];
+    assert_eq!(count_ids_mentioned("fix(x): thing (BUG-10)", &ids), 0);
+    assert_eq!(count_ids_mentioned("XBUG-1 and TASK-77", &ids), 0);
+    assert_eq!(count_ids_mentioned("fix(x): thing (bug-1)", &ids), 1);
+    assert_eq!(count_ids_mentioned("BUG-1, TASK-7.", &ids), 2);
 }
