@@ -12164,12 +12164,12 @@ pub enum Command {
         /// Number of items to show. In digest mode (default) this caps
         /// the number of distinct requirements; in events mode it
         /// caps the number of decoded events.
-        #[clap(long, short = 'n', default_value = "20")]
+        #[clap(long, short = 'n', default_value = "20", global = true)]
         limit: usize,
 
         /// Walk at most N commits on the orphan branch. Default 250 in
         /// digest mode (cheap to scan) and 5x --limit in events mode.
-        #[clap(long)]
+        #[clap(long, global = true)]
         max_commits: Option<usize>,
 
         /// Switch to per-event chronological mode — each commit's YAML
@@ -12181,31 +12181,37 @@ pub enum Command {
         #[clap(long, hide = true)]
         events: bool,
 
-        /// Only show entries for this requirement (SPEC-ID match).
-        #[clap(long)]
+        /// Only show entries for this requirement (accepts a SPEC-ID, an
+        /// agreed short ID, or the raw UUID `aida show` prints — a UUID
+        /// is resolved to its canonical spec_id; BUG-588). Works both
+        /// before and after the `events` subcommand, e.g. `aida history
+        /// events --id BUG-1474`.
+        // trace:BUG-1474 | ai:claude — global so it parses after `events`, not
+        // just before it, matching the documented invocation.
+        #[clap(long, global = true)]
         id: Option<String>,
 
         /// Only show entries for requirements of this type (functional,
         /// bug, …).
-        #[clap(long)]
+        #[clap(long, global = true)]
         r#type: Option<String>,
 
         /// Only show entries authored by this user (matches against the
         /// last_modified_by HLC field if present, else the git committer
         /// email).
-        #[clap(long)]
+        #[clap(long, global = true)]
         author: Option<String>,
 
         /// Only show events after this date (ISO 8601, e.g. 2026-05-01).
-        #[clap(long)]
+        #[clap(long, global = true)]
         since: Option<String>,
 
         /// Only show events before this date (ISO 8601).
-        #[clap(long)]
+        #[clap(long, global = true)]
         until: Option<String>,
 
         /// (events only) filter to status transitions.
-        #[clap(long)]
+        #[clap(long, global = true)]
         status_changes: bool,
 
         /// Only recent Done→Completed ship transitions — the "did my ship
@@ -12213,15 +12219,15 @@ pub enum Command {
         /// terminal-status spec), this shows just what merged-to-default,
         /// newest first. Implies events mode; composes with --since/--until/--limit.
         // trace:TASK-507 | ai:claude — plain `//` keeps the marker out of `--help`.
-        #[clap(long)]
+        #[clap(long, global = true)]
         shipped: bool,
 
         /// (events only) filter to comment events.
-        #[clap(long)]
+        #[clap(long, global = true)]
         comments: bool,
 
         /// (events only) terse one-line-per-event format.
-        #[clap(long)]
+        #[clap(long, global = true)]
         oneline: bool,
 
         /// Include archived AND deferred requirements (everything-escape-hatch).
@@ -12230,17 +12236,17 @@ pub enum Command {
         /// hides archived and deferred rows; `--all` widens to the full union.
         // trace:STORY-441 | ai:claude — supersedes TASK-64's terminal-status hide.
         // trace:STORY-584 | ai:claude — now widens the defer axis too.
-        #[clap(long, conflicts_with_all = ["archived", "deferred"])]
+        #[clap(long, conflicts_with_all = ["archived", "deferred"], global = true)]
         all: bool,
 
         /// Show only archived requirements.
         // trace:STORY-441 | ai:claude
-        #[clap(long, conflicts_with_all = ["all", "deferred"])]
+        #[clap(long, conflicts_with_all = ["all", "deferred"], global = true)]
         archived: bool,
 
         /// Show only deferred requirements (the primed/conditional shelf).
         // trace:STORY-584 | ai:claude
-        #[clap(long, conflicts_with_all = ["all", "archived"])]
+        #[clap(long, conflicts_with_all = ["all", "archived"], global = true)]
         deferred: bool,
 
         /// Include META requirements (AI prompt customization seeded by
@@ -12250,7 +12256,7 @@ pub enum Command {
         /// which already exclude them. Pass `--include-meta` to see them,
         /// or filter explicitly with `--type meta`.
         // trace:STORY-737 | ai:claude
-        #[clap(long)]
+        #[clap(long, global = true)]
         include_meta: bool,
 
         /// History view.
@@ -14382,6 +14388,58 @@ mod tests {
         ));
         let cli = Cli::try_parse_from(["aida", "history", "--events"]).unwrap();
         assert!(matches!(cli.command, Command::History { events: true, .. }));
+    }
+
+    // BUG-1474: CLAUDE.md documents `aida history events [--id <spec-id|uuid>]`
+    // as the way to read per-spec status history, but `--id` (and the other
+    // History filters) lived only on the parent `History` variant, so clap
+    // rejected them once the `events` subcommand token had been consumed.
+    // Marking those fields `global = true` makes them parse on either side of
+    // `events`, matching the documented invocation.
+    // trace:BUG-1474 | ai:claude
+    #[test]
+    fn history_filters_parse_after_events_subcommand() {
+        let cli = Cli::try_parse_from(["aida", "history", "events", "--id", "BUG-1474"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::History {
+                cmd: Some(HistoryCommand::Events),
+                id: Some(ref id),
+                ..
+            } if id == "BUG-1474"
+        ));
+
+        // Still parses in the pre-existing before-the-subcommand order.
+        let cli = Cli::try_parse_from(["aida", "history", "--id", "BUG-1474", "events"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::History {
+                cmd: Some(HistoryCommand::Events),
+                id: Some(ref id),
+                ..
+            } if id == "BUG-1474"
+        ));
+
+        // A second documented filter (--status-changes) also parses after
+        // `events`, not just --id.
+        let cli = Cli::try_parse_from([
+            "aida",
+            "history",
+            "events",
+            "--id",
+            "BUG-1474",
+            "--status-changes",
+        ])
+        .unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::History {
+                cmd: Some(HistoryCommand::Events),
+                id: Some(ref id),
+                status_changes: true,
+                ..
+            } if id == "BUG-1474"
+        ));
     }
 
     // trace:TASK-1427 | ai:codex
