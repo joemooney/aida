@@ -67,7 +67,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:29:06.068323940Z
-modified_at: 2026-09-23T21:55:57.439758488Z
+modified_at: 2026-09-23T21:56:00.182586245Z
 req_type: Story
 tags:
 - docs:impacted
@@ -90,5 +90,11 @@ comments:
   content: 'PROXY DECISION (Claude for the operator, overnight burn-down): when the pre-launch build-to-HEAD fails, the wave REFUSES to launch (PRIN-5; a drain on unknown-vintage orchestration is the incident class this spec cites), with a clear message and an explicit --allow-stale override for deliberate bisecting. Behind a flag (--require-head) first, per the spec. Now IMPLEMENT-ready; HIGH risk (drain self-modification), so give it a strict review.'
   created_at: 2026-09-23T06:28:24.551618077Z
   modified_at: 2026-09-23T06:28:24.551618077Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d044-ba36-7813-9bec-f3231893c363
+  author: joe
+  content: 'Decision (proxy for operator, 2026-09-23, after strict review): the freshness check is WARN-by-default, REFUSE behind a flag. At drain launch (queue work --auto-complete, burndown run) a dev build of the AIDA repo that is behind or diverged from the local default-branch HEAD prints a one-line stderr warning and the wave runs it; drain.lock records launched_stale=true. --require-head (or [drain] require_head = true) turns it into a refusal naming ''make build-fast, then rerun''. A build AHEAD of HEAD counts as fresh. --allow-stale-binary / AIDA_ALLOW_STALE_BINARY were dropped: with warn-by-default, pinning an older binary needs no override. Build-and-re-exec is deferred. Released binaries and downstream projects are never checked.'
+  created_at: 2026-09-23T21:56:00.182586245Z
+  modified_at: 2026-09-23T21:56:00.182586245Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
