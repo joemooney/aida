@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   1. aida ps marks a live session whose resolved identity source would be the shell-user fallback.
   2. A test covers one session with an identity and one without.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T09:22:23.719042649Z
-modified_at: 2026-09-23T11:56:42.938640552Z
+modified_at: 2026-09-23T12:18:58.179964850Z
 req_type: Task
 tags:
 - followup
@@ -37,3 +37,21 @@ comments:
   created_at: 2026-09-23T11:56:42.938640552Z
   modified_at: 2026-09-23T11:56:42.938640552Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0ce34-6ff5-7f83-b18d-dc2baefa9a07
+  author: aida-auto-bump
+  timestamp: 2026-09-23T12:18:58.165369725Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0ce34-7003-76c0-9c7d-ada64be568ef
+  timestamp: 2026-09-23T12:18:58.179963139Z
+  agent: aida
+  commit_sha: a838b3a65fd6edef126b23e0e470e2c81d682aec
+  summary: Completed via merge a838b3a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T12:18:56.345342173Z
+  completion_sha: a838b3a65fd6edef126b23e0e470e2c81d682aec
