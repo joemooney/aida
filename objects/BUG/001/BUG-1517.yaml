@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:07:21.857249644Z
-modified_at: 2026-09-23T07:39:22.342557412Z
+modified_at: 2026-09-23T07:39:23.822956555Z
 req_type: Bug
 tags:
 - papercut authority-gate aida:queue:work
@@ -28,4 +28,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 00:39 -> branch claude/bug-1517, no PR (overnight burn-down)
   created_at: 2026-09-23T07:39:11.118006870Z
   modified_at: 2026-09-23T07:39:11.118006870Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd34-7b2e-7793-9706-8f92b15dd3ca
+  author: joe
+  content: 'PROXY APPROVAL (Claude for the operator, overnight burn-down): triage confirmed the defect is still live on main.'
+  created_at: 2026-09-23T07:39:23.822956555Z
+  modified_at: 2026-09-23T07:39:23.822956555Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
