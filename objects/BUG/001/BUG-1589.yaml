@@ -33,7 +33,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T01:51:06.191825231Z
-modified_at: 2026-09-23T04:43:36.013406894Z
+modified_at: 2026-09-23T04:43:38.811143343Z
 req_type: Bug
 tags:
 - cost token-economics seat-discipline heartbeat incident:2026-09-21 parent:EPIC-71
@@ -53,6 +53,12 @@ comments:
   content: 'PASS — fresh independent cold review of PR #2106 exact head 8a09686ce5ec652b1d73658517d7908c3814cb4f. Build (ubuntu-latest) and merge-hold-gate are SUCCESS; PR is CLEAN/MERGEABLE. BUG-1589 acceptance passes: advisor/read-mail/drain/fleet/burndown guidance and generated launch context prescribe shell/event-driven zero-token waits and forbid model-side CronCreate, /loop, and ScheduleWakeup mailbox polling; scaffold/template guard rejects prior positive polling snippets; zero-token cost model is documented in docs/agents/zero-token-waiting.md and its template; incident evidence and unresolved harness question link upstream issue https://github.com/anthropics/claude-code/issues/96215. Focused tests: agent_launcher_tests 68/68, role_identity_tests 17/17, cargo fmt --all -- --check, git diff --check. No blocker. PR verdict: https://github.com/joemooney/aida/pull/2106#issuecomment-5788656188'
   created_at: 2026-09-23T03:51:18.618149531Z
   modified_at: 2026-09-23T03:51:18.618149531Z
+- id: 01a0cc93-93bb-7a71-b9bf-f7c24e080255
+  author: joe
+  content: 'Merged: PR #2106 was squash-merged at 2dcd351a09 (2026-09-22 21:43) after an independent Claude APPROVE review. Status was set to completed by hand because the orchestrator checkout is not on main.'
+  created_at: 2026-09-23T04:43:38.811143343Z
+  modified_at: 2026-09-23T04:43:38.811143343Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 implementation_info:
   implemented: true
   implemented_at: 2026-09-23T02:28:44.492858802Z
