@@ -14,24 +14,29 @@
 //!
 //! At wave launch (`aida queue work --auto-complete`, `aida burndown run`):
 //!
-//! - Only a **dev build of the AIDA workspace** is gated: the running
+//! - Only a **dev build of the AIDA workspace** is checked: the running
 //!   executable lives under some `<checkout>/target/` whose checkout is the
 //!   AIDA workspace, AND the project being drained is the AIDA workspace. A
 //!   released `aida` (installed binary) or any downstream project is never
-//!   gated.
+//!   checked.
 //! - The running binary's embedded build SHA (`AIDA_BUILD_GIT_SHA`, the same
-//!   stamp `aida --version` prints and `drain.lock` records) must match the
-//!   local default-branch HEAD. The comparison reuses the TASK-221
-//!   `classify_sha_match` verdict that `aida dev status` shows.
-//! - Behind / diverged → REFUSE with the one-line fix (`make build-fast`).
-//! - Unknown (SHA not stamped, git unavailable, no default branch) → REFUSE
-//!   with guidance; never block silently and never pass silently.
-//! - `--allow-stale-binary` or `AIDA_ALLOW_STALE_BINARY=1` is the deliberate
-//!   override (bisecting an orchestration regression, reproducing a shelve on
-//!   the binary that produced it). The bypass is recorded in `drain.lock`.
+//!   stamp `aida --version` prints and `drain.lock` records) is compared with
+//!   the local default-branch HEAD, reusing the TASK-221 `classify_sha_match`
+//!   verdict that `aida dev status` shows. Equal, or AHEAD of HEAD (a build of
+//!   a branch that already contains main), is fresh. Behind, truly diverged,
+//!   or unknown is stale.
+//! - By DEFAULT a stale binary prints a one-line stderr warning and the wave
+//!   launches; `drain.lock` records `launched_stale = true` so an audit can
+//!   establish what the wave ran under. Pinning an older binary deliberately
+//!   (bisecting an orchestration regression, reproducing a shelve) therefore
+//!   needs no override.
+//! - `--require-head` (or `[drain] require_head = true` in
+//!   `.aida/config.toml`) turns the warning into a REFUSAL naming the one fix:
+//!   `make build-fast`, then rerun. Unknown never passes silently under it.
 //!
-//! Auto build + re-exec is intentionally NOT implemented: refusal is the safe
-//! minimum (a build that fails would otherwise need its own refusal path).
+//! Build-and-re-exec (the spec's full shape) is DEFERRED: refusal under
+//! `--require-head` is the safe minimum, and a failed build would need its own
+//! refusal path.
 //!
 //! trace:STORY-1414 trace:TASK-188 | ai:claude
 
@@ -40,18 +45,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::ShaMatch;
 
-/// Env override that lets a wave launch on a binary that is not the default
-/// branch HEAD. Documented in `docs/environment-variables.md`.
-pub(crate) const ALLOW_STALE_ENV: &str = "AIDA_ALLOW_STALE_BINARY";
-
-/// Set when this process launched a wave past the gate via the override, so
-/// the drain-lock record can say so.
+/// Set when this process launched a wave on a stale binary (warned, not
+/// refused), so the drain-lock record can say so.
 // trace:STORY-1414 | ai:claude
-static BYPASSED: AtomicBool = AtomicBool::new(false);
+static LAUNCHED_STALE: AtomicBool = AtomicBool::new(false);
 
-/// True when this process bypassed the freshness gate with the override.
-pub(crate) fn gate_bypassed() -> bool {
-    BYPASSED.load(Ordering::SeqCst)
+/// True when this process launched its wave on a stale dev binary.
+pub(crate) fn launched_stale() -> bool {
+    LAUNCHED_STALE.load(Ordering::SeqCst)
 }
 
 /// The facts about the running binary vs the default branch.
@@ -79,9 +80,8 @@ pub(crate) enum Freshness {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GateDecision {
     Proceed,
-    /// Launch anyway because the operator explicitly overrode; the message is
-    /// printed so the bypass is visible.
-    Bypassed(String),
+    /// Launch, but print this one-line warning (default mode, stale binary).
+    Warn(String),
     Refuse(String),
 }
 
@@ -148,6 +148,14 @@ pub(crate) fn evaluate(project_root: &Path, exe: &Path, binary_sha: &str) -> Fre
     };
     match crate::classify_sha_match(project_root, bin, &head) {
         ShaMatch::Exact => Freshness::Fresh,
+        // Not an ancestor of HEAD: the build may be AHEAD (HEAD is its
+        // ancestor — a feature-branch build that already contains main). That
+        // is fresh; only true divergence is stale.
+        ShaMatch::Unrelated
+            if crate::classify_sha_match(project_root, &head, bin) == ShaMatch::Ancestor =>
+        {
+            Freshness::Fresh
+        }
         ShaMatch::Unknown => Freshness::Unknown {
             reason: format!("git could not place build {bin} relative to {branch} HEAD"),
         },
@@ -164,9 +172,9 @@ fn short(sha: &str) -> &str {
     sha.get(..sha.len().min(10)).unwrap_or(sha)
 }
 
-/// Pure decision: freshness + override → proceed / bypass / refuse.
+/// Pure decision: freshness + `require_head` → proceed / warn / refuse.
 // trace:STORY-1414 | ai:claude
-pub(crate) fn decide(freshness: &Freshness, allow_stale: bool) -> GateDecision {
+pub(crate) fn decide(freshness: &Freshness, require_head: bool) -> GateDecision {
     let problem = match freshness {
         Freshness::NotGated | Freshness::Fresh => return GateDecision::Proceed,
         Freshness::Stale {
@@ -190,47 +198,45 @@ pub(crate) fn decide(freshness: &Freshness, allow_stale: bool) -> GateDecision {
             format!("cannot confirm this aida binary matches the default branch HEAD: {reason}")
         }
     };
-    if allow_stale {
-        GateDecision::Bypassed(format!(
-            "{problem} — launching anyway (freshness gate bypassed; recorded in .aida/drain.lock)"
-        ))
-    } else {
+    if require_head {
         GateDecision::Refuse(format!(
             "refusing to launch the drain: {problem}.\n  \
-             A wave pins its launching binary, so it would run superseded orchestration code.\n  \
-             Fix: run `make build-fast`, then rerun this command.\n  \
-             To pin an older binary deliberately, pass --allow-stale-binary \
-             (or set {ALLOW_STALE_ENV}=1)."
+             --require-head is set (flag or `[drain] require_head`), and a wave pins its \
+             launching binary.\n  \
+             Fix: run `make build-fast`, then rerun this command."
+        ))
+    } else {
+        GateDecision::Warn(format!(
+            "{problem}; the wave will run this build (run `make build-fast` to pick up HEAD, \
+             or pass --require-head to refuse instead)"
         ))
     }
 }
 
-fn env_allows_stale() -> bool {
-    std::env::var(ALLOW_STALE_ENV)
-        .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
-        .unwrap_or(false)
-}
-
-/// Enforce the gate at wave launch. Call BEFORE taking the drain lock so the
-/// lock records whether the gate was bypassed. A child drive borrowing its
-/// parent's lock is not re-gated (the parent already was).
+/// Check the running binary at wave launch. Call BEFORE taking the drain lock
+/// so the lock records a stale launch. `require_head` is the `--require-head`
+/// flag; `[drain] require_head = true` in config also enables refusal. A child
+/// drive borrowing its parent's lock is not re-checked (the parent already
+/// was).
 // trace:STORY-1414 | ai:claude
 pub(crate) fn enforce_wave_launch_gate(
     project_root: &Path,
-    allow_flag: bool,
+    require_head: bool,
 ) -> anyhow::Result<()> {
     if crate::drain_lock::borrow_requested() {
         return Ok(());
     }
+    let require_head =
+        require_head || crate::read_drain_config(project_root).require_head == Some(true);
     let freshness = evaluate(
         project_root,
         &crate::aida_exe_path(),
         env!("AIDA_BUILD_GIT_SHA"),
     );
-    match decide(&freshness, allow_flag || env_allows_stale()) {
+    match decide(&freshness, require_head) {
         GateDecision::Proceed => Ok(()),
-        GateDecision::Bypassed(msg) => {
-            BYPASSED.store(true, Ordering::SeqCst);
+        GateDecision::Warn(msg) => {
+            LAUNCHED_STALE.store(true, Ordering::SeqCst);
             eprintln!(
                 "  {} {msg}",
                 crate::glyphs::get(crate::glyphs::Glyph::Warning, Some(project_root))

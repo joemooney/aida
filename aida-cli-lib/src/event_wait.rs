@@ -353,7 +353,7 @@ mod tests {
             binary_sha: "abc1234".into(),
             binary_mtime_secs: Some(1),
             binary_path: "/repo/target/release/aida".into(),
-            freshness_gate_bypassed: false,
+            launched_stale: false,
             specs: vec![],
         };
         let lock_path = crate::drain_lock::drain_lock_path(root);

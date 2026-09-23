@@ -61,7 +61,7 @@ fn decide_proceeds_when_fresh_or_not_gated() {
 }
 
 #[test]
-fn decide_refuses_stale_with_the_fix_command_and_override() {
+fn decide_warns_by_default_and_refuses_under_require_head() {
     let stale = Freshness::Stale {
         binary_sha: "abc1234".into(),
         head_sha: "def5678901234".into(),
@@ -69,29 +69,49 @@ fn decide_refuses_stale_with_the_fix_command_and_override() {
         kind: ShaMatch::Ancestor,
     };
     match decide(&stale, false) {
+        GateDecision::Warn(msg) => {
+            assert!(msg.contains("is behind main HEAD"), "{msg}");
+            assert!(!msg.contains('\n'), "default warning is one line: {msg}");
+            assert!(msg.contains("--require-head"), "{msg}");
+        }
+        other => panic!("expected warn, got {other:?}"),
+    }
+    match decide(&stale, true) {
         GateDecision::Refuse(msg) => {
             assert!(msg.contains("is behind main HEAD"), "{msg}");
             assert!(msg.contains("make build-fast"), "{msg}");
-            assert!(msg.contains("--allow-stale-binary"), "{msg}");
-            assert!(msg.contains(ALLOW_STALE_ENV), "{msg}");
         }
         other => panic!("expected refuse, got {other:?}"),
     }
-    assert!(matches!(decide(&stale, true), GateDecision::Bypassed(_)));
 }
 
 #[test]
-fn decide_unknown_refuses_with_guidance_never_silently() {
+fn decide_unknown_never_passes_silently() {
     let unknown = Freshness::Unknown {
         reason: "no sha".into(),
     };
-    match decide(&unknown, false) {
+    assert!(matches!(decide(&unknown, false), GateDecision::Warn(m) if m.contains("no sha")));
+    match decide(&unknown, true) {
         GateDecision::Refuse(msg) => {
-            assert!(msg.contains("no sha") && msg.contains("--allow-stale-binary"));
+            assert!(msg.contains("no sha") && msg.contains("make build-fast"));
         }
         other => panic!("expected refuse, got {other:?}"),
     }
-    assert!(matches!(decide(&unknown, true), GateDecision::Bypassed(_)));
+}
+
+#[test]
+fn require_head_config_key_parses() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+    std::fs::write(
+        tmp.path().join(".aida").join("config.toml"),
+        "[drain]\nrequire_head = true\n",
+    )
+    .unwrap();
+    assert_eq!(
+        crate::read_drain_config(tmp.path()).require_head,
+        Some(true)
+    );
 }
 
 #[test]
@@ -159,6 +179,26 @@ fn evaluate_fresh_behind_and_unknown() {
 }
 
 #[test]
+fn evaluate_build_ahead_of_main_is_fresh_but_diverged_is_stale() {
+    let (tmp, exe) = fake_workspace();
+    let root = tmp.path();
+    let base = commit(root, "a");
+    // A feature-branch build that already contains main: AHEAD, not diverged.
+    git(root, &["checkout", "-q", "-b", "feature"]);
+    let ahead = commit(root, "b");
+    assert_eq!(evaluate(root, &exe, &ahead[..9]), Freshness::Fresh);
+
+    // main moves on independently: the feature build is now truly diverged.
+    git(root, &["checkout", "-q", "main"]);
+    let _ = base;
+    commit(root, "c");
+    match evaluate(root, &exe, &ahead[..9]) {
+        Freshness::Stale { kind, .. } => assert_eq!(kind, ShaMatch::Unrelated),
+        other => panic!("expected diverged, got {other:?}"),
+    }
+}
+
+#[test]
 fn staleness_warning_only_for_behind_builds() {
     let behind = Freshness::Stale {
         binary_sha: "abc1234".into(),
@@ -192,16 +232,16 @@ fn drain_lock_serializes_bypass_only_when_set() {
         binary_sha: "abc1234".into(),
         binary_mtime_secs: None,
         binary_path: String::new(),
-        freshness_gate_bypassed: false,
+        launched_stale: false,
         specs: vec![],
     };
     let json = serde_json::to_string(&lock).unwrap();
-    assert!(!json.contains("freshness_gate_bypassed"));
+    assert!(!json.contains("launched_stale"));
     // Older lock files (no field) still parse.
     let back: crate::drain_lock::DrainLock = serde_json::from_str(&json).unwrap();
-    assert!(!back.freshness_gate_bypassed);
+    assert!(!back.launched_stale);
 
-    lock.freshness_gate_bypassed = true;
+    lock.launched_stale = true;
     let json = serde_json::to_string(&lock).unwrap();
-    assert!(json.contains("\"freshness_gate_bypassed\":true"));
+    assert!(json.contains("\"launched_stale\":true"));
 }
