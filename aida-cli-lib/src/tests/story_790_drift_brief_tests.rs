@@ -56,6 +56,8 @@ fn mail_since_exit_counts_addressed_and_broadcast_not_others_or_older() {
         retracted: false,
         deleted: false,
         archived: false,
+        from_source: aida_core::mailbox::SenderSource::Explicit,
+        from_role: None,
     };
     let fresh = Utc::now().timestamp_millis();
     let stale = (Utc::now() - Duration::hours(2)).timestamp_millis();

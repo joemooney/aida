@@ -1535,6 +1535,28 @@ fn queue_move_force_flag_parses() {
     ));
 }
 
+/// BUG-1487: `queue move` is now the last queue verb to accept `--user`,
+/// matching `add`/`remove`/`list`/`clear` — the documented way to reorder
+/// another identity's queue actually reaches the command instead of
+/// silently falling back to the caller's own resolved identity.
+// trace:BUG-1487 | ai:claude
+#[test]
+fn queue_move_user_flag_parses() {
+    let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--top"]).unwrap();
+    assert!(matches!(
+        cli.command,
+        Command::Queue(QueueCommand::Move { user: None, .. })
+    ));
+    let cli = Cli::try_parse_from([
+        "aida", "queue", "move", "TASK-1", "--top", "--user", "alice",
+    ])
+    .unwrap();
+    assert!(matches!(
+        cli.command,
+        Command::Queue(QueueCommand::Move { user: Some(ref u), .. }) if u == "alice"
+    ));
+}
+
 /// BUG-249: pre-fix, `aida queue move <id>` printed a `Moved` check line even
 /// when `<id>` wasn't in the queue at all — queue_reorder's update
 /// loop simply didn't match anything and the write completed with
@@ -5113,6 +5135,76 @@ fn corroboration_scan_still_finds_subject_trailer() {
     assert!(
         refs.contains("BUG-89"),
         "subject trailer still works: {refs:?}"
+    );
+}
+
+/// BUG-1590: the exact body of PR #2112 (squash bc61c0a04a) — six
+/// `- SPEC-ID: <prose>; <more prose> (SPEC-ID)` lines, two of which
+/// (BUG-1513, BUG-1507) carry a mid-sentence semicolon before their
+/// trailer. Before the fix, `body_line_is_code_like`'s bare
+/// `contains(';')` check mistook every semicolon-bearing prose line for
+/// pasted code and dropped it, so only 1 of 6 trailers survived
+/// (matching the observed real-world drop). All six must now be found.
+// trace:BUG-1590 | ai:claude
+#[test]
+fn squash_body_2112_shape_finds_all_six_trailers() {
+    let msg = "[AI:claude] chore(integrate): batch 2 - TASK-1305 BUG-1512 BUG-1513 BUG-1507 TASK-1442 TASK-1443 (#2112)\n\
+            \n\
+            Integration batch 2: independently-reviewed branches.\n\
+            \n\
+            - TASK-1305: unshipped-work row reflects PR state (TASK-1305)\n\
+            - BUG-1512: queue gc collects entries whose PR merged (BUG-1512)\n\
+            - BUG-1513: queue list --for filters in agent mode; count names the caller (BUG-1513)\n\
+            - BUG-1507: an unrecognised verdict refuses queue done; express forces preflight (BUG-1507)\n\
+            - TASK-1442: refuse a PR whose commits lack the spec's trailer (TASK-1442)\n\
+            - TASK-1443: adopt an existing open PR instead of opening a second (TASK-1443)\n\
+            \n\
+            Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>\n\
+            Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\n";
+
+    let subject = msg.lines().find(|l| !l.trim().is_empty()).unwrap().trim();
+    assert!(
+        extract_pr_number_from_commit_subject(subject).is_some(),
+        "subject must be recognised as a squash/merge (#N) commit"
+    );
+    let refs = extract_referenced_spec_ids_from_commit(msg);
+    for expected in [
+        "TASK-1305",
+        "BUG-1512",
+        "BUG-1513",
+        "BUG-1507",
+        "TASK-1442",
+        "TASK-1443",
+    ] {
+        assert!(
+            refs.iter().any(|r| r.eq_ignore_ascii_case(expected)),
+            "expected {expected} among body trailers, got {refs:?}"
+        );
+    }
+    assert_eq!(
+        refs.len(),
+        6,
+        "exactly six trailers, no dupes/extras: {refs:?}"
+    );
+}
+
+/// Negative case: a prose mention of a spec id MID-LINE (not the line's
+/// trailing paren group) must not be mined — only a line whose trailing
+/// group starts with a spec-id token counts.
+// trace:BUG-1590 | ai:claude
+#[test]
+fn prose_mid_line_mention_not_counted_as_trailer() {
+    let msg = "[AI:claude] chore(integrate): batch x (#3000)\n\
+            \n\
+            - discussed alongside BUG-999 in standup but shipped separately (TASK-1)\n";
+    let refs = extract_referenced_spec_ids_from_commit(msg);
+    assert!(
+        refs.iter().any(|r| r.eq_ignore_ascii_case("TASK-1")),
+        "the genuine trailing trailer must still count: {refs:?}"
+    );
+    assert!(
+        !refs.iter().any(|r| r.eq_ignore_ascii_case("BUG-999")),
+        "a bare mid-line prose mention must NOT be mined as a trailer: {refs:?}"
     );
 }
 

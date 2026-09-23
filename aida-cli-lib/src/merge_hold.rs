@@ -41,6 +41,16 @@ impl HoldReasonKind {
             _ => None,
         }
     }
+
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Supervision => "supervision",
+            Self::Recusal => "recusal",
+            Self::Rework => "rework",
+            Self::Decision => "decision",
+            Self::Unknown => "unknown",
+        }
+    }
 }
 
 /// Routing state is explicit: absence of a reader is operational evidence, not
@@ -73,6 +83,9 @@ impl HoldRoutingState {
 pub(crate) enum PrincipalKind {
     RegisteredAgent,
     Operator,
+    /// A human acting at an interactive terminal (the integrity floor).
+    // trace:STORY-1397 | ai:claude
+    Human,
     Unresolved,
 }
 
@@ -83,6 +96,14 @@ pub(crate) enum IdentityStatus {
     Unresolved,
 }
 
+/// A principal named on a hold. `IdentityStatus::Verified` means the name is
+/// WELL-FORMED (`agent:` / `operator:` / `human:` prefix with a non-empty id),
+/// not that it was authenticated: an `agent:` id is a string any process can
+/// assert. Nothing therefore grants authority on the strength of a Verified
+/// agent identity alone — clearing a hold is gated on a human at a terminal
+/// (the integrity floor), and an agent identity can only ever TIGHTEN a
+/// decision (a matching recused id refuses), never loosen one.
+// trace:STORY-1397 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct PrincipalIdentity {
     pub principal_kind: PrincipalKind,
@@ -107,6 +128,9 @@ impl PrincipalIdentity {
                 identity_status: IdentityStatus::Verified,
             };
         }
+        if let Some(id) = raw.strip_prefix("human:").filter(|id| !id.is_empty()) {
+            return Self::human(id);
+        }
         Self {
             principal_kind: PrincipalKind::Unresolved,
             principal_id: raw.into(),
@@ -122,10 +146,21 @@ impl PrincipalIdentity {
         }
     }
 
+    /// A human at an interactive terminal, keyed by the shell user id.
+    // trace:STORY-1397 | ai:claude
+    pub(crate) fn human(user: impl Into<String>) -> Self {
+        Self {
+            principal_kind: PrincipalKind::Human,
+            principal_id: user.into(),
+            identity_status: IdentityStatus::Verified,
+        }
+    }
+
     pub(crate) fn key(&self) -> String {
         match self.principal_kind {
             PrincipalKind::RegisteredAgent => format!("agent:{}", self.principal_id),
             PrincipalKind::Operator => format!("operator:{}", self.principal_id),
+            PrincipalKind::Human => format!("human:{}", self.principal_id),
             PrincipalKind::Unresolved => format!("unresolved:{}", self.principal_id),
         }
     }
@@ -204,6 +239,12 @@ pub(crate) fn hold_path(project_root: &Path, pr: u64) -> PathBuf {
 
 /// Record a supervised merge-hold for `pr` with a human-readable reason.
 /// Idempotent — re-recording refreshes the reason.
+///
+/// STORY-1397: production writers all emit typed v2 markers via
+/// [`write_typed_hold`]; this legacy plaintext writer survives only so tests
+/// can build the legacy marker shape the reader must keep honouring.
+// trace:STORY-1397 | ai:claude
+#[cfg(test)]
 pub(crate) fn write_hold(project_root: &Path, pr: u64, reason: &str) -> std::io::Result<()> {
     let dir = holds_dir(project_root);
     std::fs::create_dir_all(&dir)?;
@@ -249,9 +290,16 @@ pub(crate) fn write_typed_hold(
     aida_core::fs_atomic::write_atomic(&hold_path(project_root, record.pr), &body)
 }
 
-/// Refresh a recusal hold from live read-surface evidence. This is deliberately
-/// idempotent: awaiting/status callers may invoke it on every render. A failed
-/// refresh leaves the existing marker armed and returns the last durable record.
+/// Refresh a recusal hold from live evidence: adopt a moved PR head (which
+/// invalidates the old route), re-select a live independent reader, and write
+/// or retire the routing briefs. Idempotent. A failed refresh leaves the
+/// existing marker armed and returns the last durable record.
+///
+/// This WRITES (marker rewrite, brief creation/retirement) and probes process
+/// liveness, so it is called only from explicit merge-hold commands
+/// (`aida merge-hold list --fix`, and `add` via [`write_typed_hold`]) — never
+/// from a read surface. `aida awaiting` and its per-turn notice stay read-only
+/// and use [`project_live_head`] instead.
 // trace:STORY-1397 | ai:codex
 pub(crate) fn reconcile_recusal_hold(
     project_root: &Path,
@@ -262,14 +310,7 @@ pub(crate) fn reconcile_recusal_hold(
     if durable.reason_kind != HoldReasonKind::Recusal || durable.legacy {
         return Some(durable);
     }
-    let mut refreshed = durable.clone();
-    if let Some(head) = live_head.map(str::trim).filter(|head| !head.is_empty()) {
-        if refreshed.target_head_sha.as_deref() != Some(head) {
-            refreshed.target_head_sha = Some(head.to_string());
-            refreshed.routing_state = HoldRoutingState::StaleHead;
-            refreshed.routed_to.clear();
-        }
-    }
+    let mut refreshed = project_live_head(&durable, live_head);
     if reconcile_recusal_route(project_root, &mut refreshed).is_err() {
         return Some(durable);
     }
@@ -284,6 +325,28 @@ pub(crate) fn reconcile_recusal_hold(
         return Some(durable);
     }
     Some(refreshed)
+}
+
+/// Read-only view of a hold against the PR's live head. A recusal routed at an
+/// older head is shown as `StaleHead` with no current route; nothing is
+/// written. The durable refresh is [`reconcile_recusal_hold`].
+// trace:STORY-1397 | ai:claude
+pub(crate) fn project_live_head(
+    record: &MergeHoldRecord,
+    live_head: Option<&str>,
+) -> MergeHoldRecord {
+    let mut view = record.clone();
+    if view.reason_kind != HoldReasonKind::Recusal || view.legacy {
+        return view;
+    }
+    if let Some(head) = live_head.map(str::trim).filter(|head| !head.is_empty()) {
+        if view.target_head_sha.as_deref() != Some(head) {
+            view.target_head_sha = Some(head.to_string());
+            view.routing_state = HoldRoutingState::StaleHead;
+            view.routed_to.clear();
+        }
+    }
+    view
 }
 
 fn reconcile_recusal_route(
@@ -313,27 +376,28 @@ fn reconcile_recusal_route(
                 .get("availability")
                 .and_then(|v| v.as_str())
                 .is_some_and(|v| v.eq_ignore_ascii_case("paused"));
-            let live = value
-                .get("pid")
-                .and_then(|v| v.as_integer())
-                .and_then(|v| u32::try_from(v).ok())
-                .is_some_and(|pid| {
-                    sysinfo::System::new_all()
-                        .process(sysinfo::Pid::from_u32(pid))
-                        .is_some()
-                });
             let principal = PrincipalIdentity::registered_agent(id);
             let eligible_role = matches!(
                 role.to_ascii_lowercase().as_str(),
                 "reviewer" | "advisor" | "integrator"
             );
-            if live
-                && !ended
-                && !paused
-                && eligible_role
-                && !principal_is_recused(record, &principal)
-                && !agent_type.is_empty()
+            // Every cheap filter runs before the liveness probe, and the probe
+            // is a single-pid check (kill(pid, 0) on Unix), never a full
+            // process-table scan. trace:STORY-1397 | ai:claude
+            if ended
+                || paused
+                || !eligible_role
+                || agent_type.is_empty()
+                || principal_is_recused(record, &principal)
             {
+                continue;
+            }
+            let live = value
+                .get("pid")
+                .and_then(|v| v.as_integer())
+                .and_then(|v| u32::try_from(v).ok())
+                .is_some_and(aida_core::liveness::pid_is_alive);
+            if live {
                 candidates.push((principal, agent_type.to_string()));
             }
         }
@@ -448,6 +512,15 @@ pub(crate) fn principal_is_recused(
         })
 }
 
+/// The acting agent's self-declared identity, from `AIDA_AGENT_ID`.
+///
+/// LIMITATION: this is a self-set environment variable, not an established,
+/// authenticated identity — nothing in AIDA's launch path sets it, and any
+/// process can set it to anything. It is therefore used only to PERSONALIZE
+/// the read-only awaiting projection and to TIGHTEN a clear (an id matching a
+/// recused principal refuses). It never satisfies independence and never
+/// grants a clear.
+// trace:STORY-1397 | ai:claude
 pub(crate) fn current_principal() -> Option<PrincipalIdentity> {
     std::env::var("AIDA_AGENT_ID")
         .ok()
@@ -475,22 +548,93 @@ pub(crate) fn typed_hold(
     }
 }
 
-pub(crate) fn recusal_clear_evidence_valid(
+/// Who clears a hold, given the human at the terminal and any self-declared
+/// agent identity. Callers have ALREADY enforced the integrity floor (a human
+/// at an interactive terminal); this function never relaxes that.
+///
+/// The independence rule restricts the recused principals. A human clearing
+/// at a terminal is independent of a recused AUTHOR AGENT by definition, so no
+/// agent identity or agent-recorded verdict is required and the clearance is
+/// attributed to `human:<user>`. The human is refused only when the hold
+/// itself names that human (`human:<user>` or `operator:<user>`) as recused.
+/// A self-declared agent id can only refuse (when it is recused), never grant.
+// trace:STORY-1397 | ai:claude
+pub(crate) fn human_clear_actor(
     record: &MergeHoldRecord,
-    actor: Option<&PrincipalIdentity>,
-    approved: bool,
-    reviewed_sha: &str,
-    reviewer: &PrincipalIdentity,
-    live_head_sha: &str,
-) -> bool {
-    let expected = record.target_head_sha.as_deref().unwrap_or("");
-    approved
-        && !expected.is_empty()
-        && reviewed_sha == expected
-        && live_head_sha == expected
-        && actor.is_some_and(PrincipalIdentity::is_verified)
-        && reviewer.is_verified()
-        && !principal_is_recused(record, reviewer)
+    human_user: &str,
+    declared_agent: Option<&PrincipalIdentity>,
+) -> Result<PrincipalIdentity, String> {
+    if declared_agent.is_some_and(|agent| principal_is_recused(record, agent)) {
+        return Err(format!(
+            "the acting agent identity is recused from PR-{}; only an independent reader may clear this hold",
+            record.pr
+        ));
+    }
+    let user = human_user.trim();
+    if user.is_empty() {
+        return Err(format!(
+            "PR-{} hold cannot be cleared: the human user identity is unknown",
+            record.pr
+        ));
+    }
+    let human = PrincipalIdentity::human(user);
+    let operator = PrincipalIdentity {
+        principal_kind: PrincipalKind::Operator,
+        principal_id: user.to_string(),
+        identity_status: IdentityStatus::Verified,
+    };
+    if principal_is_recused(record, &human) || principal_is_recused(record, &operator) {
+        return Err(format!(
+            "{} is recused from PR-{}; another independent reader must clear this hold",
+            human.key(),
+            record.pr
+        ));
+    }
+    Ok(human)
+}
+
+/// Durable audit record of who cleared a hold, written by the explicit
+/// `aida merge-hold clear` command (never by a read surface). Per-clone
+/// runtime state under `.aida/`, like the markers themselves.
+// trace:STORY-1397 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct HoldClearance {
+    pub pr: u64,
+    pub reason_kind: HoldReasonKind,
+    pub detail: String,
+    pub cleared_by: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_head_sha: Option<String>,
+    pub cleared_at: String,
+}
+
+pub(crate) fn clearance_path(project_root: &Path, pr: u64) -> PathBuf {
+    project_root
+        .join(".aida")
+        .join("merge-hold-clearances")
+        .join(format!("PR-{pr}.json"))
+}
+
+pub(crate) fn record_clearance(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    actor: &PrincipalIdentity,
+) -> std::io::Result<()> {
+    let path = clearance_path(project_root, record.pr);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let clearance = HoldClearance {
+        pr: record.pr,
+        reason_kind: record.reason_kind,
+        detail: record.detail.clone(),
+        cleared_by: actor.key(),
+        target_head_sha: record.target_head_sha.clone(),
+        cleared_at: chrono::Utc::now().to_rfc3339(),
+    };
+    let body = serde_json::to_vec_pretty(&clearance)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    aida_core::fs_atomic::write_atomic(&path, &body)
 }
 
 /// The hold reason if `pr` is under a supervised merge-hold, else `None`.
@@ -1056,8 +1200,7 @@ mod tests {
         assert!(held.recused_principals.is_empty());
     }
 
-    #[test]
-    fn recusal_clear_rejects_stale_head_and_unresolved_identity() {
+    fn recused_record() -> MergeHoldRecord {
         let mut record = typed_hold(
             42,
             HoldReasonKind::Recusal,
@@ -1065,40 +1208,91 @@ mod tests {
             Some("head-a".into()),
         );
         record.recused_principals = vec![PrincipalIdentity::parse("agent:author")];
-        let actor = PrincipalIdentity::parse("agent:merger");
-        let reviewer = PrincipalIdentity::parse("agent:reviewer");
-        assert!(recusal_clear_evidence_valid(
-            &record,
-            Some(&actor),
-            true,
-            "head-a",
-            &reviewer,
-            "head-a"
-        ));
-        assert!(!recusal_clear_evidence_valid(
-            &record,
-            Some(&actor),
-            true,
-            "head-a",
-            &reviewer,
-            "head-b"
-        ));
-        assert!(!recusal_clear_evidence_valid(
-            &record,
-            Some(&PrincipalIdentity::parse("shell-user")),
-            true,
-            "head-a",
-            &reviewer,
-            "head-a"
-        ));
-        assert!(!recusal_clear_evidence_valid(
-            &record,
-            Some(&actor),
-            true,
-            "head-a",
-            &PrincipalIdentity::parse("reviewer name"),
-            "head-a"
-        ));
+        record
+    }
+
+    // trace:STORY-1397 | ai:claude
+    #[test]
+    fn human_at_terminal_clears_recusal_without_agent_id() {
+        let record = recused_record();
+        let actor = human_clear_actor(&record, "joe", None).expect("human clears");
+        assert_eq!(actor.key(), "human:joe");
+        // An unrelated declared agent id neither helps nor hinders the human.
+        let other = PrincipalIdentity::parse("agent:someone-else");
+        assert_eq!(
+            human_clear_actor(&record, "joe", Some(&other))
+                .unwrap()
+                .key(),
+            "human:joe"
+        );
+    }
+
+    #[test]
+    fn human_clear_refuses_a_recused_declared_agent_and_a_recused_human() {
+        let record = recused_record();
+        let author = PrincipalIdentity::parse("agent:author");
+        assert!(human_clear_actor(&record, "joe", Some(&author)).is_err());
+
+        let mut human_recused = recused_record();
+        human_recused
+            .recused_principals
+            .push(PrincipalIdentity::parse("human:joe"));
+        assert!(human_clear_actor(&human_recused, "joe", None).is_err());
+        assert!(human_clear_actor(&human_recused, "ann", None).is_ok());
+
+        let mut operator_recused = recused_record();
+        operator_recused
+            .recused_principals
+            .push(PrincipalIdentity::parse("operator:joe"));
+        assert!(human_clear_actor(&operator_recused, "joe", None).is_err());
+
+        assert!(human_clear_actor(&record, "  ", None).is_err());
+    }
+
+    #[test]
+    fn clearance_is_recorded_as_the_human_principal() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = recused_record();
+        let actor = human_clear_actor(&record, "joe", None).unwrap();
+        record_clearance(dir.path(), &record, &actor).unwrap();
+        let body = std::fs::read_to_string(clearance_path(dir.path(), 42)).unwrap();
+        let clearance: HoldClearance = serde_json::from_str(&body).unwrap();
+        assert_eq!(clearance.cleared_by, "human:joe");
+        assert_eq!(clearance.reason_kind, HoldReasonKind::Recusal);
+        assert_eq!(clearance.target_head_sha.as_deref(), Some("head-a"));
+    }
+
+    #[test]
+    fn human_principal_round_trips() {
+        let human = PrincipalIdentity::parse("human:joe");
+        assert_eq!(human.principal_kind, PrincipalKind::Human);
+        assert_eq!(human.key(), "human:joe");
+        let json = serde_json::to_string(&human).unwrap();
+        assert_eq!(
+            serde_json::from_str::<PrincipalIdentity>(&json).unwrap(),
+            human
+        );
+    }
+
+    #[test]
+    fn live_head_projection_marks_stale_without_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut record = recused_record();
+        record.routing_state = HoldRoutingState::Routed;
+        record.routed_to = vec![PrincipalIdentity::parse("agent:reader")];
+        std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
+        let body = serde_json::to_vec_pretty(&record).unwrap();
+        std::fs::write(hold_path(dir.path(), 42), &body).unwrap();
+
+        let view = project_live_head(&record, Some("head-b"));
+        assert_eq!(view.routing_state, HoldRoutingState::StaleHead);
+        assert!(view.routed_to.is_empty());
+        assert_eq!(view.target_head_sha.as_deref(), Some("head-b"));
+        // Same head: unchanged. No head known: unchanged.
+        assert_eq!(project_live_head(&record, Some("head-a")), record);
+        assert_eq!(project_live_head(&record, None), record);
+        // The durable marker is untouched.
+        assert_eq!(std::fs::read(hold_path(dir.path(), 42)).unwrap(), body);
     }
 
     #[test]
@@ -1151,16 +1345,50 @@ mod tests {
     }
 
     #[test]
-    fn read_surface_reconciliation_refreshes_routes_without_hold_write() {
+    fn explicit_reconciliation_refreshes_routes_and_render_stays_read_only() {
         let lib_source = include_str!("lib.rs");
         let awaiting = lib_source
             .split("fn collect_awaiting_report_inner(")
             .nth(1)
-            .and_then(|body| body.split("fn mailbox_latency_warning(").next())
+            // The collector body ends at its closing brace in column 0.
+            .and_then(|body| body.split("\n}\n").next())
             .expect("awaiting/status collector must remain inspectable");
+        // STORY-1397 review: the awaiting render (incl. the per-turn notice)
+        // is read-only and cheap. Reconciliation writes markers and briefs and
+        // probes liveness, so it lives on the explicit `merge-hold list --fix`.
+        for forbidden in [
+            "reconcile_recusal_hold",
+            "write_typed_hold",
+            "merge_hold::write_hold",
+            "sysinfo::",
+        ] {
+            assert!(
+                !awaiting.contains(forbidden),
+                "awaiting render must not call `{forbidden}`"
+            );
+        }
         assert!(
-            awaiting.contains("merge_hold::reconcile_recusal_hold"),
-            "awaiting/status reads must refresh recusal routing"
+            awaiting.contains("awaiting_you::project_held_pr"),
+            "every non-recusal held PR must be projected, not dropped"
+        );
+        let handler = lib_source
+            .split("fn handle_merge_hold(")
+            .nth(1)
+            .and_then(|body| body.split("MergeHoldAction::Add").next())
+            .expect("merge-hold list handler must remain inspectable");
+        assert!(
+            handler.contains("merge_hold::reconcile_recusal_hold"),
+            "`aida merge-hold list --fix` must reconcile recusal routing"
+        );
+        let own_source = include_str!("merge_hold.rs");
+        let route = own_source
+            .split("fn reconcile_recusal_route(")
+            .nth(1)
+            .and_then(|body| body.split("fn retire_stale_route_briefs(").next())
+            .unwrap();
+        assert!(
+            !route.contains(concat!("new", "_all")),
+            "routing must probe one pid, never scan the whole process table"
         );
 
         let dir = tempfile::tempdir().unwrap();

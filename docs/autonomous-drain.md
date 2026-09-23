@@ -597,12 +597,16 @@ backfilled, so absence of a terminal record in an older stream means
 
 ### Product-role nudge loop
 
-Until the permanent re-drive supervisor lands, a product/advisor session can run
-a cheap saved loop that only nudges stuck work:
+Until the permanent re-drive supervisor lands, run the nudge from a shell-side
+scheduler that does not wake a model when nothing needs judgment:
 
-```text
-/loop every 30m: aida supervise nudge
+```bash
+while sleep 1800; do aida supervise nudge; done
 ```
+
+Do not wrap this command in model-side `CronCreate`, `/loop`, or
+`ScheduleWakeup`; the command is cheap, but reloading a long-lived seat context
+is not. <!-- trace:BUG-1589 | ai:codex -->
 
 `aida supervise nudge` reads `.aida/events.jsonl`, finds transiently parked
 specs, and sends one urgent mailbox request to a live advisor naming each spec

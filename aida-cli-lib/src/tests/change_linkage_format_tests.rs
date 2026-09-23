@@ -117,12 +117,26 @@ fn cli_failed_and_unreachable_use_forge_noun() {
     assert!(gl_unreach.contains("(transient)"), "{gl_unreach}");
 }
 
+// BUG-1528: a failed branch lookup must never silently suppress the PR/MR
+// line — the defect that hid three open PRs behind "branch not found
+// locally". `BranchNotFound` now renders a second, distinct line (matching
+// the CliMissing / CliFailed / Unreachable "state unknown" convention)
+// instead of going quiet. trace:BUG-1528 | ai:claude
 #[test]
-fn branch_not_found_is_forge_independent() {
-    for f in [ForgeKind::GitHub, ForgeKind::GitLab, ForgeKind::None] {
-        assert_eq!(
-            render(f, &ChangeLinkageState::BranchNotFound),
-            "Branch: work committed but branch not found locally"
-        );
-    }
+fn branch_not_found_still_renders_a_pr_line() {
+    let gh = render(ForgeKind::GitHub, &ChangeLinkageState::BranchNotFound);
+    assert!(
+        gh.contains("Branch: work committed but branch not found locally"),
+        "{gh}"
+    );
+    assert!(
+        gh.contains("PR: PR state unknown — branch not found locally"),
+        "{gh}"
+    );
+
+    let gl = render(ForgeKind::GitLab, &ChangeLinkageState::BranchNotFound);
+    assert!(
+        gl.contains("MR: MR state unknown — branch not found locally"),
+        "{gl}"
+    );
 }

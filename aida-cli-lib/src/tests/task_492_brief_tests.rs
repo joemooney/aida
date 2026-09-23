@@ -750,6 +750,98 @@ fn setup_block_references_target_project_not_binary_repo() {
     );
 }
 
+// BUG-1525: the Setup block must never emit a fresh-start `git worktree add
+// -b <new> origin/main` for a spec that already has a branch with commits
+// ahead of the default branch — that silently starts a second lineage
+// containing none of the reviewed work. trace:BUG-1525 | ai:claude
+
+fn brief_git(root: &std::path::Path, args: &[&str]) {
+    let output = std::process::Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .expect("git should run");
+    assert!(
+        output.status.success(),
+        "git {:?} failed\nstdout:\n{}\nstderr:\n{}",
+        args,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn brief_init_repo(root: &std::path::Path) {
+    brief_git(root, &["init"]);
+    brief_git(root, &["checkout", "-b", "main"]);
+    brief_git(root, &["config", "user.email", "brief@example.test"]);
+    brief_git(root, &["config", "user.name", "Brief Test"]);
+    std::fs::write(root.join("README.md"), "seed\n").unwrap();
+    brief_git(root, &["add", "README.md"]);
+    brief_git(root, &["commit", "-m", "seed"]);
+}
+
+/// A spec with an existing branch carrying commits ahead of `main` gets a
+/// Setup block that reuses that branch — never a spec-id-derived new one off
+/// `origin/main`.
+// trace:BUG-1525 | ai:claude
+#[test]
+fn setup_block_reuses_existing_branch_with_commits_ahead() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    brief_init_repo(root);
+    // The live convention: `<spec>-work`, diverged from main by one commit.
+    brief_git(root, &["checkout", "-b", "task-492-work", "main"]);
+    std::fs::write(root.join("work.txt"), "in progress\n").unwrap();
+    brief_git(root, &["add", "work.txt"]);
+    brief_git(
+        root,
+        &["commit", "-m", "[AI:claude] feat: brief work (TASK-492)"],
+    );
+    brief_git(root, &["checkout", "main"]);
+
+    let store = store_with_related();
+    let path = create_agent_brief(root, &store, "codex", "TASK-492", None, None, None).unwrap();
+    let body = std::fs::read_to_string(path).unwrap();
+    let setup_idx = body.find("## Setup").expect("brief has a Setup section");
+    let setup_block = &body[setup_idx..];
+
+    assert!(
+        setup_block.contains("task-492-work"),
+        "Setup block must name the existing branch, got:\n{setup_block}"
+    );
+    assert!(
+        !setup_block.contains("-b task-492 origin/main"),
+        "Setup block must NOT emit a fresh spec-id-derived branch off origin/main, got:\n{setup_block}"
+    );
+    assert!(
+        !setup_block.contains("git worktree add") || setup_block.contains("task-492-work"),
+        "any worktree add in the Setup block must target the existing branch, got:\n{setup_block}"
+    );
+}
+
+/// A spec with no existing branch anywhere gets a fresh Setup block whose
+/// branch name matches the drain's own `<spec>-work` convention (not a bare
+/// spec-id branch that never matches what the drain actually creates).
+// trace:BUG-1525 | ai:claude
+#[test]
+fn setup_block_fresh_branch_matches_work_convention() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    brief_init_repo(root);
+
+    let store = store_with_related();
+    let path = create_agent_brief(root, &store, "codex", "TASK-492", None, None, None).unwrap();
+    let body = std::fs::read_to_string(path).unwrap();
+    let setup_idx = body.find("## Setup").expect("brief has a Setup section");
+    let setup_block = &body[setup_idx..];
+
+    assert!(
+        setup_block.contains("git worktree add")
+            && setup_block.contains("-b task-492-work origin/main"),
+        "fresh Setup block must use the <spec>-work naming convention, got:\n{setup_block}"
+    );
+}
+
 #[test]
 fn list_excludes_acked_by_default_and_ack_renames_file() {
     let temp = tempfile::tempdir().unwrap();

@@ -160,7 +160,13 @@ pub(crate) fn handle_mailbox_command(
                     "invalid --intent '{intent}'; expected one of: fyi, request, handoff"
                 )
             })?;
-            let sender = from.clone().unwrap_or_else(|| current_user_id(None));
+            // trace:BUG-1533 | ai:claude — resolve authorship with the same
+            // precedence session identity uses (agent name / AIDA_USER /
+            // role), never the BUG-89 queue-key order, and record which
+            // tier won so the envelope never looks silently attributed.
+            let (sender, from_source) = crate::resolve_mail_sender_identity(from.as_deref());
+            // trace:BUG-1592 | ai:claude
+            let from_role = crate::resolve_mail_sender_role();
             let id = uuid::Uuid::new_v4().to_string();
             let body = read_send_body(body.as_deref(), body_file.as_deref(), *stdin)?;
             // BUG-557: a reply must attach to the ORIGINAL message's thread, not
@@ -219,6 +225,8 @@ pub(crate) fn handle_mailbox_command(
                 retracted: false,
                 deleted: false,
                 archived: false,
+                from_source,
+                from_role,
             };
             mailbox_store::write_message(project_root, &msg)?;
             // STORY-1226: the event fast-path for `on = ["MailReceived"]`
@@ -370,21 +378,29 @@ pub(crate) fn handle_mailbox_command(
                 format!("{header} {who_label}").bold(),
                 format!("({})", inbox.len()).dimmed()
             );
-            for m in &inbox {
-                print_mailbox_line(m);
-            }
             // Reading marks each identity's inbox seen up to its newest message,
             // so the unread / urgent surfacing clears (STORY-539) — UNLESS
             // `--peek`, which surfaces without consuming (STORY-585 #1/#4). Each
             // mark advances to that identity's FULL inbox newest, not the
             // filtered view's. trace:BUG-555 | ai:claude
+            //
+            // This write happens BEFORE the print loop below, not after.
+            // BUG-1482: established mechanism — `install_sigpipe_handler`
+            // (BUG-99) restores SIGPIPE's default disposition at startup so
+            // `aida ... | head -N` exits with the classic "downstream closed,
+            // terminate quietly" semantics instead of Rust's default
+            // ignore-and-panic-on-EPIPE behavior. That means a write in the
+            // print loop below can end the process via the SIGPIPE signal
+            // itself, mid-loop, with no unwind — so any watermark write
+            // placed AFTER printing (the old order) never ran for a reader
+            // that closed early (`| head`). Doing the write first means every
+            // message this call is about to *display* is already recorded as
+            // seen before the first byte of it reaches a pipe that might
+            // close. trace:BUG-1482 | ai:claude
             if *archived {
                 // Read-only audit view.
             } else if *peek {
-                println!(
-                    "{}",
-                    "  (peek — not marked seen; `aida mailbox inbox` to read + ack)".dimmed()
-                );
+                // marked below, after printing (peek never marks seen).
             } else {
                 for who in &who_list {
                     let prior_watermark =
@@ -404,6 +420,15 @@ pub(crate) fn handle_mailbox_command(
                         mailbox_store::set_watermark(project_root, who, newest)?;
                     }
                 }
+            }
+            for m in &inbox {
+                print_mailbox_line(m);
+            }
+            if *peek {
+                println!(
+                    "{}",
+                    "  (peek — not marked seen; `aida mailbox inbox` to read + ack)".dimmed()
+                );
             }
             Ok(())
         }
@@ -861,6 +886,8 @@ mod tests {
             retracted: false,
             deleted: false,
             archived: false,
+            from_source: aida_core::mailbox::SenderSource::Explicit,
+            from_role: None,
         }
     }
 
@@ -1260,5 +1287,379 @@ mod tests {
             }
             other => panic!("expected mailbox send, got {other:?}"),
         }
+    }
+
+    // BUG-1482: a downstream reader that closes the pipe early (the reported
+    // case was `aida mailbox inbox | head`) must not leave the read-watermark
+    // stuck behind messages that were actually DISPLAYED. The established
+    // mechanism: `install_sigpipe_handler` (BUG-99) restores SIGPIPE's
+    // default disposition at binary startup so a write against a pipe whose
+    // reader is gone kills the process via the signal itself — mid-loop, with
+    // nothing placed AFTER the print loop ever running.
+    //
+    // That termination genuinely ends the process, so this cannot be a plain
+    // in-process unit test; it re-execs this same test binary as a "worker"
+    // that installs the same default SIGPIPE disposition and drives the real
+    // `handle_mailbox_command` print path, while this test plays `head`'s
+    // role: read exactly one line of the worker's stdout, then drop the pipe.
+    // The second message's giant body guarantees the worker is still writing
+    // (blocked on the OS pipe buffer, typically 64KiB) when that happens, so
+    // it is killed mid-print rather than finishing cleanly — reproducing the
+    // reported defect's actual failure shape, not a proxy for it.
+    // trace:BUG-1482 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn piped_inbox_read_advances_watermark_even_when_stdout_closes_early() {
+        if std::env::var("AIDA_BUG_1482_WORKER").is_ok() {
+            let project_root = std::path::PathBuf::from(
+                std::env::var("AIDA_BUG_1482_PROJECT").expect("worker needs a project dir"),
+            );
+            // Mirror the real `aida` binary's BUG-99 startup step so the
+            // worker dies the same way `aida` does: killed by SIGPIPE, not
+            // Rust's default ignore-and-panic-on-EPIPE behavior.
+            unsafe {
+                libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+            }
+            let store = project_root.join(".aida-store");
+            let _ = handle_mailbox_command(
+                &MailboxCommand::Inbox {
+                    agent: Some("bob".into()),
+                    all: false,
+                    archived: false,
+                    peek: false,
+                    unread: false,
+                    recent_read_tail: 5,
+                },
+                &store,
+            );
+            return;
+        }
+
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+
+        let mut small = message("aaaaaaaa-1111", "thread-a");
+        small.timestamp = 1;
+        mailbox_store::write_message(project.path(), &small).unwrap();
+        let mut huge = message("bbbbbbbb-2222", "thread-b");
+        huge.timestamp = 2;
+        // Newest-first sort means this one prints right after the header —
+        // large enough on its own to exceed the OS pipe buffer, so the
+        // worker blocks mid-write on this line once the parent stops
+        // reading.
+        huge.body = "x".repeat(200_000);
+        mailbox_store::write_message(project.path(), &huge).unwrap();
+
+        // The process-wide hardened resolver (TASK-1262): in a test process it resolves
+        // to this test binary, which is what the re-exec needs. trace:BUG-1482
+        let exe = crate::aida_exe_path();
+        let mut child = std::process::Command::new(exe)
+            // `--exact` matches on the FULLY QUALIFIED test name libtest
+            // prints, not the bare function name.
+            .arg("mailbox_cmd::tests::piped_inbox_read_advances_watermark_even_when_stdout_closes_early")
+            .arg("--exact")
+            .arg("--nocapture")
+            .env("AIDA_BUG_1482_WORKER", "1")
+            .env("AIDA_BUG_1482_PROJECT", project.path())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn worker");
+
+        // Act like `| head`: read lines up through the inbox header (skipping
+        // the test harness's own preamble, e.g. the blank line + "running 1
+        // test" that `--nocapture` also surfaces), then close our end — the
+        // worker's next big write hits the closed pipe.
+        {
+            let stdout = child.stdout.take().expect("worker stdout");
+            let mut reader = std::io::BufReader::new(stdout);
+            let mut found = false;
+            for _ in 0..20 {
+                let mut line = String::new();
+                let n = std::io::BufRead::read_line(&mut reader, &mut line)
+                    .expect("read worker stdout");
+                if n == 0 {
+                    break;
+                }
+                if line.contains("Inbox for") {
+                    found = true;
+                    break;
+                }
+            }
+            assert!(
+                found,
+                "never saw the inbox header line in the worker's output"
+            );
+            // Dropping `reader` here closes the read end.
+        }
+        let status = child.wait().expect("wait for worker");
+        assert!(
+            !status.success(),
+            "worker should have been killed by the closed pipe, not exited cleanly: {status:?}"
+        );
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(
+            status.signal(),
+            Some(libc::SIGPIPE),
+            "worker should die specifically from SIGPIPE (the BUG-99 mechanism), got: {status:?}"
+        );
+
+        let watermark = mailbox_store::read_watermark(project.path(), "bob");
+        assert_eq!(
+            watermark,
+            Some(2),
+            "watermark must advance to the newest DISPLAYED message even though \
+             the worker died mid-print from the closed pipe"
+        );
+    }
+
+    // ── BUG-1533: mail sender identity resolution on the send path ─────────
+
+    fn send_command(body: &str) -> MailboxCommand {
+        MailboxCommand::Send {
+            to: Some("bob".into()),
+            broadcast: false,
+            body: Some(body.into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: None,
+            in_reply_to: None,
+            from: None,
+            urgent: false,
+            intent: "fyi".into(),
+        }
+    }
+
+    // trace:BUG-1533 | ai:claude
+    #[test]
+    fn send_records_agent_name_source_without_touching_aida_user() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        // A single EnvVarsGuard::apply for every key: the guard holds the
+        // process-global env lock for its whole lifetime, and a second
+        // acquisition on the same thread deadlocks (it is not reentrant) —
+        // see `test_env::env_lock`.
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("claude-product-1")),
+            ("AIDA_USER", None),
+            ("AIDA_SESSION_ROLE", None),
+        ]);
+
+        handle_mailbox_command(&send_command("hello"), &store).unwrap();
+
+        let sent = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "hello")
+            .unwrap();
+        assert_eq!(sent.from, "claude-product-1");
+        assert_eq!(
+            sent.from_source,
+            aida_core::mailbox::SenderSource::AgentName
+        );
+        assert!(sent.from_source.is_attributed());
+    }
+
+    // trace:BUG-1533 | ai:claude
+    #[test]
+    fn send_falls_back_to_role_when_no_agent_name_or_aida_user_and_flags_shell_user_fallback() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let role_guard = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", None),
+            ("AIDA_USER", None),
+            ("AIDA_SESSION_ROLE", Some("advisor")),
+        ]);
+
+        handle_mailbox_command(&send_command("role-sourced"), &store).unwrap();
+        let sent = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "role-sourced")
+            .unwrap();
+        assert_eq!(sent.from, "advisor");
+        assert_eq!(
+            sent.from_source,
+            aida_core::mailbox::SenderSource::SessionRole
+        );
+
+        // Now drop the role too (releasing the lock first): the send must
+        // still succeed (never refuse), but the recorded source must mark it
+        // as the ambiguous shell-user fallback rather than looking like a
+        // resolved seat.
+        drop(role_guard);
+        let _no_role = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", None),
+            ("AIDA_USER", None),
+            ("AIDA_SESSION_ROLE", None),
+        ]);
+        handle_mailbox_command(&send_command("shell-fallback"), &store).unwrap();
+        let fallback = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "shell-fallback")
+            .unwrap();
+        assert_eq!(
+            fallback.from_source,
+            aida_core::mailbox::SenderSource::ShellUser,
+            "no attributable identity → recorded as the ShellUser fallback marker, not silent"
+        );
+        assert!(!fallback.from_source.is_attributed());
+    }
+
+    // trace:BUG-1533 | ai:claude
+    #[test]
+    fn two_seats_sharing_shell_user_send_distinguishable_envelopes_end_to_end() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_NAME", Some("claude-product-1")),
+                ("AIDA_USER", None),
+                ("AIDA_SESSION_ROLE", None),
+            ]);
+            handle_mailbox_command(&send_command("from-product"), &store).unwrap();
+        }
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_NAME", Some("claude-reviewer-1")),
+                ("AIDA_USER", None),
+                ("AIDA_SESSION_ROLE", None),
+            ]);
+            handle_mailbox_command(&send_command("from-reviewer"), &store).unwrap();
+        }
+
+        let all = mailbox_store::read_local_messages(project.path()).unwrap();
+        let product = all.iter().find(|m| m.body == "from-product").unwrap();
+        let reviewer = all.iter().find(|m| m.body == "from-reviewer").unwrap();
+        assert_ne!(
+            product.from, reviewer.from,
+            "two seats must not collapse to one indistinguishable envelope identity"
+        );
+    }
+
+    // ── BUG-1592: AIDA_AGENT_NAME must be a read-side inbox identity too ──
+
+    // AC1: a seat whose AIDA_AGENT_NAME differs from AIDA_USER sends mail
+    // under AIDA_AGENT_NAME (BUG-1533 precedence) but, before this fix,
+    // never read that identity's inbox — replies addressed to its agent
+    // name went unread. trace:BUG-1592 | ai:claude
+    #[test]
+    fn inbox_identities_includes_agent_name_when_distinct_from_aida_user() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("claude-impl-7")),
+            ("AIDA_USER", Some("alice")),
+            ("AIDA_SESSION_ROLE", None),
+        ]);
+        let ids = inbox_identities();
+        assert!(
+            ids.iter().any(|i| i == "claude-impl-7"),
+            "AIDA_AGENT_NAME must be one of the inbox identities: {ids:?}"
+        );
+        assert!(
+            ids.iter().any(|i| i == "alice"),
+            "AIDA_USER (the queue/current-user identity) must still be included: {ids:?}"
+        );
+    }
+
+    // AC1 end-to-end: mail addressed to the agent name is actually visible
+    // (and marked read) through the default `aida mailbox inbox` — not just
+    // present in the identity list. trace:BUG-1592 | ai:claude
+    #[test]
+    fn seat_with_agent_name_distinct_from_aida_user_reads_mail_addressed_to_agent_name() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+
+        let mut to_agent_name = message("cccccccc-3333", "thread-c");
+        to_agent_name.to = aida_core::mailbox::Recipient::Agent("claude-impl-7".into());
+        to_agent_name.timestamp = 42;
+        mailbox_store::write_message(project.path(), &to_agent_name).unwrap();
+
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("claude-impl-7")),
+            ("AIDA_USER", Some("alice")),
+            ("AIDA_SESSION_ROLE", None),
+        ]);
+        handle_mailbox_command(
+            &MailboxCommand::Inbox {
+                agent: None,
+                all: false,
+                archived: false,
+                peek: false,
+                unread: false,
+                recent_read_tail: 5,
+            },
+            &store,
+        )
+        .unwrap();
+
+        assert_eq!(
+            mailbox_store::read_watermark(project.path(), "claude-impl-7"),
+            Some(42),
+            "the default (no --agent) inbox read must union AIDA_AGENT_NAME's inbox \
+             and mark its mail seen — before the fix, mail addressed to the agent \
+             name was invisible because inbox_identities() never included it"
+        );
+    }
+
+    // AC2: the envelope records the sender's role alongside the agent id
+    // when both are known. trace:BUG-1592 | ai:claude
+    #[test]
+    fn send_records_role_alongside_agent_name_when_both_are_known() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("claude-impl-7")),
+            ("AIDA_USER", None),
+            ("AIDA_SESSION_ROLE", Some("advisor")),
+        ]);
+
+        handle_mailbox_command(&send_command("role-and-agent"), &store).unwrap();
+
+        let sent = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "role-and-agent")
+            .unwrap();
+        assert_eq!(sent.from, "claude-impl-7");
+        assert_eq!(
+            sent.from_source,
+            aida_core::mailbox::SenderSource::AgentName
+        );
+        assert_eq!(
+            sent.from_role.as_deref(),
+            Some("advisor"),
+            "role must be recorded alongside the agent id when both are known"
+        );
+    }
+
+    // AC2 (negative): no role set at send time → `from_role` stays `None`
+    // rather than a guessed/forced default. trace:BUG-1592 | ai:claude
+    #[test]
+    fn send_leaves_from_role_none_when_no_session_role_is_set() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("claude-impl-7")),
+            ("AIDA_USER", None),
+            ("AIDA_SESSION_ROLE", None),
+        ]);
+
+        handle_mailbox_command(&send_command("no-role"), &store).unwrap();
+
+        let sent = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "no-role")
+            .unwrap();
+        assert_eq!(sent.from_role, None);
     }
 }

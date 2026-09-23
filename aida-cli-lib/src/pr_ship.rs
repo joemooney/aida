@@ -939,9 +939,521 @@ pub fn cluster_pr_body(batch_name: &str, branch: &str, members: &[String]) -> St
     out
 }
 
+// ── TASK-1448: merge-time approval-covers-head gate ─────────────────────────
+
+/// Why a merge path refuses a PR whose newest recorded APPROVAL does not
+/// provably cover the PR's current head (PRIN-5: an approval that cannot be
+/// placed against the head is not evidence the head was reviewed).
+///
+/// Derived ONLY from `awaiting_you::classify_pr_review` (BUG-1549) — the
+/// same classifier the awaiting surface uses — so the merge gate and the
+/// "stale approval" row cannot disagree about which approvals are stale.
+// trace:TASK-1448 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ApprovalHeadRefusal {
+    /// The approval was recorded at a commit the head has since moved past.
+    Moved {
+        reviewed_sha: String,
+        head_sha: String,
+    },
+    /// The approval records no `reviewed_sha`, so it cannot be tied to any
+    /// commit. `head_sha` is empty when the head was unreadable too.
+    NoReviewedSha { head_sha: String },
+    /// The PR's current head could not be read, so no approval can be shown
+    /// to cover it.
+    HeadUnreadable { reviewed_sha: String },
+    /// Both shas are present but too short to compare with confidence.
+    Incomparable {
+        reviewed_sha: String,
+        head_sha: String,
+    },
+}
+
+/// TASK-1448: does the newest recorded APPROVAL among `candidates` cover
+/// `head`? `None` = the merge may proceed on this gate: either the newest
+/// approval was recorded at the head, or there is no approval at all (a PR
+/// merged without delegated review is governed by the other ship gates, not
+/// this one). `Some` = refuse.
+///
+/// Only approvals are classified: a refusal is a different question with a
+/// different gate (TASK-1169 / the orchestrator's own reviewer phase), and
+/// letting a refusal shadow the approval here would let a stale approval
+/// merge whenever a refusal also exists.
+// trace:TASK-1448 | ai:claude
+pub(crate) fn approval_head_refusal(
+    candidates: &[crate::review_verdict::RecordedVerdict],
+    head: Option<&str>,
+) -> Option<ApprovalHeadRefusal> {
+    use crate::awaiting_you::{classify_pr_review, PrReviewRow};
+    let approvals = open_approvals(candidates);
+    let head_sha = head.map(str::trim).unwrap_or("").to_string();
+    let row = classify_pr_review(&approvals, head).row?;
+    let reviewed_sha = match &row {
+        PrReviewRow::Stale { reviewed_sha }
+        | PrReviewRow::Unverifiable { reviewed_sha }
+        | PrReviewRow::Blocked { reviewed_sha, .. }
+        | PrReviewRow::ReworkReady { reviewed_sha, .. } => reviewed_sha.trim().to_string(),
+    };
+    Some(match row {
+        PrReviewRow::Stale { .. } => ApprovalHeadRefusal::Moved {
+            reviewed_sha,
+            head_sha,
+        },
+        // Every other row fails closed. Only `Unverifiable` is reachable from
+        // an approvals-only candidate set; the rest are listed so a future
+        // classifier change cannot silently turn into "merge".
+        _ if reviewed_sha.is_empty() => ApprovalHeadRefusal::NoReviewedSha { head_sha },
+        _ if head_sha.is_empty() => ApprovalHeadRefusal::HeadUnreadable { reviewed_sha },
+        _ => ApprovalHeadRefusal::Incomparable {
+            reviewed_sha,
+            head_sha,
+        },
+    })
+}
+
+/// TASK-1458: the approvals a merge gate weighs — every APPROVED verdict not
+/// yet closed by a merge. A closed approval belongs to a PR that already
+/// landed (BUG-1529 treats closed refusals the same way), so it is history,
+/// not evidence about this PR's head.
+// trace:TASK-1458 | ai:claude
+fn open_approvals(
+    candidates: &[crate::review_verdict::RecordedVerdict],
+) -> Vec<crate::review_verdict::RecordedVerdict> {
+    candidates
+        .iter()
+        .filter(|v| v.kind == crate::review_verdict::VerdictKind::Approved && !v.is_closed())
+        .cloned()
+        .collect()
+}
+
+/// TASK-1458: the commit a merge must be pinned to (`MergeOptions.match_head`)
+/// once the approval gate has passed. `Some` only when an open approval
+/// exists AND the newest one covers `head` — then the pin is that approved
+/// commit, spelled as the longer of the reviewed and head shas (the forge
+/// wants a full sha). `None` when there is no approval to pin to, when the
+/// head is unknown, or when the gate would refuse.
+// trace:TASK-1458 | ai:claude
+pub(crate) fn approved_match_head(
+    candidates: &[crate::review_verdict::RecordedVerdict],
+    head: Option<&str>,
+) -> Option<String> {
+    let head = head.map(str::trim).filter(|h| !h.is_empty())?;
+    let approvals = open_approvals(candidates);
+    if approvals.is_empty() || approval_head_refusal(candidates, Some(head)).is_some() {
+        return None;
+    }
+    let reviewed = approvals
+        .iter()
+        .filter_map(|v| v.reviewed_sha.as_deref().map(str::trim))
+        .filter(|sha| crate::forge::head_matches_pin(sha, head))
+        .max_by_key(|sha| sha.len())
+        .unwrap_or(head);
+    Some(if reviewed.len() > head.len() {
+        reviewed.to_string()
+    } else {
+        head.to_string()
+    })
+}
+
+/// TASK-1458: the reviewed and head shas a refusal names, for the durable
+/// `--override-stale-approval` record. Empty string = that sha was missing.
+// trace:TASK-1458 | ai:claude
+pub(crate) fn approval_head_refusal_shas(refusal: &ApprovalHeadRefusal) -> (String, String) {
+    match refusal {
+        ApprovalHeadRefusal::Moved {
+            reviewed_sha,
+            head_sha,
+        }
+        | ApprovalHeadRefusal::Incomparable {
+            reviewed_sha,
+            head_sha,
+        } => (reviewed_sha.clone(), head_sha.clone()),
+        ApprovalHeadRefusal::NoReviewedSha { head_sha } => (String::new(), head_sha.clone()),
+        ApprovalHeadRefusal::HeadUnreadable { reviewed_sha } => {
+            (reviewed_sha.clone(), String::new())
+        }
+    }
+}
+
+/// TASK-1458: the `.aida/advisor-activity.jsonl` line that durably records an
+/// `aida pr ship --override-stale-approval` — which PR, the approval's
+/// reviewed sha, the head it was overridden onto, and why the gate refused.
+/// Written BEFORE the merge, so the override is on record even when the
+/// merge then fails.
+// trace:TASK-1458 | ai:claude
+pub(crate) fn format_stale_approval_override_event(
+    now_iso: &str,
+    pr_number: u64,
+    refusal: &ApprovalHeadRefusal,
+) -> String {
+    let (reviewed_sha, head_sha) = approval_head_refusal_shas(refusal);
+    serde_json::json!({
+        "ts": now_iso,
+        "command": "aida pr ship",
+        "step": "pr-merge-override-stale-approval",
+        "status": "overridden",
+        "pr": pr_number,
+        "reviewed_sha": reviewed_sha,
+        "head_sha": head_sha,
+        "detail": approval_head_refusal_message(pr_number, refusal),
+    })
+    .to_string()
+}
+
+/// TASK-1448: the refusal text both merge paths print. Names both shas (or
+/// says which is missing) and says what to do: re-review the current head.
+// trace:TASK-1448 | ai:claude
+pub(crate) fn approval_head_refusal_message(pr: u64, refusal: &ApprovalHeadRefusal) -> String {
+    let short = |s: &str| crate::review_verdict::short_sha(s).to_string();
+    let why = match refusal {
+        ApprovalHeadRefusal::Moved {
+            reviewed_sha,
+            head_sha,
+        } => format!(
+            "its approval was recorded at {} but the PR head is now {} — the new commits were never reviewed",
+            short(reviewed_sha),
+            short(head_sha)
+        ),
+        ApprovalHeadRefusal::NoReviewedSha { head_sha } => format!(
+            "its approval records no reviewed commit, so it cannot be shown to cover the PR head ({})",
+            if head_sha.is_empty() {
+                "unreadable".to_string()
+            } else {
+                short(head_sha)
+            }
+        ),
+        ApprovalHeadRefusal::HeadUnreadable { reviewed_sha } => format!(
+            "its approval was recorded at {} but the PR's current head could not be read, so the \
+             approval cannot be shown to cover it",
+            short(reviewed_sha)
+        ),
+        ApprovalHeadRefusal::Incomparable {
+            reviewed_sha,
+            head_sha,
+        } => format!(
+            "its approval sha {} cannot be compared with the PR head {} (too short to tell)",
+            reviewed_sha, head_sha
+        ),
+    };
+    format!(
+        "PR-{pr} was not merged: {why}. Re-review the current head — e.g. \
+         `aida queue work PR-{pr} --role reviewer`, or `aida review record <SPEC> --verdict approved \
+         --sha <head>` after reviewing it — then merge again."
+    )
+}
+
+/// TASK-1448: every recorded verdict a merge gate must weigh for `pr` —
+/// the PR-keyed record plus the spec-keyed record for each id in `spec_ids`,
+/// read under each of `roots` (the calling worktree and the main clone can
+/// both hold `.aida/review-verdicts/`). A file seen under two roots is read
+/// once. Unreadable/absent files contribute nothing.
+// trace:TASK-1448 | ai:claude
+pub(crate) fn merge_gate_verdict_candidates(
+    roots: &[&std::path::Path],
+    pr: u64,
+    spec_ids: &[String],
+) -> Vec<crate::review_verdict::RecordedVerdict> {
+    let mut keys: Vec<String> = vec![format!("PR-{pr}")];
+    for id in spec_ids {
+        let id = id.trim().to_ascii_uppercase();
+        if !id.is_empty() && !keys.contains(&id) {
+            keys.push(id);
+        }
+    }
+    let mut seen: Vec<std::path::PathBuf> = Vec::new();
+    let mut out = Vec::new();
+    for root in roots {
+        for key in &keys {
+            let path = crate::review_verdict::verdict_path(root, key);
+            let canon = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+            if seen.contains(&canon) {
+                continue;
+            }
+            seen.push(canon);
+            if let Some(v) = std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|body| crate::review_verdict::parse_recorded_verdict(&body))
+            {
+                out.push(v);
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── TASK-1448: approval-covers-head merge gate ─────────────────────────
+    // trace:TASK-1448 | ai:claude
+    const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const OLD: &str = "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    fn verdict(
+        kind: &str,
+        sha: Option<&str>,
+        at: Option<&str>,
+    ) -> crate::review_verdict::RecordedVerdict {
+        crate::review_verdict::RecordedVerdict {
+            kind: crate::review_verdict::VerdictKind::parse(kind),
+            raw: kind.to_string(),
+            reviewed_sha: sha.map(str::to_string),
+            recorded_at: at.map(str::to_string),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn task_1448_approval_at_head_proceeds() {
+        let v = [verdict(
+            "approved",
+            Some(HEAD),
+            Some("2026-09-21T04:00:00Z"),
+        )];
+        assert_eq!(approval_head_refusal(&v, Some(HEAD)), None);
+        // An abbreviated approval sha matching the head's prefix is the same commit.
+        let short = [verdict("approved", Some(&HEAD[..12]), None)];
+        assert_eq!(approval_head_refusal(&short, Some(HEAD)), None);
+    }
+
+    #[test]
+    fn task_1448_approval_behind_head_refuses_naming_both_shas() {
+        let v = [verdict("approved", Some(OLD), Some("2026-09-21T04:00:00Z"))];
+        let refusal = approval_head_refusal(&v, Some(HEAD)).expect("must refuse");
+        assert_eq!(
+            refusal,
+            ApprovalHeadRefusal::Moved {
+                reviewed_sha: OLD.to_string(),
+                head_sha: HEAD.to_string()
+            }
+        );
+        let msg = approval_head_refusal_message(2048, &refusal);
+        assert!(msg.contains("PR-2048"), "{msg}");
+        assert!(
+            msg.contains(&OLD[..12]) && msg.contains(&HEAD[..12]),
+            "{msg}"
+        );
+        assert!(msg.contains("Re-review the current head"), "{msg}");
+    }
+
+    #[test]
+    fn task_1448_approval_without_sha_refuses() {
+        let v = [verdict("approved", None, Some("2026-09-21T04:00:00Z"))];
+        let refusal = approval_head_refusal(&v, Some(HEAD)).expect("must refuse");
+        assert_eq!(
+            refusal,
+            ApprovalHeadRefusal::NoReviewedSha {
+                head_sha: HEAD.to_string()
+            }
+        );
+        // A blank sha is the same as none.
+        let blank = [verdict("approved", Some("  "), None)];
+        assert!(matches!(
+            approval_head_refusal(&blank, Some(HEAD)),
+            Some(ApprovalHeadRefusal::NoReviewedSha { .. })
+        ));
+        let msg = approval_head_refusal_message(7, &refusal);
+        assert!(msg.contains("records no reviewed commit"), "{msg}");
+        assert!(msg.contains("Re-review the current head"), "{msg}");
+    }
+
+    #[test]
+    fn task_1448_head_unreadable_refuses() {
+        let v = [verdict("approved", Some(HEAD), None)];
+        for head in [None, Some(""), Some("   ")] {
+            let refusal = approval_head_refusal(&v, head).expect("must refuse");
+            assert_eq!(
+                refusal,
+                ApprovalHeadRefusal::HeadUnreadable {
+                    reviewed_sha: HEAD.to_string()
+                }
+            );
+        }
+        let msg = approval_head_refusal_message(
+            7,
+            &ApprovalHeadRefusal::HeadUnreadable {
+                reviewed_sha: HEAD.to_string(),
+            },
+        );
+        assert!(msg.contains("could not be read"), "{msg}");
+    }
+
+    #[test]
+    fn task_1448_incomparable_sha_refuses() {
+        let v = [verdict("approved", Some("1ac"), None)];
+        assert_eq!(
+            approval_head_refusal(&v, Some(HEAD)),
+            Some(ApprovalHeadRefusal::Incomparable {
+                reviewed_sha: "1ac".to_string(),
+                head_sha: HEAD.to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn task_1448_no_approval_is_not_this_gates_business() {
+        assert_eq!(approval_head_refusal(&[], Some(HEAD)), None);
+        assert_eq!(approval_head_refusal(&[], None), None);
+        // A refusal alone is gated elsewhere; this gate classifies approvals only.
+        let refusal_only = [verdict("request-changes", Some(OLD), None)];
+        assert_eq!(approval_head_refusal(&refusal_only, Some(HEAD)), None);
+    }
+
+    #[test]
+    fn task_1448_refusal_does_not_shadow_a_stale_approval() {
+        let v = [
+            verdict("request-changes", Some(HEAD), Some("2026-09-21T05:00:00Z")),
+            verdict("approved", Some(OLD), Some("2026-09-21T04:00:00Z")),
+        ];
+        assert!(matches!(
+            approval_head_refusal(&v, Some(HEAD)),
+            Some(ApprovalHeadRefusal::Moved { .. })
+        ));
+    }
+
+    #[test]
+    fn task_1448_newest_approval_decides() {
+        // Re-review at the new head clears an older stale approval…
+        let cleared = [
+            verdict("approved", Some(OLD), Some("2026-09-21T04:00:00Z")),
+            verdict("approved", Some(HEAD), Some("2026-09-21T05:00:00Z")),
+        ];
+        assert_eq!(approval_head_refusal(&cleared, Some(HEAD)), None);
+        // …but an older at-head approval does not clear a newer stale one.
+        let stale = [
+            verdict("approved", Some(HEAD), Some("2026-09-21T04:00:00Z")),
+            verdict("approved", Some(OLD), Some("2026-09-21T05:00:00Z")),
+        ];
+        assert!(approval_head_refusal(&stale, Some(HEAD)).is_some());
+    }
+
+    // ── TASK-1458: closed approvals, merge pin, override audit ─────────────
+    // trace:TASK-1458 | ai:claude
+
+    fn closed(
+        mut v: crate::review_verdict::RecordedVerdict,
+    ) -> crate::review_verdict::RecordedVerdict {
+        v.closed_by_merge = Some("PR-9".into());
+        v
+    }
+
+    #[test]
+    fn task_1458_closed_stale_approval_does_not_refuse() {
+        // A stale approval closed by an earlier PR's merge is history.
+        let v = [closed(verdict(
+            "approved",
+            Some(OLD),
+            Some("2026-09-21T05:00:00Z"),
+        ))];
+        assert_eq!(approval_head_refusal(&v, Some(HEAD)), None);
+    }
+
+    #[test]
+    fn task_1458_closed_approval_cannot_shadow_or_cover() {
+        // A newer CLOSED approval at the head must not hide an open stale one…
+        let shadow = [
+            verdict("approved", Some(OLD), Some("2026-09-21T04:00:00Z")),
+            closed(verdict(
+                "approved",
+                Some(HEAD),
+                Some("2026-09-21T05:00:00Z"),
+            )),
+        ];
+        assert!(matches!(
+            approval_head_refusal(&shadow, Some(HEAD)),
+            Some(ApprovalHeadRefusal::Moved { .. })
+        ));
+        // …and a closed approval alone is not an approval to pin the merge to.
+        let only_closed = [closed(verdict(
+            "approved",
+            Some(HEAD),
+            Some("2026-09-21T05:00:00Z"),
+        ))];
+        assert_eq!(approved_match_head(&only_closed, Some(HEAD)), None);
+    }
+
+    #[test]
+    fn task_1458_match_head_is_the_approved_head() {
+        let v = [verdict(
+            "approved",
+            Some(HEAD),
+            Some("2026-09-21T04:00:00Z"),
+        )];
+        assert_eq!(approved_match_head(&v, Some(HEAD)).as_deref(), Some(HEAD));
+        // An abbreviated reviewed sha still pins the FULL head sha.
+        let short = [verdict(
+            "approved",
+            Some(&HEAD[..12]),
+            Some("2026-09-21T04:00:00Z"),
+        )];
+        assert_eq!(
+            approved_match_head(&short, Some(HEAD)).as_deref(),
+            Some(HEAD)
+        );
+    }
+
+    #[test]
+    fn task_1458_no_match_head_without_a_covering_approval() {
+        let stale = [verdict("approved", Some(OLD), Some("2026-09-21T04:00:00Z"))];
+        assert_eq!(approved_match_head(&stale, Some(HEAD)), None);
+        assert_eq!(approved_match_head(&[], Some(HEAD)), None);
+        let ok = [verdict(
+            "approved",
+            Some(HEAD),
+            Some("2026-09-21T04:00:00Z"),
+        )];
+        assert_eq!(approved_match_head(&ok, None), None);
+    }
+
+    #[test]
+    fn task_1458_override_event_names_both_shas() {
+        let refusal = ApprovalHeadRefusal::Moved {
+            reviewed_sha: OLD.into(),
+            head_sha: HEAD.into(),
+        };
+        let line = format_stale_approval_override_event("2026-09-23T00:00:00Z", 77, &refusal);
+        let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(v["step"], "pr-merge-override-stale-approval");
+        assert_eq!(v["status"], "overridden");
+        assert_eq!(v["pr"], 77);
+        assert_eq!(v["reviewed_sha"], OLD);
+        assert_eq!(v["head_sha"], HEAD);
+        assert!(!line.contains('\n'), "one JSONL line");
+    }
+
+    #[test]
+    fn task_1448_candidates_read_pr_and_spec_keyed_verdicts_once() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let dir = tmp.path().join(".aida").join("review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("PR-12.json"),
+            format!(r#"{{"verdict":"approved","reviewed_sha":"{OLD}"}}"#),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("TASK-9.json"),
+            format!(r#"{{"verdict":"approved","reviewed_sha":"{HEAD}"}}"#),
+        )
+        .unwrap();
+        std::fs::write(dir.join("TASK-10.json"), "not json").unwrap();
+        // The same root twice (worktree == main clone) reads each file once.
+        let got = merge_gate_verdict_candidates(
+            &[tmp.path(), tmp.path()],
+            12,
+            &[
+                "task-9".to_string(),
+                "TASK-10".to_string(),
+                "TASK-9".to_string(),
+            ],
+        );
+        let mut shas: Vec<_> = got.iter().filter_map(|v| v.reviewed_sha.clone()).collect();
+        shas.sort();
+        let mut want = vec![OLD.to_string(), HEAD.to_string()];
+        want.sort();
+        assert_eq!(shas, want);
+    }
 
     #[test]
     fn draft_only_tag_detection_is_case_insensitive() {

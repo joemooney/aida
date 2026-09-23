@@ -34,6 +34,70 @@ fn resolve_comment_body(
 
 const PROXY_APPROVAL_MARKER: &str = "[aida:proxy-approval]";
 
+/// TASK-1456: annotate the Done rows `select_done_rework_rows` folded into
+/// the open lens. A bare `Done` row in the table would just read as ordinary
+/// (if slightly confusing, since Done isn't usually in this view)
+/// awaiting-merge work — this makes the state explicit: which spec, and the
+/// working recovery route (mirrors `QueueFreshPickup::AwaitingRework`'s hint
+/// from the spec that first taught this state).
+///
+/// Perf (review follow-up): takes the `rework_ids` set `select_done_rework_rows`
+/// already computed — a plain membership check — instead of recomputing
+/// `done_spec_outstanding_refusal` per row. The earlier version's per-row
+/// recompute repeated the (git-worktree-resolving) refusal check at every
+/// render site, on top of the one `select_done_rework_rows` already did to
+/// decide what to fold in, undermining the sub-second `aida list` contract.
+// trace:TASK-1456 | ai:claude
+fn print_rework_needed_notes(
+    reqs: &[aida_core::RequirementSummary],
+    rework_ids: &std::collections::HashSet<uuid::Uuid>,
+) {
+    if rework_ids.is_empty() {
+        return;
+    }
+    let mut printed_header = false;
+    for r in reqs {
+        if !rework_ids.contains(&r.id) {
+            continue;
+        }
+        if !printed_header {
+            println!("\n{}", "Rework needed:".bold());
+            printed_header = true;
+        }
+        let display_id = r
+            .agreed_id
+            .as_deref()
+            .or(r.spec_id.as_deref())
+            .unwrap_or("?");
+        println!(
+            "  {}  {} — `{}`",
+            display_id.bold(),
+            "reviewer requested changes; still outstanding".magenta(),
+            format!("aida queue rework {display_id}").cyan(),
+        );
+    }
+}
+
+/// TASK-1456: `aida list --format json`'s `status_label`/`status_lens`
+/// value for a row — either the folded-in-as-rework annotation (takes
+/// priority; a row is never simultaneously Done and NeedsAttention) or the
+/// pre-existing NeedsAttention parked lens. Extracted as a pure function so
+/// the precedence and exact label/key are directly testable without
+/// spinning up the list command.
+// trace:TASK-1456 | ai:claude
+pub(crate) fn list_json_status_label_lens(
+    rework: bool,
+    parked_lens: Option<&status_display::NeedsAttentionLens>,
+) -> (Option<String>, Option<&'static str>) {
+    if rework {
+        return (Some("Rework Needed".to_string()), Some("ReworkNeeded"));
+    }
+    (
+        parked_lens.map(|lens| lens.label()),
+        parked_lens.map(|lens| lens.palette_key()),
+    )
+}
+
 fn terminal_list_width() -> Option<usize> {
     if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
         return None;
@@ -754,6 +818,96 @@ mod show_latency_regression_tests {
     fn show_cached_context_stays_generic_over_cache_only_reads() {
         let req = Requirement::new("BUG-1559 witness".to_string(), String::new());
         let _ = show_cached_context(&AnotherCacheOnlyView, &req);
+    }
+}
+
+/// `aida edit --status` — emit the seat-tagged `DispositionChanged` event
+/// this invocation's status transition produced (approve/reject/defer-class
+/// decisions, including groom's `--apply`, which shells out to `aida edit`).
+/// Split out for direct unit testing, same rationale as BUG-1423's
+/// `emit_ship_pr_merged`. Best-effort: `events::emit` never fails.
+// trace:TASK-1450 | ai:claude
+fn emit_edit_disposition_changed(
+    project_root: &std::path::Path,
+    spec_display: &str,
+    before: String,
+    after: String,
+) {
+    let mut ev = crate::events::Event::new(
+        Some(spec_display.to_string()),
+        "",
+        crate::events::EventKind::DispositionChanged { before, after },
+    );
+    ev.seat = crate::events::active_seat();
+    crate::events::emit(project_root, &ev);
+}
+
+/// `aida edit --mode` — emit the seat-tagged `ExecutionModeChanged` event
+/// this invocation's mode write produced. Split out for direct unit testing.
+/// Best-effort: `events::emit` never fails.
+// trace:TASK-1450 | ai:claude
+fn emit_edit_execution_mode_changed(
+    project_root: &std::path::Path,
+    spec_display: &str,
+    before: Option<String>,
+    after: Option<String>,
+) {
+    let mut ev = crate::events::Event::new(
+        Some(spec_display.to_string()),
+        "",
+        crate::events::EventKind::ExecutionModeChanged { before, after },
+    );
+    ev.seat = crate::events::active_seat();
+    crate::events::emit(project_root, &ev);
+}
+
+#[cfg(test)]
+mod task_1450_edit_event_tests {
+    use super::*;
+
+    /// A disposition (status) change through `aida edit --status` must
+    /// record the before/after status labels and the acting seat — the
+    /// approve/reject/defer-class decision BUG-1423's follow-up (TASK-1450)
+    /// closes.
+    // trace:TASK-1450 | ai:claude
+    #[test]
+    fn disposition_change_emits_seat_tagged_before_after() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+
+        emit_edit_disposition_changed(tmp.path(), "TASK-1", "Draft".into(), "Approved".into());
+
+        let events = crate::events::read_all(tmp.path());
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].spec.as_deref(), Some("TASK-1"));
+        assert_eq!(events[0].seat.as_deref(), Some("advisor"));
+        assert!(matches!(
+            &events[0].kind,
+            crate::events::EventKind::DispositionChanged { before, after }
+                if before == "Draft" && after == "Approved"
+        ));
+    }
+
+    /// An `execution_mode` change through `aida edit --mode` must record the
+    /// before/after mode (including the ungroomed `None` case) and the
+    /// acting seat.
+    // trace:TASK-1450 | ai:claude
+    #[test]
+    fn execution_mode_change_emits_seat_tagged_before_after() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+
+        emit_edit_execution_mode_changed(tmp.path(), "TASK-2", None, Some("drain".into()));
+
+        let events = crate::events::read_all(tmp.path());
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].spec.as_deref(), Some("TASK-2"));
+        assert_eq!(events[0].seat.as_deref(), Some("advisor"));
+        assert!(matches!(
+            &events[0].kind,
+            crate::events::EventKind::ExecutionModeChanged { before, after }
+                if before.is_none() && after.as_deref() == Some("drain")
+        ));
     }
 }
 
@@ -1748,6 +1902,39 @@ pub(crate) fn handle_git_backend_command(
             };
             let mut reqs = backend.list_summaries(&filter)?;
 
+            // TASK-1456 (follow-up to BUG-1515): the open lens's status set
+            // excludes `Done` (it sits with Completed/Rejected on the closed
+            // side), but a Done spec whose PR carries a still-live refusal at
+            // its tip is not finished — it needs a rework round, and BUG-1515
+            // already taught `aida queue work`/`next` to read it that way.
+            // Left alone, it simply vanished from the main work list. Re-run
+            // the SAME filter (every other axis unchanged) scoped to `done`
+            // and fold in only the rows `select_done_rework_rows` confirms
+            // have an outstanding refusal, so the fold-in can never disagree
+            // with `queue_fresh_pickup_policy`. Runs before every downstream
+            // lens (parent/focus/meta/standing-type/etc.) so these rows are
+            // scoped identically to the rest of the view.
+            //
+            // Perf (review follow-up): `select_done_rework_rows` resolves the
+            // primary worktree root ONCE for the whole batch, reads local
+            // verdict files only (no git spawn) to narrow to candidates, and
+            // pays for the git tip/ancestry check on that small, capped
+            // candidate set — see its doc comment. `rework_ids` is the set it
+            // computed; every render site below reuses it by plain membership
+            // check instead of recomputing. trace:TASK-1456 | ai:claude
+            let mut rework_ids: std::collections::HashSet<uuid::Uuid> =
+                std::collections::HashSet::new();
+            if default_open_lens {
+                let mut done_filter = filter.clone();
+                done_filter.status =
+                    Some(aida_core::RequirementStatus::Done.cache_key().to_string());
+                let done_rows = backend.list_summaries(&done_filter)?;
+                let (rework_rows, ids) =
+                    queue_cmd::select_done_rework_rows(done_rows, store_path.parent());
+                reqs.extend(rework_rows);
+                rework_ids = ids;
+            }
+
             // STORY-62: --parent <id> restricts to direct children of <id>.
             // We don't materialize a parent->children index in the cache;
             // for one parent it's a single YAML read to grab the
@@ -2209,6 +2396,18 @@ pub(crate) fn handle_git_backend_command(
                         } else {
                             None
                         };
+                        // TASK-1456: a Done row folded in by
+                        // `select_done_rework_rows` still carries `status:
+                        // "Done"` — the machine-consumer contract that field
+                        // is (STORY-1352) — so the annotation goes in the
+                        // SAME status_label/status_lens channel NeedsAttention
+                        // rows already use, not a mutated status. Perf: a
+                        // plain `rework_ids` membership check — the set was
+                        // already computed once above, no recomputation.
+                        // trace:TASK-1456 | ai:claude
+                        let rework = rework_ids.contains(&r.id);
+                        let (status_label, status_lens) =
+                            list_json_status_label_lens(rework, parked_lens.as_ref());
                         ListJsonRow {
                             spec_id: r
                                 .agreed_id
@@ -2219,8 +2418,8 @@ pub(crate) fn handle_git_backend_command(
                             req_type: r.req_type.as_str(),
                             r#type: r.req_type.as_str(),
                             status: r.status.as_str(),
-                            status_label: parked_lens.as_ref().map(|lens| lens.label()),
-                            status_lens: parked_lens.as_ref().map(|lens| lens.palette_key()),
+                            status_label,
+                            status_lens,
                             tags: &r.tags,
                             queued,
                             in_flight,
@@ -2347,6 +2546,26 @@ pub(crate) fn handle_git_backend_command(
                 if machine_drafts_hidden > 0 {
                     println!(
                         "note: {machine_drafts_hidden} machine-filed drafts hidden — `aida list --status draft --machine-drafts`"
+                    );
+                }
+                // TASK-1456: the agent-mode row for a folded-in Done+refusal
+                // spec renders `status: Done`, same as an ordinary
+                // awaiting-merge row — flag it explicitly so an agent
+                // consuming this table doesn't read it as merge-ready. Perf:
+                // `rework_ids` membership only — the set was already computed
+                // once above, no recomputation. trace:TASK-1456 | ai:claude
+                for r in &reqs {
+                    if !rework_ids.contains(&r.id) {
+                        continue;
+                    }
+                    let display_id = r
+                        .agreed_id
+                        .as_deref()
+                        .or(r.spec_id.as_deref())
+                        .unwrap_or("?");
+                    println!(
+                        "note: {display_id} needs rework — reviewer requested changes; \
+                         `aida queue rework {display_id}`"
                     );
                 }
                 // TASK-974 (AXI #9): trailing next-step block — drill into a row
@@ -2548,6 +2767,7 @@ pub(crate) fn handle_git_backend_command(
                 );
                 print_hidden_hints();
                 print_deferred_triggers(*deferred, &reqs);
+                print_rework_needed_notes(&reqs, &rework_ids);
                 maybe_print_whats_left_tip(status.as_deref(), &reqs);
                 return Ok(());
             }
@@ -2582,6 +2802,7 @@ pub(crate) fn handle_git_backend_command(
                     );
                     print_hidden_hints();
                     print_deferred_triggers(*deferred, &reqs);
+                    print_rework_needed_notes(&reqs, &rework_ids);
                     maybe_print_whats_left_tip(status.as_deref(), &reqs);
                 }
                 return Ok(());
@@ -2645,6 +2866,7 @@ pub(crate) fn handle_git_backend_command(
                 );
                 print_hidden_hints();
                 print_deferred_triggers(*deferred, &reqs);
+                print_rework_needed_notes(&reqs, &rework_ids);
                 maybe_print_whats_left_tip(status.as_deref(), &reqs);
             }
         }
@@ -5061,6 +5283,13 @@ pub(crate) fn handle_git_backend_command(
 
             let mut changed = false;
             let mut force_dropped_structural_tags: Vec<String> = Vec::new();
+            // TASK-1450: before/after pairs for the seat-tagged coordination
+            // events emitted once the edit is durably written — captured here
+            // (not reconstructed after the fact) so the recorded values are
+            // exactly what this invocation changed, not a re-derivation from
+            // the saved requirement. trace:TASK-1450 | ai:claude
+            let mut disposition_event: Option<(String, String)> = None;
+            let mut execution_mode_event: Option<(Option<String>, Option<String>)> = None;
             if let Some(t) = title {
                 req.title = t.clone();
                 changed = true;
@@ -5130,10 +5359,12 @@ pub(crate) fn handle_git_backend_command(
                         team_role_refusal_clause()
                     );
                 }
+                let mode_before = req.execution_mode.map(|m| m.to_string());
                 if m.trim().is_empty() {
                     if req.execution_mode.is_some() {
                         req.execution_mode = None;
                         changed = true;
+                        execution_mode_event = Some((mode_before, None));
                     }
                 } else {
                     let parsed: aida_core::ExecutionMode =
@@ -5141,6 +5372,7 @@ pub(crate) fn handle_git_backend_command(
                     if req.execution_mode != Some(parsed) {
                         req.execution_mode = Some(parsed);
                         changed = true;
+                        execution_mode_event = Some((mode_before, Some(parsed.to_string())));
                     }
                 }
             }
@@ -5279,7 +5511,38 @@ pub(crate) fn handle_git_backend_command(
                 // STORY-738: capture the into-Completed transition against the
                 // prior status (before the set). trace:STORY-738 | ai:claude
                 into_completed = is_into_completed_transition(&req.status, canonical);
-                req.set_status_from_str(canonical);
+                // TASK-1450: disposition before/after for the coordination
+                // event, captured against the on-disk status before the set
+                // below (same "before the mutation" rule STORY-738 uses).
+                // trace:TASK-1450 | ai:claude
+                let status_before = req.status.to_string();
+                // STORY-1418: an into-Completed edit stamps through the seam;
+                // the ship record is emitted below once the write lands.
+                // trace:STORY-1418 | ai:claude
+                if canonical == "Completed" {
+                    crate::completion::mark_completed(&mut req);
+                } else {
+                    req.set_status_from_str(canonical);
+                }
+                disposition_event = Some((status_before, req.status.to_string()));
+                // TASK-1446: a spec deliberately reopened to Draft after its
+                // trailered commit already landed must not be flipped right
+                // back to Done by the next pull — `pre_sha=None` scans a
+                // `--max-count=50 HEAD` window that can still contain the
+                // same old commit. Stamp the code-repo HEAD sha at reopen
+                // time in its own field (not `completion_sha`, which the
+                // Done→Completed bump owns for BUG-410) so the Draft-landing
+                // guard can skip any candidate at or before this sha.
+                // trace:TASK-1446 | ai:claude
+                if matches!(req.status, RequirementStatus::Draft) {
+                    if let Ok(project_root) = find_project_root() {
+                        if let Ok(sha) = aida_core::git_ops::head_sha(&project_root) {
+                            req.implementation_info
+                                .get_or_insert_with(aida_core::ImplementationInfo::default)
+                                .reopened_at_sha = Some(sha);
+                        }
+                    }
+                }
                 // STORY-332 / EPIC-28: a spec triaged out of NeedsAttention is
                 // no longer paused — drop the now-stale punt metadata AND any
                 // orchestrator-shelving metadata. The punt ledger
@@ -5459,6 +5722,23 @@ pub(crate) fn handle_git_backend_command(
                         ),
                     )?;
                 }
+                // TASK-1450: a disposition (status) or execution_mode change
+                // made through `aida edit` is a coordination-seat decision —
+                // approve/reject/defer and groom's `--mode` writes all land
+                // here (groom/approve/reject shell out to `aida edit`
+                // themselves). Emit AFTER the write above lands, mirroring
+                // BUG-1423's PrMerged placement, so a failed write never
+                // produces a phantom event. Best-effort — `events::emit`
+                // itself never fails the edit. trace:TASK-1450 | ai:claude
+                if let Some(project_root) = store_path.parent() {
+                    let display_id = req.spec_id.as_deref().unwrap_or(id);
+                    if let Some((before, after)) = disposition_event.take() {
+                        emit_edit_disposition_changed(project_root, display_id, before, after);
+                    }
+                    if let Some((before, after)) = execution_mode_event.take() {
+                        emit_edit_execution_mode_changed(project_root, display_id, before, after);
+                    }
+                }
                 // STORY-738: a transition INTO Completed is the payoff state —
                 // render the felt completion crescendo instead of the flat
                 // generic `Updated:` line (reused for any tag edit). Only the
@@ -5472,7 +5752,7 @@ pub(crate) fn handle_git_backend_command(
                 // recomputed. trace:BUG-1286 | ai:claude
                 if into_completed {
                     if let Some(project_root) = store_path.parent() {
-                        crate::emit_spec_completed(
+                        crate::completion::emit_spec_completed(
                             project_root,
                             req.spec_id.as_deref().unwrap_or(id),
                             "",
@@ -6627,15 +6907,16 @@ pub(crate) fn handle_git_backend_command(
                     }
                     Err(e) => {
                         // A failed rebase leaves the repo in a partial
-                        // state. Bail with a recovery hint so the user
-                        // doesn't end up with weirder downstream errors.
+                        // state — but only advise `git rebase --abort`
+                        // when a rebase is actually in progress; a
+                        // transient failure (e.g. a network 502) with no
+                        // rebase in flight is a different situation.
+                        // Reuses the same check as `aida pull`'s
+                        // store-leg hint so both emission sites agree.
+                        // trace:BUG-1500 | ai:claude
                         anyhow::bail!(
-                            "Pull failed: {}\n\
-                             The orphan store may be mid-rebase. To recover:\n  \
-                                 cd {} && git rebase --abort\n\
-                             Then re-run `aida db sync --pull`.",
-                            e,
-                            store_path.display()
+                            "Pull failed: {}",
+                            crate::store_pull_failure_hint(store_path, &e.to_string())
                         );
                     }
                 }

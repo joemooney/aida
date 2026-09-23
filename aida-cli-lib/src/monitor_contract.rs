@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use std::io::Write;
 
 pub const NAME: &str = "aida-monitor";
-pub const VERSION: &str = "1.0.0";
+pub const VERSION: &str = "1.2.0";
 
 /// Return the deliberately small set of fields promised to monitor consumers.
 /// Fields not named here remain implementation details even when they happen to
@@ -27,7 +27,7 @@ pub fn manifest() -> Value {
             surface("drain-status", "aida drain status --json", &[("drain.running", "boolean"), ("in_flight", "array")]),
             surface("tail", "aida tail --json", &[("lines", "array")]),
             surface("schedule", "aida schedule list --json", &[("jobs", "array")]),
-            surface("events-follow", "aida watch --all --json", &[("ts", "string"), ("spec", "string|null"), ("run_uuid", "string"), ("kind.event", "string")]),
+            surface("events-follow", "aida watch --all --json", &[("ts", "string"), ("spec", "string|null"), ("run_uuid", "string"), ("seat", "string|null"), ("kind.event", "string")]),
         ],
     })
 }

@@ -8,6 +8,40 @@ use super::*;
 use aida_core::{QueueEntry, Relationship, Requirement, RequirementType};
 use uuid::Uuid;
 
+/// Minimal real-git helper for the BUG-1515 tip-relation tests below —
+/// `done_spec_outstanding_refusal` now shells out to `git` to place the
+/// verdict's reviewed sha against the branch tip, so a fake sha in a
+/// non-repo tempdir no longer exercises the real decision.
+// trace:BUG-1515 | ai:claude
+fn git(repo: &std::path::Path, args: &[&str]) {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .env("GIT_AUTHOR_NAME", "t")
+        .env("GIT_AUTHOR_EMAIL", "t@t")
+        .env("GIT_COMMITTER_NAME", "t")
+        .env("GIT_COMMITTER_EMAIL", "t@t")
+        .output()
+        .expect("git runs");
+    assert!(
+        out.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+// trace:BUG-1515 | ai:claude
+fn git_head(repo: &std::path::Path) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .expect("git runs");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
 /// BUG-1213 (round 2): the loop guard fires only when the IMMEDIATELY previous
 /// findings block equals the new one. Two consecutive identical rounds (A, A)
 /// recur; A → B → A does not — the last recorded block is B, so a third round
@@ -862,7 +896,7 @@ fn fresh_pickup_policy_status_table_is_shared_by_surfaces() {
             "queue work",
         ] {
             assert_eq!(
-                queue_fresh_pickup_policy(&r, &store, false),
+                queue_fresh_pickup_policy(&r, &store, false, None),
                 expected,
                 "{surface} must share status pickability for {status}"
             );
@@ -879,11 +913,11 @@ fn fresh_pickup_policy_allows_needs_attention_only_with_force() {
     store.requirements.push(r.clone());
 
     assert!(matches!(
-        queue_fresh_pickup_policy(&r, &store, false),
+        queue_fresh_pickup_policy(&r, &store, false, None),
         QueueFreshPickup::Blocked(aida_core::pickability::BlockedReason::NeedsTriage)
     ));
     assert_eq!(
-        queue_fresh_pickup_policy(&r, &store, true),
+        queue_fresh_pickup_policy(&r, &store, true, None),
         QueueFreshPickup::Pickable
     );
 }
@@ -1436,7 +1470,7 @@ fn fresh_pickup_policy_skips_deferred_specs() {
     let mut store = aida_core::RequirementsStore::default();
     store.requirements.push(deferred.clone());
 
-    let policy = queue_fresh_pickup_policy(&deferred, &store, false);
+    let policy = queue_fresh_pickup_policy(&deferred, &store, false, None);
     assert_eq!(policy, QueueFreshPickup::Deferred);
     assert_eq!(
         queue_fresh_pickup_reason_label(&policy).as_deref(),
@@ -1458,7 +1492,7 @@ fn drain_pickup_policy_skips_guided_operator_and_decide_specs() {
         r.execution_mode = Some(mode);
         store.requirements = vec![r.clone()];
 
-        let policy = queue_drain_pickup_policy(&r, &store, false);
+        let policy = queue_drain_pickup_policy(&r, &store, false, None);
         assert_eq!(policy, QueueFreshPickup::NeedsGuidedOrOperatorSession(mode));
         assert!(queue_fresh_pickup_reason_label(&policy)
             .expect("mode skip has a label")
@@ -1467,7 +1501,7 @@ fn drain_pickup_policy_skips_guided_operator_and_decide_specs() {
             .expect("mode skip has a label")
             .contains("aida derisk <ID>"));
         assert_eq!(
-            queue_fresh_pickup_policy(&r, &store, false),
+            queue_fresh_pickup_policy(&r, &store, false, None),
             QueueFreshPickup::Pickable
         );
     }
@@ -1485,13 +1519,13 @@ fn drain_pickup_policy_skips_release_meta_tasks() {
     let mut store = aida_core::RequirementsStore::default();
     store.requirements = vec![release.clone()];
 
-    let policy = queue_drain_pickup_policy(&release, &store, false);
+    let policy = queue_drain_pickup_policy(&release, &store, false, None);
     assert_eq!(policy, QueueFreshPickup::NeedsReleaseOperatorSession);
     assert!(queue_fresh_pickup_reason_label(&policy)
         .expect("release skip has a label")
         .contains("/aida-release"));
     assert_eq!(
-        queue_fresh_pickup_policy(&release, &store, false),
+        queue_fresh_pickup_policy(&release, &store, false, None),
         QueueFreshPickup::Pickable,
         "release meta-tasks stay queueable for guided/operator pickup"
     );
@@ -3118,5 +3152,184 @@ fn a_child_that_reported_a_real_ci_failure_still_travels_the_shelvable_path() {
     assert!(
         unreported.shelved_reason.is_none(),
         "an orchestrator fault must not park the spec it may never have reached"
+    );
+}
+
+/// BUG-1515: a `Done` spec whose recorded review verdict is a still-live
+/// refusal (RequestChanges/Rejected, never closed by a later merge) must
+/// classify as `AwaitingRework`, not `AwaitingMerge` — the drain, `aida
+/// queue work`, and every surface that reads `queue_fresh_pickup_policy`
+/// must stop reading a rejected round as merge-ready.
+// trace:BUG-1515 | ai:claude
+#[test]
+fn done_spec_with_outstanding_refusal_is_awaiting_rework_not_awaiting_merge() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    git(
+        root,
+        &["init", "--initial-branch=claude/bug-1515", "--quiet"],
+    );
+    git(root, &["commit", "--allow-empty", "-m", "root", "--quiet"]);
+    let head = git_head(root);
+
+    let mut store = aida_core::RequirementsStore::default();
+    let mut r = Requirement::new("refused round".to_string(), String::new());
+    r.spec_id = Some("BUG-1515".to_string());
+    r.status = RequirementStatus::Done;
+    store.requirements.push(r.clone());
+
+    // No verdict recorded yet: behaves exactly like pre-BUG-1515.
+    assert_eq!(
+        crate::queue_cmd::queue_fresh_pickup_policy(&r, &store, false, Some(root)),
+        crate::queue_cmd::QueueFreshPickup::AwaitingMerge,
+        "a Done spec with no recorded verdict is still plain awaiting-merge"
+    );
+
+    // A LIVE refusal (never closed by a merge), still pinned to the current
+    // branch tip, flips the classification.
+    crate::review_verdict::record_verdict(
+        root,
+        "BUG-1515",
+        Some("request-changes"),
+        Some(&head),
+        Some("claude/bug-1515"),
+        Some("needs another round"),
+        &["fix the thing".to_string()],
+        "reviewer",
+    )
+    .unwrap();
+    let policy = crate::queue_cmd::queue_fresh_pickup_policy(&r, &store, false, Some(root));
+    assert_eq!(
+        policy,
+        crate::queue_cmd::QueueFreshPickup::AwaitingRework,
+        "an outstanding refusal still at the tip must read as rework, not merge-ready"
+    );
+    let reason = crate::queue_cmd::queue_fresh_pickup_reason_label(&policy).unwrap();
+    assert!(
+        reason.contains("REWORK"),
+        "the hint must say REWORK, not awaiting merge: {reason}"
+    );
+    assert!(
+        !reason.contains("--from-pr") && !reason.contains("integrate"),
+        "the hint must not route a refused spec through a shipping verb: {reason}"
+    );
+    assert!(
+        reason.contains("aida queue rework"),
+        "the hint must name the working two-command recovery route: {reason}"
+    );
+
+    // An APPROVED verdict recorded on top (a later round that passed) is not
+    // a refusal at all — back to plain awaiting-merge.
+    git(
+        root,
+        &["commit", "--allow-empty", "-m", "approved round", "--quiet"],
+    );
+    let approved_head = git_head(root);
+    crate::review_verdict::record_verdict(
+        root,
+        "BUG-1515",
+        Some("approved"),
+        Some(&approved_head),
+        Some("claude/bug-1515"),
+        Some("looks good"),
+        &[],
+        "reviewer",
+    )
+    .unwrap();
+    assert_eq!(
+        crate::queue_cmd::queue_fresh_pickup_policy(&r, &store, false, Some(root)),
+        crate::queue_cmd::QueueFreshPickup::AwaitingMerge,
+        "an approval overwriting the refusal must read as plain awaiting-merge again"
+    );
+}
+
+/// BUG-1515 (blocker 1): a refusal recorded against an OLD head — the normal
+/// shape after a rework round (refusal, new commits pushed, `queue done`
+/// again) — must NOT keep reading as `AwaitingRework` just because it was
+/// never explicitly closed. Its reviewed sha is no longer the branch tip, so
+/// `awaiting_you::classify_pr_review` already treats it as re-review-ready
+/// (a `Moved` refusal); `queue_fresh_pickup_policy` must agree and fall back
+/// to `AwaitingMerge` rather than telling the operator "REWORK NEEDED" for
+/// work that was, in fact, already reworked.
+// trace:BUG-1515 | ai:claude
+#[test]
+fn stale_refusal_on_an_old_head_is_not_classified_awaiting_rework() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    git(
+        root,
+        &["init", "--initial-branch=claude/bug-1515", "--quiet"],
+    );
+    git(root, &["commit", "--allow-empty", "-m", "root", "--quiet"]);
+    let old_head = git_head(root);
+
+    crate::review_verdict::record_verdict(
+        root,
+        "BUG-1515",
+        Some("request-changes"),
+        Some(&old_head),
+        Some("claude/bug-1515"),
+        Some("needs another round"),
+        &["fix the thing".to_string()],
+        "reviewer",
+    )
+    .unwrap();
+
+    // Rework happened: new commits landed past the reviewed sha, but the
+    // refusal file was never explicitly closed.
+    git(root, &["commit", "--allow-empty", "-m", "fix", "--quiet"]);
+
+    let mut store = aida_core::RequirementsStore::default();
+    let mut r = Requirement::new("reworked round".to_string(), String::new());
+    r.spec_id = Some("BUG-1515".to_string());
+    r.status = RequirementStatus::Done;
+    store.requirements.push(r.clone());
+
+    let policy = crate::queue_cmd::queue_fresh_pickup_policy(&r, &store, false, Some(root));
+    assert_eq!(
+        policy,
+        crate::queue_cmd::QueueFreshPickup::AwaitingMerge,
+        "a refusal pinned to an OLD head, with new commits since, needs \
+         re-review — not another REWORK NEEDED round: {policy:?}"
+    );
+}
+
+/// BUG-1515 / BUG-1529: a refusal that was explicitly CLOSED by a later merge
+/// (`closed_by_merge`) is history, not a live obstruction — it must not
+/// resurrect as `AwaitingRework` on some other Done spec that happens to
+/// reuse the same verdict file id space.
+// trace:BUG-1515 | ai:claude
+#[test]
+fn closed_refusal_does_not_count_as_outstanding() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    crate::review_verdict::record_verdict(
+        root,
+        "BUG-1515",
+        Some("request-changes"),
+        Some("deadbeef"),
+        Some("claude/bug-1515"),
+        Some("needs another round"),
+        &["fix the thing".to_string()],
+        "reviewer",
+    )
+    .unwrap();
+    // Close it the way BUG-1529's merge-close path does.
+    let path = crate::review_verdict::verdict_path(root, "BUG-1515");
+    let body = std::fs::read_to_string(&path).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(&body).unwrap();
+    value["closed_by_merge"] = serde_json::Value::String("abc1234".to_string());
+    crate::review_verdict::write_verdict_atomic(&path, &value.to_string()).unwrap();
+
+    let mut store = aida_core::RequirementsStore::default();
+    let mut r = Requirement::new("closed refusal".to_string(), String::new());
+    r.spec_id = Some("BUG-1515".to_string());
+    r.status = RequirementStatus::Done;
+    store.requirements.push(r.clone());
+
+    assert_eq!(
+        crate::queue_cmd::queue_fresh_pickup_policy(&r, &store, false, Some(root)),
+        crate::queue_cmd::QueueFreshPickup::AwaitingMerge,
+        "a CLOSED refusal must not resurrect as rework"
     );
 }

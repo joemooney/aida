@@ -450,6 +450,19 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // TASK-1313: round-trip artifacts — a swallowed TOON row header or a
+    // UTF-8-as-Latin-1 mojibake sequence left in stored spec text by a
+    // read-modify-write through rendered `aida show` output. Pure text scan
+    // over the already-loaded store (no extra git/process calls), but kept
+    // off the hot `collect_doctor_findings` path per the same convention as
+    // the other opt-in categories above: `aida status` should not pay for a
+    // full-store text scan on every invocation. Report-only. Honours
+    // `--category`. trace:TASK-1313 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "round-trip-artifacts")? {
+        findings.extend(scan_round_trip_artifacts(&store));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // The performance gate: guarded command shapes that exceed their budget on
     // TOO LARGE A FRACTION of recent calls, plus guarded shapes with no recorded
     // calls at all. A proportion over a window, not a median — the distribution
@@ -730,14 +743,6 @@ fn scan_scaffold_drift(
     findings
 }
 
-/// TASK-1122: store-scrub detection. When identity redaction is configured
-/// (`[node] public_email` / `public_hostname` in `~/.aida/config.toml`), verify
-/// the RAW system identity has not ALREADY leaked into the store — a leak that
-/// landed before redaction was enabled is otherwise invisible on a public
-/// mirror. Reads the identity-bearing store files + recent store commit authors
-/// and flags any raw value present. Detection only, no auto-heal (removing an
-/// already-landed value needs a history rewrite).
-// trace:TASK-1122 | ai:claude
 /// One guarded command shape and the latency it must stay under.
 ///
 /// Per-shape rather than one global number, so guarding a second command is a
@@ -1857,6 +1862,15 @@ mod bug_1572_binary_lineage_tests {
     }
 }
 
+/// TASK-1122: store-scrub detection. When identity redaction is configured
+/// (`[node] public_email` / `public_hostname` in `~/.aida/config.toml`), verify
+/// the RAW system identity has not ALREADY leaked into the store — a leak that
+/// landed before redaction was enabled is otherwise invisible on a public
+/// mirror. Reads the identity-bearing store files + recent store commit authors
+/// and flags any raw value present. Detection only, no auto-heal (removing an
+/// already-landed value needs a history rewrite).
+// trace:TASK-1122 | ai:claude
+// trace:BUG-1561 | ai:claude
 fn scan_store_scrub(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     let (pub_host, pub_email) = aida_core::git_ops::public_identity();
     // Redaction not configured → nothing is expected to be redacted, nothing to check.
@@ -1912,6 +1926,196 @@ fn scan_store_scrub(project_root: &std::path::Path) -> Vec<DoctorFinding> {
         .collect()
 }
 
+// TASK-1313: round-trip artifacts in stored spec text. A seat that captures
+// `aida show` output (TOON-rendered when piped) and writes it back through a
+// description edit corrupts the field two ways: the TOON rendering's row
+// headers — and everything the renderer emitted after them — get swallowed
+// into the value, and/or the capture path decodes UTF-8 as Latin-1 and
+// mangles non-ASCII bytes into mojibake. Both predicates are measured against
+// the real store in TASK-1313's own spec text (six genuine instances, zero
+// false positives). REPORT-ONLY: this never rewrites a spec. Reconstructing a
+// swallowed block means recovering the pre-corruption text from the orphan
+// branch's git history, a per-spec judgment call for a human/reviewer, not an
+// automated rewrite (that repair pass is TASK-1314). trace:TASK-1313 | ai:claude
+fn round_trip_toon_header_regex() -> regex::Regex {
+    // Anchored at column 0 of a line (`(?m)^`). Anchoring is what separates a
+    // genuine swallowed TOON rendering — which always starts at a line's
+    // first column, because that is where the renderer emits it — from prose
+    // that merely discusses the convention mid-line. Unanchored, this very
+    // check's own spec text (which quotes the pattern) would false-positive.
+    regex::Regex::new(r"(?m)^(?:(?:relationships|next)\[\d+\]\{|execution_mode:)")
+        .expect("valid TOON round-trip header regex")
+}
+
+fn round_trip_toon_header_regex_unanchored() -> regex::Regex {
+    // Same alternation as `round_trip_toon_header_regex`, minus the `(?m)^`
+    // anchor. Criterion 7f: a capture path that strips (or never had) the
+    // trailing newline before the header lands it MID-LINE, a shape the
+    // anchored regex cannot see by construction — the six observed real
+    // leaks all happen to be line-anchored (one producer), which proves that
+    // producer's behaviour, not the next one's. This unanchored form is kept
+    // as a SEPARATE, lower-confidence pass rather than folded into the
+    // primary predicate: unanchored also matches ordinary inline prose that
+    // merely discusses the convention (four known false positives measured
+    // against this store, including this very spec's own text), so
+    // `scan_round_trip_artifacts` only reports an unanchored match when it
+    // is NOT also an anchored one (i.e. genuinely mid-line), and tags it with
+    // a distinct category/summary so it never dilutes the high-confidence
+    // anchored findings.
+    regex::Regex::new(r"(?:(?:relationships|next)\[\d+\]\{|execution_mode:)")
+        .expect("valid TOON round-trip header regex (unanchored)")
+}
+
+fn round_trip_mojibake_regex() -> regex::Regex {
+    // A lead character in {Â U+00C2, Ã U+00C3, â U+00E2} immediately followed
+    // by EITHER a Latin-1 Supplement code point (U+0080-U+00FF — this is what
+    // a raw UTF-8-as-Latin-1 mis-decode of a multi-byte sequence parses to)
+    // OR a literal `\xHH` escape (the form a YAML double-quoted scalar stores
+    // when the same damage still carries its escape text rather than having
+    // been parsed into the control character). Scanning the PARSED field
+    // value needs both alternatives, because YAML's parser already turns some
+    // `\xHH` escapes into the control character and leaves others literal
+    // depending on how many re-serialization passes the field went through.
+    // A LONE Â/Ã/â is an ordinary letter — only the pair indicates a
+    // mis-decode, so no bare-lead-character alternative is included.
+    regex::Regex::new(r"[\u{00C2}\u{00C3}\u{00E2}](?:[\u{0080}-\u{00FF}]|\\x[0-9a-fA-F]{2})")
+        .expect("valid mojibake regex")
+}
+
+/// Recursively collects `(field-label, content)` pairs for a comment list and
+/// every nested reply beneath it (`Comment.replies` is itself
+/// `Vec<Comment>` — a reply can carry its own replies). Criterion 6 requires
+/// coverage of every text field, and a reply's content is exactly as capable
+/// of carrying a swallowed TOON block or mojibake as a top-level comment's —
+/// the round-trip producer captures rendered output regardless of comment
+/// nesting depth. `prefix` is the field label of the comment list's parent
+/// ("" for the requirement's own top-level `comments`, or a comment's own
+/// field label when descending into its `replies`), so a reply's label reads
+/// `comment[0]/reply[0]`, a reply-of-a-reply `comment[0]/reply[0]/reply[0]`,
+/// and so on.
+// trace:TASK-1313 | ai:claude
+fn push_comment_fields<'a>(
+    comments: &'a [aida_core::models::Comment],
+    prefix: &str,
+    out: &mut Vec<(String, &'a str)>,
+) {
+    for (i, c) in comments.iter().enumerate() {
+        let field = if prefix.is_empty() {
+            format!("comment[{i}]")
+        } else {
+            format!("{prefix}/reply[{i}]")
+        };
+        out.push((field.clone(), c.content.as_str()));
+        push_comment_fields(&c.replies, &field, out);
+    }
+}
+
+/// Whether the byte at `start` in `bytes` sits at the start of a line,
+/// ALLOWING leading indentation (spaces/tabs) between the preceding newline
+/// (or start of text) and `start`. Used only to decide what the unanchored
+/// mid-line pass should SKIP as a duplicate of the anchored primary check's
+/// intent: an indented code block quoting a TOON sample (own test:
+/// `indented_toon_sample_is_not_flagged`) is a leading-INDENT case, not the
+/// mid-line CONCATENATION case criterion 7f targets — the spec text is
+/// explicit that the trade-off the column-0 anchor makes is against
+/// concatenation, not indentation, so the low-confidence pass should not
+/// re-flag indentation either.
+// trace:TASK-1313 | ai:claude
+fn is_indent_anchored(bytes: &[u8], start: usize) -> bool {
+    let mut i = start;
+    loop {
+        if i == 0 {
+            return true;
+        }
+        match bytes[i - 1] {
+            b'\n' => return true,
+            b' ' | b'\t' => i -= 1,
+            _ => return false,
+        }
+    }
+}
+
+/// Scan every text field of every requirement in the store — title,
+/// description, and every comment body, walked recursively into nested
+/// replies — for round-trip artifacts. Coverage is the whole object store,
+/// not just descriptions. Report only: never mutates `store`. All reported
+/// offsets are BYTE offsets into the field's UTF-8 text (`str::find`/regex
+/// match positions, not character counts), matching what a byte-oriented
+/// editor or `sed`/`grep -b` would report.
+// trace:TASK-1313 | ai:claude
+fn scan_round_trip_artifacts(store: &aida_core::models::RequirementsStore) -> Vec<DoctorFinding> {
+    let toon_re = round_trip_toon_header_regex();
+    let toon_re_unanchored = round_trip_toon_header_regex_unanchored();
+    let mojibake_re = round_trip_mojibake_regex();
+    let mut out = Vec::new();
+
+    for req in &store.requirements {
+        let spec_id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
+        let mut fields: Vec<(String, &str)> = vec![
+            ("title".to_string(), req.title.as_str()),
+            ("description".to_string(), req.description.as_str()),
+        ];
+        push_comment_fields(&req.comments, "", &mut fields);
+
+        for (field, text) in fields {
+            let bytes = text.as_bytes();
+            for m in toon_re.find_iter(text) {
+                out.push(DoctorFinding {
+                    category: "round-trip-artifacts".to_string(),
+                    id: format!("{spec_id}/{field}/{}", m.start()),
+                    summary: format!(
+                        "{spec_id} field `{field}` byte offset {}: swallowed TOON row header (`{}`) — a read-modify-write through rendered `aida show` output",
+                        m.start(),
+                        m.as_str()
+                    ),
+                    action: "reconstruct the field from the orphan branch's git history (this check reports, it does not repair)".to_string(),
+                    safe_heal: false,
+                });
+            }
+            // Criterion 7f: a second, unanchored pass for a header that was
+            // appended MID-LINE — a shape the column-0-anchored primary
+            // predicate cannot see. Only reported when NOT also an anchored
+            // hit (start of text or immediately after a newline), so this
+            // never duplicates the high-confidence findings above; kept in a
+            // distinct category/summary ("possible, mid-line") because
+            // unanchored also matches ordinary inline prose discussing the
+            // convention — noisier by design, eyeballed by a human, not
+            // folded into the primary signal.
+            for m in toon_re_unanchored.find_iter(text) {
+                let start = m.start();
+                if is_indent_anchored(bytes, start) {
+                    continue;
+                }
+                out.push(DoctorFinding {
+                    category: "round-trip-artifacts-possible".to_string(),
+                    id: format!("{spec_id}/{field}/{start}"),
+                    summary: format!(
+                        "{spec_id} field `{field}` byte offset {start}: possible, mid-line TOON row header (`{}`) — not at the start of a line, so lower confidence than the anchored check; may be a swallowed block appended without a leading newline, or ordinary prose mentioning the convention",
+                        m.as_str()
+                    ),
+                    action: "eyeball the surrounding text; if it is a genuine swallowed block, reconstruct the field from the orphan branch's git history (this check reports, it does not repair)".to_string(),
+                    safe_heal: false,
+                });
+            }
+            for m in mojibake_re.find_iter(text) {
+                out.push(DoctorFinding {
+                    category: "round-trip-artifacts".to_string(),
+                    id: format!("{spec_id}/{field}/{}", m.start()),
+                    summary: format!(
+                        "{spec_id} field `{field}` byte offset {}: UTF-8-decoded-as-Latin-1 mojibake sequence (`{}`)",
+                        m.start(),
+                        m.as_str()
+                    ),
+                    action: "reconstruct the field from the orphan branch's git history (this check reports, it does not repair)".to_string(),
+                    safe_heal: false,
+                });
+            }
+        }
+    }
+
+    out
+}
+
 /// Whether `category` (a normalized doctor category) is in scope given the
 /// user's `--category` filter. `None` filter selects everything. Errors only
 // if the filter itself is an unknown category. trace:TASK-673 | ai:claude
@@ -1919,6 +2123,204 @@ fn doctor_category_selected(filter: Option<&str>, category: &str) -> Result<bool
     match filter {
         None => Ok(true),
         Some(raw) => Ok(normalize_doctor_category(raw)? == category),
+    }
+}
+
+#[cfg(test)]
+mod task_1313_round_trip_artifact_tests {
+    use super::*;
+    use aida_core::models::{Requirement, RequirementsStore};
+
+    fn store_with(description: &str) -> RequirementsStore {
+        let mut req = Requirement::new("Sample".to_string(), description.to_string());
+        req.spec_id = Some("TASK-9001".to_string());
+        let mut store = RequirementsStore::new();
+        store.requirements.push(req);
+        store
+    }
+
+    // 7c: raw-form mis-decode (the parser has already turned the escape into
+    // the control character) produces exactly one mojibake finding.
+    #[test]
+    fn mojibake_raw_form_is_found() {
+        let text = "the em-dash reads as \u{00E2}\u{0080}\u{0094} here";
+        let store = store_with(text);
+        let findings = scan_round_trip_artifacts(&store);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].category, "round-trip-artifacts");
+        assert!(findings[0].summary.contains("mojibake"));
+    }
+
+    // 7d: escaped-form mis-decode (the field still carries the literal
+    // `\xHH` escape text) also produces one finding.
+    #[test]
+    fn mojibake_escaped_form_is_found() {
+        let text = "the em-dash reads as \u{00E2}\\x80\\x94 here";
+        let store = store_with(text);
+        let findings = scan_round_trip_artifacts(&store);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].summary.contains("mojibake"));
+    }
+
+    // 7a: a legitimate lone Â/Ã/â (an ordinary accented letter, not a pair)
+    // produces no mojibake finding.
+    #[test]
+    fn lone_latin_letter_is_not_mojibake() {
+        let text = "The café menu references the \u{00C2}ge Bracket column.";
+        let store = store_with(text);
+        assert!(scan_round_trip_artifacts(&store).is_empty());
+    }
+
+    // 7e: a swallowed TOON block with no non-ASCII character at all is still
+    // found — this is the case the mojibake-only detector would have missed.
+    #[test]
+    fn swallowed_toon_block_without_mojibake_is_found() {
+        let text = "Closing the description here.\"\nrelationships[1]{rel,id,title}:\n  child,TASK-2,\"x\"\nnext[1]{cmd,to}:\n  aida queue done TASK-2,done";
+        let store = store_with(text);
+        let findings = scan_round_trip_artifacts(&store);
+        assert_eq!(findings.len(), 2, "expects one finding per anchored header");
+        assert!(findings
+            .iter()
+            .all(|f| f.summary.contains("TOON row header")));
+    }
+
+    // 7b (inline mention, negative case 1): prose that discusses the
+    // convention mid-line — never at column 0 — must not fire the
+    // high-confidence anchored check. This is TASK-1313's own defining
+    // case: its spec text contains the phrase `execution_mode:` and the
+    // literal pattern `next[1]{` inline, never at the start of a line. An
+    // ordinary inline mention like this IS expected to surface in the
+    // separately-labelled, lower-confidence mid-line pass (criterion 7f) —
+    // that pass is deliberately noisier — so the negative assertion here is
+    // scoped to the high-confidence category, not to zero findings overall.
+    #[test]
+    fn inline_mention_of_execution_mode_is_not_flagged_high_confidence() {
+        let text = "It proposes a new execution_mode: value for the advisor to groom.";
+        let store = store_with(text);
+        let findings = scan_round_trip_artifacts(&store);
+        assert!(
+            findings
+                .iter()
+                .all(|f| f.category != "round-trip-artifacts"),
+            "an inline mention must never fire the high-confidence anchored check: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn inline_mention_of_toon_header_is_not_flagged_high_confidence() {
+        let text = "aida status already uses the `next[1]{cmd,to}:` row header today.";
+        let store = store_with(text);
+        let findings = scan_round_trip_artifacts(&store);
+        assert!(
+            findings
+                .iter()
+                .all(|f| f.category != "round-trip-artifacts"),
+            "an inline mention must never fire the high-confidence anchored check: {findings:?}"
+        );
+    }
+
+    // Criterion 7f: a swallowed TOON row header appended MID-LINE — no
+    // newline before it, because the capture path stripped (or never had)
+    // the trailing newline — is still found, just at lower confidence and
+    // in a separately-labelled category so it does not dilute the
+    // high-confidence anchored findings. Both anchored forms (column-0 and
+    // indent-allowing) miss this shape by construction.
+    #[test]
+    fn mid_line_toon_header_is_found_as_possible() {
+        let text = "Closing the description here.\"execution_mode: drain";
+        let store = store_with(text);
+        let findings = scan_round_trip_artifacts(&store);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].category, "round-trip-artifacts-possible");
+        assert!(findings[0].summary.contains("possible, mid-line"));
+        assert!(findings[0].summary.contains("byte offset"));
+    }
+
+    // Follow-up (criterion 7b): TASK-1313's own defining sentence and the
+    // raw regex source line, verbatim, as a fixture. The spec argues this is
+    // the strongest negative case: the `^execution_mode:` clause of the
+    // regex's own SOURCE TEXT matches the pattern mid-line (never at column
+    // 0), so a fix that special-cased this spec by id would still have to
+    // reckon with the pattern re-appearing in its own defining prose.
+    #[test]
+    fn task_1313_own_defining_text_is_not_flagged_high_confidence() {
+        let text = "THE PRIMARY PREDICATE IS THE CAUSE, NOT THE SYMPTOM, AND IT IS LINE-ANCHORED AT COLUMN 0. A description containing a TOON row header AT THE START OF A LINE is a round-trip artifact:\n\n       ^(?:relationships|next)\\[\\d+\\]\\{      or      ^execution_mode:\n";
+        let store = store_with(text);
+        let findings = scan_round_trip_artifacts(&store);
+        assert!(
+            findings.iter().all(|f| f.category != "round-trip-artifacts"),
+            "TASK-1313's own defining text must never fire the high-confidence anchored check: {findings:?}"
+        );
+    }
+
+    // 7b (negative case 2): an INDENTED code block quoting a TOON sample —
+    // the column-0 anchor (not a leading-indent-allowing anchor) must not
+    // match an indented line.
+    #[test]
+    fn indented_toon_sample_is_not_flagged() {
+        let text = "See the example below:\n\n    relationships[1]{rel,id,title}:\n      child,TASK-2,\"x\"\n";
+        let store = store_with(text);
+        assert!(scan_round_trip_artifacts(&store).is_empty());
+    }
+
+    // Coverage: title and comment bodies are scanned too, not only
+    // description (criterion 6).
+    #[test]
+    fn title_and_comment_fields_are_scanned() {
+        let mut req = Requirement::new(
+            "execution_mode:\nswallowed into the title field".to_string(),
+            "clean description".to_string(),
+        );
+        req.spec_id = Some("TASK-9002".to_string());
+        req.comments.push(aida_core::models::Comment::new(
+            "joe".to_string(),
+            "comment carries \u{00C3}\u{00A2} mojibake".to_string(),
+        ));
+        let mut store = RequirementsStore::new();
+        store.requirements.push(req);
+        let findings = scan_round_trip_artifacts(&store);
+        assert!(findings.iter().any(|f| f.id.contains("/title/")));
+        assert!(findings.iter().any(|f| f.id.contains("/comment[0]/")));
+    }
+
+    // Criterion 6: coverage is every text field, including a NESTED reply
+    // (`Comment.replies: Vec<Comment>`), not just top-level comment bodies.
+    // Mojibake buried two levels deep (a reply's reply) must still surface.
+    #[test]
+    fn mojibake_in_nested_reply_is_found() {
+        let mut req = Requirement::new("Sample".to_string(), "clean description".to_string());
+        req.spec_id = Some("TASK-9003".to_string());
+        let top = aida_core::models::Comment::new(
+            "joe".to_string(),
+            "clean top-level comment".to_string(),
+        );
+        let top_id = top.id;
+        let mut reply = aida_core::models::Comment::new_reply(
+            "advisor".to_string(),
+            "clean first-level reply".to_string(),
+            top_id,
+        );
+        let reply_id = reply.id;
+        let nested_reply = aida_core::models::Comment::new_reply(
+            "advisor".to_string(),
+            "the em-dash reads as \u{00E2}\u{0080}\u{0094} here, two levels deep".to_string(),
+            reply_id,
+        );
+        reply.replies.push(nested_reply);
+        let mut top = top;
+        top.replies.push(reply);
+        req.comments.push(top);
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(req);
+        let findings = scan_round_trip_artifacts(&store);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(findings[0].summary.contains("mojibake"));
+        assert!(
+            findings[0].id.contains("/comment[0]/reply[0]/reply[0]/"),
+            "expected a doubly-nested reply field label, got {}",
+            findings[0].id
+        );
     }
 }
 
@@ -2768,26 +3170,120 @@ pub(crate) fn branch_content_fully_landed(
     };
 
     let default_range = format!("{merge_base}..{default_ref}");
-    let Some(default_commits) = run(&["rev-list", &default_range]) else {
+
+    // BUG-1288: this fallback used to spawn a `git show | git patch-id` PAIR
+    // per default-side commit (`branch_unshipped_patch_count_default`'s
+    // sibling cost). On a long-lived repo an old branch's merge-base can sit
+    // thousands of commits behind the default branch, so that per-commit
+    // fan-out was the dominant cost of both `aida awaiting --json` and `aida
+    // status --full` (measured: one 2,496-commit range took 3m41s of wall
+    // clock for THIS SINGLE BRANCH's landed-check, serialized N times across
+    // every candidate branch in `collect_unshipped_work_items`). That is "the
+    // probe's setup" the BUG-1288 review flagged — not the candidate set,
+    // which stays exactly as wide as PR #1999 left it.
+    //
+    // Two changes, kept independent so each is auditable on its own:
+    //
+    // 1. Bound the walk. A default-side range wider than
+    //    `MAX_SQUASH_FALLBACK_COMMITS` is too expensive to exhaust patch-id
+    //    matching over, so it is skipped rather than paid for on every read.
+    //    The conservative branch is `false` ("not confirmed landed") — the
+    //    branch STAYS in the unshipped-work report rather than being
+    //    silently hidden on unproven equivalence (PRIN-5); at worst a
+    //    genuinely-landed old branch is reported once more than necessary,
+    //    never the reverse.
+    // 2. When under the bound, replace the N subprocess PAIRS with exactly
+    //    two processes total: one `git log -p` streaming every default-side
+    //    commit's diff (each preceded by its full hash, from `--format=%H`),
+    //    piped into one `git patch-id --stable`, which associates each
+    //    computed id with the commit-hash line that precedes it. This is the
+    //    same diff text `git show --format= --binary <commit>` produced per
+    //    commit — including the same "no diff" empty patch for a merge
+    //    commit `git log -p` doesn't expand by default — so the match result
+    //    is unchanged; only the process count drops from O(range) to O(1).
+    // trace:BUG-1288 | ai:claude
+    const MAX_SQUASH_FALLBACK_COMMITS: usize = 500;
+    let Some(count_out) = run(&["rev-list", "--count", &default_range]) else {
         return false;
     };
-    if !default_commits.status.success() {
+    if !count_out.status.success() {
         return false;
     }
-    for commit in String::from_utf8_lossy(&default_commits.stdout).lines() {
-        let Some(commit_diff) = run(&["show", "--format=", "--binary", commit]) else {
-            return false;
-        };
-        if !commit_diff.status.success() {
-            return false;
-        }
-        match patch_id(&commit_diff.stdout) {
-            Some(Some(id)) if id == branch_patch_id => return true,
-            Some(_) => {}
-            None => return false,
-        }
+    let Ok(commit_count) = String::from_utf8_lossy(&count_out.stdout)
+        .trim()
+        .parse::<usize>()
+    else {
+        return false;
+    };
+    if commit_count == 0 {
+        return false;
     }
-    false
+    if commit_count > MAX_SQUASH_FALLBACK_COMMITS {
+        return false;
+    }
+
+    let Some(log_out) = run(&["log", "--format=%H", "-p", "--binary", &default_range]) else {
+        return false;
+    };
+    if !log_out.status.success() {
+        return false;
+    }
+    let Some(default_side_ids) = patch_id_pairs(project_root, &log_out.stdout) else {
+        return false;
+    };
+    default_side_ids.iter().any(|id| id == &branch_patch_id)
+}
+
+/// BUG-1288: batched sibling of the per-commit `patch_id` closure in
+/// [`branch_content_fully_landed`] — feeds a whole `git log -p` stream (one
+/// commit hash line followed by that commit's diff, repeated) through a
+/// SINGLE `git patch-id --stable` process and returns every resulting patch
+/// id, instead of spawning one `git patch-id` per commit. `git patch-id`
+/// associates each id with the commit-hash line it saw immediately before
+/// that diff, so the id/commit pairing this repository doesn't currently need
+/// (only the id set is consulted) still falls out of the same single pass.
+// trace:BUG-1288 | ai:claude
+fn patch_id_pairs(project_root: &std::path::Path, log_p_output: &[u8]) -> Option<Vec<String>> {
+    use std::io::Write;
+    use std::process::{Command as PCmd, Stdio};
+
+    let mut child = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["patch-id", "--stable"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut stdin = child.stdin.take()?;
+    let input = log_p_output.to_vec();
+    // BUG-1288 fix-up: writing the WHOLE stream to stdin before reading any
+    // stdout deadlocks once the log is large enough to fill both the stdin
+    // and stdout OS pipe buffers at once (patch-id blocks writing output
+    // because we haven't read it yet; we block writing input because it
+    // hasn't read enough of it yet) — a real risk here, since the very point
+    // of this function is to hand it a big `git log -p` stream. Write on a
+    // separate thread so `wait_with_output` can drain stdout concurrently;
+    // the thread exits (dropping `stdin`, closing the pipe so patch-id sees
+    // EOF) whether or not the write fully succeeds.
+    // trace:BUG-1288 | ai:claude
+    let writer = std::thread::spawn(move || {
+        let _ = stdin.write_all(&input);
+    });
+    let output = child.wait_with_output().ok()?;
+    let _ = writer.join();
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    Some(
+        stdout
+            .lines()
+            .filter_map(|line| line.split_whitespace().next())
+            .map(str::to_string)
+            .collect(),
+    )
 }
 
 /// TASK-878: scan AIDA/Agent-tool managed worktrees and classify each under the
@@ -4748,6 +5244,118 @@ mod story_462_doctor_tests {
         assert!(
             !branch_content_fully_landed(&root, "main", "partial-work"),
             "a branch carrying a genuinely-unshipped file must never be reported fully landed"
+        );
+    }
+
+    // BUG-1288: `branch_content_fully_landed`'s squash-merge fallback used to
+    // spawn a `git show | git patch-id` subprocess PAIR per commit between a
+    // branch's merge-base and the default branch. On the aida repo itself,
+    // one call with a 2,496-commit range measured 3m41s of wall clock — the
+    // dominant cause of `aida awaiting --json` / `aida status --full`
+    // blocking for 70-90s. This fixture reproduces the same shape at a
+    // CI-affordable scale (500+ commits) and pins two things at once: the
+    // deep-history branch must not block the caller (the new
+    // `MAX_SQUASH_FALLBACK_COMMITS` bound bails out instead of walking the
+    // whole range), and bailing out must stay conservative — a genuinely
+    // unshipped branch still reads `false` ("not confirmed landed"), never a
+    // false `true`, so real unshipped work can never be hidden by this bound
+    // (PRIN-5 / BUG-1288 acceptance #6). The 30s budget is deliberately
+    // generous: this pins "does not regress back to unbounded", not a tight
+    // perf target — this bug's own history (the candidate population roughly
+    // 8x'd between when the spec was filed and when this fix landed) is the
+    // reason a tight wall-clock assertion would be the wrong thing to pin in
+    // CI. trace:BUG-1288 | ai:claude
+    #[test]
+    fn branch_content_fully_landed_bails_out_on_a_deep_history_range() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+
+        std::process::Command::new("git")
+            .arg("init")
+            .arg(&root)
+            .output()
+            .unwrap();
+        run(&["config", "user.name", "Test"]);
+        run(&["config", "user.email", "test@example.com"]);
+        std::fs::write(root.join("README.md"), "base\n").unwrap();
+        run(&["add", "README.md"]);
+        run(&["commit", "-m", "init"]);
+        run(&["branch", "-M", "main"]);
+
+        // Branch off right away — this commit is the merge-base the filler
+        // history below piles up past.
+        run(&["checkout", "-b", "deep-history-work"]);
+        std::fs::write(root.join("never-shipped.txt"), "genuinely unshipped\n").unwrap();
+        run(&["add", "never-shipped.txt"]);
+        run(&["commit", "-m", "add never-shipped.txt"]);
+        run(&["checkout", "main"]);
+
+        // Push main past MAX_SQUASH_FALLBACK_COMMITS (500) commits since the
+        // branch's merge-base — the shape that took 3m41s pre-fix on real
+        // history.
+        for i in 0..520 {
+            run(&["commit", "--allow-empty", "-m", &format!("filler {i}")]);
+        }
+
+        let merge_base_out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["merge-base", "main", "deep-history-work"])
+            .output()
+            .unwrap();
+        let merge_base = String::from_utf8_lossy(&merge_base_out.stdout)
+            .trim()
+            .to_string();
+        let count_out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["rev-list", "--count", &format!("{merge_base}..main")])
+            .output()
+            .unwrap();
+        let default_range_count: u32 = String::from_utf8_lossy(&count_out.stdout)
+            .trim()
+            .parse()
+            .unwrap();
+        assert!(
+            default_range_count > 500,
+            "fixture must exceed MAX_SQUASH_FALLBACK_COMMITS to exercise the bound, got {default_range_count}"
+        );
+
+        // Warm the fixture (git's loose-object access, this process's page
+        // cache, …) before the timed call, so the assertion below measures
+        // the bounded algorithm's own cost, not first-touch overhead.
+        let _ = branch_content_fully_landed(&root, "main", "deep-history-work");
+
+        let budget = std::time::Duration::from_secs(30);
+        let started = std::time::Instant::now();
+        let landed = branch_content_fully_landed(&root, "main", "deep-history-work");
+        let elapsed = started.elapsed();
+
+        assert!(
+            elapsed < budget,
+            "deep-history squash-fallback took {elapsed:?}, expected well under the \
+             {budget:?} regression budget (pre-fix this shape measured 3m41s on real history)"
+        );
+        assert!(
+            !landed,
+            "a genuinely-unshipped branch must stay reported as NOT landed even when the \
+             expensive proof is skipped for being too large — never silently true"
         );
     }
 

@@ -546,6 +546,73 @@ fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
     assert_eq!(entries[0].for_role.as_deref(), Some("implementer"));
 }
 
+// BUG-1494: the literal incident scenario -- `aida queue rework --work` (or
+// `--resume`) on a NeedsAttention spec resolves its smart target to
+// InProgress (`rework_smart_target`), not Approved. This is the hop the
+// original report walked through before a since-unrelated `edit --status
+// approved` (InProgress -> Approved is an intentionally ungated execution
+// flip) landed it Approved with no advisor ever ruling on it. The BUG-1470
+// gate at the status flip in `handle_queue_rework` is unconditional on
+// `work`, so this hop must refuse identically to the metadata-only
+// (`work: false`) case pinned above -- but until now nothing drove the
+// `work: true` branch through this gate, so a regression here would have
+// gone unnoticed. Refusal must happen BEFORE the queue-add/session-launch
+// side effects further down `handle_queue_rework`, so this is safe to run
+// without spawning a session.
+// trace:BUG-1494 | ai:claude
+#[test]
+fn work_rework_of_needs_attention_spec_is_refused_without_advisor_authority() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let req = req_for_test("BUG-1494", RequirementStatus::NeedsAttention);
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+
+    // Sanity: confirm this test actually exercises the InProgress-target
+    // branch the incident hit, not the Approved-target metadata-only branch
+    // pinned by `metadata_rework_needs_attention_spec_becomes_pickable_queue_head`.
+    assert_eq!(
+        rework_target_for_mode(&RequirementStatus::NeedsAttention, true),
+        Some(RequirementStatus::InProgress)
+    );
+
+    let _role = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
+    handle_queue_rework(
+        &storage,
+        "BUG-1494",
+        true, // work: true — the --work / --resume chain the incident used
+        Some("implementer"),
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("codex"),
+    )
+    .expect("a refused rework is a no-op, not an error");
+
+    let after = storage.load().unwrap();
+    assert_eq!(
+        after.get_requirement_by_spec_id("BUG-1494").unwrap().status,
+        RequirementStatus::NeedsAttention,
+        "a refused rework must leave the spec parked, not laundered into InProgress"
+    );
+    assert!(
+        storage
+            .queue_list("codex", true)
+            .unwrap_or_default()
+            .is_empty(),
+        "a refused rework must not leave a queue entry (or launch a session) behind"
+    );
+}
+
 #[test]
 fn queue_destination_contract_names_local_role_queue() {
     // trace:STORY-1002 | ai:codex

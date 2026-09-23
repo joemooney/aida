@@ -687,6 +687,10 @@ fn notify_finished_live_sessions(project_root: &std::path::Path, rows: &mut [Not
             retracted: false,
             deleted: false,
             archived: false,
+            // A fixed system identity, not an ambiguous env fallback.
+            // trace:BUG-1533 | ai:claude
+            from_source: aida_core::mailbox::SenderSource::Explicit,
+            from_role: None,
         };
         if let Err(e) = mailbox_store::write_message(project_root, &msg) {
             row.outcome = Some(format!("notify failed — {e}"));
@@ -804,6 +808,9 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
     // trace:STORY-1043 | ai:codex
     if !opts.json && !report.unshipped_work.is_empty() && !opts.quiet_when_empty {
         println!("Unshipped work detected ({}):", report.unshipped_work.len());
+        // trace:TASK-1305 | ai:claude — this surface also renders `recovery`,
+        // so it shares awaiting_you's helper rather than reading the field
+        // straight (see TASK-1305 note on UnshippedWorkItem::recovery).
         for row in &report.unshipped_work {
             println!(
                 "  {} {} on `{}` — {} commit{} ahead, age {} — `{}`",
@@ -813,7 +820,7 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
                 row.commits_ahead,
                 if row.commits_ahead == 1 { "" } else { "s" },
                 row.age,
-                row.recovery.cyan()
+                awaiting_you::unshipped_work_recovery_hint(row).cyan()
             );
         }
     }

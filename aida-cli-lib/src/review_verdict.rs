@@ -127,10 +127,106 @@ pub struct RecordedVerdict {
     /// to route a row to the reviewer WHO REFUSED had no way to ask.
     // trace:STORY-1419 | ai:claude
     pub recorded_by: Option<String>,
+    /// BUG-1529: the commit that closed this verdict out, when a refused
+    /// spec's reworked PR later merged. Distinct from a fresh `verdict`
+    /// overwrite — the refusal itself is left intact (audit trail), this
+    /// only records that the branch shipped past it. `None` on every file
+    /// this repo has never closed, including all pre-BUG-1529 records, so
+    /// old files keep reading fine.
+    // trace:BUG-1529 | ai:claude
+    pub closed_by_merge: Option<String>,
+    /// RFC-3339 timestamp of when `closed_by_merge` was recorded.
+    // trace:BUG-1529 | ai:claude
+    pub closed_at: Option<String>,
+}
+
+impl RecordedVerdict {
+    /// True once a merge has closed this verdict out — see
+    /// `closed_by_merge`. A closed verdict is not a fresh approval; it is
+    /// the original verdict PLUS a record that the branch moved on.
+    // trace:BUG-1529 | ai:claude
+    pub fn is_closed(&self) -> bool {
+        self.closed_by_merge.is_some()
+    }
+}
+
+/// BUG-1529 criterion 3: does this recorded verdict represent a refusal that
+/// is still OUTSTANDING — i.e. something a reader building an "outstanding
+/// refusals" report should surface?
+///
+/// Two independent ways a blocking verdict stops being outstanding:
+///   - it was explicitly closed by a merge (`closed_by_merge`, set going
+///     forward by `close_verdict_on_merge`), or
+///   - the caller's own store already shows the spec as `Completed` — the
+///     BUG-1529 criterion 4 fallback for the pre-existing corpus this fix
+///     cannot retroactively rewrite (this module never touches a live verdict
+///     file except at the moment a merge is observed). A Completed spec's
+///     work shipped by definition, so a still-`request-changes` record on it
+///     is exactly the false positive this bug measured (STORY-1033, STORY-818)
+///     and must not read as outstanding regardless of whether it was ever
+///     closed.
+///
+/// `spec_completed` is supplied by the caller (this module deliberately does
+/// not depend on `aida_core`'s store/status types, to stay a small, pure,
+/// filesystem-only module).
+// trace:BUG-1529 | ai:claude
+pub fn is_outstanding_refusal(verdict: &RecordedVerdict, spec_completed: bool) -> bool {
+    verdict.kind.blocks_done() && !verdict.is_closed() && !spec_completed
 }
 
 /// Path of the per-spec verdict file. Spec ids are upper-cased so
 /// `bug-775` and `BUG-775` resolve to the same record.
+/// Stage `body` in a temp file next to `path`, rename it into place (atomic
+/// on the same filesystem — no reader ever observes a half-written file),
+/// then read the file back and confirm the bytes landed. BUG-1571: a bare
+/// `fs::write` returning `Ok(())` is not proof the artefact is durably on
+/// disk under concurrent activity (another writer, a sweep, a racy
+/// filesystem) — this makes "written" mean "confirmed present with the
+/// staged content", not "the syscall returned". Every writer in this module
+/// routes through this one boundary so the guarantee is uniform.
+// trace:BUG-1571 | ai:claude
+pub(crate) fn write_verdict_atomic(path: &Path, body: &str) -> std::io::Result<()> {
+    let dir = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(dir)?;
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("verdict.json");
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp_path = dir.join(format!(".{file_name}.tmp-{}-{nanos}", std::process::id()));
+    let staged = (|| -> std::io::Result<()> {
+        std::fs::write(&tmp_path, body)?;
+        std::fs::rename(&tmp_path, path)?;
+        Ok(())
+    })();
+    if let Err(e) = staged {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(std::io::Error::new(
+            e.kind(),
+            format!("could not write {}: {e}", path.display()),
+        ));
+    }
+    // Verify: an honest "written" claim reads the artefact back rather than
+    // trusting the write syscall's return value.
+    match std::fs::read_to_string(path) {
+        Ok(on_disk) if on_disk == body => Ok(()),
+        Ok(_) => Err(std::io::Error::other(format!(
+            "wrote {} but the content on disk does not match what was staged",
+            path.display()
+        ))),
+        Err(e) => Err(std::io::Error::other(format!(
+            "wrote {} but could not read it back to confirm: {e}",
+            path.display()
+        ))),
+    }
+}
+
 pub fn verdict_path(project_root: &Path, spec: &str) -> PathBuf {
     project_root
         .join(".aida")
@@ -171,6 +267,8 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         reviewed_branch: str_field("reviewed_branch"),
         recorded_by: str_field("recorded_by"),
         recorded_at: str_field("recorded_at"),
+        closed_by_merge: str_field("closed_by_merge"),
+        closed_at: str_field("closed_at"),
         summary: str_field("summary"),
         comment_url: str_field("comment_url"),
         review_comment: str_field("review_comment")
@@ -235,7 +333,10 @@ fn recording_key(m: &JsonObj) -> RecordingKey {
     )
 }
 
-fn same_reviewed_sha(a: &str, b: &str) -> bool {
+// trace:BUG-1490 | ai:claude — widened from private so awaiting_you's
+// caller (lib.rs) can apply the same prefix-tolerant sha match a recorded
+// verdict already uses elsewhere, instead of re-deriving comparison rules.
+pub(crate) fn same_reviewed_sha(a: &str, b: &str) -> bool {
     let a = a.trim();
     let b = b.trim();
     let common = a.len().min(b.len());
@@ -777,7 +878,7 @@ pub fn backfill_abbreviated_shas(
         if !dry_run {
             let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
                 .unwrap_or_else(|_| "{}".to_string());
-            std::fs::write(&path, format!("{body}\n"))?;
+            write_verdict_atomic(&path, &format!("{body}\n"))?;
         }
     }
     Ok(report)
@@ -806,13 +907,15 @@ pub fn record_verdict(
     )
 }
 
-/// Record a verdict at an explicitly anchored artifact path. The orchestrator
-/// uses this for `PR-N.json`; sharing this boundary with spec-keyed records is
-/// what prevents the authoritative handshake from silently clobbering another
-/// reviewer's evidence.
-// trace:BUG-1581 | ai:codex
+/// Build the verdict JSON object for `path` without writing it. Split out of
+/// [`record_verdict_at_path`] so a caller that must layer extra fields onto
+/// the same record (the orchestrator's phase-3 handshake adds `mode`) can do
+/// so before the single durable write, instead of writing once and then
+/// read-modify-writing the same path again — every extra write to one path
+/// is another window for BUG-1571's "reported written, wasn't" failure mode.
+// trace:BUG-1571 | ai:claude
 #[allow(clippy::too_many_arguments)]
-pub fn record_verdict_at_path(
+pub(crate) fn build_verdict_object(
     project_root: &Path,
     path: &Path,
     verdict: Option<&str>,
@@ -821,11 +924,8 @@ pub fn record_verdict_at_path(
     summary: Option<&str>,
     findings: &[String],
     recorded_by: &str,
-) -> std::io::Result<PathBuf> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let mut obj = std::fs::read_to_string(&path)
+) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+    let mut obj = std::fs::read_to_string(path)
         .ok()
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned())
@@ -865,6 +965,11 @@ pub fn record_verdict_at_path(
             .collect(),
     );
     archive_current_round(&mut obj, &incoming_key);
+    // BUG-1529 review fix: a close belongs to the round it closed. A new
+    // round of review must not inherit it, or a fresh refusal reads as
+    // resolved. trace:BUG-1529 | ai:claude
+    obj.remove("closed_by_merge");
+    obj.remove("closed_at");
     let mut set = |k: &str, v: Option<&str>| {
         if let Some(v) = v.map(str::trim).filter(|s| !s.is_empty()) {
             obj.insert(k.to_string(), serde_json::Value::String(v.to_string()));
@@ -888,10 +993,126 @@ pub fn record_verdict_at_path(
     if !findings.is_empty() {
         obj.insert("findings".to_string(), serde_json::Value::Array(findings));
     }
-    let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
-        .unwrap_or_else(|_| "{}".to_string());
-    std::fs::write(&path, format!("{body}\n"))?;
+    Ok(obj)
+}
+
+/// Record a verdict at an explicitly anchored artifact path. The orchestrator
+/// uses this for `PR-N.json`; sharing this boundary with spec-keyed records is
+/// what prevents the authoritative handshake from silently clobbering another
+/// reviewer's evidence. Builds the object via [`build_verdict_object`] and
+/// performs exactly one durable, verified write (BUG-1571) — a caller that
+/// needs to add fields on top of the same record should call
+/// `build_verdict_object` + `write_verdict_object` directly rather than
+/// writing here and then again, which is the double-write BUG-1571 removed.
+// trace:BUG-1581 | ai:codex
+// trace:BUG-1571 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub fn record_verdict_at_path(
+    project_root: &Path,
+    path: &Path,
+    verdict: Option<&str>,
+    reviewed_sha: Option<&str>,
+    reviewed_branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    recorded_by: &str,
+) -> std::io::Result<PathBuf> {
+    let obj = build_verdict_object(
+        project_root,
+        path,
+        verdict,
+        reviewed_sha,
+        reviewed_branch,
+        summary,
+        findings,
+        recorded_by,
+    )?;
+    write_verdict_object(path, &obj)?;
     Ok(path.to_path_buf())
+}
+
+/// Serialize `obj` and durably write it to `path` (BUG-1571: atomic
+/// rename + read-back verification via [`write_verdict_atomic`]). Public so
+/// a caller that folds extra fields onto a [`build_verdict_object`] result
+/// (the orchestrator's phase-3 handshake) still writes through the one
+/// verified boundary instead of a bare `fs::write`.
+// trace:BUG-1571 | ai:claude
+pub(crate) fn write_verdict_object(
+    path: &Path,
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> std::io::Result<()> {
+    let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj.clone()))
+        .unwrap_or_else(|_| "{}".to_string());
+    write_verdict_atomic(path, &format!("{body}\n"))
+}
+
+/// BUG-1529 criterion 1: close a spec's outstanding refusal out when its
+/// reworked work merges. Called from the same place `auto_bump_done_to_completed`
+/// (and its stranded/stale-review siblings in `lib.rs`) already detect a
+/// Done→Completed transition, so this reuses their merge-detection rather than
+/// re-deriving it.
+///
+/// Deliberately narrow:
+///   - a no-op (`Ok(false)`) when there is no verdict file, when the recorded
+///     verdict is not blocking (nothing to close — an approval was never a
+///     refusal), or when it is already closed (first closing sha wins; this
+///     never overwrites `closed_by_merge`, so an idempotent re-run of the
+///     auto-bump scan can't spuriously rewrite the record).
+///   - never touches `verdict`, `summary`, `findings`, or `rounds` — closing
+///     is an ANNOTATION on the refusal, not a new review. Criterion 2: a
+///     closed refusal must stay distinguishable from a fresh approving
+///     review, and overwriting the verdict word would erase that distinction
+///     (and the audit trail STORY-1391 exists to keep).
+///
+/// `merge_ref` is normally the merge/landing commit sha; when the landing
+/// commit is unknown (e.g. the stranded-review-PR path, which only has a PR
+/// number from the forge) callers pass a `PR-<n>` marker instead — either way
+/// it is a human-readable pointer to WHAT closed the refusal, and an empty
+/// string is refused rather than silently recorded as a closer with no
+/// evidence.
+// trace:BUG-1529 | ai:claude
+pub fn close_verdict_on_merge(
+    project_root: &Path,
+    spec: &str,
+    merge_ref: &str,
+) -> std::io::Result<bool> {
+    let merge_ref = merge_ref.trim();
+    if merge_ref.is_empty() {
+        return Ok(false);
+    }
+    let path = verdict_path(project_root, spec);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return Ok(false);
+    };
+    let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&body) else {
+        return Ok(false);
+    };
+    let Some(raw_verdict) = obj.get("verdict").and_then(|v| v.as_str()) else {
+        return Ok(false);
+    };
+    if !VerdictKind::parse(raw_verdict).blocks_done() {
+        return Ok(false);
+    }
+    let already_closed = obj
+        .get("closed_by_merge")
+        .and_then(|v| v.as_str())
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+    if already_closed {
+        return Ok(false);
+    }
+    obj.insert(
+        "closed_by_merge".to_string(),
+        serde_json::Value::String(merge_ref.to_string()),
+    );
+    obj.insert(
+        "closed_at".to_string(),
+        serde_json::Value::String(chrono::Utc::now().to_rfc3339()),
+    );
+    let pretty = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
+        .unwrap_or_else(|_| "{}".to_string());
+    write_verdict_atomic(&path, &format!("{pretty}\n"))?;
+    Ok(true)
 }
 
 /// Where the branch tip sits relative to the commit the verdict named.
@@ -929,6 +1150,81 @@ pub fn classify_tip_relation(
         Some(true) => TipRelation::AdvancedPast,
         Some(false) => TipRelation::Rewritten,
         None => TipRelation::Unknown,
+    }
+}
+
+/// Whether a routed reviewer-queue entry is actionable BY THE REVIEWER, or
+/// whether it already has a verdict covering the current head and the real
+/// next step lies elsewhere. BUG-1508: a routed entry that doesn't say this
+/// reads as review-to-do even when four out of five are really rework, so a
+/// queue that "reads five-deep" can in fact have one real review outstanding.
+// trace:BUG-1508 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewActionability {
+    /// No verdict exists that provably covers the current head: no verdict
+    /// at all, a verdict whose sha differs from the head (advanced or
+    /// rewritten), OR a verdict that can never be placed against a head
+    /// (no `reviewed_sha` recorded) — criterion 8 treats that last case as
+    /// ABSENT rather than reassuring, per PRIN-5. Actionable to the reviewer.
+    NeedsReview,
+    /// A blocking verdict (request-changes / rejected) covers the EXACT
+    /// current head. The spec still needs attention — criterion 2 — but the
+    /// attention is rework by the implementer, not a fresh review.
+    AwaitingRework,
+    /// A non-blocking verdict (approved) covers the exact current head.
+    /// Nothing further is owed to the reviewer role for this head.
+    Resolved,
+}
+
+impl ReviewActionability {
+    /// Stable machine-readable token (used for `--json` output and the
+    /// queue-list annotation). Never a user-facing sentence.
+    // trace:BUG-1508 | ai:claude
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ReviewActionability::NeedsReview => "needs-review",
+            ReviewActionability::AwaitingRework => "awaiting-rework",
+            ReviewActionability::Resolved => "resolved",
+        }
+    }
+}
+
+/// Classify a routed reviewer entry's actionability from its recorded
+/// verdict and where the current head sits relative to it (criterion 1).
+///
+/// Deliberately re-derived from live inputs every call rather than cached:
+/// when the head later moves, `relation` stops being `AtReviewedSha` on the
+/// very next read and the entry reappears as `NeedsReview` with no special
+/// handling required — criterion 3.
+///
+/// `TipRelation::Unknown` already covers both "no `reviewed_sha` was ever
+/// recorded" (criterion 8's permanently-indeterminate population — 409 of
+/// 543 verdict files corpus-wide) and "the ancestry probe itself failed" —
+/// both fold into `NeedsReview` here, the fail-closed, PRIN-5-consistent
+/// answer: absent evidence is never read as good evidence.
+// trace:BUG-1508 | ai:claude
+pub fn review_actionability(
+    verdict: Option<&RecordedVerdict>,
+    relation: TipRelation,
+) -> ReviewActionability {
+    let Some(v) = verdict else {
+        return ReviewActionability::NeedsReview;
+    };
+    // BUG-1529: a refusal that was closed out by a merge is not something the
+    // reviewer role still owes rework on — the branch that would have
+    // answered it already shipped. Checked ahead of the sha relation so a
+    // closed record reads Resolved even though the head has since moved past
+    // the reviewed sha (it always has, by the time a merge closes it).
+    if v.is_closed() {
+        return ReviewActionability::Resolved;
+    }
+    if relation != TipRelation::AtReviewedSha {
+        return ReviewActionability::NeedsReview;
+    }
+    if v.kind.blocks_done() {
+        ReviewActionability::AwaitingRework
+    } else {
+        ReviewActionability::Resolved
     }
 }
 
@@ -980,6 +1276,33 @@ pub fn queue_done_verdict_gate(
         .into_iter()
         .filter(|l| !l.is_empty())
         .collect());
+    }
+    // An unrecognised verdict word is not evidence of approval. `handle_review_record`
+    // already refuses to WRITE one (`VerdictKind::Other` bails before the file is
+    // written), but an older/hand-edited file can still carry a word `parse` does not
+    // recognise, and falling through the way `blocks_done() == false` handles a real
+    // Approved verdict would silently treat "could not classify" as "passed" — the same
+    // shape as the preflight Skipped-funnels-to-Open defect. Refuse and say why instead.
+    // trace:BUG-1507 | ai:claude (PRIN-5: absent is not good evidence)
+    if v.kind == VerdictKind::Other {
+        return VerdictGate::Refuse(
+            vec![
+                format!(
+                    "error: aida queue done refused (exit 1) — the last review of {display_id} \
+                     recorded an unrecognised verdict word `{}`, so this check cannot determine \
+                     whether the review passed or blocked.",
+                    v.raw
+                ),
+                summary_line(v),
+                "A review gate that cannot classify the verdict must not wave work through. \
+                 Record a fresh, recognised verdict against the current head: `aida review \
+                 record` accepts approved, request-changes, or rejected."
+                    .to_string(),
+            ]
+            .into_iter()
+            .filter(|l| !l.is_empty())
+            .collect(),
+        );
     }
     if !v.kind.blocks_done() {
         return non_blocking_verdict_gate(display_id, v, relation);

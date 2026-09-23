@@ -21,6 +21,111 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+/// Which precedence tier resolved a message's `from` identity at send time
+/// (BUG-1533). Mirrors the resolution order the session identity itself
+/// uses — a launched agent's stable process name, then the opt-in queue
+/// identity, then the session-role persona — falling back to the bare shell
+/// user (or "default") only last. Recorded alongside `from` so a reader can
+/// tell a real seat apart from the ambiguous fallback instead of inferring
+/// it from body prose; the fallback case is the "unknown-seat marker"
+/// (acceptance #2) — `from` still carries a usable string, but `from_source`
+/// says plainly that it is not a resolved seat identity.
+///
+/// `Legacy` is the `#[serde(default)]` value for every message written
+/// before this field existed — it is NOT a resolution outcome
+/// `resolve_sender` ever returns, only what a pre-BUG-1533 record
+/// deserializes to. Existing records are left exactly as they are
+/// (acceptance #5); this default lets old JSON files load without a guess
+/// at which tier they would have resolved through.
+// trace:BUG-1533 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SenderSource {
+    /// An explicit override (`--from`, or an MCP `from` argument).
+    Explicit,
+    /// `AIDA_AGENT_NAME` — the launched agent process's stable name.
+    AgentName,
+    /// `AIDA_USER` — the opt-in session/queue identity (BUG-89).
+    AidaUser,
+    /// `AIDA_SESSION_ROLE` — the active role persona (e.g. `advisor`).
+    SessionRole,
+    /// The bare shell user (`USER`/`USERNAME`), or the literal `"default"`
+    /// when even that is unset — the ambiguous collapse this bug is about.
+    ShellUser,
+    /// Written before `from_source` existed; the true source is unknown.
+    #[default]
+    Legacy,
+}
+
+impl SenderSource {
+    /// The lowercase token form (matches the serde rename and CLI/MCP output).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SenderSource::Explicit => "explicit",
+            SenderSource::AgentName => "agent_name",
+            SenderSource::AidaUser => "aida_user",
+            SenderSource::SessionRole => "session_role",
+            SenderSource::ShellUser => "shell_user",
+            SenderSource::Legacy => "legacy",
+        }
+    }
+
+    /// Does this source identify a real, stable seat rather than the
+    /// ambiguous shell-user (or pre-field legacy) fallback? Used by display
+    /// surfaces to flag the collapse case instead of showing it as if it
+    /// were an attributed identity.
+    // trace:BUG-1533 | ai:claude
+    pub fn is_attributed(&self) -> bool {
+        !matches!(self, SenderSource::ShellUser | SenderSource::Legacy)
+    }
+}
+
+/// Resolve a message's `from` identity at send time (BUG-1533), given the
+/// caller's already-read inputs (kept pure/env-free for testability; the CLI
+/// wrapper reads the env vars). Precedence, highest first:
+///
+///   1. `explicit`     — an explicit `--from` / MCP `from` override
+///   2. `agent_name`   — `AIDA_AGENT_NAME`, a launched agent's stable name
+///   3. `aida_user`    — `AIDA_USER`, the opt-in queue/session identity
+///   4. `session_role` — `AIDA_SESSION_ROLE`, the active role persona
+///   5. `shell_user`   — the bare shell user, only as a last resort
+///
+/// Deliberately NOT the BUG-89 queue-identity order (`AIDA_USER` first): a
+/// seat that already has `AIDA_AGENT_NAME` set (every properly-launched
+/// agent does) gets a stable mail identity WITHOUT touching `AIDA_USER`, so
+/// adopting mail attribution never re-keys the queue (acceptance #6). Empty
+/// inputs are treated as absent. Returns `"default"` with [`SenderSource::ShellUser`]
+/// when nothing at all resolves, matching the pre-existing `current_user_id`
+/// last-ditch literal.
+// trace:BUG-1533 | ai:claude
+pub fn resolve_sender(
+    explicit: Option<&str>,
+    agent_name: Option<&str>,
+    aida_user: Option<&str>,
+    session_role: Option<&str>,
+    shell_user: Option<&str>,
+) -> (String, SenderSource) {
+    fn nonempty(s: Option<&str>) -> Option<&str> {
+        s.map(str::trim).filter(|s| !s.is_empty())
+    }
+    if let Some(v) = nonempty(explicit) {
+        return (v.to_string(), SenderSource::Explicit);
+    }
+    if let Some(v) = nonempty(agent_name) {
+        return (v.to_string(), SenderSource::AgentName);
+    }
+    if let Some(v) = nonempty(aida_user) {
+        return (v.to_string(), SenderSource::AidaUser);
+    }
+    if let Some(v) = nonempty(session_role) {
+        return (v.to_string(), SenderSource::SessionRole);
+    }
+    if let Some(v) = nonempty(shell_user) {
+        return (v.to_string(), SenderSource::ShellUser);
+    }
+    ("default".to_string(), SenderSource::ShellUser)
+}
+
 /// A message recipient: a specific agent, or every agent (broadcast).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "agent", rename_all = "snake_case")]
@@ -186,6 +291,26 @@ pub struct Message {
     // trace:TASK-1211 | ai:codex
     #[serde(default)]
     pub archived: bool,
+    /// Which precedence tier resolved `from` at send time — see
+    /// [`SenderSource`]. Defaults to `Legacy` for messages written before
+    /// this field existed, so old records deserialize unchanged (append-only,
+    /// non-breaking, same pattern as `urgent`/`intent`) and are never guessed
+    /// into looking attributed.
+    // trace:BUG-1533 | ai:claude
+    #[serde(default)]
+    pub from_source: SenderSource,
+    /// The sender's active session role (`AIDA_SESSION_ROLE`, normalized),
+    /// recorded alongside `from` when a seat's role was actually known at
+    /// send time — not a forced default. `None` for messages sent with no
+    /// role set, and for every message written before this field existed
+    /// (`#[serde(default)]` makes those deserialize unchanged, append-only
+    /// and non-breaking, same pattern as `from_source`). BUG-1592's AC2:
+    /// BUG-1533 recorded the agent id via `from`/`from_source` but dropped
+    /// the role half of "who sent this" — a bare agent id (e.g. an
+    /// instance name) doesn't say which seat it was acting as.
+    // trace:BUG-1592 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_role: Option<String>,
 }
 
 impl Message {
@@ -855,6 +980,8 @@ mod tests {
             retracted: false,
             deleted: false,
             archived: false,
+            from_source: SenderSource::Explicit,
+            from_role: None,
         }
     }
 
@@ -1519,5 +1646,159 @@ mod tests {
         std::fs::create_dir_all(&marker_dir).unwrap();
         std::fs::write(marker_dir.join("weird_agent.txt"), b"99").unwrap();
         assert_eq!(read_local_watermark(root, "weird/agent"), Some(99));
+    }
+
+    // ── BUG-1533: mail sender identity resolution ───────────────────────────
+
+    #[test]
+    fn resolve_sender_prefers_explicit_over_every_env_tier() {
+        let (from, source) = resolve_sender(
+            Some("explicit-name"),
+            Some("agent-name"),
+            Some("aida-user"),
+            Some("advisor"),
+            Some("joe"),
+        );
+        assert_eq!(from, "explicit-name");
+        assert_eq!(source, SenderSource::Explicit);
+    }
+
+    #[test]
+    fn resolve_sender_prefers_agent_name_over_aida_user_and_role() {
+        // BUG-1533 acceptance #6: a launched agent already carries
+        // AIDA_AGENT_NAME, so it gets a stable mail identity without ever
+        // needing to set AIDA_USER (which would re-key the BUG-89 queue).
+        let (from, source) = resolve_sender(
+            None,
+            Some("claude-product-1"),
+            Some("joe"),
+            Some("advisor"),
+            Some("joe"),
+        );
+        assert_eq!(from, "claude-product-1");
+        assert_eq!(source, SenderSource::AgentName);
+    }
+
+    #[test]
+    fn resolve_sender_prefers_aida_user_over_session_role() {
+        let (from, source) =
+            resolve_sender(None, None, Some("joe.mooney"), Some("advisor"), Some("joe"));
+        assert_eq!(from, "joe.mooney");
+        assert_eq!(source, SenderSource::AidaUser);
+    }
+
+    #[test]
+    fn resolve_sender_falls_back_to_session_role_before_shell_user() {
+        let (from, source) = resolve_sender(None, None, None, Some("advisor"), Some("joe"));
+        assert_eq!(from, "advisor");
+        assert_eq!(source, SenderSource::SessionRole);
+    }
+
+    #[test]
+    fn resolve_sender_falls_back_to_shell_user_only_last_and_flags_it() {
+        // The exact BUG-1533 collapse case: no agent name, no AIDA_USER, no
+        // role — only the shell user is left, and it must be flagged, not
+        // silently treated as an attributed seat.
+        let (from, source) = resolve_sender(None, None, None, None, Some("joe"));
+        assert_eq!(from, "joe");
+        assert_eq!(source, SenderSource::ShellUser);
+        assert!(!source.is_attributed());
+    }
+
+    #[test]
+    fn resolve_sender_uses_default_literal_when_nothing_resolves() {
+        let (from, source) = resolve_sender(None, None, None, None, None);
+        assert_eq!(from, "default");
+        assert_eq!(source, SenderSource::ShellUser);
+    }
+
+    #[test]
+    fn resolve_sender_treats_blank_env_values_as_absent() {
+        // A set-but-empty env var must not win over a lower, real tier.
+        let (from, source) =
+            resolve_sender(Some(""), Some("  "), None, Some("advisor"), Some("joe"));
+        assert_eq!(from, "advisor");
+        assert_eq!(source, SenderSource::SessionRole);
+    }
+
+    #[test]
+    fn two_seats_sharing_a_shell_user_produce_distinguishable_envelopes() {
+        // BUG-1533 acceptance #4: two seats sending from the same shell user
+        // (both USER=joe) must be distinguishable in the envelope once each
+        // carries its own stable identity source.
+        let (product_from, product_source) =
+            resolve_sender(None, Some("claude-product-1"), None, None, Some("joe"));
+        let (advisor_from, advisor_source) =
+            resolve_sender(None, None, None, Some("advisor"), Some("joe"));
+        assert_ne!(product_from, advisor_from);
+        assert_eq!(product_source, SenderSource::AgentName);
+        assert_eq!(advisor_source, SenderSource::SessionRole);
+    }
+
+    #[test]
+    fn one_seat_resolves_to_one_envelope_identity_across_a_session() {
+        // BUG-1533 acceptance #4 addendum: the SAME seat's env (fixed
+        // AIDA_AGENT_NAME across every send in the session) must resolve to
+        // the SAME envelope identity every time — no split across `from`
+        // strings the way the advisor's mail split across `joe` and
+        // `advisor` before this fix.
+        let seat_env = (
+            None,
+            Some("claude-advisor-1"),
+            Some("joe"),
+            Some("advisor"),
+            Some("joe"),
+        );
+        let first = resolve_sender(seat_env.0, seat_env.1, seat_env.2, seat_env.3, seat_env.4);
+        let second = resolve_sender(seat_env.0, seat_env.1, seat_env.2, seat_env.3, seat_env.4);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn legacy_message_without_from_source_field_deserializes_as_legacy() {
+        // Acceptance #5: existing records are left as they are — a message
+        // JSON written before this field existed must not be guessed into
+        // looking attributed on read.
+        let json = serde_json::json!({
+            "id": "m1",
+            "thread_id": "m1",
+            "from": "joe",
+            "to": {"kind": "broadcast"},
+            "timestamp": 10,
+            "body": "hi",
+        });
+        let m: Message = serde_json::from_value(json).unwrap();
+        assert_eq!(m.from_source, SenderSource::Legacy);
+        assert!(!m.from_source.is_attributed());
+        // trace:BUG-1592 | ai:claude — `from_role` is append-only too: a
+        // pre-existing record with no such field must deserialize to `None`,
+        // not a guessed role.
+        assert_eq!(m.from_role, None);
+    }
+
+    // trace:BUG-1592 | ai:claude
+    #[test]
+    fn from_role_round_trips_and_is_omitted_when_absent() {
+        let mut m = msg(
+            "m1",
+            "m1",
+            "claude-impl-7",
+            Recipient::Agent("bob".into()),
+            10,
+        );
+        m.from_role = Some("advisor".to_string());
+        let json = serde_json::to_value(&m).unwrap();
+        assert_eq!(json["from_role"], serde_json::json!("advisor"));
+        let back: Message = serde_json::from_value(json).unwrap();
+        assert_eq!(back.from_role.as_deref(), Some("advisor"));
+
+        // `None` is omitted entirely (not serialized as `null`), matching
+        // `from_source`'s established append-only shape.
+        m.from_role = None;
+        let json = serde_json::to_value(&m).unwrap();
+        assert!(
+            json.get("from_role").is_none(),
+            "from_role must be OMITTED when absent, not written as null: {json:?}"
+        );
     }
 }

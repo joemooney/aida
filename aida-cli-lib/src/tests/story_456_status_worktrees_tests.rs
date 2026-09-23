@@ -40,6 +40,7 @@ fn pr_item(number: u64, branch: &str) -> status_cleanup::OpenPrItem {
         review_decision: None,
         head_sha: None,
         labels: Vec::new(),
+        created_at: None,
     }
 }
 

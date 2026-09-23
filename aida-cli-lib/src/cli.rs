@@ -180,7 +180,9 @@ pub enum MergeHoldAction {
         json: bool,
         /// Re-sync the `aida:merge-hold` label on every live hold whose
         /// recorded label state is not `synced` (repairs a hold whose label
-        /// never landed, so the required merge-hold-gate check enforces it).
+        /// never landed, so the required merge-hold-gate check enforces it),
+        /// and re-route every recusal hold to a live independent reader at
+        /// the PR's current head.
         // trace:BUG-1236 | ai:claude
         #[clap(long)]
         fix: bool,
@@ -909,6 +911,38 @@ pub enum ReviewCommand {
         pr: Option<u64>,
     },
 
+    /// Mark a pull request as under review, so nothing merges it before
+    /// your verdict lands.
+    ///
+    /// While the claim is live, `aida pr ship` and a drain's merge phase
+    /// refuse to merge the PR at the claimed head, and `aida awaiting`
+    /// shows it as under review. `aida review record … --pr N` clears the
+    /// claim; so does `--release`. It also expires on its own after
+    /// `--ttl-mins`, so an abandoned review never holds a PR indefinitely.
+    // trace:STORY-1405 | ai:claude
+    Claim {
+        /// Pull request number being reviewed.
+        #[clap(long, value_name = "N")]
+        pr: u64,
+
+        /// Head commit under review. Defaults to the PR's current head.
+        #[clap(long, value_name = "SHA")]
+        sha: Option<String>,
+
+        /// Spec the PR implements, shown alongside the claim.
+        #[clap(long, value_name = "SPEC")]
+        spec: Option<String>,
+
+        /// Minutes until the claim expires on its own. Capped at 1440 (24h);
+        /// a larger value is clamped, not refused.
+        #[clap(long, value_name = "MINUTES", default_value_t = 30)]
+        ttl_mins: u64,
+
+        /// Remove the claim instead of placing it (an abandoned review).
+        #[clap(long)]
+        release: bool,
+    },
+
     /// Show the recorded review verdict for a spec, if any.
     // trace:BUG-775 | ai:claude
     Verdict {
@@ -929,6 +963,21 @@ pub enum ReviewCommand {
         /// Report what would change without writing anything.
         #[clap(long)]
         dry_run: bool,
+    },
+
+    /// Report specs stranded by a refusal at the PR's current head: still
+    /// Done, unheld, unqueued. Read-only by default; `--fix` applies the
+    /// same protection a fresh refusal gets (merge hold + Needs Attention).
+    Stranded {
+        /// Emit the raw report as JSON.
+        #[clap(long)]
+        json: bool,
+
+        /// Explicit opt-in remediation: hold the PR and park the spec in
+        /// Needs Attention. Idempotent — a spec already protected is left
+        /// alone, so a second run changes nothing.
+        #[clap(long)]
+        fix: bool,
     },
 }
 
@@ -1849,6 +1898,24 @@ pub enum PrCommand {
         // trace:STORY-469 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         no_trailer_check: bool,
+
+        /// Ship even when the PR's green check completed before a
+        /// CI-definition file (a workflow, or a script it invokes directly)
+        /// changed on the base branch. Without this, ship refuses so a
+        /// green that no longer means what it looks like doesn't merge
+        /// unnoticed. A plain test-file change on the base branch only
+        /// warns and never needs this flag.
+        // trace:BUG-1468 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        override_stale_check: bool,
+
+        /// Ship even when the PR's newest recorded approval does not cover
+        /// its current head — the head moved past the approved commit, the
+        /// approval names no commit, or the head could not be read. Without
+        /// this, ship refuses: re-review the current head instead.
+        // trace:TASK-1448 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        override_stale_approval: bool,
     },
 
     /// Deliberately HOLD the PR on the current session — push the branch but
@@ -1868,6 +1935,31 @@ pub enum PrCommand {
         // trace:BUG-1294 | ai:claude
         #[clap(long, value_name = "REASON", allow_hyphen_values = true)]
         reason: Option<String>,
+    },
+
+    /// Sweep local review-snapshot branches (`pr-N` / `mr-N`, created by
+    /// `aida session start --owns PR-N` / `aida pr rebase` when they fetch a
+    /// change's head ref for headless review) whose change has reached a
+    /// terminal state (merged or closed). Nothing removes these today, so a
+    /// long-running project's local branch namespace accumulates one per
+    /// review, forever.
+    ///
+    /// A candidate is deleted only when: the change is merged/closed (an
+    /// open change is left alone — the review may still need it), the
+    /// branch isn't checked out in any worktree, and the branch's tip still
+    /// matches the change's last known head SHA (a branch that gained local
+    /// commits since the fetch is left alone rather than guessed at). Every
+    /// skip is reported with its reason. Scoped to the exact `pr-<digits>` /
+    /// `mr-<digits>` name shape `aida session start --owns PR-N` creates —
+    /// never touches an authored spec branch.
+    ///
+    /// Opt-in: this command is never run automatically. Use `--dry-run` to
+    /// preview before deleting.
+    // trace:TASK-1312 | ai:claude
+    Gc {
+        /// Report what would be deleted without deleting anything.
+        #[clap(long)]
+        dry_run: bool,
     },
 }
 
@@ -5250,6 +5342,11 @@ pub enum QueueCommand {
     Move {
         /// Requirement ID (UUID or SPEC-ID)
         id: String,
+        /// User ID whose queue to reorder (defaults to AIDA_USER or the
+        /// shell's $USER), matching every other queue verb (add/remove/list).
+        // trace:BUG-1487 | ai:claude
+        #[clap(long)]
+        user: Option<String>,
         /// Move to the front of the queue (slot 1). `--to-front` and
         /// `--to-top` are accepted aliases for the same action. When
         /// the target is already at slot 1, the command is a friendly
@@ -5369,17 +5466,19 @@ pub enum QueueCommand {
     },
     /// Garbage-collect dead routed queue entries — remove every entry whose
     /// backing spec is archived, completed, or rejected (terminal corpses that
-    /// linger in the queue file after the work shipped). The default `aida
+    /// linger in the queue file after the work shipped), OR whose routed
+    /// review's own PR already merged (the review story's status alone can't
+    /// say whether the review it wraps is still needed). The default `aida
     /// queue list` view already hides them, but the underlying queue file
-    /// still carries them; this sweeps them and reports the count. Sibling of
-    /// the two `aida queue prune` predicates — `prune --orphaned` targets
-    /// DELETED specs and `prune --merged` targets shipped reviewer rows, while
-    /// `gc` targets specs that still exist but are done with (archived /
-    /// terminal). Use `--dry-run` to preview. Still-actionable entries
-    /// (Draft/Approved/Planned/InProgress/Done) always survive.
+    /// still carries them; this sweeps them and reports the count and why.
+    /// Sibling of `aida queue prune --orphaned`, which targets DELETED specs.
+    /// Use `--dry-run` to preview. Still-actionable entries
+    /// (Draft/Approved/Planned/InProgress/Done) survive unless their PR
+    /// already merged.
     // trace:TASK-1052 | ai:claude — plain `//` so the SPEC-ID doesn't leak
     // into user-facing --help output per the TASK-268 convention.
     // trace:TASK-1063 | ai:claude
+    // trace:BUG-1512 | ai:claude
     Gc {
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
@@ -8188,6 +8287,19 @@ pub enum MaintenanceScheduleCommand {
 
     /// Print crontab lines for enabled substrate jobs with an `every`.
     EmitCron,
+
+    /// Install the crontab entry that drives `aida schedule tick` for this
+    /// repo every 15 minutes (Linux/macOS only; idempotent — safe to re-run).
+    /// This is what `aida init`'s TTY prompt calls, and the fix hint `aida
+    /// doctor` prints when it finds registered jobs but no installed driver.
+    // trace:STORY-1463 | ai:claude
+    InstallCron,
+
+    /// Remove this repo's crontab entry installed by `install-cron` (or the
+    /// `aida init` prompt). Idempotent — a no-op when nothing is installed;
+    /// never touches another repo's entry.
+    // trace:STORY-1463 | ai:claude
+    UninstallCron,
 }
 
 #[derive(Subcommand, Debug)]
@@ -10610,7 +10722,12 @@ pub enum Command {
     #[clap(subcommand, hide = true)]
     Dev(DevCommand),
 
-    /// Diagnose and heal AIDA multi-agent state drift.
+    /// Diagnose and heal AIDA multi-agent state drift. Report-only by
+    /// design: exit 0 means the scan RAN, not that it found nothing —
+    /// findings print as text/JSON either way. A caller that needs a
+    /// pass/fail signal (e.g. a CI gate or scheduled job) opts in with
+    /// `doctor check <category> --fail-on-findings`, which exits non-zero
+    /// only when that one category has findings.
     // trace:EPIC-19 trace:STORY-462
     Doctor {
         /// Apply safe fixes after scanning. Without this, doctor is read-only.
@@ -11528,6 +11645,16 @@ pub enum Command {
         // trace:TASK-698 | ai:claude
         #[clap(long)]
         no_agent_config: bool,
+
+        /// Skip the TTY offer to install the scheduler-tick crontab entry
+        /// (`aida schedule tick`, every 15m). Without this flag, a TTY init
+        /// still only offers — the default answer is no — and a
+        /// non-interactive init never prompts or installs anything either
+        /// way. Use this to suppress the offer itself, e.g. in a scripted
+        /// session run at a TTY.
+        // trace:STORY-1463 | ai:claude
+        #[clap(long)]
+        no_schedule: bool,
 
         /// Overwrite existing files if already initialized
         #[clap(long)]
@@ -14092,6 +14219,23 @@ mod tests {
         }
     }
 
+    // BUG-1552: `aida doctor` is report-only by design — exit 0 means "ran
+    // successfully," not "found nothing." That contract has to be
+    // discoverable from --help itself, not just docs, so this pins that
+    // the top-level `aida doctor --help` names the opt-in gate
+    // (`--fail-on-findings`) a caller reaches for when it wants pass/fail.
+    // trace:BUG-1552 | ai:claude
+    #[test]
+    fn doctor_help_names_fail_on_findings_gate() {
+        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let help = find_subcommand_help(&mut cmd, &["doctor"]);
+        let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("--fail-on-findings"),
+            "`aida doctor --help` no longer names --fail-on-findings; got:\n{help}"
+        );
+    }
+
     /// Render the long help for a nested subcommand path (e.g. `queue work`).
     // trace:TASK-185 | ai:claude
     fn find_subcommand_help(cmd: &mut clap::Command, path: &[&str]) -> String {
@@ -14460,5 +14604,37 @@ mod tests {
             msg.contains("unexpected argument") || msg.contains("unrecognized"),
             "expected a clear parse error for the mistyped flag, got: {msg}"
         );
+    }
+
+    // trace:TASK-1307 | ai:claude
+    #[test]
+    fn review_stranded_parses_json_and_fix_flags() {
+        let cli = Cli::try_parse_from(["aida", "review", "stranded", "--json", "--fix"]).unwrap();
+        match cli.command {
+            Command::Review {
+                cmd: Some(ReviewCommand::Stranded { json, fix }),
+                ..
+            } => {
+                assert!(json);
+                assert!(fix);
+            }
+            other => panic!("expected review stranded command, got {other:?}"),
+        }
+    }
+
+    // trace:TASK-1307 | ai:claude
+    #[test]
+    fn review_stranded_defaults_to_read_only() {
+        let cli = Cli::try_parse_from(["aida", "review", "stranded"]).unwrap();
+        match cli.command {
+            Command::Review {
+                cmd: Some(ReviewCommand::Stranded { json, fix }),
+                ..
+            } => {
+                assert!(!json);
+                assert!(!fix, "the sweep must default to read-only");
+            }
+            other => panic!("expected review stranded command, got {other:?}"),
+        }
     }
 }

@@ -291,11 +291,15 @@ fn send_advisor_nudge(project_root: &Path, advisor: &str, items: &[StuckItem]) -
 
     let id = uuid::Uuid::new_v4().to_string();
     let body = format_nudge_body(items);
+    // trace:BUG-1533 | ai:claude
+    let (from, from_source) = crate::resolve_mail_sender_identity(None);
+    // trace:BUG-1592 | ai:claude
+    let from_role = crate::resolve_mail_sender_role();
     let msg = Message {
         subject: None,
         id: id.clone(),
         thread_id: id,
-        from: crate::current_user_id(None),
+        from,
         to: Recipient::Agent(advisor.to_string()),
         timestamp: Utc::now().timestamp_millis(),
         in_reply_to: None,
@@ -305,6 +309,8 @@ fn send_advisor_nudge(project_root: &Path, advisor: &str, items: &[StuckItem]) -
         retracted: false,
         deleted: false,
         archived: false,
+        from_source,
+        from_role,
     };
     crate::mailbox_store::write_message(project_root, &msg)?;
     Ok(())

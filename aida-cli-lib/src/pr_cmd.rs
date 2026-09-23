@@ -34,6 +34,8 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             complexity,
             effort,
             no_trailer_check,
+            override_stale_check,
+            override_stale_approval,
         } => pr_ship_handler(
             *n,
             *no_pull,
@@ -43,8 +45,11 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             *complexity,
             *effort,
             *no_trailer_check,
+            *override_stale_check,
+            *override_stale_approval,
         ),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
+        PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
     }
 }
 
@@ -108,6 +113,267 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
         create_cmd,
         noun,
     );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// TASK-1312: `aida pr gc` — sweep local review-snapshot branches whose PR/MR
+// has reached a terminal state.
+//
+// Every `pr-N` (GitHub) / `mr-N` (GitLab) local branch this project creates
+// comes from fetching a forge change's head ref for headless review
+// (`aida session start --owns PR-N`, `aida pr rebase`; see BUG-229). Nothing
+// deletes it afterward, so a long-lived project's local branch namespace
+// accumulates one per review, without bound. `aida pr gc` is the opt-in
+// sweep: it never runs on its own, and it only ever touches branches whose
+// name is exactly that shape.
+// ---------------------------------------------------------------------------
+
+/// Disposition for one candidate review-snapshot branch. Kept separate from
+/// the git/forge I/O so the decision itself is a pure, table-testable
+/// function.
+// trace:TASK-1312 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PrGcAction {
+    /// Safe to delete: the change is merged/closed, the branch isn't
+    /// checked out anywhere, and its tip still matches the change's last
+    /// known head SHA.
+    Delete,
+    /// The change is still open — a review could still need this snapshot.
+    SkipOpen,
+    /// The branch is checked out in some worktree right now.
+    SkipCheckedOut,
+    /// The branch's tip no longer matches the change's head SHA (local
+    /// commits, or the change moved since the fetch) — not provably a pure
+    /// snapshot anymore, so it's left alone rather than guessed at.
+    SkipDiverged {
+        local_tip: String,
+        remote_head: String,
+    },
+    /// Couldn't resolve the change's state (no forge CLI, auth failure,
+    /// network error, deleted PR, …). Fails closed — nothing is deleted
+    /// when the terminal-state check itself failed.
+    SkipUnknownState(String),
+}
+
+/// Pure classifier: given what's already been observed about one candidate
+/// branch, decide whether it's safe to delete. No I/O.
+// trace:TASK-1312 | ai:claude
+pub(crate) fn classify_pr_gc_branch(
+    checked_out: bool,
+    state: Result<crate::forge::ChangeState, String>,
+    local_tip: &str,
+    remote_head_sha: &str,
+) -> PrGcAction {
+    if checked_out {
+        return PrGcAction::SkipCheckedOut;
+    }
+    match state {
+        Err(reason) => PrGcAction::SkipUnknownState(reason),
+        Ok(crate::forge::ChangeState::Open) => PrGcAction::SkipOpen,
+        Ok(crate::forge::ChangeState::Merged) | Ok(crate::forge::ChangeState::Closed) => {
+            if !remote_head_sha.is_empty() && local_tip == remote_head_sha {
+                PrGcAction::Delete
+            } else {
+                PrGcAction::SkipDiverged {
+                    local_tip: local_tip.to_string(),
+                    remote_head: remote_head_sha.to_string(),
+                }
+            }
+        }
+    }
+}
+
+/// Parse a local branch name as a review-snapshot ref: exactly `pr-<digits>`
+/// (GitHub) or `mr-<digits>` (GitLab) — the shape `ReviewForge::local_branch_for`
+/// creates. Anything else (an authored spec branch that happens to contain
+/// "pr", `pr-161-fixup`, …) is out of scope by construction.
+// trace:TASK-1312 | ai:claude
+pub(crate) fn parse_review_snapshot_branch(branch: &str) -> Option<(crate::forge::ForgeKind, u64)> {
+    let (prefix_len, kind) = if branch.starts_with("pr-") {
+        (3, crate::forge::ForgeKind::GitHub)
+    } else if branch.starts_with("mr-") {
+        (3, crate::forge::ForgeKind::GitLab)
+    } else {
+        return None;
+    };
+    let rest = &branch[prefix_len..];
+    if rest.is_empty() || !rest.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    rest.parse::<u64>().ok().map(|n| (kind, n))
+}
+
+/// List local branches matching the review-snapshot shape.
+// trace:TASK-1312 | ai:claude
+fn pr_gc_candidate_branches(project_root: &std::path::Path) -> Result<Vec<String>> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["for-each-ref", "--format=%(refname:short)", "refs/heads/"])
+        .output()
+        .context("running git for-each-ref")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git for-each-ref failed: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|b| parse_review_snapshot_branch(b).is_some())
+        .collect())
+}
+
+/// Is `branch` checked out in any worktree of this repo right now?
+// trace:TASK-1312 | ai:claude
+fn pr_gc_branch_checked_out(project_root: &std::path::Path, branch: &str) -> Result<bool> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+        .context("running git worktree list")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git worktree list failed: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    let needle = format!("branch refs/heads/{branch}");
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .any(|l| l.trim() == needle))
+}
+
+/// Resolve a local branch's tip SHA.
+// trace:TASK-1312 | ai:claude
+fn pr_gc_branch_tip(project_root: &std::path::Path, branch: &str) -> Result<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", &format!("refs/heads/{branch}")])
+        .output()
+        .context("running git rev-parse")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git rev-parse {branch} failed: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn pr_gc_delete_branch(project_root: &std::path::Path, branch: &str) -> Result<()> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["branch", "-D", branch])
+        .output()
+        .context("running git branch -D")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git branch -D {branch} failed: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(())
+}
+
+/// Resolve a candidate's terminal state + head SHA via the matching forge
+/// CLI in one call. `Err` (stringified — `PrGcAction` doesn't need the full
+/// error chain) on any failure to resolve, so the caller fails closed.
+// trace:TASK-1312 | ai:claude
+fn pr_gc_resolve_metadata(
+    project_root: &std::path::Path,
+    kind: crate::forge::ForgeKind,
+    n: u64,
+) -> Result<crate::forge::ChangeMetadata, String> {
+    crate::forge::forge_for_kind(project_root, kind)
+        .change_metadata(n, &mut network_retry::NoopSink)
+        .map_err(|e| e.to_string())
+}
+
+/// `aida pr gc` handler: sweep local `pr-N` / `mr-N` branches whose change
+/// has reached a terminal state.
+// trace:TASK-1312 | ai:claude
+pub(crate) fn pr_gc_handler(dry_run: bool) -> Result<()> {
+    let project_root = find_main_worktree_root()?;
+    let candidates = pr_gc_candidate_branches(&project_root)?;
+    if candidates.is_empty() {
+        println!("no local `pr-N` / `mr-N` review-snapshot branches found — nothing to sweep.");
+        return Ok(());
+    }
+
+    let mut deleted = 0usize;
+    let mut skipped = 0usize;
+    for branch in &candidates {
+        let Some((kind, n)) = parse_review_snapshot_branch(branch) else {
+            continue;
+        };
+        let checked_out = pr_gc_branch_checked_out(&project_root, branch)?;
+        let local_tip = pr_gc_branch_tip(&project_root, branch)?;
+        let (state, remote_head) = if checked_out {
+            // Skip the network round-trip — checked-out always skips.
+            (Err(String::new()), String::new())
+        } else {
+            match pr_gc_resolve_metadata(&project_root, kind, n) {
+                Ok(m) => (Ok(m.state), m.head_sha),
+                Err(e) => (Err(e), String::new()),
+            }
+        };
+        let action = classify_pr_gc_branch(checked_out, state, &local_tip, &remote_head);
+        match action {
+            PrGcAction::Delete => {
+                if dry_run {
+                    println!(
+                        "  would delete `{branch}` — {} merged/closed, matches fetched head",
+                        kind.change_noun()
+                    );
+                } else {
+                    pr_gc_delete_branch(&project_root, branch)?;
+                    println!("  {} deleted `{branch}`", "✓".green());
+                }
+                deleted += 1;
+            }
+            PrGcAction::SkipOpen => {
+                println!("  skip `{branch}` — {} still open", kind.change_noun());
+                skipped += 1;
+            }
+            PrGcAction::SkipCheckedOut => {
+                println!("  skip `{branch}` — checked out in a worktree");
+                skipped += 1;
+            }
+            PrGcAction::SkipDiverged {
+                local_tip,
+                remote_head,
+            } => {
+                println!(
+                    "  skip `{branch}` — has commits not on its remote head (local {}, remote {})",
+                    &local_tip[..local_tip.len().min(12)],
+                    if remote_head.is_empty() {
+                        "unknown".to_string()
+                    } else {
+                        remote_head[..remote_head.len().min(12)].to_string()
+                    }
+                );
+                skipped += 1;
+            }
+            PrGcAction::SkipUnknownState(reason) => {
+                println!(
+                    "  skip `{branch}` — could not resolve {} state ({reason})",
+                    kind.change_noun()
+                );
+                skipped += 1;
+            }
+        }
+    }
+
+    println!();
+    if dry_run {
+        println!(
+            "{deleted} branch(es) would be deleted, {skipped} skipped (dry run — nothing changed)."
+        );
+    } else {
+        println!("{deleted} branch(es) deleted, {skipped} skipped.");
+    }
     Ok(())
 }
 
@@ -977,19 +1243,61 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         eprintln!("  step 1: no uncommitted work — nothing to commit");
     }
 
-    // ---- Step 2: rebase onto current origin/main. ----
-    eprintln!("  step 2: rebasing onto current origin/main");
+    // ---- Step 2: rebase onto the branch's REAL base, not a hardcoded
+    // origin/main (TASK-1416). A stacked PR (base = another in-flight
+    // branch, not the repository default) that gets rebased onto main
+    // anyway silently replays its parent's commits a second time — the
+    // conflict this produces looks like a stale GitHub view, not the
+    // local mistake it is. Resolve the base from the branch's open PR
+    // (if any); fall back to the repository default when there's no PR
+    // yet or its base can't be read, and SAY SO before acting (PRIN-5).
+    let base_lookup = change_lookup_for_branch(&project_root, &branch);
+    // Review fix: an unreachable forge (offline, gh failure, gh missing) is
+    // "could not tell", not "no PR" — it must print the fallback note too.
+    // trace:TASK-1416 | ai:claude
+    let base_lookup_failed = finish_base_lookup_failed(&base_lookup);
+    let pr_number_for_base = match base_lookup {
+        crate::forge::ChangeLookup::Found(c) => Some(c.id),
+        _ => None,
+    };
+    let pr_base_branch = pr_number_for_base.and_then(finish_ceremony_pr_base);
+    let default_ref =
+        detect_default_branch_ref(&project_root).unwrap_or_else(|| "origin/main".to_string());
+    let rebase_target = pr_rebase::resolve_finish_rebase_base(
+        pr_number_for_base,
+        pr_base_branch.as_deref(),
+        &default_ref,
+    );
+    if let Some(note) = rebase_target.note() {
+        eprintln!(
+            "  {} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+            note
+        );
+    } else if base_lookup_failed {
+        eprintln!(
+            "  {} could not determine this branch's PR base (the forge lookup failed); \
+             falling back to {default_ref}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+        );
+    }
+    let origin_ref = rebase_target.origin_ref().to_string();
+    let remote_branch = origin_ref
+        .strip_prefix("origin/")
+        .unwrap_or(origin_ref.as_str())
+        .to_string();
+    eprintln!("  step 2: rebasing onto current {origin_ref}");
     let fetch = std::process::Command::new("git")
         .current_dir(&project_root)
-        .args(["fetch", "origin", "main"])
+        .args(["fetch", "origin", &remote_branch])
         .status()
         .context("could not invoke `git fetch`")?;
     if !fetch.success() {
-        anyhow::bail!("`git fetch origin main` failed — is the remote reachable?");
+        anyhow::bail!("`git fetch origin {remote_branch}` failed — is the remote reachable?");
     }
     let rebase = std::process::Command::new("git")
         .current_dir(&project_root)
-        .args(["rebase", "origin/main"])
+        .args(["rebase", &origin_ref])
         .status()
         .context("could not invoke `git rebase`")?;
     if !rebase.success() {
@@ -999,13 +1307,13 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
             .args(["rebase", "--abort"])
             .status();
         anyhow::bail!(
-            "rebase onto origin/main hit conflicts — aborted, worktree left clean.\n  \
-             Resolve by hand: `git rebase origin/main`, fix the conflicts, \
+            "rebase onto {origin_ref} hit conflicts — aborted, worktree left clean.\n  \
+             Resolve by hand: `git rebase {origin_ref}`, fix the conflicts, \
              `git rebase --continue`, then re-run `aida ship`."
         );
     }
     eprintln!(
-        "  {} rebased onto origin/main",
+        "  {} rebased onto {origin_ref}",
         crate::glyph(crate::glyphs::Glyph::Check).green()
     );
 
@@ -1045,6 +1353,9 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
                     c.id
                 }
                 _ => {
+                    // TASK-1442 (containment for BUG-1510): `spec` here is the
+                    // already-resolved spec this ceremony is shipping for.
+                    run_pr_open_spec_guard(&project_root, &branch, &spec);
                     let n = pr_ship_create_pr(&project_root, &branch)?;
                     eprintln!(
                         "  {} created PR-{}",
@@ -1078,6 +1389,8 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
                 None,                  // complexity
                 None,                  // effort
                 opts.no_trailer_check, // no_trailer_check
+                false,                 // override_stale_check — not exposed on `aida ship` yet
+                false, // override_stale_approval — not exposed on `aida ship` (TASK-1448)
             )
         }
     }
@@ -1090,6 +1403,15 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
 /// same branch.
 // trace:STORY-1171 | ai:claude
 pub(crate) fn pr_ship_target_branch(pr: u64) -> String {
+    finish_ceremony_pr_base(pr).unwrap_or_else(|| "main".to_string())
+}
+
+/// Read PR `pr`'s real base branch (`baseRefName`) from the forge. Returns
+/// `None` — never a guessed default — when `gh` is missing, the call fails,
+/// or the field comes back empty; callers decide the fallback and whether
+/// to say so.
+// trace:TASK-1416 | ai:claude
+fn finish_ceremony_pr_base(pr: u64) -> Option<String> {
     std::process::Command::new("gh")
         .args([
             "pr",
@@ -1105,7 +1427,6 @@ pub(crate) fn pr_ship_target_branch(pr: u64) -> String {
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "main".to_string())
 }
 
 /// Acquire the branch merge-lease for this ship, or REFUSE (Err) if a live merger
@@ -1131,6 +1452,100 @@ fn acquire_merge_lease(
     })
 }
 
+// Emit the same `PrMerged` event the drain's merge phase emits
+// (`DriveContext::merge_pr` in `lib.rs`), from `aida pr ship` — so a feed
+// consumer cannot tell whether a merge came from the orchestrator or an
+// explicit ship. One event per spec the PR is credited to; a PR crediting no
+// resolvable spec still emits once with `spec: None` so the merge is never
+// silently dropped. `emit` itself is best-effort (never errors the ship);
+// isolated here so the target-derivation logic is unit-testable without
+// stubbing `gh`. trace:BUG-1423 | ai:claude
+fn emit_ship_pr_merged(main_worktree: &std::path::Path, pr: u32, spec_ids: &[String]) {
+    let seat = crate::events::active_seat();
+    let targets: Vec<Option<String>> = if spec_ids.is_empty() {
+        vec![None]
+    } else {
+        spec_ids.iter().cloned().map(Some).collect()
+    };
+    for spec in targets {
+        let mut ev = crate::events::Event::new(spec, "", crate::events::EventKind::PrMerged { pr });
+        ev.seat = seat.clone();
+        crate::events::emit(main_worktree, &ev);
+    }
+}
+
+/// TASK-1448: the PR's CURRENT head sha for the approval-covers-head gate,
+/// read from the forge (gh `headRefOid`; pure-git resolves `branch`).
+/// `None` when it cannot be read — which the gate treats as "cannot show
+/// the approval covers the head", i.e. refuse (PRIN-5).
+// trace:TASK-1448 | ai:claude
+fn pr_head_sha_for_merge_gate(
+    project_root: &std::path::Path,
+    pr_number: u64,
+    branch: &str,
+) -> Option<String> {
+    let change = crate::forge::ChangeRef {
+        id: pr_number,
+        url: String::new(),
+        branch: branch.to_string(),
+        base: String::new(),
+        title: None,
+    };
+    crate::forge::forge_for(project_root)
+        .change_status(&change)
+        .ok()
+        .map(|status| status.head_sha.trim().to_string())
+        .filter(|sha| !sha.is_empty())
+}
+
+/// TASK-1448 + TASK-1458: `aida pr ship`'s approval-covers-head gate.
+/// `Ok(pin)` = merge, pinned to `pin` (`MergeOptions.match_head`, i.e. gh
+/// `--match-head-commit`) so a push between this check and the merge is
+/// refused by the forge instead of landing unreviewed. The pin is the
+/// approved head when an open approval covers it, `None` when there is no
+/// approval, and — under `--override-stale-approval` — the head the override
+/// was granted for, after a durable `advisor-activity.jsonl` record naming
+/// both shas. `Err` = refused (logged as a failed merge step).
+// trace:TASK-1458 | ai:claude
+pub(crate) fn pr_ship_approval_gate(
+    main_worktree: &std::path::Path,
+    pr_number: u64,
+    candidates: &[crate::review_verdict::RecordedVerdict],
+    head_sha: Option<&str>,
+    override_stale_approval: bool,
+    delete_branch: bool,
+) -> Result<Option<String>> {
+    let Some(refusal) = pr_ship::approval_head_refusal(candidates, head_sha) else {
+        return Ok(pr_ship::approved_match_head(candidates, head_sha));
+    };
+    let message = pr_ship::approval_head_refusal_message(pr_number, &refusal);
+    if !override_stale_approval {
+        log_ship_activity(
+            main_worktree,
+            Some(pr_number),
+            &pr_ship::ShipStep::Merge { delete_branch },
+            &pr_ship::StepOutcome::Failed(message.clone()),
+        );
+        anyhow::bail!("{message} (To merge anyway, re-run with `--override-stale-approval`.)");
+    }
+    append_ship_activity_line(
+        main_worktree,
+        &pr_ship::format_stale_approval_override_event(
+            &chrono::Utc::now().to_rfc3339(),
+            pr_number,
+            &refusal,
+        ),
+    );
+    eprintln!(
+        "  {} {message} — shipping anyway (--override-stale-approval)",
+        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+    );
+    Ok(head_sha
+        .map(str::trim)
+        .filter(|sha| !sha.is_empty())
+        .map(str::to_string))
+}
+
 pub(crate) fn pr_ship_handler(
     n: Option<u64>,
     no_pull: bool,
@@ -1140,6 +1555,8 @@ pub(crate) fn pr_ship_handler(
     complexity: Option<complexity_calibration::ComplexityLevel>,
     effort: Option<effort_calibration::EffortBucket>,
     no_trailer_check: bool,
+    override_stale_check: bool,
+    override_stale_approval: bool,
 ) -> Result<()> {
     use pr_ship::{
         branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan,
@@ -1290,6 +1707,16 @@ pub(crate) fn pr_ship_handler(
                         );
                         merged_n
                     } else {
+                        // TASK-1442 (containment for BUG-1510): a leased branch
+                        // must carry a commit trailered for the spec it's leased
+                        // for before a PR opens under that spec's identity.
+                        if let Some(expected) = list_leases(&main_worktree)
+                            .into_iter()
+                            .find(|l| l.branch == branch)
+                            .map(|l| l.scope)
+                        {
+                            run_pr_open_spec_guard(&project_root, &branch, &expected);
+                        }
                         let new_n = pr_ship_create_pr(&project_root, &branch)?;
                         eprintln!(
                             "  {} created PR-{}",
@@ -1729,6 +2156,61 @@ pub(crate) fn pr_ship_handler(
         );
     }
 
+    // ---- BUG-1468: warn (or refuse) when the PR's green predates a
+    // CI-definition change on main. A green check is evidence about the
+    // guards that existed WHEN IT RAN; nothing re-evaluates it when main
+    // gains a stricter workflow since. Two tiers (BUG-1468 follow-up):
+    // `definition_files` (a `.github/workflows/*` file, or a `scripts/`
+    // file a workflow invokes directly) REFUSE unless overridden — the
+    // check's own definition changed. `test_files` only WARN — an ordinary
+    // test file changing on main is the common, usually-harmless "base
+    // moved" case, and in this repo it's most commits, so refusing on it
+    // made `--override-stale-check` routine. `!already_merged` because a
+    // merged PR has nothing left to refuse. trace:BUG-1468 | ai:claude
+    if !already_merged {
+        let base_branch = pr_ship_target_branch(pr_number);
+        let base_ref = format!("origin/{base_branch}");
+        if let Some(warning) = pr_stale_check_warning(&project_root, &ship_branch, &base_ref) {
+            if !warning.definition_files.is_empty() {
+                if override_stale_check {
+                    eprintln!(
+                        "  {} PR-{}'s green predates a CI-definition change on {} \
+                         ({}) — shipping anyway (override)",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                        pr_number,
+                        base_branch,
+                        warning.definition_files.join(", "),
+                    );
+                } else {
+                    anyhow::bail!(
+                        "PR-{pr_number}'s green check completed before {} changed on {base_branch}: {} \
+                         — its CI ran against an OLDER definition of that check, so the green does not \
+                         mean what it looks like it means. Re-run CI (push an empty commit or rebase), \
+                         or re-run with `--override-stale-check` to ship anyway.",
+                        if warning.definition_files.len() == 1 { "a CI definition file" } else { "CI definition files" },
+                        warning.definition_files.join(", "),
+                    );
+                }
+            } else if !warning.test_files.is_empty() {
+                eprintln!(
+                    "  {} {} commits behind; {} test files changed on main since this branch's base",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    warning.behind_commits,
+                    warning.test_files.len(),
+                );
+            } else {
+                eprintln!(
+                    "  {} PR-{}'s green predates {} commit(s) now on {} (base moved — \
+                     usually harmless)",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    pr_number,
+                    warning.behind_commits,
+                    base_branch,
+                );
+            }
+        }
+    }
+
     // ---- Step 3: merge. Use retry-wrapper so a transient gh
     // network blip doesn't abort. ----
     // BUG-574: skipped entirely when the PR is already merged — the activity
@@ -1741,7 +2223,61 @@ pub(crate) fn pr_ship_handler(
     // released when this handler returns. Bounded-wait-then-refuse on contention.
     // trace:STORY-1171 | ai:claude
     let _merge_lease = acquire_merge_lease(&main_worktree, pr_number)?;
+    // STORY-1405: refuse while a reviewer is mid-way through THIS head. Asked
+    // under the merge-lease, immediately before the merge, so a review that
+    // started after CI settled is still seen. One local stat when no marker
+    // exists; a forge head lookup only when a live one does.
+    // trace:STORY-1405 | ai:claude
     if !already_merged {
+        let gate = crate::review_marker::merge_gate(&main_worktree, pr_number, || {
+            fetch_change_info_via_resolved_forge(
+                &project_root,
+                pr_number,
+                crate::forge::resolve_open_change_forge_kind(&project_root),
+            )
+            .ok()
+            .map(|info| info.head_oid)
+        });
+        if let crate::review_marker::MergeGate::UnderReview(m) = &gate {
+            anyhow::bail!("{}", crate::review_marker::refusal_message(m));
+        }
+        if let Some(note) = crate::review_marker::proceed_note(&gate) {
+            eprintln!(
+                "  {} {note}",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan()
+            );
+        }
+    }
+    if !already_merged {
+        // ---- TASK-1448: approval-covers-head gate. Checked under the merge
+        // lease, immediately before the merge (and before any merge-hold is
+        // released), so the head it compares is the one about to land. ----
+        // trace:TASK-1448 | ai:claude
+        let mut gate_spec_ids: Vec<String> = ship_gate_spec_records(&project_root)
+            .into_iter()
+            .map(|(id, _, _)| id)
+            .collect();
+        gate_spec_ids.extend(pr_ship::extract_spec_ids_from_text(&ship_branch));
+        if let Some(title) = target_change.as_ref().and_then(|c| c.title.as_deref()) {
+            gate_spec_ids.extend(pr_ship::extract_spec_ids_from_text(title));
+        }
+        let head_sha = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch);
+        let candidates = pr_ship::merge_gate_verdict_candidates(
+            &[project_root.as_path(), main_worktree.as_path()],
+            pr_number,
+            &gate_spec_ids,
+        );
+        // TASK-1458: gate + merge pin + durable override audit, in one
+        // function so the wiring test drives exactly what ship runs.
+        // trace:TASK-1458 | ai:claude
+        let match_head = pr_ship_approval_gate(
+            &main_worktree,
+            pr_number,
+            &candidates,
+            head_sha.as_deref(),
+            override_stale_approval,
+            delete_branch,
+        )?;
         if branch_in_sibling {
             eprintln!(
                 "  step 3: branch {} is checked out in a sibling worktree — \
@@ -1774,6 +2310,7 @@ pub(crate) fn pr_ship_handler(
             method: crate::forge::MergeMethod::Squash,
             squash_subject: explicit_squash_subject.clone(),
             delete_branch,
+            match_head, // trace:TASK-1458 | ai:claude
         };
         let change_ref = crate::forge::ChangeRef {
             id: pr_number,
@@ -1811,6 +2348,21 @@ pub(crate) fn pr_ship_handler(
                 reason,
             );
             let _ = crate::merge_hold::clear_hold(&hold_root, pr_number);
+            // BUG-1423: this IS the coordination-seat action the missing
+            // event taxonomy could not record — an explicit advisor/human
+            // `aida pr ship` releasing a supervised merge-hold. Best-effort,
+            // never affects the ship outcome. trace:BUG-1423 | ai:claude
+            let mut hold_event = crate::events::Event::new(
+                None,
+                "",
+                crate::events::EventKind::MergeHoldChanged {
+                    pr: pr_number as u32,
+                    placed: false,
+                    reason: Some(reason.to_string()),
+                },
+            );
+            hold_event.seat = crate::events::active_seat();
+            crate::events::emit(&hold_root, &hold_event);
             if let Err(err) = crate::merge_hold::sync_label(&hold_root, pr_number, false) {
                 eprintln!(
                     "  {} could not remove the merge-hold label ({err}) — branch protection will keep the merge closed",
@@ -1913,9 +2465,18 @@ pub(crate) fn pr_ship_handler(
     // populates N records. Best-effort: a `gh` blip here leaves the merge
     // landed and just skips the capture.
     // trace:STORY-439 | ai:claude
+    // BUG-1423: the decisive gap — a merge performed by `aida pr ship`
+    // (the advisor/product seat's explicit merge path) never appended a
+    // `PrMerged` event, so the feed recorded only drain merges. Mirror the
+    // drain merge phase's emit here (`DriveContext::merge_pr` in `lib.rs`)
+    // so a feed consumer cannot tell whether a merge came from the
+    // orchestrator or this command — same kind, same terminal semantics.
+    // Best-effort: emit failures never fail the ship. trace:BUG-1423 | ai:claude
+    let mut pr_merged_spec_ids: Vec<String> = Vec::new();
     if let Ok(pr_meta) = fetch_pr_ship_metadata_via_gh(&project_root, pr_number) {
         let spec_ids =
             pr_ship::derive_squash_subject_spec_ids(&pr_meta.title, &branch, &pr_meta.body);
+        pr_merged_spec_ids = spec_ids.clone();
         for spec in &spec_ids {
             let punts = complexity_calibration::punt_count_for_spec(&main_worktree, spec);
             if let Err(e) =
@@ -1944,6 +2505,15 @@ pub(crate) fn pr_ship_handler(
                 opts.effort,
             );
         }
+    }
+    // BUG-1423: emit only for a merge THIS invocation performed — matches
+    // the drain's own emit-on-success semantics and keeps a re-run against
+    // an already-merged PR (BUG-574) from re-appending a duplicate event.
+    // A PR crediting no resolvable spec still emits once (spec: None) so
+    // the merge is never silently dropped from the feed.
+    // trace:BUG-1423 | ai:claude
+    if merged_this_run {
+        emit_ship_pr_merged(&main_worktree, pr_number as u32, &pr_merged_spec_ids);
     }
 
     // ---- Step 4: aida pull (from the main worktree). ----
@@ -2155,11 +2725,26 @@ pub(crate) fn pr_ship_handler(
         }
     }
 
-    eprintln!(
-        "{} aida pr ship — PR-{} shipped",
-        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
-        pr_number
-    );
+    // BUG-1537: `merged_this_run` (set only where THIS invocation performed
+    // the merge, never in the `already_merged` no-op path) is the one signal
+    // that distinguishes an act this run performed from one it merely
+    // observed already done. Report the two cases in first person only when
+    // true — PRIN-5: a coordination surface must not render an absent act
+    // identically to a performed one. trace:BUG-1537 | ai:claude
+    if merged_this_run {
+        eprintln!(
+            "{} aida pr ship — PR-{} shipped",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+            pr_number
+        );
+    } else {
+        eprintln!(
+            "{} aida pr ship — PR-{} was already merged (not by this run); \
+             ran post-merge sync + cleanup only",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+            pr_number
+        );
+    }
 
     // BUG-376: substrate-as-bouncer signal. The implementer's job ends
     // here — CI was gated in step 2, the merge ran in step 3, pull +
@@ -2170,9 +2755,12 @@ pub(crate) fn pr_ship_handler(
     // Paired with the `aida-implement.md` Step 7 skill directive. The
     // banner is the *substrate* half of the pairing — even an agent
     // that has not read or has misremembered the skill template sees
-    // this on the way out. trace:BUG-376 | ai:claude
+    // this on the way out. Printed only for a merge THIS run performed
+    // (BUG-1537) — an already-merged PR gets the shorter honest
+    // "observed merged" line instead, from the same function.
+    // trace:BUG-376 trace:BUG-1537 | ai:claude
     let mut stderr = std::io::stderr();
-    let _ = write_implementer_complete_banner(&mut stderr, pr_number);
+    let _ = write_implementer_complete_banner(&mut stderr, pr_number, merged_this_run);
 
     // Keep the activity-event formatter referenced so the warning-as-
     // unused-import doesn't fire if a future refactor narrows usage.
@@ -2202,11 +2790,43 @@ pub(crate) fn pr_ship_hold_root(project_root: &std::path::Path) -> std::path::Pa
 /// Takes `&mut impl Write` so the rendering is unit-testable without
 /// spawning a subprocess — mirrors the `status_cleanup::render` pattern.
 ///
-/// trace:BUG-376 | ai:claude
+/// `merged_this_run` (BUG-1537) distinguishes a merge THIS invocation
+/// performed from one it found already done (BUG-574's `already_merged`
+/// no-op path, e.g. a sibling seat merged first). Rendering the two cases
+/// identically is exactly the PRIN-5 defect BUG-1537 records: the loud
+/// first-person "IMPLEMENTER COMPLETE" banner claims an act ("PR-N is
+/// merged... ran in steps 2-5 above") that this run did not perform when
+/// `false`. In that case we print a short, honest "observed merged" line
+/// instead — still telling the session there is nothing left to do, without
+/// claiming credit for the merge.
+// trace:BUG-376 trace:BUG-1537 | ai:claude
 pub(crate) fn write_implementer_complete_banner(
     w: &mut impl std::io::Write,
     pr_number: u64,
+    merged_this_run: bool,
 ) -> std::io::Result<()> {
+    if !merged_this_run {
+        writeln!(w)?;
+        writeln!(
+            w,
+            "  {} PR-{} was already merged by another run before this `aida pr \
+             ship` started — this run only observed it and ran the idempotent \
+             post-merge steps (pull / auto-bump, lease release). Nothing was \
+             merged by this session; nothing left to watch or re-merge.",
+            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            pr_number,
+        )?;
+        // BUG-376's exit directive is load-bearing for the implementer
+        // session and must survive the honest wording (BUG-1537 review).
+        // trace:BUG-1537 | ai:claude
+        writeln!(
+            w,
+            "  {} — this implementer session has nothing left to do.",
+            "EXIT NOW".bold()
+        )?;
+        writeln!(w)?;
+        return Ok(());
+    }
     let bar = "═".repeat(64);
     writeln!(w)?;
     writeln!(w, "{}", bar.bold())?;
@@ -2811,6 +3431,13 @@ pub(crate) fn log_ship_activity(
 ) {
     let now = chrono::Utc::now().to_rfc3339();
     let line = pr_ship::format_activity_event(&now, pr_number, step, outcome);
+    append_ship_activity_line(main_worktree, &line);
+}
+
+/// Append one pre-formatted JSON line to `.aida/advisor-activity.jsonl`
+/// (best-effort, like every activity-log write).
+// trace:TASK-1458 | ai:claude
+pub(crate) fn append_ship_activity_line(main_worktree: &std::path::Path, line: &str) {
     let aida_dir = main_worktree.join(".aida");
     if std::fs::create_dir_all(&aida_dir).is_err() {
         return;
@@ -3259,6 +3886,10 @@ mod task_471_stale_base_preflight_tests;
 #[path = "tests/story_429_auto_rebase_tests.rs"]
 mod story_429_auto_rebase_tests;
 
+#[cfg(test)]
+#[path = "tests/task1312_pr_gc_tests.rs"]
+mod task1312_pr_gc_tests;
+
 #[cfg(all(test, unix))]
 mod pr_ship_environment_tests {
     use super::*;
@@ -3551,6 +4182,61 @@ mod pr_ship_environment_tests {
             "the regression was reading the sibling worktree's empty .aida directory"
         );
     }
+
+    // BUG-1423: `aida pr ship` merging a PR outside a drain phase must append
+    // the same `PrMerged` event the drain's merge phase does — one per
+    // credited spec, carrying the acting seat when known. This is the
+    // decisive gap the bug measured: nine of ten advisor merges recorded
+    // nothing.
+    #[test]
+    fn emit_ship_pr_merged_writes_one_event_per_credited_spec_with_seat() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+
+        emit_ship_pr_merged(
+            tmp.path(),
+            4242,
+            &["BUG-1423".to_string(), "TASK-1".to_string()],
+        );
+
+        let events = crate::events::read_all(tmp.path());
+        assert_eq!(events.len(), 2, "one PrMerged per credited spec");
+        for (ev, expected_spec) in events.iter().zip(["BUG-1423", "TASK-1"]) {
+            assert!(
+                matches!(ev.kind, crate::events::EventKind::PrMerged { pr } if pr == 4242),
+                "expected PrMerged{{pr: 4242}}, got {:?}",
+                ev.kind
+            );
+            assert_eq!(ev.spec.as_deref(), Some(expected_spec));
+            assert_eq!(
+                ev.seat.as_deref(),
+                Some("advisor"),
+                "the acting seat must ride along — this is the field the \
+                 PrMerged undercount hid: an advisor merge and a drain merge \
+                 must be distinguishable in the feed"
+            );
+        }
+    }
+
+    // BUG-1423: a PR crediting no resolvable spec (title/branch/body all
+    // miss) must still emit — the merge itself is never silently dropped
+    // from the feed just because spec attribution failed.
+    #[test]
+    fn emit_ship_pr_merged_emits_once_with_no_spec_when_none_resolved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _seat = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
+
+        emit_ship_pr_merged(tmp.path(), 99, &[]);
+
+        let events = crate::events::read_all(tmp.path());
+        assert_eq!(events.len(), 1);
+        assert!(events[0].spec.is_none());
+        assert!(events[0].seat.is_none());
+        assert!(matches!(
+            events[0].kind,
+            crate::events::EventKind::PrMerged { pr: 99 }
+        ));
+    }
 }
 
 /// Implementation of `aida pr auto-queue-review` — files (or skips, if
@@ -3641,5 +4327,140 @@ pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> 
             anyhow::bail!("{}", outcome.summary)
         }
         _ => Ok(()),
+    }
+}
+
+/// True when the forge could not answer (as opposed to answering "no PR"):
+/// the finish ceremony must then say it fell back rather than stay silent.
+// trace:TASK-1416 | ai:claude
+pub(crate) fn finish_base_lookup_failed(lookup: &crate::forge::ChangeLookup) -> bool {
+    !matches!(
+        lookup,
+        crate::forge::ChangeLookup::Found(_) | crate::forge::ChangeLookup::NoChange
+    )
+}
+
+#[cfg(test)]
+mod task_1416_lookup_failure_tests {
+    use super::finish_base_lookup_failed;
+    use crate::forge::ChangeLookup;
+
+    // trace:TASK-1416 | ai:claude
+    #[test]
+    fn unreachable_forge_is_a_lookup_failure_but_no_pr_is_not() {
+        assert!(!finish_base_lookup_failed(&ChangeLookup::NoChange));
+        assert!(finish_base_lookup_failed(&ChangeLookup::CliMissing));
+        assert!(finish_base_lookup_failed(&ChangeLookup::CliFailed(
+            "boom".into()
+        )));
+        assert!(finish_base_lookup_failed(&ChangeLookup::Unreachable(
+            "offline".into()
+        )));
+    }
+}
+
+/// TASK-1458: the `aida pr ship` approval gate as `pr_ship_handler` runs it —
+/// the merge pin it returns and the durable activity records it writes.
+// trace:TASK-1458 | ai:claude
+#[cfg(test)]
+mod task_1458_pr_ship_approval_gate_tests {
+    use super::pr_ship_approval_gate;
+    use crate::review_verdict::{RecordedVerdict, VerdictKind};
+
+    const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const OLD: &str = "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    fn approval(sha: &str) -> RecordedVerdict {
+        RecordedVerdict {
+            kind: VerdictKind::Approved,
+            raw: "approved".into(),
+            reviewed_sha: Some(sha.into()),
+            recorded_at: Some("2026-09-23T00:00:00Z".into()),
+            ..Default::default()
+        }
+    }
+
+    fn activity(root: &std::path::Path) -> Vec<serde_json::Value> {
+        std::fs::read_to_string(root.join(".aida").join("advisor-activity.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn covering_approval_pins_the_merge_to_the_approved_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pin = pr_ship_approval_gate(tmp.path(), 5, &[approval(HEAD)], Some(HEAD), false, true)
+            .expect("an approval at the head merges");
+        assert_eq!(pin.as_deref(), Some(HEAD));
+        assert!(activity(tmp.path()).is_empty(), "nothing to audit");
+    }
+
+    #[test]
+    fn no_approval_merges_unpinned() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pin = pr_ship_approval_gate(tmp.path(), 5, &[], Some(HEAD), false, true).unwrap();
+        assert_eq!(pin, None);
+    }
+
+    #[test]
+    fn stale_approval_refuses_and_logs_a_failed_merge_step() {
+        let tmp = tempfile::tempdir().unwrap();
+        let err = pr_ship_approval_gate(tmp.path(), 5, &[approval(OLD)], Some(HEAD), false, true)
+            .expect_err("a stale approval refuses");
+        assert!(
+            err.to_string().contains("--override-stale-approval"),
+            "{err}"
+        );
+        let log = activity(tmp.path());
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0]["step"], "pr-merge");
+        assert_eq!(log[0]["status"], "failed");
+    }
+
+    #[test]
+    fn override_is_recorded_durably_with_both_shas_and_pins_the_overridden_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pin = pr_ship_approval_gate(tmp.path(), 5, &[approval(OLD)], Some(HEAD), true, true)
+            .expect("the override ships");
+        assert_eq!(
+            pin.as_deref(),
+            Some(HEAD),
+            "the override is granted for THIS head only"
+        );
+        let log = activity(tmp.path());
+        assert_eq!(log.len(), 1, "{log:?}");
+        assert_eq!(log[0]["step"], "pr-merge-override-stale-approval");
+        assert_eq!(log[0]["pr"], 5);
+        assert_eq!(log[0]["reviewed_sha"], OLD);
+        assert_eq!(log[0]["head_sha"], HEAD);
+    }
+}
+
+/// TASK-1458: source-shape guard — `pr_ship_handler` routes its merge
+/// through `pr_ship_approval_gate` and hands the returned pin to the forge
+/// merge, so the tested gate is the one ship runs. Needles are split so this
+/// block cannot match its own literals.
+// trace:TASK-1458 | ai:claude
+#[cfg(test)]
+mod task_1458_pr_ship_wiring_guard {
+    #[test]
+    fn pr_ship_handler_pins_its_merge_through_the_approval_gate() {
+        let src = include_str!("pr_cmd.rs");
+        let start = src
+            .find(concat!("pub(crate) fn pr_ship_", "handler("))
+            .expect("handler");
+        let body = &src[start..];
+        let gate = body
+            .find(concat!("let match_head = pr_ship_", "approval_gate("))
+            .expect("the handler runs the approval gate");
+        let opts = body
+            .find(concat!("match_head, // trace:", "TASK-1458"))
+            .expect("the gate's pin reaches MergeOptions");
+        let merge = body
+            .find(concat!(".merge_", "change("))
+            .expect("the handler merges");
+        assert!(gate < opts && opts < merge, "gate → pin → merge order");
     }
 }

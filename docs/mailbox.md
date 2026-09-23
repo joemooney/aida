@@ -126,6 +126,7 @@ covered below (TASK-782).
 Each message carries:
 
 - **`from`** — the originator (agent id)
+- **`from_source`** — which precedence tier resolved `from` at send time (BUG-1533): `explicit` (`--from`), `agent_name` (`AIDA_AGENT_NAME`), `aida_user` (`AIDA_USER`), `session_role` (`AIDA_SESSION_ROLE`), or `shell_user` (the bare shell user — the ambiguous fallback, used only when nothing else resolves). `legacy` is the deserialization default for messages written before this field existed; it is never a resolution outcome. **Not** the BUG-89 queue-identity order — a launched agent's `AIDA_AGENT_NAME` outranks `AIDA_USER` so adopting a stable mail identity never re-keys the queue. `aida mailbox inbox` tags a message `[unattributed]` when `from_source` is `shell_user` or `legacy`, since `from` alone may be shared by several seats and the human operator in that case.
 - **`to`** — a specific agent (`Recipient::Agent`) **or** a broadcast (`Recipient::Broadcast`)
 - **`timestamp`** — when it was sent
 - **`body`** — the text

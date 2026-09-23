@@ -108,7 +108,7 @@ fn parse_open_pr_snapshot_parses_number_title_branch() {
             {"number": 760, "title": "feat: add open-PR section", "headRefName": "agent-abc"},
             {"number": 12, "title": "fix: typo", "headRefName": "fix/typo"}
         ]"#;
-    let snap = parse_open_pr_snapshot(json);
+    let snap = parse_open_pr_snapshot(json, None);
     assert_eq!(snap.by_branch.len(), 2);
     let a = snap.by_branch.get("agent-abc").expect("agent-abc row");
     assert_eq!(a.number, 760);
@@ -122,10 +122,12 @@ fn parse_open_pr_snapshot_parses_number_title_branch() {
 // trace:TASK-833
 #[test]
 fn parse_open_pr_snapshot_degrades_on_empty_and_malformed() {
-    assert!(parse_open_pr_snapshot("[]").by_branch.is_empty());
-    assert!(parse_open_pr_snapshot("not json").by_branch.is_empty());
-    assert!(parse_open_pr_snapshot("{}").by_branch.is_empty());
+    assert!(parse_open_pr_snapshot("[]", None).by_branch.is_empty());
+    assert!(parse_open_pr_snapshot("not json", None)
+        .by_branch
+        .is_empty());
+    assert!(parse_open_pr_snapshot("{}", None).by_branch.is_empty());
     // a row missing the required `number` field is skipped, not panicked on
-    let snap = parse_open_pr_snapshot(r#"[{"title": "no number", "headRefName": "b"}]"#);
+    let snap = parse_open_pr_snapshot(r#"[{"title": "no number", "headRefName": "b"}]"#, None);
     assert!(snap.by_branch.is_empty());
 }

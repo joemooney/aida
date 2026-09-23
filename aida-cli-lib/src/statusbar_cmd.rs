@@ -122,6 +122,11 @@ pub(crate) fn you_channels(report: &awaiting_you::AwaitingReport) -> Vec<(usize,
     if recusals > 0 {
         v.push((recusals, label(recusals, "recusal", "recusals")));
     }
+    // trace:STORY-1397 | ai:claude
+    let held = report.held_prs.len();
+    if held > 0 {
+        v.push((held, "held".to_string()));
+    }
     let broken = report.unowned_failing_prs.len();
     if broken > 0 {
         v.push((broken, "broken-unowned".to_string()));
@@ -149,6 +154,10 @@ pub(crate) fn you_channels(report: &awaiting_you::AwaitingReport) -> Vec<(usize,
         v.push((cron, "cron".to_string()));
     }
     // trace:STORY-1043 | ai:codex
+    // TASK-1305: this meter only ever renders `unshipped_work.len()`, never a
+    // row's `pr_state`/`recovery` — a bare count carries no per-branch action
+    // hint to get wrong, so the no-PR-vs-open-PR distinction doesn't apply
+    // here. No change needed on this surface.
     let unshipped = report.unshipped_work.len();
     if unshipped > 0 {
         v.push((unshipped, "unshipped".to_string()));
@@ -197,9 +206,14 @@ fn collect_meter(
         .filter(|r| matches!(r.state, LeaseState::Stale))
         .count();
 
-    // Needs-you — the cheap (no_ci) awaiting report, mirroring the per-turn
-    // notice path: a lightweight context (role from env, empty queue head),
-    // so no full-store load and no gh call ever rides the refresh loop.
+    // Needs-you — the cheap (no_ci, notice_fast) awaiting report, mirroring
+    // the per-turn notice path EXACTLY: a lightweight context (role from
+    // env, empty queue head) AND `notice_fast: true`, so the summaries reads
+    // hit the unrefreshed cache snapshot (`backend.cache().list_summaries`)
+    // instead of `backend.list_summaries()`, which freshness-checks and can
+    // trigger a full store rebuild (BUG-1569). The statusbar previously
+    // called the public `collect_awaiting_report` wrapper, which hardcodes
+    // `notice_fast: false` — that one call was the whole 68s. trace:TASK-195
     let you = backend
         .map(|b| {
             let ctx = UserStatusContext {
@@ -211,7 +225,13 @@ fn collect_meter(
                 queue_total: 0,
                 agents: Vec::new(),
             };
-            you_channels(&collect_awaiting_report(project_root, b, &ctx, true))
+            you_channels(&collect_awaiting_report_inner(
+                project_root,
+                b,
+                &ctx,
+                true,
+                true,
+            ))
         })
         .unwrap_or_default();
 
@@ -325,6 +345,42 @@ mod tests {
         MergeablePrItem, NightlyRedItem, PendingBriefItem, ReviewerQueueItem, UnshippedWorkItem,
     };
 
+    /// TASK-195: `collect_meter` must call the notice-fast
+    /// `collect_awaiting_report_inner(.., no_ci: true, notice_fast: true)`
+    /// path — the exact pairing `aida awaiting --notice` uses — never the
+    /// public `collect_awaiting_report` wrapper, which hardcodes
+    /// `notice_fast: false` and so hits `backend.list_summaries()` (a
+    /// freshness check that can trigger a full store rebuild, BUG-1569)
+    /// instead of the unrefreshed `backend.cache().list_summaries()`
+    /// snapshot. That one flag flip was the entire 68s-vs-cache-fast
+    /// regression (statusbar was measured taking 68s on a surface
+    /// documented as cache/local-fast with no network). Source-level guard
+    /// because the regression is a one-word literal with no compile-time
+    /// signal and no cheap way to inject a backend seam here.
+    // trace:TASK-195 | ai:claude
+    #[test]
+    fn collect_meter_uses_notice_fast_awaiting_path_not_the_slow_wrapper() {
+        let src = include_str!("statusbar_cmd.rs");
+        let body_start = src
+            .find("fn collect_meter(")
+            .expect("collect_meter must exist in this file");
+        let body_end = src[body_start..]
+            .find("\n}\n")
+            .map(|i| body_start + i)
+            .unwrap_or(src.len());
+        let body = &src[body_start..body_end];
+        assert!(
+            body.contains("collect_awaiting_report_inner("),
+            "collect_meter must call collect_awaiting_report_inner directly \
+             (with notice_fast: true), not the notice_fast:false wrapper"
+        );
+        assert!(
+            !body.contains("collect_awaiting_report(project_root"),
+            "collect_meter must not call the collect_awaiting_report wrapper \
+             — it hardcodes notice_fast: false, which is the slow path"
+        );
+    }
+
     #[test]
     fn quiet_meter_shows_queue_and_live_only() {
         let c = MeterCounts::default();
@@ -395,12 +451,15 @@ mod tests {
                 title: "t".into(),
                 head_branch: "b".into(),
                 ci_rollup: Some("pass".into()),
+                under_review: None,
             }],
             recusal_holds: Vec::new(),
+            held_prs: Vec::new(),
             unowned_failing_prs: vec![crate::awaiting_you::UnownedFailingPrItem {
                 number: 8,
                 title: "broken".into(),
                 head_branch: "broken-pr".into(),
+                done_spec: None,
             }],
             pending_briefs: vec![PendingBriefItem {
                 agent: "claude".into(),
@@ -420,6 +479,8 @@ mod tests {
             },
             cron: CronChannel { due: 1, next: None },
             rework_ready: Vec::new(),
+            stale_approvals: Vec::new(),
+            blocked_reviews: Vec::new(),
             unshipped_work: vec![UnshippedWorkItem {
                 spec_id: "".into(),
                 branch: "".into(),
@@ -428,6 +489,7 @@ mod tests {
                 recovery: "".into(),
                 pr_state: "".into(),
             }],
+            unshipped_work_scan: None,
             nightly_red: Some(NightlyRedItem {
                 summary: "".into(),
                 run_id: Some(1),
@@ -436,6 +498,7 @@ mod tests {
             reviewer_queue_items: vec![ReviewerQueueItem {
                 spec_id: "".into(),
                 title: "".into(),
+                state: crate::review_verdict::ReviewActionability::NeedsReview,
             }],
             escalations: vec![
                 EscalationItem {
@@ -447,6 +510,9 @@ mod tests {
                     title: "".into(),
                 },
             ],
+            pr_attribution_disagreements: Vec::new(),
+            orphaned_in_progress: Vec::new(),
+            role: None,
         };
         let channels = you_channels(&report);
         let rendered: Vec<String> = channels.iter().map(|(n, l)| format!("{n} {l}")).collect();

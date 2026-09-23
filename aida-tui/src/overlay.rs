@@ -66,13 +66,13 @@ pub struct BranchInfo {
     pub name: String,
     #[serde(default)]
     pub dirty: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_zero")]
     pub ahead_main: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_zero")]
     pub behind_main: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_zero")]
     pub ahead_upstream: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_zero")]
     pub behind_upstream: i64,
     #[serde(default)]
     pub has_upstream: bool,
@@ -81,6 +81,18 @@ pub struct BranchInfo {
 /// PR / CI rollup (`status.pr`). The same key carries four shapes —
 /// `{skipped}`, `{error,reason}`, `{state:"none"}`, or the full PR — so
 /// every field is optional and [`pr_lines`] dispatches on which are set.
+/// `aida status --json` emits `null` for the upstream counts on a branch
+/// with no upstream (e.g. a local-only branch); read that as 0 rather than
+/// failing the whole overlay parse. Rendering is already gated on
+/// `has_upstream`, so a 0 here is never shown as a real count.
+// trace:BUG-1503 | ai:claude
+fn null_as_zero<'de, D>(d: D) -> std::result::Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Option::<i64>::deserialize(d)?.unwrap_or(0))
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct PrInfo {
     #[serde(default)]
@@ -133,13 +145,19 @@ pub struct CacheInfo {
 /// Run `aida status --json` and parse it into an [`OverlayModel`]. With
 /// `no_ci`, passes `--no-ci` so the PR/CI shell-out is skipped — the
 /// sub-millisecond first paint (plan risk #10).
+///
+/// BUG-1503 routed the BARE `aida status --json` to a fast, cache-only
+/// snapshot whose `branch` field is a plain string (agent-shaped, not this
+/// overlay's `BranchInfo`), which blanked the panel via a silent serde
+/// failure. `--full` is the existing flag that still asks for the pre-BUG-1503
+/// heavy report — same `print_status_json` code path, byte-identical shape —
+/// so the overlay must request it explicitly rather than relying on the bare
+/// default.
+// trace:BUG-1503 | ai:claude
 pub fn fetch(no_ci: bool) -> Result<OverlayModel> {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
-    cmd.arg("status").arg("--json");
-    if no_ci {
-        cmd.arg("--no-ci");
-    }
+    cmd.args(status_args(no_ci));
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -154,6 +172,19 @@ pub fn fetch(no_ci: bool) -> Result<OverlayModel> {
         );
     }
     parse(&out.stdout)
+}
+
+/// The exact argv `fetch` runs (minus the exe path itself), pulled out so a
+/// test can drive the real binary with precisely what the overlay uses —
+/// closing the BUG-1503 gap where the argv and the parsed shape silently
+/// drifted apart.
+// trace:BUG-1503 | ai:claude
+fn status_args(no_ci: bool) -> Vec<&'static str> {
+    let mut args = vec!["status", "--json", "--full"];
+    if no_ci {
+        args.push("--no-ci");
+    }
+    args
 }
 
 /// Parse `aida status --json` output. Split from [`fetch`] so the panel
@@ -635,5 +666,104 @@ mod tests {
     fn clip_adds_ellipsis_only_when_cut() {
         assert_eq!(clip("short", 20), "short");
         assert_eq!(clip("0123456789", 5), "0123…");
+    }
+
+    /// BUG-1503 regression: the bare `aida status --json` now takes the
+    /// FAST agent-shaped path (`branch` is a string, no `session`/`pr`/
+    /// `agents`/`cache`), which fails to deserialize into [`OverlayModel`]
+    /// and blanks the overlay. `fetch` must always request the heavy report
+    /// explicitly via `--full` regardless of `no_ci`.
+    // trace:BUG-1503 | ai:claude
+    #[test]
+    fn status_args_always_requests_full_heavy_json() {
+        for no_ci in [false, true] {
+            let args = status_args(no_ci);
+            assert_eq!(args[0], "status");
+            assert!(args.contains(&"--json"), "must request JSON: {args:?}");
+            assert!(
+                args.contains(&"--full"),
+                "must request the heavy --full report, not the BUG-1503 fast bare path: {args:?}"
+            );
+            assert_eq!(args.contains(&"--no-ci"), no_ci);
+        }
+    }
+
+    /// Locate the workspace's own built `aida` binary next to this crate's
+    /// `target/` dir, preferring a release build (matches the dev-daily-driver
+    /// pin) and falling back to debug. Returns `None` (test skips, rather
+    /// than fails) when neither has been built yet — this test's job is to
+    /// catch an argv/shape regression when the binary IS available, not to
+    /// force a full workspace build as a side effect of `cargo test -p
+    /// aida-tui`.
+    fn workspace_aida_binary() -> Option<std::path::PathBuf> {
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let target_dir = manifest_dir.parent()?.join("target");
+        for profile in ["release", "debug"] {
+            let candidate = target_dir.join(profile).join("aida");
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+        None
+    }
+
+    /// End-to-end regression: run the REAL `aida` binary with exactly the
+    /// argv `fetch` uses (via [`status_args`]) against this repo (an
+    /// AIDA-managed project) and confirm the output deserializes into
+    /// [`OverlayModel`] — the same connection `fetch`/`parse` make at
+    /// runtime, minus the `Command` indirection. Fails loudly (not merely
+    /// skips) on a non-zero exit or a parse error, so a regression back to
+    /// the bare fast-path shape is caught whenever the binary is present.
+    // trace:BUG-1503 | ai:claude
+    #[test]
+    fn fetch_argv_against_real_binary_parses_as_overlay_model() {
+        let Some(exe) = workspace_aida_binary() else {
+            eprintln!(
+                "skipping fetch_argv_against_real_binary_parses_as_overlay_model: \
+                 no built aida binary under target/{{release,debug}}/aida"
+            );
+            return;
+        };
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("workspace root")
+            .to_path_buf();
+        let out = Command::new(&exe)
+            .args(status_args(true)) // no_ci: true matches the TUI's first-paint call
+            .current_dir(&repo_root)
+            .env("AIDA_TELEMETRY", "0")
+            .output()
+            .expect("spawn the workspace aida binary");
+        assert!(
+            out.status.success(),
+            "`{} {}` failed: {}",
+            exe.display(),
+            status_args(true).join(" "),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let model = parse(&out.stdout).unwrap_or_else(|e| {
+            panic!(
+                "OverlayModel failed to parse the TUI's own argv output: {e}\nstdout: {}",
+                String::from_utf8_lossy(&out.stdout)
+            )
+        });
+        // A heavy-report-only field must be present (absent on the BUG-1503
+        // fast bare path) to prove --full actually took effect rather than
+        // merely parsing an empty/degenerate object.
+        assert!(
+            model.cache.is_some(),
+            "expected the heavy report's `cache` section; got a shape that looks like the fast bare path"
+        );
+    }
+
+    // trace:BUG-1503 | ai:claude
+    #[test]
+    fn parse_accepts_null_upstream_counts_on_a_local_only_branch() {
+        let json = br#"{"branch": {"ahead_main":2,"behind_main":0,"ahead_upstream":null,"behind_upstream":null,"dirty":false,"has_upstream":false,"name":"local-only"},"cache":{"fresh":true,"rows":1}}"#;
+        let m = parse(json).expect("null upstream counts must not fail the overlay parse");
+        let b = m.branch.expect("branch");
+        assert_eq!(b.ahead_upstream, 0);
+        assert_eq!(b.behind_upstream, 0);
+        assert!(!b.has_upstream);
     }
 }
