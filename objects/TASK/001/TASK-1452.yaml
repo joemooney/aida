@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   1. The detector's high-confidence swallowed-TOON count for descriptions goes to 0; each edit is verified by diffing the before and after description.
   2. The comment instances are either repaired through a supported surface or recorded as unrepairable, with the reason.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T10:02:27.848962003Z
-modified_at: 2026-09-23T11:24:52.888898002Z
+modified_at: 2026-09-23T11:27:37.091460186Z
 req_type: Task
 tags:
 - data-repair
