@@ -26,12 +26,12 @@ description: |
      falsify it.
   4. A test covers the not-comparable case with a verdict file whose sha key is present
      but empty - PR-1784.json is a real instance of exactly that shape.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:39:48.714673512Z
-modified_at: 2026-09-23T10:58:16.995185018Z
+modified_at: 2026-09-23T11:38:51.809052692Z
 req_type: Task
 tags:
 - parent:BUG-1470 review-verdict observability severity:operational
