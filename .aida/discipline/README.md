@@ -7,10 +7,10 @@ How to work effectively with AIDA — habits, vocabulary, and workflow patterns 
 | Guide | What it covers |
 |-------|----------------|
 | [`advisor-role.md`](advisor-role.md) | The advisor seat — its responsibilities, what it does *not* do, and the three autonomy modes |
-| [`two-seat-protocol.md`](two-seat-protocol.md) | Product/advisor independence and handoffs |
-| [`rework-brief-craft.md`](rework-brief-craft.md) | Cold-session-safe reviewer-to-implementer handoffs |
-| [`seat-recovery-playbooks.md`](seat-recovery-playbooks.md) | Recovery for branch, commit, hold-shelf, and store divergence failures |
-| [`implementer-discipline.md`](implementer-discipline.md) | The implementer's six rules: one-spec-per-session, exit-after-ship, poll-briefs, ship-full-acceptance, read-pending-brief-banner, advise-escape — each linked to the runtime substrate-bouncer that enforces it |
+| [`two-seat-protocol.md`](two-seat-protocol.md) | Product/advisor independence, handoffs, and ownership of judgment gates |
+| [`rework-brief-craft.md`](rework-brief-craft.md) | Turning a reviewer verdict into a cold-session-safe implementation handoff |
+| [`seat-recovery-playbooks.md`](seat-recovery-playbooks.md) | Recovery for stale/diverged branches, stranded commits, hold shelves, and store divergence |
+| [`implementer-discipline.md`](implementer-discipline.md) | The implementer's six rules: one-spec-per-session, exit-after-ship, poll-briefs, ship-full-acceptance, read-pending-brief-banner, advise-escape — each linked to the runtime substrate-bouncer that enforces it — plus a falsification-discipline rule: a green mutation is not evidence until it's shown to have changed behaviour |
 | [`integrator-role.md`](integrator-role.md) | The integrator seat — owns the merge cascade (rebase, mechanical-conflict resolution, CI watch, squash-merge, `aida pull`); escalates semantic conflicts to the advisor, missing verdicts to the reviewer, real failures to the implementer |
 | [`docs-lane.md`](docs-lane.md) | The single-writer docs lane (SPIKE-10 MVP) — one agent owns `docs/`, every other agent FLAGS via the `needs-docs` routing primitive instead of editing; drain via `/aida-burndown` filtered to docs + a periodic `/aida-docs-review` sweep; single-writer stays conventional |
 | [`observation-discipline.md`](observation-discipline.md) | When to file an `aida findings add` observation vs an immediate BUG/TASK; the recurrence-as-promotion signal |
@@ -29,6 +29,5 @@ How to work effectively with AIDA — habits, vocabulary, and workflow patterns 
 | [`brief-polling.md`](brief-polling.md) | How agents should poll AIDA's brief surface — the scratchpad-drift failure mode and the `aida queue done` pending-brief banner |
 | [`robust-project-root-resolution.md`](robust-project-root-resolution.md) | Project-root resolution fallbacks, explaining how skill-rendering gracefully handles missing git repositories |
 | [`skill-cli-symmetry.md`](skill-cli-symmetry.md) | When a skill's deterministic slice ships as a CLI verb, the parent skill must *call* that verb in the same PR rather than re-implement the logic — the same anti-drift discipline as the CLI↔MCP mirror (STORY-82) |
-| [`test-isolation.md`](test-isolation.md) | Parallel-test isolation under `cargo test` — the `EnvVarGuard` helper for process-global env mutation, the per-test temp-path pattern for subprocess plumbing. Local to this repo's own Rust test suite, not part of the master pack shipped to downstream projects |
 
 **Companion:** `aida init --with-memories` writes the same discipline as persistent *memory* files (one fact per file), so the habits surface in-session — not only when these docs are read.
