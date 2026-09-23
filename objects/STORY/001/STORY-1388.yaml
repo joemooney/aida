@@ -41,12 +41,12 @@ description: |
   5. The rule is run against its own implementation before acceptance, and the result recorded.
 
   Filed by the product seat; disposition is the advisor's. This does not fix TASK-1293 — that spec still needs its own rework — it stops the proxy being reintroduced.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T13:22:03.980585256Z
-modified_at: 2026-09-23T06:19:55.419366668Z
+modified_at: 2026-09-23T06:19:57.312848865Z
 req_type: Story
 tags:
 - from:session-0919
