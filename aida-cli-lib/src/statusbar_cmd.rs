@@ -416,6 +416,8 @@ mod tests {
             },
             cron: CronChannel { due: 1, next: None },
             rework_ready: Vec::new(),
+            stale_approvals: Vec::new(),
+            blocked_reviews: Vec::new(),
             unshipped_work: vec![UnshippedWorkItem {
                 spec_id: "".into(),
                 branch: "".into(),
@@ -446,6 +448,7 @@ mod tests {
             ],
             pr_attribution_disagreements: Vec::new(),
             orphaned_in_progress: Vec::new(),
+            role: None,
         };
         let channels = you_channels(&report);
         let rendered: Vec<String> = channels.iter().map(|(n, l)| format!("{n} {l}")).collect();
