@@ -1045,6 +1045,9 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
                     c.id
                 }
                 _ => {
+                    // TASK-1442 (containment for BUG-1510): `spec` here is the
+                    // already-resolved spec this ceremony is shipping for.
+                    run_pr_open_spec_guard(&project_root, &branch, &spec);
                     let n = pr_ship_create_pr(&project_root, &branch)?;
                     eprintln!(
                         "  {} created PR-{}",
@@ -1290,6 +1293,16 @@ pub(crate) fn pr_ship_handler(
                         );
                         merged_n
                     } else {
+                        // TASK-1442 (containment for BUG-1510): a leased branch
+                        // must carry a commit trailered for the spec it's leased
+                        // for before a PR opens under that spec's identity.
+                        if let Some(expected) = list_leases(&main_worktree)
+                            .into_iter()
+                            .find(|l| l.branch == branch)
+                            .map(|l| l.scope)
+                        {
+                            run_pr_open_spec_guard(&project_root, &branch, &expected);
+                        }
                         let new_n = pr_ship_create_pr(&project_root, &branch)?;
                         eprintln!(
                             "  {} created PR-{}",

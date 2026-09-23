@@ -74792,6 +74792,103 @@ fn run_client_trailer_guard(project_root: &std::path::Path, surface: &str, force
     std::process::exit(1);
 }
 
+// ============================================================================
+// TASK-1442: PR-open spec-attribution guard (containment for BUG-1510).
+//
+// STORY-469's `run_client_trailer_guard` above checks that every `(SPEC-ID)`
+// trailer on the branch resolves to a LIVE spec — it never checks that a
+// trailer names the SPEC THE BRANCH IS FOR. BUG-1510's incident: STORY-1391's
+// drain opened PR #2043 whose commits were all trailered BUG-1420 — every
+// trailer was live, so Guard 1 passed, but the PR was misattributed. This
+// guard closes that gap: before a NEW PR is opened, at least one commit the
+// branch adds over the default branch must carry a trailer naming the spec
+// the branch is leased for.
+// ============================================================================
+
+/// Pure, testable core: given commits as `(sha, subject)` pairs and the spec
+/// the branch is leased for, return `None` when some commit's `(SPEC-ID)`
+/// trailer names `expected_spec` (attribution OK), or `Some(other_ids)` — the
+/// distinct spec ids the trailers DO name — when none does (refuse). Reuses
+/// the same trailer extractor + plan-commit exemption as Guard 1
+/// (`validate_trailer_references`) so the two guards agree on what a
+/// "trailer" is.
+// trace:TASK-1442 | ai:claude
+fn pr_open_spec_guard_violation(
+    commits: &[(String, String)],
+    expected_spec: &str,
+) -> Option<Vec<String>> {
+    let mut other_ids: Vec<String> = Vec::new();
+    for (_, subject) in commits {
+        if is_plan_commit_subject(subject) {
+            continue;
+        }
+        for id in extract_spec_ids_from_commit(subject) {
+            if id.eq_ignore_ascii_case(expected_spec) {
+                return None; // found a matching trailer — attributed correctly
+            }
+            if !other_ids
+                .iter()
+                .any(|s: &String| s.eq_ignore_ascii_case(&id))
+            {
+                other_ids.push(id);
+            }
+        }
+    }
+    Some(other_ids)
+}
+
+/// Refuse (exit 1) to open a PR when no commit the branch adds over the
+/// default branch carries a `(SPEC-ID)` trailer naming `expected_spec`. A
+/// no-op when the commit range can't be read (soft warning — a git hiccup
+/// shouldn't block shipping) or when the branch has no commits to ship.
+// trace:TASK-1442 | ai:claude
+fn run_pr_open_spec_guard(project_root: &std::path::Path, branch: &str, expected_spec: &str) {
+    let range = resolve_gate_range(project_root, None);
+    let commits = match read_commits_in_range(project_root, &range) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!(
+                "{} pr ship: PR-spec attribution check skipped — {}",
+                "warning:".yellow().bold(),
+                e
+            );
+            return;
+        }
+    };
+    if commits.is_empty() {
+        return;
+    }
+
+    let other_ids = match pr_open_spec_guard_violation(&commits, expected_spec) {
+        None => return,
+        Some(ids) => ids,
+    };
+
+    eprintln!(
+        "{} pr ship: refusing to open a PR — branch `{}` is leased for {} but no commit on \
+         it carries a `({})` trailer.",
+        crate::glyph(crate::glyphs::Glyph::Cross),
+        branch,
+        expected_spec,
+        expected_spec
+    );
+    if other_ids.is_empty() {
+        eprintln!("  no commit on this branch carries a (SPEC-ID) trailer at all.");
+    } else {
+        eprintln!(
+            "  commit trailer(s) instead name: {} — a mismatch against the leased spec {}.",
+            other_ids.join(", "),
+            expected_spec
+        );
+    }
+    eprintln!(
+        "  Fix the trailer(s) (`git commit --amend` / interactive rebase) to reference {}, or \
+         end this lease and open the PR from the branch that actually owns {}.",
+        expected_spec, expected_spec
+    );
+    std::process::exit(1);
+}
+
 /// CLI handler for `aida trace gate`. Reads the commit range from git, runs the
 /// pure validator against the live store, prints the result, and exits non-zero
 /// (code 1) when any commit references a dead/dangling SPEC-ID.
@@ -94680,3 +94777,8 @@ mod story_1424_graded_review_tests;
 #[cfg(test)]
 #[path = "tests/bug_1418_drain_token_measurement_tests.rs"]
 mod bug_1418_drain_token_measurement_tests;
+
+// trace:TASK-1442 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1442_pr_open_spec_guard_tests.rs"]
+mod task_1442_pr_open_spec_guard_tests;
