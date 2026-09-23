@@ -34,12 +34,12 @@ description: |
   5. The surfacing names WHY the PR is stuck - red CI, no owner - rather than only that it is. A row saying "PR #2035 needs attention" sends someone to rediscover what this spec already established.
 
   NOT IN SCOPE: whether a spec should be Done while its PR is red. That is a lifecycle question and belongs with the Done-versus-Completed work; this spec is about the work being findable either way.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:30:26.030629266Z
-modified_at: 2026-09-23T04:09:56.053574834Z
+modified_at: 2026-09-23T07:16:50.714032265Z
 req_type: Bug
 tags:
 - batch:night-0920 visibility merge-safety drain-safe from:session-0920
