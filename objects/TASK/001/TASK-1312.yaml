@@ -43,12 +43,12 @@ description: |
   4. The sweep never touches a branch that is not a refs/pull-derived snapshot. Authored
      spec branches, including the 100-day-old ones BUG-1531 criterion 4 protects, are out
      of scope by construction.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:14:15.735389401Z
-modified_at: 2026-09-23T09:47:49.382024669Z
+modified_at: 2026-09-23T10:28:44.782560767Z
 req_type: Task
 tags:
 - parent:EPIC-62 reviewer-lane cleanup severity:operational
@@ -76,3 +76,21 @@ comments:
   created_at: 2026-09-23T09:47:49.382024669Z
   modified_at: 2026-09-23T09:47:49.382024669Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0cdcf-8648-7c41-8430-94e07b4d2c91
+  author: aida-auto-bump
+  timestamp: 2026-09-23T10:28:44.744614338Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0cdcf-866e-72b1-8429-9a65e39835ab
+  timestamp: 2026-09-23T10:28:44.782557973Z
+  agent: aida
+  commit_sha: 066fc138b0cac80803cfb94faa5d3b0b327ee607
+  summary: Completed via merge 066fc138
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T10:28:44.744241631Z
+  completion_sha: 066fc138b0cac80803cfb94faa5d3b0b327ee607
