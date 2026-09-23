@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:42:03.999804940Z
-modified_at: 2026-09-23T04:11:36.354780435Z
+modified_at: 2026-09-23T04:11:37.684224551Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -70,4 +70,9 @@ comments:
   created_at: 2026-09-23T02:45:24.268021565Z
   modified_at: 2026-09-23T02:45:24.268021565Z
   session_id: 01a0cbdf-7c46-79e0-a895-67caf4e1efce
+- id: 01a0cc76-4354-7fd2-936a-8008345f0aa2
+  author: joe
+  content: '[aida:independent-review] REQUEST_CHANGES at rebased head 9ba1acca65. The lib.rs aida pull path is corrected and its two helper tests pass, but acceptance criterion 3 is unmet: aida-cli-lib/src/git_backend_cmd.rs still emits the unconditional orphan-store mid-rebase / git rebase --abort hint in its Pull failed Err arm. Add the same checked rebase-state behavior and a test for both states there; inspect other unchecked recovery hints as criterion 5 requires. Local evidence: project code review found the unchanged second site; no PR opened. Independent Codex reviewer.'
+  created_at: 2026-09-23T04:11:37.684224551Z
+  modified_at: 2026-09-23T04:11:37.684224551Z
 execution_mode: drain
