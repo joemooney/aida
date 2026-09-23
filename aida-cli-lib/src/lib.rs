@@ -31536,12 +31536,6 @@ fn resolve_worktree_pool_enabled(flag: Option<bool>, project_root: &std::path::P
         .unwrap_or(true)
 }
 
-/// Acquire a warm-pool worktree for a new session and create `branch_name` on
-/// it. The tree is handed out at a detached furthest-ahead default HEAD, so the
-/// branch forks from the right base; a durable lease (keyed on the branch) keeps
-/// it reserved while the session is live even though this start process exits.
-/// On branch-creation failure the tree is returned, not leaked.
-// trace:STORY-714 | ai:claude
 /// BUG-669: a recycled pool worktree may still carry the PRIOR occupant's
 /// session lease — `return_to_pool` resets the *tree* but the session lease
 /// (`.aida/sessions/<id>.toml`) keyed to that worktree path is left behind. Drop
@@ -31573,6 +31567,13 @@ fn clear_worktree_session_leases(
     removed
 }
 
+/// Acquire a warm-pool worktree for a new session and create `branch_name` on
+/// it. The tree is handed out at a detached furthest-ahead default HEAD, so the
+/// branch forks from the right base; a durable lease (keyed on the branch) keeps
+/// it reserved while the session is live even though this start process exits.
+/// On branch-creation failure the tree is returned, not leaked.
+// trace:STORY-714 | ai:claude
+// trace:BUG-1561 | ai:claude
 fn acquire_session_pool_worktree(
     project_root: &std::path::Path,
     branch_name: &str,

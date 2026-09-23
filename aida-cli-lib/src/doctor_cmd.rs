@@ -730,14 +730,6 @@ fn scan_scaffold_drift(
     findings
 }
 
-/// TASK-1122: store-scrub detection. When identity redaction is configured
-/// (`[node] public_email` / `public_hostname` in `~/.aida/config.toml`), verify
-/// the RAW system identity has not ALREADY leaked into the store — a leak that
-/// landed before redaction was enabled is otherwise invisible on a public
-/// mirror. Reads the identity-bearing store files + recent store commit authors
-/// and flags any raw value present. Detection only, no auto-heal (removing an
-/// already-landed value needs a history rewrite).
-// trace:TASK-1122 | ai:claude
 /// One guarded command shape and the latency it must stay under.
 ///
 /// Per-shape rather than one global number, so guarding a second command is a
@@ -1857,6 +1849,15 @@ mod bug_1572_binary_lineage_tests {
     }
 }
 
+/// TASK-1122: store-scrub detection. When identity redaction is configured
+/// (`[node] public_email` / `public_hostname` in `~/.aida/config.toml`), verify
+/// the RAW system identity has not ALREADY leaked into the store — a leak that
+/// landed before redaction was enabled is otherwise invisible on a public
+/// mirror. Reads the identity-bearing store files + recent store commit authors
+/// and flags any raw value present. Detection only, no auto-heal (removing an
+/// already-landed value needs a history rewrite).
+// trace:TASK-1122 | ai:claude
+// trace:BUG-1561 | ai:claude
 fn scan_store_scrub(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     let (pub_host, pub_email) = aida_core::git_ops::public_identity();
     // Redaction not configured → nothing is expected to be redacted, nothing to check.
