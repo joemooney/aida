@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T19:33:33.668555610Z
-modified_at: 2026-09-23T16:40:36.098524044Z
+modified_at: 2026-09-23T16:40:38.722660466Z
 req_type: Bug
 tags:
 - awaiting ci merge-safety substrate-as-bouncer from:review-pr-2009
@@ -245,5 +245,11 @@ comments:
   content: 'Rework 0d2fde20ab fixes both strict-review blockers: integrate parks (ParkReason::RequiredCheckMissing) on missing/unknown and never merges; required_status_checks returns ''none required'' only for the literal ''branch not protected'', otherwise unknown. 5 new tests; bug_1481, integrate, awaiting_you and ci pass. The optional permission hint in awaiting output was skipped. Next batch.'
   created_at: 2026-09-23T16:09:24.773475177Z
   modified_at: 2026-09-23T16:09:24.773475177Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cf24-0242-7a63-b7b5-d19bfff779e4
+  author: joe
+  content: 'Merged via integration batch 16, PR #2127 (merge confirmed MERGED, 2026-09-23 09:40).'
+  created_at: 2026-09-23T16:40:38.722660466Z
+  modified_at: 2026-09-23T16:40:38.722660466Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
