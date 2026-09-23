@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:39:48.714673512Z
-modified_at: 2026-09-23T10:50:00.859834309Z
+modified_at: 2026-09-23T10:50:05.207467436Z
 req_type: Task
 tags:
 - parent:BUG-1470 review-verdict observability severity:operational
@@ -41,4 +41,10 @@ comments:
   content: Claude implementer dispatched 2026-09-23 03:34 -> branch claude/task-1310, no PR (overnight burn-down)
   created_at: 2026-09-23T10:34:18.051260223Z
   modified_at: 2026-09-23T10:34:18.051260223Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cde3-1017-7f11-9290-989418522e82
+  author: joe
+  content: 'Claude implementer result: claude/task-1310 @ c875ce0297 (awaiting_you.rs only). Blocked review rows carry recorded_at; ''refused Nd ago, no rework since'' with a 7-day overdue flag; JSON has recorded_at/age_secs/overdue; a missing recorded_at renders ''age unknown'' (PRIN-5). Reuses classify_pr_review; the notice path is unchanged. 5 tests. Awaiting review, then batch 9.'
+  created_at: 2026-09-23T10:50:05.207467436Z
+  modified_at: 2026-09-23T10:50:05.207467436Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
