@@ -392,6 +392,7 @@ mod tests {
                 number: 8,
                 title: "broken".into(),
                 head_branch: "broken-pr".into(),
+                done_spec: None,
             }],
             pending_briefs: vec![PendingBriefItem {
                 agent: "claude".into(),
