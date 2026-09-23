@@ -1502,3 +1502,267 @@ fn shelve_on_failure_always_shelves_the_lease_spec_with_an_attribution_note() {
         ShelveAttribution::Reattributed("BUG-1420".to_string())
     );
 }
+
+// ============================================================================
+// TASK-1449: `RealPhaseDriver::rework_no_op_failure` refuses on unknowns and
+// compares against the blocking verdict's reviewed_sha on the DISPATCHED
+// branch, rather than failing open. Tests set `rework_guard` /
+// `phase_done_pr` directly — `begin_rework_guard`'s arming path is exercised
+// elsewhere; these cover the guard's own judgment once armed.
+// ============================================================================
+
+/// `main` with one commit, plus a DISPATCHED branch forked from it — the
+/// shape `rework_no_op_failure` judges. Returns the worktree root; commits
+/// land locally (no push needed — `dispatched_branch_head_sha` falls back to
+/// the local branch name when `origin/<branch>` isn't fetched).
+fn rework_fixture() -> (tempfile::TempDir, std::path::PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("work");
+    std::fs::create_dir_all(&root).unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["config", "user.email", "aida@example.invalid"]);
+    git(&root, &["config", "user.name", "AIDA Test"]);
+    write_commit(&root, "README.md", "root\n", "chore: seed (TASK-0)");
+    git(&root, &["checkout", "-q", "-b", "task-1449-work"]);
+    (tmp, root)
+}
+
+#[test]
+fn rework_no_op_failure_is_none_when_guard_is_not_armed() {
+    // A genuine first-round (non-rework) advance must never trip the guard —
+    // it is armed only when a blocking verdict exists.
+    let (_tmp, root) = rework_fixture();
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = None;
+    d.phase_done_pr = Some(1);
+    assert!(d.rework_no_op_failure().is_none());
+}
+
+#[test]
+fn rework_no_op_fires_when_dispatched_branch_head_equals_reviewed_sha() {
+    let (_tmp, root) = rework_fixture();
+    write_commit(&root, "impl.rs", "v1\n", "fix: attempt one (TASK-1449)");
+    let head = git(&root, &["rev-parse", "HEAD"]);
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        Some(head),
+        "outstanding review findings".to_string(),
+        3,
+    ));
+    d.phase_done_pr = Some(77);
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("an unmoved dispatched branch must refuse to advance");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+    assert!(failure.reason.contains("ROUND 3"), "{}", failure.reason);
+}
+
+#[test]
+fn rework_no_op_fires_when_some_other_head_moved_but_not_the_dispatched_branch() {
+    // BUG-1522 AC7 shape: a DIFFERENT branch gains a commit (simulating
+    // another PR's head moving) while the DISPATCHED branch sits untouched
+    // at the reviewed sha. The guard must still fire.
+    let (_tmp, root) = rework_fixture();
+    let reviewed_sha = git(&root, &["rev-parse", "HEAD"]);
+    git(&root, &["checkout", "-q", "-b", "unrelated-other-pr"]);
+    write_commit(&root, "other.rs", "v1\n", "fix: unrelated work (BUG-9998)");
+    git(&root, &["checkout", "-q", "task-1449-work"]);
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        Some(reviewed_sha),
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("another branch moving must not excuse the dispatched branch's own no-op");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+}
+
+#[test]
+fn rework_no_op_passes_on_genuine_new_content_on_the_dispatched_branch() {
+    let (_tmp, root) = rework_fixture();
+    let reviewed_sha = git(&root, &["rev-parse", "HEAD"]);
+    write_commit(
+        &root,
+        "impl.rs",
+        "v2 — real fix\n",
+        "fix: address findings (TASK-1449)",
+    );
+    let after = git(&root, &["rev-parse", "HEAD"]);
+    assert_ne!(reviewed_sha, after);
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        Some(reviewed_sha),
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    assert!(
+        d.rework_no_op_failure().is_none(),
+        "genuine new patch-unique content must be allowed to proceed"
+    );
+}
+
+#[test]
+fn rework_no_op_refuses_when_verdict_has_no_reviewed_sha() {
+    // TASK-1449 AC1 / BUG-1522 AC9: a verdict with no recorded reviewed_sha
+    // is UNKNOWN, not clear — refuse rather than silently advance.
+    let (_tmp, root) = rework_fixture();
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        None,
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("a missing reviewed_sha must refuse rather than silently pass");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+    assert!(
+        failure.reason.contains("reviewed_sha"),
+        "{}",
+        failure.reason
+    );
+}
+
+#[test]
+fn rework_no_op_refuses_when_dispatched_branch_head_is_unreadable() {
+    // TASK-1449 AC1: an unreadable head (here: the dispatched branch was
+    // never created) is UNKNOWN — refuse, never advance.
+    let (_tmp, root) = rework_fixture();
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "branch-that-does-not-exist".to_string(),
+        Some("deadbeef".repeat(5)),
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(77);
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("an unreadable dispatched-branch head must refuse rather than silently pass");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+    assert!(
+        failure.reason.contains("could not be read"),
+        "{}",
+        failure.reason
+    );
+}
+
+#[test]
+fn rework_no_op_fires_even_when_pr_number_is_none_this_round() {
+    // TASK-1449 AC4: the Held/Inconclusive `ImplementerOutcome` arms capture
+    // no PR (`phase_done_pr` stays `None`). The old `phase_done_pr !=
+    // Some(pr)` gate made the guard unreachable there; the dispatched-branch
+    // comparison must not depend on `phase_done_pr` at all.
+    let (_tmp, root) = rework_fixture();
+    let head = git(&root, &["rev-parse", "HEAD"]);
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        Some(head),
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = None; // Held/Inconclusive: no PR captured this round.
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("a None phase_done_pr must not disarm the guard");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+}
+
+#[test]
+fn rework_no_op_catches_phase_done_pr_bound_to_another_specs_pr() {
+    // TASK-1449 AC3 / the BUG-1527 shape: this round's own `phase_done_pr`
+    // names a DIFFERENT, real PR whose commits credit another spec entirely.
+    // The old `phase_done_pr != Some(pr) => return None` exit treated that
+    // mismatch as license to advance. The attribution check must name it,
+    // and the dispatched-branch comparison (unaffected by `phase_done_pr`)
+    // must still fire regardless.
+    let (_tmp, root) = rework_fixture();
+    let reviewed_sha = git(&root, &["rev-parse", "HEAD"]);
+    git(
+        &root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/repo.git",
+        ],
+    );
+    git(&root, &["checkout", "-q", "-b", "other-spec-work"]);
+    write_commit(
+        &root,
+        "other.rs",
+        "v1\n",
+        "fix(x): unrelated fix (BUG-9999)",
+    );
+    git(&root, &["checkout", "-q", "task-1449-work"]);
+
+    let gh = fake_gh(
+        &root,
+        r#"#!/usr/bin/env bash
+if [[ "${1:-}" == "pr" && "${2:-}" == "view" && "${3:-}" == "999" ]]; then
+  cat <<'JSON'
+{
+  "state": "OPEN",
+  "title": "unrelated fix",
+  "mergedAt": null,
+  "baseRefName": "main",
+  "headRefName": "other-spec-work",
+  "headRefOid": "deadbeefcafe",
+  "isCrossRepository": false,
+  "headRepository": {"nameWithOwner": "acme/repo"},
+  "isDraft": false
+}
+JSON
+  exit 0
+fi
+exit 1
+"#,
+    );
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", gh.to_str().unwrap())]);
+
+    let mut d = driver(&root, "TASK-1449");
+    d.rework_guard = Some((
+        77,
+        "task-1449-work".to_string(),
+        Some(reviewed_sha),
+        "outstanding review findings".to_string(),
+        2,
+    ));
+    d.phase_done_pr = Some(999);
+
+    let failure = d
+        .rework_no_op_failure()
+        .expect("a mismatched, misattributed PR must refuse rather than pass silently");
+    assert_eq!(failure.kind, FailureKind::ReworkNoOp);
+    assert!(
+        failure.reason.contains("PR-999") && failure.reason.contains("not attributed"),
+        "expected the misattribution to be named explicitly, got: {}",
+        failure.reason
+    );
+}
