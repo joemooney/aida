@@ -34,12 +34,12 @@ description: |-
   NOT IN SCOPE: widening STORY-1419's row to all verdict kinds by deleting the verdict_blocks filter. That filter is correct for what that surface reports; the approval direction is a different question with a different audience and a different remedy, and hanging it on the same row would make one surface answer two questions badly.
 
   Found by the reviewer seat after the advisor claimed the shipped feature would have caught it. It would not have, for a structural reason neither had checked; the filter was verified in the merged code before this was filed.
-status: Done
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T11:50:22.817831771Z
-modified_at: 2026-09-23T08:13:26.792552794Z
+modified_at: 2026-09-23T08:13:38.692072148Z
 req_type: Bug
 relationships:
 - rel_type: Parent
