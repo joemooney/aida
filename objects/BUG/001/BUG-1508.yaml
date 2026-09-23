@@ -52,7 +52,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:51:11.600098076Z
-modified_at: 2026-09-23T07:16:46.907013403Z
+modified_at: 2026-09-23T07:16:49.317312823Z
 req_type: Bug
 tags:
 - batch:night-0920 queue agent-surface drain-safe from:review-triage-0920
@@ -155,4 +155,10 @@ comments:
   content: 'Claude implementer result: branch claude/bug-1508 @ 05f030e76a (2 commits, pushed, no PR). The review_actionability classifier (review_verdict.rs) returns NeedsReview/AwaitingRework/Resolved; an indeterminate verdict (no reviewed_sha / unknown tip) counts as ABSENT, so NeedsReview (AC8, PRIN-5). reviewer_row_actionability + covered_spec_ids_for_reviewer_row (lib.rs) resolve the head LOCALLY (verdict reviewed_branch -> lease -> refs/remotes/origin/* or refs/heads/*), with no forge call. Wired into ''aida queue list --for reviewer'' (per-row state in text/JSON/TOON plus the header ''actionable N of M routed'') and into the reviewer section of ''aida awaiting'' (the same summary line plus a per-row state in render/compact_line/to_json). Rows are never dropped (AC2), and a head that moved past the verdict goes back to needs-review (AC3, git-fixture tests). AC5 was measured on the live queue: before ''3 items'', after ''actionable 2 of 3 routed''. The 2026-09-20 0-of-22 sample has since rotated. Tests: review_verdict 42, awaiting_you 36, queue_cmd 30, bug_1508_reviewer_row_tests 2, all passing. REVIEWER NOTES: (a) PERF: the queue list paths call storage.load() (a full-store load) whenever ANY reviewer-routed row exists, which is the STORY-707 anti-pattern. Should be targeted get_requirement_by_spec_id lookups like the awaiting path uses. (b) +829 lines; the implementer overran its tool budget (226 calls). (c) Not in scope, per the spec: the BUG-1505 verdict schema.'
   created_at: 2026-09-23T04:39:24.333128042Z
   modified_at: 2026-09-23T04:39:24.333128042Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0cd1f-d025-7fe2-82c1-bbf05141462b
+  author: joe
+  content: 'Merged to main via integration batch 1, PR #2111 squash 48dac64a77 (2026-09-23 00:15). Completed by hand: aida pull auto-bumped 5 of the 7 batch specs but not this one, even though the squash body carries its (ID) trailer. A possible squash-body-trailer scan gap, worth a look.'
+  created_at: 2026-09-23T07:16:49.317312823Z
+  modified_at: 2026-09-23T07:16:49.317312823Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
