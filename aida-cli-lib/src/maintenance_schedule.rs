@@ -4585,4 +4585,46 @@ enabled = true
             .unwrap()
             .is_none());
     }
+
+    /// STORY-1423 criterion 3 (THE TRIGGER): a dogfood regression test over
+    /// this repo's OWN `.aida/config.toml`, not a fixture. `aida schedule
+    /// list` reporting both jobs enabled was a point-in-time observation
+    /// (2026-09-21, PR #2062); nothing stopped a later config edit from
+    /// silently disabling or deleting either entry and letting the gate go
+    /// dark again — exactly the "commented example is a trigger for nobody"
+    /// defect this spec exists to close, recurring one layer out. Reads the
+    /// real file via `CARGO_MANIFEST_DIR` so this fails the moment the
+    /// dogfood surface regresses.
+    // trace:STORY-1423 | ai:claude
+    #[test]
+    fn this_repo_keeps_the_performance_guard_pair_registered_and_enabled() {
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("aida-cli-lib has a workspace parent");
+        let cfg = load_config(repo_root)
+            .unwrap()
+            .expect("this repo's .aida/config.toml must declare a [schedule] section");
+
+        let guard = cfg
+            .tasks
+            .iter()
+            .find(|t| t.name == "performance-guard")
+            .expect("the performance-guard substrate job must stay registered in this repo");
+        assert_eq!(guard.kind, JobKind::Substrate);
+        assert!(
+            guard.enabled,
+            "performance-guard must stay enabled — a disabled entry is a trigger for nobody"
+        );
+
+        let route = cfg
+            .tasks
+            .iter()
+            .find(|t| t.name == "performance-guard-route")
+            .expect("the performance-guard-route seat job must stay registered in this repo");
+        assert_eq!(route.kind, JobKind::Seat);
+        assert!(
+            route.enabled,
+            "performance-guard-route must stay enabled so a trip still reaches a seat"
+        );
+    }
 }
