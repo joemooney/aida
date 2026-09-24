@@ -49,6 +49,51 @@ fn schedule_install_cron_and_uninstall_cron_parse() {
     ));
 }
 
+// BUG-1600: the per-turn hook invokes `schedule tick --hook`; the installed
+// crontab entry invokes plain `schedule tick` (tagged with
+// `AIDA_SCHEDULE_INVOKER=cron`, not a CLI flag). Both shapes must keep
+// parsing exactly as before.
+// trace:BUG-1600 | ai:claude
+#[test]
+fn schedule_tick_hook_and_timer_shapes_parse() {
+    let cli = Cli::try_parse_from(["aida", "schedule", "tick", "--hook"]).unwrap();
+    assert!(matches!(
+        cli.command,
+        Command::Schedule(MaintenanceScheduleCommand::Tick { hook: true })
+    ));
+
+    // The timer/cron shape: no --hook.
+    let cli = Cli::try_parse_from(["aida", "schedule", "tick"]).unwrap();
+    assert!(matches!(
+        cli.command,
+        Command::Schedule(MaintenanceScheduleCommand::Tick { hook: false })
+    ));
+}
+
+// BUG-1600: `schedule tick` has no JSON projection. This locks in the
+// exact clap-introspection fact `enforce_json_format_capability` relies on
+// to reject `--format json` before dispatch — if this ever flips (a real
+// `--json` gets added to `Tick`), the cron-line builder's choice to pass
+// plain `schedule tick` needs a conscious second look, not silent drift.
+// trace:BUG-1600 | ai:claude
+#[test]
+fn schedule_tick_has_no_json_capability() {
+    use clap::CommandFactory;
+    let root = Cli::command();
+    let schedule = root
+        .get_subcommands()
+        .find(|c| c.get_name() == "schedule")
+        .expect("schedule subcommand must exist");
+    let tick = schedule
+        .get_subcommands()
+        .find(|c| c.get_name() == "tick")
+        .expect("schedule tick subcommand must exist");
+    assert!(
+        !tick.get_arguments().any(|a| a.get_id().as_str() == "json"),
+        "schedule tick must not declare --json — nothing may pass it --format json"
+    );
+}
+
 #[test]
 fn init_no_schedule_flag_parses() {
     let cli = Cli::try_parse_from(["aida", "init", "--no-schedule"]).unwrap();
@@ -86,8 +131,8 @@ fn build_tick_cron_line_matches_reference_shape() {
     let aida_exe = Path::new("/home/joe/.aida/bin/aida");
     let line = build_tick_cron_line(repo, aida_exe).unwrap();
 
-    // */15 * * * * cd <repo> && PATH='<bin-dir>:...' <abs-aida> schedule tick
-    // --format json >> ~/.aida/schedule-tick.log 2>&1 # <marker>
+    // */15 * * * * cd <repo> && PATH='<bin-dir>:...' AIDA_SCHEDULE_INVOKER=cron
+    // <abs-aida> schedule tick >> ~/.aida/schedule-tick.log 2>&1 # <marker>
     assert!(line.starts_with("*/15 * * * * cd "), "{line}");
     // The whole PATH assignment is quoted as one shell word (not just the
     // bin dir) so it can never be split or glob-expanded on the way in.
@@ -95,12 +140,23 @@ fn build_tick_cron_line_matches_reference_shape() {
         line.contains("PATH='/home/joe/.aida/bin:/usr/local/bin:/usr/bin:/bin'"),
         "{line}"
     );
+    // BUG-1600: tags the invocation source in scheduler telemetry so a
+    // cron-driven tick is distinguishable from the per-turn hook (--hook).
+    assert!(line.contains("AIDA_SCHEDULE_INVOKER=cron"), "{line}");
     assert!(
         line.contains("'/home/joe/.aida/bin/aida' schedule tick"),
         "{line}"
     );
+    // BUG-1600: `schedule tick` has no `--format`/`--json` projection — a
+    // prior version of this line added `--format json`, which `aida`
+    // rejects before dispatch on every single tick (see the audit in
+    // docs/cli-format-json-audit.md). The line must never reintroduce it.
     assert!(
-        line.contains("schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1"),
+        !line.contains("--format"),
+        "must not pass an unsupported --format to `schedule tick`: {line}"
+    );
+    assert!(
+        line.contains("schedule tick >> ~/.aida/schedule-tick.log 2>&1"),
         "{line}"
     );
     assert!(
@@ -143,14 +199,49 @@ fn crontab_after_install_appends_without_clobbering_existing_entries() {
 }
 
 #[test]
-fn crontab_after_install_is_idempotent() {
+fn crontab_after_install_is_idempotent_when_content_matches() {
     let marker = "aida-schedule-tick:/repo";
-    let existing = format!("*/15 * * * * cd /repo && aida schedule tick # {marker}\n");
+    let line = format!("*/15 * * * * cd /repo && aida schedule tick # {marker}");
+    let existing = format!("{line}\n");
     assert_eq!(
-        crontab_after_install(&existing, marker, "irrelevant new line # different"),
+        crontab_after_install(&existing, marker, &line),
         None,
-        "already installed → no-op"
+        "byte-identical entry already installed → true no-op"
     );
+}
+
+// BUG-1600: a stale entry (e.g. one installed before this fix, still
+// carrying `--format json`) must be rewritten IN PLACE the next time
+// install/refresh runs — not silently left broken because "a line with
+// this marker already exists".
+#[test]
+fn crontab_after_install_repairs_a_stale_line_in_place() {
+    let marker = "aida-schedule-tick:/repo";
+    let stale = format!(
+        "*/15 * * * * cd /repo && aida schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let fresh = format!(
+        "*/15 * * * * cd /repo && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let existing = format!("0 4 * * * some-other-cronjob\n{stale}\n0 5 * * * another-cronjob\n");
+
+    let body = crontab_after_install(&existing, marker, &fresh)
+        .expect("stale content must be rewritten, not treated as a no-op");
+
+    assert!(
+        !body.contains(&stale),
+        "the stale line must be gone: {body}"
+    );
+    assert!(
+        body.contains(&fresh),
+        "the fresh line must replace it: {body}"
+    );
+    // Repaired in place, not appended at the end — every other line's
+    // relative order is preserved.
+    let lines: Vec<&str> = body.lines().collect();
+    assert_eq!(lines[0], "0 4 * * * some-other-cronjob");
+    assert_eq!(lines[1], fresh);
+    assert_eq!(lines[2], "0 5 * * * another-cronjob");
 }
 
 #[test]
