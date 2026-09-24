@@ -7892,6 +7892,13 @@ pub enum UsageCommand {
     /// Show the raw recent usage event stream.
     // trace:STORY-1028 | ai:codex
     Events,
+    /// Compact one-line-per-invocation timeline: local timestamp, duration,
+    /// command shape, and exit status/failure mark — newest first. The
+    /// scan-first companion to `events` (which prints the full raw fields);
+    /// use this to eyeball what ran immediately before a slow command.
+    /// Honors --since/--cmd/--slower-than/--limit/--json like `events`.
+    // trace:TASK-1481 | ai:claude
+    Timeline,
     /// Show autonomous drain telemetry.
     // trace:STORY-1028 | ai:codex
     Drains {
@@ -14785,6 +14792,32 @@ mod tests {
                 ..
             }
         ));
+
+        // TASK-1481: `timeline` is subcommand-only (no legacy `--timeline`
+        // flag), and composes with the shared --cmd/--slower-than/--limit
+        // flags the same way `events` does.
+        let cli = Cli::try_parse_from([
+            "aida",
+            "usage",
+            "--cmd",
+            "queue list",
+            "--slower-than",
+            "500ms",
+            "timeline",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Usage {
+                action: Some(UsageCommand::Timeline),
+                cmd,
+                slower_than,
+                ..
+            } => {
+                assert_eq!(cmd.as_deref(), Some("queue list"));
+                assert_eq!(slower_than, Some(500));
+            }
+            other => panic!("expected Usage{{ action: Timeline, .. }}, got {other:?}"),
+        }
 
         let cli = Cli::try_parse_from(["aida", "graph", "blocked-by", "STORY-1"]).unwrap();
         assert!(matches!(
