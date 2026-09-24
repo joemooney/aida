@@ -44,7 +44,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:27:13.842442950Z
-modified_at: 2026-09-21T22:27:13.842442950Z
+modified_at: 2026-09-24T03:54:03.613797900Z
 req_type: Story
 tags:
+- docs:impacted
 - substrate lifecycle papercut
