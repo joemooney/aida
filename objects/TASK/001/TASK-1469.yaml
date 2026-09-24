@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T03:06:32.592974630Z
-modified_at: 2026-09-24T08:14:47.130565677Z
+modified_at: 2026-09-24T08:14:51.743816725Z
 req_type: Task
 tags:
 - merge-hold
@@ -17,3 +17,10 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-24T03:06:34.739228809Z
+comments:
+- id: 01a0d27b-4f5f-78a1-bed5-36cc40276430
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): REJECTED. Nothing to sort: merge-hold list shows one marker, on closed PR #2103, already flagged stale. A human can sweep it with aida merge-hold clear --stale.'
+  created_at: 2026-09-24T08:14:51.743816725Z
+  modified_at: 2026-09-24T08:14:51.743816725Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
