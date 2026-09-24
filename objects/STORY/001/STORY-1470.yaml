@@ -8,5 +8,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T02:17:28.910831106Z
-modified_at: 2026-09-24T08:12:12.887890972Z
+modified_at: 2026-09-24T08:12:14.212086271Z
 req_type: Story
+comments:
+- id: 01a0d278-e804-7862-b3f8-8078d50fd659
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. Self-contained TUI contextual help overlay.'
+  created_at: 2026-09-24T08:12:14.212086271Z
+  modified_at: 2026-09-24T08:12:14.212086271Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
