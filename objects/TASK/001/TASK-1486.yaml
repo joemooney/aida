@@ -15,12 +15,12 @@ description: |-
   - The admin guide matches the behaviour.
   - init --refresh in declared-but-unattached distributed mode does not seed a stale local db.
   - Tests cover (1), (2) and (4).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T16:00:50.333680636Z
-modified_at: 2026-09-24T16:43:03.388842849Z
+modified_at: 2026-09-24T17:13:54.560885206Z
 req_type: Task
 tags:
 - docs
@@ -33,6 +33,20 @@ comments:
   created_at: 2026-09-24T16:43:03.388842849Z
   modified_at: 2026-09-24T16:43:03.388842849Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d468-d27a-7900-ba1e-b31f58078b1e
+  author: aida-auto-bump
+  timestamp: 2026-09-24T17:13:54.554010928Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d468-d280-75e3-bb51-83f0d2ee7beb
+  timestamp: 2026-09-24T17:13:54.560883402Z
+  agent: aida
+  commit_sha: 2ab1b8d9595d61e30904573a1c13b2be45d0194d
+  summary: Completed via merge 2ab1b8d9
 filed_at:
   code_sha: 64b652e051a639975ced35f04527e83b4bd00d33
   branch: main
@@ -41,3 +55,7 @@ filed_at:
   aida_build_sha: 1c22d30ab1
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T17:13:54.554006886Z
+  completion_sha: 2ab1b8d9595d61e30904573a1c13b2be45d0194d
