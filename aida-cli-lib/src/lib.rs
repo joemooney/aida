@@ -604,15 +604,7 @@ pub fn main_entry() {
             // and the human-at-a-TTY path below is byte-identical to before.
             // trace:TASK-972
             if agent_output_mode() {
-                let (summary, help) = agent_error_summary_help(&msg);
-                // TASK-1082: fold a did-you-mean suggestion into the agent-mode
-                // summary when a "Requirement not found" error is a near-miss of
-                // a real spec id. trace:TASK-1082 | ai:claude
-                let summary_owned = match did_you_mean_for_not_found(&msg) {
-                    Some(hint) => format!("{summary} ({hint})"),
-                    None => summary.to_string(),
-                };
-                println!("{}", toon::error_block(&summary_owned, help.as_deref()));
+                println!("{}", agent_error_block(&err, &msg));
             } else if err.downcast_ref::<SoftSignpostShown>().is_some() {
                 // STORY-737 (delight #5): the command already rendered a soft,
                 // forward-pointing signpost to stderr — re-printing it as a red
@@ -2182,6 +2174,29 @@ fn list_hidden_hint_lines(
 #[path = "tests/bug_783_list_hidden_hints_tests.rs"]
 mod bug_783_list_hidden_hints_tests;
 
+/// Render the agent-mode (TOON) error block for `err`, whose Debug-formatted
+/// text is `msg`. A typed error that carries its own help list renders every
+/// item, so multi-line guidance survives; anything else keeps the TASK-972
+/// shape of a one-line summary plus the first embedded `aida …` command.
+// trace:TASK-972 trace:TASK-1486 | ai:claude
+fn agent_error_block(err: &anyhow::Error, msg: &str) -> String {
+    if let Some(no_project) = err
+        .chain()
+        .find_map(|e| e.downcast_ref::<aida_core::NoProjectFound>())
+    {
+        return toon::error_block_with_help_list(no_project.summary(), &no_project.help_lines());
+    }
+    let (summary, help) = agent_error_summary_help(msg);
+    // TASK-1082: fold a did-you-mean suggestion into the agent-mode
+    // summary when a "Requirement not found" error is a near-miss of
+    // a real spec id. trace:TASK-1082 | ai:claude
+    let summary_owned = match did_you_mean_for_not_found(msg) {
+        Some(hint) => format!("{summary} ({hint})"),
+        None => summary.to_string(),
+    };
+    toon::error_block(&summary_owned, help.as_deref())
+}
+
 fn agent_error_summary_help(msg: &str) -> (&str, Option<String>) {
     let first = msg.lines().next().unwrap_or("").trim();
     let summary = first
@@ -2569,6 +2584,10 @@ fn render_search_fields(
 #[cfg(test)]
 #[path = "tests/task970_agent_output_tests.rs"]
 mod task970_agent_output_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1486_store_refusal_tests.rs"]
+mod task_1486_store_refusal_tests;
 
 fn maybe_run_asciinema_wrapper(raw_args: &[String], cli: &Cli) -> Result<Option<i32>> {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
@@ -3496,18 +3515,48 @@ fn run() -> Result<()> {
             // Seed into THIS project's store: the distributed store first, then
             // a local legacy store. Never the registry's ambient default, which
             // could be an unrelated project's database. trace:BUG-1603 | ai:claude
-            let store_path = detect_distributed_store()
-                .map(Ok)
-                .unwrap_or_else(|| determine_requirements_path(None));
-            match store_path {
-                Ok(store_path) => {
+            // A distributed project whose store isn't attached here must not
+            // fall through to a stale `requirements.db` in the cwd either: try
+            // to attach the store, and otherwise skip seeding. trace:TASK-1486 | ai:claude
+            let cwd = std::env::current_dir()?;
+            let target = refresh_seed_target(
+                detect_distributed_store(),
+                unattached_distributed_root(&cwd).is_some(),
+                || determine_requirements_path(None),
+            );
+            let target = match target {
+                RefreshSeedTarget::DistributedUnattached => {
+                    match unattached_distributed_root(&cwd)
+                        .filter(|root| branch_exists_anywhere(root, "aida-store"))
+                        .map(|root| try_attach_store_worktree(&root))
+                    {
+                        Some(Ok(store_path)) => {
+                            eprintln!(
+                                "  {} attached the AIDA store worktree from `aida-store`",
+                                "Note:".dimmed()
+                            );
+                            RefreshSeedTarget::Store(store_path)
+                        }
+                        _ => RefreshSeedTarget::DistributedUnattached,
+                    }
+                }
+                other => other,
+            };
+            match target {
+                RefreshSeedTarget::Store(store_path) => {
                     let storage = Storage::new(store_path);
                     let seeded = protocol_cmd::seed_missing_protocols(&storage)?;
                     if seeded > 0 {
                         println!("  {} seeded {seeded} missing type protocol(s)", "+".green());
                     }
                 }
-                Err(_) => eprintln!(
+                RefreshSeedTarget::DistributedUnattached => eprintln!(
+                    "  {} type protocols not seeded: this is a distributed AIDA project, but \
+                     its store isn't attached in this working copy (no `.aida-store/` \
+                     worktree). A local legacy requirements store here was left untouched.",
+                    "Note:".dimmed()
+                ),
+                RefreshSeedTarget::NoStore => eprintln!(
                     "  {} type protocols not seeded: no requirements store found here",
                     "Note:".dimmed()
                 ),
@@ -4720,128 +4769,105 @@ fn run() -> Result<()> {
         // User explicitly specified a file path - use it directly
         explicit_path
     } else {
-        // Check for distributed mode config (.aida/config.toml with store_path)
-        // Skip for commands that use their own APIs (Jira, GitHub, GitLab)
-        let is_external_integration = matches!(
-            &cli.command,
-            Command::Jira(_) | Command::Github(_) | Command::Gitlab(_)
-        );
-        if !is_external_integration {
-            if let Some(store_path) = detect_distributed_store() {
-                // MCP server reads/writes through the same canonical git store
-                // the CLI uses. Pointing Storage at the store directory lets
-                // its load/save transparently delegate to GitBackend, so
-                // every MCP write lands in `objects/` and is visible to the
-                // next CLI invocation. The previous YAML-snapshot approach
-                // wrote to `.aida/mcp-cache.yaml` only — invisible to the
-                // CLI and overwritten on every MCP restart.
-                // trace:BUG-310 | ai:claude
-                if matches!(&cli.command, Command::McpServe) {
-                    let mcp_storage = Storage::new(&store_path);
-                    let project_root = find_project_root().unwrap_or_else(|_| store_path.clone());
-                    mcp::run_mcp_server(&mcp_storage, project_root)?;
-                    return Ok(());
-                }
-                return git_backend_cmd::handle_git_backend_command(&store_path, &cli.command);
+        // Check for distributed mode config (.aida/config.toml with store_path).
+        // The Jira / GitHub / GitLab tracker commands go through the same
+        // distributed-first resolution as everything else: they used to skip
+        // it, so inside a distributed project with no local db they fell to the
+        // legacy resolver and wrongly reported there was no `.aida/config.toml`.
+        // trace:TASK-1486 | ai:claude
+        if let Some(store_path) = detect_distributed_store() {
+            return run_on_distributed_store(&cli.command, &store_path);
+        }
+        // Distributed mode is declared in `.aida/config.toml` but the store
+        // worktree isn't resolvable here — the hallmark of a freshly-cloned
+        // AIDA project (`.aida-store/` is gitignored and only created by
+        // `aida init`). We must NOT silently fall back to the legacy
+        // requirements.yaml/SQLite: that shows STALE data with no signal
+        // it's wrong (a first-user lands on someone's pre-migration specs
+        // and never knows). trace:BUG-428 | ai:claude
+        // BUG-442 / TASK-621: a project is distributed if local
+        // `.aida/config.toml` declares it OR — on a FRESH CLONE with no
+        // local config yet — the `aida-store` branch exists (origin or
+        // local). Detecting from the git ref is what makes auto-attach fire
+        // on a fresh clone AND, critically, prevents falling through to
+        // `determine_requirements_path`'s global-registry fallback, which
+        // would SILENTLY read an UNRELATED project's store (the worst
+        // failure mode — wrong data, no warning). BUG-428's refuse-fallback
+        // guard only covered the *declared* case; a fresh clone isn't
+        // declared yet, which is exactly the gap this closes.
+        // trace:BUG-442 trace:TASK-621 trace:BUG-428 | ai:claude
+        let distributed_root = distributed_mode_declared().or_else(|| {
+            let root = find_project_root().ok()?;
+            if branch_exists_anywhere(&root, "aida-store") {
+                return Some(root);
             }
-            // Distributed mode is declared in `.aida/config.toml` but the store
-            // worktree isn't resolvable here — the hallmark of a freshly-cloned
-            // AIDA project (`.aida-store/` is gitignored and only created by
-            // `aida init`). We must NOT silently fall back to the legacy
-            // requirements.yaml/SQLite: that shows STALE data with no signal
-            // it's wrong (a first-user lands on someone's pre-migration specs
-            // and never knows). trace:BUG-428 | ai:claude
-            // BUG-442 / TASK-621: a project is distributed if local
-            // `.aida/config.toml` declares it OR — on a FRESH CLONE with no
-            // local config yet — the `aida-store` branch exists (origin or
-            // local). Detecting from the git ref is what makes auto-attach fire
-            // on a fresh clone AND, critically, prevents falling through to
-            // `determine_requirements_path`'s global-registry fallback, which
-            // would SILENTLY read an UNRELATED project's store (the worst
-            // failure mode — wrong data, no warning). BUG-428's refuse-fallback
-            // guard only covered the *declared* case; a fresh clone isn't
-            // declared yet, which is exactly the gap this closes.
-            // trace:BUG-442 trace:TASK-621 trace:BUG-428 | ai:claude
-            let distributed_root = distributed_mode_declared().or_else(|| {
-                let root = find_project_root().ok()?;
-                if branch_exists_anywhere(&root, "aida-store") {
-                    return Some(root);
-                }
-                // BUG-433: the store is physically PRESENT here (`.aida-store/`
-                // with an `objects/` dir — even via a symlink to the main store)
-                // but there's no `.aida/config.toml` marker AND no detectable
-                // `aida-store` branch — e.g. a session worktree forked from a
-                // commit that predates the committed scaffolding, or a symlink
-                // into another repo's store. Detect distributed mode from the
-                // store's SHAPE so we use the real store instead of silently
-                // falling through to the legacy backend (which serves
-                // stale/unrelated data with no signal — the inverse of BUG-428).
-                // trace:BUG-433 | ai:claude
-                attached_store_present(&root).then_some(root)
-            });
-            if let Some(project_root) = distributed_root {
-                // An already-attached fresh clone (no config, but the worktree
-                // exists from a prior auto-attach) must be used directly — no
-                // re-fetch, no repeated "attached…" noise on every command.
-                let existing_worktree = project_root.join(".aida-store");
-                let store_path_opt = if attached_store_present(&project_root) {
-                    Some(existing_worktree)
-                } else if branch_exists_anywhere(&project_root, "aida-store") {
-                    // Auto-attach the store worktree from the `aida-store` branch
-                    // (the same fetch + worktree-add the post-clone init does).
-                    // Node-id / scaffolding stay with `aida init` / `aida node
-                    // acquire`: a node id is needed before WRITING, not reading.
-                    match try_attach_store_worktree(&project_root) {
-                        Ok(store_path) => {
-                            eprintln!(
-                                "{} attached the AIDA store worktree from `aida-store`. \
-                                 Run `{}` to claim a node id before issuing new IDs (`aida add`).",
-                                "Note:".dimmed(),
-                                "aida node acquire".cyan()
-                            );
-                            Some(store_path)
-                        }
-                        // Auto-attach failed (offline, diverged/locked branch,
-                        // git too old, …). Don't fall to legacy/ambient — drop to
-                        // the explicit setup guidance below, naming the cause.
-                        Err(e) => {
-                            eprintln!(
-                                "{} couldn't auto-attach the store worktree: {}",
-                                "Note:".dimmed(),
-                                e
-                            );
-                            None
-                        }
+            // BUG-433: the store is physically PRESENT here (`.aida-store/`
+            // with an `objects/` dir — even via a symlink to the main store)
+            // but there's no `.aida/config.toml` marker AND no detectable
+            // `aida-store` branch — e.g. a session worktree forked from a
+            // commit that predates the committed scaffolding, or a symlink
+            // into another repo's store. Detect distributed mode from the
+            // store's SHAPE so we use the real store instead of silently
+            // falling through to the legacy backend (which serves
+            // stale/unrelated data with no signal — the inverse of BUG-428).
+            // trace:BUG-433 | ai:claude
+            attached_store_present(&root).then_some(root)
+        });
+        if let Some(project_root) = distributed_root {
+            // An already-attached fresh clone (no config, but the worktree
+            // exists from a prior auto-attach) must be used directly — no
+            // re-fetch, no repeated "attached…" noise on every command.
+            let existing_worktree = project_root.join(".aida-store");
+            let store_path_opt = if attached_store_present(&project_root) {
+                Some(existing_worktree)
+            } else if branch_exists_anywhere(&project_root, "aida-store") {
+                // Auto-attach the store worktree from the `aida-store` branch
+                // (the same fetch + worktree-add the post-clone init does).
+                // Node-id / scaffolding stay with `aida init` / `aida node
+                // acquire`: a node id is needed before WRITING, not reading.
+                match try_attach_store_worktree(&project_root) {
+                    Ok(store_path) => {
+                        eprintln!(
+                            "{} attached the AIDA store worktree from `aida-store`. \
+                             Run `{}` to claim a node id before issuing new IDs (`aida add`).",
+                            "Note:".dimmed(),
+                            "aida node acquire".cyan()
+                        );
+                        Some(store_path)
                     }
-                } else {
-                    None
-                };
-                if let Some(store_path) = store_path_opt {
-                    if matches!(&cli.command, Command::McpServe) {
-                        let mcp_storage = Storage::new(&store_path);
-                        let project_root =
-                            find_project_root().unwrap_or_else(|_| store_path.clone());
-                        mcp::run_mcp_server(&mcp_storage, project_root)?;
-                        return Ok(());
+                    // Auto-attach failed (offline, diverged/locked branch,
+                    // git too old, …). Don't fall to legacy/ambient — drop to
+                    // the explicit setup guidance below, naming the cause.
+                    Err(e) => {
+                        eprintln!(
+                            "{} couldn't auto-attach the store worktree: {}",
+                            "Note:".dimmed(),
+                            e
+                        );
+                        None
                     }
-                    return git_backend_cmd::handle_git_backend_command(&store_path, &cli.command);
                 }
-                let on_store_ref = branch_exists_anywhere(&project_root, "aida-store");
-                let branch_hint = if on_store_ref {
-                    "\n  Its `aida-store` branch is available, ready to attach."
-                } else {
-                    ""
-                };
-                anyhow::bail!(
-                    "This is a distributed AIDA project, but its store isn't set up in \
-                     this working copy yet (no `.aida-store/` worktree).{branch_hint}\n\n  \
-                     Run `aida init` to attach it — it creates the `.aida-store` worktree \
-                     from the `aida-store` branch and rebuilds the cache.\n\n  \
-                     (Refusing to fall back to a legacy or ambient requirements store: \
-                     that would show stale or UNRELATED data with no indication it's wrong.)"
-                );
+            } else {
+                None
+            };
+            if let Some(store_path) = store_path_opt {
+                return run_on_distributed_store(&cli.command, &store_path);
             }
-        } // close is_external_integration check
+            let on_store_ref = branch_exists_anywhere(&project_root, "aida-store");
+            let branch_hint = if on_store_ref {
+                "\n  Its `aida-store` branch is available, ready to attach."
+            } else {
+                ""
+            };
+            anyhow::bail!(
+                "This is a distributed AIDA project, but its store isn't set up in \
+                 this working copy yet (no `.aida-store/` worktree).{branch_hint}\n\n  \
+                 Run `aida init` to attach it — it creates the `.aida-store` worktree \
+                 from the `aida-store` branch and rebuilds the cache.\n\n  \
+                 (Refusing to fall back to a legacy or ambient requirements store: \
+                 that would show stale or UNRELATED data with no indication it's wrong.)"
+            );
+        }
 
         // Auto-detect: first find the base path, then check migration status
         let initial_path = determine_requirements_path(cli.project.as_deref())?;
@@ -12726,6 +12752,76 @@ fn detect_distributed_store() -> Option<std::path::PathBuf> {
     }
     let cwd = std::env::current_dir().ok()?;
     detect_distributed_store_from(&cwd)
+}
+
+/// Run `command` against a resolved git-canonical store directory. The MCP
+/// server and the Jira / GitHub / GitLab tracker commands take a `Storage`;
+/// pointing it at the store directory makes its load/save delegate to
+/// GitBackend, so their reads and writes land in `objects/` like every other
+/// command's. Everything else goes through the git-backend dispatcher.
+// trace:BUG-310 trace:TASK-1486 | ai:claude
+fn run_on_distributed_store(command: &Command, store_path: &std::path::Path) -> Result<()> {
+    let storage = Storage::new(store_path);
+    match command {
+        // MCP server reads/writes through the same canonical git store the CLI
+        // uses. The previous YAML-snapshot approach wrote to
+        // `.aida/mcp-cache.yaml` only — invisible to the CLI and overwritten on
+        // every MCP restart. trace:BUG-310 | ai:claude
+        Command::McpServe => {
+            let project_root = find_project_root().unwrap_or_else(|_| store_path.to_path_buf());
+            mcp::run_mcp_server(&storage, project_root)
+        }
+        Command::Jira(cmd) => tracker_cmd::handle_jira_command(cmd, &storage),
+        Command::Github(cmd) => tracker_cmd::handle_github_command(cmd, &storage),
+        Command::Gitlab(cmd) => tracker_cmd::handle_gitlab_command(cmd, &storage),
+        _ => git_backend_cmd::handle_git_backend_command(store_path, command),
+    }
+}
+
+/// Where `aida init --refresh` seeds missing type protocols.
+// trace:TASK-1486 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RefreshSeedTarget {
+    /// A resolved store: the distributed store, or a legacy store in a project
+    /// that is not distributed.
+    Store(std::path::PathBuf),
+    /// The project is distributed but its store isn't attached here. Seeding
+    /// a legacy `requirements.db` would write into stale data.
+    DistributedUnattached,
+    /// No store resolves at all.
+    NoStore,
+}
+
+/// Pure decision for [`RefreshSeedTarget`]. The legacy resolver runs only when
+/// the project is not distributed, so a stale local `requirements.db` in a
+/// distributed project is never chosen.
+// trace:TASK-1486 | ai:claude
+fn refresh_seed_target(
+    distributed_store: Option<std::path::PathBuf>,
+    distributed_unattached: bool,
+    legacy: impl FnOnce() -> Result<std::path::PathBuf>,
+) -> RefreshSeedTarget {
+    if let Some(store) = distributed_store {
+        return RefreshSeedTarget::Store(store);
+    }
+    if distributed_unattached {
+        return RefreshSeedTarget::DistributedUnattached;
+    }
+    legacy()
+        .map(RefreshSeedTarget::Store)
+        .unwrap_or(RefreshSeedTarget::NoStore)
+}
+
+/// The project root when `start` is inside a distributed AIDA project: one
+/// whose `.aida/config.toml` declares distributed mode, or whose git repo has
+/// an `aida-store` branch. The same signals the main resolver uses to refuse
+/// the legacy fallback when the store isn't attached.
+// trace:TASK-1486 trace:BUG-428 trace:BUG-442 | ai:claude
+fn unattached_distributed_root(start: &std::path::Path) -> Option<std::path::PathBuf> {
+    distributed_mode_declared_from(start).or_else(|| {
+        let root = start.ancestors().find(|d| d.join(".git").exists())?;
+        branch_exists_anywhere(root, "aida-store").then(|| root.to_path_buf())
+    })
 }
 
 /// BUG-433: is a git-canonical store physically attached at `<root>/.aida-store`?

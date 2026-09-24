@@ -110,7 +110,7 @@ pub fn resolve_requirements_path_in(
                     return Ok(local);
                 }
             }
-            anyhow::bail!("{}", no_project_guidance(registry_path));
+            return Err(NoProjectFound::from_registry(registry_path).into());
         }
     };
 
@@ -124,34 +124,89 @@ pub fn resolve_requirements_path_in(
     }
 }
 
-/// The refusal shown when no project is resolvable. Names the registry's
-/// configured default (if any) so a user who relied on it knows the explicit
-/// replacement, without ever using it implicitly.
-// trace:BUG-1603 | ai:claude
-fn no_project_guidance(registry_path: &std::path::Path) -> String {
-    let default_hint = registry_path
-        .exists()
-        .then(|| Registry::load(registry_path).ok())
-        .flatten()
-        .and_then(|r| r.default_project.filter(|d| r.projects.contains_key(d)))
-        .map(|name| {
-            format!(
-                "\n\n  Your project registry names `{name}` as the default project. It is \
-                 not used implicitly; pass `-p {name}` (or set REQ_DB_NAME={name}) to target it."
-            )
-        })
-        .unwrap_or_default();
-    format!(
-        "No AIDA project found here: there is no `.aida/config.toml` in this directory \
-         or its parents, and no local requirements store.\n\n  \
-         Run `aida init` to set up a project in this directory, or `cd` into an \
-         existing AIDA project.\n  \
-         To target a store explicitly, pass `--file <path>` or `-p <project>`, or set \
-         AIDA_STORE or REQ_DB_NAME.{default_hint}\n\n  \
-         (Refusing to fall back to another project's store: a write would land in \
-         the wrong project.)"
-    )
+/// The refusal raised when no project is resolvable. A typed error rather than
+/// prose so every renderer can pick its shape: `Display` is the full human
+/// message (unchanged from the plain-string refusal), while [`Self::summary`]
+/// and [`Self::help_lines`] give agent-mode output a one-line summary plus the
+/// complete list of explicit-store alternatives. Agent output used to shorten
+/// the message to its first line and a bare `aida init`, which dropped the
+/// `--file` / `-p` / `REQ_DB_NAME` / `AIDA_STORE` options and could lead an
+/// agent to initialise a stray project in whatever directory it happened to be.
+///
+/// Names the registry's configured default (if any) so a user who relied on it
+/// knows the explicit replacement, without ever using it implicitly.
+// trace:BUG-1603 trace:TASK-1486 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoProjectFound {
+    /// The registry's `default_project`, when it names a registered project.
+    pub default_project: Option<String>,
 }
+
+impl NoProjectFound {
+    /// Build the refusal, reading the registry only to name its default.
+    fn from_registry(registry_path: &std::path::Path) -> Self {
+        let default_project = registry_path
+            .exists()
+            .then(|| Registry::load(registry_path).ok())
+            .flatten()
+            .and_then(|r| r.default_project.filter(|d| r.projects.contains_key(d)));
+        Self { default_project }
+    }
+
+    /// The one-line summary (the first line of the human message).
+    pub fn summary(&self) -> &'static str {
+        "No AIDA project found here: there is no `.aida/config.toml` in this directory \
+         or its parents, and no local requirements store."
+    }
+
+    /// Every way forward, one per line: move into a project or set one up, the
+    /// explicit-store options, and the `-p <default>` replacement when the
+    /// registry names a default.
+    // trace:TASK-1486 | ai:claude
+    pub fn help_lines(&self) -> Vec<String> {
+        let mut lines = vec![
+            "cd into an existing AIDA project, or run `aida init` to set one up in this directory"
+                .to_string(),
+            "--file <path>: use a specific requirements store".to_string(),
+            "-p <project> (or REQ_DB_NAME=<project>): use a project from the registry".to_string(),
+            "AIDA_STORE=<dir>: use a git-canonical store directory".to_string(),
+        ];
+        if let Some(name) = &self.default_project {
+            lines.push(format!(
+                "-p {name}: the registry's default project, which is not used implicitly"
+            ));
+        }
+        lines
+    }
+}
+
+impl std::fmt::Display for NoProjectFound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let default_hint = self
+            .default_project
+            .as_deref()
+            .map(|name| {
+                format!(
+                    "\n\n  Your project registry names `{name}` as the default project. It is \
+                     not used implicitly; pass `-p {name}` (or set REQ_DB_NAME={name}) to target it."
+                )
+            })
+            .unwrap_or_default();
+        write!(
+            f,
+            "{}\n\n  \
+             Run `aida init` to set up a project in this directory, or `cd` into an \
+             existing AIDA project.\n  \
+             To target a store explicitly, pass `--file <path>` or `-p <project>`, or set \
+             AIDA_STORE or REQ_DB_NAME.{default_hint}\n\n  \
+             (Refusing to fall back to another project's store: a write would land in \
+             the wrong project.)",
+            self.summary()
+        )
+    }
+}
+
+impl std::error::Error for NoProjectFound {}
 
 /// Lists available projects from the registry
 pub fn list_available_projects() -> Result<Vec<(String, String)>> {
@@ -235,6 +290,37 @@ mod tests {
         assert_eq!(std::fs::read(&f.legacy_db).unwrap(), b"legacy-bytes");
         assert_eq!(std::fs::read(&f.registry).unwrap(), registry_before);
         assert_eq!(std::fs::read_dir(&f.cwd).unwrap().count(), 0);
+    }
+
+    /// The refusal is a typed error: agent renderers downcast it and get the
+    /// full list of explicit-store options, not just `aida init`.
+    // trace:TASK-1486 | ai:claude
+    #[test]
+    fn refusal_is_typed_and_carries_every_explicit_store_option() {
+        let f = fixture();
+        let err = resolve_requirements_path_in(&f.cwd, None, None, &f.registry).unwrap_err();
+        let typed = err
+            .downcast_ref::<NoProjectFound>()
+            .expect("the refusal must be a NoProjectFound");
+        assert_eq!(typed.default_project.as_deref(), Some("other"));
+        assert!(err.to_string().starts_with(typed.summary()));
+        let help = typed.help_lines().join("\n");
+        for needle in [
+            "aida init",
+            "--file",
+            "-p <project>",
+            "REQ_DB_NAME",
+            "AIDA_STORE",
+            "-p other",
+        ] {
+            assert!(help.contains(needle), "missing {needle:?} in help:\n{help}");
+        }
+        let no_default = NoProjectFound {
+            default_project: None,
+        }
+        .help_lines()
+        .join("\n");
+        assert!(!no_default.contains("default project"), "{no_default}");
     }
 
     #[test]
