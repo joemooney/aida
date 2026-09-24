@@ -184,6 +184,7 @@ mod metrics_cmd;
 mod network_retry;
 mod node_cmd;
 mod not_found;
+mod pr_claim_surface;
 mod reconstitute;
 // trace:STORY-1029 | ai:codex — rule-gated operator notifications.
 mod notify;
@@ -31709,7 +31710,20 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                 verdict_ref,
                 release_condition,
                 spec: None,
+                placed_by: Some(merge_hold::placing_seat()),
             };
+            // STORY-1416 criterion 1a: before the marker lands, show what is
+            // already on record for this PR (marker + verdicts, with seat and
+            // sha). Informational only — never blocks the write.
+            // trace:STORY-1416 | ai:claude
+            {
+                let extra: Vec<&str> = verdict.as_deref().into_iter().collect();
+                let standing = pr_claim_surface::read_pr_record(&root, *pr, &extra);
+                pr_claim_surface::print(
+                    *pr,
+                    &pr_claim_surface::lines_for_marker_write(&standing, &record),
+                );
+            }
             // BUG-1562: never silently overwrite an existing marker's body.
             // trace:BUG-1562 | ai:claude
             merge_hold::place_hand_hold(&root, &record, *replace)
@@ -85203,6 +85217,26 @@ fn handle_review_record_at(
         );
     }
     let recorded_by = review_recorded_by();
+
+    // STORY-1416 criterion 1b: recording a verdict for a PR surfaces the
+    // standing marker (its text and who placed it) and any prior verdict
+    // BEFORE either is overwritten below. Informational only.
+    // trace:STORY-1416 | ai:claude
+    if let Some(n) = pr {
+        let standing = pr_claim_surface::read_pr_record(&project_root, n, &[spec]);
+        pr_claim_surface::print(
+            n,
+            &pr_claim_surface::lines_for_verdict_write(
+                &standing,
+                &pr_claim_surface::IncomingVerdict {
+                    key: &spec.trim().to_ascii_uppercase(),
+                    kind,
+                    sha: resolved_sha.as_deref(),
+                    recorded_by: &recorded_by,
+                },
+            ),
+        );
+    }
 
     // A refusal is a protection event, not merely metadata. Arm the local
     // merge chokepoint before publishing the verdict; mirroring the label also

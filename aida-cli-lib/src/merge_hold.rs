@@ -218,6 +218,12 @@ pub(crate) struct MergeHoldRecord {
     // trace:BUG-1562 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spec: Option<String>,
+    /// STORY-1416: the seat that PLACED this marker, so a later verdict write
+    /// can show who asserted what the marker says. `None` on markers written
+    /// before this field existed.
+    // trace:STORY-1416 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placed_by: Option<String>,
 }
 
 /// BUG-1532 criterion 10: the identity of a recorded review verdict — the
@@ -337,6 +343,7 @@ impl MergeHoldRecord {
             verdict_ref: None,
             release_condition: None,
             spec: None,
+            placed_by: None,
         }
     }
 }
@@ -627,6 +634,7 @@ pub(crate) fn read_hold_record(project_root: &Path, pr: u64) -> Option<MergeHold
                     verdict_ref: None,
                     release_condition: None,
                     spec: None,
+                    placed_by: None,
                 }),
             }
         }
@@ -646,6 +654,7 @@ pub(crate) fn read_hold_record(project_root: &Path, pr: u64) -> Option<MergeHold
             verdict_ref: None,
             release_condition: None,
             spec: None,
+            placed_by: None,
         }),
     }
 }
@@ -699,6 +708,28 @@ pub(crate) fn typed_hold(
         verdict_ref: None,
         release_condition: None,
         spec: None,
+        placed_by: Some(placing_seat()),
+    }
+}
+
+/// STORY-1416: the seat placing a marker — the launched agent's name (with
+/// its role when known), else the session role, else the shell user.
+// trace:STORY-1416 | ai:claude
+pub(crate) fn placing_seat() -> String {
+    let env = |k: &str| {
+        std::env::var(k)
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+    };
+    match (env("AIDA_AGENT_NAME"), env("AIDA_SESSION_ROLE")) {
+        (Some(name), Some(role)) => format!("{name} ({role})"),
+        (Some(name), None) => name,
+        (None, Some(role)) => format!("{role} seat"),
+        (None, None) => env("USER")
+            .or_else(|| env("USERNAME"))
+            .map(|u| format!("user:{u}"))
+            .unwrap_or_else(|| "unknown".to_string()),
     }
 }
 
@@ -2745,6 +2776,7 @@ mod tests {
             verdict_ref: None,
             release_condition: None,
             spec: None,
+            placed_by: None,
         };
         write_typed_hold(dir.path(), &record).unwrap();
         record_label_state(dir.path(), 2023, &LabelState::Synced).unwrap();
@@ -2785,6 +2817,7 @@ mod tests {
             verdict_ref: None,
             release_condition: None,
             spec: None,
+            placed_by: None,
         };
         assert!(write_typed_hold(dir.path(), &record).is_err());
         std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
