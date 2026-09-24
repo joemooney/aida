@@ -536,8 +536,9 @@ mod tests {
         assert!(!is_temp_root_in(other.path(), &roots));
         // A root that doesn't exist on this host must fall back to raw-path
         // comparison instead of erroring (canonicalize fails for it).
-        let missing_root = vec![PathBuf::from("/private/tmp")];
-        assert!(is_temp_root_in(Path::new("/private/tmp"), &missing_root));
+        let missing = tmp.path().join("does-not-exist");
+        let missing_root = vec![missing.clone()];
+        assert!(is_temp_root_in(&missing, &missing_root));
     }
 
     #[test]
