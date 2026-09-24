@@ -26,12 +26,12 @@ description: |
   NOT IN SCOPE: the split verdict itself, the classification rules, and the budget's threshold - all ADR-49. This spec is only the switch, the clock and the window.
 
   PROVENANCE: requested by the operator 2026-09-20 21:16, immediately after answering ADR-49's exit condition. The request is the second half of that answer - an exit condition with no mechanism to observe or enforce it is a statement of intent, and the operator asked for the mechanism unprompted.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:17:35.380363150Z
-modified_at: 2026-09-24T03:49:32.502914286Z
+modified_at: 2026-09-24T03:53:33.031514978Z
 req_type: Story
 tags:
 - batch:night-0920 review-gate operator-surface from:session-0920
