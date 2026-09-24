@@ -1,0 +1,44 @@
+id: 01a0d56c-8155-7d90-9ad5-ae854551fe73
+spec_id: BUG-1608
+agreed_id: BUG-1608
+title: Queue-wide drain starts a blocked dependent after upstream failure despite max-failures one
+description: |-
+  Observed live from `aida queue work --drain --user joe --role implementer --vendor codex --max-failures 1 --max-runtime 8h` on 2026-09-24.
+
+  ## Reproduction evidence
+  - STORY-52 was the sole pickable head; NFR-56 had an explicit BlockedBy edge to STORY-52.
+  - STORY-52 implementation committed, then phase 2 failed because the new project had no usable origin. AIDA shelved STORY-52 to NeedsAttention and auto-filed qci#BUG-57 at 21:07:41Z.
+  - Despite `--max-failures 1`, the same drain started NFR-56 less than one second later. NFR-56 then failed phase 1 and auto-filed qci#BUG-58 at 21:07:42Z.
+  - The prerequisite was neither merged nor Completed.
+
+  ## Expected
+  A failure budget of one stops before dispatching another spec after the first shelved failure. Independently, a BlockedBy dependent remains unpickable until its prerequisite is Completed; Done, NeedsAttention, a pushed branch, or a failed CI phase must not satisfy the dependency.
+
+  ## Acceptance
+  - End-to-end CLI test for untagged queue-wide `--drain --max-failures 1`, not only the pure `drain_batch` unit path.
+  - First shelved member stops the queue before a second launch when the cap is one.
+  - A dependent is skipped and reported with its blocker after the blocker shelves in any phase.
+  - Independent work may continue only when the configured failure budget permits it.
+  - Regression coverage exercises the real queue resolver/status transitions used by `--drain`.
+
+  Regression context: STORY-449 documents and tests both the failure cap and dependent skip, but the observed queue-wide drain violated both guarantees.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T21:57:33.141469956Z
+modified_at: 2026-09-24T21:57:33.141469956Z
+req_type: Bug
+tags:
+- autonomous-drain
+- dependencies
+- max-failures
+- regression
+- severity:major
+filed_at:
+  code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 81c37e2cb
+  vendor: codex
