@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T04:23:19.458083645Z
-modified_at: 2026-09-24T23:07:23.001024490Z
+modified_at: 2026-09-24T23:11:51.603982683Z
 req_type: Doc
 tags:
 - example
@@ -52,6 +52,12 @@ comments:
     Recommendation: if/when STORY-1472 is implemented, it should (a) factor the three existing inline prompts into named, versioned questions rather than leaving them ad hoc, and (b) give them a shared recorded-judgments log with the provenance fields above, including for the contradiction sweep, which currently has none.
   created_at: 2026-09-24T23:04:50.161154468Z
   modified_at: 2026-09-24T23:04:50.161154468Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d5b0-8934-7251-a5f7-df14e4db5b3d
+  author: joe
+  content: 'Review: its one inaccuracy is fixed in 3efae2e9a8. The doc no longer calls AIDA_JEV_API_KEY the single switch: graded review and the contradiction sweep also accept TYPESAFE_API_KEY, including from ~/.env, as docs/environment-variables.md already documents. All other claims were verified against main. APPROVE. Queued for batch 57.'
+  created_at: 2026-09-24T23:11:51.603982683Z
+  modified_at: 2026-09-24T23:11:51.603982683Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 custom_fields:
   audience: user
