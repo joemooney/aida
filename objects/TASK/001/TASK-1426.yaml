@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:46:14.802500200Z
-modified_at: 2026-09-24T16:17:39.300668557Z
+modified_at: 2026-09-24T16:31:49.407888958Z
 req_type: Task
 tags:
 - cli
@@ -81,6 +81,12 @@ comments:
   content: 'Review: APPROVE (fresh strict Opus reviewer). The reviewer ran the migration end to end on a clone of the store: 100 per-spec commits, 144 edges converted, 14 twins deleted, a second run did nothing, and the cache stayed FRESH. After merge, the orchestrator runs the real migration during a low-lease window.'
   created_at: 2026-09-24T15:13:33.801578388Z
   modified_at: 2026-09-24T15:13:33.801578388Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d442-4a9f-79d3-be54-82d51e5f10d5
+  author: joe
+  content: 'Live migration applied by the orchestrator on 2026-09-24 09:27: 158 legacy edges, 144 converted to References, 14 twins deleted, 100 specs written as per-spec commits. A re-run dry-run finds 0. The store was pushed.'
+  created_at: 2026-09-24T16:31:49.407888958Z
+  modified_at: 2026-09-24T16:31:49.407888958Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 history:
 - id: 01a0d435-51dd-7a02-a77c-4ac28d53b532
