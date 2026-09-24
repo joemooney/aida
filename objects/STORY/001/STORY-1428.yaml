@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:49:23.844095324Z
-modified_at: 2026-09-24T07:02:58.417661920Z
+modified_at: 2026-09-24T07:03:10.378207678Z
 req_type: Story
 tags:
 - determinism
@@ -51,3 +51,10 @@ tags:
 - findings
 - gates
 - prin-8
+comments:
+- id: 01a0d239-ad2a-7c20-bf0a-194da94ed320
+  author: joe
+  content: 'Implemented on claude/story-1428: `aida findings promote <ID> --to gate --detectable mechanical|agent|none`. At recurrence >= promote_threshold, both `recur` and a work promote name both destinations. mechanical/agent files a queued gate TASK linked both ways (References edges + gated-by:<ID> tag); none records gate-decision:prose so later recurrences report the decision instead of re-asking; a recurrence on a gated finding points at the gate. Below threshold: unchanged (and --to gate is refused). Not yet wired to STORY-1417 finding classes; the gate is linked per finding, not per class.'
+  created_at: 2026-09-24T07:03:10.378207678Z
+  modified_at: 2026-09-24T07:03:10.378207678Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
