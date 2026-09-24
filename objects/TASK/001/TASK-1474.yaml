@@ -1,0 +1,17 @@
+id: 01a0d2a4-ebd9-7ad1-8464-103e335ab44e
+spec_id: TASK-1474
+agreed_id: TASK-1474
+title: Sync completed_at into the cache so aida list --sort completed uses the real completion time
+description: TASK-1464's completed sort uses modified_at on Completed rows as a stand-in for completion time. The model already has completed_at and completion_sha (STORY-86, stamped by the auto-bump), but they aren't in the cache schema, so a post-completion edit (tag or comment) skews the sort. Add completed_at to the cache (with a schema-drift rebuild, BUG-627) and sort on it.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T09:00:18.777923101Z
+modified_at: 2026-09-24T09:00:18.777923101Z
+req_type: Task
+tags:
+- cache
+- followup
+- list
+- parent:TASK-1464
