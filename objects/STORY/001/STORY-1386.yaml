@@ -56,7 +56,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:44:38.754900781Z
-modified_at: 2026-09-24T12:08:45.171552459Z
+modified_at: 2026-09-24T12:08:54.818055391Z
 req_type: Story
 tags:
 - closure:pending
@@ -100,5 +100,13 @@ comments:
   content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. First slice: record a red run per criterion in the drain; aida criteria exists.'
   created_at: 2026-09-24T08:13:25.953443232Z
   modified_at: 2026-09-24T08:13:25.953443232Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d351-9722-7ee3-9a39-15000f290499
+  author: joe
+  content: |-
+    SLICE 1 (claude/story-1386): when a drain's implementer phase starts, the orchestrator runs the spec's criterion-traced tests (the `aida criteria` tracer) on the main worktree BEFORE implementation and records a per-criterion red run once in .aida/red-runs/<SPEC>.json: red / 'test cannot fail / already satisfied' / not-run. Surfaced in the round-1 reviewer prompt and in `aida criteria`'s human report. Skipped when no criterion-traced tests exist; budget AIDA_RED_RUN_BUDGET_SECS (default 300, 0 disables). Runners: cargo, pytest, go test (JS/TS reported not-run).
+    REMAINING: (AC1/AC5) a separate test-writing phase 1a with its own time budget and a reviewable checkpoint before implementation — today only pre-existing traced tests are run, so tests the implementer writes are never observed red; (AC2) enforce 'a phase with no failing test has not satisfied this' as a gate, not just a flag; (AC3) exempt criteria declared via TASK-1293's cannot-be-traced state with reason; (AC4) `aida criteria --json` reporting the checkpoint state; (AC6) untestable-criteria surfaced as a grooming problem; STRETCH red-then-green transition per criterion; a JS/TS runner.
+  created_at: 2026-09-24T12:08:54.818055391Z
+  modified_at: 2026-09-24T12:08:54.818055391Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
