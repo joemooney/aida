@@ -5064,6 +5064,65 @@ pub(crate) fn handle_queue_command(
                 }
             }
 
+            // TASK-1277: typed protocols slice 2 — evaluate the machine-
+            // checkable items of the spec type's protocol (spike deliverable,
+            // ADR accepted + references edge, bug test-file change). Same
+            // `[protocol] enforce` posture as the criteria gate above: warn
+            // (print + ledger + proceed), refuse (block, item named), `--force`
+            // (proceed + ledger naming who forced). Unevaluable items are
+            // reported UNKNOWN, never passed (PRIN-5). Quiet for types with
+            // no machine-checkable item and when every item is met.
+            // trace:TASK-1277 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                let report = crate::protocol_gate::evaluate_for_repo(req, &project_root);
+                let enforce = crate::criteria_gate::read_enforce_mode(&project_root);
+                let outcome = crate::protocol_gate::decide(&report, enforce, *force);
+                let (missing, unknown, refuse, forced) = match outcome {
+                    crate::protocol_gate::GateOutcome::Proceed { unknown } => {
+                        (Vec::new(), unknown, false, false)
+                    }
+                    crate::protocol_gate::GateOutcome::Warn {
+                        missing,
+                        unknown,
+                        forced,
+                    } => (missing, unknown, false, forced),
+                    crate::protocol_gate::GateOutcome::Refuse { missing, unknown } => {
+                        (missing, unknown, true, false)
+                    }
+                };
+                for line in unknown.iter().chain(missing.iter()) {
+                    eprintln!(
+                        "{} {line}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                    );
+                }
+                if refuse {
+                    eprintln!(
+                        "queue done refused: {} is missing protocol items \
+                         ([protocol] enforce = \"refuse\"). Override with `--force` \
+                         (the override is ledgered).",
+                        display_id
+                    );
+                    std::process::exit(1);
+                }
+                if !missing.is_empty() {
+                    let author = get_default_author();
+                    let body = crate::protocol_gate::ledger_comment(
+                        "aida queue done",
+                        display_id,
+                        &missing,
+                        forced.then_some(author.as_str()),
+                    );
+                    let comment = aida_core::Comment::new(author.clone(), body);
+                    let gate_req_id = req.id;
+                    storage.update_atomically(|s| {
+                        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == gate_req_id) {
+                            r.add_comment(comment);
+                        }
+                    })?;
+                }
+            }
+
             // STORY-469 Guard 1: validate trailer spec-IDs before flipping the
             // spec to Done. Catch a hallucinated / typo'd / since-rejected
             // `(SPEC-ID)` trailer on this branch's commits BEFORE the spec is
@@ -9054,9 +9113,6 @@ pub(crate) fn append_untraced_criteria_prompt_block(
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(1);
-    if round != 1 {
-        return;
-    }
     let Ok((base, head)) = pr_base_head(project_root, forge, pr_n) else {
         return;
     };
@@ -9073,6 +9129,23 @@ pub(crate) fn append_untraced_criteria_prompt_block(
                 spec_ids.push(id);
             }
         }
+    }
+    // TASK-1277: every round carries the type protocol's machine-checkable
+    // checklist verbatim, so review rounds cite protocol items by name.
+    // trace:TASK-1277 | ai:claude
+    let typed: Vec<(String, aida_core::RequirementType)> = spec_ids
+        .iter()
+        .filter_map(|id| {
+            let req = store.requirements.iter().find(|r| spec_matches(r, id))?;
+            let display = req.spec_id.as_deref().unwrap_or(id.as_str()).to_string();
+            Some((display, req.req_type.clone()))
+        })
+        .collect();
+    if let Some(block) = crate::protocol_gate::reviewer_prompt_block(&typed) {
+        prompt.push_str(&block);
+    }
+    if round != 1 {
+        return;
     }
     let mut reports: Vec<(String, crate::criteria::CriteriaReport)> = Vec::new();
     for id in &spec_ids {

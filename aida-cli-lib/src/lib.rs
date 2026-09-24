@@ -49,6 +49,7 @@ mod dev_cmd;
 mod digest;
 mod digest_cmd;
 mod graph_cmd;
+mod protocol_gate;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
 mod dispatch_health_ps;
 // trace:TASK-1092 | ai:claude — [dispatch.routing] config loader (additive, not yet wired in).
@@ -35206,7 +35207,7 @@ fn is_script_path(path: &str) -> bool {
 }
 
 // trace:BUG-1468 | ai:claude
-fn is_test_path(path: &str) -> bool {
+pub(crate) fn is_test_path(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     lower.starts_with("tests/")
         || lower.contains("/tests/")
@@ -49382,7 +49383,7 @@ fn render_in_flight_grouped(
 /// skip the ancestor check rather than guess (the prior code passed
 /// `"main"` as a literal, which leaked stderr on master-default repos).
 /// trace:BUG-380 | ai:claude
-fn resolve_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
+pub(crate) fn resolve_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
     use std::process::Command as PCmd;
     let git = |args: &[&str]| -> Option<String> {
         PCmd::new("git")
