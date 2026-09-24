@@ -1327,6 +1327,94 @@ pub fn exec_codex_session(initial_prompt: &str, bypass: bool, model: Option<&str
     }
 }
 
+/// BUG-1607: spawn (not exec) an interactive `codex <prompt>` session and
+/// wait, returning the exit status — the Codex analogue of
+/// [`spawn_claude_session`] for the standalone reviewer launch, which must
+/// outlive the child to print its end-of-command summary (BUG-226).
+// trace:BUG-1607 | ai:claude
+pub fn spawn_codex_session(
+    initial_prompt: &str,
+    bypass: bool,
+    model: Option<&str>,
+) -> Result<std::process::ExitStatus> {
+    std::process::Command::new("codex")
+        .args(codex_session_args(initial_prompt, bypass, model))
+        .status()
+        .context("failed to spawn codex")
+}
+
+/// BUG-1607: the interactive reviewer launch a resolved `vendor` maps to —
+/// PURE decision (which program + argv, or a refusal for an unsupported
+/// vendor); no process is spawned. Every interactive reviewer launch site
+/// (the standalone `aida queue work --role reviewer` launch and the inline
+/// `aida review` / `aida human review` launch) builds its plan through this
+/// ONE function and then hands it to [`spawn_reviewer_launch_plan`], so a
+/// vendor knob can never route one site and miss the other — the exact
+/// BUG-1607 failure mode. Unit-tested directly, without spawning
+/// `claude`/`codex`.
+// trace:BUG-1607 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReviewerLaunchPlan {
+    pub(crate) vendor: HeadlessVendor,
+    pub(crate) program: &'static str,
+    pub(crate) args: Vec<String>,
+}
+
+// trace:BUG-1607 | ai:claude
+pub(crate) fn interactive_reviewer_launch_plan(
+    vendor: HeadlessVendor,
+    permission_mode: Option<&str>,
+    name: Option<&str>,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+) -> Result<ReviewerLaunchPlan> {
+    match vendor {
+        HeadlessVendor::Claude => Ok(ReviewerLaunchPlan {
+            vendor,
+            program: "claude",
+            args: claude_session_args(
+                permission_mode,
+                name,
+                Some(prompt),
+                Some(session_id),
+                contained,
+                None,
+            ),
+        }),
+        HeadlessVendor::Codex => {
+            // Interactive queue-work's Codex-tab launch maps the uniform
+            // `[agents] bypass` posture (surfaced here as
+            // `--permission-mode bypassPermissions`) to Codex's own bypass
+            // flag (BUG-743); a reviewer session follows the same mapping.
+            let bypass = permission_mode == Some("bypassPermissions");
+            Ok(ReviewerLaunchPlan {
+                vendor,
+                program: "codex",
+                args: codex_session_args(prompt, bypass, None),
+            })
+        }
+        HeadlessVendor::Agy => anyhow::bail!(
+            "interactive reviewer launch does not support vendor `agy` yet. Recovery: \
+             re-run with `--vendor claude` or `--vendor codex`, or use `--no-human` for a \
+             headless AGY reviewer."
+        ),
+    }
+}
+
+/// Spawn (not exec) an [`interactive_reviewer_launch_plan`] and wait,
+/// returning the exit status — the only place an interactive reviewer
+/// launch plan is actually turned into a process.
+// trace:BUG-1607 | ai:claude
+pub(crate) fn spawn_reviewer_launch_plan(
+    plan: &ReviewerLaunchPlan,
+) -> Result<std::process::ExitStatus> {
+    std::process::Command::new(plan.program)
+        .args(&plan.args)
+        .status()
+        .with_context(|| format!("failed to spawn {}", plan.program))
+}
+
 /// STORY-683: which vendor's headless CLI drives an orchestrator drain phase.
 /// The autonomous drain (`burndown` / `queue work --auto-complete --no-human`)
 /// used to hardcode `claude -p`; this enum lets the same spawn path launch
@@ -1611,6 +1699,41 @@ pub(crate) fn resolve_enabled_headless_vendor(worktree_root: &Path) -> Result<He
          vendor, for example `--vendor codex`, or use `--no-launch`.",
         resolved.as_str(),
         enabled_names
+    );
+}
+
+/// BUG-1607: verify the resolved launch vendor's CLI is actually reachable —
+/// BEFORE a caller mints a lease or worktree. [`resolve_enabled_headless_vendor`]
+/// only checks the `[agents] enabled` config; it can resolve to a vendor that
+/// is enabled but never installed. The observed failure: a codex-only project
+/// correctly resolved `vendor: codex`, created the reviewer lease + worktree,
+/// then the launch itself hardcoded `claude` and failed with a raw ENOENT —
+/// leaving a live lease/worktree behind with no process. Every launch site
+/// that mutates state before spawning MUST call this first, in addition to
+/// (not instead of) `resolve_enabled_headless_vendor`, and propagate the
+/// error unchanged.
+///
+/// Routes the binary name through [`resolve_agent_program`] first, so tests
+/// can inject a fake reachable/unreachable "binary" via `AIDA_AGENT_CMD`
+/// without spawning a real vendor CLI — the same seam the headless spawn
+/// paths already use.
+// trace:BUG-1607 | ai:claude
+pub(crate) fn preflight_vendor_binary(vendor: HeadlessVendor) -> Result<()> {
+    let program = resolve_agent_program(vendor.program());
+    let reachable = if program.contains(std::path::MAIN_SEPARATOR) {
+        Path::new(&program).is_file()
+    } else {
+        which_on_path(&program).is_some()
+    };
+    if reachable {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "the resolved launch vendor `{}` (`{program}`) is not on PATH — refusing before \
+         creating a lease or worktree. Recovery: install `{program}`, choose an installed \
+         vendor with `--vendor <name>`, or point `[agents] vendor` / `[agents] enabled` in \
+         agents.toml at a profile that is actually installed.",
+        vendor.as_str()
     );
 }
 
@@ -5662,6 +5785,205 @@ mod tests {
         );
         assert!(msg.contains("--vendor codex"), "{msg}");
         assert!(msg.contains("--no-launch"), "{msg}");
+    }
+
+    /// BUG-1607: an explicit `--vendor` flag (the `install_headless_vendor_override`
+    /// bridge every `--vendor` flag installs before resolution — the SAME bridge
+    /// `aida queue work --role reviewer --vendor codex` uses) wins over the
+    /// project `[agents] vendor` default, for the exact resolver
+    /// (`resolve_enabled_headless_vendor`) both the standalone reviewer launch
+    /// and the implementer launch share.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn reviewer_vendor_resolution_explicit_flag_wins_over_config_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        // Project config defaults to claude, with both profiles enabled.
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[agents]\nvendor = \"claude\"\nenabled = [\"claude\", \"codex\"]\n",
+        )
+        .unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_HEADLESS_VENDOR", None),
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("HOME", Some(home.to_str().unwrap())),
+        ]);
+        set_headless_vendor_override(None);
+
+        // No flag: the configured default (claude) wins.
+        assert_eq!(
+            resolve_enabled_headless_vendor(&project).unwrap(),
+            HeadlessVendor::Claude,
+            "with no explicit vendor, the config default should resolve"
+        );
+
+        // An explicit `--vendor codex` wins over the config default.
+        assert_eq!(
+            install_headless_vendor_override("codex"),
+            Some(HeadlessVendor::Codex)
+        );
+        assert_eq!(
+            resolve_enabled_headless_vendor(&project).unwrap(),
+            HeadlessVendor::Codex,
+            "an explicit --vendor must win over `[agents] vendor`"
+        );
+
+        set_headless_vendor_override(None);
+    }
+
+    /// BUG-1607: [`preflight_vendor_binary`] must fail closed for a resolved
+    /// vendor whose binary cannot be found — this is the check that must run
+    /// BEFORE `session_start` mints a lease/worktree, so a
+    /// resolved-but-uninstalled vendor never leaves orphaned state behind.
+    /// Routes through `AIDA_AGENT_CMD` (the same mock seam the headless spawn
+    /// paths already use) so no real `claude`/`codex` binary is ever spawned or
+    /// even required to exist on the test machine.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn preflight_vendor_binary_fails_closed_for_unreachable_binary() {
+        let _env = AgentCmdEnvGuard::acquire();
+        let missing = "/tmp/aida-bug-1607-missing-agent-binary-does-not-exist";
+        let _ = std::fs::remove_file(missing);
+        std::env::set_var("AIDA_AGENT_CMD", missing);
+
+        // A tempdir standing in for "nothing has been created yet" — the
+        // state right before `session_start` would mint a lease/worktree.
+        let tmp = tempfile::tempdir().unwrap();
+        let before = std::fs::read_dir(tmp.path()).unwrap().count();
+
+        let err = preflight_vendor_binary(HeadlessVendor::Codex)
+            .expect_err("an unreachable binary must fail the preflight");
+        let msg = err.to_string();
+        assert!(msg.contains("codex"), "{msg}");
+        assert!(msg.contains("not on PATH"), "{msg}");
+        assert!(
+            msg.contains("lease or worktree"),
+            "the error must say WHY this runs early: {msg}"
+        );
+
+        // Purely a reachability check — it must not have touched the
+        // filesystem at all (no lease, no worktree, nothing).
+        let after = std::fs::read_dir(tmp.path()).unwrap().count();
+        assert_eq!(before, after, "preflight must not create any state");
+    }
+
+    /// BUG-1607: the mirror of the above — once the mock binary actually
+    /// exists (still never a real vendor CLI), the preflight passes.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn preflight_vendor_binary_succeeds_for_reachable_binary() {
+        let _env = AgentCmdEnvGuard::acquire();
+        let tmp = tempfile::tempdir().unwrap();
+        let fake = tmp.path().join("fake-agent");
+        std::fs::write(&fake, "#!/bin/sh\nexit 0\n").unwrap();
+        std::env::set_var("AIDA_AGENT_CMD", fake.to_str().unwrap());
+
+        preflight_vendor_binary(HeadlessVendor::Codex)
+            .expect("an existing (mock) binary must pass the preflight");
+        preflight_vendor_binary(HeadlessVendor::Claude)
+            .expect("the same mock override applies uniformly across vendors");
+    }
+
+    /// BUG-1607: the pure launch-plan resolver an interactive reviewer launch
+    /// (`aida queue work --role reviewer` and `aida review` / `aida human
+    /// review`) builds from — no process is spawned. With Codex resolved, the
+    /// plan names the `codex` program and the exact argv
+    /// [`codex_session_args`] builds, so "reviewer launch with codex resolves
+    /// to the codex exec" is provable without spawning anything.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn interactive_reviewer_launch_plan_codex_resolves_to_codex_exec() {
+        let plan = interactive_reviewer_launch_plan(
+            HeadlessVendor::Codex,
+            None,
+            Some("review-story-1"),
+            "/aida-review --pr 42",
+            "session-1",
+            false,
+        )
+        .expect("codex is a supported interactive reviewer vendor");
+        assert_eq!(plan.vendor, HeadlessVendor::Codex);
+        assert_eq!(plan.program, "codex");
+        assert_eq!(
+            plan.args,
+            codex_session_args("/aida-review --pr 42", false, None)
+        );
+        assert_eq!(
+            plan.args.last().map(String::as_str),
+            Some("/aida-review --pr 42")
+        );
+
+        // `--permission-mode bypassPermissions` maps to Codex's own bypass
+        // flag (mirrors the general interactive Codex-tab dispatch, BUG-743).
+        let bypass_plan = interactive_reviewer_launch_plan(
+            HeadlessVendor::Codex,
+            Some("bypassPermissions"),
+            Some("review-story-1"),
+            "/aida-review --pr 42",
+            "session-1",
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            bypass_plan.args,
+            codex_session_args("/aida-review --pr 42", true, None)
+        );
+    }
+
+    /// BUG-1607: parity check — Claude's plan is byte-identical to the
+    /// pre-existing `claude_session_args` shape, so routing the reviewer
+    /// launch through the shared plan resolver never changes Claude's
+    /// behavior.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn interactive_reviewer_launch_plan_claude_matches_claude_session_args() {
+        let plan = interactive_reviewer_launch_plan(
+            HeadlessVendor::Claude,
+            Some("acceptEdits"),
+            Some("review-story-1"),
+            "/aida-review",
+            "session-1",
+            true,
+        )
+        .expect("claude is a supported interactive reviewer vendor");
+        assert_eq!(plan.vendor, HeadlessVendor::Claude);
+        assert_eq!(plan.program, "claude");
+        assert_eq!(
+            plan.args,
+            claude_session_args(
+                Some("acceptEdits"),
+                Some("review-story-1"),
+                Some("/aida-review"),
+                Some("session-1"),
+                true,
+                None,
+            )
+        );
+    }
+
+    /// BUG-1607: Agy has no interactive reviewer support yet — the plan
+    /// resolver refuses with a recovery hint instead of silently launching
+    /// nothing or falling back to another vendor.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn interactive_reviewer_launch_plan_agy_refuses_with_recovery_hint() {
+        let err = interactive_reviewer_launch_plan(
+            HeadlessVendor::Agy,
+            None,
+            None,
+            "/aida-review",
+            "session-1",
+            false,
+        )
+        .expect_err("agy has no interactive reviewer support");
+        let msg = err.to_string();
+        assert!(msg.contains("agy"), "{msg}");
+        assert!(msg.contains("--vendor claude"), "{msg}");
+        assert!(msg.contains("--vendor codex"), "{msg}");
     }
 
     /// BUG-705: the shared composition routes per vendor — with Codex the
