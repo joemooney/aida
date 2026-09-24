@@ -3,12 +3,12 @@ spec_id: TASK-1470
 agreed_id: TASK-1470
 title: Integrate EPIC-72 exposition and wiki onto mainline
 description: 'Reconcile the completed EPIC-72 implementation from feat/jev-integration with current main, isolate it from unrelated evaluator changes, and submit it through advisor review before merging. Acceptance: (1) create a fresh sibling worktree from current main; (2) selectively transplant the EPIC-72 implementation and required tests/docs from the feature branch without rewriting the published branch; (3) resolve and document any API, dependency, or behavior conflicts; (4) verify aida explain and aida wiki build/serve behavior plus targeted and full relevant tests; (5) advisor independently reviews and approves the result; (6) merge to main and verify the mainline binary exposes the commands; (7) update EPIC-72 or its child records if any acceptance claim differs from the delivered behavior.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T03:10:18.423470148Z
-modified_at: 2026-09-24T12:52:02.513659433Z
+modified_at: 2026-09-24T20:18:41.033754617Z
 req_type: Task
 comments:
 - id: 01a0d278-f27b-7bc2-b524-4e63d2f63a10
