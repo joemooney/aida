@@ -1606,11 +1606,15 @@ pub(crate) fn refusal_release(
         .filter(|s| !s.is_empty())
     {
         None => RefusalRelease::Held(format!(
-            "the verdict on record ({} for {key}{by}, {path}) carries NO reviewed sha — the missing              provenance, not the refusal itself, is why it cannot release: a verdict that cannot be              tied to a commit is answered only by a fresh verdict that records one. Re-review the              current head {head_short} and record the verdict with `--sha`",
+            "the verdict on record ({} for {key}{by}, {path}) carries NO reviewed sha — the missing \
+             provenance, not the refusal itself, is why it cannot release: a verdict that cannot be \
+             tied to a commit is answered only by a fresh verdict that records one. Re-review the \
+             current head {head_short} and record the verdict with `--sha`",
             verdict.kind.label()
         )),
         Some(sha) => RefusalRelease::Held(format!(
-            "the verdict on record is {} for {key} at {}{by} ({path}); no APPROVED verdict is              recorded at the current head {head_short} — re-review that head",
+            "the verdict on record is {} for {key} at {}{by} ({path}); no APPROVED verdict is \
+             recorded at the current head {head_short} — re-review that head",
             verdict.kind.label(),
             short_sha(sha)
         )),

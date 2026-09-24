@@ -505,6 +505,31 @@ pub(crate) fn ship_hold_gate(
     ))
 }
 
+/// BUG-1532: the merge pin when a refusal hold is released by a fresh
+/// verdict. The verdict covers exactly `head_sha`, so the merge is pinned
+/// there (overriding the TASK-1448 pin, which is None when the verdict's key
+/// is not among its candidates); with no readable head the release is
+/// refused. Not verdict-released → the TASK-1448 pin stands unchanged.
+// trace:BUG-1532 | ai:claude
+pub(crate) fn refusal_release_pin(
+    released_by_verdict: bool,
+    match_head: Option<String>,
+    head_sha: Option<&str>,
+    pr: u64,
+) -> Result<Option<String>, String> {
+    if !released_by_verdict {
+        return Ok(match_head);
+    }
+    match head_sha.map(str::trim).filter(|h| !h.is_empty()) {
+        Some(head) => Ok(Some(head.to_string())),
+        None => Err(format!(
+            "PR-{pr}: the reviewer-refusal hold's release rests on a verdict at the PR head, but \
+             the head could not be read to pin the merge to it; the hold stays. Re-run \
+             `aida pr ship {pr}`."
+        )),
+    }
+}
+
 /// BUG-710/BUG-716/TASK-1253: a drive seat may not merge any PR, and no caller
 /// may merge the live drive's own PR. Merely observing an unrelated live drain
 /// is not grounds to block: those merges serialize on the merge lease.
@@ -1440,6 +1465,46 @@ mod tests {
         let legacy = crate::merge_hold::read_hold_record(dir.path(), 9).unwrap();
         let msg = ship_hold_gate(Some(&legacy), true, 9, held).expect("untyped is not permission");
         assert!(msg.contains("legacy"), "{msg}");
+    }
+
+    // BUG-1532: a verdict-released hold merges PINNED to the head the verdict
+    // covers, even when the TASK-1448 pin is None (the verdict's key was not a
+    // candidate); no readable head → refused. Otherwise the pin is untouched.
+    // trace:BUG-1532 | ai:claude
+    #[test]
+    fn verdict_released_hold_always_merges_pinned_to_the_head() {
+        assert_eq!(
+            refusal_release_pin(true, None, Some("cd21a1dc0a9e"), 7),
+            Ok(Some("cd21a1dc0a9e".to_string()))
+        );
+        assert_eq!(
+            refusal_release_pin(true, Some("old".into()), Some("cd21a1dc0a9e"), 7),
+            Ok(Some("cd21a1dc0a9e".to_string()))
+        );
+        let err = refusal_release_pin(true, None, None, 7).unwrap_err();
+        assert!(err.contains("hold stays"), "{err}");
+        assert!(refusal_release_pin(true, None, Some("  "), 7).is_err());
+        assert_eq!(refusal_release_pin(false, None, None, 7), Ok(None));
+        assert_eq!(
+            refusal_release_pin(false, Some("abc".into()), Some("def"), 7),
+            Ok(Some("abc".to_string()))
+        );
+        // Wiring: the pin is applied to merge_opts BEFORE the hold is cleared.
+        let src = include_str!("pr_cmd.rs");
+        let pin = src
+            .find("pr_ship::refusal_release_pin(")
+            .expect("ship applies the release pin");
+        let assign = src
+            .find("Ok(pin) => merge_opts.match_head = pin")
+            .expect("pin assigned to the merge");
+        let clear = src
+            .find("crate::merge_hold::clear_hold(&hold_root, pr_number)")
+            .expect("release site");
+        let merge = src[clear..]
+            .find("&merge_opts,")
+            .map(|i| i + clear)
+            .expect("merge call");
+        assert!(pin < assign && assign < clear && clear < merge);
     }
 
     // BUG-1532: the real ship path consults the hold gate BEFORE the CI watch

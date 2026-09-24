@@ -2371,7 +2371,7 @@ pub(crate) fn pr_ship_handler(
         // its own provider's merge. The unified contract returns Err (with stderr)
         // on a failed merge, which we map to the existing activity-log + recovery
         // hint + bail. trace:STORY-516 | ai:claude
-        let merge_opts = crate::forge::MergeOptions {
+        let mut merge_opts = crate::forge::MergeOptions {
             method: crate::forge::MergeMethod::Squash,
             squash_subject: explicit_squash_subject.clone(),
             delete_branch,
@@ -2449,6 +2449,28 @@ pub(crate) fn pr_ship_handler(
                 }
             },
         };
+        // BUG-1532: a hold released by a verdict must merge PINNED to the head
+        // that verdict covers — the TASK-1448 pin is None when the verdict's
+        // key is not among its candidates, and an unpinned merge after the
+        // hold drops could land a commit nobody approved. Decided BEFORE the
+        // hold is touched. trace:BUG-1532 | ai:claude
+        match pr_ship::refusal_release_pin(
+            released_by_verdict.is_some(),
+            merge_opts.match_head.take(),
+            head_sha.as_deref(),
+            pr_number,
+        ) {
+            Ok(pin) => merge_opts.match_head = pin,
+            Err(refusal) => {
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &pr_ship::ShipStep::Merge { delete_branch },
+                    &pr_ship::StepOutcome::Skipped(refusal.clone()),
+                );
+                anyhow::bail!(refusal);
+            }
+        }
         if let Some(reason) = marker_reason.as_deref() {
             match &released_by_verdict {
                 Some(verdict) => eprintln!(
