@@ -4,7 +4,8 @@
 
 use crate::cli::WikiCommand;
 use crate::exposition::{
-    build_bounded_closure, extract_offline_exposition, load_exposition, ExpositionAudience,
+    build_bounded_closure, extract_offline_exposition, is_inside_store_worktree, load_exposition,
+    ExpositionAudience,
 };
 use anyhow::Result;
 use colored::Colorize;
@@ -49,10 +50,25 @@ pub fn handle_wiki_command(cmd: &WikiCommand) -> Result<()> {
 }
 
 /// Builds the static HTML living wiki projection over canonical specs and exposition sidecars.
-// trace:TASK-1439 | ai:antigravity
+// trace:TASK-1439 trace:TASK-1489 | ai:antigravity
 pub fn build_wiki(out_dir: Option<&Path>) -> Result<PathBuf> {
     let project_root =
         crate::find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+
+    let wiki_dir = out_dir
+        .map(PathBuf::from)
+        .unwrap_or_else(|| project_root.join(".aida").join("wiki"));
+
+    // Same guard as `save_exposition`: run from the store worktree (or pass
+    // an explicit --out under it) and this would otherwise write build
+    // output into the requirement store, where `aida db sync` would sweep it
+    // into canonical history. trace:TASK-1489 | ai:claude
+    if is_inside_store_worktree(&wiki_dir) {
+        anyhow::bail!(
+            "refusing to write the wiki inside the requirement store ({}); run from the project checkout",
+            wiki_dir.display()
+        );
+    }
 
     let store = crate::load_store_for_lookup(&project_root).ok_or_else(|| {
         anyhow::anyhow!(
@@ -60,10 +76,6 @@ pub fn build_wiki(out_dir: Option<&Path>) -> Result<PathBuf> {
             project_root.display()
         )
     })?;
-
-    let wiki_dir = out_dir
-        .map(PathBuf::from)
-        .unwrap_or_else(|| project_root.join(".aida").join("wiki"));
 
     std::fs::create_dir_all(&wiki_dir)?;
 

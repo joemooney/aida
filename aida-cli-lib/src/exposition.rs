@@ -92,7 +92,8 @@ pub struct HumanEdits {
     pub human_reviewed: bool,
 }
 
-/// Versioned exposition sidecar stored at `.aida-store/expositions/<SPEC-ID>/<audience>.yaml` (TASK-1435).
+/// Versioned exposition sidecar stored at `.aida/expositions/<SPEC-ID>/<audience>.yaml` (TASK-1435).
+// trace:TASK-1489 | ai:claude
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExpositionSidecar {
     pub schema_version: u32,
@@ -563,8 +564,11 @@ pub fn exposition_path(
         .join(format!("{}.yaml", audience.as_str()))
 }
 
-/// True when `path` runs through a `.aida-store` directory.
-fn is_inside_store_worktree(path: &Path) -> bool {
+/// True when `path` runs through a `.aida-store` directory. Shared by
+/// [`save_exposition`] and `wiki::build_wiki`, which both refuse to write
+/// under the requirement store.
+// trace:TASK-1489 | ai:claude
+pub(crate) fn is_inside_store_worktree(path: &Path) -> bool {
     path.components()
         .any(|c| c.as_os_str() == std::ffi::OsStr::new(".aida-store"))
 }

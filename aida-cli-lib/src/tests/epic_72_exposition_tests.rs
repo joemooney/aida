@@ -375,6 +375,23 @@ fn test_wiki_html_generation_structure() {
     assert!(spec_html.contains("Stale (Graph Closure Drifted)"));
 }
 
+#[test]
+// trace:TASK-1489 | ai:claude
+fn build_wiki_refuses_any_store_directory() {
+    let tmp = tempdir().expect("Failed to create tempdir");
+    let wiki_out = tmp.path().join(".aida-store").join("wiki");
+
+    let err = crate::wiki::build_wiki(Some(&wiki_out)).unwrap_err();
+    assert!(
+        err.to_string().contains("refusing to write"),
+        "unexpected error: {err}"
+    );
+    assert!(
+        !wiki_out.exists(),
+        "nothing may be created under .aida-store"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // TASK-1470 integration fixes: env-var rename, fail-closed advisory audit,
 // loopback-only wiki server, vendored (local) mermaid.
