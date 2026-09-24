@@ -54,12 +54,12 @@ description: |-
   against its own interest - the skew it pointed out makes the mechanism that blocked it look
   better rather than worse. Related: ADR-52 (the floor's subject), TASK-1418 item 3 (the same
   invisibility seen from the blocked seat's side), BUG-1566 (the two clear paths).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:45:48.146378234Z
-modified_at: 2026-09-24T06:07:20.094449027Z
+modified_at: 2026-09-24T07:36:23.877746304Z
 req_type: Story
 tags:
 - docs:impacted
@@ -77,3 +77,21 @@ comments:
   created_at: 2026-09-24T06:07:13.969261566Z
   modified_at: 2026-09-24T06:07:13.969261566Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d258-1838-78b3-8f12-cd469608169c
+  author: aida-auto-bump
+  timestamp: 2026-09-24T07:36:23.864395131Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d258-1845-7532-9472-b6e5cdd4e52f
+  timestamp: 2026-09-24T07:36:23.877744411Z
+  agent: aida
+  commit_sha: 334cc8e25616a16b0c55abe5d87623373bc6fc20
+  summary: Completed via merge 334cc8e2
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T07:36:23.257317993Z
+  completion_sha: 334cc8e25616a16b0c55abe5d87623373bc6fc20
