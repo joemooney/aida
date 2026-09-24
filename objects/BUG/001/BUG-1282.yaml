@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:38:19.264486976Z
-modified_at: 2026-09-19T21:32:14.555326574Z
+modified_at: 2026-09-24T16:25:56.346561904Z
 req_type: Bug
 tags:
 - auto-complete
@@ -49,8 +49,7 @@ tags:
 - failure-kind:tool-exit
 - implementer
 relationships:
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0bb6f-f968-7082-8192-40e4ea1779c8
   created_at: 2026-09-19T21:32:14.555322107Z
   created_by: joe
