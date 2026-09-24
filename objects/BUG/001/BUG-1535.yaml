@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:04:54.098400831Z
-modified_at: 2026-09-24T02:52:27.225956893Z
+modified_at: 2026-09-24T02:52:31.045052988Z
 req_type: Bug
 tags:
 - aida:show
@@ -232,4 +232,25 @@ comments:
     Also noted: registry/agreed_counters.toml is stale (BUG=34, STORY=82, TASK=195 while ids run to ~1594/1468/1465). The branch makes the merge-gate walk to the next free id instead of bailing at 1000.
   created_at: 2026-09-24T02:05:24.629564598Z
   modified_at: 2026-09-24T02:05:24.629564598Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d154-31c5-7310-84a8-cf22d4424b79
+  author: joe
+  content: |-
+    Review follow-up pushed to claude/bug-1535 as fast-forward commit 2.
+
+    Criterion 1 (prevention): the merge-gate reserves every file name, spec_id and agreed_id, including unparseable objects. It walks to the next free id with no fixed cap.
+
+    Criterion 2 (detection): `aida doctor --category id-collisions` names every candidate. On the live store it finds exactly the seven.
+
+    Criterion 3 (resolution): an ambiguous id is refused with a non-zero exit, and every candidate's unambiguous handle is listed (the native id for an agreed-id holder, the UUID for the native owner). This covers `aida show`, edit/status, del, comment add/edit/delete, rel add/remove, assign, archive, defer, proxy approval, add --parent, and MCP update_requirement / add_comment / add_relationship. show and edit now accept a UUID. A cache-reported ambiguity is confirmed against the objects before refusing.
+
+    Criterion 4 (list): `aida list` never emits two rows under one id. A row whose agreed id is ambiguous renders under its native id, with a stderr note.
+
+    Criterion 5 (count): the doctor store-count finding compares unique displayed ids to store objects.
+
+    Tests: unit tests plus black-box aida-cli/tests/bug_1535_ambiguous_ids.rs (ambiguous edit/comment/rel refusal with no bytes written, show exit code, list dedupe).
+
+    Still open: criterion 6. The seven live collisions are not renumbered; the proposal is in the earlier comment.
+  created_at: 2026-09-24T02:52:31.045052988Z
+  modified_at: 2026-09-24T02:52:31.045052988Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
