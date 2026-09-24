@@ -33,7 +33,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T19:52:54.820749198Z
-modified_at: 2026-09-16T19:59:37.245955952Z
+modified_at: 2026-09-24T20:17:21.329747922Z
 req_type: Bug
 tags:
 - blocker
@@ -42,11 +42,6 @@ tags:
 - fast-follow:TASK-1207
 - regression
 relationships:
-- rel_type:
-    custom: duplicate-of
-  target_id: 01a0abcb-34d9-7613-a06c-0fda505073f8
-  created_at: 2026-09-16T19:59:28.120803036Z
-  created_by: joe
 - rel_type: Duplicate
   target_id: 01a0abcb-34d9-7613-a06c-0fda505073f8
   created_at: 2026-09-16T19:59:37.245951570Z
