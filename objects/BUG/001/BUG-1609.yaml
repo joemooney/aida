@@ -24,12 +24,12 @@ description: |-
   - Auto-queue-review and review help text is forge-neutral or provider-specific.
 
   This is a concrete live instance of the remaining call-site migration tracked by STORY-621.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T21:58:10.530410659Z
-modified_at: 2026-09-24T23:24:47.945733719Z
+modified_at: 2026-09-24T23:25:29.555150621Z
 req_type: Bug
 tags:
 - forge
