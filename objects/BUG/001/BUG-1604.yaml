@@ -8,12 +8,12 @@ description: |-
   Consequence: the widened 'aida db migrate-related-edges' (TASK-1488) correctly leaves any Custom(duplicate-of) edge untouched, since its selection predicate is a pure function of parse_relationship_type (deliberately, to avoid a second hand-maintained alias list that can drift). The live store has one such edge -- BUG-1175 holds both a Custom(duplicate-of) edge and a native Duplicate edge to the same target (a genuine twin) -- that will stay unmigrated until this is fixed.
 
   Fix: add 'duplicate-of' (and probably 'duplicate_of'/'duplicateof' for consistency with the other aliases' _/no-separator variants) to parse_relationship_type's match arms, mapping to RelationshipType::Duplicate. After that lands, a routine re-run of 'aida db migrate-related-edges' picks up BUG-1175's edge automatically -- no migration code changes needed.
-status: Completed
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T17:59:30.069861681Z
-modified_at: 2026-09-24T20:13:14.437524709Z
+modified_at: 2026-09-24T20:19:26.504521893Z
 req_type: Bug
 tags:
 - aida:rel
@@ -31,6 +31,11 @@ comments:
   created_at: 2026-09-24T18:38:00.735992943Z
   modified_at: 2026-09-24T18:38:00.735992943Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d512-aea8-7e11-a75e-429ec8ebafde
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (81c37e2) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-09-24T20:19:26.504521257Z
+  modified_at: 2026-09-24T20:19:26.504521257Z
 history:
 - id: 01a0d50d-013a-7330-b728-c2e63f7e63f1
   author: aida-auto-bump
@@ -39,6 +44,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a0d512-aea8-7e11-a75e-428fcda96819
+  author: aida-auto-bump
+  timestamp: 2026-09-24T20:19:26.504520435Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 processing_record:
 - id: 01a0d50d-0145-77e3-9120-457dea721f46
   timestamp: 2026-09-24T20:13:14.437522530Z
@@ -53,7 +65,3 @@ filed_at:
   aida_build_sha: 43649a4222
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
-implementation_info:
-  implemented: false
-  completed_at: 2026-09-24T20:13:14.426550708Z
-  completion_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
