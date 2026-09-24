@@ -30,7 +30,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T21:57:13.808572289Z
-modified_at: 2026-09-24T21:57:13.808572289Z
+modified_at: 2026-09-24T21:59:23.381429087Z
 req_type: Bug
 tags:
 - codex
@@ -38,6 +38,11 @@ tags:
 - regression
 - reviewer
 - severity:major
+relationships:
+- rel_type: References
+  target_id: 019f3d64-0ac3-7510-86e3-4df5f0a9242b
+  created_at: 2026-09-24T21:59:23.381424828Z
+  created_by: joe.mooney
 filed_at:
   code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
   branch: main
