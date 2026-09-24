@@ -827,8 +827,74 @@ fn pin_from_origin(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PinnedChange {
     pub merged: bool,
+    /// BUG-1541: the full lifecycle state, so a sweep can tell an OPEN change
+    /// from one CLOSED without merging. `merged` stays for existing callers
+    /// and is exactly `state == ChangeState::Merged`.
+    pub state: ChangeState,
     pub head_sha: Option<String>,
     pub hold_label: bool,
+}
+
+/// BUG-1541: the forge's lifecycle state for a change. `Unknown` (a missing
+/// or unrecognised state word) is its own answer so a sweep fails CLOSED —
+/// only a definite terminal state authorises dropping a marker.
+// trace:BUG-1541 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChangeState {
+    Open,
+    Merged,
+    ClosedUnmerged,
+    Unknown,
+}
+
+impl ChangeState {
+    /// Parse GitHub (`OPEN`/`CLOSED`/`MERGED`) and GitLab
+    /// (`opened`/`closed`/`merged`/`locked`) state words.
+    // trace:BUG-1541 | ai:claude
+    pub(crate) fn parse(raw: Option<&str>) -> Self {
+        match raw.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+            Some("open" | "opened" | "locked") => Self::Open,
+            Some("merged") => Self::Merged,
+            Some("closed") => Self::ClosedUnmerged,
+            _ => Self::Unknown,
+        }
+    }
+
+    /// The terminal class, when the change can never merge (again): a marker
+    /// on such a change protects nothing. `None` = open or unknown → live.
+    // trace:BUG-1541 | ai:claude
+    pub(crate) fn terminal(self) -> Option<TerminalState> {
+        match self {
+            Self::Merged => Some(TerminalState::Merged),
+            Self::ClosedUnmerged => Some(TerminalState::ClosedUnmerged),
+            Self::Open | Self::Unknown => None,
+        }
+    }
+}
+
+/// BUG-1541: why a marker is a phantom. Reported distinctly — a merged PR and
+/// a PR closed without merging mean different things about how a hold ended.
+// trace:BUG-1541 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TerminalState {
+    Merged,
+    ClosedUnmerged,
+}
+
+impl TerminalState {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Merged => "merged",
+            Self::ClosedUnmerged => "closed-unmerged",
+        }
+    }
+
+    pub(crate) fn describe(self) -> &'static str {
+        match self {
+            Self::Merged => "PR merged",
+            Self::ClosedUnmerged => "PR closed without merging",
+        }
+    }
 }
 
 /// Read `pr` from the project's pinned forge repo. `Ok(None)` = pure-git.
@@ -917,10 +983,8 @@ fn parse_pinned_change(pin: &PinnedRepo, pr: u64, json: &str) -> Result<PinnedCh
     } else {
         ("state", "headRefOid")
     };
-    let merged = value
-        .get(state_key)
-        .and_then(|v| v.as_str())
-        .is_some_and(|s| s.eq_ignore_ascii_case("merged"));
+    let state = ChangeState::parse(value.get(state_key).and_then(|v| v.as_str()));
+    let merged = state == ChangeState::Merged;
     let head_sha = value
         .get(head_key)
         .and_then(|v| v.as_str())
@@ -930,6 +994,7 @@ fn parse_pinned_change(pin: &PinnedRepo, pr: u64, json: &str) -> Result<PinnedCh
     let hold_label = labels_json_contains(json, HOLD_LABEL)?;
     Ok(PinnedChange {
         merged,
+        state,
         head_sha,
         hold_label,
     })
@@ -995,6 +1060,241 @@ fn labels_json_contains(json: &str, wanted: &str) -> Result<bool, String> {
             .or_else(|| label.get("name").and_then(|v| v.as_str()))
             == Some(wanted)
     }))
+}
+
+/// BUG-1469: every OPEN change in the pinned repo that carries the hold
+/// label. The label alone blocks a merge (it drives the required
+/// merge-hold-gate check), so an inventory that only reads marker files
+/// under-reports. `Ok(None)` = pure-git (no forge label layer). An error —
+/// unpinnable repo, forge failure, a truncated page, an answer naming another
+/// repo — is returned so the listing can REPORT the gap, never render the
+/// smaller marker-only set as complete.
+///
+/// Only called from the explicit `aida merge-hold list`; never from
+/// `aida awaiting` or its per-turn notice.
+// trace:BUG-1469 | ai:claude
+pub(crate) fn list_labeled_open_changes(
+    project_root: &Path,
+    kind: crate::forge::ForgeKind,
+) -> Result<Option<Vec<u64>>, String> {
+    let Some(pin) = resolve_pinned_repo(project_root, kind)? else {
+        return Ok(None);
+    };
+    list_labeled_open_changes_with(project_root, &pin, run_forge_cli_stdout).map(Some)
+}
+
+/// Page ceiling for the labeled-change query. A full page is reported as
+/// truncated rather than trusted as the whole set.
+const LABELED_QUERY_LIMIT: usize = 100;
+
+/// The argv for the pinned labeled-change query, per forge — pure for testing.
+// trace:BUG-1469 | ai:claude
+fn labeled_changes_command(pin: &PinnedRepo) -> Option<(&'static str, Vec<String>)> {
+    use crate::forge::ForgeKind;
+    match pin.kind {
+        ForgeKind::GitHub => Some((
+            "gh",
+            vec![
+                "pr".into(),
+                "list".into(),
+                "-R".into(),
+                pin.repo_arg(),
+                "--state".into(),
+                "open".into(),
+                "--label".into(),
+                HOLD_LABEL.into(),
+                "--limit".into(),
+                LABELED_QUERY_LIMIT.to_string(),
+                "--json".into(),
+                "number,url,labels".into(),
+            ],
+        )),
+        ForgeKind::GitLab => {
+            let mut args = vec!["api".to_string()];
+            if !pin.host_is_alias() {
+                args.push("--hostname".into());
+                args.push(pin.host.clone());
+            }
+            args.push(format!(
+                "projects/{}/merge_requests?state=opened&labels={}&per_page={}",
+                pin.path.replace('/', "%2F"),
+                HOLD_LABEL.replace(':', "%3A"),
+                LABELED_QUERY_LIMIT
+            ));
+            Some(("glab", args))
+        }
+        ForgeKind::None => None,
+    }
+}
+
+fn list_labeled_open_changes_with(
+    project_root: &Path,
+    pin: &PinnedRepo,
+    runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+) -> Result<Vec<u64>, String> {
+    let (cli, args) = labeled_changes_command(pin)
+        .ok_or_else(|| "no forge to list labeled changes from (pure-git)".to_string())?;
+    let (ok, stdout) = runner(project_root, cli, &args)?;
+    if !ok {
+        return Err(format!("`{cli} {}` failed", args.join(" ")));
+    }
+    parse_labeled_changes(pin, &stdout)
+}
+
+/// Parse the labeled-change listing. Every entry must name a change in the
+/// pinned repo AND carry the label; any entry that does not refuses the whole
+/// answer (TASK-1455: a response we cannot attribute is not evidence).
+// trace:BUG-1469 | ai:claude
+fn parse_labeled_changes(pin: &PinnedRepo, json: &str) -> Result<Vec<u64>, String> {
+    use crate::forge::ForgeKind;
+    let value: serde_json::Value = serde_json::from_str(json)
+        .map_err(|e| format!("could not parse labeled-change listing: {e}"))?;
+    let entries = value
+        .as_array()
+        .ok_or_else(|| "labeled-change listing was not an array".to_string())?;
+    if entries.len() >= LABELED_QUERY_LIMIT {
+        return Err(format!(
+            "labeled-change listing hit the {LABELED_QUERY_LIMIT}-row page limit; it may be truncated"
+        ));
+    }
+    let (num_key, url_key) = if pin.kind == ForgeKind::GitLab {
+        ("iid", "web_url")
+    } else {
+        ("number", "url")
+    };
+    let mut out = Vec::new();
+    for entry in entries {
+        let pr = entry
+            .get(num_key)
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| format!("labeled-change entry has no `{num_key}`"))?;
+        let url = entry.get(url_key).and_then(|v| v.as_str()).unwrap_or("");
+        if !pin.change_url_matches(url, pr) {
+            return Err(format!(
+                "refusing labeled-change listing: #{pr} names `{}`, not a change in the pinned repo `{}`",
+                if url.is_empty() { "<no url>" } else { url },
+                pin.repo_arg()
+            ));
+        }
+        let labeled = labels_json_contains(&entry.to_string(), HOLD_LABEL)?;
+        if !labeled {
+            return Err(format!(
+                "refusing labeled-change listing: #{pr} does not carry `{HOLD_LABEL}`"
+            ));
+        }
+        if !out.contains(&pr) {
+            out.push(pr);
+        }
+    }
+    out.sort_unstable();
+    Ok(out)
+}
+
+/// The reason shown for a hold that exists only as the forge label.
+// trace:BUG-1469 | ai:claude
+pub(crate) const LABEL_ONLY_REASON: &str = "label-only (no marker)";
+
+/// Which half of a hold exists. `Marker` covers both the marker-only and the
+/// marker+label shapes (the label column says which); `LabelOnly` is a hold a
+/// seat placed with a bare forge label.
+// trace:BUG-1469 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HoldSource {
+    Marker,
+    MarkerAndLabel,
+    LabelOnly,
+}
+
+impl HoldSource {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Marker => "marker",
+            Self::MarkerAndLabel => "marker+label",
+            Self::LabelOnly => "label",
+        }
+    }
+}
+
+/// The label-only holds: open labeled changes with no marker. Pure.
+// trace:BUG-1469 | ai:claude
+pub(crate) fn label_only_holds(labeled: &[u64], marker_prs: &[u64]) -> Vec<u64> {
+    let mut out: Vec<u64> = labeled
+        .iter()
+        .copied()
+        .filter(|pr| !marker_prs.contains(pr))
+        .collect();
+    out.sort_unstable();
+    out.dedup();
+    out
+}
+
+/// Commit-sha-shaped tokens cited in a marker's prose: 7–40 hex chars with at
+/// least one digit and one letter (so a bare PR number or an English word is
+/// never read as a sha).
+// trace:BUG-1562 | ai:claude
+fn cited_shas(text: &str) -> Vec<String> {
+    text.split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|tok| {
+            (7..=40).contains(&tok.len())
+                && tok.bytes().all(|b| b.is_ascii_hexdigit())
+                && tok.bytes().any(|b| b.is_ascii_digit())
+                && tok.bytes().any(|b| b.is_ascii_alphabetic())
+        })
+        .map(str::to_ascii_lowercase)
+        .collect()
+}
+
+/// BUG-1562: re-evaluate a marker's premise where it is machine-checkable,
+/// at READ time — a reason is written once and the world moves on. `Some`
+/// explains why the stated premise no longer holds. This only FLAGS: a hold
+/// is a deliberate gate and its owner releases it; nothing here clears.
+///
+/// Checks, each skipped when its input is unknown (unknown is never stale):
+///   - the marker cites a commit (its `target_head_sha`, else a sha in its
+///     prose) and the PR head has moved past every cited commit;
+///   - a REWORK hold names a spec whose recorded verdict is now APPROVED, or
+///     has been closed by a merge — the refusal it quotes is no longer the
+///     reviewer's position.
+// trace:BUG-1562 | ai:claude
+pub(crate) fn premise_stale(
+    record: &MergeHoldRecord,
+    live_head: Option<&str>,
+    verdict_of: impl Fn(&str) -> Option<crate::review_verdict::RecordedVerdict>,
+) -> Option<String> {
+    use crate::review_verdict::{same_reviewed_sha, short_sha, VerdictKind};
+    let mut why = Vec::new();
+    if record.reason_kind == HoldReasonKind::Rework {
+        for spec in crate::pr_ship::extract_spec_ids_from_text(&record.detail) {
+            let Some(verdict) = verdict_of(&spec) else {
+                continue;
+            };
+            if let Some(merge) = verdict.closed_by_merge.as_deref() {
+                why.push(format!(
+                    "{spec}'s verdict was closed by merge {}",
+                    short_sha(merge)
+                ));
+            } else if verdict.kind == VerdictKind::Approved {
+                why.push(match verdict.reviewed_sha.as_deref() {
+                    Some(sha) => format!("{spec}'s verdict is now APPROVED at {}", short_sha(sha)),
+                    None => format!("{spec}'s verdict is now APPROVED"),
+                });
+            }
+        }
+    }
+    let cited: Vec<String> = match record.target_head_sha.as_deref().map(str::trim) {
+        Some(sha) if !sha.is_empty() => vec![sha.to_ascii_lowercase()],
+        _ => cited_shas(&record.detail),
+    };
+    if let Some(head) = live_head.map(str::trim).filter(|h| !h.is_empty()) {
+        if !cited.is_empty() && !cited.iter().any(|sha| same_reviewed_sha(sha, head)) {
+            why.push(format!(
+                "marker cites {} but the PR head is now {}",
+                short_sha(&cited[0]),
+                short_sha(head)
+            ));
+        }
+    }
+    (!why.is_empty()).then(|| why.join("; "))
 }
 
 /// BUG-1236: whether the `aida:merge-hold` label on the change mirrors the
@@ -1357,6 +1657,7 @@ mod tests {
             ok,
             PinnedChange {
                 merged: false,
+                state: ChangeState::Open,
                 head_sha: Some("abc".into()),
                 hold_label: true
             }
@@ -1431,6 +1732,7 @@ mod tests {
         let change = |hold_label| {
             Ok(Some(PinnedChange {
                 merged: false,
+                state: ChangeState::Open,
                 head_sha: None,
                 hold_label,
             }))
@@ -1444,6 +1746,260 @@ mod tests {
         assert_eq!(label_diverged(&ForgeLabel::Absent), Some(true));
         assert_eq!(label_diverged(&ForgeLabel::NoForge), Some(false));
         assert_eq!(label_diverged(&unknown), None);
+    }
+
+    // BUG-1469: the label scan is ONE pinned query; every entry must belong
+    // to the pinned repo and carry the label, and a full page is reported as
+    // possibly truncated rather than trusted.
+    // trace:BUG-1469 | ai:claude
+    #[test]
+    fn labeled_change_scan_is_pinned_and_refuses_unattributable_answers() {
+        use crate::forge::ForgeKind;
+        let dir = tempfile::tempdir().unwrap();
+        let gh = pin(ForgeKind::GitHub, "https://github.com/o/r.git");
+        let (cli, args) = labeled_changes_command(&gh).unwrap();
+        assert_eq!(cli, "gh");
+        assert!(
+            args.windows(2).any(|w| w[0] == "-R" && w[1] == "o/r"),
+            "{args:?}"
+        );
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "--label" && w[1] == HOLD_LABEL));
+        assert!(args.windows(2).any(|w| w[0] == "--state" && w[1] == "open"));
+
+        let row = |n: u64, repo: &str, label: &str| {
+            format!(
+                r#"{{"number":{n},"url":"https://github.com/{repo}/pull/{n}","labels":[{{"name":"{label}"}}]}}"#
+            )
+        };
+        let answer = |body: String| move |_: &Path, _: &str, _: &[String]| Ok((true, body.clone()));
+        let ok = list_labeled_open_changes_with(
+            dir.path(),
+            &gh,
+            answer(format!(
+                "[{},{}]",
+                row(1978, "o/r", HOLD_LABEL),
+                row(1974, "o/r", HOLD_LABEL)
+            )),
+        )
+        .unwrap();
+        assert_eq!(ok, vec![1974, 1978]);
+
+        let foreign = format!("[{}]", row(7, "other/r", HOLD_LABEL));
+        let err = list_labeled_open_changes_with(dir.path(), &gh, answer(foreign)).unwrap_err();
+        assert!(err.contains("pinned repo"), "{err}");
+        let unlabeled = format!("[{}]", row(7, "o/r", "bug"));
+        let err = list_labeled_open_changes_with(dir.path(), &gh, answer(unlabeled)).unwrap_err();
+        assert!(err.contains("does not carry"), "{err}");
+        let full = format!(
+            "[{}]",
+            (1..=LABELED_QUERY_LIMIT as u64)
+                .map(|n| row(n, "o/r", HOLD_LABEL))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let err = list_labeled_open_changes_with(dir.path(), &gh, answer(full)).unwrap_err();
+        assert!(err.contains("truncated"), "{err}");
+        let err =
+            list_labeled_open_changes_with(dir.path(), &gh, |_: &Path, _: &str, _: &[String]| {
+                Ok((false, String::new()))
+            })
+            .unwrap_err();
+        assert!(err.contains("failed"), "{err}");
+
+        let gl = pin(ForgeKind::GitLab, "https://gitlab.com/g/p.git");
+        let (cli, args) = labeled_changes_command(&gl).unwrap();
+        assert_eq!(cli, "glab");
+        assert!(
+            args.iter().any(|a| a.starts_with(
+                "projects/g%2Fp/merge_requests?state=opened&labels=aida%3Amerge-hold"
+            )),
+            "{args:?}"
+        );
+        let got = list_labeled_open_changes_with(dir.path(), &gl, |_: &Path, _: &str, _: &[String]| {
+            Ok((
+                true,
+                r#"[{"iid":3,"web_url":"https://gitlab.com/g/p/-/merge_requests/3","labels":["aida:merge-hold"]}]"#
+                    .to_string(),
+            ))
+        })
+        .unwrap();
+        assert_eq!(got, vec![3]);
+    }
+
+    // BUG-1469 verification shape: N labeled PRs (some also marker-backed)
+    // plus M marker-only holds list as N+M rows — the label-only ones are
+    // exactly the labeled PRs with no marker.
+    // trace:BUG-1469 | ai:claude
+    #[test]
+    fn label_only_holds_are_the_labeled_prs_without_a_marker() {
+        let labeled = [1972, 1974, 1978, 1979, 2014];
+        let markers = [1972, 1979, 2050];
+        let label_only = label_only_holds(&labeled, &markers);
+        assert_eq!(label_only, vec![1974, 1978, 2014]);
+        let rows = markers.len() + label_only.len();
+        let marker_only = markers.iter().filter(|m| !labeled.contains(m)).count();
+        assert_eq!(
+            rows,
+            labeled.len() + marker_only,
+            "N labeled + M marker-only"
+        );
+        assert_eq!(HoldSource::LabelOnly.as_str(), "label");
+    }
+
+    // BUG-1499: a label-only hold is cleared by the same human floor and the
+    // clearance is RECORDED like a marker's, naming the missing half. The
+    // handler reads the forge label before recording (never guesses).
+    // trace:BUG-1499 | ai:claude
+    #[test]
+    fn label_only_clear_is_recorded_as_the_human_principal() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = typed_hold(2019, HoldReasonKind::Unknown, LABEL_ONLY_REASON, None);
+        let actor = human_clear_actor(&record, "joe", None).unwrap();
+        record_clearance(dir.path(), &record, &actor).unwrap();
+        let clearance: HoldClearance = serde_json::from_str(
+            &std::fs::read_to_string(clearance_path(dir.path(), 2019)).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(clearance.cleared_by, "human:joe");
+        assert_eq!(clearance.detail, LABEL_ONLY_REASON);
+
+        let lib_source = include_str!("lib.rs");
+        let clear = lib_source
+            .split("crate::cli::MergeHoldAction::Clear { pr, stale } =>")
+            .nth(1)
+            .and_then(|body| body.split("(None, true) =>").next())
+            .expect("clear handler must remain inspectable");
+        let floor = clear.find("has_integrity_floor_authority()").unwrap();
+        let read = clear.find("merge_hold::fetch_pinned_change(").unwrap();
+        let recorded = clear
+            .rfind("merge_hold::record_clearance(&root, record, actor)")
+            .unwrap();
+        assert!(
+            floor < read && read < recorded,
+            "floor, then forge read, then record"
+        );
+        assert!(clear.contains("merge_hold::LABEL_ONLY_REASON"));
+    }
+
+    // BUG-1541: state words parse per forge; anything unrecognised is Unknown
+    // and never terminal (fail closed).
+    // trace:BUG-1541 | ai:claude
+    #[test]
+    fn change_state_parses_both_forges_and_fails_closed() {
+        let dir = tempfile::tempdir().unwrap();
+        let gh = pin(
+            crate::forge::ForgeKind::GitHub,
+            "https://github.com/o/r.git",
+        );
+        let closed =
+            fetch_pinned_change_with(dir.path(), &gh, 7, |_: &Path, _: &str, _: &[String]| {
+                Ok((
+                    true,
+                    r#"{"url":"https://github.com/o/r/pull/7","state":"CLOSED","labels":[]}"#
+                        .to_string(),
+                ))
+            })
+            .unwrap();
+        assert_eq!(closed.state, ChangeState::ClosedUnmerged);
+        assert!(!closed.merged);
+        assert_eq!(closed.state.terminal(), Some(TerminalState::ClosedUnmerged));
+        let missing =
+            fetch_pinned_change_with(dir.path(), &gh, 7, |_: &Path, _: &str, _: &[String]| {
+                Ok((
+                    true,
+                    r#"{"url":"https://github.com/o/r/pull/7","labels":[]}"#.to_string(),
+                ))
+            })
+            .unwrap();
+        assert_eq!(missing.state, ChangeState::Unknown);
+        assert_eq!(missing.state.terminal(), None);
+        assert_eq!(ChangeState::parse(Some("locked")).terminal(), None);
+    }
+
+    // BUG-1562, red-first: a marker citing a sha is REPORTED once the PR head
+    // moves past it, and not while the head still matches. A rework hold whose
+    // verdict is now approved (or closed by a merge) is reported too. Nothing
+    // is cleared — the marker is untouched.
+    // trace:BUG-1562 | ai:claude
+    #[test]
+    fn premise_stale_fires_when_the_world_moves_and_never_clears() {
+        use crate::review_verdict::{RecordedVerdict, VerdictKind};
+        let dir = tempfile::tempdir().unwrap();
+        write_hold(
+            dir.path(),
+            2049,
+            "CHANGES REQUESTED for STORY-1422 at 3acf3671fd7a",
+        )
+        .unwrap();
+        let before = std::fs::read(hold_path(dir.path(), 2049)).unwrap();
+        let legacy = read_hold_record(dir.path(), 2049).unwrap();
+        let none = |_: &str| None;
+        // Current: head still at the cited sha → not stale.
+        assert_eq!(premise_stale(&legacy, Some("3acf3671fd7a0000"), none), None);
+        // Head unknown → unknown is never stale.
+        assert_eq!(premise_stale(&legacy, None, none), None);
+        // Advance the head past it → reported.
+        let why = premise_stale(&legacy, Some("cd21a1dc0a9e1111"), none).expect("stale");
+        assert!(
+            why.contains("3acf3671fd7a") && why.contains("cd21a1dc0a9e"),
+            "{why}"
+        );
+        assert_eq!(std::fs::read(hold_path(dir.path(), 2049)).unwrap(), before);
+
+        // A PR number or plain word is never mistaken for a cited sha.
+        let plain = typed_hold(
+            5,
+            HoldReasonKind::Supervision,
+            "PR 20490123 is marked drive",
+            None,
+        );
+        assert_eq!(premise_stale(&plain, Some("abcdef1234567"), none), None);
+
+        // Typed target_head_sha wins over prose.
+        let rework = typed_hold(
+            2001,
+            HoldReasonKind::Rework,
+            "stranded refusal recovered for BUG-1291 at 64e4e5755b",
+            Some("64e4e5755b".into()),
+        );
+        assert_eq!(premise_stale(&rework, Some("64e4e5755b99"), none), None);
+        let approved = |spec: &str| {
+            (spec == "BUG-1291").then(|| RecordedVerdict {
+                kind: VerdictKind::Approved,
+                raw: "approved".into(),
+                reviewed_sha: Some("af49b12b83fc".into()),
+                ..Default::default()
+            })
+        };
+        let why = premise_stale(&rework, Some("af49b12b83fc"), approved).expect("stale");
+        assert!(
+            why.contains("BUG-1291's verdict is now APPROVED at af49b12b83fc"),
+            "{why}"
+        );
+        assert!(why.contains("PR head is now af49b12b83fc"), "{why}");
+        let closed = |_: &str| {
+            Some(RecordedVerdict {
+                kind: VerdictKind::RequestChanges,
+                closed_by_merge: Some("deadbeef1234".into()),
+                ..Default::default()
+            })
+        };
+        let why = premise_stale(&rework, Some("64e4e5755b"), closed).expect("closed");
+        assert!(why.contains("closed by merge deadbeef1234"), "{why}");
+        // A supervision hold's premise is not the verdict — an approval does
+        // not make "awaiting a human merge" stale.
+        let supervised = typed_hold(
+            9,
+            HoldReasonKind::Supervision,
+            "BUG-1291 is marked drive",
+            None,
+        );
+        assert_eq!(
+            premise_stale(&supervised, Some("af49b12b83fc"), approved),
+            None
+        );
     }
 
     #[test]

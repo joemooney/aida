@@ -196,6 +196,10 @@ mod pane_host;
 // trace:STORY-647 | ai:claude — team RBAC slice 2: gated-op permission map +
 // protected specs + strict mode (guardrail, not security).
 mod permissions;
+// TASK-1454: local runtime marker recording a seat blocked on an unanswered
+// permission prompt — the Notification(permission_prompt) hook writes it,
+// `aida ps` / `aida awaiting` read it.
+mod pending_approval;
 mod plan_cmd;
 mod pr_rebase;
 mod pr_ship;
@@ -23934,6 +23938,30 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
         SessionCommand::HarnessWorktreeRelease { agent_id } => {
             session_harness_worktree_release(agent_id)
         }
+        // trace:TASK-1454 | ai:claude
+        SessionCommand::PendingApprovalSet {
+            session,
+            tool,
+            message,
+        } => {
+            let project_root = find_main_worktree_root()?;
+            pending_approval::write_marker(
+                &project_root,
+                session,
+                tool.as_deref(),
+                message.as_deref(),
+                chrono::Utc::now(),
+            )?;
+            println!("recorded pending-approval marker for session {session}");
+            Ok(())
+        }
+        // trace:TASK-1454 | ai:claude
+        SessionCommand::PendingApprovalClear { session } => {
+            let project_root = find_main_worktree_root()?;
+            pending_approval::clear_marker(&project_root, session)?;
+            println!("cleared pending-approval marker for session {session}");
+            Ok(())
+        }
         SessionCommand::End {
             id,
             spec,
@@ -30741,33 +30769,59 @@ fn handle_merge_lock_status(json: bool) -> Result<()> {
     Ok(())
 }
 
-/// Partition merge-hold markers into (stale, live) by a mergedness predicate:
-/// a marker whose PR has already merged is stale (a phantom hold left behind by
-/// a merge AIDA did not perform, e.g. a raw `gh pr merge`). Pure so the
-/// list/sweep logic is testable without a live forge.
-// trace:TASK-161 | ai:claude
+type StaleHold = (u64, String, merge_hold::TerminalState);
+
+/// Partition merge-hold markers into (stale, live) by a terminal-state
+/// predicate: a marker whose PR can never merge (again) is stale — merged (a
+/// phantom left by a merge AIDA did not perform, e.g. a raw `gh pr merge`) OR
+/// closed without merging (BUG-1541). Pure so the list/sweep logic is
+/// testable without a live forge.
+// trace:TASK-161 trace:BUG-1541 | ai:claude
 fn partition_stale_holds(
     holds: Vec<(u64, String)>,
-    mut is_merged: impl FnMut(u64) -> Option<bool>,
-) -> (Vec<(u64, String)>, Vec<(u64, String)>) {
+    mut terminal_state: impl FnMut(u64) -> Option<merge_hold::TerminalState>,
+) -> (Vec<StaleHold>, Vec<(u64, String)>) {
     let mut stale = Vec::new();
     let mut live = Vec::new();
     for (pr, reason) in holds {
-        // Only a definite "yes, merged" makes a marker stale; an unknown
-        // (offline / gh error) is treated as live so we never clear a hold we
-        // could not confirm is safe to drop. trace:TASK-161 | ai:claude
-        if is_merged(pr) == Some(true) {
-            stale.push((pr, reason));
-        } else {
-            live.push((pr, reason));
+        // Only a definite terminal state makes a marker stale; an unknown
+        // (offline / gh error / unrecognised state word) is treated as live so
+        // we never clear a hold we could not confirm is safe to drop.
+        // trace:TASK-161 trace:BUG-1541 | ai:claude
+        match terminal_state(pr) {
+            Some(terminal) => stale.push((pr, reason, terminal)),
+            None => live.push((pr, reason)),
         }
     }
     (stale, live)
 }
 
+/// The terminal state behind a marker, from one pinned forge read (or the
+/// pure-git fallback). Fails CLOSED: anything but a definite merged/closed
+/// answer is `None` (live).
+// trace:BUG-1541 | ai:claude
+fn hold_terminal_state(
+    root: &std::path::Path,
+    pr: u64,
+    fetched: Option<&Result<Option<merge_hold::PinnedChange>, String>>,
+) -> Option<merge_hold::TerminalState> {
+    match fetched {
+        Some(Ok(Some(change))) => change.state.terminal(),
+        // pure-git: no forge repo to pin; keep the forge-routed check.
+        Some(Ok(None)) => {
+            let mut sink = network_retry::StderrSink;
+            (pr_is_merged_with_sink(root, pr as u32, &mut sink) == Some(true))
+                .then_some(merge_hold::TerminalState::Merged)
+        }
+        // unreadable / unpinnable: cannot confirm terminal → stays live.
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod merge_hold_cli_tests {
     use super::partition_stale_holds;
+    use crate::merge_hold::TerminalState;
 
     #[test]
     fn stale_partition_splits_merged_from_open_and_unknown() {
@@ -30779,14 +30833,62 @@ mod merge_hold_cli_tests {
         // PR 1 merged -> stale; PR 2 still open -> live; PR 3 unknown (offline /
         // gh error) -> live, because an unconfirmed hold is never swept.
         let (stale, live) = partition_stale_holds(holds, |pr| match pr {
-            1 => Some(true),
-            2 => Some(false),
+            1 => Some(TerminalState::Merged),
             _ => None,
         });
-        assert_eq!(stale, vec![(1u64, "drive".to_string())]);
+        assert_eq!(
+            stale,
+            vec![(1u64, "drive".to_string(), TerminalState::Merged)]
+        );
         assert_eq!(
             live,
             vec![(2u64, "drive".to_string()), (3u64, "drive".to_string())]
+        );
+    }
+
+    // BUG-1541: a PR closed WITHOUT merging is equally phantom — it can never
+    // merge, so its hold releases nothing. It is swept and reported distinctly
+    // from a merged one; an unknown forge state stays live (fail closed).
+    // trace:BUG-1541 | ai:claude
+    #[test]
+    fn stale_partition_sweeps_closed_unmerged_and_fails_closed_on_unknown() {
+        use crate::merge_hold::ChangeState;
+        let states = [
+            (10u64, ChangeState::parse(Some("MERGED"))),
+            (11, ChangeState::parse(Some("CLOSED"))),
+            (12, ChangeState::parse(Some("OPEN"))),
+            (13, ChangeState::parse(None)),
+            (14, ChangeState::parse(Some("weird"))),
+            (15, ChangeState::parse(Some("closed"))), // GitLab spelling
+            (16, ChangeState::parse(Some("opened"))),
+        ];
+        let holds = states
+            .iter()
+            .map(|(pr, _)| (*pr, "r".to_string()))
+            .collect();
+        let (stale, live) = partition_stale_holds(holds, |pr| {
+            states
+                .iter()
+                .find(|(n, _)| *n == pr)
+                .and_then(|(_, s)| s.terminal())
+        });
+        assert_eq!(
+            stale.iter().map(|(pr, _, t)| (*pr, *t)).collect::<Vec<_>>(),
+            vec![
+                (10, TerminalState::Merged),
+                (11, TerminalState::ClosedUnmerged),
+                (15, TerminalState::ClosedUnmerged),
+            ]
+        );
+        assert_eq!(
+            live.iter().map(|(pr, _)| *pr).collect::<Vec<_>>(),
+            vec![12, 13, 14, 16],
+            "open and unknown states are never swept"
+        );
+        assert_eq!(TerminalState::Merged.describe(), "PR merged");
+        assert_eq!(
+            TerminalState::ClosedUnmerged.describe(),
+            "PR closed without merging"
         );
     }
 }
@@ -30812,16 +30914,9 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     .collect::<std::collections::HashMap<_, _>>()
             };
             let mut facts = fetch_all(&holds);
-            let (stale, live) = partition_stale_holds(holds, |pr| match facts.get(&pr) {
-                Some(Ok(Some(change))) => Some(change.merged),
-                // pure-git: no forge repo to pin; keep the forge-routed check.
-                Some(Ok(None)) => {
-                    let mut sink = network_retry::StderrSink;
-                    pr_is_merged_with_sink(&root, pr as u32, &mut sink)
-                }
-                // unreadable / unpinnable: cannot confirm merged → stays live.
-                _ => None,
-            });
+            // BUG-1541: merged AND closed-unmerged are both terminal.
+            let (stale, live) =
+                partition_stale_holds(holds, |pr| hold_terminal_state(&root, pr, facts.get(&pr)));
             // BUG-1236: `--fix` re-syncs the Layer-2 label on every LIVE hold
             // whose FORGE label is not confirmed present, then reports.
             // TASK-189: keyed off the forge read, not the recorded state, so a
@@ -30851,8 +30946,11 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     println!("No live hold needed a label re-sync.");
                 } else {
                     // Re-read so the listing below shows the post-fix forge.
-                    let all: Vec<(u64, String)> =
-                        live.iter().chain(stale.iter()).cloned().collect();
+                    let all: Vec<(u64, String)> = live
+                        .iter()
+                        .cloned()
+                        .chain(stale.iter().map(|(pr, r, _)| (*pr, r.clone())))
+                        .collect();
                     facts = fetch_all(&all);
                 }
                 // STORY-1397: recusal routing is reconciled HERE, on an
@@ -30905,13 +31003,69 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     .map(merge_hold::ForgeLabel::from_fetch)
                     .unwrap_or(merge_hold::ForgeLabel::Unknown(String::new()))
             };
+            // BUG-1469: a hold placed as a bare forge label has no marker, yet
+            // blocks the merge exactly like one. Enumerate open labeled PRs in
+            // ONE pinned query and list the label-only ones too; a scan that
+            // could not run is REPORTED, never rendered as "no such holds".
+            // trace:BUG-1469 | ai:claude
+            let label_scan = merge_hold::list_labeled_open_changes(&root, forge_kind);
+            let marker_prs: Vec<u64> = live
+                .iter()
+                .map(|(pr, _)| *pr)
+                .chain(stale.iter().map(|(pr, _, _)| *pr))
+                .collect();
+            let label_only: Vec<u64> = match &label_scan {
+                Ok(Some(labeled)) => merge_hold::label_only_holds(labeled, &marker_prs),
+                _ => Vec::new(),
+            };
+            // A live marker the per-PR read saw labeled but the scan did not
+            // list is a disagreement between two forge answers — surfaced,
+            // not silently resolved toward the smaller set.
+            let scan_disagrees: Vec<u64> = match &label_scan {
+                Ok(Some(labeled)) => live
+                    .iter()
+                    .map(|(pr, _)| *pr)
+                    .filter(|pr| {
+                        forge_label_of(*pr) == merge_hold::ForgeLabel::Present
+                            && !labeled.contains(pr)
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            let label_scan_state = match &label_scan {
+                Ok(Some(_)) => "ok".to_string(),
+                Ok(None) => "no-forge".to_string(),
+                Err(e) => format!("unknown: {}", e.lines().next().unwrap_or("")),
+            };
+            // BUG-1562: re-evaluate each live marker's premise at read time
+            // (PR head vs the sha it cites; a rework hold's verdict now
+            // approved or closed). FLAG only — never auto-clear.
+            // trace:BUG-1562 | ai:claude
+            let premise_of = |pr: u64| -> Option<String> {
+                let record = merge_hold::read_hold_record(&root, pr)?;
+                let head = match facts.get(&pr) {
+                    Some(Ok(Some(change))) => change.head_sha.clone(),
+                    _ => None,
+                };
+                merge_hold::premise_stale(&record, head.as_deref(), |spec| {
+                    review_verdict::read_recorded_verdict(&root, spec)
+                })
+            };
+            let source_of = |pr: u64| {
+                if forge_label_of(pr) == merge_hold::ForgeLabel::Present {
+                    merge_hold::HoldSource::MarkerAndLabel
+                } else {
+                    merge_hold::HoldSource::Marker
+                }
+            };
             let recorded_of = |pr: u64| match merge_hold::read_label_state(&root, pr) {
                 merge_hold::LabelState::Synced => "synced".to_string(),
                 merge_hold::LabelState::Unsynced(e) => format!("unsynced: {e}"),
                 merge_hold::LabelState::Unknown => "unknown".to_string(),
             };
             if *json {
-                let row = |pr: u64, reason: &str, is_stale: bool| {
+                let row = |pr: u64, reason: &str, terminal: Option<merge_hold::TerminalState>| {
+                    let is_stale = terminal.is_some();
                     let forge_label = forge_label_of(pr);
                     let record = merge_hold::read_hold_record(&root, pr);
                     let kind = record
@@ -30932,7 +31086,10 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         "reason_kind": kind,
                         "routing_state": routing,
                         "recused_principals": recused,
+                        "source": source_of(pr).as_str(),
                         "stale": is_stale,
+                        "stale_reason": terminal.map(merge_hold::TerminalState::as_str),
+                        "premise_stale": if is_stale { None } else { premise_of(pr) },
                         "label": forge_label.as_str(),
                         "label_recorded": recorded_of(pr),
                         "label_diverged": if is_stale {
@@ -30944,15 +31101,58 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                 };
                 let mut items: Vec<serde_json::Value> = Vec::new();
                 for (pr, reason) in &live {
-                    items.push(row(*pr, reason, false));
+                    items.push(row(*pr, reason, None));
                 }
-                for (pr, reason) in &stale {
-                    items.push(row(*pr, reason, true));
+                // BUG-1469: label-only holds are rows too, naming the missing half.
+                for pr in &label_only {
+                    items.push(serde_json::json!({
+                        "pr": pr,
+                        "reason": merge_hold::LABEL_ONLY_REASON,
+                        "reason_kind": "unknown",
+                        "routing_state": "pending",
+                        "recused_principals": [],
+                        "source": merge_hold::HoldSource::LabelOnly.as_str(),
+                        "stale": false,
+                        "stale_reason": null,
+                        "premise_stale": null,
+                        "label": merge_hold::ForgeLabel::Present.as_str(),
+                        "label_recorded": "none",
+                        "label_diverged": null,
+                    }));
                 }
-                println!("{}", serde_json::json!({ "merge_holds": items }));
+                for (pr, reason, terminal) in &stale {
+                    items.push(row(*pr, reason, Some(*terminal)));
+                }
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "merge_holds": items,
+                        "label_scan": label_scan_state,
+                        "label_scan_disagrees": scan_disagrees,
+                    })
+                );
                 return Ok(());
             }
-            if live.is_empty() && stale.is_empty() {
+            if let Err(err) = &label_scan {
+                println!(
+                    "{}",
+                    format!(
+                        "Label-only holds UNKNOWN — the `aida:merge-hold` label scan did not run ({}); PRs held by the label alone may be missing below.",
+                        err.lines().next().unwrap_or("")
+                    )
+                    .yellow()
+                );
+            }
+            for pr in &scan_disagrees {
+                println!(
+                    "{}",
+                    format!(
+                        "PR #{pr}: the per-PR read shows the hold label but the label scan did not list it — the forge answers disagree."
+                    )
+                    .yellow()
+                );
+            }
+            if live.is_empty() && stale.is_empty() && label_only.is_empty() {
                 println!("No active merge-holds.");
                 return Ok(());
             }
@@ -30975,11 +31175,31 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     .to_string(),
                 };
                 println!("  PR #{pr}  {reason}  [{rendered} | recorded: {recorded}]");
+                if let Some(why) = premise_of(*pr) {
+                    println!(
+                        "      {}",
+                        format!(
+                            "premise stale: {why} — the hold is still armed; a human decides whether to `aida merge-hold clear {pr}`"
+                        )
+                        .yellow()
+                    );
+                }
             }
-            for (pr, reason) in &stale {
+            for pr in &label_only {
+                println!(
+                    "  PR #{pr}  {}  [{} | recorded: none — no marker, no reason; `aida merge-hold clear {pr}` releases it]",
+                    merge_hold::LABEL_ONLY_REASON,
+                    "label: present".green()
+                );
+            }
+            for (pr, reason, terminal) in &stale {
                 println!(
                     "  PR #{pr}  {reason}  {}",
-                    "[stale — PR merged; `aida merge-hold clear --stale` to sweep]".yellow()
+                    format!(
+                        "[stale — {}; `aida merge-hold clear --stale` to sweep]",
+                        terminal.describe()
+                    )
+                    .yellow()
                 );
             }
             Ok(())
@@ -31059,12 +31279,12 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             match (pr, stale) {
                 (Some(_), true) => {
                     anyhow::bail!(
-                        "give a PR number OR --stale, not both: `aida merge-hold clear <pr>` clears one, `aida merge-hold clear --stale` sweeps every already-merged marker"
+                        "give a PR number OR --stale, not both: `aida merge-hold clear <pr>` clears one, `aida merge-hold clear --stale` sweeps every marker whose PR merged or closed unmerged"
                     );
                 }
                 (None, false) => {
                     anyhow::bail!(
-                        "nothing to clear: `aida merge-hold clear <pr>` clears one hold, `aida merge-hold clear --stale` sweeps every already-merged marker"
+                        "nothing to clear: `aida merge-hold clear <pr>` clears one hold, `aida merge-hold clear --stale` sweeps every marker whose PR merged or closed unmerged"
                     );
                 }
                 (Some(pr), false) => {
@@ -31089,6 +31309,41 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         None => None,
                     };
                     let existed = cleared.is_some();
+                    // BUG-1499: no marker may still mean a LABEL-ONLY hold (a
+                    // seat applied the label by hand). The same human floor
+                    // above already applies; read the forge label (pinned) so
+                    // the clearance is recorded against a hold that really
+                    // existed, never against a guess.
+                    // trace:BUG-1499 | ai:claude
+                    let label_only_forge = if existed {
+                        None
+                    } else {
+                        Some(merge_hold::ForgeLabel::from_fetch(
+                            &merge_hold::fetch_pinned_change(
+                                &root,
+                                forge::resolve_forge_kind(&root),
+                                *pr,
+                            ),
+                        ))
+                    };
+                    let label_only_record = match &label_only_forge {
+                        Some(merge_hold::ForgeLabel::Present) => {
+                            let record = merge_hold::typed_hold(
+                                *pr,
+                                merge_hold::HoldReasonKind::Unknown,
+                                merge_hold::LABEL_ONLY_REASON,
+                                None,
+                            );
+                            let actor = merge_hold::human_clear_actor(
+                                &record,
+                                &current_user_id(None),
+                                merge_hold::current_principal().as_ref(),
+                            )
+                            .map_err(|e| anyhow::anyhow!(e))?;
+                            Some((record, actor))
+                        }
+                        _ => None,
+                    };
                     merge_hold::clear_hold(&root, *pr)?;
                     if let Some((record, actor)) = &cleared {
                         if let Err(err) = merge_hold::record_clearance(&root, record, actor) {
@@ -31104,7 +31359,17 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                             );
                         }
                     }
-                    if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
+                    if matches!(
+                        label_only_forge,
+                        Some(merge_hold::ForgeLabel::Absent | merge_hold::ForgeLabel::NoForge)
+                    ) {
+                        println!(
+                            "No merge-hold on PR #{pr}: no marker, and the forge carries no `aida:merge-hold` label."
+                        );
+                        return Ok(());
+                    }
+                    let unlabel = merge_hold::sync_label(&root, *pr, false);
+                    if let Err(err) = &unlabel {
                         eprintln!(
                         "  {} label not dropped on PR #{pr}: {err} — drop it by hand or re-run `aida merge-hold clear {pr}`",
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow()
@@ -31114,9 +31379,26 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         println!(
                             "Cleared merge-hold on PR #{pr} (marker removed, `aida:merge-hold` label dropped)."
                         );
+                    } else if let Some((record, actor)) = &label_only_record {
+                        if unlabel.is_ok() {
+                            if let Err(err) = merge_hold::record_clearance(&root, record, actor) {
+                                eprintln!(
+                                    "  {} could not record who cleared PR #{pr}: {err}",
+                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                                );
+                            }
+                            println!(
+                                "Cleared label-only merge-hold on PR #{pr} (no marker; `aida:merge-hold` label dropped, clearance recorded as {}).",
+                                actor.key()
+                            );
+                        } else {
+                            anyhow::bail!(
+                                "label-only merge-hold on PR #{pr} is still in place: the label could not be removed"
+                            );
+                        }
                     } else {
                         println!(
-                            "No merge-hold marker for PR #{pr}; dropped the `aida:merge-hold` label anyway in case it lingered."
+                            "No merge-hold marker for PR #{pr} and the forge label could not be read; dropped the `aida:merge-hold` label anyway in case it lingered."
                         );
                     }
                     Ok(())
@@ -31127,22 +31409,23 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     // removing a marker is pinned to this project's repo — a
                     // same-numbered merged PR elsewhere must not sweep a live
                     // hold here. trace:TASK-1455 | ai:claude
+                    // BUG-1541: a PR closed WITHOUT merging is swept too —
+                    // it can never merge, so its hold releases nothing. An
+                    // unknown forge state stays (fail closed).
+                    // trace:BUG-1541 | ai:claude
                     let forge_kind = forge::resolve_forge_kind(&root);
-                    let (stale, _live) = partition_stale_holds(holds, |pr| {
-                        match merge_hold::fetch_pinned_change(&root, forge_kind, pr) {
-                            Ok(Some(change)) => Some(change.merged),
-                            Ok(None) => {
-                                let mut sink = network_retry::StderrSink;
-                                pr_is_merged_with_sink(&root, pr as u32, &mut sink)
-                            }
-                            Err(_) => None,
-                        }
+                    let (stale, live) = partition_stale_holds(holds, |pr| {
+                        let fetched = merge_hold::fetch_pinned_change(&root, forge_kind, pr);
+                        hold_terminal_state(&root, pr, Some(&fetched))
                     });
                     if stale.is_empty() {
-                        println!("No stale merge-holds (every marker's PR is still open).");
+                        println!(
+                            "No stale merge-holds ({} marker(s) on PRs that are open or whose state could not be confirmed).",
+                            live.len()
+                        );
                         return Ok(());
                     }
-                    for (pr, _reason) in &stale {
+                    for (pr, _reason, terminal) in &stale {
                         let _ = merge_hold::clear_hold(&root, *pr);
                         if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
                             eprintln!(
@@ -31150,7 +31433,10 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                                 crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                             );
                         }
-                        println!("Cleared stale merge-hold on PR #{pr} (PR already merged).");
+                        println!(
+                            "Cleared stale merge-hold on PR #{pr} ({}).",
+                            terminal.describe()
+                        );
                     }
                     println!("Swept {} stale merge-hold(s).", stale.len());
                     Ok(())
@@ -43336,6 +43622,13 @@ mod story_696_ps_tests;
 #[cfg(test)]
 #[path = "tests/task_1451_mail_identity_ps_tests.rs"]
 mod task_1451_mail_identity_ps_tests;
+
+// The pending-approval marker's priority over the heuristic classifier, plus
+// `aida ps` / `aida awaiting` end-to-end rendering of a Blocked seat.
+// trace:TASK-1454 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1454_pending_approval_tests.rs"]
+mod task_1454_pending_approval_tests;
 
 // The orphaned-In-Progress detection → `aida awaiting` mapping.
 // trace:BUG-1523 | ai:claude
@@ -60127,6 +60420,16 @@ enum SeatActivity {
     /// No session transcript could be resolved/read for this pid at all —
     /// honestly "don't know", never guessed as Working.
     Unknown,
+    /// TASK-1454: a REAL `Notification(permission_prompt)` hook marker is
+    /// present (and not stale) for this seat's Claude Code session — ground
+    /// truth from Claude Code itself, not an inference from process/
+    /// transcript state. Unlike `LongToolCall`/`Suspended`, this DOES assert
+    /// "blocked on your approval", because it is sourced from the exact
+    /// signal the 2026-09-23 PROXY DECISION said would justify that claim.
+    /// `tool` names the pending tool when the notification message named
+    /// one; `secs` is how long the marker has stood.
+    // trace:TASK-1454 | ai:claude
+    Blocked { tool: Option<String>, secs: i64 },
 }
 
 impl SeatActivity {
@@ -60136,6 +60439,7 @@ impl SeatActivity {
             SeatActivity::LongToolCall { .. } => "long_tool_call",
             SeatActivity::Suspended => "suspended",
             SeatActivity::Unknown => "unknown",
+            SeatActivity::Blocked { .. } => "blocked",
         }
     }
 }
@@ -60255,6 +60559,28 @@ fn classify_seat_activity(
         },
         _ => SeatActivity::Working,
     }
+}
+
+/// TASK-1454: the marker-first wrapper around [`classify_seat_activity`]. A
+/// present (already-filtered-non-stale) pending-approval marker is ground
+/// truth and ALWAYS wins outright over the transcript/proc-state heuristic —
+/// pure and separated out specifically so that priority is unit-testable
+/// without a lease/session-manifest fixture.
+// trace:TASK-1454 | ai:claude
+fn seat_activity_with_marker(
+    marker: Option<&pending_approval::PendingApprovalMarker>,
+    tail: Option<&[String]>,
+    proc_stopped: bool,
+    now: chrono::DateTime<chrono::Utc>,
+) -> SeatActivity {
+    if let Some(marker) = marker {
+        let secs = now.signed_duration_since(marker.since).num_seconds().max(0);
+        return SeatActivity::Blocked {
+            tool: marker.tool.clone(),
+            secs,
+        };
+    }
+    classify_seat_activity(tail, proc_stopped, now)
 }
 
 /// BUG-1553: read only the TAIL of a transcript file — never the whole
@@ -61347,19 +61673,37 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
         .into_iter()
         .filter_map(|m| m.claude_session_id.map(|csid| (m.session_id, csid)))
         .collect();
-    // BUG-1553: the real (transcript-tail + /proc-reading) seat-activity
-    // probe — injected into `build_running_work` the same way every other
-    // real I/O source here is, so the row-building logic stays testable on
-    // fixtures. Reads only the TAIL of the resolved transcript
-    // (`read_transcript_tail`, capped at `TRANSCRIPT_TAIL_BYTES`), never the
-    // whole file. trace:BUG-1553 | ai:claude
+    // TASK-1454: active (non-stale) pending-approval markers, keyed by the
+    // Claude Code session id they were recorded for. `list_active` is cheap
+    // when nothing is blocked (the overwhelming common case — a single
+    // `read_dir` on a directory that's usually empty), so building this map
+    // up front costs nothing extra on a quiet `aida ps`.
+    // trace:TASK-1454 | ai:claude
+    let pending_approvals: std::collections::HashMap<
+        String,
+        pending_approval::PendingApprovalMarker,
+    > = pending_approval::list_active(project_root, now)
+        .into_iter()
+        .map(|m| (m.session_id.clone(), m))
+        .collect();
+    // BUG-1553 / TASK-1454: the real (marker-first, then transcript-tail +
+    // /proc-reading) seat-activity probe — injected into `build_running_work`
+    // the same way every other real I/O source here is, so the row-building
+    // logic stays testable on fixtures. A recorded pending-approval marker is
+    // ground truth and wins outright; only when none exists does this fall
+    // back to reading the TAIL of the resolved transcript
+    // (`read_transcript_tail`, capped at `TRANSCRIPT_TAIL_BYTES`, never the
+    // whole file). trace:BUG-1553 trace:TASK-1454 | ai:claude
     let seat_activity_probe = |l: &SessionLease, pid: u32| -> SeatActivity {
+        let marker = manifest_claude_session_ids
+            .get(&l.id)
+            .and_then(|csid| pending_approvals.get(csid));
         let tail = manifest_claude_session_ids.get(&l.id).and_then(|csid| {
             aida_core::liveness::claude_projects_dir_for_cwd(&l.worktree_path)
                 .map(|dir| dir.join(format!("{csid}.jsonl")))
         });
         let tail_lines = tail.and_then(|path| read_transcript_tail(&path, TRANSCRIPT_TAIL_BYTES));
-        classify_seat_activity(tail_lines.as_deref(), proc_is_stopped(pid), now)
+        seat_activity_with_marker(marker, tail_lines.as_deref(), proc_is_stopped(pid), now)
     };
 
     // The store gives us (a) the set of known spec ids (so a lease scope can be
@@ -61445,6 +61789,41 @@ fn orphaned_in_progress_items(
             spec_id: o.spec,
             title: o.title,
             abandoned: o.stale_lease,
+        })
+        .collect()
+}
+
+/// TASK-1454: `aida awaiting`'s view of every LIVE seat `aida ps` classifies
+/// `SeatActivity::Blocked` — reuses `gather_running_work` verbatim (the same
+/// marker-first classifier `seat_activity_probe` applies), so there is
+/// exactly ONE place that decides "is this seat blocked," not a second
+/// implementation drifting from the first.
+///
+/// Cheap on EVERY caller, including the per-turn notice-fast path: it starts
+/// with [`pending_approval::list_active`], a single local directory read
+/// that is empty on the overwhelming majority of turns (nothing is ever
+/// blocked most of the time) — that empty case returns immediately with no
+/// lease scan, no `/proc` probe, no store read at all. Only when a marker
+/// genuinely exists does this pay `gather_running_work`'s heavier
+/// lease-resolution cost, and that is exactly the rare, actionable moment
+/// where paying it is worth it.
+// trace:TASK-1454 | ai:claude
+fn collect_blocked_seat_items(
+    project_root: &std::path::Path,
+) -> Vec<awaiting_you::BlockedSeatItem> {
+    if pending_approval::list_active(project_root, chrono::Utc::now()).is_empty() {
+        return Vec::new();
+    }
+    let (rows, _orphans) = gather_running_work(project_root);
+    rows.into_iter()
+        .filter_map(|row| match row.activity {
+            Some(SeatActivity::Blocked { tool, secs }) => Some(awaiting_you::BlockedSeatItem {
+                session_id: row.lease.id.clone(),
+                spec: row.spec.clone().or(Some(row.lease.scope.clone())),
+                tool,
+                since_label: humanize_duration_secs(secs.max(0) as u64),
+            }),
+            _ => None,
         })
         .collect()
 }
@@ -61746,16 +62125,20 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     // to probe); otherwise "attributed" / "unattributed" /
                     // "unknown" — never collapsed to a boolean "fine".
                     "mail_identity": row.mail_identity.map(MailIdentityStatus::as_str),
-                    // BUG-1553: "working" / "long_tool_call" / "suspended" /
-                    // "unknown", null when no live pid backs the row
-                    // (nothing to classify).
+                    // BUG-1553 / TASK-1454: "working" / "long_tool_call" /
+                    // "suspended" / "unknown" / "blocked", null when no live
+                    // pid backs the row (nothing to classify). "blocked" is
+                    // the only value sourced from ground truth (the
+                    // Notification hook marker) rather than a heuristic.
                     "activity": row.activity.as_ref().map(SeatActivity::label),
                     "activity_pending_tool": match &row.activity {
-                        Some(SeatActivity::LongToolCall { tool, .. }) => tool.clone(),
+                        Some(SeatActivity::LongToolCall { tool, .. })
+                        | Some(SeatActivity::Blocked { tool, .. }) => tool.clone(),
                         _ => None,
                     },
                     "activity_secs": match &row.activity {
-                        Some(SeatActivity::LongToolCall { secs, .. }) => Some(*secs),
+                        Some(SeatActivity::LongToolCall { secs, .. })
+                        | Some(SeatActivity::Blocked { secs, .. }) => Some(*secs),
                         _ => None,
                     },
                 })
@@ -62078,14 +62461,24 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             // BUG-1553 (2026-09-23 PROXY DECISION): neither `LongToolCall`
             // nor `Suspended` overrides this cell's color/text — a purely
             // time-based or process-state heuristic cannot assert "blocked
-            // on your approval", so the `live` cell always keeps its
-            // ordinary Live/Dormant/Stale coloring; the neutral/warning
+            // on your approval", so the `live` cell keeps its ordinary
+            // Live/Dormant/Stale coloring for those; the neutral/warning
             // activity note prints as an extra line below instead.
-            // trace:BUG-1553 | ai:claude
-            let live_col = match row.state {
-                LeaseState::Live => live_label.green(),
-                LeaseState::Dormant => live_label.cyan(),
-                LeaseState::Stale => live_label.yellow(),
+            // `SeatActivity::Blocked` is different: it is a REAL
+            // Notification-hook marker, not a heuristic, so THIS is the
+            // ground-truth case the proxy decision deferred — it DOES
+            // override the cell, loudly, naming the state "Blocked"
+            // instead of "Live" so it reads as visually distinct, not a
+            // footnote (BUG-1553 AC1). trace:BUG-1553 trace:TASK-1454 | ai:claude
+            let live_col = match &row.activity {
+                Some(SeatActivity::Blocked { .. }) => {
+                    format!("{} Blocked", crate::glyph(crate::glyphs::Glyph::Blocked)).red()
+                }
+                _ => match row.state {
+                    LeaseState::Live => live_label.green(),
+                    LeaseState::Dormant => live_label.cyan(),
+                    LeaseState::Stale => live_label.yellow(),
+                },
             };
             // TASK-1143: the worktree lock owner, blank when unlocked. Plain
             // text (paddable), so it slots into the fixed-width table before the
@@ -62197,6 +62590,19 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         " ".repeat(11),
                         crate::glyph(crate::glyphs::Glyph::Neutral),
                         "activity".dimmed()
+                    );
+                }
+                // TASK-1454: ground truth from the Notification hook — loud
+                // and named, since a human is the only one who can unblock
+                // this seat right now (BUG-1553's whole motivation).
+                Some(SeatActivity::Blocked { tool, secs }) => {
+                    let what = tool.as_deref().unwrap_or("a tool call");
+                    println!(
+                        "{}{} {}: {what} — waiting {}",
+                        " ".repeat(11),
+                        crate::glyph(crate::glyphs::Glyph::Blocked),
+                        "blocked on your approval".red().bold(),
+                        humanize_duration_secs(*secs as u64),
                     );
                 }
                 Some(SeatActivity::Working) | None => {}
@@ -74487,6 +74893,11 @@ fn collect_awaiting_report_inner(
         })
     };
 
+    // TASK-1454: cheap on every path (see doc comment) — computed
+    // unconditionally, including on the notice-fast path, unlike
+    // `orphaned_in_progress` above.
+    let blocked_seats = collect_blocked_seat_items(project_root);
+
     awaiting_you::AwaitingReport {
         mergeable_prs,
         recusal_holds,
@@ -74508,6 +74919,7 @@ fn collect_awaiting_report_inner(
         nightly_red,
         pr_attribution_disagreements,
         orphaned_in_progress,
+        blocked_seats,
         // trace:BUG-1530 | ai:claude — the seat this session reads as, so the
         // headline (render) and per-turn compact line can scope themselves
         // to channels this seat can act on.

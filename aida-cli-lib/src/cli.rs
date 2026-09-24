@@ -170,10 +170,14 @@ pub enum InternalCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum MergeHoldAction {
-    /// List active merge-hold markers. Each row is the held PR + the hold
-    /// reason; a PR that has already merged is flagged `[stale — PR merged]`
-    /// so a phantom marker left by a direct merge is obvious at a glance.
-    // trace:TASK-161 | ai:claude
+    /// List every active merge-hold: marker-backed holds AND holds that exist
+    /// only as the `aida:merge-hold` label (shown as `label-only (no marker)`).
+    /// Each row is the held PR + the hold reason. A marker whose PR merged or
+    /// closed without merging is flagged stale; a marker whose stated premise
+    /// has moved (the PR head passed the commit it cites, or a rework hold's
+    /// verdict is now approved or closed) is flagged `premise stale` for a
+    /// human to judge — nothing is cleared automatically.
+    // trace:TASK-161 trace:BUG-1469 trace:BUG-1562 | ai:claude
     List {
         /// Machine-readable JSON output.
         #[clap(long)]
@@ -217,13 +221,16 @@ pub enum MergeHoldAction {
         head: Option<String>,
     },
     /// Clear a merge-hold: remove the marker file and drop the
-    /// `aida:merge-hold` label, releasing the PR for merge. Give a PR number,
-    /// or `--stale` to sweep every marker whose PR has already merged.
-    // trace:TASK-161 | ai:claude
+    /// `aida:merge-hold` label, releasing the PR for merge. A hold that exists
+    /// only as the label is cleared the same way and the clearance recorded.
+    /// Give a PR number, or `--stale` to sweep every marker whose PR can never
+    /// merge (merged, or closed without merging).
+    // trace:TASK-161 trace:BUG-1499 trace:BUG-1541 | ai:claude
     Clear {
         /// PR number whose hold to clear.
         pr: Option<u64>,
-        /// Clear every marker whose PR has already merged (phantom holds).
+        /// Clear every marker whose PR has merged or was closed without
+        /// merging (phantom holds). A PR whose state cannot be read is kept.
         #[clap(long)]
         stale: bool,
     },
@@ -1362,6 +1369,34 @@ pub enum SessionCommand {
     HarnessWorktreeRelease {
         #[clap(long)]
         agent_id: String,
+    },
+
+    /// Record that a live seat is blocked on an unanswered permission
+    /// prompt — written by the Notification(permission_prompt) hook.
+    /// Internal; never called by hand.
+    // trace:TASK-1454 | ai:claude
+    #[clap(hide = true)]
+    PendingApprovalSet {
+        /// The Claude Code session id the Notification hook fired for.
+        #[clap(long)]
+        session: String,
+        /// The tool name Claude Code is asking permission for, when known.
+        #[clap(long)]
+        tool: Option<String>,
+        /// The raw notification message, for debugging.
+        #[clap(long)]
+        message: Option<String>,
+    },
+
+    /// Clear a session's pending-approval marker (if any) — written by the
+    /// UserPromptSubmit/PostToolUse hooks once the block has resolved.
+    /// Internal; never called by hand.
+    // trace:TASK-1454 | ai:claude
+    #[clap(hide = true)]
+    PendingApprovalClear {
+        /// The Claude Code session id to clear.
+        #[clap(long)]
+        session: String,
     },
 
     /// End a scoped session: remove the worktree, delete the lease,

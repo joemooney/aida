@@ -150,6 +150,17 @@ pub(crate) struct AwaitingReport {
     /// (which must stay local and fast, no full-store load) leaves it empty.
     // trace:BUG-1564 | ai:claude
     pub orphaned_in_progress: Vec<OrphanedInProgressItem>,
+    /// TASK-1454: LIVE seats confirmed blocked on an unanswered permission
+    /// prompt (BUG-1553's "the blocked state is the only one a human can
+    /// fix"). Sourced from the `Notification(permission_prompt)` hook's
+    /// on-disk marker, not a heuristic — so unlike most of the other
+    /// heavier-probe channels above, this stays CHEAP on the notice-fast
+    /// path: the marker directory is empty on the overwhelming majority of
+    /// turns, and only the rare non-empty case pays the lease-resolution
+    /// cost (`aida ps`'s own `gather_running_work`, reused verbatim so
+    /// there is exactly one Blocked classifier).
+    // trace:TASK-1454 | ai:claude
+    pub blocked_seats: Vec<BlockedSeatItem>,
     /// BUG-1530: the reading seat's session role (`AIDA_SESSION_ROLE` / the
     /// role file), as the caller already resolves it for every other
     /// role-scoped surface. Drives which channels the headline (`render`)
@@ -266,6 +277,21 @@ pub(crate) struct OrphanedInProgressItem {
     pub spec_id: String,
     pub title: String,
     pub abandoned: bool,
+    pub since_label: String,
+}
+
+/// TASK-1454: one LIVE seat confirmed blocked on a human approval gate — the
+/// `aida awaiting` projection of a `Blocked`-activity `aida ps` row. `spec`
+/// is the lease's scope when it resolves to one (`None` for a generic
+/// harness-worktree fan-out lease, mirroring `PsRow.spec`'s own honesty
+/// about scope-unknown rows); `session_id` is always present as the
+/// fallback identifier.
+// trace:TASK-1454 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct BlockedSeatItem {
+    pub session_id: String,
+    pub spec: Option<String>,
+    pub tool: Option<String>,
     pub since_label: String,
 }
 
@@ -1360,6 +1386,8 @@ impl AwaitingReport {
             } else {
                 0
             })
+            // trace:TASK-1454 | ai:claude
+            + self.blocked_seats.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -1409,6 +1437,32 @@ impl AwaitingReport {
         // can be MERGED (a stale refusal just wastes a re-review round), so
         // it outranks even the STORY-1419 rework-ready row below it.
         // trace:BUG-1549 | ai:claude
+        // TASK-1454: a seat confirmed blocked on YOUR approval, right now,
+        // renders first of everything — this is BUG-1553's whole point: the
+        // work is stopped and the fix is one keystroke by a person who may
+        // not know they're the blocker. Ground truth (a Notification-hook
+        // marker), not a heuristic, so it earns top billing ahead of even
+        // the PR-review channels below.
+        // trace:TASK-1454 | ai:claude
+        for item in &self.blocked_seats {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            let scope = item.spec.clone().unwrap_or_else(|| item.session_id.clone());
+            let tool = item.tool.as_deref().unwrap_or("a tool call");
+            writeln!(
+                w,
+                "  {} {} blocked on your approval: {} — waiting {} — `{}`",
+                crate::glyph(crate::glyphs::Glyph::Blocked).red(),
+                scope.bold(),
+                tool,
+                item.since_label,
+                "aida ps".cyan(),
+            )?;
+            budget -= 1;
+        }
+
         // trace:BUG-1549 | ai:claude — a live refusal is why the PR is not in
         // the mergeable list; say so rather than letting it silently vanish.
         for item in &self.blocked_reviews {
@@ -2076,6 +2130,13 @@ impl AwaitingReport {
                 "abandoned": o.abandoned,
                 "since_label": o.since_label,
             })).collect::<Vec<_>>(),
+            // trace:TASK-1454 | ai:claude
+            "blocked_seats": self.blocked_seats.iter().map(|b| serde_json::json!({
+                "session_id": b.session_id,
+                "spec": b.spec,
+                "tool": b.tool,
+                "since_label": b.since_label,
+            })).collect::<Vec<_>>(),
         })
     }
 
@@ -2102,6 +2163,16 @@ impl AwaitingReport {
         let show_reviewer = owned_channel_visible(seat, AwaitingSeat::Reviewer);
         let mut hidden_other_seat = 0usize;
         let mut parts: Vec<String> = Vec::new();
+        // trace:TASK-1454 | ai:claude — leads the compact line too: a
+        // blocked seat is the single most time-sensitive item this notice
+        // can carry (work is stopped RIGHT NOW on your keystroke).
+        if !self.blocked_seats.is_empty() {
+            parts.push(pluralize(
+                self.blocked_seats.len(),
+                "BLOCKED seat",
+                "BLOCKED seats",
+            ));
+        }
         if !self.mergeable_prs.is_empty() {
             parts.push(pluralize(self.mergeable_prs.len(), "PR", "PRs"));
         }
@@ -3561,6 +3632,76 @@ mod tests {
         assert_eq!(json["orphaned_in_progress"][0]["spec_id"], "BUG-9001");
         assert_eq!(json["orphaned_in_progress"][0]["abandoned"], true);
         assert_eq!(json["orphaned_in_progress"][1]["abandoned"], false);
+    }
+
+    // trace:TASK-1454 | ai:claude
+    #[test]
+    fn blocked_seats_render_first_json_and_compact_line() {
+        let r = AwaitingReport {
+            blocked_seats: vec![BlockedSeatItem {
+                session_id: "sess-abc".to_string(),
+                spec: Some("TASK-1454".to_string()),
+                tool: Some("Bash".to_string()),
+                since_label: "3m".to_string(),
+            }],
+            // A lower-priority channel alongside it, to prove ordering.
+            mergeable_prs: vec![MergeablePrItem {
+                number: 42,
+                title: "some PR".to_string(),
+                head_branch: "some-branch".to_string(),
+                ci_rollup: Some("pass".to_string()),
+                under_review: None,
+            }],
+            ..Default::default()
+        };
+        assert_eq!(r.total(), 2);
+        let line = r
+            .compact_line()
+            .expect("blocked seat yields a per-turn line");
+        assert!(line.contains("1 BLOCKED seat"), "compact line: {line}");
+        // Ordering: the blocked seat leads the compact line, ahead of PRs.
+        assert!(
+            line.find("BLOCKED seat").unwrap() < line.find("PR").unwrap(),
+            "compact line: {line}"
+        );
+
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(
+            s.contains("TASK-1454") && s.contains("blocked on your approval: Bash"),
+            "{s}"
+        );
+        assert!(s.contains("waiting 3m"), "{s}");
+        // Ordering in the rendered text too: the blocked-seat line must
+        // appear before the PR line.
+        let blocked_pos = s.find("blocked on your approval").unwrap();
+        let pr_pos = s.find("PR-42").unwrap();
+        assert!(blocked_pos < pr_pos, "{s}");
+
+        let json = r.to_json();
+        assert_eq!(json["blocked_seats"][0]["session_id"], "sess-abc");
+        assert_eq!(json["blocked_seats"][0]["spec"], "TASK-1454");
+        assert_eq!(json["blocked_seats"][0]["tool"], "Bash");
+    }
+
+    // trace:TASK-1454 | ai:claude
+    #[test]
+    fn blocked_seat_with_no_resolved_spec_falls_back_to_session_id() {
+        let r = AwaitingReport {
+            blocked_seats: vec![BlockedSeatItem {
+                session_id: "sess-xyz".to_string(),
+                spec: None,
+                tool: None,
+                since_label: "45s".to_string(),
+            }],
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(s.contains("sess-xyz"), "{s}");
+        assert!(s.contains("a tool call"), "{s}");
     }
 
     // trace:TASK-1305 | ai:claude
