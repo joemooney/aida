@@ -35,6 +35,23 @@ use std::path::{Path, PathBuf};
 /// project BELOW a temp root (e.g. `/tmp/real-project/.aida`); only the temp
 /// root itself is off-limits.
 ///
+/// The guarded call sites, as of this writing (keep this list current when
+/// adding a new `.aida`-looking-for walk-up — that's the "every walk-up"
+/// claim above, made checkable):
+/// - `aida-core`: [`detect_distributed_store_from`],
+///   `CachedGitBackend::default_cache_path`.
+/// - `aida-cli-lib`: `distributed_mode_declared_from`,
+///   `find_aida_project_root_from`, `config_toml_exists_upward` (BUG-1574's
+///   fail-open carve-out — see its doc comment for why disagreeing with
+///   `detect_distributed_store_from` here specifically flips a refusal the
+///   wrong way), `parent_project_root_for_session`.
+/// - `aida-tui`: `lib.rs::ensure_project_context`,
+///   `launcher.rs::ensure_project_context`, `dashboard.rs::project_root_of`,
+///   `redesign/mail.rs::resolve_project_root` (its `.git`/`.aida` fallback;
+///   its primary path already routes through the guarded
+///   `resolve_project_root_from`), `redesign/store.rs::resolve_store_path`,
+///   `config.rs::find_project_root`.
+///
 /// The real temp roots ([`real_temp_roots`]) are `std::env::temp_dir()` (so
 /// `$TMPDIR`, a sandboxed session's redirect, or CI's `RUNNER_TEMP`-backed
 /// override is always covered) PLUS the fixed, well-known Unix roots
@@ -46,7 +63,7 @@ use std::path::{Path, PathBuf};
 /// exists for.
 // trace:BUG-1598 | ai:claude
 pub fn is_system_temp_dir(path: &Path) -> bool {
-    is_temp_root_in(path, &real_temp_roots())
+    is_in_canonical_roots(path, canonical_temp_roots())
 }
 
 /// The fixed set of directories that must never be adopted as a project
@@ -65,21 +82,60 @@ pub fn real_temp_roots() -> Vec<PathBuf> {
     roots
 }
 
+/// [`real_temp_roots`], canonicalized once and cached for the life of the
+/// process. `std::env::temp_dir()` (and thus the real root set) does not
+/// change during a running process in practice, so every walk-up that
+/// guards against the REAL temp roots via [`is_system_temp_dir`]
+/// canonicalizes the root set ONCE total for the whole process, never once
+/// per ancestor level. Perf follow-up to the round-1 fix, which
+/// canonicalized `roots` freshly on every [`is_temp_root_in`] call (i.e. on
+/// every level of every walk-up).
+// trace:BUG-1598 | ai:claude
+pub fn canonical_temp_roots() -> &'static [PathBuf] {
+    static ROOTS: std::sync::OnceLock<Vec<PathBuf>> = std::sync::OnceLock::new();
+    ROOTS.get_or_init(|| canonicalize_roots(&real_temp_roots()))
+}
+
+/// Canonicalize each of `roots`, falling back to the raw path per-element
+/// when `canonicalize` fails (e.g. a listed root like `/private/tmp` that
+/// doesn't exist on this host). The "once per walk" half of the guard: a
+/// `*_with_roots` walk-up loop calls this ONCE, before iterating, then
+/// checks each ancestor with [`is_in_canonical_roots`] (which canonicalizes
+/// only the path side).
+// trace:BUG-1598 | ai:claude
+pub fn canonicalize_roots(roots: &[PathBuf]) -> Vec<PathBuf> {
+    roots
+        .iter()
+        .map(|r| r.canonicalize().unwrap_or_else(|_| r.clone()))
+        .collect()
+}
+
+/// Is `path` one of `canonical_roots`, which the caller has ALREADY
+/// canonicalized (via [`canonicalize_roots`] or [`canonical_temp_roots`])?
+/// Canonicalizes only `path` — the cheap, per-ancestor-level half of the
+/// guard. Falls back to the raw path when `path` doesn't (yet) exist, e.g.
+/// canonicalize fails for it.
+// trace:BUG-1598 | ai:claude
+pub fn is_in_canonical_roots(path: &Path, canonical_roots: &[PathBuf]) -> bool {
+    let canon_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    canonical_roots.contains(&canon_path)
+}
+
 /// Is `path` one of `roots`? Canonicalizes both sides before comparing (so a
-/// symlinked root, e.g. macOS `/tmp` -> `/private/tmp`, still matches),
-/// falling back to the raw path on either side when `canonicalize` fails
-/// (e.g. a listed root like `/private/tmp` that doesn't exist on this host).
+/// symlinked root, e.g. macOS `/tmp` -> `/private/tmp`, still matches).
+/// Convenience for a ONE-OFF check (a single test assertion, a call site
+/// that isn't a loop) — canonicalizes `roots` fresh on every call, so a
+/// walk-up loop must NOT call this per ancestor level. Use
+/// [`canonicalize_roots`] once before the loop plus [`is_in_canonical_roots`]
+/// per level instead (see any `*_with_roots` walk-up in this codebase for
+/// the pattern).
 ///
 /// Roots are passed in rather than hardcoded so callers — and tests — can
 /// exercise the guard against a fake root without mutating process-global
-/// env state (`TMPDIR`) or touching the real, shared system temp dir. The
-/// public, no-argument callers ([`is_system_temp_dir`],
-/// `CachedGitBackend::default_cache_path`) supply [`real_temp_roots`].
+/// env state (`TMPDIR`) or touching the real, shared system temp dir.
 // trace:BUG-1598 | ai:claude
 pub fn is_temp_root_in(path: &Path, roots: &[PathBuf]) -> bool {
-    let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
-    let canon_path = canon(path);
-    roots.iter().any(|root| canon_path == canon(root))
+    is_in_canonical_roots(path, &canonicalize_roots(roots))
 }
 
 /// Classification of a candidate store path: either it resolves to a usable
@@ -213,11 +269,15 @@ fn detect_distributed_store_from_with_roots(
     start: &Path,
     temp_roots: &[PathBuf],
 ) -> Option<PathBuf> {
+    // Canonicalize the root set ONCE, before the loop — not on every
+    // ancestor level (`is_in_canonical_roots` below only canonicalizes the
+    // per-level `current`, which can't be hoisted out of the loop).
+    let canonical_roots = canonicalize_roots(temp_roots);
     let mut current = start;
     loop {
         // BUG-1598: never walk INTO a temp root and adopt whatever
         // `.aida/config.toml` some unrelated process left sitting there.
-        if is_temp_root_in(current, temp_roots) {
+        if is_in_canonical_roots(current, &canonical_roots) {
             return None;
         }
         let config_path = current.join(".aida").join("config.toml");

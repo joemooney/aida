@@ -12915,9 +12915,12 @@ fn distributed_mode_declared_from_with_roots(
     start: &std::path::Path,
     temp_roots: &[std::path::PathBuf],
 ) -> Option<std::path::PathBuf> {
+    // Canonicalize the root set ONCE, before the loop — not on every
+    // ancestor level.
+    let canonical_roots = aida_core::store_locate::canonicalize_roots(temp_roots);
     let mut current = start;
     loop {
-        if aida_core::store_locate::is_temp_root_in(current, temp_roots) {
+        if aida_core::store_locate::is_in_canonical_roots(current, &canonical_roots) {
             return None;
         }
         let config_path = current.join(".aida").join("config.toml");
@@ -31191,6 +31194,12 @@ pub(crate) fn parent_project_root_for_session(cwd: &std::path::Path) -> Option<s
     let canon = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
     let mut probe = canon.as_path();
     loop {
+        // BUG-1598: never adopt a temp root itself as the project root —
+        // see `aida_core::store_locate` for the shared rationale.
+        // trace:BUG-1598 | ai:claude
+        if aida_core::store_locate::is_system_temp_dir(probe) {
+            return None;
+        }
         if probe.join(".aida").join("sessions").is_dir() {
             let lease = active_lease_for_cwd(probe, &canon)?;
             return lease.parent_project_root;
@@ -89753,8 +89762,37 @@ pub(crate) fn unattended_git_mutation_refusal_for(
 /// the store/spec is a genuine problem, not an absence, and must fail
 /// closed (refuse), never silently read as "nothing to check".
 pub(crate) fn config_toml_exists_upward(project_root: &std::path::Path) -> bool {
+    config_toml_exists_upward_with_roots(project_root, &aida_core::store_locate::real_temp_roots())
+}
+
+/// [`config_toml_exists_upward`], parameterized on the temp roots to guard
+/// against.
+///
+/// BUG-1598: must agree with `detect_distributed_store_from` on where the
+/// walk-up stops. Without this guard, a stray `.aida/config.toml` sitting
+/// directly in a temp root makes this function report `true` (an
+/// AIDA-managed project root exists) while the now-guarded
+/// `detect_distributed_store_from` correctly refuses to resolve a store
+/// from it — `unattended_git_mutation_refusal` then falls through PAST its
+/// only fail-open carve-out (this function returning `false`) and fails
+/// CLOSED (refuses the mutation) for a project that, from
+/// `unattended_git_mutation_refusal`'s point of view, has no AIDA config at
+/// all. Factored out as `_with_roots` so a test can exercise the guard
+/// against a fake root without mutating `TMPDIR` or touching the real,
+/// shared system temp dir.
+// trace:BUG-1598 | ai:claude
+fn config_toml_exists_upward_with_roots(
+    project_root: &std::path::Path,
+    temp_roots: &[std::path::PathBuf],
+) -> bool {
+    // Canonicalize the root set ONCE, before the loop — not on every
+    // ancestor level.
+    let canonical_roots = aida_core::store_locate::canonicalize_roots(temp_roots);
     let mut current = project_root;
     loop {
+        if aida_core::store_locate::is_in_canonical_roots(current, &canonical_roots) {
+            return false;
+        }
         if current.join(".aida").join("config.toml").is_file() {
             return true;
         }
@@ -90092,6 +90130,46 @@ mod bug_1574_unattended_git_mutation_tests {
         // against. The ONLY fail-open case.
         let dir = tempfile::tempdir().unwrap();
         assert!(unattended_git_mutation_refusal(dir.path(), "TASK-1274", "test", None).is_none());
+    }
+
+    /// BUG-1598: `config_toml_exists_upward` must agree with
+    /// `detect_distributed_store_from` on where the walk-up stops — a stray
+    /// `.aida/config.toml` sitting directly in a temp root must NOT make
+    /// this function report `true` (which would push
+    /// `unattended_git_mutation_refusal` past its only fail-open carve-out
+    /// and refuse a mutation for a project that has no real AIDA config at
+    /// all). A FAKE temp root (a plain tempdir, injected — never `TMPDIR`,
+    /// never the real shared `/tmp`) holds a planted `.aida/config.toml`
+    /// directly at its own root; a fixture one level under it must not see
+    /// it.
+    // trace:BUG-1598 | ai:claude
+    #[test]
+    fn config_toml_exists_upward_never_adopts_a_temp_root() {
+        let fake_temp_root = tempfile::tempdir().unwrap();
+        let roots = vec![fake_temp_root.path().to_path_buf()];
+
+        std::fs::create_dir_all(fake_temp_root.path().join(".aida")).unwrap();
+        std::fs::write(
+            fake_temp_root.path().join(".aida").join("config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+
+        let nested = fake_temp_root.path().join("a").join("b");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        assert!(
+            !config_toml_exists_upward_with_roots(&nested, &roots),
+            "must never report a temp root's ambient .aida/config.toml as an AIDA project root"
+        );
+
+        // Sanity check: WITHOUT the guard (empty roots list), the same
+        // fixture DOES report true — proving the guard, not some other
+        // difference, is what suppresses the false positive above.
+        assert!(
+            config_toml_exists_upward_with_roots(&nested, &[]),
+            "fixture must be adoptable when nothing is guarded, or this test proves nothing"
+        );
     }
 
     #[test]

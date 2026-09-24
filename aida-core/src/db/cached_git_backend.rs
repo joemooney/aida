@@ -84,6 +84,9 @@ impl CachedGitBackend {
     /// touching the real, shared system temp dir.
     // trace:BUG-1598 | ai:claude
     fn default_cache_path_with_roots(git_root: &Path, temp_roots: &[PathBuf]) -> PathBuf {
+        // Canonicalize the root set ONCE, before the loop — not on every
+        // ancestor level.
+        let canonical_roots = crate::store_locate::canonicalize_roots(temp_roots);
         let mut probe = match git_root.parent() {
             Some(p) => p.to_path_buf(),
             None => return git_root.with_extension("cache.db"),
@@ -96,7 +99,7 @@ impl CachedGitBackend {
             // anything else on the machine ever left a `.aida/` sitting
             // there, silently share/corrupt that cache instead of falling
             // through to its own sibling file below.
-            if crate::store_locate::is_temp_root_in(&probe, temp_roots) {
+            if crate::store_locate::is_in_canonical_roots(&probe, &canonical_roots) {
                 break;
             }
             if probe.join(".aida").is_dir() {
