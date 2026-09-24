@@ -814,6 +814,7 @@ fn normalize_upgrade_mode(check: bool, diff: bool, cmd: Option<&UpgradeCommand>)
 }
 
 // trace:STORY-1028 | ai:codex
+#[allow(clippy::type_complexity)]
 fn normalize_usage_mode<'a>(
     unused: Option<&'a str>,
     errors: bool,
@@ -824,12 +825,24 @@ fn normalize_usage_mode<'a>(
     slowest: bool,
     events: bool,
     action: Option<&'a UsageCommand>,
-) -> (Option<&'a str>, bool, bool, bool, bool, bool, bool, bool) {
+) -> (
+    Option<&'a str>,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+) {
     match action {
         Some(UsageCommand::Rebuild { .. } | UsageCommand::Show { .. }) => {
-            (None, false, false, false, false, false, false, false)
+            (None, false, false, false, false, false, false, false, false)
         }
-        Some(UsageCommand::Slowest) => (None, false, false, false, false, false, true, false),
+        Some(UsageCommand::Slowest) => {
+            (None, false, false, false, false, false, true, false, false)
+        }
         Some(UsageCommand::Unused { duration }) => (
             Some(duration.as_str()),
             false,
@@ -839,13 +852,20 @@ fn normalize_usage_mode<'a>(
             false,
             false,
             false,
+            false,
         ),
-        Some(UsageCommand::Errors) => (None, true, false, false, false, false, false, false),
-        Some(UsageCommand::Events) => (None, false, false, false, false, false, false, true),
-        Some(UsageCommand::Drains { failures, pattern }) => {
-            (None, false, true, *failures, *pattern, false, false, false)
+        Some(UsageCommand::Errors) => (None, true, false, false, false, false, false, false, false),
+        Some(UsageCommand::Events) => (None, false, false, false, false, false, false, true, false),
+        // TASK-1481: `aida usage timeline` — the compact one-line-per-invocation
+        // view. Brand new surface (no legacy flag predates it), so it's
+        // subcommand-only: no hidden `--timeline` alias to normalize.
+        Some(UsageCommand::Timeline) => {
+            (None, false, false, false, false, false, false, false, true)
         }
-        Some(UsageCommand::Health) => (None, false, false, false, false, true, false, false),
+        Some(UsageCommand::Drains { failures, pattern }) => (
+            None, false, true, *failures, *pattern, false, false, false, false,
+        ),
+        Some(UsageCommand::Health) => (None, false, false, false, false, true, false, false, false),
         None => {
             if slowest {
                 note_hidden_alias(concat!("aida usage ", "--slowest"), "aida usage slowest");
@@ -877,6 +897,7 @@ fn normalize_usage_mode<'a>(
                 health,
                 slowest,
                 events,
+                false,
             )
         }
     }
@@ -1779,6 +1800,22 @@ mod story_1028_mode_alias_tests {
                 false,
                 Some(&UsageCommand::Health)
             )
+        );
+        // TASK-1481: `timeline` is subcommand-only (no legacy flag predates
+        // it) — assert it flips only the new 9th (timeline) slot.
+        assert_eq!(
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Timeline)
+            ),
+            (None, false, false, false, false, false, false, false, true)
         );
     }
 }
@@ -5423,18 +5460,27 @@ fn run() -> Result<()> {
             // (to resolve drafted-BUG statuses) — keep plain `aida usage`
             // store-load-free. STORY-530: the `--health` catalog also needs
             // the store for draft-inbox depth + burn-down velocity.
-            let (unused, errors, auto_complete, failures, pattern, health, slowest, events) =
-                normalize_usage_mode(
-                    unused.as_deref(),
-                    *errors,
-                    *auto_complete,
-                    *failures,
-                    *pattern,
-                    *health,
-                    *slowest,
-                    *events,
-                    action.as_ref(),
-                );
+            let (
+                unused,
+                errors,
+                auto_complete,
+                failures,
+                pattern,
+                health,
+                slowest,
+                events,
+                timeline,
+            ) = normalize_usage_mode(
+                unused.as_deref(),
+                *errors,
+                *auto_complete,
+                *failures,
+                *pattern,
+                *health,
+                *slowest,
+                *events,
+                action.as_ref(),
+            );
             let store = if auto_complete || health {
                 storage.load().ok()
             } else {
@@ -5454,6 +5500,7 @@ fn run() -> Result<()> {
                 *read_write,
                 slowest,
                 events,
+                timeline,
                 cmd.as_deref(),
                 *slower_than,
                 store.as_ref(),
@@ -79755,27 +79802,21 @@ fn rel_should_write_inverse(rel_type: &RelationshipType, bidirectional_flag: boo
     bidirectional_flag || matches!(rel_type, RelationshipType::Parent | RelationshipType::Child)
 }
 
-/// Parse the relationship vocabulary accepted by `aida rel add`.
+/// Parse the relationship vocabulary accepted by `aida rel add` / `aida rel
+/// remove`.
 ///
 /// `related` is the natural spelling for a general link, but storing it as a
-/// custom edge makes the link invisible to standard graph traversal. Keep the
-/// core parser lossless for existing `Custom("related")` data and normalize
-/// only the CLI input to the existing `References` taxonomy member.
-// trace:BUG-1471 | ai:codex
+/// custom edge makes the link invisible to standard graph traversal; this
+/// normalizes it (and the other input-only aliases like `depends-on` /
+/// `verified_by` / `replaced_by`) to the matching standard taxonomy member.
+/// Thin wrapper around the shared parser in aida-core
+/// (`RelationshipType::parse_relationship_type`) so `rel add`, `rel remove`
+/// and the MCP `relationship_type` param all resolve the same spelling the
+/// same way — see that function's doc comment for why it's kept separate
+/// from `RelationshipType::from_str`, the core/Deserialize parser.
+// trace:BUG-1471 | ai:codex trace:BUG-1602 | ai:claude
 fn cli_relationship_type(input: &str) -> RelationshipType {
-    match input.to_lowercase().as_str() {
-        "parent" => RelationshipType::Parent,
-        "child" => RelationshipType::Child,
-        "duplicate" => RelationshipType::Duplicate,
-        "verifies" => RelationshipType::Verifies,
-        "verified-by" | "verifiedby" => RelationshipType::VerifiedBy,
-        "references" | "related" => RelationshipType::References,
-        "blocked-by" | "blocked_by" | "blockedby" => RelationshipType::BlockedBy,
-        "blocks" => RelationshipType::Blocks,
-        "superseded-by" | "superseded_by" | "supersededby" => RelationshipType::SupersededBy,
-        "supersedes" => RelationshipType::Supersedes,
-        other => RelationshipType::Custom(other.to_string()),
-    }
+    RelationshipType::parse_relationship_type(input)
 }
 
 /// Does a stored edge match the `--type` given to `rel remove`?
@@ -80154,6 +80195,14 @@ mod task_928_parent_tag_edge_tests;
 #[cfg(test)]
 #[path = "tests/task_1426_related_edge_migration_tests.rs"]
 mod task_1426_related_edge_migration_tests;
+
+// BUG-1602: handler-level tests of `aida rel remove` itself (typed removal,
+// --bidirectional, the parent/child pair, the legacy Custom-related family)
+// through the real Command::Rel dispatch path — task_1426's tests above only
+// cover the pure `rel_remove_matches` helper. trace:BUG-1602 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1602_rel_remove_handler_tests.rs"]
+mod bug_1602_rel_remove_handler_tests;
 
 // trace:TASK-1468 | ai:claude
 #[cfg(test)]

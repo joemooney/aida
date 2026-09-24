@@ -1256,6 +1256,37 @@ impl RelationshipType {
         }
     }
 
+    /// Parse a relationship-type string as fresh command input — `aida rel
+    /// add --type`, `aida rel remove --type`, and the MCP `relationship_type`
+    /// tool parameter. The single shared parser for those three surfaces
+    /// (BUG-1602): before this they each hand-rolled their own alias table
+    /// and drifted, so a typed `rel remove --type verified_by` or
+    /// `--type depends-on` silently matched nothing even though `rel add`
+    /// (or MCP) accepted the same spelling.
+    ///
+    /// A strict superset of [`RelationshipType::from_str`], adding
+    /// input-only conveniences: `related`/`relates-to`/`relates_to`/
+    /// `relatesto` for [`RelationshipType::References`], `depends-on`/
+    /// `depends_on`/`dependson` for [`RelationshipType::BlockedBy`], and
+    /// `replaced_by`/`replacedby` alongside `from_str`'s existing
+    /// `replaced-by` for [`RelationshipType::SupersededBy`].
+    ///
+    /// Deliberately NOT folded into `from_str`, which also backs
+    /// `Deserialize` for stored data: `related` names an existing legacy
+    /// `Custom("related")` edge (BUG-1471), so `from_str` keeps it as
+    /// `Custom` to avoid silently reclassifying anything already on disk.
+    /// This parser is for interpreting what an operator or agent just typed,
+    /// never for reading back a stored relationship type.
+    // trace:BUG-1602 | ai:claude
+    pub fn parse_relationship_type(s: &str) -> Self {
+        match s.trim().to_lowercase().as_str() {
+            "related" | "relates-to" | "relates_to" | "relatesto" => RelationshipType::References,
+            "depends-on" | "depends_on" | "dependson" => RelationshipType::BlockedBy,
+            "replaced_by" | "replacedby" => RelationshipType::SupersededBy,
+            other => Self::from_str(other),
+        }
+    }
+
     /// Get the inverse relationship type (if applicable)
     pub fn inverse(&self) -> Option<Self> {
         match self {
