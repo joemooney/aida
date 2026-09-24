@@ -38005,11 +38005,37 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
         Some(_) => return CiProbe::NoSignal("gh json PR number was 0".to_string()),
         None => return CiProbe::NoSignal("gh json missing PR number".to_string()),
     };
-    let rollup = pr.get("statusCheckRollup").and_then(|v| v.as_array());
-    let rollup = match rollup {
+    let raw_rollup = pr.get("statusCheckRollup").and_then(|v| v.as_array());
+    let raw_rollup = match raw_rollup {
         Some(r) if !r.is_empty() => r,
         _ => return CiProbe::PrNoChecks { pr_number },
     };
+    // TASK-1424 safety net: the GitLab-mirror-link status is informational
+    // only (it always posts `success`/`pending` — see
+    // `gitlab_mirror_link::post_github_mirror_status` — so a real
+    // failure/pending mirror entry should be unreachable in practice), but
+    // excluding its context here too means a future change to that
+    // invariant still can't shelve or stall a drain on GitLab-mirror
+    // evidence, which is advisory, not a gate. Filtered out BEFORE the
+    // empty-rollup check below (not skipped mid-loop): a PR carrying only
+    // the mirror status must read as "no checks yet" (`PrNoChecks`), not as
+    // a vacuously passing `Green` from an empty tally. Checked by context
+    // (StatusContext shape) or name (CheckRun shape) — whichever the rollup
+    // entry carries.
+    // trace:TASK-1424 | ai:claude
+    let rollup: Vec<&serde_json::Value> = raw_rollup
+        .iter()
+        .filter(|check| {
+            let check_id = check
+                .get("context")
+                .and_then(|v| v.as_str())
+                .or_else(|| check.get("name").and_then(|v| v.as_str()));
+            check_id != Some(crate::gitlab_mirror_link::MIRROR_STATUS_CONTEXT)
+        })
+        .collect();
+    if rollup.is_empty() {
+        return CiProbe::PrNoChecks { pr_number };
+    }
     // Tally check states. statusCheckRollup entries can be from
     // CheckRun (status=COMPLETED|IN_PROGRESS|QUEUED, conclusion=SUCCESS|FAILURE|...)
     // or StatusContext (state=SUCCESS|FAILURE|PENDING|ERROR). Handle both.

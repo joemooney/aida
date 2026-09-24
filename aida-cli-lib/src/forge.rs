@@ -3279,7 +3279,9 @@ pub(crate) fn stream_probe_needs_wait(probe: &CiProbeResult) -> bool {
     matches!(probe, CiProbeResult::InProgress { .. })
 }
 
-fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
+// trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link can reuse this
+// mapper for a sha-filtered pipeline query instead of a second implementation.
+pub(crate) fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
     let none = || CiStatus {
         state: CiState::None,
         url: None,
