@@ -3,12 +3,12 @@ spec_id: TASK-1477
 agreed_id: TASK-1477
 title: Stamp completed_at on manual completions (aida edit --status completed, done, queue close, promote) via completion::mark_completed
 description: 'From the TASK-1474 review: only the five merge-driven auto-bump paths stamp implementation_info.completed_at. Manual completions don''t (aida edit --status completed, git_backend_cmd.rs ~5711; aida done; queue close; promote), so they fall back to modified_at and later edits reorder --sort completed. Stamp completed_at inside completion::mark_completed (completion.rs:29), the STORY-1418 seam, so every into-Completed path gets it once.'
-status: Approved
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T10:41:00.020275361Z
-modified_at: 2026-09-24T10:41:07.157760101Z
+modified_at: 2026-09-24T11:18:19.980512376Z
 req_type: Task
 tags:
 - followup
