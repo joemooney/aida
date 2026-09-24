@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T20:33:59.618260056Z
-modified_at: 2026-09-24T22:25:44.399115847Z
+modified_at: 2026-09-24T23:18:01.339777546Z
 req_type: Bug
 tags:
 - closure:pending
@@ -74,6 +74,11 @@ comments:
   created_at: 2026-09-24T22:25:44.399115847Z
   modified_at: 2026-09-24T22:25:44.399115847Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d5b6-2d7d-77f0-a8ca-bad8fdb680c5
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit 1992299), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit BUG-1606 --description ...` / `aida edit BUG-1606 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec BUG-1606 --since 1992299^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit BUG-1606 --status completed`. (merge sha: 19922993159c1efd3bba7beb1eedeea1401239b8)'
+  created_at: 2026-09-24T23:18:01.341040161Z
+  modified_at: 2026-09-24T23:18:01.341040161Z
 filed_at:
   code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
   branch: main
