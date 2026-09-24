@@ -24937,6 +24937,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             no_title: false,
             show_context: false,
             noexec: false,
+            show_prompt: false,
             prompt: None,
             no_prompt: false,
             no_resume: false,
@@ -24960,6 +24961,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             no_title: false,
             show_context: false,
             noexec: false,
+            show_prompt: false,
             prompt: None,
             no_prompt: false,
             no_resume: false,
@@ -24981,6 +24983,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             no_title: false,
             show_context: false,
             noexec: false,
+            show_prompt: false,
             prompt: None,
             no_prompt: false,
             no_resume: false,
@@ -25068,6 +25071,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             no_title,
             show_context,
             noexec,
+            show_prompt,
             prompt,
             no_prompt,
             no_resume,
@@ -25089,6 +25093,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             AgentContextOptions::new(!*no_context, *show_context),
             !*no_title,
             *noexec,
+            *show_prompt,
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentResumeOptions::new(
                 !*no_resume,
@@ -25112,6 +25117,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             no_title,
             show_context,
             noexec,
+            show_prompt,
             prompt,
             no_prompt,
             no_resume,
@@ -25131,6 +25137,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             AgentContextOptions::new(!*no_context, *show_context),
             !*no_title,
             *noexec,
+            *show_prompt,
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentResumeOptions::new(
                 !*no_resume,
@@ -25152,6 +25159,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             no_title,
             show_context,
             noexec,
+            show_prompt,
             prompt,
             no_prompt,
             no_resume,
@@ -25171,6 +25179,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             AgentContextOptions::new(!*no_context, *show_context),
             !*no_title,
             *noexec,
+            *show_prompt,
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentResumeOptions::new(
                 !*no_resume,
@@ -25575,17 +25584,23 @@ impl AgentResumeOptions {
     }
 }
 
-/// TASK-646: resolve the role for a SPAWNED CHILD agent. ADR-2 ordering:
+/// TASK-646/TASK-1462: resolve the role for a SPAWNED CHILD agent. ADR-2
+/// ordering:
 ///   1. `--role X` → use X (no prompt).
 ///   2. no `--role`, stdin is a TTY → prompt via the shared role picker,
-///      pre-highlighting `implementer` (the dominant spawn); blank Enter
-///      accepts implementer, `q` cancels.
+///      pre-highlighting the operator's active role (`AIDA_SESSION_ROLE`) when
+///      one is set and appears in the project's role list; otherwise falls
+///      back to `implementer` (the dominant spawn), exactly as before. Blank
+///      Enter accepts the highlighted role, `q` cancels.
 ///   3. no `--role`, non-interactive → default `implementer` + a one-line
 ///      notice; never errors, never hangs, never launches role-less.
-///      The launching shell's `AIDA_SESSION_ROLE` is deliberately NOT inherited —
-///      advisor/product spawning an implementer is the common case, so cloning the
-///      launcher's hat would be wrong. Returns `Ok(None)` only when the user
-///      cancels the picker, so the caller aborts the launch cleanly.
+///      The launching shell's `AIDA_SESSION_ROLE` is deliberately NOT inherited
+///      into the LAUNCHED CHILD's role — advisor/product spawning an
+///      implementer is the common case, so cloning the launcher's hat would be
+///      wrong. It is still consulted here, read-only, to pick the picker's
+///      starting cursor. Returns `Ok(None)` only when the user cancels the
+///      picker, so the caller aborts the launch cleanly.
+// trace:TASK-1462 | ai:claude
 fn resolve_child_role(
     project_root: &std::path::Path,
     role: Option<String>,
@@ -25597,12 +25612,19 @@ fn resolve_child_role(
     if std::io::stdin().is_terminal() {
         let header = format!("Select a role for the new {} agent:", agent_type);
         let annotations = role_picker_launch_annotations(project_root, chrono::Utc::now());
+        // TASK-1462: prefer the operator's active shell role as the picker's
+        // default cursor; `implementer` remains the fallback when no role is
+        // active. `pick_role_with_header` itself no-ops the highlight if the
+        // name isn't in the project's role list (falls back to the top of the
+        // list), so an active role from a different project is harmless here.
+        let (active_role, is_default) = effective_role_resolved();
+        let default_highlight = child_role_picker_default_highlight(&active_role, is_default);
         // `pick_role_with_header` returns Ok(None) on cancel → propagate as
         // the abort signal.
         pick_role_with_header(
             project_root,
             &header,
-            Some("implementer"),
+            Some(&default_highlight),
             Some(&annotations),
         )
     } else {
@@ -25612,6 +25634,20 @@ fn resolve_child_role(
             "implementer".cyan()
         );
         Ok(Some("implementer".to_string()))
+    }
+}
+
+/// TASK-1462: the role picker's starting-cursor name — the operator's active
+/// shell role when one is set (`is_default == false`), `implementer`
+/// otherwise. Pure so the default-vs-active choice is testable without a TTY
+/// or `AIDA_SESSION_ROLE`. `pick_role_with_header` separately no-ops a
+/// highlight that isn't in the project's role list.
+// trace:TASK-1462 | ai:claude
+fn child_role_picker_default_highlight(active_role: &str, is_default: bool) -> String {
+    if is_default {
+        "implementer".to_string()
+    } else {
+        active_role.to_string()
     }
 }
 
@@ -26001,6 +26037,7 @@ fn agent_new_claude(
     context: AgentContextOptions,
     title: bool,
     noexec: bool,
+    show_prompt: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -26073,6 +26110,7 @@ fn agent_new_claude(
             context,
             title,
             noexec,
+            show_prompt,
             prompt,
             resume,
             flag_options,
@@ -26090,6 +26128,7 @@ fn agent_new_claude(
             context,
             title,
             noexec,
+            show_prompt,
             prompt,
             resume,
             flag_options,
@@ -26112,6 +26151,7 @@ fn agent_new_codex(
     context: AgentContextOptions,
     title: bool,
     noexec: bool,
+    show_prompt: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -26150,6 +26190,7 @@ fn agent_new_codex(
         context,
         title,
         noexec,
+        show_prompt,
         prompt,
         resume,
         flag_options,
@@ -26171,6 +26212,7 @@ fn agent_new_antigravity(
     context: AgentContextOptions,
     title: bool,
     noexec: bool,
+    show_prompt: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -26209,6 +26251,7 @@ fn agent_new_antigravity(
         context,
         title,
         noexec,
+        show_prompt,
         prompt,
         resume,
         flag_options,
@@ -26229,6 +26272,7 @@ fn agent_new_with_config(
     context: AgentContextOptions,
     title: bool,
     noexec: bool,
+    show_prompt: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -26278,6 +26322,19 @@ fn agent_new_with_config(
     if context.show {
         return print_dry_launch_context(&project_root, role, spec, &config, name);
     }
+    // TASK-1467: `--show-prompt` is a narrower dry preview than `--no-exec` —
+    // just the initial prompt that would be sent, explicit or generated.
+    // Same dry plan, same "no side effects" contract, checked before
+    // `--no-exec` so `--show-prompt --no-exec` degrades to the narrower ask.
+    if show_prompt {
+        let plan = prepare_agent_launch_dry(&project_root, role, spec, config.agent_type, name)?;
+        config.default_args.extend(agent_seed_session_args(
+            config.agent_type,
+            plan.native_session_id.as_deref(),
+        ));
+        let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
+        return print_agent_show_prompt(&prompt, &prompt_args);
+    }
     if noexec {
         let plan = prepare_agent_launch_dry(&project_root, role, spec, config.agent_type, name)?;
         config.default_args.extend(agent_seed_session_args(
@@ -26285,7 +26342,15 @@ fn agent_new_with_config(
             plan.native_session_id.as_deref(),
         ));
         let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
-        return print_agent_launch_noexec(&binary, &config, &plan, &prompt_args, true);
+        return print_agent_launch_noexec(
+            &binary,
+            &config,
+            &plan,
+            &prompt,
+            &prompt_args,
+            true,
+            context.enabled,
+        );
     }
 
     // STORY-717: focus-scope drift guard at the agent-launch work-start moment.
@@ -26417,6 +26482,7 @@ fn agent_new_bg_dispatch(
     context: AgentContextOptions,
     _title: bool,
     noexec: bool,
+    show_prompt: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -26463,6 +26529,17 @@ fn agent_new_bg_dispatch(
     if context.show {
         return print_dry_launch_context(&project_root, role, spec, &config, name);
     }
+    // TASK-1467: see the foreground path's comment — same narrower-preview-first
+    // ordering and no-side-effects contract for the `--bg` dispatch.
+    if show_prompt {
+        let plan = prepare_agent_launch_dry(&project_root, role, spec, config.agent_type, name)?;
+        config.default_args.extend(agent_seed_session_args(
+            config.agent_type,
+            plan.native_session_id.as_deref(),
+        ));
+        let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
+        return print_agent_show_prompt(&prompt, &prompt_args);
+    }
     if noexec {
         let plan = prepare_agent_launch_dry(&project_root, role, spec, config.agent_type, name)?;
         config.default_args.extend(agent_seed_session_args(
@@ -26470,7 +26547,15 @@ fn agent_new_bg_dispatch(
             plan.native_session_id.as_deref(),
         ));
         let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
-        return print_agent_launch_noexec(&binary, &config, &plan, &prompt_args, false);
+        return print_agent_launch_noexec(
+            &binary,
+            &config,
+            &plan,
+            &prompt,
+            &prompt_args,
+            false,
+            context.enabled,
+        );
     }
 
     // STORY-717: focus-scope drift guard (same as the foreground path) for the
@@ -27834,8 +27919,10 @@ fn resolve_agent_description(
     if !needs_prompt || !std::io::stdin().is_terminal() {
         return Ok(None);
     }
-    let answer = inquire::Text::new("Agent description:")
-        .with_help_message("One line describing what this advisor/product agent is for")
+    let answer = inquire::Text::new("Agent description (optional):")
+        .with_help_message(
+            "Optional — one line describing what this advisor/product agent is for; leave blank to skip",
+        )
         .prompt()?;
     Ok(agent_registry::normalize_description(Some(answer)))
 }
@@ -28580,27 +28667,50 @@ fn resolved_agent_program_and_args(
 }
 
 // trace:TASK-1232 | ai:codex
+// trace:TASK-1467 | ai:claude
+#[allow(clippy::too_many_arguments)]
 fn print_agent_launch_noexec(
     binary: &std::path::Path,
     config: &AgentLaunchConfig,
     plan: &AgentLaunchPlan,
+    prompt: &AgentPromptOptions,
     prompt_args: &[String],
     wrap_claude: bool,
+    context_enabled: bool,
 ) -> Result<()> {
     print!(
         "{}",
-        render_agent_launch_noexec(binary, config, plan, prompt_args, wrap_claude)?
+        render_agent_launch_noexec(
+            binary,
+            config,
+            plan,
+            prompt,
+            prompt_args,
+            wrap_claude,
+            context_enabled
+        )?
     );
     Ok(())
 }
 
+/// TASK-1467: the complete resolved launch contract — argv, active role,
+/// explicit-vs-generated prompt, the launch-context snapshot PATH it would
+/// write (not its body — that's `--show-context`), the AIDA environment
+/// inputs the child process would see, and the repository guidance files
+/// (AGENTS.md/CLAUDE.md) the child is expected to consume. Built entirely
+/// from the DRY plan (`prepare_agent_launch_dry`) — no worktree, lease,
+/// status transition, network sync, or file write happens to produce it.
 // trace:TASK-1232 | ai:codex
+// trace:TASK-1467 | ai:claude
+#[allow(clippy::too_many_arguments)]
 fn render_agent_launch_noexec(
     binary: &std::path::Path,
     config: &AgentLaunchConfig,
     plan: &AgentLaunchPlan,
+    prompt: &AgentPromptOptions,
     prompt_args: &[String],
     wrap_claude: bool,
+    context_enabled: bool,
 ) -> Result<String> {
     let (program, exec_args) =
         resolved_agent_program_and_args(binary, config, plan, prompt_args, wrap_claude)?;
@@ -28608,9 +28718,22 @@ fn render_agent_launch_noexec(
     argv.extend(exec_args.clone());
     let agents_bypass = load_agents_bypass(&plan.project_root).unwrap_or(false);
     let agents_contained = load_agents_contained(&plan.project_root).unwrap_or(false);
+    // TASK-1467: a dry-computed path — same naming scheme `prepare_agent_launch_context`
+    // uses, but nothing is written here (no side effects). The real launch mints
+    // its own token, so this path is illustrative of the SHAPE, not a promise of
+    // the exact filename a subsequent real launch will use.
+    let context_path = context_enabled.then(|| {
+        plan.project_root
+            .join(".aida")
+            .join("agents")
+            .join("context")
+            .join(format!("{}-<token>.context.md", config.agent_type))
+    });
 
     let mut out = String::new();
-    out.push_str("# AIDA agent launch preview — no process was started.\n");
+    out.push_str(
+        "# AIDA agent launch preview — complete launch contract; no process was started.\n",
+    );
     out.push_str(&format!("agent: {}\n", config.agent_type));
     out.push_str(&format!("name: {}\n", plan.name));
     if let Some(role) = &plan.role {
@@ -28639,7 +28762,138 @@ fn render_agent_launch_noexec(
             resolved_flag_value(&exec_args, "--ask-for-approval").unwrap_or("codex default")
         ));
     }
+
+    // TASK-1467: prompt source, distinguishing explicit --prompt from an
+    // auto-generated one so a reader isn't guessing which they're looking at.
+    out.push_str(&format!(
+        "prompt_source: {}\n",
+        prompt_source_label(prompt, prompt_args)
+    ));
+
+    // TASK-1467: where the launch-context snapshot WOULD be written (its
+    // body is `--show-context`, not repeated here).
+    match &context_path {
+        Some(path) => out.push_str(&format!(
+            "launch_context_snapshot: {} (not written by this preview)\n",
+            path.display()
+        )),
+        None => out.push_str("launch_context_snapshot: (disabled — --no-context)\n"),
+    }
+
+    // TASK-1467: the AIDA_* environment the child process would see, mirroring
+    // exactly what `run_tracked_agent` sets on the real launch.
+    out.push_str("env:\n");
+    for (key, value) in agent_launch_env_inputs(config, plan, context_path.as_deref()) {
+        out.push_str(&format!("  {key}={value}\n"));
+    }
+
+    // TASK-1467: repository guidance files the child is expected to read on
+    // startup, with whether each is actually present in this checkout.
+    out.push_str("guidance_files:\n");
+    for (rel_path, present) in agent_guidance_files(config.agent_type, &plan.project_root) {
+        let marker = if present { "present" } else { "absent" };
+        out.push_str(&format!("  {rel_path} ({marker})\n"));
+    }
+
     Ok(out)
+}
+
+/// TASK-1467: label the prompt that would be sent as `explicit` (from
+/// `--prompt`) or `generated` (auto-built from `--spec`), or note that no
+/// initial message would be sent at all.
+fn prompt_source_label(prompt: &AgentPromptOptions, prompt_args: &[String]) -> &'static str {
+    let explicit = prompt
+        .explicit_prompt
+        .as_deref()
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .is_some();
+    match (explicit, prompt_args.is_empty()) {
+        (true, _) => "explicit (--prompt)",
+        (false, false) => "generated (from --spec)",
+        (false, true) => "none (no --prompt, no --spec, or --no-prompt)",
+    }
+}
+
+/// TASK-1467: `--show-prompt` — print ONLY the exact initial prompt text
+/// that would be sent (explicit or generated), then exit. Narrower than
+/// `--no-exec`; same no-side-effects contract (built from the dry plan).
+fn print_agent_show_prompt(prompt: &AgentPromptOptions, prompt_args: &[String]) -> Result<()> {
+    print!("{}", render_agent_show_prompt(prompt, prompt_args));
+    Ok(())
+}
+
+fn render_agent_show_prompt(prompt: &AgentPromptOptions, prompt_args: &[String]) -> String {
+    let mut out = String::new();
+    out.push_str("# AIDA agent launch preview — initial prompt only; no process was started.\n");
+    out.push_str(&format!(
+        "source: {}\n\n",
+        prompt_source_label(prompt, prompt_args)
+    ));
+    match prompt_args.last() {
+        Some(text) => {
+            out.push_str(text);
+            out.push('\n');
+        }
+        None => out.push_str("(no initial message would be sent)\n"),
+    }
+    out
+}
+
+/// TASK-1467: the `AIDA_*` environment variables `run_tracked_agent` sets on
+/// the spawned child, mirrored here read-only for the `--no-exec` preview.
+/// Keep in sync with `run_tracked_agent`'s `.env(...)` calls.
+fn agent_launch_env_inputs(
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    context_path: Option<&std::path::Path>,
+) -> Vec<(&'static str, String)> {
+    let mut out = vec![
+        ("AIDA_AGENT_TYPE", config.agent_type.to_string()),
+        ("AIDA_AGENT_NAME", plan.name.clone()),
+        ("AIDA_USER", plan.name.clone()),
+        ("AIDA_PROJECT_ROOT", plan.project_root.display().to_string()),
+        (
+            "AIDA_ROLE_INSTANCE",
+            plan.role_instance.as_str().to_string(),
+        ),
+    ];
+    if let Some(role) = &plan.role {
+        out.push(("AIDA_SESSION_ROLE", role.clone()));
+    }
+    if let Some(spec) = &plan.current_spec {
+        out.push(("AIDA_SESSION_SCOPE", spec.clone()));
+    }
+    if let Some(path) = context_path {
+        out.push(("AIDA_AGENT_CONTEXT_FILE", path.display().to_string()));
+        out.push((
+            "AIDA_AGENT_REGISTRY_TOKEN",
+            "<generated at launch>".to_string(),
+        ));
+    }
+    out
+}
+
+/// TASK-1467: repository guidance files the spawned child is expected to
+/// read on startup, keyed off vendor (`CLAUDE.md` for claude, `AGENTS.md`
+/// for codex/antigravity) plus the universal AIDA discipline pointer.
+/// Returns (repo-relative path, exists-on-disk) pairs — existence is
+/// read-only `Path::is_file`, never a write.
+fn agent_guidance_files(agent_type: &str, project_root: &std::path::Path) -> Vec<(String, bool)> {
+    let mut candidates: Vec<&str> = match agent_type {
+        "claude" => vec!["CLAUDE.md"],
+        "codex" => vec!["AGENTS.md"],
+        "antigravity" => vec!["AGENTS.md"],
+        _ => vec!["CLAUDE.md", "AGENTS.md"],
+    };
+    candidates.push(".aida/discipline/README.md");
+    candidates
+        .into_iter()
+        .map(|rel| {
+            let present = project_root.join(rel).is_file();
+            (rel.to_string(), present)
+        })
+        .collect()
 }
 
 // trace:TASK-1232 | ai:codex
@@ -85017,6 +85271,7 @@ fn handle_derisk_command(spec: &str) -> Result<()> {
             AgentContextOptions::new(true, false),
             true,
             false,
+            false,
             AgentPromptOptions::new(Some(launch.prompt), false),
             AgentResumeOptions::new(false, None, true, false),
             AgentDefaultFlagOptions::new(true, Vec::new(), None),
@@ -85032,6 +85287,7 @@ fn handle_derisk_command(spec: &str) -> Result<()> {
             false,
             AgentContextOptions::new(true, false),
             true,
+            false,
             false,
             AgentPromptOptions::new(Some(launch.prompt), false),
             AgentResumeOptions::new(false, None, true, false),
@@ -85070,6 +85326,7 @@ pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
             AgentContextOptions::new(true, false),
             true,
             false,
+            false,
             AgentPromptOptions::new(Some(launch.prompt), false),
             AgentResumeOptions::new(false, None, true, false),
             AgentDefaultFlagOptions::new(true, Vec::new(), None),
@@ -85085,6 +85342,7 @@ pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
             false,
             AgentContextOptions::new(true, false),
             true,
+            false,
             false,
             AgentPromptOptions::new(Some(launch.prompt), false),
             AgentResumeOptions::new(false, None, true, false),
