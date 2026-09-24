@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T08:24:01.804311106Z
-modified_at: 2026-09-24T08:14:37.566025636Z
+modified_at: 2026-09-24T08:14:42.066588225Z
 req_type: Story
 tags:
 - from:session-0919
@@ -51,6 +51,13 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T08:24:03.594850523Z
+comments:
+- id: 01a0d27b-2992-7942-bf41-98e8fa56a932
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): DEFERRED until: >=3 live merge-holds or the next hold-caused incident. Only one live merge-hold, and it''s stale.'
+  created_at: 2026-09-24T08:14:42.066588225Z
+  modified_at: 2026-09-24T08:14:42.066588225Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 deferred: true
 deferred_at: 2026-09-24T08:14:37.566025636Z
 deferred_until: '>=3 live merge-holds or the next hold-caused incident'
