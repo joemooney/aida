@@ -22,12 +22,12 @@ description: |-
   - Regression coverage exercises the real queue resolver/status transitions used by `--drain`.
 
   Regression context: STORY-449 documents and tests both the failure cap and dependent skip, but the observed queue-wide drain violated both guarantees.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T21:57:33.141469956Z
-modified_at: 2026-09-24T21:59:46.616956801Z
+modified_at: 2026-09-24T23:24:44.427987431Z
 req_type: Bug
 tags:
 - autonomous-drain
