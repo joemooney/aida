@@ -59,14 +59,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:45:48.146378234Z
-modified_at: 2026-09-24T07:36:23.877746304Z
+modified_at: 2026-09-24T16:30:12.920198679Z
 req_type: Story
 tags:
 - docs:impacted
 - substrate observability governance
 relationships:
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0c626-bb17-7c21-ad8d-a6fd894af766
   created_at: 2026-09-21T22:51:08.036965917Z
   created_by: joe
