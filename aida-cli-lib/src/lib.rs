@@ -85112,6 +85112,26 @@ mod story_1436_gate_held_tests {
     }
 
     #[test]
+    fn dry_run_pickup_refusal_is_not_recorded() {
+        use aida_core::pickability::BlockedReason;
+        let blocked = queue_cmd::QueueFreshPickup::Blocked(BlockedReason::PermanentlyBlocked {
+            target_spec: "TASK-1".into(),
+        });
+        let _on = crate::test_env::EnvVarGuard::unset(events::EVENTS_DISABLE_ENV);
+        let preview = tempfile::tempdir().unwrap();
+        queue_cmd::record_pickup_refusal(preview.path(), &blocked, "S-1".into(), "r", true);
+        assert!(events::read_all(preview.path()).is_empty());
+        let real = tempfile::tempdir().unwrap();
+        queue_cmd::record_pickup_refusal(real.path(), &blocked, "S-1".into(), "r", false);
+        let evs = events::read_all(real.path());
+        assert_eq!(evs.len(), 1);
+        assert!(matches!(
+            &evs[0].kind,
+            events::EventKind::GateHeld { gate, .. } if gate == events::GATE_BLOCKED_BY_PICKUP
+        ));
+    }
+
+    #[test]
     fn merge_hold_clear_floor_refusal_is_recorded_before_the_bail() {
         let src = include_str!("lib.rs");
         let clear = src

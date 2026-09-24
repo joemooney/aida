@@ -73,7 +73,9 @@ whose actor is instead identified by `run_uuid`. // trace:BUG-1423 | ai:claude /
   so floor refusals can be counted against releases
   (`aida history --kind gate-held`). `GateHeld` is not actionable (absorbed by
   `aida watch`). Before `1.3.0` no refusal was recorded: any refusal count
-  over an older log is zero by omission, not by measurement. Additive only.
+  over an older log is zero by omission, not by measurement. An `aida watch`
+  older than `1.3.0` reads `GateHeld` as `Unknown`, which is actionable and
+  wakes the supervisor, so upgrade those binaries. Additive only.
   (STORY-1436) // trace:STORY-1436 | ai:claude
 - `1.2.0` — `aida review record` now emits `ReviewVerdictRecorded` (spec, PR,
   verdict, reviewed sha); `aida edit --status`/`--mode` now emit
