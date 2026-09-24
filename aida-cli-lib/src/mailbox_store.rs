@@ -275,6 +275,7 @@ mod tests {
             archived: false,
             from_source: aida_core::mailbox::SenderSource::Explicit,
             from_role: None,
+            relayed_from: None,
         }
     }
 

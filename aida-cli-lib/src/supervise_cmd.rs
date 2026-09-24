@@ -311,6 +311,7 @@ fn send_advisor_nudge(project_root: &Path, advisor: &str, items: &[StuckItem]) -
         archived: false,
         from_source,
         from_role,
+        relayed_from: None,
     };
     crate::mailbox_store::write_message(project_root, &msg)?;
     Ok(())

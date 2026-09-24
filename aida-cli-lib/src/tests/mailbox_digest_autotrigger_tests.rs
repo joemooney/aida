@@ -23,6 +23,7 @@ fn msg(id: &str) -> Message {
         archived: false,
         from_source: SenderSource::Explicit,
         from_role: None,
+        relayed_from: None,
     }
 }
 

@@ -65,6 +65,7 @@ fn awaiting_report_folds_in_unread_mail_without_a_network_call() {
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        relayed_from: None,
     };
     crate::mailbox_store::write_message(dir.path(), &msg).unwrap();
 
@@ -118,6 +119,7 @@ fn role_addressed_mail_does_not_inflate_the_operator_mail_count() {
             archived: false,
             from_source: aida_core::mailbox::SenderSource::Explicit,
             from_role: None,
+            relayed_from: None,
         };
         crate::mailbox_store::write_message(dir.path(), &msg).unwrap();
     }
@@ -166,6 +168,7 @@ fn ctx_role_includes_shared_role_mail_when_env_role_is_absent() {
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        relayed_from: None,
     };
     crate::mailbox_store::write_message(dir.path(), &msg).unwrap();
 
