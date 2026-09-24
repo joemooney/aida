@@ -1,0 +1,12 @@
+id: 01a0d0d2-723f-7203-98e3-35bbc3cd6a43
+spec_id: TASK-1465
+agreed_id: TASK-1465
+title: 'aida init: preflight and explicitly opt in to remote repository creation'
+description: 'When initializing a local repository without a usable remote, provide a clear, optional path to create and attach one. Before any remote-creation attempt, determine the selected provider, required CLI, authentication state, and likely permission to create a repository; distinguish missing tool, unauthenticated, insufficient permission, network failure, and successful readiness without exposing tokens. Remote creation must be explicit and skippable, must never be attempted merely because a CLI or token exists, and must print the exact command/next step when it cannot proceed. Acceptance: GitHub and GitLab paths use the forge abstraction; a user can finish as local-only; no credential material is logged; and rerunning init does not create duplicate remotes or repositories.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T00:30:47.871943661Z
+modified_at: 2026-09-24T00:30:47.871943661Z
+req_type: Task

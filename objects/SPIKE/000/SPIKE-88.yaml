@@ -1,0 +1,13 @@
+id: 01a0d0e0-a10f-7a70-968c-411bc00e0440
+spec_id: SPIKE-88
+agreed_id: SPIKE-88
+title: Evaluate multi-clone aida-store writer policies and proposal branches
+description: 'Evaluate a simpler multi-node synchronization model for the git-canonical `aida-store` branch. Candidate policy: one designated maintainer clone writes the canonical branch directly; satellite clones use proposal mode, committing requirement/comment changes to branches based on `aida-store` (for example `aida-store/<node>/<slug>`) and handing them to the maintainer as a forge change request or a forge-less cherry-pick/bundle recipe. Consider an optional readonly mode as well. Preserve readable/offline operation in every clone, but prevent proposal clones from directly pushing canonical queue, lease, lock, registry, or coordination state. Investigate which store data is append/merge-friendly versus conflict-prone, how new IDs/comments/status edits should behave, how canonical branch protection interacts with code-branch workflows, and how to recover without a forge. Deliverable: a bounded design recommendation with migration/backward-compatibility notes and explicit acceptance criteria for a follow-on implementation spec. Do not implement during the spike.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T00:46:17.359985263Z
+modified_at: 2026-09-24T00:46:17.359985263Z
+req_type: Spike
+human_only: true

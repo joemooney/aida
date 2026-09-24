@@ -221,7 +221,7 @@ blocks:
   type_prefix: SPIKE
   range_start: 5
   range_end: 104
-  next: 88
+  next: 89
   allocated_at: 2026-05-09T04:40:40.163752Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
@@ -597,7 +597,7 @@ blocks:
   type_prefix: TASK
   range_start: 1415
   range_end: 1514
-  next: 1463
+  next: 1466
   allocated_at: 2026-09-19T21:01:08.490625158Z
 - node_id: '1'
   owner: redacted@node.invalid
@@ -629,5 +629,5 @@ blocks:
   type_prefix: STORY
   range_start: 1441
   range_end: 1540
-  next: 1467
+  next: 1469
   allocated_at: 2026-09-21T12:49:26.868649036Z
