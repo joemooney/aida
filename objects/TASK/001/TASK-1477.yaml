@@ -3,12 +3,12 @@ spec_id: TASK-1477
 agreed_id: TASK-1477
 title: Stamp completed_at on manual completions (aida edit --status completed, done, queue close, promote) via completion::mark_completed
 description: 'From the TASK-1474 review: only the five merge-driven auto-bump paths stamp implementation_info.completed_at. Manual completions don''t (aida edit --status completed, git_backend_cmd.rs ~5711; aida done; queue close; promote), so they fall back to modified_at and later edits reorder --sort completed. Stamp completed_at inside completion::mark_completed (completion.rs:29), the STORY-1418 seam, so every into-Completed path gets it once.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T10:41:00.020275361Z
-modified_at: 2026-09-24T11:18:19.980512376Z
+modified_at: 2026-09-24T13:09:11.994791560Z
 req_type: Task
 tags:
 - followup
@@ -18,3 +18,21 @@ relationships:
 - rel_type: Child
   target_id: 01a0d2a4-ebd9-7ad1-8464-103e335ab44e
   created_at: 2026-09-24T10:41:07.157760101Z
+history:
+- id: 01a0d388-c8b3-70a0-855a-14cd8e63c73b
+  author: aida-auto-bump
+  timestamp: 2026-09-24T13:09:11.987885352Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d388-c8ba-7e41-9a03-e951eebbdb79
+  timestamp: 2026-09-24T13:09:11.994790096Z
+  agent: aida
+  commit_sha: 1c22d30ab196540a36e0202ab63fcff84bfd2e49
+  summary: Completed via merge 1c22d30a
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T13:09:11.987755568Z
+  completion_sha: 1c22d30ab196540a36e0202ab63fcff84bfd2e49
