@@ -932,6 +932,17 @@ pub enum ReviewCommand {
         #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         finding: Vec<String>,
 
+        /// Defect class for a finding, paired with `--finding` by position:
+        /// the first `--finding-class` belongs to the first `--finding`, and
+        /// so on. Use `-` to leave one finding unclassified. Classes:
+        /// incomplete-fix, fail-open, absent-evidence-reads-as-good,
+        /// untested-path, contract-drift, race, perf, portability,
+        /// stale-base, scope-creep. An unknown class is warned about and the
+        /// finding is recorded unclassified — it never blocks the verdict.
+        // trace:STORY-1417 | ai:claude
+        #[clap(long, value_name = "CLASS")]
+        finding_class: Vec<String>,
+
         /// Also write the orchestrator's phase-3 handshake file
         /// (`.aida/review-verdicts/PR-<N>.json`) for this PR number, at the
         /// drive root. This is what lets a headless drain's phase 4 proceed.
@@ -979,6 +990,20 @@ pub enum ReviewCommand {
         spec: String,
 
         /// Emit the raw record as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Count review findings per defect class across every recorded verdict,
+    /// including archived rounds. Alias of `aida findings classes`.
+    // trace:STORY-1417 | ai:claude
+    Classes {
+        /// Only count rounds recorded since this point: a relative window
+        /// (`30d`, `12h`, `45m`) or an RFC3339 timestamp.
+        #[clap(long, value_name = "WHEN")]
+        since: Option<String>,
+
+        /// Emit the report as JSON.
         #[clap(long)]
         json: bool,
     },
@@ -6874,6 +6899,22 @@ pub enum FindingsCommand {
         // trace:BUG-1294 | ai:claude
         #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         note: Option<String>,
+    },
+
+    /// Count review findings per defect class across every recorded verdict,
+    /// including archived rounds. Only findings recorded with a class
+    /// (`aida review record --finding-class`) are counted; free text is never
+    /// classified after the fact. `aida review classes` is the same report.
+    // trace:STORY-1417 | ai:claude
+    Classes {
+        /// Only count rounds recorded since this point: a relative window
+        /// (`30d`, `12h`, `45m`) or an RFC3339 timestamp.
+        #[clap(long, value_name = "WHEN")]
+        since: Option<String>,
+
+        /// Emit the report as JSON.
+        #[clap(long)]
+        json: bool,
     },
 
     /// List draft findings awaiting triage, grouped by source then origin and
@@ -14772,6 +14813,53 @@ mod tests {
                 );
             }
             other => panic!("expected review record command, got {other:?}"),
+        }
+    }
+
+    // trace:STORY-1417 | ai:claude
+    #[test]
+    fn review_record_accepts_finding_classes_and_classes_parses() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "review",
+            "record",
+            "TASK-1",
+            "--verdict",
+            "request-changes",
+            "--finding",
+            "left a sibling",
+            "--finding-class",
+            "incomplete-fix",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Review {
+                cmd: Some(ReviewCommand::Record { finding_class, .. }),
+                ..
+            } => assert_eq!(finding_class, vec!["incomplete-fix".to_string()]),
+            other => panic!("expected review record command, got {other:?}"),
+        }
+        let cli = Cli::try_parse_from(["aida", "findings", "classes", "--since", "7d"]).unwrap();
+        match cli.command {
+            Command::Findings {
+                cmd: Some(FindingsCommand::Classes { since, json }),
+            } => {
+                assert_eq!(since.as_deref(), Some("7d"));
+                assert!(!json);
+            }
+            other => panic!("expected findings classes command, got {other:?}"),
+        }
+        let cli =
+            Cli::try_parse_from(["aida", "review", "classes", "--since", "30d", "--json"]).unwrap();
+        match cli.command {
+            Command::Review {
+                cmd: Some(ReviewCommand::Classes { since, json }),
+                ..
+            } => {
+                assert_eq!(since.as_deref(), Some("30d"));
+                assert!(json);
+            }
+            other => panic!("expected review classes command, got {other:?}"),
         }
     }
 

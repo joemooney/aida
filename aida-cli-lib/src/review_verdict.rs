@@ -1105,6 +1105,12 @@ pub(crate) fn build_verdict_object(
         .collect();
     if !findings.is_empty() {
         obj.insert("findings".to_string(), serde_json::Value::Array(findings));
+        // STORY-1417: `finding_classes` is positional against `findings`, so
+        // new findings invalidate the old classes. A caller that has classes
+        // for these findings re-applies them via
+        // `review_classes::apply_finding_classes`.
+        // trace:STORY-1417 | ai:claude
+        obj.remove("finding_classes");
     }
     Ok(obj)
 }

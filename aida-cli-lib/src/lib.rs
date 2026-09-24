@@ -243,6 +243,8 @@ mod research;
 mod reviewer_summary;
 // trace:STORY-1405 | ai:claude — review-in-progress marker consulted by merge surfaces.
 mod review_marker;
+// trace:STORY-1417 | ai:claude
+mod review_classes;
 // trace:BUG-775 | ai:claude — review verdicts as first-class gate-readable state.
 mod review_verdict;
 mod role_cmd;
@@ -6631,6 +6633,8 @@ fn handle_findings_command(
         FindingsCommand::Recur { id, note } => {
             handle_findings_recur(backend, store_path, id, note.as_deref())?
         }
+        // trace:STORY-1417 | ai:claude
+        FindingsCommand::Classes { since, json } => handle_review_classes(since.as_deref(), *json)?,
     }
     Ok(())
 }
@@ -13383,9 +13387,12 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
                 | TraceCommand::Scan { update: true, .. }
         ),
         // STORY-732: bare `aida findings` (None) defaults to list — read-only.
-        Command::Findings { cmd } => cmd
-            .as_ref()
-            .is_some_and(|c| !matches!(c, FindingsCommand::List { .. })),
+        Command::Findings { cmd } => cmd.as_ref().is_some_and(|c| {
+            !matches!(
+                c,
+                FindingsCommand::List { .. } | FindingsCommand::Classes { .. }
+            )
+        }),
         // STORY-522: `aida questions ask` / `answer` write the
         // decision_request field; bare list / `list` are read-only.
         // trace:STORY-522 | ai:claude
@@ -13732,7 +13739,7 @@ fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
                 ..
             }
             | Command::Findings {
-                cmd: None | Some(FindingsCommand::List { .. }),
+                cmd: None | Some(FindingsCommand::List { .. } | FindingsCommand::Classes { .. }),
             }
             | Command::Punts(PuntsCommand::List { .. } | PuntsCommand::Read { .. })
             | Command::Worker(WorkerCommand::Directives { .. })
@@ -84041,6 +84048,7 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
             branch,
             summary,
             finding,
+            finding_class,
             pr,
         } => handle_review_record(
             spec,
@@ -84049,8 +84057,11 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
             branch.as_deref(),
             summary.as_deref(),
             finding,
+            finding_class,
             *pr,
         ),
+        // trace:STORY-1417 | ai:claude
+        ReviewCommand::Classes { since, json } => handle_review_classes(since.as_deref(), *json),
         // trace:STORY-1405 | ai:claude
         ReviewCommand::Claim {
             pr,
@@ -84885,6 +84896,7 @@ fn handle_review_record(
     branch: Option<&str>,
     summary: Option<&str>,
     findings: &[String],
+    finding_classes: &[String],
     pr: Option<u64>,
 ) -> Result<()> {
     let project_root = drive_root_or_project_root()?;
@@ -84896,8 +84908,68 @@ fn handle_review_record(
         branch,
         summary,
         findings,
+        finding_classes,
         pr,
     )
+}
+
+/// `aida review classes` — count recorded findings per defect class across
+/// the whole verdict corpus (current files, per-sha archives, retained
+/// rounds). Read-only.
+// trace:STORY-1417 | ai:claude
+fn handle_review_classes(since: Option<&str>, json: bool) -> Result<()> {
+    let project_root = drive_root_or_project_root()?;
+    let since = since.map(queue_cmd::parse_since_arg).transpose()?;
+    let dir = project_root.join(".aida").join("review-verdicts");
+    let report = review_classes::collect_class_report(&dir, since);
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+    if report.classes.is_empty() && report.unknown.is_empty() {
+        println!(
+            "No classified findings{}.",
+            if since.is_some() {
+                " in that window"
+            } else {
+                ""
+            }
+        );
+    } else {
+        println!(
+            "{:<32} {:>8} {:>9}  {}",
+            "CLASS".bold(),
+            "FINDINGS".bold(),
+            "SUBJECTS".bold(),
+            "LAST SEEN".bold()
+        );
+        for c in &report.classes {
+            println!(
+                "{:<32} {:>8} {:>9}  {}",
+                c.class,
+                c.findings,
+                c.subjects.len(),
+                c.last_seen
+                    .as_deref()
+                    .map(|s| s.get(..10).unwrap_or(s))
+                    .unwrap_or("-")
+            );
+        }
+        for (class, n) in &report.unknown {
+            println!("{:<32} {:>8}  (not in the vocabulary)", class, n);
+        }
+    }
+    println!(
+        "{} classified, {} unclassified findings.",
+        report.classified, report.unclassified
+    );
+    if report.classified == 0 {
+        println!(
+            "  {} record a class with `aida review record <SPEC> --finding <TEXT> --finding-class <CLASS>`; older findings stay unclassified.",
+            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
+        );
+    }
+    Ok(())
 }
 
 /// The core of `aida review record`, taking its write root as an explicit
@@ -84914,10 +84986,21 @@ fn handle_review_record_at(
     branch: Option<&str>,
     summary: Option<&str>,
     findings: &[String],
+    finding_classes: &[String],
     pr: Option<u64>,
 ) -> Result<()> {
     #[cfg(test)]
     assert_review_write_root_is_isolated(&project_root);
+    // STORY-1417: resolve classes up front; a bad class is a warning, never a
+    // reason to refuse the verdict. trace:STORY-1417 | ai:claude
+    let (classes, class_warnings) =
+        review_classes::resolve_finding_classes(findings, finding_classes);
+    for w in &class_warnings {
+        eprintln!(
+            "  {} {w}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
     let kind = review_verdict::VerdictKind::parse(verdict);
     if kind == review_verdict::VerdictKind::Unknown {
         anyhow::bail!(
@@ -85038,9 +85121,13 @@ fn handle_review_record_at(
             );
         }
     }
-    let path = review_verdict::record_verdict(
+    // STORY-1417: build + classify + one verified write — the same boundary
+    // `record_verdict` uses, with the typed classes layered on before the
+    // single durable write (BUG-1571). trace:STORY-1417 | ai:claude
+    let path = review_verdict::verdict_path(&project_root, spec);
+    let mut verdict_obj = review_verdict::build_verdict_object(
         &project_root,
-        spec,
+        &path,
         Some(verdict),
         resolved_sha.as_deref(),
         branch.as_deref(),
@@ -85049,6 +85136,9 @@ fn handle_review_record_at(
         &recorded_by,
     )
     .with_context(|| "could not write the review verdict")?;
+    review_classes::apply_finding_classes(&mut verdict_obj, findings, &classes);
+    review_verdict::write_verdict_object(&path, &verdict_obj)
+        .with_context(|| "could not write the review verdict")?;
     // PRIN-5 / BUG-1571: `record_verdict` already writes atomically and
     // verifies the bytes landed, but never print a path this process has
     // not itself just confirmed exists on disk.
@@ -85165,6 +85255,8 @@ fn handle_review_record_at(
             recorded.recorded_by.as_deref().unwrap_or(&recorded_by),
         )
         .with_context(|| format!("could not prepare {}", handshake.display()))?;
+        // trace:STORY-1417 | ai:claude
+        review_classes::apply_finding_classes(&mut handshake_obj, findings, &classes);
         // The two artifacts describe the same act of review, so retain the
         // spec record's timestamp byte-for-byte while preserving any displaced
         // PR-keyed round through the shared writer above.
@@ -85241,6 +85333,7 @@ mod story_1405_review_marker_tests {
             Some("abc1234"),
             Some("bug-14051-work"),
             Some("looks right"),
+            &[],
             &[],
             Some(14051),
         )
@@ -85427,6 +85520,7 @@ mod bug_1452_refusal_aftermath_tests {
             Some("bug-14520-work"),
             Some("the regression is still open"),
             &["fix the regression".to_string()],
+            &[],
             Some(1452),
         )
         .expect("recording a refusing verdict must succeed");
@@ -85549,6 +85643,7 @@ mod bug_1452_refusal_aftermath_tests {
             Some("bug-99999-work"),
             Some("isolation check"),
             &["nothing real".to_string()],
+            &[],
             Some(9_999_999),
         )
         .expect("recording against the explicit root must succeed regardless of ambient env");
