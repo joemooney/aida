@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T01:02:18.813550852Z
-modified_at: 2026-09-21T10:33:44.786073582Z
+modified_at: 2026-09-24T16:31:07.457756514Z
 req_type: Task
 tags:
 - drain-safe
@@ -40,8 +40,7 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T01:02:22.404692813Z
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0bb7d-7f12-78d1-a0ea-4c530343130e
   created_at: 2026-09-20T01:02:50.709387877Z
   created_by: joe
