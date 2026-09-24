@@ -35,12 +35,12 @@ description: |
   5. Legitimate `.contains` uses from the same files are the negative fixtures; a rule that flags those is too broad and must be narrowed rather than allowlisted.
 
   Filed by the product seat; disposition is the advisor's. Note this does not replace fixing the instances — BUG-1435 and BUG-1297 still need their typed outcomes. It stops the sixth.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:27:17.869346098Z
-modified_at: 2026-09-24T06:50:57.715612660Z
+modified_at: 2026-09-24T08:08:38.748504571Z
 req_type: Story
 tags:
 - ci
@@ -113,4 +113,17 @@ comments:
   created_at: 2026-09-24T06:50:47.900646903Z
   modified_at: 2026-09-24T06:50:47.900646903Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d275-9e5c-75f1-b195-2b517cee92bb
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit a1fbb31), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit STORY-1382 --description ...` / `aida edit STORY-1382 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec STORY-1382 --since a1fbb31^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit STORY-1382 --status completed`. (merge sha: a1fbb3111aeee393d8c333471a1d784982bddab8)'
+  created_at: 2026-09-24T08:08:38.748824242Z
+  modified_at: 2026-09-24T08:08:38.748824242Z
+history:
+- id: 01a0d275-9e5c-75f1-b195-2b4df50190dc
+  author: aida-auto-bump
+  timestamp: 2026-09-24T08:08:38.748818125Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: guided
