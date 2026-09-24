@@ -27,12 +27,12 @@ description: |-
   - The existing heuristic labelling and the harvest-candidates output from ADR-44 are preserved unchanged.
 
   NON-GOAL: whole-system reconstitution. This story keeps the per-spec scope ADR-44 chose; it changes what is measured, not how much is attempted.
-status: Done
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:46:59.718785414Z
-modified_at: 2026-09-24T08:08:12.597324976Z
+modified_at: 2026-09-24T08:08:17.696056836Z
 req_type: Story
 tags:
 - docs:impacted
