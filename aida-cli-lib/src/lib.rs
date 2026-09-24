@@ -265,6 +265,7 @@ mod schedule_cmd;
 mod schedule_ledger;
 mod schedule_predicate;
 mod schema;
+mod seat_rotation;
 mod seats;
 mod server_cmd;
 mod session;
@@ -24370,7 +24371,18 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
         ),
         SessionCommand::Leases { verbose, all, json } => session_leases(*verbose, *all, *json),
         SessionCommand::Show { id, plan } => session_show(id.as_deref(), *plan),
-        SessionCommand::Handoff { check } => session_handoff_check(*check),
+        SessionCommand::Handoff {
+            check,
+            write,
+            show,
+            seat,
+        } => {
+            if write.is_some() || *show {
+                session_handoff_seat(write.as_deref(), *show, seat.as_deref())
+            } else {
+                session_handoff_check(*check)
+            }
+        }
         SessionCommand::Prune {
             days,
             dry_run,
@@ -45192,6 +45204,46 @@ fn collect_session_handoff_facts(project_root: &std::path::Path) -> SessionHando
         stale_drain,
         live_session_leases,
     }
+}
+
+/// STORY-1464: write or show a seat handoff note (the rotation primitive).
+// trace:STORY-1464 | ai:claude
+fn session_handoff_seat(write: Option<&str>, _show: bool, seat: Option<&str>) -> Result<()> {
+    let seat = match seat {
+        Some(s) => s.to_string(),
+        None => std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| canonical_role_name(&s))
+            .ok_or_else(|| {
+                anyhow::anyhow!("no seat given: pass --seat <seat> or set AIDA_SESSION_ROLE")
+            })?,
+    };
+    let project_root = main_worktree_root_from(&find_project_root()?);
+    if let Some(src) = write {
+        let body = if src == "-" {
+            let mut s = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut s)?;
+            s
+        } else {
+            std::fs::read_to_string(src).with_context(|| format!("reading {src}"))?
+        };
+        let written =
+            seat_rotation::write_handoff(&project_root, &seat, &body, chrono::Utc::now())?;
+        println!(
+            "Handoff written: {} ({} bytes)",
+            written.path.display(),
+            written.bytes
+        );
+        println!("Latest: {}", written.latest.display());
+        println!("Next session: aida session handoff --seat {seat} --show");
+        return Ok(());
+    }
+    match seat_rotation::read_latest_handoff(&project_root, &seat)? {
+        Some(text) => print!("{text}"),
+        None => println!("No handoff recorded for seat '{seat}'."),
+    }
+    Ok(())
 }
 
 fn session_handoff_check(_check: bool) -> Result<()> {
@@ -75895,6 +75947,20 @@ fn emit_notice_time_line() {
     // Local time, matching the trial hook's `%A %Y-%m-%d %H:%M %Z` shape.
     let when = now.format("%A %Y-%m-%d %H:%M %Z").to_string();
     println!("{}", format_notice_time_line(&when, &label));
+    // STORY-1464: seat rotation signal — when this session's latest model call
+    // crossed the context ceiling, tell the seat to hand off and restart.
+    // Tail-read of the hook's transcript only; silent below the ceiling.
+    // trace:STORY-1464 | ai:claude
+    if let Ok(payload) = std::env::var("AIDA_HOOK_PAYLOAD") {
+        let seat = std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| canonical_role_name(&s))
+            .unwrap_or_else(|| "<seat>".to_string());
+        if let Some(line) = seat_rotation::notice_from_hook_payload(&payload, &seat) {
+            println!("{line}");
+        }
+    }
 }
 
 /// Enforce the per-turn notice's fail-open latency contract across the whole

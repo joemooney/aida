@@ -2983,7 +2983,10 @@ mod tests {
 
     #[test]
     fn explicit_reconciliation_refreshes_routes_and_render_stays_read_only() {
-        let lib_source = include_str!("lib.rs");
+        // Normalise CRLF (Windows autocrlf checkout) so the column-0
+        // closing-brace split below still finds the body end.
+        // trace:BUG-1556 | ai:claude
+        let lib_source = include_str!("lib.rs").replace("\r\n", "\n");
         let awaiting = lib_source
             .split("fn collect_awaiting_report_inner(")
             .nth(1)

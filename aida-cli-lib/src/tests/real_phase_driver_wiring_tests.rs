@@ -1897,6 +1897,9 @@ fn rework_no_op_fires_even_when_pr_number_is_none_this_round() {
     assert_eq!(failure.kind, FailureKind::ReworkNoOp);
 }
 
+// Uses a bash-script fake `gh`, which Windows cannot execute.
+// trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn rework_no_op_catches_phase_done_pr_bound_to_another_specs_pr() {
     // TASK-1449 AC3 / the BUG-1527 shape: this round's own `phase_done_pr`

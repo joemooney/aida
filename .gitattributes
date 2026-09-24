@@ -9,3 +9,9 @@ aida-core/templates/** text eol=lf
 # master. The comparison also normalizes defensively, but this prevents a
 # Windows checkout from manufacturing drift on disk. trace:BUG-1555 | ai:codex
 .aida/discipline/** text eol=lf
+
+# Rust sources: pin to LF so a Windows autocrlf checkout cannot hand
+# `include_str!` source-shape tests CRLF text (their `\n}\n` body-end
+# searches then silently span the whole file). The tests also normalise
+# defensively. trace:BUG-1556 | ai:claude
+*.rs text eol=lf

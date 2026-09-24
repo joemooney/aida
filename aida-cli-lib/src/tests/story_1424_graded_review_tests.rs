@@ -2,11 +2,17 @@
 //
 // trace:STORY-1424 | ai:antigravity
 
+// Imports only the unix-gated executable-criterion tests use.
+// trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 use crate::evaluator::{EvaluatorError, MockEvaluator};
+#[cfg(unix)]
+use crate::graded_review::CriterionStatus;
 use crate::graded_review::{
     execute_graded_review, generate_graded_reviewer_prompt, parse_acceptance_criteria,
-    CriterionKind, CriterionStatus,
+    CriterionKind,
 };
+#[cfg(unix)]
 use crate::review_verdict::VerdictKind;
 use std::path::Path;
 
@@ -44,6 +50,9 @@ Some overview of the feature.
     }
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_graded_review_pure_executable_pass() {
     let desc = "## Acceptance\n- [ ] `true`\n- [ ] `echo hello`\n";
@@ -67,6 +76,9 @@ fn test_graded_review_pure_executable_pass() {
     assert!(!verdict.escalated_to_seat);
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_graded_review_executable_failure_veto() {
     let desc = "## Acceptance\n- [ ] `true`\n- [ ] `false`\n- Prose criterion\n";
@@ -80,6 +92,9 @@ fn test_graded_review_executable_failure_veto() {
     assert!(!verdict.escalated_to_seat);
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_graded_review_mixed_jev_fast_pass() {
     let desc = "## Acceptance\n- [ ] `true`\n- High quality error handling and clear docs\n";
@@ -111,6 +126,9 @@ fn test_graded_review_mixed_jev_fast_pass() {
     assert!(!verdict.escalated_to_seat);
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_high_probability_low_confidence_escalates() {
     let desc = "## Acceptance\n- [ ] `true`\n- Clear operational behavior\n";
@@ -133,6 +151,9 @@ fn test_high_probability_low_confidence_escalates() {
     assert!(prompt.contains("Clear operational behavior"));
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_low_probability_low_confidence_remains_phase3_residual() {
     let desc = "## Acceptance\n- [ ] `true`\n- Safe rollback behavior\n";
@@ -158,6 +179,9 @@ fn test_low_probability_low_confidence_remains_phase3_residual() {
     assert!(prompt.contains("Safe rollback behavior"));
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_fast_fail_probability_and_confidence_belong_to_same_criterion() {
     let desc = "## Acceptance\n- [ ] `true`\n- First prose criterion\n- Second prose criterion\n";
@@ -181,6 +205,9 @@ fn test_fast_fail_probability_and_confidence_belong_to_same_criterion() {
     assert!(verdict.summary.contains("confidence=0.95"));
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_graded_review_mixed_jev_fast_fail() {
     let desc = "## Acceptance\n- [ ] `true`\n- Proper error handling\n";
@@ -209,6 +236,9 @@ fn test_graded_review_mixed_jev_fast_fail() {
     assert!(!verdict.escalated_to_seat);
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_graded_review_mixed_escalation_zone() {
     let desc = "## Acceptance\n- [ ] `true`\n- Tasteful ergonomics\n";
@@ -239,6 +269,9 @@ fn test_graded_review_mixed_escalation_zone() {
     assert!(prompt.contains("Tasteful ergonomics"));
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_graded_review_fail_closed_on_evaluator_error() {
     let desc = "## Acceptance\n- [ ] `true`\n- Residual prose\n";
