@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:54:35.383232444Z
-modified_at: 2026-09-18T09:03:51.979261322Z
+modified_at: 2026-09-24T16:25:19.746960689Z
 req_type: Bug
 tags:
 - batch:followups-0917b
@@ -25,8 +25,7 @@ tags:
 - personas
 - requester
 relationships:
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0b206-0bc8-7a72-928a-9a03e2f22d06
   created_at: 2026-09-18T04:58:17.025627141Z
   created_by: joe
